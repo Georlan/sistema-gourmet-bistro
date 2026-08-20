@@ -2011,6 +2011,18 @@ export function CaixaPanel({
     );
   };
 
+  const getTableOrderPresentation = (order: Order) => {
+    const mesaId = Number(order.mesaId || 0);
+    const configuredName = salonTables.find(table => Number(table.id) === mesaId)?.nome?.trim();
+    const activeItemCount = (order.itens || []).filter(item => item.status !== 'cancelado').length;
+
+    return {
+      shortLabel: mesaId > 0 ? `M${mesaId}` : 'B',
+      title: configuredName || (mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão'),
+      subtitle: `${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
+    };
+  };
+
   // Impressão rápida de pré-conta do card no Kanban
   const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -4028,13 +4040,30 @@ export function CaixaPanel({
       ...activeDigitalOrders.map(order => order.criadoEm),
     ];
 
+    const attentionKeys = new Set<string>();
+    activeTableList.forEach(order => {
+      if (getOrderSlaData(order, nowTimestamp).minutes >= 15) {
+        attentionKeys.add(`mesa:${order.id}`);
+      }
+    });
+    activeDigitalOrders.forEach(order => {
+      if (
+        ['pendente', 'analise'].includes(order.status)
+        || getOrderSlaData(order, nowTimestamp).minutes >= 15
+      ) {
+        attentionKeys.add(`digital:${order.id}`);
+      }
+    });
+    pagamentosPendentes.forEach((payment, index) => {
+      attentionKeys.add(`pagamento:${payment?.id || index}`);
+    });
+
     return {
       oldestOrder: formatOldestAge(timestamps),
       openValue: tableValue + digitalValue,
-      attentionCount: activeDigitalOrders.filter(order => order.status === 'pendente').length
-        + pagamentosPendentes.length,
+      attentionCount: attentionKeys.size,
     };
-  }, [deliveryOrders, pagamentosPendentes.length, tableOrdersInProduction, tableOrdersReady]);
+  }, [deliveryOrders, nowTimestamp, pagamentosPendentes, tableOrdersInProduction, tableOrdersReady]);
 
   const isSidebarTabActive = (tabId: string) => (
     tabId === 'cardapio_digital' ? (activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital')
@@ -4834,7 +4863,7 @@ export function CaixaPanel({
                     <span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>
                   </label>
                   <div className="orders-delivery-total">
-                    <span>Delivery hoje</span>
+                    <span>Balcão e delivery</span>
                     <strong>{formatCurrency(deliveryOrders.reduce((s, o) => s + o.total, 0))}</strong>
                   </div>
                   {/* Bell button — opens floating drawer */}
@@ -4957,7 +4986,7 @@ export function CaixaPanel({
               <div className="orders-mobile-stages" role="tablist" aria-label="Etapa dos pedidos">
                 {[
                   { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
-                  { id: 'digital' as const, label: 'Digital', count: filteredDigitalProduction.length },
+                  { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length },
                   { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
                 ].map(stage => (
                   <button
@@ -5010,73 +5039,71 @@ export function CaixaPanel({
                           const isExpanded = !!expandedCardIds[cardId];
                           const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
                           const smartPosState = getSmartPosCardState(order);
+                          const presentation = getTableOrderPresentation(order);
 
                           return (
                             <div 
                               key={`table-prod-${order.id}`} 
                               onClick={() => setSelectedKanbanOrder(order)}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget) return;
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  setSelectedKanbanOrder(order);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${presentation.title}, ${presentation.subtitle}, ver detalhes`}
                               className={clsx(
                                 'orders-card orders-card--salon rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
                                 sla.borderTopClass
                               )}
                             >
-                              {/* LINHA 1 (Top Bar do Card) */}
-                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
-                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
-                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
-                                    {sla.label}
-                                  </span>
-                                  <span className={clsx('orders-card__chip', 'is-primary')}>
-                                    {order.mesaId && order.mesaId > 0 ? `MESA ${order.mesaId}` : 'BALCÃO'}
-                                  </span>
-                                  {smartPosState && (
-                                    <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
-                                      {smartPosState.label}
-                                    </span>
-                                  )}
-                                  {tableMovement.transferredFromMesaIds.length > 0 && (
-                                    <span className={clsx('orders-card__chip', 'is-muted')}>
-                                      ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
-                                    </span>
-                                  )}
-                                  {tableMovement.mergedMesaIds.length > 0 && (
-                                    <span className={clsx('orders-card__chip', 'is-muted')}>
-                                      ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
-                                    </span>
-                                  )}
+                              <div className="orders-card__identity">
+                                <div className="orders-card__number is-table">
+                                  <Users size={15} />
+                                  <strong>{presentation.shortLabel}</strong>
                                 </div>
-                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
+                                <div className="min-w-0">
+                                  <strong className="orders-card__identity-title">{presentation.title}</strong>
+                                  <span className="orders-card__identity-subtitle">{presentation.subtitle}</span>
+                                  <div className="orders-card__identity-chips">
+                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
+                                    <span className={clsx('orders-card__chip', 'is-primary')}>EM ATENDIMENTO</span>
+                                    {smartPosState ? (
+                                      <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
+                                        {smartPosState.label}
+                                      </span>
+                                    ) : (
+                                      <span className={clsx('orders-card__chip', 'is-muted')}>
+                                        {operationalOriginLabel(order.origemOperacional)}
+                                      </span>
+                                    )}
+                                    {tableMovement.transferredFromMesaIds.length > 0 && (
+                                      <span className={clsx('orders-card__chip', 'is-muted')}>
+                                        ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
+                                      </span>
+                                    )}
+                                    {tableMovement.mergedMesaIds.length > 0 && (
+                                      <span className={clsx('orders-card__chip', 'is-muted')}>
+                                        ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="orders-card__identity-side">
+                                  <span className="orders-card__price">{formatCurrency(totalVal)}</span>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
                                     className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
+                                    aria-label={`Imprimir conferência da ${presentation.title}`}
                                   >
                                     <Printer size={12} />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedKanbanOrder(order);
-                                    }}
-                                    className="orders-card__icon"
-                                    title="Ver detalhes do pedido"
-                                  >
-                                    <ChevronRight size={12} />
-                                  </button>
-                                  <span className="orders-card__price">
-                                    {formatCurrency(totalVal)}
-                                  </span>
                                 </div>
-                              </div>
-
-                              {/* LINHA 2 (Sub-header) */}
-                              <div className="orders-card__meta">
-                                <strong className="orders-card__title">
-                                  {(order as any).identificador || (order.mesaId && order.mesaId > 0 ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
-                                </strong>
-                                <span className="shrink-0">{order.garcomNome || 'Garçom'}</span>
                               </div>
 
                               {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
@@ -5118,13 +5145,13 @@ export function CaixaPanel({
                   </div>
                 </div>
 
-                {/* COLUMN 2: pedidos online aceitos, delivery ou retirada. */}
+                {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
                 <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden snap-center', mobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
-                      <span className="orders-column__number">02 / DIGITAL</span>
-                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Delivery e Retirada</span>
-                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Pedidos aceitos e em preparo</span>
+                      <span className="orders-column__number">02 / SEM MESA</span>
+                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Balcão e delivery</span>
+                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Venda rápida, retirada e entrega</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredDigitalProduction.length}
@@ -5195,19 +5222,9 @@ export function CaixaPanel({
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
                                     className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
+                                    aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
                                   >
                                     <Printer size={12} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openDeliveryOrderDetails(order);
-                                    }}
-                                    className="orders-card__icon"
-                                    title="Ver detalhes do pedido"
-                                  >
-                                    <ChevronRight size={12} />
                                   </button>
                                   </div>
                                 </div>
@@ -5269,78 +5286,76 @@ export function CaixaPanel({
                           const sla = getOrderSlaData(order, nowTimestamp);
                           const isExpanded = !!expandedCardIds[cardId];
                           const contaPedida = !!(order as any).contaPedida;
-                          const badgeText = (order.mesaId && order.mesaId > 0)
-                            ? (contaPedida ? `MESA ${order.mesaId} — CONTA PEDIDA` : `MESA ${order.mesaId} — PRONTO P/ RECEBER`)
-                            : (contaPedida ? 'BALCÃO — CONTA PEDIDA' : 'BALCÃO — PRONTO');
+                          const badgeText = contaPedida ? 'CONTA PEDIDA' : 'PRONTO / RECEBER';
                           const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
                           const tableMovement = getTableMovementContext(order);
                           const pendingTableItems = Number((order as any).itensEmPreparoCount || 0);
                           const smartPosState = getSmartPosCardState(order);
+                          const presentation = getTableOrderPresentation(order);
 
                           return (
                             <div
                               key={`close-${order.id}`}
                               onClick={() => setSelectedKanbanOrder(order)}
+                              onKeyDown={(event) => {
+                                if (event.target !== event.currentTarget) return;
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  setSelectedKanbanOrder(order);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${presentation.title}, ${badgeText.toLowerCase()}, ver detalhes`}
                               className={clsx(
                                 'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
                                 sla.borderTopClass
                               )}
                             >
-                              {/* LINHA 1 (Top Bar do Card) */}
-                              <div className={clsx('flex', 'justify-between', 'items-center', 'gap-2')}>
-                                <div className={clsx('flex', 'items-center', 'gap-1.5', 'flex-wrap')}>
-                                  <span className={clsx('orders-card__chip', sla.badgeClass)}>
-                                    {sla.label}
-                                  </span>
-                                  <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
-                                  {smartPosState && (
-                                    <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
-                                      {smartPosState.label}
-                                    </span>
-                                  )}
-                                  {tableMovement.transferredFromMesaIds.length > 0 && (
-                                    <span className={clsx('orders-card__chip', 'is-muted')}>
-                                      ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
-                                    </span>
-                                  )}
-                                  {tableMovement.mergedMesaIds.length > 0 && (
-                                    <span className={clsx('orders-card__chip', 'is-muted')}>
-                                      ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
-                                    </span>
-                                  )}
+                              <div className="orders-card__identity">
+                                <div className="orders-card__number is-table">
+                                  <Users size={15} />
+                                  <strong>{presentation.shortLabel}</strong>
                                 </div>
-                                <div className={clsx('flex', 'items-center', 'gap-1', 'shrink-0')}>
+                                <div className="min-w-0">
+                                  <strong className="orders-card__identity-title">{presentation.title}</strong>
+                                  <span className="orders-card__identity-subtitle">{presentation.subtitle}</span>
+                                  <div className="orders-card__identity-chips">
+                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
+                                    <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
+                                    {smartPosState ? (
+                                      <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
+                                        {smartPosState.label}
+                                      </span>
+                                    ) : (
+                                      <span className={clsx('orders-card__chip', 'is-muted')}>
+                                        {operationalOriginLabel(order.origemOperacional)}
+                                      </span>
+                                    )}
+                                    {tableMovement.transferredFromMesaIds.length > 0 && (
+                                      <span className={clsx('orders-card__chip', 'is-muted')}>
+                                        ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
+                                      </span>
+                                    )}
+                                    {tableMovement.mergedMesaIds.length > 0 && (
+                                      <span className={clsx('orders-card__chip', 'is-muted')}>
+                                        ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="orders-card__identity-side">
+                                  <span className="orders-card__price">{formatCurrency(totalVal)}</span>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
                                     className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
+                                    aria-label={`Imprimir conferência da ${presentation.title}`}
                                   >
                                     <Printer size={12} />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedKanbanOrder(order);
-                                    }}
-                                    className="orders-card__icon"
-                                    title="Ver detalhes do pedido"
-                                  >
-                                    <ChevronRight size={12} />
-                                  </button>
-                                  <span className="orders-card__price">
-                                    {formatCurrency(totalVal)}
-                                  </span>
                                 </div>
-                              </div>
-
-                              {/* LINHA 2 (Sub-header) */}
-                              <div className="orders-card__meta">
-                                <strong className="orders-card__title">
-                                  {order.identificador || ((order.mesaId && order.mesaId > 0) ? `Consumo Mesa ${order.mesaId}` : 'Consumo Balcão')}
-                                </strong>
-                                <span className="shrink-0">{order.garcomNome || 'Garçom'}</span>
                               </div>
 
                               {pendingTableItems > 0 && (
@@ -5452,19 +5467,9 @@ export function CaixaPanel({
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
                                     className="orders-card__icon"
                                     title="Imprimir pré-conta / conferência"
+                                    aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
                                   >
                                     <Printer size={12} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openDeliveryOrderDetails(order);
-                                    }}
-                                    className="orders-card__icon"
-                                    title="Ver detalhes do pedido"
-                                  >
-                                    <ChevronRight size={12} />
                                   </button>
                                   </div>
                                 </div>
