@@ -19,6 +19,7 @@ import {
   type CatalogSnapshot,
 } from '../catalog/catalog';
 import { API_BASE_URL, WS_BASE_URL } from '../config/api';
+import { getIngredientObservationPresets, normalizeText } from '../domain';
 import type { SmartPosSession } from './smartPosSession';
 
 type MesaResumo = {
@@ -42,6 +43,7 @@ type CartLine = {
   productId: string;
   quantity: number;
   observationIds: number[];
+  ingredientObservations: string[];
   customObservation: string;
 };
 
@@ -52,6 +54,7 @@ interface SmartPosOrderingFlowProps {
   mesa: MesaResumo;
   comandas: ComandaResumo[];
   onCancel: () => void;
+  cancelLabel?: string;
   onSessionInvalid: () => void;
   onOrderCreated: () => Promise<void> | void;
 }
@@ -72,6 +75,7 @@ export default function SmartPosOrderingFlow({
   mesa,
   comandas,
   onCancel,
+  cancelLabel = 'Voltar para a mesa',
   onSessionInvalid,
   onOrderCreated,
 }: SmartPosOrderingFlowProps) {
@@ -227,6 +231,7 @@ export default function SmartPosOrderingFlow({
               productId: product.id,
               quantity: 1,
               observationIds: [],
+              ingredientObservations: [],
               customObservation: '',
             },
       };
@@ -259,6 +264,24 @@ export default function SmartPosOrderingFlow({
           observationIds: selected
             ? line.observationIds.filter((id) => id !== observationId)
             : [...line.observationIds, observationId],
+        },
+      };
+    });
+  };
+
+  const toggleIngredientObservation = (productId: string, text: string) => {
+    setCart((current) => {
+      const line = current[productId];
+      if (!line) return current;
+      const selectedObservations = line.ingredientObservations || [];
+      const selected = selectedObservations.includes(text);
+      return {
+        ...current,
+        [productId]: {
+          ...line,
+          ingredientObservations: selected
+            ? selectedObservations.filter((observation) => observation !== text)
+            : [...selectedObservations, text],
         },
       };
     });
@@ -301,7 +324,7 @@ export default function SmartPosOrderingFlow({
       .map((id) => observations.find((observation) => observation.id === id)?.texto)
       .filter((value): value is string => Boolean(value));
     const custom = line.customObservation.trim();
-    return [...selected, ...(custom ? [custom] : [])].join(', ');
+    return [...selected, ...(line.ingredientObservations || []), ...(custom ? [custom] : [])].join(', ');
   };
 
   const submitOrder = async () => {
@@ -389,7 +412,7 @@ export default function SmartPosOrderingFlow({
   if (catalogError && catalog.produtos.length === 0) {
     return (
       <section className="pt-6">
-        <button type="button" onClick={goBack} className="mb-5 flex items-center gap-2 text-xs font-bold text-koma-muted"><ArrowLeft size={16} /> Voltar para a mesa</button>
+        <button type="button" onClick={goBack} className="mb-5 flex items-center gap-2 text-xs font-bold text-koma-muted"><ArrowLeft size={16} /> {cancelLabel}</button>
         <div className="rounded-2xl border border-red-900/50 bg-red-950/20 p-5">
           <p className="text-sm font-black text-red-300">Cardápio indisponível</p>
           <p className="mt-2 text-xs leading-5 text-koma-muted">{catalogError}</p>
@@ -435,7 +458,12 @@ export default function SmartPosOrderingFlow({
             if (!product) {
               return <div key={line.productId} className="rounded-2xl border border-red-900/50 bg-red-950/20 p-4 text-xs text-red-300">Este produto não está mais disponível. Remova-o para continuar.</div>;
             }
-            const categoryObservations = observations.filter((observation) => observation.categoria_id === product.categoria_id);
+            const ingredientObservations = getIngredientObservationPresets(product);
+            const ingredientObservationKeys = new Set(ingredientObservations.map(normalizeText));
+            const categoryObservations = observations.filter((observation) => (
+              observation.categoria_id === product.categoria_id
+              && !ingredientObservationKeys.has(normalizeText(observation.texto))
+            ));
             return (
               <article key={line.productId} className={`rounded-2xl border bg-koma-surface p-4 ${product.ativo === false ? 'border-red-900/60' : 'border-koma-border'}`}>
                 <div className="flex items-start justify-between gap-3">
@@ -447,9 +475,21 @@ export default function SmartPosOrderingFlow({
                   </div>
                 </div>
 
+                {ingredientObservations.length > 0 && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-koma-muted">Ajustes pelos ingredientes</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ingredientObservations.map((observation) => {
+                        const selected = (line.ingredientObservations || []).includes(observation);
+                        return <button key={observation} type="button" onClick={() => toggleIngredientObservation(product.id, observation)} className={`min-h-9 rounded-xl border px-3 text-[11px] font-bold ${selected ? 'border-koma-accent bg-koma-accent/10 text-koma-accent' : 'border-koma-border text-koma-muted'}`}>{selected && <Check size={12} className="mr-1 inline" />}{observation}</button>;
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {categoryObservations.length > 0 && (
                   <div className="mt-4">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-koma-muted">Observações rápidas</p>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-koma-muted">Outros atalhos</p>
                     <div className="flex flex-wrap gap-2">
                       {categoryObservations.map((observation) => {
                         const selected = line.observationIds.includes(observation.id);
@@ -460,7 +500,7 @@ export default function SmartPosOrderingFlow({
                 )}
 
                 <details className="mt-3 rounded-xl border border-koma-border bg-koma-page px-3 py-2">
-                  <summary className="cursor-pointer text-[11px] font-bold text-koma-muted">Outra observação</summary>
+                  <summary className="cursor-pointer text-[11px] font-bold text-koma-muted">Escrever observação</summary>
                   <textarea value={line.customObservation} onChange={(event) => updateCustomObservation(product.id, event.target.value)} maxLength={180} rows={2} placeholder="Digite somente se necessário" className="mt-2 w-full resize-none rounded-lg border border-koma-border bg-koma-surface p-2 text-xs outline-none focus:border-koma-accent" />
                 </details>
               </article>
@@ -493,16 +533,46 @@ export default function SmartPosOrderingFlow({
         </div>
         <p className="mt-2 text-xs text-koma-muted">Toque no item para adicionar. Toques repetidos aumentam a quantidade.</p>
 
-        <div className="mt-5 grid grid-cols-2 gap-3">
+        <nav aria-label="Categorias do cardápio" className="sticky top-0 z-10 -mx-4 mt-4 overflow-x-auto border-y border-koma-border bg-koma-page/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          <div className="flex w-max min-w-full gap-2">
+            {categories.map(({ category }) => {
+              const selected = category.id === selectedCategoryId;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setSelectedCategoryId(category.id)}
+                  aria-current={selected ? 'page' : undefined}
+                  className={`min-h-10 shrink-0 rounded-full border px-4 text-xs font-black ${selected ? 'border-koma-accent bg-koma-accent text-black' : 'border-koma-border bg-koma-surface text-koma-muted'}`}
+                >
+                  {categoryLabel(category)}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
           {selectedProducts.map((product) => {
             const quantity = cart[product.id]?.quantity || 0;
             return (
-              <button key={product.id} type="button" onClick={() => addProduct(product)} className="relative min-h-28 rounded-2xl border border-koma-border bg-koma-surface p-4 text-left active:scale-[0.98]">
-                {quantity > 0 && <span className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-koma-accent text-xs font-black text-black">{quantity}</span>}
-                <p className="pr-7 text-sm font-black leading-5">{product.nome}</p>
-                <p className="mt-2 text-sm font-black text-koma-accent">{money(Number(product.preco || 0))}</p>
-                {product.descricao && <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-koma-muted">{product.descricao}</p>}
-              </button>
+              <article key={product.id} className={`flex min-h-40 flex-col overflow-hidden rounded-2xl border bg-koma-surface ${quantity > 0 ? 'border-koma-accent/70' : 'border-koma-border'}`}>
+                <button type="button" onClick={() => addProduct(product)} className="relative flex flex-1 flex-col p-4 text-left active:bg-koma-accent/5" aria-label={`Adicionar ${product.nome}`}>
+                  {quantity > 0 && <span className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-full bg-koma-accent text-xs font-black text-black" aria-live="polite">{quantity}</span>}
+                  <p className="pr-7 text-sm font-black leading-5">{product.nome}</p>
+                  <p className="mt-2 text-sm font-black text-koma-accent">{money(Number(product.preco || 0))}</p>
+                  {product.descricao && <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-koma-muted">{product.descricao}</p>}
+                </button>
+                {quantity > 0 ? (
+                  <div className="flex min-h-12 items-center justify-between border-t border-koma-border bg-koma-page/50 px-2 py-1.5">
+                    <button type="button" onClick={() => changeQuantity(product.id, -1)} className="flex size-9 items-center justify-center rounded-xl border border-koma-border text-koma-muted active:bg-koma-surface" aria-label={`Diminuir ${product.nome}`}><Minus size={16} /></button>
+                    <span className="px-1 text-xs font-black">{quantity}</span>
+                    <button type="button" onClick={() => changeQuantity(product.id, 1)} className="flex size-9 items-center justify-center rounded-xl bg-koma-accent text-black active:opacity-80" aria-label={`Aumentar ${product.nome}`}><Plus size={16} /></button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => addProduct(product)} className="flex min-h-11 items-center justify-center gap-1.5 border-t border-koma-border text-[11px] font-black text-koma-accent"><Plus size={14} /> Adicionar</button>
+                )}
+              </article>
             );
           })}
         </div>
@@ -514,7 +584,7 @@ export default function SmartPosOrderingFlow({
 
   return (
     <section className="pb-5 pt-6">
-      <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-xs font-bold text-koma-muted"><ArrowLeft size={16} /> Voltar para a mesa</button>
+      <button type="button" onClick={goBack} className="mb-4 flex items-center gap-2 text-xs font-bold text-koma-muted"><ArrowLeft size={16} /> {cancelLabel}</button>
       <div className="flex items-start justify-between gap-3">
         <div><p className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Novo pedido · {mesa.nome || `Mesa ${mesa.id}`}</p><h1 className="mt-2 text-3xl font-black tracking-[-0.04em]">Escolha a categoria</h1></div>
         <button type="button" onClick={() => void loadCatalog()} className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-koma-border text-koma-muted" aria-label="Atualizar cardápio"><RefreshCw size={16} /></button>

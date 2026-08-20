@@ -7,7 +7,6 @@ import {
   LockKeyhole,
   LogOut,
   Plus,
-  ReceiptText,
   RefreshCw,
   ShieldCheck,
   ShoppingBag,
@@ -451,8 +450,9 @@ export default function SmartPosPage() {
   const selectedBalance = selectedComandas.reduce((sum, comanda) => sum + comandaBalance(comanda), 0);
 
   const openMesa = (mesaId: number) => {
+    const mesaHasOpenComandas = comandas.some((comanda) => comanda.mesa_id === mesaId);
     setSelectedMesaId(mesaId);
-    setScreen('mesa');
+    setScreen(!mesaHasOpenComandas && context?.pedidos_disponiveis ? 'pedido' : 'mesa');
   };
 
   if (!session) {
@@ -497,7 +497,11 @@ export default function SmartPosPage() {
       setScreen('mesas');
       return;
     }
-    if (screen === 'pedido' || screen === 'receber') {
+    if (screen === 'pedido') {
+      setScreen(selectedComandas.length > 0 ? 'mesa' : 'mesas');
+      return;
+    }
+    if (screen === 'receber') {
       setScreen('mesa');
       return;
     }
@@ -577,7 +581,8 @@ export default function SmartPosPage() {
             session={session}
             mesa={selectedMesa}
             comandas={selectedComandas}
-            onCancel={() => setScreen('mesa')}
+            onCancel={() => setScreen(selectedComandas.length > 0 ? 'mesa' : 'mesas')}
+            cancelLabel={selectedComandas.length > 0 ? 'Voltar para a mesa' : 'Voltar para as mesas'}
             onSessionInvalid={handleLogout}
             onOrderCreated={async () => {
               await loadMesas('mesa');
@@ -679,24 +684,23 @@ export default function SmartPosPage() {
       <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pb-6 pt-4 sm:px-6">
         <Header />
         <section className="flex flex-1 flex-col pt-6">
-          <div className="mb-5 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{validationError ? <RefreshCw size={18} /> : <ShieldCheck size={18} />}</span>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{session.user.nome}</p><p className="mt-1 truncate text-xs text-koma-muted">{roleLabel(session.user.role)} · {context?.restaurante?.nome || 'Restaurante'}</p><p className={`mt-2 text-[11px] font-bold ${context?.turno_aberto ? 'text-koma-accent' : 'text-yellow-300'}`}>{validationError || (context?.turno_aberto ? 'Caixa do salão aberto' : 'Caixa do salão fechado')}</p></div>
-              {context?.turno_aberto && <CheckCircle2 size={18} className="text-koma-accent" />}
+          <div className="mb-5 rounded-2xl border border-koma-border bg-koma-surface px-3 py-3">
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{validationError ? <RefreshCw size={16} /> : <ShieldCheck size={16} />}</span>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{session.user.nome}</p><p className="mt-0.5 truncate text-[11px] text-koma-muted">{roleLabel(session.user.role)} · {context?.restaurante?.nome || 'Restaurante'}</p></div>
+              <span className={`flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-bold uppercase ${context?.turno_aberto && !validationError ? 'border-koma-accent/40 text-koma-accent' : 'border-yellow-700/50 text-yellow-300'}`}>{context?.turno_aberto && !validationError && <CheckCircle2 size={11} />}{validationError ? 'Sem conexão' : context?.turno_aberto ? 'Caixa aberto' : 'Caixa fechado'}</span>
             </div>
           </div>
 
-          <div className="mb-6"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Canal de atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Kôma Maquininha</h1></div>
+          <div className="mb-5"><p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-koma-accent">Novo atendimento</p><h1 className="text-3xl font-black tracking-[-0.04em]">Onde será o pedido?</h1></div>
 
+          {validationError && <p role="alert" className="mb-3 rounded-xl border border-yellow-800/50 bg-yellow-950/20 px-3 py-2 text-xs text-yellow-200">{validationError}</p>}
           {mesasError && <p role="alert" className="mb-3 rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{mesasError}</p>}
 
           <div className="grid gap-3">
-            <button type="button" onClick={() => setScreen('venda-rapida')} disabled={!context?.venda_rapida_disponivel} className="flex min-h-24 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ShoppingBag size={22} /></span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold">Venda rápida</span><span className="mt-1 block text-xs text-koma-muted">Sem mesa</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
+            <button type="button" onClick={() => void loadMesas('mesas')} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-20 items-center gap-4 rounded-2xl border border-koma-accent bg-koma-accent px-4 py-3 text-left text-black shadow-lg shadow-koma-accent/10 disabled:cursor-not-allowed disabled:border-koma-border disabled:bg-koma-surface disabled:text-koma-muted disabled:shadow-none"><span className="flex size-11 items-center justify-center rounded-xl bg-black/10">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-black">Mesas</span><span className="mt-0.5 block text-xs text-black/70">{context?.mesas_disponiveis ? 'Abrir ou continuar atendimento' : 'Caixa fechado'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} />}</button>
 
-            <button type="button" onClick={() => void loadMesas('mesas')} disabled={!context?.mesas_disponiveis || isLoadingMesas} className="flex min-h-24 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent">{isLoadingMesas ? <Loader2 size={22} className="animate-spin" /> : context?.mesas_disponiveis ? <Table2 size={22} /> : <LockKeyhole size={21} />}</span><span className="min-w-0 flex-1"><span className="block text-base font-extrabold">Mesas</span><span className="mt-1 block text-xs text-koma-muted">{context?.mesas_disponiveis ? 'Mesas e comandas' : 'Caixa fechado'}</span></span>{context?.mesas_disponiveis && <ChevronRight size={18} className="text-koma-muted" />}</button>
-
-            <button type="button" disabled className="flex min-h-24 cursor-not-allowed items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-4 text-left opacity-50"><span className="flex size-12 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ReceiptText size={22} /></span><span><span className="block text-base font-extrabold">Histórico</span><span className="mt-1 block text-xs text-koma-muted">Em breve</span></span></button>
+            <button type="button" onClick={() => setScreen('venda-rapida')} disabled={!context?.venda_rapida_disponivel} className="flex min-h-18 items-center gap-4 rounded-2xl border border-koma-border bg-koma-surface px-4 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50"><span className="flex size-11 items-center justify-center rounded-xl border border-koma-border bg-koma-page text-koma-accent"><ShoppingBag size={21} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-extrabold">Venda rápida</span><span className="mt-0.5 block text-xs text-koma-muted">Pedido sem mesa</span></span><ChevronRight size={18} className="text-koma-muted" /></button>
           </div>
         </section>
       </div>

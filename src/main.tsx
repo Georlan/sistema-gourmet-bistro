@@ -1,11 +1,7 @@
 /// <reference types="vite/client" />
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import OnlineOrderEmergencyActions from "./components/OnlineOrderEmergencyActions";
-import SmartPosPage from "./smartpos/SmartPosPage";
 import "./index.css";
-import * as Sentry from "@sentry/react";
 import { initializeKomaTheme } from "./config/theme";
 
 // Aplica o tema persistido antes do primeiro paint do React, inclusive nas rotas
@@ -14,19 +10,34 @@ initializeKomaTheme();
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
-  Sentry.init({
-    dsn: sentryDsn,
-    // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
-    tracesSampleRate: 0.1,
+  void import("@sentry/react").then((Sentry) => {
+    Sentry.init({
+      dsn: sentryDsn,
+      // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
+      tracesSampleRate: 0.1,
+    });
   });
 }
 
 const isSmartPosRoute = window.location.pathname.startsWith("/smartpos");
-const RootApp = isSmartPosRoute ? SmartPosPage : App;
+const RootApp = React.lazy(isSmartPosRoute
+  ? () => import("./smartpos/SmartPosPage")
+  : () => import("./App"));
+const OnlineOrderEmergencyActions = isSmartPosRoute
+  ? null
+  : React.lazy(() => import("./components/OnlineOrderEmergencyActions"));
+
+const RouteLoading = () => (
+  <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
+    <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando Kôma…</p>
+  </main>
+);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RootApp />
-    {!isSmartPosRoute && <OnlineOrderEmergencyActions />}
+    <React.Suspense fallback={<RouteLoading />}>
+      <RootApp />
+      {OnlineOrderEmergencyActions && <OnlineOrderEmergencyActions />}
+    </React.Suspense>
   </React.StrictMode>
 );

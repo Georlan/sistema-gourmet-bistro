@@ -95,6 +95,74 @@ export function obterNomeCategoria(categoria: any): string {
   return String(categoria);
 }
 
+type IngredientPresetProduct = {
+  nome?: string | null;
+  descricao?: string | null;
+};
+
+/**
+ * Builds quick per-item adjustments only from ingredients explicitly mentioned
+ * in the product name or description. This keeps SmartPOS shortcuts relevant
+ * instead of showing the same generic observations for every product.
+ */
+export function getIngredientObservationPresets(product: IngredientPresetProduct): string[] {
+  const searchableText = normalizeText(`${product.nome || ''} ${product.descricao || ''}`);
+  if (!searchableText) return [];
+
+  const paddedText = ` ${searchableText.replace(/\s+/g, ' ')} `;
+  const hasAny = (...terms: string[]) => terms.some((term) => (
+    paddedText.includes(` ${normalizeText(term).replace(/\s+/g, ' ')} `)
+  ));
+  const presets: string[] = [];
+  const addWhenPresent = (label: string, ...terms: string[]) => {
+    if (hasAny(...terms)) presets.push(`Sem ${label}`);
+  };
+
+  addWhenPresent('salada', 'salada');
+  addWhenPresent('cebola', 'cebola');
+  addWhenPresent('cheddar', 'cheddar');
+  addWhenPresent('bacon', 'bacon');
+  addWhenPresent('ovo', 'ovo');
+  addWhenPresent('muçarela', 'muçarela', 'mussarela', 'mozzarella');
+  addWhenPresent('gorgonzola', 'gorgonzola');
+  addWhenPresent('provolone', 'provolone');
+  addWhenPresent('parmesão', 'parmesão', 'parmesao');
+  addWhenPresent('catupiry', 'catupiry');
+  addWhenPresent('requeijão', 'requeijão', 'requeijao');
+  addWhenPresent('queijo coalho', 'queijo coalho', 'coalho');
+
+  const hasSpecificCheese = hasAny(
+    'muçarela', 'mussarela', 'mozzarella', 'gorgonzola', 'provolone',
+    'parmesão', 'parmesao', 'catupiry', 'requeijão', 'requeijao', 'coalho',
+  );
+  if (!hasSpecificCheese) addWhenPresent('queijo', 'queijo', 'cheese');
+
+  addWhenPresent('calabresa', 'calabresa');
+  addWhenPresent('pepperoni', 'pepperoni');
+  addWhenPresent('frango', 'frango');
+  addWhenPresent('carne', 'carne', 'hambúrguer', 'hamburguer');
+  addWhenPresent('presunto', 'presunto');
+  addWhenPresent('camarão', 'camarão', 'camarao');
+  addWhenPresent('molho', 'molho');
+  addWhenPresent('barbecue', 'barbecue', 'barbeque');
+  addWhenPresent('maionese', 'maionese');
+  addWhenPresent('tomate', 'tomate');
+  addWhenPresent('milho', 'milho');
+  addWhenPresent('azeitona', 'azeitona');
+  addWhenPresent('orégano', 'orégano', 'oregano');
+  addWhenPresent('manjericão', 'manjericão', 'manjericao');
+  addWhenPresent('azeite', 'azeite');
+  addWhenPresent('abacaxi', 'abacaxi');
+  addWhenPresent('palmito', 'palmito');
+  addWhenPresent('pimentão', 'pimentão', 'pimentao');
+  addWhenPresent('cogumelo', 'cogumelo', 'champignon');
+  addWhenPresent('rúcula', 'rúcula', 'rucula');
+  addWhenPresent('alho', 'alho');
+  addWhenPresent('pimenta', 'pimenta');
+
+  return Array.from(new Set(presets)).slice(0, 8);
+}
+
 /**
  * Dynamically generates observation presets based on product attributes and category.
  */
@@ -257,4 +325,3 @@ export function smartSearchMatch(text: string | undefined | null, query: string)
     });
   });
 }
-
