@@ -164,14 +164,14 @@ def test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column()
     css = source("src/index.css")
     caixa = source("src/components/CaixaPanel.tsx")
 
-    # O modo compacto termina em 63rem. Logo acima disso, o desktop precisa
-    # imediatamente usar colunas flexíveis; um segundo breakpoint em 68rem
-    # criava uma faixa em que a terceira coluna ficava fora da viewport.
-    assert "@container (max-width: 63rem)" in css
-    assert "@container (min-width: 63rem)" in css
-    assert "@container (min-width: 68rem)" not in css
+    # A troca acontece no mesmo limite dos dois lados: até 68rem o operador usa
+    # as etapas compactas; a partir daí as três colunas passam a caber de fato.
+    assert "@container (max-width: 68rem)" in css
+    assert "@container (min-width: 68rem)" in css
+    assert "@container (max-width: 63rem)" not in css
+    assert "@container (min-width: 63rem)" not in css
 
-    desktop_block = css.split("@container (min-width: 63rem)", 1)[1].split("@container (max-width: 63rem)", 1)[0]
+    desktop_block = css.split("@container (min-width: 68rem)", 1)[1].split("@container (max-width: 68rem)", 1)[0]
     assert "grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));" in desktop_block
     assert ".orders-column" in desktop_block
     assert "min-width: 0;" in desktop_block
@@ -180,6 +180,88 @@ def test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column()
     assert "orders-column--closing" in caixa
     assert "03 / FECHAMENTO" in caixa
     assert "Prontos para concluir" in caixa
+
+
+def test_cashier_mobile_uses_one_natural_scroll_owner():
+    css = source("src/index.css")
+    caixa = source("src/components/CaixaPanel.tsx")
+
+    shell_block = css.split(".cashier-shell {", 1)[1].split("}", 1)[0]
+    assert "height: 100dvh;" in shell_block
+    assert "min-height: 100svh;" in shell_block
+
+    assert "cashier-shell flex w-full h-screen" not in caixa
+    assert "'cashier-content', 'flex-1', 'overflow-y-auto'" not in caixa
+    assert "'orders-board', 'flex-1', 'gap-3', 'overflow-x-auto'" not in caixa
+    assert "snap-mandatory" not in caixa
+    assert "snap-center" not in caixa
+
+    mobile_block = css.split("@media (max-width: 768px)", 1)[1].split(
+        "@media (min-width: 480px) and (max-width: 768px)", 1
+    )[0]
+    assert ".cashier-shell" in mobile_block
+    assert "height: auto;" in mobile_block
+    assert ".cashier-content" in mobile_block
+    assert "overflow: visible;" in mobile_block
+    assert ".orders-column__body" in mobile_block
+    assert "overflow-y: visible !important;" in mobile_block
+
+    assert "@media (hover: none) and (pointer: coarse)" in css
+
+
+def test_cashier_narrow_cards_return_space_to_order_identity():
+    css = source("src/index.css")
+
+    narrow_block = css.split("@container (max-width: 30rem)", 1)[1].split(
+        ".cashier-shell .text-\\[8px\\]", 1
+    )[0]
+    assert "grid-template-columns: clamp(2.55rem, 13vw, 2.9rem) minmax(0, 1fr) auto;" in narrow_block
+    assert ".orders-card__identity-side" in narrow_block
+    assert "min-width: 3.35rem;" in narrow_block
+    assert ".orders-card__price" in narrow_block
+    assert "white-space: nowrap;" in narrow_block
+
+
+def test_cashier_reference_viewports_choose_expected_kanban_mode():
+    # Aproxima a largura real do container: a sidebar fixa só existe a partir
+    # de 1024px e o conteúdo desktop desconta 2.5rem de padding horizontal.
+    cases = {
+        (360, 800): "compact",
+        (390, 844): "compact",
+        (412, 915): "compact",
+        (768, 1024): "compact",
+        (1024, 768): "compact",
+        (1366, 768): "compact",
+        (1440, 900): "wide",
+        (1920, 1080): "wide",
+    }
+    breakpoint_px = 68 * 16
+
+    for (viewport_width, _viewport_height), expected in cases.items():
+        if viewport_width >= 1024:
+            container_width = viewport_width - (17 * 16) - (2.5 * 16)
+        else:
+            container_width = viewport_width - (1.4 * 16)
+        actual = "wide" if container_width >= breakpoint_px else "compact"
+        assert actual == expected, (viewport_width, container_width, expected)
+
+
+def test_cashier_low_desktop_height_compacts_non_operational_chrome():
+    css = source("src/index.css")
+
+    assert "@media (min-width: 1024px) and (max-height: 820px)" in css
+    low_height_block = css.split(
+        "@media (min-width: 1024px) and (max-height: 820px)", 1
+    )[1].split("@media (prefers-reduced-motion: reduce)", 1)[0]
+    for selector in (
+        ".cashier-topbar",
+        ".cashier-subnav",
+        ".cashier-content",
+        ".orders-hero",
+        ".orders-toolbar",
+        ".orders-column__header",
+    ):
+        assert selector in low_height_block
 
 
 
@@ -200,6 +282,7 @@ def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hidi
     assert ".orders-auto-accept__label" in css
     assert "white-space: normal;" in css
     assert "grid-column: 1 / -1;" in css
+    assert "position: static !important;" in css
 
 def test_temporary_stage4_patch_workflows_are_not_part_of_runtime_branch():
     assert not (ROOT / ".github/workflows/stage4b-one-shot.yml").exists()
