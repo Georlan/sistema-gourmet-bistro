@@ -160,23 +160,37 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     assert "divide-[#252b28]" not in closing
 
 
-def test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column():
+def test_orders_kanban_keeps_every_enabled_stage_side_by_side_on_desktop():
     css = source("src/index.css")
     caixa = source("src/components/CaixaPanel.tsx")
 
-    # A troca acontece no mesmo limite dos dois lados: até 68rem o operador usa
-    # as etapas compactas; a partir daí as três colunas passam a caber de fato.
+    # O container ainda compacta detalhes internos, mas não decide mais se as
+    # colunas existem. Essa decisão usa viewport/capacidade informadas pelo navegador.
     assert "@container (max-width: 68rem)" in css
-    assert "@container (min-width: 68rem)" in css
-    assert "@container (max-width: 63rem)" not in css
-    assert "@container (min-width: 63rem)" not in css
+    assert "@container (min-width: 68rem)" not in css
+    assert "@media (min-width: 769px), (hover: hover) and (pointer: fine)" in css
 
-    desktop_block = css.split("@container (min-width: 68rem)", 1)[1].split("@container (max-width: 68rem)", 1)[0]
+    desktop_block = css.split(
+        "@media (min-width: 769px), (hover: hover) and (pointer: fine)", 1
+    )[1].split("@media (hover: hover) and (pointer: fine)", 1)[0]
     assert "grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));" in desktop_block
+    assert ".orders-mobile-stages" in desktop_block
+    assert "display: none;" in desktop_block
     assert ".orders-column" in desktop_block
+    assert "display: flex;" in desktop_block
     assert "min-width: 0;" in desktop_block
 
-    # A terceira etapa continua estruturalmente presente no Kanban.
+    # Os canais configurados controlam a quantidade de trilhas sem deixar
+    # mínimos rígidos capazes de ampliar a página.
+    assert "visibleOrdersStages = ordersStages.filter(stage => stage.enabled)" in caixa
+    assert "repeat(${visibleOrdersStages.length}, minmax(0, 1fr))" in caixa
+    assert "minmax(15rem" not in caixa
+    assert "minmax(20rem" not in caixa
+    assert "is-channel-disabled" in css
+    assert "!modulesActive.salon && 'is-channel-disabled'" in caixa
+    assert "!modulesActive.delivery && 'is-channel-disabled'" in caixa
+
+    # A etapa de fechamento continua estruturalmente presente no Kanban.
     assert "orders-column--closing" in caixa
     assert "03 / FECHAMENTO" in caixa
     assert "Prontos para concluir" in caixa
@@ -264,27 +278,23 @@ def test_cashier_narrow_cards_return_space_to_order_identity():
 
 
 def test_cashier_reference_viewports_choose_expected_kanban_mode():
-    # Aproxima a largura real do container: a sidebar fixa só existe a partir
-    # de 1024px e o conteúdo desktop desconta 2.5rem de padding horizontal.
+    # O modo largo considera a viewport e a capacidade de apontador, não a
+    # largura restante depois da sidebar. Assim monitores nunca viram abas.
     cases = {
-        (360, 800): "compact",
-        (390, 844): "compact",
-        (412, 915): "compact",
-        (768, 1024): "compact",
-        (1024, 768): "compact",
-        (1366, 768): "compact",
-        (1440, 900): "wide",
-        (1920, 1080): "wide",
+        (360, 800, "coarse"): "compact",
+        (390, 844, "coarse"): "compact",
+        (412, 915, "coarse"): "compact",
+        (768, 1024, "coarse"): "compact",
+        (1024, 768, "coarse"): "wide",
+        (640, 800, "fine"): "wide",
+        (1366, 768, "fine"): "wide",
+        (1440, 900, "fine"): "wide",
+        (1920, 1080, "fine"): "wide",
     }
-    breakpoint_px = 68 * 16
 
-    for (viewport_width, _viewport_height), expected in cases.items():
-        if viewport_width >= 1024:
-            container_width = viewport_width - (17 * 16) - (2.5 * 16)
-        else:
-            container_width = viewport_width - (1.4 * 16)
-        actual = "wide" if container_width >= breakpoint_px else "compact"
-        assert actual == expected, (viewport_width, container_width, expected)
+    for (viewport_width, _viewport_height, pointer), expected in cases.items():
+        actual = "wide" if viewport_width >= 769 or pointer == "fine" else "compact"
+        assert actual == expected, (viewport_width, pointer, expected)
 
 
 def test_cashier_low_desktop_height_compacts_non_operational_chrome():

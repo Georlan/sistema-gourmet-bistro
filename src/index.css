@@ -1872,16 +1872,6 @@ body {
   background: rgba(0, 201, 150, 0.2);
 }
 
-@container (min-width: 68rem) {
-  .orders-board {
-    grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));
-  }
-
-  .orders-column {
-    min-width: 0;
-  }
-}
-
 @container (max-width: 68rem) {
   .orders-hero {
     grid-template-columns: 1fr;
@@ -1907,111 +1897,6 @@ body {
     justify-content: space-between;
   }
 
-  .orders-mobile-stages {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.35rem;
-    padding: 0.35rem;
-    border: 1px solid var(--koma-border-default);
-    border-radius: 0.85rem;
-    background: var(--koma-surface-panel);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  }
-
-  .orders-mobile-stages__button {
-    display: flex;
-    min-width: 0;
-    min-height: 2.75rem;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.35rem;
-    padding: 0.45rem 0.65rem;
-    color: var(--koma-text-muted);
-    border: 1px solid transparent;
-    border-radius: 0.65rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    transition: all 150ms ease;
-  }
-
-  .orders-mobile-stages__button strong {
-    display: grid;
-    min-width: 1.3rem;
-    height: 1.3rem;
-    place-items: center;
-    border: 1px solid var(--koma-border-subtle);
-    border-radius: 999px;
-    background: var(--koma-surface-raised);
-    color: var(--koma-text-primary);
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
-    font-weight: 700;
-  }
-
-  .orders-mobile-stages__button.is-active {
-    color: #065f46;
-    border-color: #99e6d0;
-    background: #e6f7f2;
-  }
-
-  .orders-mobile-stages__button.is-active strong {
-    color: #ffffff;
-    border-color: #059669;
-    background: #059669;
-  }
-
-  [data-koma-theme="dark"] .orders-mobile-stages {
-    border-color: rgba(255, 255, 255, 0.08);
-    background: rgba(14, 18, 16, 0.95);
-    box-shadow: none;
-  }
-
-  [data-koma-theme="dark"] .orders-mobile-stages__button {
-    color: #8e9993;
-  }
-
-  [data-koma-theme="dark"] .orders-mobile-stages__button strong {
-    color: #8e9993;
-    border-color: rgba(255, 255, 255, 0.05);
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  [data-koma-theme="dark"] .orders-mobile-stages__button.is-active {
-    color: #00c996;
-    border-color: rgba(0, 201, 150, 0.35);
-    background: rgba(0, 201, 150, 0.15);
-  }
-
-  [data-koma-theme="dark"] .orders-mobile-stages__button.is-active strong {
-    color: #00c996;
-    border-color: rgba(0, 201, 150, 0.4);
-    background: rgba(0, 201, 150, 0.3);
-  }
-
-  .orders-board {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: auto;
-    overflow: visible;
-  }
-
-  .orders-column {
-    display: none;
-    min-width: 0;
-    min-height: 13rem;
-  }
-
-  .orders-column.is-mobile-active {
-    display: flex;
-  }
-
-  .orders-column.is-empty {
-    min-height: 11rem;
-  }
-
-  .orders-column__body {
-    overflow-y: visible !important;
-    overscroll-behavior: auto;
-  }
 }
 
 @container (max-width: 30rem) {
@@ -2341,6 +2226,48 @@ body {
     overflow-y: visible !important;
     overscroll-behavior: auto;
   }
+}
+
+/*
+ * Operational rule: a desktop-capable viewport always exposes every enabled
+ * Kanban stage side by side. Container width may compact the cards, but it
+ * must never turn desktop columns into click-to-switch tabs.
+ *
+ * The width branch also honors the browser's "desktop site" viewport on
+ * touch devices. The fine-pointer branch keeps the rule true when a desktop
+ * window is resized below the nominal tablet breakpoint.
+ */
+@media (min-width: 769px), (hover: hover) and (pointer: fine) {
+  .orders-mobile-stages {
+    display: none;
+  }
+
+  .orders-board {
+    grid-template-columns: var(--orders-columns, repeat(3, minmax(0, 1fr)));
+    min-height: 24rem;
+    overflow: hidden;
+  }
+
+  .orders-column {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .orders-column.is-empty {
+    min-height: 0;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .orders-column__body {
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+}
+
+.orders-column.is-channel-disabled {
+  display: none !important;
 }
 
 @container cashier-content (max-width: 30rem) {

@@ -4025,17 +4025,22 @@ export function CaixaPanel({
     return filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
   }, [filteredCol1, filteredDigitalProduction, filteredCol2Table, filteredDeliveryFinalization]);
 
-  const ordersColumnCounts = [
-    filteredCol1.length,
-    filteredDigitalProduction.length,
-    filteredCol2Table.length + filteredDeliveryFinalization.length
+  const ordersStages = [
+    { id: 'salon' as const, label: 'Salão', count: filteredCol1.length, enabled: modulesActive.salon },
+    { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length, enabled: modulesActive.delivery },
+    { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length, enabled: true },
   ];
+  const visibleOrdersStages = ordersStages.filter(stage => stage.enabled);
+  const effectiveMobileOrdersStage = visibleOrdersStages.some(stage => stage.id === mobileOrdersStage)
+    ? mobileOrdersStage
+    : visibleOrdersStages[0].id;
+  const ordersColumnCounts = visibleOrdersStages.map(stage => stage.count);
   const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
   const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
   const ordersColumnsTemplate = activeOrdersColumns === 0
-    ? 'repeat(3, minmax(0, 1fr))'
+    ? `repeat(${visibleOrdersStages.length}, minmax(0, 1fr))`
     : ordersColumnCounts
-      .map(count => count === 0 ? 'minmax(15rem, 0.68fr)' : `minmax(20rem, ${ordersColumnWeight}fr)`)
+      .map(count => count === 0 ? 'minmax(0, 0.68fr)' : `minmax(0, ${ordersColumnWeight}fr)`)
       .join(' ');
   const ordersBoardStyle = {
     '--orders-columns': ordersColumnsTemplate
@@ -5017,18 +5022,14 @@ export function CaixaPanel({
               )}
 
               <div className="orders-mobile-stages" role="tablist" aria-label="Etapa dos pedidos">
-                {[
-                  { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
-                  { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length },
-                  { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
-                ].map(stage => (
+                {visibleOrdersStages.map(stage => (
                   <button
                     key={stage.id}
                     type="button"
                     role="tab"
-                    aria-selected={mobileOrdersStage === stage.id}
+                    aria-selected={effectiveMobileOrdersStage === stage.id}
                     onClick={() => setMobileOrdersStage(stage.id)}
-                    className={clsx('orders-mobile-stages__button', mobileOrdersStage === stage.id && 'is-active')}
+                    className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active')}
                   >
                     <span>{stage.label}</span>
                     <strong>{stage.count}</strong>
@@ -5044,7 +5045,7 @@ export function CaixaPanel({
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', mobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', !modulesActive.salon && 'is-channel-disabled', filteredCol1.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">01 / SALÃO</span>
@@ -5179,7 +5180,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
-                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', mobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', !modulesActive.delivery && 'is-channel-disabled', filteredDigitalProduction.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">02 / SEM MESA</span>
@@ -5293,7 +5294,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', mobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">03 / FECHAMENTO</span>
