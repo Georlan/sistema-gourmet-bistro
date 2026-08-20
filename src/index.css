@@ -265,9 +265,12 @@ body {
  * vertical scroll owner.
  */
 .management-shell {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 100vh;
   min-height: 100svh;
+  overflow-x: clip;
 }
 
 /* Cashier workspace — same editorial language as the public landing page. */
@@ -280,6 +283,7 @@ body {
   --cashier-muted: var(--koma-text-muted);
   --cashier-accent: var(--koma-accent);
   width: 100%;
+  max-width: 100%;
   height: 100vh;
   height: 100dvh;
   min-height: 100svh;
@@ -732,6 +736,8 @@ body {
 }
 
 .cashier-main {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -746,11 +752,32 @@ body {
 }
 
 .cashier-content {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 0;
+  overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+  container-name: cashier-content;
+  container-type: inline-size;
+}
+
+.cashier-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cashier-content :where(.grid, .flex) {
+  min-width: 0;
+}
+
+.cashier-fluid-view,
+.cashier-fluid-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .orders-workspace {
@@ -2063,17 +2090,20 @@ body {
   .cashier-shell {
     height: auto;
     min-height: 100svh;
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .cashier-main {
     min-height: 100svh;
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .cashier-content {
     padding: 0.7rem !important;
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
     overscroll-behavior-y: auto;
     scrollbar-gutter: auto;
   }
@@ -2285,12 +2315,14 @@ body {
   .cashier-shell {
     height: auto;
     min-height: 100svh;
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .cashier-main,
   .cashier-content {
-    overflow: visible;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .cashier-content {
@@ -2308,6 +2340,43 @@ body {
   .orders-column__body {
     overflow-y: visible !important;
     overscroll-behavior: auto;
+  }
+}
+
+@container cashier-content (max-width: 30rem) {
+  .closing-workspace {
+    gap: 0.75rem;
+  }
+
+  .closing-toolbar-actions,
+  .closing-count-field__header,
+  .closing-count-field__meta {
+    flex-wrap: wrap;
+  }
+
+  .closing-toolbar-actions {
+    width: 100%;
+  }
+
+  .closing-toolbar-actions > button {
+    flex: 1 1 9rem;
+    min-width: 0;
+  }
+
+  .closing-count-field__header > label,
+  .closing-count-field__meta > span:first-child {
+    flex: 1 1 10rem;
+  }
+
+  .closing-count-field__use-expected,
+  .closing-count-field__expected {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .closing-count-field__expected {
+    margin-left: auto;
+    text-align: right;
   }
 }
 
