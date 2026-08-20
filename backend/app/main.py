@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 import sentry_sdk
 from fastapi import FastAPI, HTTPException, Request
@@ -67,10 +68,13 @@ async def lifespan(app: FastAPI):
     from .database import validate_postgres_runtime_role
 
     validate_postgres_runtime_role()
-    try:
+    if should_create_schema_on_startup():
         Base.metadata.create_all(bind=engine)
-    except Exception:
-        pass
+    else:
+        print(
+            "[DATABASE] create_all desativado; Alembic é a fonte do esquema.",
+            flush=True,
+        )
     yield
 
 
@@ -80,6 +84,16 @@ app = FastAPI(
     description="Backend API local para o App de Garçons e Caixas do Bistrô",
     lifespan=lifespan,
 )
+
+
+def should_create_schema_on_startup() -> bool:
+    """Restringe create_all a SQLite/desenvolvimento ou opt-in explícito."""
+    override = os.getenv("CREATE_SCHEMA_ON_STARTUP")
+    if override is not None:
+        return override.strip().lower() == "true"
+
+    environment = os.getenv("ENVIRONMENT", "").strip().lower()
+    return engine.dialect.name == "sqlite" or environment in {"development", "test"}
 
 
 async def run_migrations_on_startup():
@@ -333,9 +347,42 @@ def trigger_backend_error():
     return {"status": division_by_zero}
 
 
+def _deployment_commit() -> str | None:
+    commit = (
+        os.getenv("RAILWAY_GIT_COMMIT_SHA")
+        or os.getenv("GIT_COMMIT_SHA")
+        or ""
+    ).strip()
+    return commit[:12] or None
+
+
+def _websocket_connections_count() -> int:
+    try:
+        from .websocket_manager import manager
+
+        return sum(
+            len(connections) for connections in manager.active_connections.values()
+        )
+    except Exception:
+        return 0
+
+
+@app.get("/health/live")
+def liveness_check():
+    """Confirma apenas que o processo HTTP está vivo, sem depender do banco."""
+    return {
+        "status": "ok",
+        "version": settings.PROJECT_VERSION,
+        "commit": _deployment_commit(),
+    }
+
+
 @app.get("/health")
+@app.get("/health/ready")
 def health_check():
+    """Sinaliza prontidão real: sem PostgreSQL, o backend não recebe tráfego."""
     db_status = "healthy"
+    started_at = perf_counter()
     try:
         from sqlalchemy import text
 
@@ -345,20 +392,14 @@ def health_check():
         is_dev = os.getenv("ENVIRONMENT") == "development"
         db_status = f"unhealthy: {exc}" if is_dev else "unhealthy"
 
-    ws_connections_count = 0
-    try:
-        from .websocket_manager import manager
-
-        ws_connections_count = sum(
-            len(connections) for connections in manager.active_connections.values()
-        )
-    except Exception:
-        pass
-
-    return {
-        "status": "ok",
+    ready = db_status == "healthy"
+    payload = {
+        "status": "ok" if ready else "unavailable",
         "version": settings.PROJECT_VERSION,
+        "commit": _deployment_commit(),
         "database": db_status,
+        "database_latency_ms": round((perf_counter() - started_at) * 1_000, 2),
         "print_queue": {"backend": "postgres", "consumer": "koma-print"},
-        "websocket": {"active_connections": ws_connections_count},
+        "websocket": {"active_connections": _websocket_connections_count()},
     }
+    return JSONResponse(status_code=200 if ready else 503, content=payload)

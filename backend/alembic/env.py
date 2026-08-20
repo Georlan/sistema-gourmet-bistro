@@ -14,6 +14,10 @@ from app.database import Base
 from app.config import settings
 from app import models
 from app import financial_cash_constraints  # noqa: F401
+from app.migration_runtime import (
+    prepare_migration_connection,
+    release_migration_lock,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -51,13 +55,26 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata, render_as_batch=True
-        )
+    try:
+        with connectable.connect() as connection:
+            lock_acquired = False
+            try:
+                lock_acquired = prepare_migration_connection(connection)
+                context.configure(
+                    connection=connection,
+                    target_metadata=target_metadata,
+                    render_as_batch=True,
+                )
 
-        with context.begin_transaction():
-            context.run_migrations()
+                with context.begin_transaction():
+                    context.run_migrations()
+            finally:
+                release_migration_lock(
+                    connection,
+                    lock_acquired=lock_acquired,
+                )
+    finally:
+        connectable.dispose()
 
 
 if context.is_offline_mode():
