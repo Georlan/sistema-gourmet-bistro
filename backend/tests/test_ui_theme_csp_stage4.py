@@ -184,7 +184,18 @@ def test_orders_kanban_has_no_desktop_breakpoint_gap_that_hides_closing_column()
 
 def test_cashier_mobile_uses_one_natural_scroll_owner():
     css = source("src/index.css")
+    app = source("src/App.tsx")
     caixa = source("src/components/CaixaPanel.tsx")
+
+    management_shell = css.split(".management-shell {", 1)[1].split("}", 1)[0]
+    assert "min-height: 100svh;" in management_shell
+    assert "overflow:" not in management_shell
+
+    assert "management-shell w-full bg-koma-page" in app
+    assert (
+        "w-full h-screen bg-koma-page text-koma-foreground flex flex-col "
+        "font-sans overflow-hidden"
+    ) not in app
 
     shell_block = css.split(".cashier-shell {", 1)[1].split("}", 1)[0]
     assert "height: 100dvh;" in shell_block
