@@ -158,6 +158,7 @@ def login(
     candidate_restaurants = [candidate.get("restaurante_id") for candidate in candidates]
 
     if candidates and staff_login_is_blocked(
+        db,
         candidate_restaurants,
         identifier=username_val,
         client_ip=client_ip,
@@ -172,6 +173,7 @@ def login(
         blocked = False
         if candidates:
             blocked = record_staff_login_failure(
+                db,
                 candidate_restaurants,
                 identifier=username_val,
                 client_ip=client_ip,
@@ -212,14 +214,18 @@ def login(
             detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
 
+    # Materializa o payload antes de limpar o bucket. O cleanup pode encerrar a
+    # transação de leitura atual, então não mantemos dependência de atributos ORM
+    # depois desse ponto.
+    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
+    user_data = _login_user_payload(usuario)
+
     clear_staff_login_failures(
+        db,
         restaurante_id,
         identifier=username_val,
         client_ip=client_ip,
     )
-
-    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
-    user_data = _login_user_payload(usuario)
 
     return {
         "access_token": access_token,
