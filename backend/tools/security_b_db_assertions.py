@@ -23,10 +23,11 @@ EXPECTED_SMARTPOS_FK = (
     "usuarios",
     ("restaurante_id", "id"),
 )
-BLOCKED_FINDING_CODES = {
+BLOCKED_TENANT_FK_FINDINGS = {
     "CROSS_TENANT_FK_ACTIVITY_LOG",
     "CROSS_TENANT_FK_SMARTPOS_OPERATOR",
 }
+BLOCKED_AUTH_FINDINGS = {"STAFF_LOGIN_NO_RATE_LIMIT"}
 
 
 def _has_unique(inspector, table: str, columns: tuple[str, ...]) -> bool:
@@ -58,10 +59,17 @@ def main() -> None:
         for item in report.get("findings", [])
         if item.get("code")
     }
-    still_exploitable = sorted(BLOCKED_FINDING_CODES & finding_codes)
-    assert not still_exploitable, (
+
+    tenant_fk_findings = sorted(BLOCKED_TENANT_FK_FINDINGS & finding_codes)
+    assert not tenant_fk_findings, (
         "cross-tenant user FK probes are still exploitable: "
-        f"{still_exploitable}"
+        f"{tenant_fk_findings}"
+    )
+
+    auth_findings = sorted(BLOCKED_AUTH_FINDINGS & finding_codes)
+    assert not auth_findings, (
+        "staff login brute-force probe is still unthrottled: "
+        f"{auth_findings}"
     )
 
     engine = create_engine(ADMIN_URL, pool_pre_ping=True)
@@ -82,8 +90,8 @@ def main() -> None:
         engine.dispose()
 
     print(
-        "Security B OK: cross-tenant user references are blocked by "
-        "composite PostgreSQL foreign keys."
+        "Security B/C OK: tenant-safe user references are enforced and "
+        "repeated staff login failures are throttled."
     )
 
 
