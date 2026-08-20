@@ -302,7 +302,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
       {saveStatus.type && (
         <div className={`p-4 rounded border text-xs font-mono flex items-center gap-3 animate-fadeIn ${
           saveStatus.type === "success" 
-            ? "bg-emerald-950/20/20 border-emerald-500/50 text-emerald-400" 
+            ? "bg-emerald-950/20 border-emerald-500/50 text-emerald-400"
             : "bg-red-950/20 border-red-500/50 text-red-400"
         }`}>
           {saveStatus.type === "success" ? (

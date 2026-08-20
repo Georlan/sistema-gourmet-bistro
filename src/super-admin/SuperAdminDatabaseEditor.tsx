@@ -412,7 +412,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
       {/* Header and Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-koma-card border border-[#1e293b]/40 p-4 rounded">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-950/20/40 border border-[#00b894]/20 rounded">
+          <div className="p-2 bg-emerald-950/40 border border-[#00b894]/20 rounded">
             <Database className="w-5 h-5 text-[#00b894]" />
           </div>
           <div>

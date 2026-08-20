@@ -118,7 +118,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                 id={`kitchen-card-${item.id}`}
                 className={`bg-koma-panel border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 ${
                   isDelayed 
-                    ? 'border-rose-900/50/50 bg-rose-900/40 border border-rose-800/50/5 shadow-lg shadow-[#f43f5e]/10' 
+                    ? 'border-rose-300 bg-rose-50 shadow-lg shadow-rose-900/10 dark:border-rose-800/50 dark:bg-rose-950/40 dark:shadow-[#f43f5e]/10'
                     : 'border-koma-border hover:border-emerald-500/30'
                 }`}
               >
@@ -130,8 +130,8 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
                     </span>
                     
                     <div className="flex items-center gap-1.5 bg-koma-card px-2.5 py-1 rounded-full border border-koma-border">
-                      <Clock size={12} className={isDelayed ? 'text-rose-400' : 'text-emerald-700 dark:text-emerald-400'} />
-                      <span className={`font-mono text-xs font-semibold ${isDelayed ? 'text-rose-400 font-bold' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                      <Clock size={12} className={isDelayed ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-400'} />
+                      <span className={`font-mono text-xs font-semibold ${isDelayed ? 'text-rose-700 dark:text-rose-300 font-bold' : 'text-emerald-700 dark:text-emerald-400'}`}>
                         {minutesElapsed}m atrás
                       </span>
                     </div>
@@ -150,7 +150,7 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
 
                     {/* Unit observation - Crucial for kitchen */}
                     {item.observacao ? (
-                      <div className="flex items-start gap-1.5 p-3 bg-rose-900/40 border border-rose-800/50/5 border border-dashed border-rose-900/50/20 rounded-xl text-xs text-amber-700 dark:text-amber-300 leading-normal font-sans">
+                      <div className="flex items-start gap-1.5 p-3 bg-amber-50 border border-dashed border-amber-300 dark:bg-rose-950/40 dark:border-rose-900/50 rounded-xl text-xs text-amber-800 dark:text-amber-300 leading-normal font-sans">
                         <MessageSquare size={12} className="shrink-0 mt-0.5 text-emerald-700 dark:text-emerald-400" />
                         <span>"{item.observacao}"</span>
                       </div>

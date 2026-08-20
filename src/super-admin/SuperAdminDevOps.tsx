@@ -354,7 +354,7 @@ export default function SuperAdminDevOps({
             {/* Cloudflare */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.cloudflare?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
                 : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
@@ -364,7 +364,7 @@ export default function SuperAdminDevOps({
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                   apiHealth.cloudflare?.status === "CONNECTED"
-                    ? "bg-emerald-950/20/40 border border-[#00b894]/20 text-[#00b894]"
+                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
                     : "bg-amber-950/40 border border-amber-850 text-amber-400"
                 }`}>
                   {apiHealth.cloudflare?.status === "CONNECTED" ? "CONECTADO" : "AJUSTE REQ."}
@@ -381,7 +381,7 @@ export default function SuperAdminDevOps({
             {/* GitHub */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.github?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
                 : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
@@ -391,7 +391,7 @@ export default function SuperAdminDevOps({
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                   apiHealth.github?.status === "CONNECTED"
-                    ? "bg-emerald-950/20/40 border border-[#00b894]/20 text-[#00b894]"
+                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
                     : "bg-amber-950/40 border border-amber-850 text-amber-400"
                 }`}>
                   {apiHealth.github?.status === "CONNECTED" ? "CONECTADO" : "FALHA CONEXÃO"}
@@ -408,7 +408,7 @@ export default function SuperAdminDevOps({
             {/* Railway */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.railway?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
                 : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
@@ -418,7 +418,7 @@ export default function SuperAdminDevOps({
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                   apiHealth.railway?.status === "CONNECTED"
-                    ? "bg-emerald-950/20/40 border border-[#00b894]/20 text-[#00b894]"
+                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
                     : "bg-amber-950/40 border border-amber-850 text-amber-400"
                 }`}>
                   {apiHealth.railway?.status === "CONNECTED" ? "CONECTADO" : "NÃO AUTORIZADO"}
@@ -435,7 +435,7 @@ export default function SuperAdminDevOps({
             {/* Sentry */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.sentry?.status === "CONNECTED"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
                 : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
             }`}>
               <div className="flex items-center justify-between mb-1.5">
@@ -445,7 +445,7 @@ export default function SuperAdminDevOps({
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                   apiHealth.sentry?.status === "CONNECTED"
-                    ? "bg-emerald-950/20/40 border border-[#00b894]/20 text-[#00b894]"
+                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
                     : "bg-amber-950/40 border border-amber-850 text-amber-400"
                 }`}>
                   {apiHealth.sentry?.status === "CONNECTED" ? "CONECTADO" : "ACESSO NEGADO"}
@@ -462,7 +462,7 @@ export default function SuperAdminDevOps({
             {/* Evolution API */}
             <div className={`p-3.5 rounded border transition-all ${
               apiHealth.evolution?.status === "green"
-                ? "bg-emerald-950/20/10 border-emerald-950 text-koma-secondary"
+                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
                 : apiHealth.evolution?.status === "yellow"
                   ? "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
                   : "bg-red-950/10 border-red-900/40 text-koma-secondary"
@@ -474,7 +474,7 @@ export default function SuperAdminDevOps({
                 </span>
                 <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                   apiHealth.evolution?.status === "green"
-                    ? "bg-emerald-950/20/40 border border-[#00b894]/20 text-[#00b894]"
+                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
                     : apiHealth.evolution?.status === "yellow"
                       ? "bg-amber-950/40 border border-amber-850 text-amber-400"
                       : "bg-red-950/40 border border-red-900/60 text-red-400"
@@ -511,7 +511,7 @@ export default function SuperAdminDevOps({
               <Server className="w-4 h-4 text-[#00b894]" />
               [01] RAILWAY CONTAINER SAÚDE (CORE API)
             </h3>
-            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/20/60">
+            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/60">
               RAILWAY_API
             </span>
           </div>
@@ -625,7 +625,7 @@ export default function SuperAdminDevOps({
               <Globe className="w-4 h-4 text-[#00b894]" />
               [02] CLOUDFLARE DOMÍNIOS AUTOMÁTICOS
             </h3>
-            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/20/60">
+            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/60">
               CLOUDFLARE_API
             </span>
           </div>
@@ -685,7 +685,7 @@ export default function SuperAdminDevOps({
                         <p className="text-[9px] text-[#00b894] mt-0.5">CNAME &rarr; {dns.target}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[9px] text-[#00b894] bg-emerald-950/20/40 border border-emerald-950 px-1.5 rounded font-bold">
+                        <span className="text-[9px] text-[#00b894] bg-emerald-950/40 border border-emerald-950 px-1.5 rounded font-bold">
                           🟢 PROXIED
                         </span>
                         <span className="text-[9px] text-koma-subtle bg-zinc-950 px-1.5 rounded">
@@ -707,7 +707,7 @@ export default function SuperAdminDevOps({
               <GitBranch className="w-4 h-4 text-[#00b894]" />
               [03] GITHUB CI/CD WORKFLOW RUNS
             </h3>
-            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/20/60">
+            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/60">
               GITHUB_API
             </span>
           </div>
@@ -739,7 +739,7 @@ export default function SuperAdminDevOps({
                           {commit.branch}
                         </span>
                         {commit.status === "success" ? (
-                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/20/40 border border-emerald-500 px-1.5 rounded">
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500 px-1.5 rounded">
                             Success
                           </span>
                         ) : commit.status === "failure" ? (
@@ -763,7 +763,7 @@ export default function SuperAdminDevOps({
                       <div className="pt-1">
                         <button
                           onClick={() => triggerGithubWorkflow(commit.branch)}
-                          className="text-[9px] bg-emerald-950/20/60 hover:bg-emerald-900/60 border border-[#00b894]/20/40 text-[#00b894] font-mono py-1 px-2 rounded cursor-pointer transition-all"
+                          className="text-[9px] bg-emerald-950/60 hover:bg-emerald-900/60 border border-[#00b894]/40 text-[#00b894] font-mono py-1 px-2 rounded cursor-pointer transition-all"
                         >
                           FORÇAR REDEPLOY (WORKFLOW_DISPATCH)
                         </button>

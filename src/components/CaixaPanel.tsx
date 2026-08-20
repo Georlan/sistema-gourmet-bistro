@@ -4035,7 +4035,7 @@ export function CaixaPanel({
   const ordersColumnsTemplate = activeOrdersColumns === 0
     ? 'repeat(3, minmax(0, 1fr))'
     : ordersColumnCounts
-      .map(count => count === 0 ? 'minmax(12rem, 0.56fr)' : `minmax(20rem, ${ordersColumnWeight}fr)`)
+      .map(count => count === 0 ? 'minmax(15rem, 0.68fr)' : `minmax(20rem, ${ordersColumnWeight}fr)`)
       .join(' ');
   const ordersBoardStyle = {
     '--orders-columns': ordersColumnsTemplate
@@ -4497,7 +4497,7 @@ export function CaixaPanel({
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
-              className={clsx('lg:hidden', 'p-1.5', 'bg-koma-raised', 'hover:bg-koma-card', 'text-emerald-400', 'rounded-xl', 'border', 'border-koma-border', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'shrink-0')}
+              className={clsx('lg:hidden', 'p-1.5', 'bg-koma-raised', 'hover:bg-koma-card', 'text-emerald-700', 'dark:text-emerald-400', 'rounded-xl', 'border', 'border-koma-border', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'shrink-0')}
               title="Abrir Menu do Caixa"
               aria-label="Abrir menu principal"
               aria-controls="mobile-caixa-sidebar"
@@ -4529,7 +4529,7 @@ export function CaixaPanel({
               className={clsx(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border',
                 isFullscreen
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-400 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40 dark:hover:bg-emerald-500/30'
                   : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground'
               )}
               title={isFullscreen ? "Sair do Modo PDV Tela Cheia" : "Entrar no Modo PDV Tela Cheia"}
@@ -4841,7 +4841,7 @@ export function CaixaPanel({
                                   if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
                                 }
                               }}
-                              className={clsx('px-3', 'py-1.5', 'bg-rose-950/30', 'border', 'border-rose-900/35', 'text-rose-400', 'hover:bg-rose-900/20', 'hover:text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
+                              className={clsx('px-3', 'py-1.5', 'bg-rose-50', 'border', 'border-rose-300', 'text-rose-800', 'hover:bg-rose-700', 'hover:text-white', 'dark:bg-rose-950/30', 'dark:border-rose-900/35', 'dark:text-rose-300', 'dark:hover:bg-rose-900/50', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
                             >
                               Rejeitar
                             </button>
@@ -5059,7 +5059,7 @@ export function CaixaPanel({
                   <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
                     {filteredCol1.length === 0 ? (
                       <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-koma-subtle', 'text-xs', 'space-y-1')}>
-                        <ClipboardList size={20} className={clsx('mx-auto', 'opacity-40', 'mb-2', 'text-emerald-400')} />
+                        <ClipboardList size={20} className={clsx('mx-auto', 'opacity-70', 'mb-2', 'text-emerald-700', 'dark:text-emerald-400')} />
                         <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido local em produção"}</p>
                       </div>
                     ) : (

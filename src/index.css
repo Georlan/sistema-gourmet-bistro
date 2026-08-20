@@ -81,6 +81,9 @@
   --koma-border-strong: rgba(220, 240, 230, 0.28);
   --koma-accent: #00c996;
   --koma-focus-ring: rgba(0, 201, 150, 0.34);
+  --koma-stage-salon: #00c996;
+  --koma-stage-digital: #68d7b3;
+  --koma-stage-closing: #9bb7aa;
 
   /* Status Tokens (Dark) */
   --koma-success-bg: rgba(0, 201, 150, 0.12);
@@ -122,12 +125,12 @@
   --color-brand-accent: #00875f;
 
   /* Theme contract — Light mode palette (anti-glare, crisp contrast, official Kôma light design system) */
-  --koma-surface-page: #f3f6f7;
-  --koma-surface-canvas: #edf1f2;
+  --koma-surface-page: #eef3f4;
+  --koma-surface-canvas: #e8eef0;
   --koma-surface-shell: #ffffff;
   --koma-surface-panel: #ffffff;
   --koma-surface-card: #ffffff;
-  --koma-surface-raised: #f1f5f7;
+  --koma-surface-raised: #eef3f5;
   --koma-surface-input: #ffffff;
   --koma-surface-dialog: #ffffff;
   --koma-surface-overlay: rgba(15, 23, 42, 0.65);
@@ -135,11 +138,27 @@
   --koma-text-secondary: #334155;
   --koma-text-muted: #52606a;
   --koma-text-subtle: #64748b;
-  --koma-border-subtle: rgba(15, 23, 42, 0.08);
-  --koma-border-default: #cdd5d9;
+  --koma-border-subtle: rgba(15, 23, 42, 0.10);
+  --koma-border-default: #c3cdd2;
   --koma-border-strong: #94a3b8;
   --koma-accent: #00875f;
   --koma-focus-ring: rgba(0, 135, 95, 0.35);
+  --koma-stage-salon: #047857;
+  --koma-stage-digital: #0f766e;
+  --koma-stage-closing: #475569;
+  --koma-light-emerald-text: #047857;
+  --koma-light-blue-text: #1d4ed8;
+  --koma-light-sky-text: #0369a1;
+  --koma-light-cyan-text: #0e7490;
+  --koma-light-amber-text: #92400e;
+  --koma-light-yellow-text: #854d0e;
+  --koma-light-orange-text: #9a3412;
+  --koma-light-red-text: #b91c1c;
+  --koma-light-rose-text: #be123c;
+  --koma-light-purple-text: #7e22ce;
+  --koma-light-pink-text: #be185d;
+  --koma-light-indigo-text: #4338ca;
+  --koma-light-neutral-text: #52525b;
 
   /* Status Tokens (Light) */
   --koma-success-bg: #e6f7f2;
@@ -164,12 +183,64 @@
 
   --koma-waiter-bg: linear-gradient(180deg, #ffffff 0%, #f3f6f7 58%, #ffffff 100%);
   --koma-sidebar-bg: #ffffff;
-  --koma-main-bg: #f3f6f7;
+  --koma-main-bg: linear-gradient(180deg, #f4f7f8 0%, #eaf0f2 100%);
   --koma-topbar-bg: rgba(255, 255, 255, 0.98);
   --koma-hero-bg: linear-gradient(112deg, #ffffff 0 62%, rgba(0, 135, 95, 0.08) 62.1% 100%);
   --koma-hero-accent: linear-gradient(122deg, transparent 38%, rgba(0, 135, 95, 0.08) 38.2%, transparent 38.7%), radial-gradient(circle at 72% 0, rgba(0, 135, 95, 0.06), transparent 56%);
 
   color-scheme: light;
+}
+
+/* Compatibility layer for older components authored with dark-first Tailwind colors. */
+[data-koma-theme="light"] .text-emerald-400,
+[data-koma-theme="light"] .text-green-400,
+[data-koma-theme="light"] .text-teal-400 {
+  color: var(--koma-light-emerald-text) !important;
+}
+
+[data-koma-theme="light"] .text-blue-400,
+[data-koma-theme="light"] .text-indigo-400 {
+  color: var(--koma-light-blue-text) !important;
+}
+
+[data-koma-theme="light"] .text-sky-400 {
+  color: var(--koma-light-sky-text) !important;
+}
+
+[data-koma-theme="light"] .text-cyan-400 {
+  color: var(--koma-light-cyan-text) !important;
+}
+
+[data-koma-theme="light"] .text-amber-400 {
+  color: var(--koma-light-amber-text) !important;
+}
+
+[data-koma-theme="light"] .text-yellow-400 {
+  color: var(--koma-light-yellow-text) !important;
+}
+
+[data-koma-theme="light"] .text-orange-400 {
+  color: var(--koma-light-orange-text) !important;
+}
+
+[data-koma-theme="light"] .text-red-400 {
+  color: var(--koma-light-red-text) !important;
+}
+
+[data-koma-theme="light"] .text-rose-400 {
+  color: var(--koma-light-rose-text) !important;
+}
+
+[data-koma-theme="light"] .text-purple-400 {
+  color: var(--koma-light-purple-text) !important;
+}
+
+[data-koma-theme="light"] .text-pink-400 {
+  color: var(--koma-light-pink-text) !important;
+}
+
+[data-koma-theme="light"] .text-zinc-400 {
+  color: var(--koma-light-neutral-text) !important;
 }
 
 /* Luxury Fine Dining Color Palettes - Setup as Rich Dark theme */
@@ -678,6 +749,10 @@ body {
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.16);
 }
 
+[data-koma-theme="light"] .orders-hero {
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.10);
+}
+
 .orders-hero::before {
   content: '';
   position: absolute;
@@ -699,8 +774,8 @@ body {
   margin-bottom: 0.2rem;
   color: var(--cashier-accent);
   font-family: var(--font-mono);
-  font-size: 0.52rem;
-  font-weight: 700;
+  font-size: 0.6rem;
+  font-weight: 800;
   letter-spacing: 0.18em;
 }
 
@@ -728,7 +803,7 @@ body {
   max-width: 43rem;
   margin-top: 0.32rem;
   color: var(--koma-text-muted);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   line-height: 1.35;
 }
 
@@ -762,8 +837,8 @@ body {
 .orders-hero__metrics span {
   margin-top: 0.2rem;
   color: var(--koma-text-muted);
-  font-size: 0.54rem;
-  font-weight: 600;
+  font-size: 0.62rem;
+  font-weight: 650;
   white-space: nowrap;
 }
 
@@ -936,17 +1011,29 @@ body {
   align-items: center;
   gap: 0.38rem;
   padding: 0.4rem 0.7rem;
-  color: #7ce3c1;
-  border: 1px solid rgba(0, 201, 150, 0.22);
+  color: #065f46;
+  border: 1px solid #86d8bd;
   border-radius: 0.65rem;
-  background: rgba(0, 201, 150, 0.075);
-  font-size: 0.65rem;
-  font-weight: 700;
+  background: #e6f7f2;
+  font-size: 0.7rem;
+  font-weight: 800;
   cursor: pointer;
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 
 .orders-new-orders:hover {
+  color: #ffffff;
+  border-color: #047857;
+  background: #047857;
+}
+
+[data-koma-theme="dark"] .orders-new-orders {
+  color: #7ce3c1;
+  border-color: rgba(0, 201, 150, 0.22);
+  background: rgba(0, 201, 150, 0.075);
+}
+
+[data-koma-theme="dark"] .orders-new-orders:hover {
   color: #d7fff2;
   border-color: rgba(0, 201, 150, 0.4);
   background: rgba(0, 201, 150, 0.14);
@@ -962,7 +1049,7 @@ body {
   align-items: center;
   justify-content: center;
   color: #062119;
-  border: 2px solid #0b0e0c;
+  border: 2px solid var(--koma-surface-panel);
   border-radius: 999px;
   background: #72dfbc;
   font-size: 0.5rem;
@@ -1023,7 +1110,7 @@ body {
 }
 
 .orders-column {
-  --orders-stage: var(--cashier-accent);
+  --orders-stage: var(--koma-stage-salon);
   min-width: 20.5rem;
   min-height: 0;
   border: 1px solid var(--koma-border-default);
@@ -1034,11 +1121,11 @@ body {
 }
 
 .orders-column--digital {
-  --orders-stage: #68d7b3;
+  --orders-stage: var(--koma-stage-digital);
 }
 
 .orders-column--closing {
-  --orders-stage: #9bb7aa;
+  --orders-stage: var(--koma-stage-closing);
 }
 
 .orders-column.is-empty {
@@ -1052,13 +1139,17 @@ body {
   background: var(--koma-surface-raised);
 }
 
+[data-koma-theme="light"] .orders-column__header {
+  background: linear-gradient(180deg, #f5f8f9 0%, #edf3f5 100%);
+}
+
 .orders-column__number {
   display: block;
   margin-bottom: 0.18rem;
   color: var(--orders-stage);
   font-family: var(--font-mono);
-  font-size: 0.49rem;
-  font-weight: 700;
+  font-size: 0.61rem;
+  font-weight: 800;
   letter-spacing: 0.16em;
 }
 
@@ -1094,10 +1185,10 @@ body {
   align-items: center;
   justify-content: center;
   padding-inline: 0.45rem;
-  color: #7ce3c1;
-  border: 1px solid rgba(0, 201, 150, 0.2);
+  color: var(--orders-stage);
+  border: 1px solid color-mix(in srgb, var(--orders-stage) 38%, transparent);
   border-radius: 999px;
-  background: rgba(0, 201, 150, 0.08);
+  background: color-mix(in srgb, var(--orders-stage) 10%, transparent);
   font-family: var(--font-mono);
   font-size: 0.67rem;
   font-weight: 700;
@@ -1122,16 +1213,16 @@ body {
   position: absolute;
   inset: 0 auto 0 0;
   width: 2px;
-  background: rgba(0, 201, 150, 0.5);
+  background: var(--orders-stage);
   opacity: 0.68;
 }
 
 .orders-card--digital::before {
-  background: rgba(104, 215, 179, 0.52);
+  background: var(--orders-stage);
 }
 
 .orders-card--closing::before {
-  background: rgba(155, 183, 170, 0.52);
+  background: var(--orders-stage);
 }
 
 .orders-card:hover {
@@ -1169,7 +1260,7 @@ body {
   border-radius: 0.42rem;
   background: var(--koma-surface-raised);
   font-family: var(--font-mono);
-  font-size: 0.56rem;
+  font-size: 0.61rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.075em;
@@ -1335,7 +1426,7 @@ body {
   overflow: hidden;
   margin-top: 0.22rem;
   color: var(--koma-text-muted);
-  font-size: 0.65rem;
+  font-size: 0.69rem;
   font-weight: 600;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -1762,6 +1853,124 @@ body {
     grid-column: 1 / -1;
     justify-content: space-between;
   }
+
+  .orders-mobile-stages {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+    padding: 0.35rem;
+    border: 1px solid var(--koma-border-default);
+    border-radius: 0.85rem;
+    background: var(--koma-surface-panel);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .orders-mobile-stages__button {
+    display: flex;
+    min-width: 0;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    padding: 0.45rem 0.65rem;
+    color: var(--koma-text-muted);
+    border: 1px solid transparent;
+    border-radius: 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 150ms ease;
+  }
+
+  .orders-mobile-stages__button strong {
+    display: grid;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    place-items: center;
+    border: 1px solid var(--koma-border-subtle);
+    border-radius: 999px;
+    background: var(--koma-surface-raised);
+    color: var(--koma-text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+
+  .orders-mobile-stages__button.is-active {
+    color: #065f46;
+    border-color: #99e6d0;
+    background: #e6f7f2;
+  }
+
+  .orders-mobile-stages__button.is-active strong {
+    color: #ffffff;
+    border-color: #059669;
+    background: #059669;
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(14, 18, 16, 0.95);
+    box-shadow: none;
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button {
+    color: #8e9993;
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button strong {
+    color: #8e9993;
+    border-color: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button.is-active {
+    color: #00c996;
+    border-color: rgba(0, 201, 150, 0.35);
+    background: rgba(0, 201, 150, 0.15);
+  }
+
+  [data-koma-theme="dark"] .orders-mobile-stages__button.is-active strong {
+    color: #00c996;
+    border-color: rgba(0, 201, 150, 0.4);
+    background: rgba(0, 201, 150, 0.3);
+  }
+
+  .orders-board {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+    overflow-x: hidden !important;
+    scroll-snap-type: none;
+  }
+
+  .orders-column {
+    display: none;
+    min-width: 0;
+    min-height: 13rem;
+    scroll-snap-align: none;
+  }
+
+  .orders-column.is-mobile-active {
+    display: flex;
+  }
+
+  .orders-column.is-empty {
+    min-height: 11rem;
+  }
+
+  .orders-column__body {
+    overflow-y: visible !important;
+  }
+}
+
+.cashier-shell .text-\[8px\],
+.cashier-shell .text-\[9px\] {
+  font-size: 0.625rem !important;
+}
+
+.cashier-subnav button {
+  min-height: 1.9rem;
+  padding-inline: 0.8rem !important;
+  font-size: 0.625rem !important;
 }
 
 @media (max-width: 768px) {
@@ -2214,7 +2423,7 @@ body {
 }
 .drawer-enter-active {
   transform: translateY(0);
-  transition: transform 300s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ==========================================================================

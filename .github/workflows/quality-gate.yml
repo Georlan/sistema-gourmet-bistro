@@ -38,6 +38,9 @@ jobs:
       - name: TypeScript check
         run: npm run lint
 
+      - name: Light mode contrast audit
+        run: npm run audit:light
+
       - name: Dependency audit
         run: npm audit --audit-level=high
 

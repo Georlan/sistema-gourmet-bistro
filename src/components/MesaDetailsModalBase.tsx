@@ -1325,7 +1325,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                           <p className="text-[9px] text-emerald-700 dark:text-emerald-400 uppercase font-bold">Para: {item.clienteNome}</p>
                         )}
                         {item.observacao && (
-                          <p className="text-[10px] text-rose-600 dark:text-rose-300 italic pl-2 border-l border-dashed border-rose-900/50/50">
+                          <p className="text-[10px] text-rose-700 dark:text-rose-300 italic pl-2 border-l border-dashed border-rose-300 dark:border-rose-900/50">
                             Obs: "{item.observacao}"
                           </p>
                         )}

@@ -293,7 +293,7 @@ export default function SuperAdminTerminal({
                   onClick={() => setIsStreamingLogs(!isStreamingLogs)}
                   className={`p-1.5 rounded border text-[10px] font-mono flex items-center gap-1 cursor-pointer transition-colors ${
                     isStreamingLogs 
-                      ? "bg-emerald-950/20 border-[#00b894]/20/60 text-[#00b894]" 
+                      ? "bg-emerald-950/20 border-[#00b894]/60 text-[#00b894]"
                       : "bg-koma-card border-[#1e293b]/40 text-koma-subtle"
                   }`}
                   title={isStreamingLogs ? "Pause automatic scrolling" : "Enable automatic scrolling"}
