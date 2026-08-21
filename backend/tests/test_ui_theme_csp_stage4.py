@@ -297,6 +297,19 @@ def test_cashier_reference_viewports_choose_expected_kanban_mode():
         assert actual == expected, (viewport_width, pointer, expected)
 
 
+def test_smartpos_pending_state_opens_checkout_with_safe_recovery_instead_of_dead_button():
+    caixa = source("src/components/CaixaPanel.tsx")
+
+    assert "disabled={smartPosState?.blocksPayment === true}" not in caixa
+    assert "if (smartPosState?.blocksPayment || isLoading) return" not in caixa
+    assert "Revisar pagamento" in caixa
+    assert "Acompanhar pagamento" in caixa
+    assert "Concluir pagamento aprovado" in caixa
+    assert "/reconciliar-liquidacao" in caixa
+    assert "disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}" in caixa
+    assert "Revise a operação da maquininha antes de lançar outra baixa" in caixa
+
+
 def test_cashier_low_desktop_height_compacts_non_operational_chrome():
     css = source("src/index.css")
 

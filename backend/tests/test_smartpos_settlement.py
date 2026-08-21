@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 import pytest
@@ -203,6 +204,32 @@ def test_approved_debit_settles_into_canonical_payment_and_closes_table():
         assert Decimal(str(comanda.valor_pago)) == Decimal("42.0")
         assert comanda.fechada is True
         assert item.pago is True
+    finally:
+        db.close()
+
+
+def test_approved_intent_cannot_settle_against_a_reused_table_cycle():
+    db = SessionLocal()
+    try:
+        intent = _approved_intent(db, key="settlement-stale-table-cycle")
+        comanda = db.query(Comanda).filter_by(id="cmd-settlement").one()
+        intent.criado_em = comanda.criado_em - datetime.timedelta(minutes=5)
+        intent.status_em = intent.criado_em
+        db.commit()
+
+        with pytest.raises(SmartPosSettlementError, match="atendimento anterior"):
+            settle_approved_smartpos_intent(
+                db,
+                restaurante_id=RESTAURANTE_ID,
+                intent_id=intent.id,
+            )
+
+        assert db.query(Pagamento).filter(
+            Pagamento.restaurante_id == RESTAURANTE_ID
+        ).count() == 0
+        db.refresh(comanda)
+        assert comanda.fechada is False
+        assert Decimal(str(comanda.valor_pago)) == Decimal("0")
     finally:
         db.close()
 

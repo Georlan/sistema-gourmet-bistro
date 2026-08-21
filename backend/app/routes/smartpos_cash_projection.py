@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal, Optional
 
@@ -8,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, Item, Lancamento, Usuario
+from ..models import CaixaTurno, Comanda, Item, Lancamento, Usuario
 from ..security import require_permission
 from ..smartpos_models import SmartPosPaymentIntent
 
@@ -55,6 +56,12 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
+def _timeline_value(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
 def _project_payment(intent: SmartPosPaymentIntent | None) -> SmartPosCashPaymentProjection | None:
     if intent is None:
         return None
@@ -97,20 +104,40 @@ def projetar_operacao_smartpos_no_caixa(
     if not comandas:
         return []
 
+    grouped: dict[int, list[Comanda]] = {}
+    for comanda in comandas:
+        grouped.setdefault(int(comanda.mesa_id), []).append(comanda)
+
+    active_turn_id = db.query(CaixaTurno.id).filter(
+        CaixaTurno.restaurante_id == restaurante_id,
+        CaixaTurno.status == "aberto",
+    ).scalar()
     mesa_ids = sorted({int(comanda.mesa_id) for comanda in comandas if comanda.mesa_id is not None})
-    intents = (
-        db.query(SmartPosPaymentIntent)
-        .filter(
-            SmartPosPaymentIntent.restaurante_id == restaurante_id,
-            SmartPosPaymentIntent.mesa_id.in_(mesa_ids),
-            SmartPosPaymentIntent.status.in_(_ACTIVE_INTENT_STATUSES),
+    intents = []
+    if active_turn_id is not None:
+        intents = (
+            db.query(SmartPosPaymentIntent)
+            .filter(
+                SmartPosPaymentIntent.restaurante_id == restaurante_id,
+                SmartPosPaymentIntent.turno_id == active_turn_id,
+                SmartPosPaymentIntent.mesa_id.in_(mesa_ids),
+                SmartPosPaymentIntent.status.in_(_ACTIVE_INTENT_STATUSES),
+            )
+            .order_by(SmartPosPaymentIntent.status_em.desc(), SmartPosPaymentIntent.criado_em.desc())
+            .all()
         )
-        .order_by(SmartPosPaymentIntent.status_em.desc(), SmartPosPaymentIntent.criado_em.desc())
-        .all()
-    )
+
+    cycle_started_by_table = {
+        mesa_id: min(_timeline_value(comanda.criado_em) for comanda in table_commands)
+        for mesa_id, table_commands in grouped.items()
+    }
     latest_intent_by_table: dict[int, SmartPosPaymentIntent] = {}
     for intent in intents:
-        latest_intent_by_table.setdefault(int(intent.mesa_id), intent)
+        mesa_id = int(intent.mesa_id)
+        cycle_started_at = cycle_started_by_table.get(mesa_id)
+        if cycle_started_at is None or _timeline_value(intent.criado_em) < cycle_started_at:
+            continue
+        latest_intent_by_table.setdefault(mesa_id, intent)
 
     smartpos_origin_tables = {
         int(mesa_id)
@@ -129,10 +156,6 @@ def projetar_operacao_smartpos_no_caixa(
         )
         if mesa_id is not None
     }
-
-    grouped: dict[int, list[Comanda]] = {}
-    for comanda in comandas:
-        grouped.setdefault(int(comanda.mesa_id), []).append(comanda)
 
     result: list[SmartPosCashTableProjection] = []
     for mesa_id, table_commands in grouped.items():

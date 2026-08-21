@@ -250,6 +250,8 @@ interface SmartPosCardState {
   chipClass: 'is-muted' | 'is-primary' | 'is-attention';
   blocksPayment: boolean;
   ctaLabel?: string;
+  intentId?: string;
+  canReconcile?: boolean;
 }
 
 interface SystemUser {
@@ -515,6 +517,8 @@ export function CaixaPanel({
   });
 
   const [smartPosCashRows, setSmartPosCashRows] = useState<SmartPosCashRow[]>([]);
+  const [isReconcilingSmartPos, setIsReconcilingSmartPos] = useState(false);
+  const [smartPosRecoveryError, setSmartPosRecoveryError] = useState('');
   const smartPosAuthorization = authHeaders.Authorization || authHeaders.authorization || '';
   const smartPosCashByTable = useMemo(
     () => new Map(smartPosCashRows.map(row => [Number(row.mesa_id), row])),
@@ -580,7 +584,8 @@ export function CaixaPanel({
         label: 'MAQUININHA · ATENÇÃO',
         chipClass: 'is-attention',
         blocksPayment: true,
-        ctaLabel: 'Pagamento requer atenção',
+        ctaLabel: 'Revisar pagamento',
+        intentId: row.pagamento.intent_id,
       };
     }
     if (row.estado_operacional === 'aprovado_pendente_liquidacao') {
@@ -588,7 +593,9 @@ export function CaixaPanel({
         label: 'MAQUININHA · FINALIZANDO',
         chipClass: 'is-primary',
         blocksPayment: true,
-        ctaLabel: 'Finalizando pagamento…',
+        ctaLabel: 'Revisar pagamento',
+        intentId: row.pagamento?.intent_id,
+        canReconcile: true,
       };
     }
     if (row.estado_operacional === 'pagamento_processando') {
@@ -596,7 +603,8 @@ export function CaixaPanel({
         label: 'MAQUININHA · PROCESSANDO',
         chipClass: 'is-primary',
         blocksPayment: true,
-        ctaLabel: 'Pagamento em andamento',
+        ctaLabel: 'Acompanhar pagamento',
+        intentId: row.pagamento?.intent_id,
       };
     }
     if (row.origem_smartpos) {
@@ -3220,6 +3228,13 @@ export function CaixaPanel({
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder || isProcessingPaymentRef.current) return; // Sync ref guard
+    const smartPosState = getSmartPosCardState(selectedOrder);
+    if (smartPosState?.blocksPayment) {
+      setSmartPosRecoveryError(
+        'Revise a operação da maquininha antes de lançar outra baixa para esta mesa.'
+      );
+      return;
+    }
     isProcessingPaymentRef.current = true;
     setErrorMsg('');
     setIsProcessingPayment(true);
@@ -3375,6 +3390,38 @@ export function CaixaPanel({
     } finally {
       isProcessingPaymentRef.current = false;
       setIsProcessingPayment(false);
+    }
+  };
+
+  const handleReconcileSmartPosPayment = async (intentId: string) => {
+    if (!intentId || isReconcilingSmartPos) return;
+    setIsReconcilingSmartPos(true);
+    setSmartPosRecoveryError('');
+    try {
+      const response = await operationalFetch(
+        `${apiBaseUrl}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/reconciliar-liquidacao`,
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Não foi possível concluir a liquidação da maquininha.');
+      }
+
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
+      showToast('Pagamento da maquininha conciliado com sucesso.', 'success');
+      await Promise.all([
+        onRefreshOrders(),
+        fetchTurno(),
+        refreshSmartPosCashProjection(),
+      ]);
+    } catch (err: any) {
+      setSmartPosRecoveryError(err?.message || 'Falha ao reconciliar o pagamento aprovado.');
+    } finally {
+      setIsReconcilingSmartPos(false);
     }
   };
 
@@ -4173,6 +4220,9 @@ export function CaixaPanel({
     : 0;
   const selectedCanAdvanceDigital = selectedIsDigital
     && selectedKanbanOrder?.deliveryStatus === 'producao';
+  const selectedCheckoutSmartPosState = selectedOrder
+    ? getSmartPosCardState(selectedOrder)
+    : null;
 
   return (
     <div className={`cashier-shell flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
@@ -5405,10 +5455,10 @@ export function CaixaPanel({
 
                               <button
                                 type="button"
-                                disabled={smartPosState?.blocksPayment === true}
+                                disabled={isLoading}
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  if (smartPosState?.blocksPayment || isLoading) return;
+                                  if (isLoading) return;
                                   
                                   const tableComandas = orders.filter(
                                     o => Number(o.mesaId) === Number(order.mesaId)
@@ -5422,6 +5472,7 @@ export function CaixaPanel({
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
                                   setSelectedItemIds([]);
+                                  setSmartPosRecoveryError('');
                                   
                                   const sub = checkoutOrder.itens
                                     .filter(item => (item.status as string) !== 'cancelado')
@@ -9437,6 +9488,59 @@ export function CaixaPanel({
                 </button>
               </div>
 
+              {selectedCheckoutSmartPosState?.blocksPayment && (
+                <div className={clsx(
+                  'mx-5', 'mt-4', 'rounded-2xl', 'border', 'p-4', 'text-left',
+                  selectedCheckoutSmartPosState.canReconcile
+                    ? 'border-emerald-500/30 bg-emerald-500/10'
+                    : 'border-amber-500/30 bg-amber-500/10'
+                )}>
+                  <div className="flex items-start gap-3">
+                    <Smartphone size={18} className="mt-0.5 shrink-0 text-emerald-500" />
+                    <div className="min-w-0 flex-1">
+                      <strong className="block text-sm text-koma-foreground">
+                        {selectedCheckoutSmartPosState.canReconcile
+                          ? 'Pagamento aprovado aguardando conclusão'
+                          : 'Pagamento em andamento na maquininha'}
+                      </strong>
+                      <p className="mt-1 text-[11px] leading-relaxed text-koma-secondary">
+                        {selectedCheckoutSmartPosState.canReconcile
+                          ? 'A cobrança já foi aprovada. Conclua a liquidação idempotente antes de lançar outra baixa.'
+                          : 'O Kôma bloqueia uma segunda cobrança, mas mantém esta tela aberta para acompanhamento e recuperação.'}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedCheckoutSmartPosState.canReconcile && selectedCheckoutSmartPosState.intentId && (
+                          <button
+                            type="button"
+                            disabled={isReconcilingSmartPos}
+                            onClick={() => handleReconcileSmartPosPayment(selectedCheckoutSmartPosState.intentId!)}
+                            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {isReconcilingSmartPos ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                            Concluir pagamento aprovado
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSmartPosRecoveryError('');
+                            void refreshSmartPosCashProjection();
+                          }}
+                          className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-koma-border px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-koma-secondary"
+                        >
+                          <RefreshCw size={13} /> Atualizar estado
+                        </button>
+                      </div>
+                      {smartPosRecoveryError && (
+                        <p className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-2.5 text-[10px] font-semibold text-rose-400">
+                          {smartPosRecoveryError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className={clsx('p-5', 'overflow-y-auto', 'flex-1', 'bg-koma-raised', 'grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5')}>
                 <div className="space-y-4">
                   <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-koma-border', 'pb-1.5')}>
@@ -9865,7 +9969,8 @@ export function CaixaPanel({
 
                     <button
                       type="submit"
-                      className={clsx('w-full', 'py-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-xl', 'font-bold', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-md', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-[10px]')}
+                      disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
+                      className={clsx('w-full', 'py-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-xl', 'font-bold', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-md', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-[10px]', 'disabled:cursor-not-allowed', 'disabled:opacity-50')}
                     >
                       <Check size={14} />
                       <span>

@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 import pytest
@@ -224,6 +225,25 @@ def test_provider_approval_without_settlement_is_visible_as_cashier_attention():
         assert row.pagamento is not None
         assert row.pagamento.intent_id == intent.id
         assert row.pagamento.pagamento_id is None
+    finally:
+        db.close()
+
+
+def test_approved_intent_from_previous_table_cycle_does_not_hijack_reused_table():
+    db = SessionLocal()
+    try:
+        item = db.query(Item).filter(Item.id == "item-projection").one()
+        item.status = "pronto"
+        intent = _intent(db, "aprovada")
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-projection").one()
+        stale_at = comanda.criado_em - datetime.timedelta(minutes=5)
+        intent.criado_em = stale_at
+        intent.status_em = stale_at
+        db.commit()
+
+        row = _projection(db)
+        assert row.estado_operacional == "aguardando_pagamento"
+        assert row.pagamento is None
     finally:
         db.close()
 
