@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal, Optional
 
@@ -123,6 +124,12 @@ class SmartPosRecentIntentResponse(BaseModel):
 
 def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
+
+
+def _timeline_value(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
 
 
 def _capture_for_method(method: str, requested: Optional[str]) -> str:
@@ -483,6 +490,9 @@ def criar_payment_intent(
         )
 
     comanda_ids = [comanda.id for comanda in comandas]
+    current_table_cycle_started_at = min(
+        _timeline_value(comanda.criado_em) for comanda in comandas
+    )
     itens = db.query(Item).filter(
         Item.restaurante_id == restaurante_id,
         Item.comanda_id.in_(comanda_ids),
@@ -538,6 +548,7 @@ def criar_payment_intent(
         db.query(SmartPosPaymentIntent)
         .filter(
             SmartPosPaymentIntent.restaurante_id == restaurante_id,
+            SmartPosPaymentIntent.turno_id == turno.id,
             SmartPosPaymentIntent.mesa_id == payload.mesa_id,
             SmartPosPaymentIntent.status.in_(_RESERVING_STATUSES),
             SmartPosPaymentIntent.pagamento_id.is_(None),
@@ -545,6 +556,11 @@ def criar_payment_intent(
         .with_for_update()
         .all()
     )
+    reserving_intents = [
+        intent
+        for intent in reserving_intents
+        if _timeline_value(intent.criado_em) >= current_table_cycle_started_at
+    ]
 
     reserved_item_ids = {
         item_id
@@ -783,6 +799,76 @@ def confirmar_payment_intent_manual(
         "financial_effect": True,
         "troco": troco,
     }
+
+
+@router.post("/payment-intents/{intent_id}/reconciliar-liquidacao")
+def reconciliar_liquidacao_payment_intent(
+    intent_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
+):
+    """Retoma no Caixa a liquidação idempotente de uma cobrança já aprovada."""
+    restaurante_id = require_tenant_id()
+    if not has_capability(db, restaurante_id, "smartpos"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SmartPOS não habilitado para este restaurante.",
+        )
+
+    intent = db.query(SmartPosPaymentIntent).filter(
+        SmartPosPaymentIntent.restaurante_id == restaurante_id,
+        SmartPosPaymentIntent.id == intent_id,
+    ).first()
+    if intent is None:
+        raise HTTPException(status_code=404, detail="Intenção de pagamento não encontrada.")
+    if intent.status != "aprovada" and intent.pagamento_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Somente uma cobrança já aprovada pode retomar a liquidação no Caixa.",
+        )
+
+    try:
+        settlement = settle_approved_smartpos_intent(
+            db,
+            restaurante_id=restaurante_id,
+            intent_id=intent_id,
+        )
+    except SmartPosSettlementError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Não foi possível concluir a liquidação aprovada: {exc}",
+        ) from exc
+
+    for event_name in ("payment_intent_updated", "payment_updated", "cash_updated", "tables_updated"):
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": event_name,
+                "detail": {
+                    "type": "smartpos_cashier_reconciliation",
+                    "intent_id": settlement.intent.id,
+                    "payment_id": settlement.pagamento.id,
+                    "mesa_id": settlement.intent.mesa_id,
+                    "metodo": settlement.pagamento.metodo,
+                    "valor": float(settlement.pagamento.valor),
+                    "mesa_liberada": settlement.mesa_liberada,
+                    "operador_id": current_user.id,
+                },
+            },
+            restaurante_id,
+        )
+
+    return {
+        "intent_id": settlement.intent.id,
+        "status": settlement.intent.status,
+        "payment_id": settlement.pagamento.id,
+        "settled": True,
+        "replayed": settlement.replayed,
+        "mesa_liberada": settlement.mesa_liberada,
+    }
+
 
 @router.post(
     "/payment-intents/{intent_id}/cancelar",

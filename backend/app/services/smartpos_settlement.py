@@ -42,6 +42,12 @@ def _money(value: object) -> Decimal:
     return Decimal(str(value or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
+def _timeline_value(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
 def _active_total(comanda: Comanda) -> Decimal:
     return _money(sum(
         (_money(item.preco_unit) for item in comanda.itens if item.status != "cancelado"),
@@ -146,6 +152,14 @@ def settle_approved_smartpos_intent(
     if not comandas:
         raise SmartPosSettlementError(
             "A mesa não possui mais comanda aberta para receber esta aprovação."
+        )
+
+    current_table_cycle_started_at = min(
+        _timeline_value(comanda.criado_em) for comanda in comandas
+    )
+    if _timeline_value(intent.criado_em) < current_table_cycle_started_at:
+        raise SmartPosSettlementError(
+            "A aprovação pertence a um atendimento anterior desta mesa e não pode ser aplicada à comanda atual."
         )
 
     debitos: list[tuple[Comanda, Decimal, Decimal]] = []

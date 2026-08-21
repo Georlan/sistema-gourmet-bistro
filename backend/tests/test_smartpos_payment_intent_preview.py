@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 import pytest
@@ -539,6 +540,97 @@ def test_criar_intent_nao_cria_receita_nem_altera_mesa():
     finally:
         db.close()
         current_restaurante_id.reset(token)
+
+
+def test_intent_antigo_da_mesa_reutilizada_nao_reserva_o_saldo_da_nova_comanda():
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == RESTAURANTE_ID,
+            CaixaTurno.status == "aberto",
+        ).one()
+        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
+        stale_at = comanda.criado_em - datetime.timedelta(minutes=5)
+        db.add(SmartPosPaymentIntent(
+            restaurante_id=RESTAURANTE_ID,
+            turno_id=turno.id,
+            mesa_id=4,
+            operador_id=USER_ID,
+            valor=Decimal("42.00"),
+            metodo="pix",
+            captura="provider_integrado",
+            escopo="valor",
+            idempotency_key="stale-previous-table-cycle",
+            status="aprovada",
+            criado_em=stale_at,
+            status_em=stale_at,
+            origem="smartpos",
+        ))
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    response = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "new-current-table-cycle",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "criada"
+
+
+def test_caixa_pode_retomar_liquidacao_aprovada_sem_duplicar_cobranca():
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == RESTAURANTE_ID,
+            CaixaTurno.status == "aberto",
+        ).one()
+        intent = SmartPosPaymentIntent(
+            restaurante_id=RESTAURANTE_ID,
+            turno_id=turno.id,
+            mesa_id=4,
+            operador_id=USER_ID,
+            valor=Decimal("42.00"),
+            metodo="pix",
+            captura="provider_integrado",
+            escopo="valor",
+            idempotency_key="cashier-reconcile-approved",
+            status="aprovada",
+            provider_name="pagbank",
+            provider_reference="PB-RECONCILE-001",
+            origem="smartpos",
+        )
+        db.add(intent)
+        db.commit()
+        db.refresh(intent)
+        intent_id = intent.id
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    first = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/reconciliar-liquidacao",
+        headers=caixa_headers(),
+    )
+    second = client.post(
+        f"/auth/smartpos/payment-intents/{intent_id}/reconciliar-liquidacao",
+        headers=caixa_headers(),
+    )
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["settled"] is True
+    assert second.json()["settled"] is True
+    assert first.json()["payment_id"] == second.json()["payment_id"]
 
 
 def test_idempotencia_retorna_mesma_intencao_e_rejeita_payload_diferente():
