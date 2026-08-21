@@ -664,52 +664,107 @@ export function CaixaPanel({
   }, [activeSubTab, activeTab]);
 
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
-  const [cancelTableTarget, setCancelTableTarget] = useState<{
+  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
+    scope: 'order' | 'table';
     mesaId: number;
     comandas: number;
     itens: number;
     total: number;
+    itemIds: string[];
   } | null>(null);
   const [cancelTableReason, setCancelTableReason] = useState('');
   const [isCancellingTable, setIsCancellingTable] = useState(false);
+  const [tableTransferTargetId, setTableTransferTargetId] = useState('');
+  const [isTransferringTable, setIsTransferringTable] = useState(false);
 
   const openCancelTableConfirmation = (mesaId: number) => {
     const tableOrders = orders.filter(order => Number(order.mesaId) === Number(mesaId));
     const activeItems = tableOrders.flatMap(order => order.itens || [])
       .filter(item => (item.status as string) !== 'cancelado');
-    setCancelTableTarget({
+    setCancelConsumptionTarget({
+      scope: 'table',
       mesaId,
       comandas: tableOrders.length,
       itens: activeItems.length,
       total: activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0),
+      itemIds: activeItems.map(item => String(item.id)).filter(Boolean),
+    });
+    setCancelTableReason('');
+    setSelectedKanbanOrder(null);
+  };
+
+  const openCancelOrderConfirmation = (order: any) => {
+    const activeItems = (order?.itens || []).filter(
+      (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
+    );
+    const comandaIds = new Set(
+      activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean),
+    );
+    setCancelConsumptionTarget({
+      scope: 'order',
+      mesaId: Number(order.mesaId),
+      comandas: comandaIds.size,
+      itens: activeItems.length,
+      total: activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
+      itemIds: activeItems.map((item: any) => String(item.id)),
     });
     setCancelTableReason('');
     setSelectedKanbanOrder(null);
   };
 
   const handleCancelTableConsumption = async () => {
-    if (!cancelTableTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
+    if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
     setIsCancellingTable(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/mesas/${cancelTableTarget.mesaId}/cancelar-consumo`, {
+      const isOrderScope = cancelConsumptionTarget.scope === 'order';
+      const response = await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motivo: cancelTableReason.trim() }),
+        body: JSON.stringify({
+          motivo: cancelTableReason.trim(),
+          ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
+        }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o consumo.');
 
-      setCancelTableTarget(null);
+      setCancelConsumptionTarget(null);
       setCancelTableReason('');
       await onRefreshOrders();
       showToast(
-        `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+        isOrderScope
+          ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
+          : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
         'success',
       );
     } catch (error: any) {
       showToast(error?.message || 'Não foi possível cancelar o consumo.', 'error');
     } finally {
       setIsCancellingTable(false);
+    }
+  };
+
+  const handleTransferTableFromSalon = async (order: any) => {
+    const sourceMesaId = Number(order?.mesaId || 0);
+    const targetMesaId = Number(tableTransferTargetId || 0);
+    const primaryComandaId = String(order?.comandaId || order?.id || '');
+    if (!sourceMesaId || !targetMesaId || !primaryComandaId || isTransferringTable) return;
+    setIsTransferringTable(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/comandas/${primaryComandaId}/transferir/${targetMesaId}`, {
+        method: 'POST',
+        headers: authHeaders,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível transferir a mesa.');
+      setSelectedKanbanOrder(null);
+      setTableTransferTargetId('');
+      await onRefreshOrders();
+      showToast(`Mesa ${sourceMesaId} transferida para a Mesa ${targetMesaId}.`, 'success');
+    } catch (error: any) {
+      showToast(error?.message || 'Não foi possível transferir a mesa.', 'error');
+    } finally {
+      setIsTransferringTable(false);
     }
   };
 
@@ -6339,7 +6394,12 @@ export function CaixaPanel({
                                     <button
                                       type="button"
                                       disabled={tableOrders.length === 0}
-                                      onClick={() => tableOrders[0] && setSelectedKanbanOrder(tableOrders[0])}
+                                      onClick={() => tableOrders[0] && setSelectedKanbanOrder({
+                                        ...tableOrders[0],
+                                        contextoSalao: true,
+                                        itens: tableOrders.flatMap(order => order.itens || []),
+                                        comandaIds: tableOrders.map(order => order.id),
+                                      })}
                                       className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-danger', 'hover:bg-rose-200 dark:hover:bg-rose-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
                                       <Receipt size={11} />
@@ -10482,13 +10542,40 @@ export function CaixaPanel({
                       <span>Só Valores</span>
                     </button>
                     </div>
+                    {selectedKanbanOrder.contextoSalao && (
+                      <div className={clsx('flex', 'gap-2', 'w-full')}>
+                        <select
+                          aria-label="Mesa de destino"
+                          value={tableTransferTargetId}
+                          onChange={(event) => setTableTransferTargetId(event.target.value)}
+                          disabled={isTransferringTable}
+                          className={clsx('min-h-10', 'min-w-0', 'flex-1', 'rounded-xl', 'border', 'border-koma-border', 'bg-koma-panel', 'px-3', 'text-xs', 'font-bold', 'text-koma-secondary', 'outline-none', 'focus:border-emerald-500/60')}
+                        >
+                          <option value="">Transferir para…</option>
+                          {salonTables
+                            .filter(table => Number(table.id) !== Number(selectedKanbanOrder.mesaId))
+                            .map(table => <option key={table.id} value={table.id}>Mesa {table.id}{table.nome ? ` · ${table.nome}` : ''}</option>)}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleTransferTableFromSalon(selectedKanbanOrder)}
+                          disabled={!tableTransferTargetId || isTransferringTable}
+                          className={clsx('flex', 'min-h-10', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-emerald-500/30', 'bg-emerald-500/10', 'px-3', 'text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-300', 'hover:bg-emerald-500/20', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}
+                        >
+                          {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <ArrowUpRight size={13} />}
+                          Transferir
+                        </button>
+                      </div>
+                    )}
                     <button
                       type="button"
-                      onClick={() => openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))}
+                      onClick={() => selectedKanbanOrder.contextoSalao
+                        ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
+                        : openCancelOrderConfirmation(selectedKanbanOrder)}
                       className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
                     >
                       <Trash2 size={13} />
-                      Cancelar consumo e liberar mesa
+                      {selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : 'Cancelar somente este pedido'}
                     </button>
                   </div>
                 )}
@@ -10498,24 +10585,32 @@ export function CaixaPanel({
         </div>
       )}
 
-      {cancelTableTarget && (
+      {cancelConsumptionTarget && (
         <div className={clsx('fixed', 'inset-0', 'z-[60]', 'flex', 'items-center', 'justify-center', 'bg-black/90', 'p-4', 'backdrop-blur-sm')}>
           <div role="dialog" aria-modal="true" aria-labelledby="cancel-table-title" className={clsx('w-full', 'max-w-md', 'space-y-4', 'rounded-3xl', 'border', 'border-rose-900/50', 'bg-koma-card', 'p-5', 'shadow-2xl')}>
             <div className={clsx('flex', 'items-start', 'justify-between', 'gap-3', 'border-b', 'border-koma-border-subtle', 'pb-4')}>
               <div>
                 <span className={clsx('font-mono', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-[0.18em]', 'text-rose-400')}>Ação irreversível</span>
-                <h3 id="cancel-table-title" className={clsx('mt-1', 'text-lg', 'font-bold', 'text-koma-foreground')}>Liberar Mesa {cancelTableTarget.mesaId} sem receber?</h3>
-                <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-koma-subtle')}>O histórico será preservado como cancelado, mas nenhum valor entrará no caixa ou no faturamento.</p>
+                <h3 id="cancel-table-title" className={clsx('mt-1', 'text-lg', 'font-bold', 'text-koma-foreground')}>
+                  {cancelConsumptionTarget.scope === 'table'
+                    ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`
+                    : 'Cancelar somente este pedido?'}
+                </h3>
+                <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-koma-subtle')}>
+                  {cancelConsumptionTarget.scope === 'table'
+                    ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'
+                    : 'Somente os itens do card escolhido serão cancelados; os demais pedidos da mesa serão preservados.'}
+                </p>
               </div>
-              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'hover:bg-white/[0.05]', 'hover:text-koma-foreground', 'disabled:opacity-40')} aria-label="Fechar">
+              <button type="button" onClick={() => setCancelConsumptionTarget(null)} disabled={isCancellingTable} className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'hover:bg-white/[0.05]', 'hover:text-koma-foreground', 'disabled:opacity-40')} aria-label="Fechar">
                 <X size={16} />
               </button>
             </div>
 
             <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
-              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelTableTarget.comandas}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>comandas</span></div>
-              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelTableTarget.itens}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>itens</span></div>
-              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-rose-600 dark:text-rose-300')}>{cancelTableTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>cancelados</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelConsumptionTarget.comandas}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>comandas</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>{cancelConsumptionTarget.itens}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>itens</span></div>
+              <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}><strong className={clsx('block', 'font-mono', 'text-sm', 'text-rose-600 dark:text-rose-300')}>{cancelConsumptionTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className={clsx('text-[9px]', 'text-koma-muted')}>cancelados</span></div>
             </div>
 
             <label className={clsx('block', 'space-y-1.5')}>
@@ -10532,10 +10627,10 @@ export function CaixaPanel({
             </label>
 
             <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'sm:flex-row')}>
-              <button type="button" onClick={() => setCancelTableTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-koma-subtle', 'hover:text-koma-foreground', 'disabled:opacity-40')}>Manter atendimento</button>
+              <button type="button" onClick={() => setCancelConsumptionTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-koma-subtle', 'hover:text-koma-foreground', 'disabled:opacity-40')}>Manter atendimento</button>
               <button type="button" onClick={handleCancelTableConsumption} disabled={cancelTableReason.trim().length < 3 || isCancellingTable} className={clsx('flex', 'min-h-11', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-rose-600', 'px-3', 'text-xs', 'font-extrabold', 'text-koma-foreground', 'hover:bg-rose-500', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}>
                 {isCancellingTable ? <RefreshCw className="animate-spin" size={14} /> : <Trash2 size={14} />}
-                {isCancellingTable ? 'Liberando…' : 'Cancelar e liberar'}
+                {isCancellingTable ? 'Cancelando…' : cancelConsumptionTarget.scope === 'table' ? 'Cancelar e liberar' : 'Cancelar este pedido'}
               </button>
             </div>
           </div>

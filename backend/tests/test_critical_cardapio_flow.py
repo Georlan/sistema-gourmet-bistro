@@ -888,6 +888,102 @@ def test_cancelar_consumo_bloqueia_mesa_com_valor_pago():
         db.close()
 
 
+def _criar_outro_pedido_na_mesa(mesa_id: int, token: str):
+    response = client.post(
+        "/comandas/venda-direta",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "mesa_id": mesa_id,
+            "garcom_id": "usr_cardapio_100",
+            "tipo": "Consumo no Local",
+            "itens": [{
+                "produto_id": "prod-cardapio-test",
+                "observacao": "Outro card da mesma mesa",
+                "cliente_nome": "Consumo Geral",
+            }],
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def test_caixa_cancela_so_o_card_escolhido_e_preserva_outro_pedido_da_mesa():
+    mesa_id = 1000 + uuid.uuid4().int % 1_000_000
+    comanda_cancelada_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_id)
+    comanda_preservada_id = _criar_outro_pedido_na_mesa(mesa_id, token)
+
+    db = SessionLocal()
+    try:
+        item_id = db.query(Item.id).filter(Item.comanda_id == comanda_cancelada_id).scalar()
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/mesas/{mesa_id}/cancelar-itens",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"motivo": "Card lançado por engano", "item_ids": [item_id]},
+    )
+    assert response.status_code == 200
+    assert response.json()["itens_cancelados"] == 1
+    assert response.json()["comandas_fechadas"] == 1
+    assert response.json()["mesa_liberada"] is False
+
+    db = SessionLocal()
+    try:
+        cancelada = db.query(Comanda).filter(Comanda.id == comanda_cancelada_id).one()
+        preservada = db.query(Comanda).filter(Comanda.id == comanda_preservada_id).one()
+        assert cancelada.fechada is True
+        assert all(item.status == "cancelado" for item in cancelada.itens)
+        assert preservada.fechada is False
+        assert all(item.status != "cancelado" for item in preservada.itens)
+        audit = db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 100,
+            ActivityLog.action == "CANCEL_CASHIER_ORDER_SCOPE",
+            ActivityLog.details.contains(f"Mesa {mesa_id}"),
+        ).one()
+        assert "Card lançado por engano" in audit.details
+    finally:
+        db.close()
+
+
+def test_transferir_mesa_move_todas_as_comandas_abertas_da_familia():
+    mesa_origem_id = 1000 + uuid.uuid4().int % 1_000_000
+    mesa_destino_id = 1000 + uuid.uuid4().int % 1_000_000
+    comanda_principal_id, token = _criar_pedido_de_mesa_para_cancelamento(mesa_origem_id)
+    comanda_irma_id = _criar_outro_pedido_na_mesa(mesa_origem_id, token)
+
+    db = SessionLocal()
+    tenant_token = current_restaurante_id.set(100)
+    try:
+        db.add(Mesa(
+            id=mesa_destino_id,
+            capacidade=4,
+            nome=f"Mesa {mesa_destino_id}",
+            restaurante_id=100,
+        ))
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant_token)
+        db.close()
+
+    response = client.post(
+        f"/comandas/{comanda_principal_id}/transferir/{mesa_destino_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    db = SessionLocal()
+    try:
+        comandas = db.query(Comanda).filter(
+            Comanda.id.in_([comanda_principal_id, comanda_irma_id]),
+        ).all()
+        assert len(comandas) == 2
+        assert all(comanda.mesa_id == mesa_destino_id for comanda in comandas)
+        assert all(comanda.mesa_transferida_de == mesa_origem_id for comanda in comandas)
+    finally:
+        db.close()
+
+
 def test_primeiro_aceite_online_imprime_uma_unica_vez():
     created = client.post(
         "/cardapio/pedidos",
