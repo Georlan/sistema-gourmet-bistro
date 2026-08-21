@@ -173,6 +173,11 @@ def test_admin_allowed_relatorios():
         ),
         ("get", "/comandas/estatisticas/geral", None),
         ("post", "/auth/usuarios/u-gerente/reenviar-convite", None),
+        (
+            "post",
+            "/mesas/999/cancelar-itens",
+            {"motivo": "Pedido duplicado", "item_ids": ["item-inexistente"]},
+        ),
     ],
 )
 def test_garcom_blocked_from_sensitive_backoffice_routes(method, path, payload):
@@ -204,6 +209,20 @@ def test_gerente_allowed_by_central_permission_matrix():
         headers=headers,
     )
     assert catalog_response.status_code == 201, catalog_response.text
+
+
+def test_caixa_reaches_order_scope_cancellation_beyond_rbac_guard():
+    client = TestClient(app)
+    headers = get_auth_headers(client, "caixa", "123")
+
+    response = client.post(
+        "/mesas/999/cancelar-itens",
+        json={"motivo": "Pedido duplicado", "item_ids": ["item-inexistente"]},
+        headers=headers,
+    )
+
+    assert response.status_code == 409, response.text
+    assert "pedido mudou" in response.json()["detail"].lower()
 
 
 def test_inactive_user_blocked():

@@ -19,6 +19,7 @@ from ..schemas import (
     MesaUpdate,
     MesaCreate,
     CancelarConsumoMesaRequest,
+    CancelarItensMesaRequest,
     ObservacaoPredefinidaResponse,
 )
 from ..security import get_current_garcom_optional, get_current_user, require_permission
@@ -264,6 +265,142 @@ def cancelar_consumo_mesa(
         "comandas_canceladas": len(comandas),
         "itens_cancelados": len(itens_ativos),
         "total_cancelado": total_cancelado,
+    }
+
+
+@router.post("/{mesa_id}/cancelar-itens")
+def cancelar_itens_mesa(
+    mesa_id: int,
+    payload: CancelarItensMesaRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("comandas:forcar_fechamento")),
+):
+    """Cancela somente os itens representados por um card do Caixa.
+
+    Esta rota deliberadamente não recebe apenas a mesa como escopo. Os IDs dos
+    itens são obrigatórios para impedir que uma ação em um pedido apague o
+    restante do consumo da mesa.
+    """
+    rest_id = require_tenant_id()
+    motivo = " ".join(payload.motivo.split())
+    item_ids = list(dict.fromkeys(item_id.strip() for item_id in payload.item_ids if item_id.strip()))
+    if len(motivo) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe um motivo válido com pelo menos 3 caracteres.",
+        )
+    if not item_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe ao menos um item do pedido a cancelar.",
+        )
+
+    itens = (
+        db.query(Item)
+        .join(Comanda, Comanda.id == Item.comanda_id)
+        .filter(
+            Item.restaurante_id == rest_id,
+            Item.id.in_(item_ids),
+            Comanda.restaurante_id == rest_id,
+            Comanda.mesa_id == mesa_id,
+            Comanda.fechada == False,
+        )
+        .with_for_update()
+        .all()
+    )
+    if len(itens) != len(item_ids):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O pedido mudou ou contém itens que não pertencem mais a esta mesa. Atualize a tela.",
+        )
+
+    itens_ativos = [item for item in itens if item.status != "cancelado"]
+    if not itens_ativos:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Os itens deste pedido já foram cancelados.",
+        )
+    if any(item.pago for item in itens_ativos):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há item pago neste pedido. Estorne o recebimento antes de cancelar.",
+        )
+
+    comanda_ids = list({item.comanda_id for item in itens_ativos})
+    comandas = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.id.in_(comanda_ids),
+            Comanda.fechada == False,
+        )
+        .with_for_update()
+        .all()
+    )
+    pagamento_existente = db.query(Pagamento.id).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.comanda_id.in_(comanda_ids),
+        or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
+    ).first()
+    if pagamento_existente or any(float(comanda.valor_pago or 0) > 0 for comanda in comandas):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há pagamento registrado neste pedido. Cancele ou estorne o recebimento antes de continuar.",
+        )
+
+    total_cancelado = round(sum(float(item.preco_unit or 0) for item in itens_ativos), 2)
+    for item in itens_ativos:
+        item.status = "cancelado"
+        item.cancelado_por = current_user.id
+
+    fechado_em = datetime.datetime.now(datetime.timezone.utc)
+    comandas_fechadas = 0
+    for comanda in comandas:
+        if all(item.status == "cancelado" for item in comanda.itens):
+            comanda.fechada = True
+            comanda.fechado_em = fechado_em
+            comanda.status_comanda = None
+            comandas_fechadas += 1
+
+    mesa_ainda_ocupada = db.query(Comanda.id).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.mesa_id == mesa_id,
+        Comanda.fechada == False,
+        ~Comanda.id.in_(comanda_ids),
+    ).first() is not None or any(not comanda.fechada for comanda in comandas)
+
+    db.add(ActivityLog(
+        restaurante_id=rest_id,
+        garcom_id=current_user.id,
+        action="CANCEL_CASHIER_ORDER_SCOPE",
+        details=(
+            f"Mesa {mesa_id}: card com {len(itens_ativos)} item(ns), "
+            f"total R$ {total_cancelado:.2f}. Motivo: {motivo}"
+        ),
+    ))
+    db.commit()
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "MESA_ATUALIZADA",
+            "data": {
+                "mesa_id": mesa_id,
+                "status": "ocupada" if mesa_ainda_ocupada else "livre",
+                "comanda_id": None,
+            },
+        },
+        rest_id,
+    )
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    return {
+        "status": "cancelado",
+        "mesa_id": mesa_id,
+        "itens_cancelados": len(itens_ativos),
+        "comandas_fechadas": comandas_fechadas,
+        "total_cancelado": total_cancelado,
+        "mesa_liberada": not mesa_ainda_ocupada,
     }
 
 

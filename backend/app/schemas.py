@@ -155,6 +155,10 @@ class MesaUpdate(BaseModel):
 class CancelarConsumoMesaRequest(BaseModel):
     motivo: str = Field(min_length=3, max_length=300)
 
+
+class CancelarItensMesaRequest(CancelarConsumoMesaRequest):
+    item_ids: List[str] = Field(min_length=1, max_length=200)
+
 class MesaResponse(MesaBase):
     model_config = ConfigDict(from_attributes=True)
 
