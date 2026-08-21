@@ -1160,6 +1160,39 @@ export default function App() {
     });
   };
 
+  const handleEditDraftItems = (
+    mesaId: number,
+    draftItemIds: string[],
+    fields: Pick<DraftItem, 'quantidade' | 'observacao' | 'clienteNome'>,
+  ) => {
+    const selectedIds = new Set(draftItemIds);
+    if (selectedIds.size === 0) return;
+
+    setDrafts((prev) => {
+      const existing = prev[mesaId] || [];
+      const primaryIndex = existing.findIndex((item) => selectedIds.has(item.id));
+      if (primaryIndex < 0) return prev;
+
+      const primaryId = existing[primaryIndex].id;
+      const normalizedQuantity = Math.max(1, Math.floor(fields.quantidade || 1));
+      const nextItems = existing.flatMap((item) => {
+        if (!selectedIds.has(item.id)) return [item];
+        if (item.id !== primaryId) return [];
+        return [{
+          ...item,
+          quantidade: normalizedQuantity,
+          observacao: fields.observacao,
+          clienteNome: fields.clienteNome,
+        }];
+      });
+
+      return {
+        ...prev,
+        [mesaId]: nextItems,
+      };
+    });
+  };
+
   const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
     id: comanda.id,
     numeroPedido: Number.isFinite(Number(comanda.numero_pedido)) ? Number(comanda.numero_pedido) : undefined,
@@ -2642,6 +2675,7 @@ export default function App() {
             onAddToDraft={(product, qty, obs, client) => handleAddToDraft(selectedTable.id, product, qty, obs, client)}
             onRemoveFromDraft={(draftItemId) => handleRemoveFromDraft(selectedTable.id, draftItemId)}
             onUpdateDraftItem={(draftItemId, fields) => handleUpdateDraftItem(selectedTable.id, draftItemId, fields)}
+            onEditDraftItems={(draftItemIds, fields) => handleEditDraftItems(selectedTable.id, draftItemIds, fields)}
             onSubmitDraft={(orderType) => handleSubmitDraft(selectedTable.id, orderType)}
             onTransferTable={(targetTableId) => handleTransferTable(selectedTable.id, targetTableId)}
             onTransferItem={handleTransferItem}
