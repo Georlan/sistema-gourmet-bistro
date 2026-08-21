@@ -27,6 +27,10 @@ interface MesaDetailsModalProps {
   onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
   onRemoveFromDraft: (draftItemId: string) => void;
   onUpdateDraftItem: (draftItemId: string, updates: Partial<DraftItem>) => void;
+  onEditDraftItems: (
+    draftItemIds: string[],
+    updates: Pick<DraftItem, 'quantidade' | 'observacao' | 'clienteNome'>,
+  ) => void;
   onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   otherWaitersServing?: string[];
   onTransferTable: (targetTableId: number) => void;
@@ -68,6 +72,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   onAddToDraft,
   onRemoveFromDraft,
   onUpdateDraftItem,
+  onEditDraftItems,
   onSubmitDraft,
   otherWaitersServing = [],
   onTransferTable,
@@ -721,6 +726,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onAddToDraft={onAddToDraft}
               onRemoveFromDraft={onRemoveFromDraft}
               onUpdateDraftItem={onUpdateDraftItem}
+              onEditDraftItems={onEditDraftItems}
               onSubmitDraft={onSubmitDraft}
               historicClients={historicClients}
               isSubmitting={isSubmitting}

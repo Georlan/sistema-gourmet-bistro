@@ -18,6 +18,10 @@ interface MenuPanelProps {
   onAddToDraft: (product: Product, quantity?: number, observacao?: string, clienteNome?: string) => void;
   onRemoveFromDraft: (draftItemId: string) => void;
   onUpdateDraftItem: (draftItemId: string, fields: Partial<DraftItem>) => void;
+  onEditDraftItems: (
+    draftItemIds: string[],
+    fields: Pick<DraftItem, 'quantidade' | 'observacao' | 'clienteNome'>,
+  ) => void;
   onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   historicClients?: string[];
   liveProdutos?: Product[];
@@ -36,6 +40,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   onAddToDraft,
   onRemoveFromDraft,
   onUpdateDraftItem,
+  onEditDraftItems,
   onSubmitDraft,
   historicClients = [],
   liveProdutos = [],
@@ -90,6 +95,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
   // Selected product to configure
   const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
+  const [editingDraftItemIds, setEditingDraftItemIds] = useState<string[]>([]);
   
   // Product configuration modal inputs
   const [configQty, setConfigQty] = useState<number>(1);
@@ -139,21 +145,45 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     return Array.from(uniqueNames.values());
   }, [historicClients, suggestedClientNames, draftItems]);
 
-  // Open configuration modal
+  const closeProductConfig = () => {
+    setSelectedProductToConfigure(null);
+    setEditingDraftItemIds([]);
+  };
+
+  // Quando o produto já está no carrinho, o modal edita todas as unidades
+  // selecionadas como um grupo. Salvar substitui o grupo em vez de anexar uma
+  // nova unidade ao rascunho.
   const handleOpenConfig = (product: Product) => {
+    const matchingDraftItems = draftItems.filter((item) => item.produtoId === product.id);
+    const firstMatch = matchingDraftItems[0];
     setSelectedProductToConfigure(product);
-    setConfigQty(1);
-    setConfigObs('');
-    // Pre-fill with the first client name if there is already a name in the cart
-    setConfigClient(draftItems.length > 0 ? draftItems[0].clienteNome : '');
+    setEditingDraftItemIds(matchingDraftItems.map((item) => item.id));
+    setConfigQty(
+      matchingDraftItems.length > 0
+        ? matchingDraftItems.reduce((total, item) => total + (item.quantidade || 1), 0)
+        : 1,
+    );
+    setConfigObs(firstMatch?.observacao || '');
+    setConfigClient(
+      firstMatch?.clienteNome
+        || (draftItems.length > 0 ? draftItems[0].clienteNome : ''),
+    );
   };
 
   // Adiciona ao mesmo rascunho persistente. Permanecer no cardápio evita que
   // o garçom precise reabrir a lista a cada novo item.
   const handleConfirmAdd = () => {
     if (!selectedProductToConfigure) return;
-    onAddToDraft(selectedProductToConfigure, configQty, configObs, configClient);
-    setSelectedProductToConfigure(null);
+    if (editingDraftItemIds.length > 0) {
+      onEditDraftItems(editingDraftItemIds, {
+        quantidade: configQty,
+        observacao: configObs,
+        clienteNome: configClient,
+      });
+    } else {
+      onAddToDraft(selectedProductToConfigure, configQty, configObs, configClient);
+    }
+    closeProductConfig();
     openCartReview();
   };
 
@@ -161,6 +191,17 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const handleQuickAdd = (product: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const defaultClient = draftItems.length > 0 ? (draftItems[0].clienteNome || '') : '';
+    const compatibleDraftItem = draftItems.find((item) =>
+      item.produtoId === product.id
+      && !item.observacao
+      && (item.clienteNome || '') === defaultClient
+    );
+    if (compatibleDraftItem) {
+      onUpdateDraftItem(compatibleDraftItem.id, {
+        quantidade: (compatibleDraftItem.quantidade || 1) + 1,
+      });
+      return;
+    }
     onAddToDraft(product, 1, '', defaultClient);
   };
 
@@ -786,7 +827,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) {
-              setSelectedProductToConfigure(null);
+              closeProductConfig();
             }
           }}
           className="fixed inset-0 bg-koma-overlay z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in cursor-pointer"
@@ -798,10 +839,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <div>
                 <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
                 <h4 className="font-serif font-bold text-base sm:text-lg text-koma-foreground mt-0.5">{selectedProductToConfigure.nome}</h4>
+                {editingDraftItemIds.length > 0 && (
+                  <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-amber-400">
+                    Editando {configQty} {configQty === 1 ? 'unidade selecionada' : 'unidades selecionadas'}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedProductToConfigure(null)}
+                onClick={closeProductConfig}
                 className="p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"
               >
                 <X size={18} />
@@ -944,7 +990,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             <div className="flex items-center gap-3 pt-3 border-t border-koma-border">
               <button
                 type="button"
-                onClick={() => setSelectedProductToConfigure(null)}
+                onClick={closeProductConfig}
                 className="flex-1 py-2.5 border border-koma-border hover:bg-koma-raised text-koma-muted hover:text-koma-foreground text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
               >
                 Cancelar
@@ -954,7 +1000,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 onClick={handleConfirmAdd}
                 className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer text-center shadow-md shadow-emerald-900/30 active:scale-95"
               >
-                Adicionar ao Pedido
+                {editingDraftItemIds.length > 0 ? 'Salvar alterações' : 'Adicionar ao Pedido'}
               </button>
             </div>
 
