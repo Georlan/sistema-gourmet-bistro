@@ -111,6 +111,12 @@ class SmartPosPaymentIntent(Base):
             "restaurante_id",
             "mesa_id",
         ),
+        Index(
+            "ix_smartpos_intent_tenant_atendimento_status",
+            "restaurante_id",
+            "atendimento_id",
+            "status",
+        ),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -126,6 +132,11 @@ class SmartPosPaymentIntent(Base):
         nullable=False,
     )
     mesa_id = Column(Integer, nullable=False)
+    atendimento_id = Column(
+        String,
+        ForeignKey("atendimentos_mesa.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     operador_id = Column(
         String,
         ForeignKey("usuarios.id", ondelete="RESTRICT"),

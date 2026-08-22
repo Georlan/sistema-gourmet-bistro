@@ -20,6 +20,7 @@ from app.models import (
     Restaurante,
     Usuario,
 )
+from app.operational_models import AtendimentoComanda, AtendimentoMesa
 from app.security import create_access_token
 from app.services.smartpos_payment_state import can_transition
 from app.smartpos_models import (
@@ -57,6 +58,12 @@ def setup_smartpos_payment_intent(monkeypatch):
         ).delete()
         db.query(SmartPosPaymentIntent).filter(
             SmartPosPaymentIntent.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(AtendimentoComanda).filter(
+            AtendimentoComanda.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(AtendimentoMesa).filter(
+            AtendimentoMesa.restaurante_id == RESTAURANTE_ID
         ).delete()
         db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).delete()
         db.query(Item).filter(Item.restaurante_id == RESTAURANTE_ID).delete()
@@ -524,6 +531,7 @@ def test_criar_intent_nao_cria_receita_nem_altera_mesa():
     assert response.json()["status"] == "criada"
     assert response.json()["origem"] == "smartpos"
     assert response.json()["captura"] == "provider_integrado"
+    assert response.json()["atendimento_id"]
 
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
@@ -531,6 +539,20 @@ def test_criar_intent_nao_cria_receita_nem_altera_mesa():
         assert db.query(SmartPosPaymentIntent).filter(
             SmartPosPaymentIntent.restaurante_id == RESTAURANTE_ID
         ).count() == 1
+        intent = db.query(SmartPosPaymentIntent).filter(
+            SmartPosPaymentIntent.restaurante_id == RESTAURANTE_ID
+        ).one()
+        attendance = (
+            db.query(AtendimentoMesa)
+            .join(
+                AtendimentoComanda,
+                AtendimentoComanda.atendimento_id == AtendimentoMesa.id,
+            )
+            .filter(AtendimentoComanda.comanda_id == "cmd-smartpos-intent")
+            .one()
+        )
+        assert intent.atendimento_id == (attendance.principal_id or attendance.id)
+        assert response.json()["atendimento_id"] == intent.atendimento_id
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 0
         comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
         itens = db.query(Item).filter(Item.comanda_id == comanda.id).all()
@@ -542,7 +564,7 @@ def test_criar_intent_nao_cria_receita_nem_altera_mesa():
         current_restaurante_id.reset(token)
 
 
-def test_intent_antigo_da_mesa_reutilizada_nao_reserva_o_saldo_da_nova_comanda():
+def test_intent_de_outro_atendimento_nao_reserva_mesa_mesmo_com_timestamp_recente():
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
     try:
@@ -550,12 +572,23 @@ def test_intent_antigo_da_mesa_reutilizada_nao_reserva_o_saldo_da_nova_comanda()
             CaixaTurno.restaurante_id == RESTAURANTE_ID,
             CaixaTurno.status == "aberto",
         ).one()
-        comanda = db.query(Comanda).filter(Comanda.id == "cmd-smartpos-intent").one()
-        stale_at = comanda.criado_em - datetime.timedelta(minutes=5)
+        old_attendance = AtendimentoMesa(
+            id="old-smartpos-table-service",
+            restaurante_id=RESTAURANTE_ID,
+            numero_conta=9403,
+            periodo_ref=datetime.datetime.now().strftime("%Y-%m"),
+            mesa_id=None,
+            status="fechado",
+            proxima_sequencia=1,
+        )
+        db.add(old_attendance)
+        db.flush()
+        recent_at = datetime.datetime.now(datetime.timezone.utc)
         db.add(SmartPosPaymentIntent(
             restaurante_id=RESTAURANTE_ID,
             turno_id=turno.id,
             mesa_id=4,
+            atendimento_id=old_attendance.id,
             operador_id=USER_ID,
             valor=Decimal("42.00"),
             metodo="pix",
@@ -563,8 +596,8 @@ def test_intent_antigo_da_mesa_reutilizada_nao_reserva_o_saldo_da_nova_comanda()
             escopo="valor",
             idempotency_key="stale-previous-table-cycle",
             status="aprovada",
-            criado_em=stale_at,
-            status_em=stale_at,
+            criado_em=recent_at,
+            status_em=recent_at,
             origem="smartpos",
         ))
         db.commit()

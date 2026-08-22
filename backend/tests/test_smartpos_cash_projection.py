@@ -15,6 +15,7 @@ from app.models import (
     Restaurante,
     Usuario,
 )
+from app.operational_models import AtendimentoComanda, AtendimentoMesa
 from app.routes.smartpos_cash_projection import projetar_operacao_smartpos_no_caixa
 from app.smartpos_models import SmartPosPaymentIntent, SmartPosPaymentIntentEvent
 
@@ -36,6 +37,12 @@ def setup_projection():
             ).delete()
             db.query(SmartPosPaymentIntent).filter(
                 SmartPosPaymentIntent.restaurante_id == rid
+            ).delete()
+            db.query(AtendimentoComanda).filter(
+                AtendimentoComanda.restaurante_id == rid
+            ).delete()
+            db.query(AtendimentoMesa).filter(
+                AtendimentoMesa.restaurante_id == rid
             ).delete()
             db.query(Item).filter(Item.restaurante_id == rid).delete()
             db.query(Lancamento).filter(Lancamento.restaurante_id == rid).delete()
@@ -239,6 +246,49 @@ def test_approved_intent_from_previous_table_cycle_does_not_hijack_reused_table(
         stale_at = comanda.criado_em - datetime.timedelta(minutes=5)
         intent.criado_em = stale_at
         intent.status_em = stale_at
+        db.commit()
+
+        row = _projection(db)
+        assert row.estado_operacional == "aguardando_pagamento"
+        assert row.pagamento is None
+    finally:
+        db.close()
+
+
+def test_intent_bound_to_other_attendance_is_ignored_even_when_recent():
+    db = SessionLocal()
+    try:
+        item = db.query(Item).filter(Item.id == "item-projection").one()
+        item.status = "pronto"
+        current = AtendimentoMesa(
+            id="projection-current-attendance",
+            restaurante_id=RESTAURANTE_ID,
+            numero_conta=9830,
+            periodo_ref=datetime.datetime.now().strftime("%Y-%m"),
+            mesa_id=83,
+            status="aberto",
+            proxima_sequencia=1,
+        )
+        previous = AtendimentoMesa(
+            id="projection-previous-attendance",
+            restaurante_id=RESTAURANTE_ID,
+            numero_conta=9829,
+            periodo_ref=datetime.datetime.now().strftime("%Y-%m"),
+            mesa_id=None,
+            status="fechado",
+            proxima_sequencia=1,
+        )
+        db.add_all([current, previous])
+        db.flush()
+        db.add(AtendimentoComanda(
+            restaurante_id=RESTAURANTE_ID,
+            atendimento_id=current.id,
+            comanda_id="cmd-projection",
+        ))
+        db.commit()
+
+        intent = _intent(db, "aprovada")
+        intent.atendimento_id = previous.id
         db.commit()
 
         row = _projection(db)

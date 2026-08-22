@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..models import CaixaTurno, Comanda, Item, Lancamento, Usuario
+from ..operational_models import AtendimentoComanda, AtendimentoMesa
 from ..security import require_permission
 from ..smartpos_models import SmartPosPaymentIntent
 
@@ -131,12 +132,50 @@ def projetar_operacao_smartpos_no_caixa(
         mesa_id: min(_timeline_value(comanda.criado_em) for comanda in table_commands)
         for mesa_id, table_commands in grouped.items()
     }
+    command_table_by_id = {
+        comanda.id: mesa_id
+        for mesa_id, table_commands in grouped.items()
+        for comanda in table_commands
+    }
+    current_atendimentos_by_table: dict[int, set[str]] = {
+        mesa_id: set() for mesa_id in grouped
+    }
+    attendance_rows = (
+        db.query(
+            AtendimentoComanda.comanda_id,
+            AtendimentoMesa.id,
+            AtendimentoMesa.principal_id,
+        )
+        .join(
+            AtendimentoMesa,
+            AtendimentoMesa.id == AtendimentoComanda.atendimento_id,
+        )
+        .filter(
+            AtendimentoComanda.restaurante_id == restaurante_id,
+            AtendimentoMesa.restaurante_id == restaurante_id,
+            AtendimentoComanda.comanda_id.in_(command_table_by_id),
+        )
+        .all()
+    )
+    for comanda_id, atendimento_id, principal_id in attendance_rows:
+        mesa_id = command_table_by_id.get(comanda_id)
+        if mesa_id is not None:
+            current_atendimentos_by_table[mesa_id].add(principal_id or atendimento_id)
+
     latest_intent_by_table: dict[int, SmartPosPaymentIntent] = {}
     for intent in intents:
         mesa_id = int(intent.mesa_id)
-        cycle_started_at = cycle_started_by_table.get(mesa_id)
-        if cycle_started_at is None or _timeline_value(intent.criado_em) < cycle_started_at:
-            continue
+        if intent.atendimento_id is not None:
+            current_atendimentos = current_atendimentos_by_table.get(mesa_id, set())
+            if intent.atendimento_id not in current_atendimentos:
+                continue
+        else:
+            cycle_started_at = cycle_started_by_table.get(mesa_id)
+            if (
+                cycle_started_at is None
+                or _timeline_value(intent.criado_em) < cycle_started_at
+            ):
+                continue
         latest_intent_by_table.setdefault(mesa_id, intent)
 
     smartpos_origin_tables = {

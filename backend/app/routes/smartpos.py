@@ -19,6 +19,10 @@ from ..models import (
     Usuario,
 )
 from ..security import get_current_user, require_permission
+from ..services.atendimentos import (
+    AtendimentoError,
+    materialize_table_accounts_for_write,
+)
 from ..services.capabilities import has_capability
 from ..services.payment_providers.registry import (
     integrated_provider_available,
@@ -64,6 +68,7 @@ class SmartPosPaymentIntentCreate(BaseModel):
 class SmartPosPaymentIntentResponse(BaseModel):
     id: str
     mesa_id: int
+    atendimento_id: Optional[str] = None
     turno_id: int
     operador_id: str
     valor: Decimal
@@ -167,6 +172,7 @@ def _intent_payload(intent: SmartPosPaymentIntent) -> dict:
     return {
         "id": intent.id,
         "mesa_id": intent.mesa_id,
+        "atendimento_id": intent.atendimento_id,
         "turno_id": intent.turno_id,
         "operador_id": intent.operador_id,
         "valor": _money(intent.valor),
@@ -489,6 +495,29 @@ def criar_payment_intent(
             detail="A mesa não possui consumo em aberto.",
         )
 
+    try:
+        accounts = materialize_table_accounts_for_write(
+            db,
+            restaurante_id,
+            payload.mesa_id,
+            actor_id=current_user.id,
+        )
+    except AtendimentoError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    atendimento_ids = {account.principal_id or account.id for account in accounts}
+    if len(atendimento_ids) != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Não foi possível identificar uma única ocupação ativa para esta mesa. "
+                "Revise as contas abertas antes de iniciar o recebimento."
+            ),
+        )
+    atendimento_id = atendimento_ids.pop()
+
     comanda_ids = [comanda.id for comanda in comandas]
     current_table_cycle_started_at = min(
         _timeline_value(comanda.criado_em) for comanda in comandas
@@ -559,7 +588,11 @@ def criar_payment_intent(
     reserving_intents = [
         intent
         for intent in reserving_intents
-        if _timeline_value(intent.criado_em) >= current_table_cycle_started_at
+        if intent.atendimento_id == atendimento_id
+        or (
+            intent.atendimento_id is None
+            and _timeline_value(intent.criado_em) >= current_table_cycle_started_at
+        )
     ]
 
     reserved_item_ids = {
@@ -599,6 +632,7 @@ def criar_payment_intent(
         restaurante_id=restaurante_id,
         turno_id=turno.id,
         mesa_id=payload.mesa_id,
+        atendimento_id=atendimento_id,
         operador_id=current_user.id,
         valor=valor,
         metodo=payload.metodo,
