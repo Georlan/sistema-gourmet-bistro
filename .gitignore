@@ -3,6 +3,8 @@ node_modules/
 dist/
 build/
 .next/
+playwright-report/
+test-results/
 
 # Ambiente Virtual do Python (Backend)
 venv/
