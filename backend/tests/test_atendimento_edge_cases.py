@@ -12,6 +12,10 @@ from app.operational_models import (
     NumeradorOperacional,
 )
 from app.services.atendimento_projection import build_table_family_view
+from app.services.atendimento_reconciliation import (
+    find_open_atendimentos_without_open_commands,
+    repair_open_atendimentos_without_open_commands,
+)
 from app.services.atendimentos import (
     AtendimentoError,
     ensure_atendimento_for_comanda,
@@ -277,6 +281,91 @@ def test_transferred_item_is_projected_with_original_human_order_id():
         assert projected["atendimento_origem_id"] == identity.atendimento_id
         db.commit()
     finally:
+        db.close()
+
+
+def test_table_projection_is_strictly_read_only_when_identity_is_missing():
+    db = SessionLocal()
+    try:
+        command = _command(db, "c-read-only", 1, 70)
+        launch = _launch(db, command, "l-read-only", "i-read-only")
+        account = ensure_atendimento_for_comanda(db, command, actor_id=USER)
+        db.commit()
+
+        assert db.query(LancamentoIdentidade).filter(
+            LancamentoIdentidade.restaurante_id == TENANT,
+            LancamentoIdentidade.lancamento_id == launch.id,
+        ).count() == 0
+
+        view = build_table_family_view(db, TENANT, 1)
+
+        assert view[0]["atendimento_id"] == account.id
+        assert view[0]["lancamentos"][0]["pedido_id"] is None
+        assert view[0]["lancamentos"][0]["identity_status"] == "missing"
+        assert len(db.new) == 0
+        assert len(db.dirty) == 0
+        assert db.query(LancamentoIdentidade).filter(
+            LancamentoIdentidade.restaurante_id == TENANT,
+            LancamentoIdentidade.lancamento_id == launch.id,
+        ).count() == 0
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_inconsistent_atendimento_repair_is_count_guarded_and_audited():
+    db = SessionLocal()
+    try:
+        orphan = AtendimentoMesa(
+            id="a-h3o-orphan",
+            restaurante_id=TENANT,
+            numero_conta=71,
+            periodo_ref="2026-08",
+            mesa_id=2,
+            status="aberto",
+            proxima_sequencia=1,
+            criado_em=datetime.datetime(2026, 8, 16, 2, 0),
+        )
+        db.add(orphan)
+        db.commit()
+
+        findings = find_open_atendimentos_without_open_commands(
+            db,
+            restaurante_id=TENANT,
+        )
+        assert [finding.atendimento_id for finding in findings] == [orphan.id]
+
+        with pytest.raises(RuntimeError, match="Quantidade de inconsistências mudou"):
+            repair_open_atendimentos_without_open_commands(
+                db,
+                restaurante_id=TENANT,
+                expected_count=9,
+                actor_id=USER,
+            )
+        db.rollback()
+        assert db.get(AtendimentoMesa, orphan.id).status == "aberto"
+
+        repaired = repair_open_atendimentos_without_open_commands(
+            db,
+            restaurante_id=TENANT,
+            expected_count=1,
+            actor_id=USER,
+        )
+        db.commit()
+
+        assert [finding.atendimento_id for finding in repaired] == [orphan.id]
+        db.refresh(orphan)
+        assert orphan.status == "fechado"
+        movement = db.query(MovimentoAtendimento).filter(
+            MovimentoAtendimento.restaurante_id == TENANT,
+            MovimentoAtendimento.atendimento_id == orphan.id,
+            MovimentoAtendimento.tipo == "fechamento",
+        ).one()
+        assert movement.ator_id == USER
+        assert movement.detalhes["procedimento"] == "h3o.1"
+        assert movement.detalhes["motivo"] == "reparacao_estado_derivado_sem_comanda_aberta"
+    finally:
+        db.rollback()
         db.close()
 
 

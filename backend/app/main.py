@@ -1,4 +1,7 @@
 import os
+import json
+import logging
+import uuid
 from contextlib import asynccontextmanager
 from time import perf_counter
 
@@ -89,6 +92,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+request_logger = logging.getLogger("koma.http")
+
 
 def should_create_schema_on_startup() -> bool:
     """Restringe create_all a SQLite/desenvolvimento ou opt-in explícito."""
@@ -162,6 +167,36 @@ async def run_migrations_on_startup():
     finally:
         if migration_engine is not None:
             migration_engine.dispose()
+
+
+@app.middleware("http")
+async def add_request_id_and_structured_log(request: Request, call_next):
+    supplied_request_id = (request.headers.get("X-Request-ID") or "").strip()
+    request_id = (
+        supplied_request_id
+        if supplied_request_id and len(supplied_request_id) <= 128
+        else uuid.uuid4().hex
+    )
+    request.state.request_id = request_id
+    sentry_sdk.set_tag("request_id", request_id)
+    started_at = perf_counter()
+    response = await call_next(request)
+    duration_ms = round((perf_counter() - started_at) * 1_000, 2)
+    response.headers["X-Request-ID"] = request_id
+    request_logger.info(
+        json.dumps(
+            {
+                "event": "http_request",
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+            },
+            separators=(",", ":"),
+        )
+    )
+    return response
 
 
 @app.middleware("http")
@@ -303,8 +338,9 @@ app.add_middleware(
         "X-Koma-Customer-Token",
         "X-Tenant-ID",
         "X-Restaurante-ID",
+        "X-Request-ID",
     ],
-    expose_headers=[],
+    expose_headers=["X-Request-ID"],
 )
 
 
@@ -339,6 +375,7 @@ def read_root():
         "status": "online",
         "app": settings.PROJECT_NAME,
         "version": settings.PROJECT_VERSION,
+        "commit": _deployment_commit(),
         "docs": "/docs",
     }
 

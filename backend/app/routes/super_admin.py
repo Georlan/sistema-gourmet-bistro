@@ -6,16 +6,20 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 import jwt
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Body, BackgroundTasks
+from sqlalchemy import text
 from pydantic import BaseModel
 
 from ..config import settings
+from ..database import engine
 from ..security import create_access_token, verify_password
 from .super_admin_services import (
     SupabaseService,
     CloudflareService,
     RailwayService,
     TelegramService,
+    is_mock_allowed,
     logger
 )
 from ..services.whatsapp import obter_status_evolution
@@ -38,22 +42,32 @@ router = APIRouter(
     tags=["SuperAdmin"]
 )
 
-# In-Memory Cache/Storage helper mirroring node server.ts state
-tableRestaurantes = [
+
+def _unavailable(detail: str, *, not_implemented: bool = False) -> None:
+    raise HTTPException(
+        status_code=(
+            status.HTTP_501_NOT_IMPLEMENTED
+            if not_implemented
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        ),
+        detail=detail,
+    )
+
+
+def _simulated_rows(rows: list[dict], capability: str) -> list[dict]:
+    if not is_mock_allowed():
+        _unavailable(f"{capability}: fonte real não configurada.")
+    return [
+        {**row, "dataStatus": "simulated", "dataSource": "development_fixture"}
+        for row in rows
+    ]
+
+# Fixtures visíveis somente em development/test e sempre marcadas como simuladas.
+SIMULATED_TENANTS = [
     { "id": "ten_01a", "name": "Pizzaria Sol", "subdomain": "pizzaria-sol.koma.com", "plan": "Bistro", "phone": "+55 (11) 99999-1111", "status": "ACTIVE", "monthlyOrders": 1420, "monthlyBilling": 49550.0, "createdAt": "2026-01-15", "lastActivity": "2026-07-15 15:30", "printerStatus": "online", "failedWebhooksCount24h": 0, "healthStatus": "green" },
     { "id": "ten_02b", "name": "Koma Burgers", "subdomain": "burgers.koma.com", "plan": "Delivery", "phone": "+55 (11) 98888-2222", "status": "ACTIVE", "monthlyOrders": 2890, "monthlyBilling": 86700.0, "createdAt": "2026-02-10", "lastActivity": "2026-07-15 15:24", "printerStatus": "online", "failedWebhooksCount24h": 0, "healthStatus": "green" },
     { "id": "ten_03c", "name": "Hamburgueria Silva", "subdomain": "hamburgueria-silva.koma.com", "plan": "Pocket", "phone": "+55 (11) 97777-3333", "status": "ACTIVE", "monthlyOrders": 540, "monthlyBilling": 16200.0, "createdAt": "2026-03-24", "lastActivity": "2026-07-15 14:15", "printerStatus": "online", "failedWebhooksCount24h": 2, "healthStatus": "red" },
     { "id": "ten_04d", "name": "Sushi Premium Co.", "subdomain": "sushi-premium.koma.com", "plan": "Premium", "phone": "+55 (11) 96666-4444", "status": "SUSPENDED", "monthlyOrders": 1200, "monthlyBilling": 120000.0, "createdAt": "2026-04-01", "lastActivity": "2026-07-15 11:00", "printerStatus": "offline", "failedWebhooksCount24h": 1, "healthStatus": "yellow" }
-]
-
-failedWebhooks = [
-    { "id": "wh_01", "tenantName": "Pizzaria Sol", "orderId": "PED-7969", "event": "PAYMENT_RECEIVED", "amount": 124.90, "errorReason": "Timeout connecting to schema_pizzaria-sol", "createdAt": datetime.now().isoformat(), "resolved": False },
-    { "id": "wh_02", "tenantName": "Hamburgueria Silva", "orderId": "PED-1024", "event": "PAYMENT_RECEIVED", "amount": 45.00, "errorReason": "Error: Connection pool exhausted inside multi-tenant router", "createdAt": datetime.now().isoformat(), "resolved": False }
-]
-
-sentryIssues = [
-    { "id": "err_01", "timestamp": datetime.now().strftime("%H:%M:%S"), "level": "CRITICAL", "service": "POSTGRES-POOL", "message": "Connection pool connection timeout on schema_sushi-premium." },
-    { "id": "err_02", "timestamp": datetime.now().strftime("%H:%M:%S"), "level": "WARNING", "service": "PRINTER-GATEWAY", "message": "Connection drop from printer client Sushi Premium Co." }
 ]
 
 # (credentialsStore removido conforme regra P0.1 - credenciais não devem ficar em memória global)
@@ -148,7 +162,7 @@ async def list_tenants(
     admin: dict = Depends(get_current_admin),
     supabase: SupabaseService = Depends(SupabaseService)
 ):
-    return tableRestaurantes
+    return _simulated_rows(SIMULATED_TENANTS, "Restaurantes SuperAdmin")
 
 class OnboardingRequest(BaseModel):
     name: str
@@ -163,6 +177,11 @@ async def trigger_onboarding(
     cloudflare: CloudflareService = Depends(CloudflareService),
     telegram: TelegramService = Depends(TelegramService)
 ):
+    if not is_mock_allowed():
+        _unavailable(
+            "Onboarding automático ainda não possui provisionamento real completo.",
+            not_implemented=True,
+        )
     try:
         slug = payload.name.lower().replace(" ", "-")
         db_res = await supabase.create_tenant_schema(slug, payload.plan)
@@ -186,10 +205,11 @@ async def trigger_onboarding(
             "failedWebhooksCount24h": 0,
             "healthStatus": "green"
         }
-        tableRestaurantes.insert(0, new_tenant)
+        SIMULATED_TENANTS.insert(0, new_tenant)
 
         return {
             "success": True,
+            "dataStatus": "simulated",
             "tenant_slug": slug,
             "database": db_res,
             "dns": dns_res,
@@ -211,7 +231,12 @@ async def update_tenant_status(
     admin: dict = Depends(get_current_admin),
     telegram: TelegramService = Depends(TelegramService)
 ):
-    for tenant in tableRestaurantes:
+    if not is_mock_allowed():
+        _unavailable(
+            "Alteração real de status de tenant não configurada.",
+            not_implemented=True,
+        )
+    for tenant in SIMULATED_TENANTS:
         if tenant["id"] == tenant_id:
             tenant["status"] = payload.status
             break
@@ -221,11 +246,11 @@ async def update_tenant_status(
     else:
         await telegram.send_alert(f"🟢 <b>Status Financeiro:</b> Inquilino ID {tenant_id} re-ativado e liberado.")
         
-    return {"success": True, "tenant_id": tenant_id, "status": payload.status}
+    return {"success": True, "dataStatus": "simulated", "tenant_id": tenant_id, "status": payload.status}
 
 @router.post("/restaurantes/{tenant_id}/flush-cache")
 async def flush_tenant_cache(tenant_id: str, admin: dict = Depends(get_current_admin)):
-    return {"success": True, "message": f"Cache for tenant {tenant_id} flushed successfully."}
+    _unavailable("Flush de cache não possui executor real configurado.", not_implemented=True)
 
 
 # --- DEVOPS & INFRASTRUCTURE ---
@@ -234,8 +259,10 @@ async def fetch_devops_telemetry(
     admin: dict = Depends(get_current_admin),
     railway: RailwayService = Depends(RailwayService)
 ):
-    metrics = await railway.get_service_metrics()
-    return metrics
+    try:
+        return await railway.get_service_metrics()
+    except RuntimeError as exc:
+        _unavailable(str(exc))
 
 @router.post("/railway/restart")
 async def trigger_emergency_reboot(
@@ -243,52 +270,105 @@ async def trigger_emergency_reboot(
     railway: RailwayService = Depends(RailwayService),
     telegram: TelegramService = Depends(TelegramService)
 ):
-    logger.critical("EMERGENCY SERVER RESTART ISSUED BY SUPERADMIN")
-    await telegram.send_alert("🚨 <b>ALERTA CRÍTICO:</b> Reinicialização de Emergência do servidor central do SaaS disparada pelo SuperAdmin!")
-    reboot_success = await railway.trigger_emergency_restart()
+    try:
+        reboot_success = await railway.trigger_emergency_restart()
+    except RuntimeError as exc:
+        _unavailable(str(exc), not_implemented=True)
     if reboot_success:
+        logger.critical("EMERGENCY SERVER RESTART ISSUED BY SUPERADMIN")
+        await telegram.send_alert("🚨 <b>ALERTA CRÍTICO:</b> Reinicialização de Emergência do servidor central do SaaS disparada pelo SuperAdmin!")
         return {"success": True, "reboot_dispatched": True}
     raise HTTPException(status_code=500, detail="Reboot command failed on hosting layer.")
 
 @router.get("/github/runs")
 async def get_github_runs(admin: dict = Depends(get_current_admin)):
-    return {
-        "total_count": 2,
-        "workflow_runs": [
-            { "id": 1024, "name": "Production Deploy", "status": "completed", "conclusion": "success", "html_url": "https://github.com", "run_number": 42, "created_at": datetime.now().isoformat() },
-            { "id": 1025, "name": "Lint & Test Suite", "status": "completed", "conclusion": "success", "html_url": "https://github.com", "run_number": 41, "created_at": datetime.now().isoformat() }
-        ]
-    }
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    owner = os.getenv("GITHUB_OWNER", "Georlan").strip()
+    repo = os.getenv("GITHUB_REPO", "sistema-gourmet-bistro").strip()
+    if not token:
+        _unavailable("GitHub não configurado no servidor.")
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
+            params={"per_page": 20},
+            headers=headers,
+            timeout=10.0,
+        )
+    if response.status_code != 200:
+        _unavailable(f"GitHub API respondeu HTTP {response.status_code}.")
+    return response.json()
 
 @router.post("/github/dispatch")
 async def github_dispatch(admin: dict = Depends(get_current_admin)):
-    return {"success": True, "message": "Workflow dispatch trigger sent successfully to GitHub Actions."}
+    _unavailable("Dispatch GitHub não possui workflow/ref explícitos configurados.", not_implemented=True)
 
 @router.post("/git/deploy")
 async def git_deploy(admin: dict = Depends(get_current_admin)):
-    return {"success": True, "message": "Git deployment triggered successfully on hosting infrastructure."}
+    _unavailable("Deploy pelo painel não possui executor real configurado.", not_implemented=True)
 
 @router.get("/cloudflare/dns")
-async def get_cloudflare_dns(admin: dict = Depends(get_current_admin)):
-    return [
-        { "id": "dns_1", "type": "CNAME", "name": "burgers.koma.com", "content": "k-ingress-prod.railway.app", "proxied": True, "ttl": 1 },
-        { "id": "dns_2", "type": "CNAME", "name": "pizzaria-sol.koma.com", "content": "k-ingress-prod.railway.app", "proxied": True, "ttl": 1 }
-    ]
+async def get_cloudflare_dns(
+    admin: dict = Depends(get_current_admin),
+    cloudflare: CloudflareService = Depends(CloudflareService),
+):
+    try:
+        return await cloudflare.list_dns_records()
+    except RuntimeError as exc:
+        _unavailable(str(exc))
 
 @router.post("/cloudflare/cname")
-async def create_cloudflare_cname(payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
-    return {"success": True, "id": "dns_dyn_mock", "subdomain": payload.get("subdomain"), "proxied": True, "status": "ACTIVE"}
+async def create_cloudflare_cname(
+    payload: Dict[str, Any] = Body(...),
+    admin: dict = Depends(get_current_admin),
+    cloudflare: CloudflareService = Depends(CloudflareService),
+):
+    subdomain = str(payload.get("subdomain") or "").strip()
+    if not subdomain:
+        raise HTTPException(status_code=422, detail="subdomain é obrigatório.")
+    try:
+        record = await cloudflare.create_cname_record(subdomain)
+    except RuntimeError as exc:
+        _unavailable(str(exc))
+    is_simulated = str(record.get("status") or "").startswith("MOCK_")
+    return {
+        "success": True,
+        "record": record,
+        "dataStatus": "simulated" if is_simulated else "real",
+    }
 
 @router.get("/integrations/health")
 def get_integrations_health(admin: dict = Depends(get_current_admin)):
+    database_started = time.perf_counter()
+    database_status = "available"
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception:
+        database_status = "unavailable"
+
+    def configured(*names: str) -> dict:
+        is_configured = all(bool(os.getenv(name)) for name in names)
+        return {
+            "status": "configured_unverified" if is_configured else "not_configured",
+            "source": "environment",
+            "simulated": False,
+        }
+
     return {
-        "supabase": { "status": "green", "ping": "142ms", "details": "Multi-tenant connection pool operational" },
-        "cloudflare": { "status": "green", "ping": "89ms", "details": "Zone koma.com routing operational" },
-        "railway": { "status": "green", "ping": "210ms", "details": "RAM footprint stable under 60%" },
-        "github": { "status": "green", "ping": "174ms", "details": "V3 Actions REST Gateway active" },
-        "sentry": { "status": "green", "ping": "95ms", "details": "Error tracking stream established" },
-        "telegram": { "status": "green", "ping": "120ms", "details": "Emergency notification service active" },
-        "evolution": obter_status_evolution(),
+        "database": {
+            "status": database_status,
+            "latency_ms": round((time.perf_counter() - database_started) * 1000, 2),
+            "source": "select_1",
+            "simulated": False,
+        },
+        "supabase": configured("SUPABASE_DB_URL", "SUPABASE_SERVICE_ROLE_KEY"),
+        "cloudflare": configured("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_ID"),
+        "railway": configured("RAILWAY_API_TOKEN", "RAILWAY_PROJECT_ID"),
+        "github": configured("GITHUB_TOKEN"),
+        "sentry": configured("SENTRY_DSN", "SENTRY_AUTH_TOKEN"),
+        "telegram": configured("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"),
+        "evolution": {"status": "configured_unverified", "details": obter_status_evolution(), "simulated": False},
     }
 
 
@@ -299,15 +379,10 @@ async def force_confirm_payment(
     admin: dict = Depends(get_current_admin),
     telegram: TelegramService = Depends(TelegramService)
 ):
-    logger.warning(f"Bypassing signature and forcing confirmation for Webhook {webhook_id}...")
-    await telegram.send_alert(f"✅ <b>BYPASS EFETUADO:</b> Webhook {webhook_id} confirmado manualmente. Pagamento aprovado no caixa!")
-    
-    # Resolve webhook in memory
-    for wh in failedWebhooks:
-        if wh["id"] == webhook_id or webhook_id == "all":
-            wh["resolved"] = True
-            
-    return {"success": True, "webhook_id": webhook_id, "status": "FORCE_CONFIRMED"}
+    _unavailable(
+        "Confirmação forçada de webhook foi desativada até existir fonte real, assinatura e auditoria.",
+        not_implemented=True,
+    )
 
 
 # --- TELEGRAM BOT ALERTING ---
@@ -348,96 +423,82 @@ async def update_credentials(admin: dict = Depends(get_current_admin)):
 @router.post("/test-connection")
 async def test_connection(payload: Dict[str, str] = Body(...), admin: dict = Depends(get_current_admin)):
     service = payload.get("service", "").lower()
-    return {
-        "success": True,
-        "message": f"Connection test passed successfully for {service.upper()} integration gateway."
-    }
+    if service == "cloudflare":
+        cloudflare = CloudflareService()
+        try:
+            await cloudflare.list_dns_records()
+        except RuntimeError as exc:
+            _unavailable(str(exc))
+        return {"success": True, "service": service, "source": "cloudflare_api"}
+    if service == "github":
+        token = os.getenv("GITHUB_TOKEN", "").strip()
+        if not token:
+            _unavailable("GitHub não configurado no servidor.")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://api.github.com/user",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10.0,
+            )
+        if response.status_code != 200:
+            _unavailable(f"GitHub API respondeu HTTP {response.status_code}.")
+        return {"success": True, "service": service, "source": "github_api"}
+    _unavailable(
+        f"Teste real de conexão para {service or 'serviço desconhecido'} não implementado.",
+        not_implemented=True,
+    )
 
 
 # --- DATABASE EDITOR ---
 @router.get("/db/tables")
 async def list_db_tables(admin: dict = Depends(get_current_admin)):
-    return [
-        { "name": "restaurantes", "rowCount": len(tableRestaurantes), "columnsCount": 6 },
-        { "name": "produtos", "rowCount": 5, "columnsCount": 6 },
-        { "name": "categorias", "rowCount": 4, "columnsCount": 3 },
-        { "name": "mesas", "rowCount": 4, "columnsCount": 4 },
-        { "name": "failed_webhooks", "rowCount": len(failedWebhooks), "columnsCount": 7 }
-    ]
+    _unavailable("Editor genérico de banco foi desativado até possuir fonte e auditoria reais.", not_implemented=True)
 
-@router.get("/db/{tableName}/schema")
-async def get_table_schema(tableName: str, admin: dict = Depends(get_current_admin)):
-    if tableName == "restaurantes":
-        return [
-            { "name": "id", "type": "varchar", "nullable": False, "isPrimary": True },
-            { "name": "name", "type": "varchar", "nullable": False, "isPrimary": False },
-            { "name": "subdomain", "type": "varchar", "nullable": True, "isPrimary": False },
-            { "name": "plan", "type": "varchar", "nullable": False, "isPrimary": False },
-            { "name": "status", "type": "varchar", "nullable": False, "isPrimary": False },
-            { "name": "createdAt", "type": "varchar", "nullable": True, "isPrimary": False }
-        ]
-    # Generic simple schema fallback
-    return [
-        { "name": "id", "type": "varchar", "nullable": False, "isPrimary": True },
-        { "name": "name", "type": "varchar", "nullable": False, "isPrimary": False },
-        { "name": "updated_at", "type": "timestamp", "nullable": True, "isPrimary": False }
-    ]
-
-@router.get("/db/{tableName}")
-async def get_table_data(tableName: str, admin: dict = Depends(get_current_admin)):
-    if tableName == "restaurantes":
-        return tableRestaurantes
-    elif tableName == "failed_webhooks":
-        return failedWebhooks
-    return [
-        { "id": "row_1", "name": "Item Demo 1", "updated_at": datetime.now().isoformat() },
-        { "id": "row_2", "name": "Item Demo 2", "updated_at": datetime.now().isoformat() }
-    ]
-
-@router.post("/db/{tableName}")
-async def insert_table_row(tableName: str, payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
-    payload["id"] = f"dyn_{uuid.uuid4().hex[:4]}"
-    return { "success": True, "row": payload }
-
-@router.put("/db/{tableName}/{rowId}")
-async def update_table_row(tableName: str, rowId: str, payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
-    return { "success": True, "rowId": rowId, "updated": payload }
-
-@router.delete("/db/{tableName}/{rowId}")
-async def delete_table_row(tableName: str, rowId: str, admin: dict = Depends(get_current_admin)):
-    return { "success": True, "rowId": rowId, "message": "Row deleted successfully."}
 
 @router.get("/db/audit-log")
 async def get_db_audit_log(admin: dict = Depends(get_current_admin)):
-    return [
-        { "id": "audit_1", "who": "georlandbz@gmail.com", "action": "UPDATE", "affected_table": "restaurantes", "affected_field": "status", "old_value": "ACTIVE", "new_value": "SUSPENDED", "timestamp": datetime.now().isoformat() }
-    ]
+    _unavailable("Auditoria simulada removida; fonte real não configurada.", not_implemented=True)
+
 
 @router.post("/db/backup")
 async def trigger_db_backup(admin: dict = Depends(get_current_admin)):
-    return { "success": True, "backup_url": "https://supabase-backups.koma.co/bistro-backup-latest.sql" }
+    _unavailable("Backup pelo painel não possui executor real configurado.", not_implemented=True)
 
+@router.get("/db/{tableName}/schema")
+async def get_table_schema(tableName: str, admin: dict = Depends(get_current_admin)):
+    _unavailable("Schema simulado removido; introspecção real não configurada.", not_implemented=True)
+
+@router.get("/db/{tableName}")
+async def get_table_data(tableName: str, admin: dict = Depends(get_current_admin)):
+    _unavailable("Dados simulados removidos; leitura genérica de tabelas não configurada.", not_implemented=True)
+
+@router.post("/db/{tableName}")
+async def insert_table_row(tableName: str, payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
+    _unavailable("Escrita genérica no banco desativada por segurança.", not_implemented=True)
+
+@router.put("/db/{tableName}/{rowId}")
+async def update_table_row(tableName: str, rowId: str, payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
+    _unavailable("Escrita genérica no banco desativada por segurança.", not_implemented=True)
+
+@router.delete("/db/{tableName}/{rowId}")
+async def delete_table_row(tableName: str, rowId: str, admin: dict = Depends(get_current_admin)):
+    _unavailable("Exclusão genérica no banco desativada por segurança.", not_implemented=True)
 
 # --- SENTRY SYSTEM LOGS ---
 @router.get("/sentry/issues")
 async def get_sentry_issues(admin: dict = Depends(get_current_admin)):
-    return sentryIssues
+    _unavailable("Consulta real de issues do Sentry não configurada.", not_implemented=True)
 
 @router.post("/sentry/issues/{issue_id}/resolve")
 async def resolve_sentry_issue(issue_id: str, admin: dict = Depends(get_current_admin)):
-    global sentryIssues
-    sentryIssues = [issue for issue in sentryIssues if issue["id"] != issue_id]
-    return { "success": True, "issue_id": issue_id, "message": "Issue resolved successfully." }
+    _unavailable("Resolução de issue Sentry não possui mutação real configurada.", not_implemented=True)
 
 
 # --- WEBSOCKET CLIENTS MONITOR ---
 @router.get("/websocket-clients")
 async def get_websocket_clients(admin: dict = Depends(get_current_admin)):
-    return [
-        { "restaurantId": "ten_01a", "restaurantName": "Pizzaria Sol", "device": "Painel do Caixa", "status": "CONNECTED", "ip": "189.24.15.12" },
-        { "restaurantId": "ten_01a", "restaurantName": "Pizzaria Sol", "device": "Printer Gateway", "status": "CONNECTED", "ip": "189.24.15.15" }
-    ]
+    _unavailable("Inventário detalhado de clientes WebSocket não está disponível.", not_implemented=True)
 
 @router.post("/websocket-clients/toggle")
 async def toggle_websocket_client(payload: Dict[str, Any] = Body(...), admin: dict = Depends(get_current_admin)):
-    return { "success": True, "message": "Websocket client state toggled." }
+    _unavailable("Controle de cliente WebSocket não possui executor real.", not_implemented=True)

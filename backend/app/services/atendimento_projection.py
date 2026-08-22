@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Item, Lancamento
 from ..operational_models import AtendimentoComanda
-from .atendimentos import ensure_launch_identity, get_table_family_snapshot
+from .atendimentos import get_launch_identity, get_table_family_snapshot
 
 
 def build_table_family_view(
@@ -59,15 +59,20 @@ def build_table_family_view(
         )
         projected = []
         for launch in launches:
-            identity = ensure_launch_identity(db, launch)
+            identity = get_launch_identity(db, restaurante_id, launch.id)
             projected.append(
                 {
                     "lancamento_id": launch.id,
-                    "sequencia": identity.sequencia,
-                    "pedido_id": identity.label,
+                    "sequencia": identity.sequencia if identity is not None else None,
+                    "pedido_id": identity.label if identity is not None else None,
                     "timestamp": launch.timestamp,
-                    "atendimento_origem_id": identity.atendimento_id,
-                    "transferido": identity.atendimento_id != family["atendimento_id"],
+                    "atendimento_origem_id": identity.atendimento_id if identity is not None else None,
+                    "transferido": (
+                        identity.atendimento_id != family["atendimento_id"]
+                        if identity is not None
+                        else False
+                    ),
+                    "identity_status": "persisted" if identity is not None else "missing",
                 }
             )
         family["lancamentos"] = projected

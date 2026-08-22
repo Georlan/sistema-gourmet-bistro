@@ -78,10 +78,12 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
         const filtered = data.filter((t: string) => ALLOWED_TABLES.includes(t.toLowerCase()));
         setTables(filtered.length > 0 ? filtered : ALLOWED_TABLES);
       } else {
-        setTables(ALLOWED_TABLES);
+        setTables([]);
+        setDbEditError("Fonte real de tabelas indisponível; nenhum dado simulado foi carregado.");
       }
     } catch {
-      setTables(ALLOWED_TABLES);
+      setTables([]);
+      setDbEditError("Falha ao consultar a fonte real de tabelas.");
     }
   };
 
@@ -117,6 +119,11 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           const fallbackCols = idCol ? [idCol, ...otherCols] : otherCols;
           setTableColumns(fallbackCols);
         }
+      } else {
+        const error = await res.json().catch(() => ({}));
+        setRows([]);
+        setTableColumns([]);
+        setDbEditError(error.detail || "Fonte real de dados indisponível.");
       }
     } catch (err) {
       console.error("Error fetching table data:", err);
@@ -387,9 +394,12 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
         const data = await res.json();
         setBackupResult({ filename: data.filename, size: data.size });
         onAddLog(`Backup de segurança gerado: ${data.filename}`, "success");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || `Backup respondeu HTTP ${res.status}`);
       }
-    } catch (err) {
-      onAddLog("Falha ao gerar backup de segurança das tabelas", "critical");
+    } catch (err: any) {
+      onAddLog(`Backup não executado: ${err.message}`, "critical");
     } finally {
       setIsBackingUp(false);
     }
@@ -417,7 +427,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
           </div>
           <div>
             <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
-              EDITOR VISUAL DO BANCO DE DADOS (SUPABASE REAL)
+              EDITOR VISUAL DO BANCO DE DADOS {dbEditError ? "(INDISPONÍVEL)" : "(FONTE VERIFICADA)"}
             </h3>
             <p className="text-[10px] text-koma-muted font-mono mt-0.5">
               PLANILHA OPERACIONAL COM PERSISTÊNCIA DIRETA E VALIDAÇÃO ESTRITA DE ENUM/TIPOS

@@ -38,6 +38,7 @@ export interface ActiveDevice {
 }
 
 export default function SuperAdminPanel() {
+  const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "não informado";
   const [activeTab, setActiveTab] = useState<TabId>("metrics");
   const [selectedWhitelabelTenantId, setSelectedWhitelabelTenantId] = useState<string>("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -51,6 +52,7 @@ export default function SuperAdminPanel() {
   const [currentTime, setCurrentTime] = useState("");
   const [socketDevices, setSocketDevices] = useState<ActiveDevice[]>([]);
   const [flashAlert, setFlashAlert] = useState<{ id: string; title: string; message: string; timestamp: string; type: "sentry" | "webhook" } | null>(null);
+  const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null } | null>(null);
 
   const fetchAlertRules = async () => {
     try {
@@ -197,6 +199,13 @@ export default function SuperAdminPanel() {
 
   // Populate initially and open WebSocket channel
   useEffect(() => {
+    fetch("/health/live")
+      .then(async response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then(data => setRuntimeHealth({ status: data.status === "ok" ? "ok" : "unavailable", commit: data.commit }))
+      .catch(() => setRuntimeHealth({ status: "unavailable" }));
     fetchTenants();
     fetchWebhooks();
     fetchSentryLogs();
@@ -476,8 +485,7 @@ export default function SuperAdminPanel() {
       {/* Immersive UI Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between px-6 py-4 bg-koma-card border-b border-[#1e293b]/40 shadow-lg shrink-0 gap-4" id="superadmin-header">
         <div className="flex items-center space-x-4">
-          {/* Glowing Green Nominal State Indicator */}
-          <div className="h-3 w-3 rounded-full bg-[#00b894] shadow-[0_0_8px_#00b894]"></div>
+          <div className={`h-3 w-3 rounded-full ${runtimeHealth?.status === "ok" ? "bg-[#00b894] shadow-[0_0_8px_#00b894]" : "bg-amber-500"}`}></div>
           
           <div className="flex items-center gap-3">
             {/* Minimalist Dynamic SVG Kôma Logo */}
@@ -486,11 +494,11 @@ export default function SuperAdminPanel() {
             </div>
             <div>
               <h1 className="text-xl font-black tracking-tighter text-koma-foreground flex items-center gap-1.5">
-                KÔMA <span className="text-[#00b894]">DATA</span> <span className="text-[10px] text-koma-muted font-normal tracking-normal uppercase">v2.4.0</span>
+                KÔMA <span className="text-[#00b894]">DATA</span> <span className="text-[10px] text-koma-muted font-normal tracking-normal uppercase">FE {frontendBuildSha}</span>
               </h1>
               <div className="flex items-center gap-2 mt-0.5">
-                <div className="px-2 py-0.5 border border-[#00b894] text-[#00b894] text-[9px] rounded animate-pulse font-bold tracking-widest">
-                  SYSTEM: NOMINAL
+                <div className={`px-2 py-0.5 border text-[9px] rounded font-bold tracking-widest ${runtimeHealth?.status === "ok" ? "border-[#00b894] text-[#00b894]" : "border-amber-500 text-amber-400"}`}>
+                  {runtimeHealth?.status === "ok" ? "PROCESSO HTTP: ATIVO" : "STATUS: NÃO VERIFICADO"}
                 </div>
                 <span className="text-[9px] text-[#9ca3af] uppercase font-sans tracking-wide">Kôma SaaS Core - Solopreneur Monitor</span>
               </div>
@@ -502,11 +510,11 @@ export default function SuperAdminPanel() {
         <div className="flex space-x-6 md:space-x-8 text-[11px] font-mono text-[#9ca3af]">
           <div className="flex flex-col items-start md:items-end">
             <span className="text-koma-muted uppercase text-[9px] tracking-wider">Railway Node</span>
-            <span className="text-koma-foreground font-bold">US-EAST-1 (PROD)</span>
+            <span className="text-koma-foreground font-bold">{runtimeHealth?.commit ? `BE ${runtimeHealth.commit}` : "NÃO INFORMADO"}</span>
           </div>
           <div className="flex flex-col items-start md:items-end">
             <span className="text-koma-muted uppercase text-[9px] tracking-wider">Memory</span>
-            <span className="text-[#00b894] font-bold">512MB / 2048MB</span>
+            <span className="text-amber-400 font-bold">NÃO DISPONÍVEL</span>
           </div>
           <div className="flex flex-col items-start md:items-end">
             <span className="text-koma-muted uppercase text-[9px] tracking-wider">Server Time</span>

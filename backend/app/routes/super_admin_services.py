@@ -35,22 +35,13 @@ class SupabaseService:
                 "seed_records": 0,
                 "connection_pool_active": False
             }
-
-        return {
-            "status": "PROVISIONED",
-            "schema": schema_name,
-            "isolated_tables": ["categories", "products", "orders", "users", "sessions"],
-            "seed_records": 12,
-            "connection_pool_active": True
-        }
+        raise RuntimeError(
+            "Provisionamento Supabase ainda não possui implementação real; "
+            "nenhum schema foi criado."
+        )
 
     async def get_tenant_billing_metrics(self) -> List[Dict[str, Any]]:
-        return [
-            {"id": "ten_01a", "name": "Pizzaria Sol", "monthlyOrders": 1420, "monthlyBilling": 49550.0},
-            {"id": "ten_02b", "name": "Koma Burgers", "monthlyOrders": 2890, "monthlyBilling": 86700.0},
-            {"id": "ten_03c", "name": "Hamburgueria Silva", "monthlyOrders": 540, "monthlyBilling": 16200.0},
-            {"id": "ten_04d", "name": "Sushi Premium Co.", "monthlyOrders": 1200, "monthlyBilling": 120000.0}
-        ]
+        raise RuntimeError("Métricas reais de faturamento Supabase não configuradas.")
 
 
 class CloudflareService:
@@ -96,6 +87,19 @@ class CloudflareService:
                 logger.error("Exceção na conexão com Cloudflare")
                 raise e
 
+    async def list_dns_records(self) -> List[Dict[str, Any]]:
+        if not self.api_token or not self.zone_id:
+            raise RuntimeError("Cloudflare não configurado no servidor.")
+        headers = {"Authorization": f"Bearer {self.api_token}"}
+        async with httpx.AsyncClient() as client:
+            response = await client.get(self.base_url, headers=headers, timeout=10.0)
+        if response.status_code != 200:
+            raise RuntimeError(f"Cloudflare API respondeu HTTP {response.status_code}.")
+        payload = response.json()
+        if not payload.get("success"):
+            raise RuntimeError("Cloudflare API não confirmou a consulta.")
+        return payload.get("result", [])
+
 
 class RailwayService:
     """
@@ -107,37 +111,19 @@ class RailwayService:
 
     async def get_service_metrics(self) -> Dict[str, Any]:
         if not self.api_token or not self.project_id:
-            if not is_mock_allowed():
-                raise RuntimeError("RailwayService: RAILWAY_API_TOKEN ou RAILWAY_PROJECT_ID não configurados em produção.")
-            return {
-                "server_status": "MOCK_ONLINE",
-                "cpu_usage_pct": 0.0,
-                "memory_usage_mb": 0.0,
-                "memory_limit_mb": 512.0,
-                "database_connections_pool": 0,
-                "database_limit": 100,
-                "deployments_active": 1
-            }
-
-        return {
-            "server_status": "ONLINE",
-            "cpu_usage_pct": 12.4,
-            "memory_usage_mb": 254.0,
-            "memory_limit_mb": 512.0,
-            "database_connections_pool": 24,
-            "database_limit": 100,
-            "deployments_active": 3
-        }
+            raise RuntimeError("Railway não configurado no servidor.")
+        raise RuntimeError(
+            "Coleta de métricas Railway ainda não possui consulta real implementada."
+        )
 
     async def trigger_emergency_restart(self) -> bool:
         if not self.api_token or not self.project_id:
             if not is_mock_allowed():
                 raise RuntimeError("RailwayService: RAILWAY_API_TOKEN ou RAILWAY_PROJECT_ID não configurados em produção.")
-            logger.warning("[DEVELOPMENT MOCK] Restart emergencial simulado.")
-            return True
-
-        logger.warning("EMERGENCY RESTART SERVICE DISPATCHED TO RAILWAY")
-        return True
+            raise RuntimeError("Railway não configurado no servidor.")
+        raise RuntimeError(
+            "Restart Railway ainda não possui mutação real implementada; nada foi executado."
+        )
 
     async def update_environment_variables(self, variables: Dict[str, str]) -> bool:
         environment_id = os.getenv("RAILWAY_ENVIRONMENT_ID", "")
@@ -207,7 +193,7 @@ class TelegramService:
             if not is_mock_allowed():
                 raise RuntimeError("TelegramService: TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID não configurados em produção.")
             logger.info(f"[DEVELOPMENT MOCK TELEGRAM ALERT] {text}")
-            return True
+            return False
 
         payload = {
             "chat_id": self.chat_id,

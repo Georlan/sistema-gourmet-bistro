@@ -234,6 +234,60 @@ def _linked_command_ids(db: Session, restaurante_id: int, atendimento_id: str) -
     ]
 
 
+def lock_table_for_service(
+    db: Session,
+    restaurante_id: int,
+    mesa_id: int,
+) -> Mesa:
+    """Serializa fluxos de escrita que decidem como ocupar uma mesa.
+
+    A mesa é o registro estável compartilhado por comandas concorrentes. Bloqueá-la
+    antes de consultar/criar comandas impede duas requisições de observarem a mesa
+    livre ao mesmo tempo. No SQLite o ``FOR UPDATE`` é ignorado, mas a semântica
+    continua válida para os testes unitários; a garantia de produção é PostgreSQL.
+    """
+    mesa = (
+        db.query(Mesa)
+        .filter(
+            Mesa.restaurante_id == restaurante_id,
+            Mesa.id == mesa_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if mesa is None:
+        raise AtendimentoError("Mesa não encontrada", status_code=404)
+    return mesa
+
+
+def materialize_table_accounts_for_write(
+    db: Session,
+    restaurante_id: int,
+    mesa_id: int,
+    *,
+    actor_id: Optional[str] = None,
+) -> list[AtendimentoMesa]:
+    """Materializa identidades apenas dentro de um fluxo mutável explícito."""
+    lock_table_for_service(db, restaurante_id, mesa_id)
+    commands = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.mesa_id == mesa_id,
+            Comanda.fechada == False,
+            Comanda.tipo == "Consumo no Local",
+        )
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+        .all()
+    )
+    accounts = [
+        ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+        for command in commands
+    ]
+    db.flush()
+    return accounts
+
+
 def _sync_account_status(db: Session, account: AtendimentoMesa) -> None:
     command_ids = _linked_command_ids(db, account.restaurante_id, account.id)
     if not command_ids:
@@ -411,6 +465,23 @@ def ensure_atendimento_for_comanda(
     if comanda.tipo != "Consumo no Local" or comanda.mesa_id is None:
         raise AtendimentoError("Somente consumo no local possui família de mesa", status_code=400)
 
+    # A mesa é o mutex transacional do ciclo de atendimento. Depois de obter o
+    # lock, recarregamos a comanda para enxergar um vínculo confirmado por uma
+    # transação concorrente que possa ter esperado pelo mesmo registro.
+    lock_table_for_service(db, comanda.restaurante_id, int(comanda.mesa_id))
+    locked_command = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == comanda.restaurante_id,
+            Comanda.id == comanda.id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if locked_command is None:
+        raise AtendimentoError("Comanda não encontrada", status_code=404)
+    comanda = locked_command
+
     existing = _account_for_comanda(db, comanda.restaurante_id, comanda.id, lock=True)
     if existing is not None:
         _sync_account_status(db, existing)
@@ -463,6 +534,36 @@ def ensure_atendimento_for_comanda(
     comanda.numero_pedido = account.numero_conta
     db.flush()
     return account
+
+
+def get_launch_identity(
+    db: Session,
+    restaurante_id: int,
+    lancamento_id: str,
+) -> Optional[PedidoIdentidade]:
+    """Consulta a identidade já persistida sem criar ou corrigir estado."""
+    row = (
+        db.query(LancamentoIdentidade, AtendimentoMesa)
+        .join(
+            AtendimentoMesa,
+            AtendimentoMesa.id == LancamentoIdentidade.atendimento_id,
+        )
+        .filter(
+            LancamentoIdentidade.restaurante_id == restaurante_id,
+            LancamentoIdentidade.lancamento_id == lancamento_id,
+            AtendimentoMesa.restaurante_id == restaurante_id,
+        )
+        .first()
+    )
+    if row is None:
+        return None
+    identity, account = row
+    return PedidoIdentidade(
+        atendimento_id=account.id,
+        numero_conta=account.numero_conta,
+        sequencia=identity.sequencia,
+        label=format_order_family_id(account.numero_conta, identity.sequencia),
+    )
 
 
 def _ensure_related_open_comandas_linked(
@@ -577,7 +678,11 @@ def ensure_launch_identity(db: Session, lancamento: Lancamento) -> PedidoIdentid
 
 
 def get_table_family_snapshot(db: Session, restaurante_id: int, mesa_id: int) -> list[dict]:
-    reconcile_table_principal(db, restaurante_id, mesa_id)
+    """Projeta famílias já persistidas sem mutar estado derivado.
+
+    Inconsistências e identidades ausentes ficam visíveis no payload em vez de
+    serem silenciosamente reparadas por uma leitura HTTP.
+    """
     accounts = (
         db.query(AtendimentoMesa)
         .filter(
@@ -604,13 +709,14 @@ def get_table_family_snapshot(db: Session, restaurante_id: int, mesa_id: int) ->
         )
         launch_rows = []
         for launch in launches:
-            identity = ensure_launch_identity(db, launch)
+            identity = get_launch_identity(db, restaurante_id, launch.id)
             launch_rows.append(
                 {
                     "lancamento_id": launch.id,
-                    "sequencia": identity.sequencia,
-                    "pedido_id": identity.label,
+                    "sequencia": identity.sequencia if identity is not None else None,
+                    "pedido_id": identity.label if identity is not None else None,
                     "timestamp": launch.timestamp,
+                    "identity_status": "persisted" if identity is not None else "missing",
                 }
             )
         result.append(

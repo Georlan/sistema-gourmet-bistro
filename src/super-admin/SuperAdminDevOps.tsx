@@ -168,12 +168,17 @@ export default function SuperAdminDevOps({
       const res = await fetch("/api/super-admin/cloudflare/cname", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restaurante_slug: newSubdomain })
+        body: JSON.stringify({ subdomain: newSubdomain })
       });
       if (res.ok) {
         const data = await res.json();
-        onAddLog(`✅ Cloudflare dynamic routing configured: ${data.record.subdomain} points to ${data.record.target} with SSL enabled.`, "success");
-        onTriggerTelegramAlert(`🌐 Cloudflare: Novo subdomínio DNS mapeado! https://${data.record.subdomain}`);
+        const recordName = data.record.name || data.record.subdomain;
+        const recordTarget = data.record.content || data.record.target;
+        const sourceLabel = data.dataStatus === "simulated" ? "SIMULAÇÃO" : "API REAL";
+        onAddLog(`✅ [${sourceLabel}] Cloudflare CNAME: ${recordName} -> ${recordTarget}.`, data.dataStatus === "simulated" ? "warning" : "success");
+        if (data.dataStatus !== "simulated") {
+          onTriggerTelegramAlert(`🌐 Cloudflare: Novo subdomínio DNS mapeado! https://${recordName}`);
+        }
         setNewSubdomain("");
         fetchDnsList();
       } else {
@@ -195,47 +200,29 @@ export default function SuperAdminDevOps({
   const executeRestartServer = async () => {
     setShowRestartModal(false);
     setIsRestarting(true);
-    setRestartCountdown(5);
-    onAddLog("🚨 REINICIALIZAÇÃO DE EMERGÊNCIA DISPARADA!", "critical");
-    onTriggerTelegramAlert("🚨 ALERTA CRÍTICO: Reinicialização de Emergência do servidor central disparada pelo SuperAdmin!");
+    setRestartCountdown(0);
+    onAddLog("Solicitando reinicialização ao executor Railway...", "warning");
 
     try {
-      await fetch("/api/super-admin/railway/restart", {
+      const response = await fetch("/api/super-admin/railway/restart", {
         method: "POST"
       });
-    } catch (e) {
-      console.error("[RAILWAY REBOOT CALL ERROR]", e);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.reboot_dispatched) {
+        throw new Error(data.detail || `Railway respondeu HTTP ${response.status}`);
+      }
+      onAddLog("Railway confirmou o recebimento do comando de reinicialização.", "success");
+      onTriggerTelegramAlert("🚨 Railway confirmou o recebimento de uma reinicialização solicitada pelo SuperAdmin.");
+    } catch (e: any) {
+      onAddLog(`Reinicialização não executada: ${e.message}`, "error");
+    } finally {
+      setIsRestarting(false);
+      fetchRailwayTelemetry();
     }
-
-    const timer = setInterval(() => {
-      setRestartCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          executeServerWakeup();
-          return 0;
-        }
-        onAddLog(`[REBOOT] Servidor reiniciando em ${prev - 1}...`, "warning");
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const executeServerWakeup = () => {
-    onAddLog("[REBOOT] Express container group killed (SIGTERM dispatch).", "info");
-    onAddLog("[REBOOT] Starting container build: node-koma:prod-v3...", "info");
-    onAddLog("[REBOOT] Port 3000 mapping validated. Container routing initialized.", "info");
-    onAddLog("[REBOOT] Redis instance connection established on redis://default:6379", "info");
-    onAddLog("[REBOOT] Supabase Pool restored. 100 client connections isolated successfully.", "info");
-    onAddLog("🟢 Servidor central ONLINE e operando normalmente em tempo recorde!", "success");
-    onTriggerTelegramAlert("🟢 RECOVERY: O Servidor Central do SaaS foi reiniciado com sucesso e restabeleceu todas as conexões.");
-    setIsRestarting(false);
-    fetchRailwayTelemetry();
   };
 
   const triggerGithubWorkflow = async (branch: string) => {
-    onAddLog(`GitHub Actions API: Dispatched workflow for branch [${branch}]`, "info");
-    onAddLog(`[CI/CD] Triggering build environment on Ubuntu-22.04 matrix...`, "info");
-    onTriggerTelegramAlert(`⚙️ GitHub: Executando workflow de CI/CD para a branch [${branch}]...`);
+    onAddLog(`Solicitando workflow GitHub para a branch [${branch}]...`, "info");
     
     try {
       const res = await fetch("/api/super-admin/github/dispatch", {
@@ -244,6 +231,7 @@ export default function SuperAdminDevOps({
         body: JSON.stringify({ branch })
       });
       if (res.ok) {
+        onTriggerTelegramAlert(`⚙️ GitHub confirmou o workflow de CI/CD para a branch [${branch}].`);
         onAddLog(`[CI/CD] Deployment successfully pushed to build pipeline!`, "success");
         setTimeout(() => fetchGithubRuns(), 1500);
       } else {
@@ -268,6 +256,11 @@ export default function SuperAdminDevOps({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: commitMessage })
       });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `Deploy respondeu HTTP ${response.status}`);
+      }
 
       if (!response.body) {
         throw new Error("No response body available for streaming.");

@@ -45,6 +45,10 @@ from ..services.clientes import (
 )
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..services.capabilities import has_capability
+from ..services.atendimentos import (
+    ensure_atendimento_for_comanda,
+    ensure_launch_identity,
+)
 from ..subscription import subscription_has_printing
 from ..waiter_permissions import (
     require_waiter_permission,
@@ -486,7 +490,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
         mesa = db.query(Mesa).filter(
             Mesa.restaurante_id == rid,
             Mesa.id == comanda_in.mesa_id,
-        ).first()
+        ).with_for_update().first()
         if not mesa:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -512,7 +516,10 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
                     ),
                     None,
                 )
-                return comanda_geral or comandas_abertas[0]
+                existing_command = comanda_geral or comandas_abertas[0]
+                ensure_atendimento_for_comanda(db, existing_command, actor_id=current_user.id)
+                db.commit()
+                return existing_command
 
             identificador_normalizado = identificador.casefold()
             comanda_do_cliente = next(
@@ -527,6 +534,8 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
                 None,
             )
             if comanda_do_cliente:
+                ensure_atendimento_for_comanda(db, comanda_do_cliente, actor_id=current_user.id)
+                db.commit()
                 return comanda_do_cliente
             numero_pedido = comandas_abertas[0].numero_pedido
         else:
@@ -571,6 +580,9 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
             motoboy_id=comanda_in.motoboy_id
         )
         db.add(nova_comanda)
+        db.flush()
+        if nova_comanda.tipo == "Consumo no Local" and nova_comanda.mesa_id is not None:
+            ensure_atendimento_for_comanda(db, nova_comanda, actor_id=current_user.id)
         db.commit()
     except HTTPException:
         raise
@@ -750,7 +762,7 @@ async def criar_venda_direta(
         mesa = db.query(Mesa).filter(
             Mesa.restaurante_id == rid,
             Mesa.id == venda_in.mesa_id,
-        ).first()
+        ).with_for_update().first()
         if not mesa:
             raise HTTPException(status_code=404, detail=f"Mesa {venda_in.mesa_id} não encontrada")
         comanda_aberta = db.query(Comanda).filter(
@@ -869,6 +881,11 @@ async def criar_venda_direta(
             dest = (dest_impressao_val or "COZINHA").upper()
             if dest not in ("NENHUM", "NONE", ""):
                 itens_cozinha.append(novo_item)
+
+        db.flush()
+        if tipo_pedido == "Consumo no Local" and nova_comanda.mesa_id is not None:
+            ensure_atendimento_for_comanda(db, nova_comanda, actor_id=current_user.id)
+            ensure_launch_identity(db, novo_lancamento)
 
         db.commit()
 
@@ -1191,6 +1208,15 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             
             itens_criados.append(novo_item)
 
+        db.flush()
+        if (
+            (comanda.tipo or "").strip().casefold()
+            in {"consumo no local", "mesa", "local"}
+            and comanda.mesa_id is not None
+        ):
+            ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
+            ensure_launch_identity(db, novo_lancamento)
+
         novo_lancamento.dispensado_impressao = False
         should_print = False
         items_payload = []
@@ -1368,6 +1394,8 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         )
         db.add(nova_comanda)
         db.flush()
+        if nova_comanda.tipo == "Consumo no Local" and nova_comanda.mesa_id is not None:
+            ensure_atendimento_for_comanda(db, nova_comanda, actor_id=current_user.id)
 
         # 4. Mover os itens
         for item in itens:

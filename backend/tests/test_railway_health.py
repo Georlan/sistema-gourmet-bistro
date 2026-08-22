@@ -27,6 +27,14 @@ def test_liveness_does_not_depend_on_database(monkeypatch):
     }
 
 
+def test_request_id_is_preserved_and_returned():
+    with TestClient(app) as client:
+        response = client.get("/health/live", headers={"X-Request-ID": "h3o-check-123"})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "h3o-check-123"
+
+
 def test_readiness_returns_503_when_database_is_unavailable(monkeypatch):
     failing_engine = MagicMock()
     failing_engine.connect.side_effect = RuntimeError("database unavailable")

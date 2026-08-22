@@ -63,10 +63,6 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
     if (!value || value.trim() === "" || value.includes("...")) return null; // Blank or masked values are ok (not configured or unchanged)
     const val = value.trim();
 
-    // Skip validation for mock settings/defaults
-    const isMock = val.includes("mock") || val.includes("koma") || val === "Georlan" || val === "solopreneur" || val === "sistema-gourmet-bistro";
-    if (isMock) return null;
-
     if (name === "CLOUDFLARE_ZONE_ID") {
       if (val === "test" || val === "placeholder") {
         return "Zone ID não pode ser um placeholder ('test' ou 'placeholder').";
@@ -262,7 +258,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
         }
       } else {
         const data = await res.json().catch(() => ({}));
-        const errMsg = data.error || "Erro desconhecido ao salvar credenciais.";
+        const errMsg = data.detail || data.error || "Armazenamento seguro de credenciais indisponível.";
         setSaveStatus({ type: "error", message: errMsg });
         onAddLog(`Erro ao salvar credenciais: ${errMsg}`, "error");
       }
@@ -286,7 +282,7 @@ export default function SuperAdminCredentials({ onAddLog, onRefreshHealthCheck }
             GERENCIADOR DE CHAVES & CREDENCIAIS DO SISTEMA
           </h2>
           <p className={clsx('text-xs', 'text-koma-subtle', 'mt-1', 'max-w-2xl', 'font-sans', 'leading-relaxed')}>
-            Configure e edite as chaves de API reais do seu sistema diretamente por aqui. As atualizações modificam o arquivo <code className={clsx('text-amber-400', 'font-mono')}>.env</code> de forma persistente e recarregam as configurações em memória em tempo de execução, sem necessidade de reinicializar o container do servidor de forma forçada.
+            Consulte quais integrações estão configuradas no servidor. A gravação permanece indisponível até existir um cofre de segredos auditável; este painel não altera arquivos <code className={clsx('text-amber-400', 'font-mono')}>.env</code>.
           </p>
         </div>
         <button

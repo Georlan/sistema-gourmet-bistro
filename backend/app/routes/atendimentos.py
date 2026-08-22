@@ -26,6 +26,7 @@ from ..services.atendimentos import (
     AtendimentoError,
     ensure_atendimento_for_comanda,
     get_table_family_snapshot,
+    materialize_table_accounts_for_write,
     merge_tables,
     principal_command_for_comanda,
     principal_command_for_table,
@@ -48,29 +49,6 @@ class TransferItemsBatchRequest(BaseModel):
 
 def _raise_domain(exc: AtendimentoError) -> None:
     raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-
-
-def _materialize_table_accounts(
-    db: Session,
-    restaurante_id: int,
-    mesa_id: int,
-    *,
-    actor_id: str | None = None,
-) -> None:
-    commands = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == restaurante_id,
-            Comanda.mesa_id == mesa_id,
-            Comanda.fechada == False,
-            Comanda.tipo == "Consumo no Local",
-        )
-        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
-        .all()
-    )
-    for command in commands:
-        ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
-    db.flush()
 
 
 def _item_already_at_table(
@@ -101,9 +79,7 @@ def listar_familias_mesa(
 ):
     rid = require_tenant_id()
     try:
-        _materialize_table_accounts(db, rid, mesa_id, actor_id=current_user.id)
         data = build_table_family_view(db, rid, mesa_id)
-        db.commit()
         return {"mesa_id": mesa_id, "familias": data}
     except AtendimentoError as exc:
         db.rollback()
@@ -122,7 +98,7 @@ def imprimir_recibo_mesa_com_identidade(
     require_waiter_permission(db, current_user, "perm_garcom_print")
     rid = require_tenant_id()
     try:
-        _materialize_table_accounts(db, rid, mesa_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, mesa_id, actor_id=current_user.id)
         job = enqueue_table_receipt(
             db,
             rid,
@@ -186,7 +162,7 @@ def lancar_itens_na_familia_principal(
         return lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
 
     try:
-        _materialize_table_accounts(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
         principal = principal_command_for_comanda(
             db,
             rid,
@@ -223,7 +199,7 @@ async def venda_direta_respeitando_familia_principal(
 
     rid = require_tenant_id()
     try:
-        _materialize_table_accounts(db, rid, venda_in.mesa_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, venda_in.mesa_id, actor_id=current_user.id)
         families = get_table_family_snapshot(db, rid, venda_in.mesa_id)
         if len(families) <= 1:
             return await criar_venda_direta(venda_in, background_tasks, db, current_user)
@@ -314,7 +290,7 @@ def transferir_atendimento_compativel(
     require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
     rid = require_tenant_id()
     try:
-        _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, nova_mesa_id, actor_id=current_user.id)
         command = transfer_group_by_comanda(db, rid, comanda_id, nova_mesa_id, actor_id=current_user.id)
         db.commit()
         db.refresh(command)
@@ -336,8 +312,8 @@ def mesclar_atendimentos_compativel(
     require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
     rid = require_tenant_id()
     try:
-        _materialize_table_accounts(db, rid, mesa_origem_id, actor_id=current_user.id)
-        _materialize_table_accounts(db, rid, mesa_destino_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, mesa_origem_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, mesa_destino_id, actor_id=current_user.id)
         merge_tables(db, rid, mesa_origem_id, mesa_destino_id, actor_id=current_user.id)
         command = principal_command_for_table(db, rid, mesa_destino_id)
         if command is None:
@@ -396,7 +372,7 @@ def transferir_itens_em_lote(
     require_waiter_permission(db, current_user, "perm_garcom_transferir_item")
     rid = require_tenant_id()
     try:
-        _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, nova_mesa_id, actor_id=current_user.id)
         already = [
             _item_already_at_table(db, rid, item_id, nova_mesa_id)
             for item_id in payload.item_ids
@@ -436,7 +412,7 @@ def transferir_item_compativel(
     if existing is not None:
         return existing
     try:
-        _materialize_table_accounts(db, rid, nova_mesa_id, actor_id=current_user.id)
+        materialize_table_accounts_for_write(db, rid, nova_mesa_id, actor_id=current_user.id)
         items = transfer_items_batch(db, rid, [item_id], nova_mesa_id, actor_id=current_user.id)
         db.commit()
         item = items[0]

@@ -4,7 +4,16 @@ import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const buildSha = (
+    process.env.CF_PAGES_COMMIT_SHA
+    || process.env.GITHUB_SHA
+    || process.env.GIT_COMMIT_SHA
+    || ""
+  ).slice(0, 12);
   return {
+    define: {
+      "import.meta.env.VITE_BUILD_SHA": JSON.stringify(buildSha || "não informado"),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
