@@ -16,6 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
+from . import operational_models as _operational_models  # noqa: F401
 from .database import Base, current_restaurante_id
 
 
