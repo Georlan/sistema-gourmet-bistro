@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
@@ -11,10 +11,7 @@ from app.main import app
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_menu_sync.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
-
-@event.listens_for(Engine, "connect")
+@event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
