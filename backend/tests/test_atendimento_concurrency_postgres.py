@@ -12,7 +12,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, current_restaurante_id
 from app.models import Comanda, Mesa, Restaurante, Usuario
-from app.operational_models import AtendimentoComanda, AtendimentoMesa
+from app.operational_models import (
+    AtendimentoComanda,
+    AtendimentoMesa,
+    MovimentoAtendimento,
+    NumeradorOperacional,
+)
 from app.services.atendimentos import (
     allocate_account_number,
     ensure_atendimento_for_comanda,
@@ -120,6 +125,21 @@ def test_two_simultaneous_table_openings_converge_to_one_command_and_account():
     finally:
         cleanup = Session()
         try:
+            cleanup.query(AtendimentoComanda).filter(
+                AtendimentoComanda.restaurante_id == tenant_id
+            ).delete()
+            cleanup.query(MovimentoAtendimento).filter(
+                MovimentoAtendimento.restaurante_id == tenant_id
+            ).delete()
+            cleanup.query(AtendimentoMesa).filter(
+                AtendimentoMesa.restaurante_id == tenant_id
+            ).delete()
+            cleanup.query(Comanda).filter(Comanda.restaurante_id == tenant_id).delete()
+            cleanup.query(NumeradorOperacional).filter(
+                NumeradorOperacional.restaurante_id == tenant_id
+            ).delete()
+            cleanup.query(Mesa).filter(Mesa.restaurante_id == tenant_id).delete()
+            cleanup.query(Usuario).filter(Usuario.restaurante_id == tenant_id).delete()
             cleanup.query(Restaurante).filter(Restaurante.id == tenant_id).delete()
             cleanup.commit()
         finally:
