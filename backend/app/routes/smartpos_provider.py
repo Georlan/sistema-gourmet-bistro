@@ -1,8 +1,9 @@
+import datetime
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
@@ -18,6 +19,10 @@ from ..services.payment_providers.registry import (
 from ..services.smartpos_provider_orchestrator import (
     SmartPosProviderError,
     execute_provider_payment,
+)
+from ..services.smartpos_expiration import (
+    expire_intent_if_safely_abandoned,
+    smartpos_intent_ttl,
 )
 from ..services.smartpos_settlement import (
     SmartPosSettlementError,
@@ -140,6 +145,25 @@ def _require_integrated_provider() -> None:
         )
 
 
+def _reject_safely_expired_intent(
+    db: Session,
+    *,
+    intent: SmartPosPaymentIntent,
+    actor_id: str,
+) -> None:
+    if not expire_intent_if_safely_abandoned(
+        db,
+        intent=intent,
+        actor_id=actor_id,
+    ):
+        return
+    db.commit()
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Esta intenção foi abandonada e expirou. Inicie um novo recebimento.",
+    )
+
+
 def _load_pending_provider_intents(
     db: Session,
     *,
@@ -149,12 +173,22 @@ def _load_pending_provider_intents(
     limit: int = 50,
 ) -> list[SmartPosPaymentIntent]:
     """Fila operacional por tenant/provider/terminal, sem qualquer mutação financeira."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    legacy_cutoff = now - smartpos_intent_ttl()
     return (
         db.query(SmartPosPaymentIntent)
         .filter(
             SmartPosPaymentIntent.restaurante_id == restaurante_id,
             SmartPosPaymentIntent.captura == "provider_integrado",
             SmartPosPaymentIntent.status.in_(_ACTIVE_PROVIDER_STATUSES),
+            or_(
+                SmartPosPaymentIntent.status == "processando",
+                SmartPosPaymentIntent.expira_em > now,
+                and_(
+                    SmartPosPaymentIntent.expira_em.is_(None),
+                    SmartPosPaymentIntent.criado_em > legacy_cutoff,
+                ),
+            ),
             or_(
                 SmartPosPaymentIntent.provider_name.is_(None),
                 SmartPosPaymentIntent.provider_name == provider,
@@ -220,6 +254,11 @@ def preparar_payment_intent_terminal(
     _require_smartpos(db, restaurante_id)
     _require_integrated_provider()
     intent = _load_intent(db, restaurante_id, intent_id)
+    _reject_safely_expired_intent(
+        db,
+        intent=intent,
+        actor_id=current_user.id,
+    )
     try:
         command = prepare_terminal_command(
             db,
@@ -358,6 +397,11 @@ def processar_payment_intent_provider(
     restaurante_id = require_tenant_id()
     _require_smartpos(db, restaurante_id)
     intent = _load_intent(db, restaurante_id, intent_id)
+    _reject_safely_expired_intent(
+        db,
+        intent=intent,
+        actor_id=current_user.id,
+    )
 
     try:
         provider = get_configured_provider()

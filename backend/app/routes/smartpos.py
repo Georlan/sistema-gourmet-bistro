@@ -28,6 +28,11 @@ from ..services.payment_providers.registry import (
     integrated_provider_available,
     terminal_mode,
 )
+from ..services.smartpos_expiration import (
+    expire_abandoned_intents,
+    expire_intent_if_safely_abandoned,
+    new_smartpos_expiration,
+)
 from ..services.smartpos_payment_state import (
     InvalidSmartPosTransition,
     initial_status_for_capture,
@@ -79,6 +84,7 @@ class SmartPosPaymentIntentResponse(BaseModel):
     idempotency_key: str
     status: str
     origem: str
+    expira_em: Optional[datetime.datetime] = None
 
 
 class SmartPosManualConfirmation(BaseModel):
@@ -105,6 +111,12 @@ class SmartPosIntentCancellation(BaseModel):
 class SmartPosIntentCancellationResponse(SmartPosPaymentIntentResponse):
     transition_replayed: bool = False
     financial_effect: bool = False
+
+
+class SmartPosMaintenanceResponse(BaseModel):
+    expiradas: int
+    processando_reconciliacao: int
+    aprovadas_reconciliacao: int
 
 
 class SmartPosRecentIntentResponse(BaseModel):
@@ -183,6 +195,9 @@ def _intent_payload(intent: SmartPosPaymentIntent) -> dict:
         "idempotency_key": intent.idempotency_key,
         "status": intent.status,
         "origem": intent.origem,
+        "expira_em": (
+            _timeline_value(intent.expira_em) if intent.expira_em is not None else None
+        ),
     }
 
 
@@ -571,6 +586,13 @@ def criar_payment_intent(
             detail="item_ids só pode ser informado quando o escopo for por itens.",
         )
 
+    expire_abandoned_intents(
+        db,
+        restaurante_id=restaurante_id,
+        atendimento_id=atendimento_id,
+        actor_id=current_user.id,
+    )
+
     # Parcelas ainda não liquidadas reservam saldo. O lock da Mesa acima faz
     # duas criações concorrentes enxergarem uma ordem total no PostgreSQL.
     reserving_intents = (
@@ -641,6 +663,7 @@ def criar_payment_intent(
         item_ids=normalized_items or None,
         idempotency_key=normalized_key,
         status="criada",
+        expira_em=new_smartpos_expiration(),
         origem="smartpos",
     )
     db.add(intent)
@@ -682,6 +705,71 @@ def criar_payment_intent(
 
 
 @router.post(
+    "/payment-intents/expirar-abandonados",
+    response_model=SmartPosMaintenanceResponse,
+)
+def expirar_payment_intents_abandonados(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
+):
+    """Expira só intenções sem cobrança e informa o que exige reconciliação."""
+    restaurante_id = require_tenant_id()
+    if not has_capability(db, restaurante_id, "smartpos"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SmartPOS não habilitado para este restaurante.",
+        )
+
+    expired = expire_abandoned_intents(
+        db,
+        restaurante_id=restaurante_id,
+        actor_id=current_user.id,
+    )
+    processing_attention = db.query(SmartPosPaymentIntent).filter(
+        SmartPosPaymentIntent.restaurante_id == restaurante_id,
+        SmartPosPaymentIntent.status == "processando",
+        SmartPosPaymentIntent.pagamento_id.is_(None),
+    ).count()
+    approved_attention = db.query(SmartPosPaymentIntent).filter(
+        SmartPosPaymentIntent.restaurante_id == restaurante_id,
+        SmartPosPaymentIntent.status == "aprovada",
+        SmartPosPaymentIntent.pagamento_id.is_(None),
+    ).count()
+    db.commit()
+
+    if expired:
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "payment_intent_updated",
+                "detail": {
+                    "type": "smartpos_abandoned_intents_expired",
+                    "count": len(expired),
+                },
+            },
+            restaurante_id,
+        )
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "tables_updated",
+                "detail": {
+                    "type": "smartpos_abandoned_intents_expired",
+                    "count": len(expired),
+                },
+            },
+            restaurante_id,
+        )
+
+    return {
+        "expiradas": len(expired),
+        "processando_reconciliacao": processing_attention,
+        "aprovadas_reconciliacao": approved_attention,
+    }
+
+
+@router.post(
     "/payment-intents/{intent_id}/confirmar-manual",
     response_model=SmartPosManualConfirmationResponse,
 )
@@ -718,6 +806,16 @@ def confirmar_payment_intent_manual(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Pagamentos integrados só podem ser aprovados pelo fluxo do provider.",
+        )
+    if expire_intent_if_safely_abandoned(
+        db,
+        intent=intent,
+        actor_id=current_user.id,
+    ):
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta intenção foi abandonada e expirou. Inicie um novo recebimento.",
         )
 
     troco = Decimal("0.00")

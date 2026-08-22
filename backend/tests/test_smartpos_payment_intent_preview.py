@@ -532,6 +532,9 @@ def test_criar_intent_nao_cria_receita_nem_altera_mesa():
     assert response.json()["origem"] == "smartpos"
     assert response.json()["captura"] == "provider_integrado"
     assert response.json()["atendimento_id"]
+    assert datetime.datetime.fromisoformat(response.json()["expira_em"]) > datetime.datetime.now(
+        datetime.timezone.utc
+    )
 
     token = current_restaurante_id.set(RESTAURANTE_ID)
     db = SessionLocal()
@@ -618,6 +621,185 @@ def test_intent_de_outro_atendimento_nao_reserva_mesa_mesmo_com_timestamp_recent
     )
     assert response.status_code == 201, response.text
     assert response.json()["status"] == "criada"
+
+
+def test_manutencao_expira_so_abandono_sem_cobranca_e_sinaliza_reconciliacao():
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        turno = db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id == RESTAURANTE_ID,
+            CaixaTurno.status == "aberto",
+        ).one()
+        expired_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            minutes=1
+        )
+        common = {
+            "restaurante_id": RESTAURANTE_ID,
+            "turno_id": turno.id,
+            "mesa_id": 4,
+            "operador_id": USER_ID,
+            "valor": Decimal("10.00"),
+            "metodo": "pix",
+            "captura": "provider_integrado",
+            "escopo": "valor",
+            "expira_em": expired_at,
+            "origem": "smartpos",
+        }
+        db.add_all([
+            SmartPosPaymentIntent(
+                **common,
+                idempotency_key="maintenance-created-expired",
+                status="criada",
+            ),
+            SmartPosPaymentIntent(
+                **common,
+                idempotency_key="maintenance-processing-review",
+                status="processando",
+            ),
+            SmartPosPaymentIntent(
+                **common,
+                idempotency_key="maintenance-approved-review",
+                status="aprovada",
+            ),
+        ])
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    response = client.post(
+        "/auth/smartpos/payment-intents/expirar-abandonados",
+        headers=caixa_headers(),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "expiradas": 1,
+        "processando_reconciliacao": 1,
+        "aprovadas_reconciliacao": 1,
+    }
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        statuses = {
+            intent.idempotency_key: intent.status
+            for intent in db.query(SmartPosPaymentIntent).filter(
+                SmartPosPaymentIntent.restaurante_id == RESTAURANTE_ID
+            )
+        }
+        assert statuses["maintenance-created-expired"] == "expirada"
+        assert statuses["maintenance-processing-review"] == "processando"
+        assert statuses["maintenance-approved-review"] == "aprovada"
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_confirmacao_manual_expira_intent_abandonada_sem_efeito_financeiro():
+    created = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "dinheiro",
+            "escopo": "valor",
+            "idempotency_key": "manual-expiration-created",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["status"] == "pendente"
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        intent = db.query(SmartPosPaymentIntent).filter(
+            SmartPosPaymentIntent.id == created.json()["id"]
+        ).one()
+        intent.expira_em = datetime.datetime.now(
+            datetime.timezone.utc
+        ) - datetime.timedelta(seconds=1)
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    confirmed = client.post(
+        f"/auth/smartpos/payment-intents/{created.json()['id']}/confirmar-manual",
+        headers=headers(),
+        json={"idempotency_key": "manual-expiration-confirm"},
+    )
+    assert confirmed.status_code == 409
+    assert "expirou" in confirmed.json()["detail"].lower()
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        intent = db.query(SmartPosPaymentIntent).filter(
+            SmartPosPaymentIntent.id == created.json()["id"]
+        ).one()
+        assert intent.status == "expirada"
+        assert intent.pagamento_id is None
+        assert db.query(Pagamento).filter(
+            Pagamento.restaurante_id == RESTAURANTE_ID
+        ).count() == 0
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_nova_intent_expira_reserva_abandonada_do_mesmo_atendimento():
+    first = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "auto-expiration-first-intent",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        intent = db.query(SmartPosPaymentIntent).filter(
+            SmartPosPaymentIntent.id == first.json()["id"]
+        ).one()
+        intent.expira_em = datetime.datetime.now(
+            datetime.timezone.utc
+        ) - datetime.timedelta(seconds=1)
+        db.commit()
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
+
+    replacement = client.post(
+        "/auth/smartpos/payment-intents",
+        headers=headers(),
+        json={
+            "mesa_id": 4,
+            "valor": "42.00",
+            "metodo": "pix",
+            "escopo": "valor",
+            "idempotency_key": "auto-expiration-replacement",
+        },
+    )
+    assert replacement.status_code == 201, replacement.text
+
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    db = SessionLocal()
+    try:
+        old_intent = db.query(SmartPosPaymentIntent).filter(
+            SmartPosPaymentIntent.id == first.json()["id"]
+        ).one()
+        assert old_intent.status == "expirada"
+    finally:
+        db.close()
+        current_restaurante_id.reset(token)
 
 
 def test_caixa_pode_retomar_liquidacao_aprovada_sem_duplicar_cobranca():
@@ -1398,6 +1580,7 @@ def test_grafo_de_estados_bloqueia_saltos_e_estados_terminais():
     assert can_transition("pendente", "aprovada") is True
     assert can_transition("processando", "aprovada") is True
     assert can_transition("processando", "recusada") is True
+    assert can_transition("processando", "expirada") is False
     for terminal in ("aprovada", "recusada", "cancelada", "expirada"):
         assert can_transition(terminal, "pendente") is False
         assert can_transition(terminal, "processando") is False

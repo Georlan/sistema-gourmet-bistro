@@ -12,7 +12,7 @@ TERMINAL_STATUSES = {"aprovada", "recusada", "cancelada", "expirada"}
 _ALLOWED_TRANSITIONS = {
     "criada": {"pendente", "cancelada", "expirada"},
     "pendente": {"processando", "aprovada", "cancelada", "expirada"},
-    "processando": {"aprovada", "recusada", "expirada"},
+    "processando": {"aprovada", "recusada"},
     "aprovada": set(),
     "recusada": set(),
     "cancelada": set(),

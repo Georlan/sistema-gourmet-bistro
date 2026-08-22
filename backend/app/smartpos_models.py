@@ -118,6 +118,12 @@ class SmartPosPaymentIntent(Base):
             "atendimento_id",
             "status",
         ),
+        Index(
+            "ix_smartpos_intent_tenant_status_expira",
+            "restaurante_id",
+            "status",
+            "expira_em",
+        ),
     )
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -155,6 +161,7 @@ class SmartPosPaymentIntent(Base):
         nullable=False,
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+    expira_em = Column(DateTime(timezone=True), nullable=True)
     provider_name = Column(String(32), nullable=True)
     provider_operation_key = Column(String(128), nullable=True)
     provider_terminal_id = Column(String(64), nullable=True)

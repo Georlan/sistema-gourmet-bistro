@@ -187,6 +187,10 @@ class Settings:
         "KOMA_TEST_PREMIUM_RESTAURANTE_IDS",
         "1",
     )
+    SMARTPOS_INTENT_TTL_MINUTES: int = max(
+        1,
+        int(os.getenv("SMARTPOS_INTENT_TTL_MINUTES", "15")),
+    )
 
     # WhatsApp Automation Toggle (MVP: Default = False)
     KOMA_WHATSAPP_AUTOMATION_ENABLED: bool = (

@@ -1,3 +1,4 @@
+import datetime
 from decimal import Decimal
 
 import pytest
@@ -108,6 +109,13 @@ def test_queue_returns_only_active_integrated_intents_available_to_terminal():
             db, rid=RID, turno_id=turno.id, mesa_id=84, user_id=USER_ID,
             key="queue-approved", status="aprovada", provider="pagbank", terminal="POS-A",
         )
+        expired_unstarted = _intent(
+            db, rid=RID, turno_id=turno.id, mesa_id=84, user_id=USER_ID,
+            key="queue-expired-unstarted",
+        )
+        expired_unstarted.expira_em = datetime.datetime.now(
+            datetime.timezone.utc
+        ) - datetime.timedelta(seconds=1)
         db.commit()
 
         rows = _load_pending_provider_intents(
@@ -118,6 +126,8 @@ def test_queue_returns_only_active_integrated_intents_available_to_terminal():
         )
         ids = {row.id for row in rows}
         assert ids == {visible_new.id, visible_reconcile.id}
+        db.refresh(expired_unstarted)
+        assert expired_unstarted.status == "criada"
     finally:
         db.close()
 
