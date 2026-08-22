@@ -9,14 +9,6 @@ export interface SubscriptionPlan {
   recommended?: boolean;
   features: string[];
   limitations: string[];
-  quotas: {
-    iaChefRespostas: number;
-    whatsappDisparos: number;
-  };
-  rates: {
-    pixInApp: string;
-    creditCard: string;
-  };
 }
 
 export const ANNUAL_DISCOUNT_RATE = 0.1;
@@ -64,15 +56,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     limitations: [
       'Sem impressão automática de cozinha',
       'Cardápio Digital opcional (add-on)'
-    ],
-    quotas: {
-      iaChefRespostas: 100,
-      whatsappDisparos: 100
-    },
-    rates: {
-      pixInApp: '0,99%',
-      creditCard: '2,49% + R$ 0,39'
-    }
+    ]
   },
   {
     id: 'pro',
@@ -92,40 +76,21 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
     limitations: [
       `Cardápio Digital opcional por R$ ${ONLINE_MENU_ADDON.price}/mês`
-    ],
-    quotas: {
-      iaChefRespostas: 500,
-      whatsappDisparos: 500
-    },
-    rates: {
-      pixInApp: '0,79%',
-      creditCard: '1,99% + R$ 0,29'
-    }
+    ]
   },
   {
     id: 'premium',
     name: 'Kôma Premium',
     price: 299,
     implementationFee: 699,
-    tagline: 'Venda digital, automação e recursos avançados para sua operação.',
+    tagline: 'Cardápio digital integrado e suporte prioritário.',
     features: [
       'Tudo do Pro',
       'Cardápio Digital + QR Code',
       'Pedidos digitais integrados ao fluxo do restaurante',
-      'Pix integrado',
-      'Recursos avançados de automação',
-      'Integrações disponíveis no Kôma',
       'Suporte prioritário'
     ],
-    limitations: [],
-    quotas: {
-      iaChefRespostas: 2500,
-      whatsappDisparos: 2000
-    },
-    rates: {
-      pixInApp: '0,49%',
-      creditCard: '1,49% + R$ 0,19'
-    }
+    limitations: []
   }
 ];
 
@@ -145,10 +110,7 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: 'Básico', pro: 'Completo', premium: 'Completo' },
   { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: 'R$ 49/mês', pro: 'R$ 49/mês', premium: '✓ Incluso' },
   { category: 'Cardápio Digital', feature: 'Gaveta de Aceite de Pedidos Digitais no PDV', pocket: false, pro: 'Com Addon', premium: true },
-  { category: 'Inteligência Artificial', feature: 'Chef Virtual Kôma (Copiloto IA)', pocket: '100 resp/mês', pro: '500 resp/mês', premium: '2.500 resp/mês' },
-  { category: 'Notificações', feature: 'Alertas no WhatsApp (Disparos Automáticos)', pocket: '100 msgs/mês', pro: '500 msgs/mês', premium: '2.000 msgs/mês' },
-  { category: 'Taxas Gateway (Asaas)', feature: 'Taxa Pix In-App por transação', pocket: '0,99%', pro: '0,79%', premium: '0,49%' },
-  { category: 'Taxas Gateway (Asaas)', feature: 'Taxa Cartão de Crédito Online', pocket: '2,49% + R$0,39', pro: '1,99% + R$0,29', premium: '1,49% + R$0,19' }
+  { category: 'Notificações', feature: 'Contato manual por WhatsApp (wa.me)', pocket: true, pro: true, premium: true }
 ];
 
 export function normalizeSubscriptionPlan(plan?: string | null): SubscriptionPlanId {

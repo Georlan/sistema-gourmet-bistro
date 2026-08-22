@@ -33,7 +33,7 @@ def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_pars
     ) == 2
 
 
-def test_stage3d_hybrid_fields_distinguish_money_from_points_and_percentages():
+def test_stage3d_hybrid_fields_distinguish_money_from_points_without_local_coupons():
     panel = _source("src/components/CaixaPanel.tsx")
 
     # Novo cliente: pontos são quantidade inteira; cashback é dinheiro.
@@ -47,11 +47,10 @@ def test_stage3d_hybrid_fields_distinguish_money_from_points_and_percentages():
     assert "onValueChange={(value) => setCrmFormCashback(Number(value || 0))}" in panel
     assert "onChange={(e) => setCrmFormCashback(Number(e.target.value))}" not in panel
 
-    # Cupom fixo recebe máscara de moeda, mas cupom percentual continua sendo
-    # um número percentual comum.
-    assert "newCouponTipo === 'fixo' ? (" in panel
-    assert "onValueChange={(value) => setNewCouponVal(Number(value || 0))}" in panel
-    assert "onChange={(e) => setNewCouponVal(Number(e.target.value))}" in panel
+    # O antigo cupom de desconto era apenas estado local e não pode voltar como
+    # uma autoridade financeira paralela ao backend.
+    assert "newCouponTipo" not in panel
+    assert "setNewCouponVal" not in panel
 
 
 def test_stage3d_cash_closing_uses_money_input_instead_of_custom_money_parser():

@@ -38,8 +38,8 @@ superuser, `BYPASSRLS`, proprietária de tabela tenant ou que não pertença a
 ### 3. Atualizar as variáveis de ambiente do banco
 No painel de hospedagem (Supabase / Railway / Render / AWS):
 ```bash
-DATABASE_URL="postgresql://koma_runtime:SENHA_GERADA@host:5432/postgres"
-MIGRATION_DATABASE_URL="postgresql://koma_migrator:SENHA_ADMIN@host:5432/postgres"
+DATABASE_URL="DEFINA_A_URI_DE_RUNTIME_NO_COFRE_DA_PLATAFORMA"
+MIGRATION_DATABASE_URL="DEFINA_A_URI_ADMINISTRATIVA_NO_COFRE_DA_PLATAFORMA"
 ```
 
 - `DATABASE_URL`: usada exclusivamente pelas requisições e tarefas de runtime.

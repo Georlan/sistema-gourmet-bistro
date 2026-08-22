@@ -22,9 +22,8 @@ _META_COUNTRY_RESTRICTION: bool = False
 
 def obter_diagnostico_whatsapp() -> dict[str, object]:
     """Retorna o estado de diagnóstico atual das integrações Meta Cloud API e Evolution API."""
-    import os
-    meta_token = getattr(settings, "META_ACCESS_TOKEN", None) or os.getenv("META_ACCESS_TOKEN", "")
-    phone_id = getattr(settings, "META_PHONE_NUMBER_ID", None) or os.getenv("META_PHONE_NUMBER_ID", "")
+    meta_token = getattr(settings, "META_ACCESS_TOKEN", "") or ""
+    phone_id = getattr(settings, "META_PHONE_NUMBER_ID", "") or ""
 
     evolution_diag = obter_status_evolution()
 
@@ -188,13 +187,12 @@ def enviar_notificacao_whatsapp_task(telefone: str, mensagem: str) -> None:
 def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: str) -> bool:
     """
     Envia código OTP por WhatsApp utilizando a Meta Cloud API oficial.
-    Retorna True se enviado com sucesso, False se simulado/falha.
+    Retorna True se enviado com sucesso e False quando indisponível ou com falha.
     """
     if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
         logger.debug("[WHATSAPP DESATIVADO] Envio de OTP Meta ignorado (KOMA_WHATSAPP_AUTOMATION_ENABLED=false).")
         return False
 
-    import os
     global _META_LAST_ERROR, _META_COUNTRY_RESTRICTION
 
 
@@ -204,17 +202,14 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
             logger.warning("[META CLOUD API] Falha: Telefone inválido")
             return False
 
-        meta_token = getattr(settings, "META_ACCESS_TOKEN", None) or os.getenv("META_ACCESS_TOKEN", "")
-        phone_number_id = getattr(settings, "META_PHONE_NUMBER_ID", None) or os.getenv("META_PHONE_NUMBER_ID", "")
+        meta_token = getattr(settings, "META_ACCESS_TOKEN", "") or ""
+        phone_number_id = getattr(settings, "META_PHONE_NUMBER_ID", "") or ""
 
         mensagem = f"Olá! Seu código de acesso para o *{nome_restaurante}* é: *{codigo_otp}*\n\nDigite no cardápio digital para continuar. Válido por 10 minutos."
 
         if not meta_token:
-            logger.info(
-                "[META CLOUD API SIMULADO] Token não configurado. Mensagem para %s: '%s'",
-                numero,
-                mensagem
-            )
+            _META_LAST_ERROR = "Meta Cloud API não configurada."
+            logger.warning("[META CLOUD API] OTP não enviado: configuração incompleta.")
             return False
 
         if not phone_number_id:
@@ -278,8 +273,6 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
             if isinstance(data, dict) and "error" in data:
                 err = data["error"]
                 code = err.get("code")
-                msg = err.get("message", res.text)
-
                 if code == 130497:
                     _META_COUNTRY_RESTRICTION = True
                     _META_LAST_ERROR = (
@@ -294,27 +287,36 @@ def enviar_otp_whatsapp_meta(telefone: str, nome_restaurante: str, codigo_otp: s
                     )
                     return False
                 elif code == 130429:
-                    _META_LAST_ERROR = f"130429: Limite de envios excedido (rate limit): {msg}"
-                    logger.error("[META 130429 ERRO RATE LIMIT] %s", msg)
+                    _META_LAST_ERROR = "130429: limite de envios excedido."
+                    logger.error("[META CLOUD API] Limite de envios excedido (130429).")
                     return False
                 elif code == 132000:
-                    _META_LAST_ERROR = f"132000: Modelo de mensagem não encontrado: {msg}"
-                    logger.error("[META 132000 ERRO TEMPLATE] %s", msg)
+                    _META_LAST_ERROR = "132000: modelo de mensagem não encontrado."
+                    logger.error("[META CLOUD API] Modelo de mensagem ausente (132000).")
                     return False
                 else:
-                    _META_LAST_ERROR = f"{code or 'ERRO'}: {msg}"
-                    logger.error("[META API ERRO %s] %s", code or res.status_code, msg)
+                    safe_code = code if isinstance(code, int) else "desconhecido"
+                    _META_LAST_ERROR = f"Falha do provedor (código {safe_code})."
+                    logger.error(
+                        "[META CLOUD API] Falha do provedor (código=%s, http=%s).",
+                        safe_code,
+                        res.status_code,
+                    )
                     return False
 
             if res.status_code in (200, 201):
-                logger.info("[META CLOUD API SUCCESS] OTP enviado para %s", numero)
+                logger.info("[META CLOUD API] OTP aceito pelo provedor.")
                 _META_LAST_ERROR = None
                 return True
             else:
-                _META_LAST_ERROR = f"HTTP {res.status_code}: {res.text}"
-                logger.warning("[META CLOUD API HTTP %s] Falha ao enviar OTP: %s", res.status_code, res.text)
+                _META_LAST_ERROR = f"Falha HTTP {res.status_code} ao enviar OTP."
+                logger.warning(
+                    "[META CLOUD API] Falha HTTP %s ao enviar OTP.",
+                    res.status_code,
+                )
                 return False
     except Exception as exc:
-        _META_LAST_ERROR = f"Exception: {str(exc)}"
-        logger.warning("[META CLOUD API EXCEPTION] Erro ao enviar OTP: %s", exc)
+        error_type = type(exc).__name__
+        _META_LAST_ERROR = f"Falha local ao enviar OTP ({error_type})."
+        logger.warning("[META CLOUD API] Falha local ao enviar OTP (%s).", error_type)
         return False

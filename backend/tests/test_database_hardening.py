@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 
 from app.database import Base
-from app.models import Categoria, Pagamento, Produto, Restaurante
+from app.models import Categoria, Comanda, Mesa, Pagamento, Produto, Restaurante, Usuario
 
 
 def _check_names(table) -> set[str]:
@@ -64,6 +64,73 @@ def test_product_price_constraint_rejects_negative_values():
                     nome="Produto inválido",
                     categoria_id="cat-teste",
                     preco=-0.01,
+                )
+            )
+
+
+def test_composite_foreign_keys_reject_cross_tenant_links():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+
+    @event.listens_for(engine, "connect")
+    def _enable_foreign_keys(dbapi_connection, _connection_record):
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+
+    Base.metadata.create_all(engine)
+
+    with engine.begin() as connection:
+        connection.execute(
+            Restaurante.__table__.insert().values(
+                id=2,
+                nome="Segundo restaurante",
+                plano="pocket",
+            )
+        )
+        connection.execute(
+            Categoria.__table__.insert().values(
+                id="categoria-tenant-1",
+                restaurante_id=1,
+                nome="Categoria do tenant 1",
+            )
+        )
+        connection.execute(
+            Mesa.__table__.insert().values(
+                id=99,
+                restaurante_id=1,
+                capacidade=2,
+            )
+        )
+        connection.execute(
+            Usuario.__table__.insert().values(
+                id="usuario-tenant-2",
+                restaurante_id=2,
+                nome="Usuário tenant 2",
+                cargo="garcom",
+                status="ativo",
+            )
+        )
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(
+                Produto.__table__.insert().values(
+                    id="produto-cruzado",
+                    restaurante_id=2,
+                    nome="Produto cruzado",
+                    categoria_id="categoria-tenant-1",
+                    preco=1,
+                )
+            )
+
+    with pytest.raises(IntegrityError):
+        with engine.begin() as connection:
+            connection.execute(
+                Comanda.__table__.insert().values(
+                    id="comanda-cruzada",
+                    restaurante_id=2,
+                    mesa_id=99,
+                    garcom_id="usuario-tenant-2",
+                    numero_pedido=999,
+                    tipo="Consumo no Local",
                 )
             )
 

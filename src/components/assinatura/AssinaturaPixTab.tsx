@@ -4,19 +4,15 @@ import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { TimelineContent } from '@/components/ui/timeline-animation';
 import {
-  CreditCard,
-  QrCode,
   CheckCircle2,
   Sparkles,
   Zap,
-  Bot,
   MessageSquare,
   ArrowUpRight,
   ShieldCheck,
   Check,
   CheckCheck,
   X,
-  AlertTriangle,
   Info,
   ChevronDown,
   ChevronUp,
@@ -42,10 +38,6 @@ interface AssinaturaPixTabProps {
   currentPlanId: SubscriptionPlanId;
   hasPrinting: boolean;
   hasOnlineMenu: boolean;
-  payPixActive: boolean;
-  setPayPixActive: (v: boolean) => void;
-  payCardActive: boolean;
-  setPayCardActive: (v: boolean) => void;
   isTestPlan?: boolean;
   bannerNotice?: string | null;
 }
@@ -103,14 +95,10 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
   currentPlanId,
   hasPrinting,
   hasOnlineMenu,
-  payPixActive,
-  setPayPixActive,
-  payCardActive,
-  setPayCardActive,
   isTestPlan = false,
   bannerNotice
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'pagamentos' | 'planos_upgrade'>('meu_plano');
+  const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'planos_upgrade'>('meu_plano');
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(currentPlanId);
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
   const [isYearly, setIsYearly] = useState(false);
@@ -123,19 +111,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
       setActiveSubTab('planos_upgrade');
     }
   }, [bannerNotice]);
-
-  const [usageData] = useState({
-    iaRespostasUsadas: 410,
-    whatsappUsados: 440
-  });
-
-  const iaQuota = currentPlan.quotas.iaChefRespostas;
-  const waQuota = currentPlan.quotas.whatsappDisparos;
-
-  const iaPct = Math.min(100, Math.round((usageData.iaRespostasUsadas / iaQuota) * 100));
-  const waPct = Math.min(100, Math.round((usageData.whatsappUsados / waQuota) * 100));
-
-  const isHighUsage = iaPct >= 80 || waPct >= 80;
 
   const groupedMatrix = PLAN_COMPARISON_MATRIX.reduce((acc, row) => {
     if (!acc[row.category]) acc[row.category] = [];
@@ -180,21 +155,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           )}
         >
           <ShieldCheck size={15} />
-          <span>Meu Plano & Consumo</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('pagamentos')}
-          className={clsx(
-            'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
-            activeSubTab === 'pagamentos'
-              ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
-          )}
-        >
-          <CreditCard size={15} />
-          <span>Pagamentos Online</span>
+          <span>Meu Plano</span>
         </button>
 
         <button
@@ -235,73 +196,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
       {/* 2. SUB-ABA 1: MEU PLANO & CONSUMO DO MÊS */}
       {activeSubTab === 'meu_plano' && (
         <div className="space-y-6 animate-fade-in">
-          {/* BLOCO DE CONSUMO DO MÊS */}
-          <div className="bg-koma-panel/80 border border-koma-border p-5 rounded-3xl space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-koma-border pb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-emerald-400" />
-                <h4 className="font-serif font-bold text-sm text-koma-foreground">Consumo do Mês (Cotas Ativas)</h4>
-              </div>
-              <span className="text-[9px] text-koma-subtle font-mono">Renovação Mensal</span>
-            </div>
-
-            {isHighUsage && (
-              <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-600 dark:text-amber-300 text-xs">
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle size={18} className="shrink-0 text-amber-400 animate-pulse" />
-                  <span>Você atingiu mais de 80% das cotas do seu plano neste mês.</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveSubTab('planos_upgrade')}
-                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-[10px] uppercase tracking-wider rounded-xl shrink-0 cursor-pointer shadow"
-                >
-                  Liberar Mais Cotas
-                </button>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Cota IA */}
-              <div className="bg-koma-raised/60 border border-koma-border p-4 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-koma-foreground flex items-center gap-1.5">
-                    <Bot size={16} className="text-emerald-700 dark:text-emerald-400" />
-                    <span>Chef Virtual / Copiloto IA</span>
-                  </span>
-                  <span className="font-mono text-koma-muted text-[10px]">
-                    <strong className="text-koma-foreground">{usageData.iaRespostasUsadas}</strong> / {iaQuota} msgs
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-koma-canvas border border-koma-border rounded-full overflow-hidden p-0.5">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${iaPct >= 80 ? 'bg-amber-500' : 'bg-emerald-600'}`}
-                    style={{ width: `${iaPct}%` }}
-                  />
-                </div>
-                <span className="text-[9px] text-koma-muted block">
-                  {iaPct}% das respostas utilizadas neste período
-                </span>
-              </div>
-
-              {/* Cota WhatsApp */}
-              <div className="bg-koma-raised/60 border border-koma-border p-4 rounded-2xl space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-koma-foreground flex items-center gap-1.5">
-                    <MessageSquare size={16} className="text-koma-muted" />
-                    <span>Notificações Automáticas WhatsApp</span>
-                  </span>
-                  <span className="koma-badge-warning px-2.5 py-0.5 rounded-lg text-[9px] font-bold font-mono">
-                    Manual via wa.me (Automação em breve)
-                  </span>
-                </div>
-                <span className="text-[9px] text-koma-muted block pt-1">
-                  Neste plano, o envio de notificações e contatos é realizado via links diretos sem custos adicionais.
-                </span>
-              </div>
-            </div>
-          </div>
-
           {/* RESUMO COMPACTO DO PLANO ATUAL */}
           <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-koma-border pb-4">
@@ -344,9 +238,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               )}>
                 {hasOnlineMenu ? 'Cardápio Digital Ativo' : 'Cardápio Digital Opcional (+R$ 49/mês)'}
               </span>
-              <span className="px-3 py-1 rounded-xl border border-koma-border bg-koma-raised text-koma-foreground font-medium">
-                Taxa Pix In-App: <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{currentPlan.rates.pixInApp}</strong>
-              </span>
             </div>
 
             <div className="pt-2">
@@ -363,79 +254,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
         </div>
       )}
 
-      {/* 3. SUB-ABA 2: PAGAMENTOS ONLINE */}
-      {activeSubTab === 'pagamentos' && (
-        <div className="bg-koma-panel/60 border border-koma-border p-5 rounded-3xl space-y-4 animate-fade-in">
-          <div className="border-b border-koma-border pb-3">
-            <h4 className="font-serif font-bold text-sm text-koma-foreground">Integrações de Pagamento Online In-App</h4>
-            <p className="text-[10px] text-koma-subtle mt-0.5">
-              Recebimentos automáticos via gateway Asaas com liquidação direta no seu caixa.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {/* Toggle Pix */}
-            <div className="p-4 bg-koma-raised/40 border border-koma-border rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <QrCode size={16} className="text-emerald-400" />
-                  <strong className="text-koma-foreground text-xs font-semibold">Pix Automático In-App</strong>
-                  <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] font-mono font-bold rounded">
-                    Taxa Atual: {currentPlan.rates.pixInApp} por venda
-                  </span>
-                </div>
-                <p className="text-[10px] text-koma-subtle leading-relaxed">
-                  Gera um QR Code Pix dinâmico na mesa. Libera a comanda e o caixa de forma autônoma.
-                </p>
-                <span className="text-[9px] text-koma-muted block font-mono">
-                  No Kôma Pro a taxa reduz para <strong className="text-emerald-600 dark:text-emerald-300">0,79%</strong> e no Premium para <strong className="text-emerald-600 dark:text-emerald-300">0,49%</strong>.
-                </span>
-              </div>
-
-              <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  checked={payPixActive}
-                  onChange={(e) => setPayPixActive(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-
-            {/* Toggle Cartão */}
-            <div className="p-4 bg-koma-raised/40 border border-koma-border rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <CreditCard size={16} className="text-sky-400" />
-                  <strong className="text-koma-foreground text-xs font-semibold">Cartão de Crédito Online</strong>
-                  <span className="px-2 py-0.5 bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[8px] font-mono font-bold rounded">
-                    Taxa Atual: {currentPlan.rates.creditCard} por venda
-                  </span>
-                </div>
-                <p className="text-[10px] text-koma-subtle leading-relaxed">
-                  Permite pagamento com cartão direto no celular do cliente pela comanda digital.
-                </p>
-                <span className="text-[9px] text-koma-muted block font-mono">
-                  No Kôma Pro a taxa reduz para <strong className="text-sky-600 dark:text-sky-300">1,99% + R$0,29</strong> e no Premium para <strong className="text-sky-600 dark:text-sky-300">1,49% + R$0,19</strong>.
-                </span>
-              </div>
-
-              <label className="relative inline-flex items-center cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  checked={payCardActive}
-                  onChange={(e) => setPayCardActive(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-              </label>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. SUB-ABA 3: PLANOS & UPGRADE (NOVO LAYOUT ANIMADO COM NUMBERFLOW E SHADCN) */}
+      {/* 3. SUB-ABA 2: PLANOS & UPGRADE */}
       {activeSubTab === 'planos_upgrade' && (
         <div className="space-y-6 animate-fade-in" ref={pricingRef}>
           {/* TOPO COM ANIMAÇÃO TIMELINE */}

@@ -204,6 +204,7 @@ class Settings:
 
     # Meta Cloud API (WhatsApp Oficial) - Opcional / Reservado para futuro
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "")
+    META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
     META_PHONE_NUMBER_ID: str = os.getenv("META_PHONE_NUMBER_ID", "")
     META_ACCESS_TOKEN: str = os.getenv("META_ACCESS_TOKEN", os.getenv("META_ACESS_TOKEN", ""))
     META_USE_TEMPLATE: bool = os.getenv("META_USE_TEMPLATE", "False").lower() == "true"

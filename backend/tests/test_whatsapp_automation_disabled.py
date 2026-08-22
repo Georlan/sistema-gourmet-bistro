@@ -80,14 +80,11 @@ def test_solicitar_otp_endpoint_returns_503_when_automation_disabled():
     assert "WhatsApp indisponível" in response.json()["detail"]
 
 
-def test_ai_router_chat_waiter_is_registered_and_not_404():
-    """Confirma que /api/chat-waiter está registrado no app FastAPI e desativação do WhatsApp não remove a IA."""
-    # 1. Inspeção de rotas no OpenAPI do app
-    assert "/api/chat-waiter" in app.openapi()["paths"], "A rota /api/chat-waiter deve estar registrada no app OpenAPI."
-
-    # 2. Requisição sem corpo retorna erro de validação (422), atestando que a rota existe e não é 404
+def test_unimplemented_virtual_waiter_is_not_exposed():
+    """O protótipo determinístico não deve se apresentar como assistente de IA."""
+    assert "/api/chat-waiter" not in app.openapi()["paths"]
     response = client.post("/api/chat-waiter", json={})
-    assert response.status_code == 422, f"Esperado status_code 422 sem payload, obtido: {response.status_code}"
+    assert response.status_code == 404
 
 
 @pytest.fixture

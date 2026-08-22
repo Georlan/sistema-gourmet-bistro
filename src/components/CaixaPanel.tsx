@@ -8,7 +8,7 @@ import {
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronLeft, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
-  MessageSquare, Send, Printer, Cpu, HelpCircle, Smartphone,
+  Send, Printer, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
   SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
@@ -35,13 +35,12 @@ import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
 import { CategoriaModal } from './cardapio/CategoriaModal';
-import { AssistenteConfigTab } from './assistente/AssistenteConfigTab';
-import { AssistenteSimuladorTab } from './assistente/AssistenteSimuladorTab';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { normalizeCatalogSnapshot, type CatalogCategory } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import { formatBackendTime, localCalendarDate } from '../utils/dateTime';
+import { clearOperatorSession } from '../utils/authSession';
 import { API } from '../config/caixaService';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from '../config/theme';
 import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
@@ -123,9 +122,8 @@ const CASHIER_SIDEBAR_GROUPS = [
   {
     category: 'Ferramentas',
     items: [
-      { id: 'assistente_koma', label: 'Assistente Kôma', icon: Cpu },
       { id: 'impressao_salao', label: 'Salão e impressão', icon: Printer },
-      { id: 'assinatura_pix', label: 'Assinatura e Pix', icon: CreditCard },
+      { id: 'assinatura_pix', label: 'Assinatura e planos', icon: CreditCard },
       { id: 'cardapio_digital', label: 'Cardápio digital', icon: Globe }
     ]
   }
@@ -139,13 +137,6 @@ interface Courier {
   placa: string;
   status: 'disponivel' | 'em_entrega' | 'indisponivel';
   corridas: number;
-}
-
-interface DeliveryZone {
-  id: number;
-  bairro: string;
-  taxa: number;
-  tempo: string;
 }
 
 interface AccountItem {
@@ -263,12 +254,6 @@ interface SystemUser {
   role?: string;
   status?: 'pendente_ativacao' | 'ativo' | 'inativo' | string;
   created_at?: string;
-}
-
-interface BotChatMessage {
-  sender: 'user' | 'bot';
-  text: string;
-  timestamp: string;
 }
 
 interface LoyaltyCustomer {
@@ -468,17 +453,13 @@ export function CaixaPanel({
     setToastData({ msg, type });
     setTimeout(() => setToastData(null), 3000);
   };
-  const handleSaveFidelityConfig = (e: any) => { e.preventDefault(); };
-  const handleDespacharPedido = async (id: any, mId: any) => {};
-  const handleCadastrarMotoboy = (e: any) => { e.preventDefault(); };
-
   const [activeTab, setActiveTab] = useState<
-    'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'assistente_koma' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital' | 'dashboard' | 'robo_ia'
+    'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital' | 'dashboard'
   >(() => {
     const saved = sessionStorage.getItem('koma_active_tab');
     if (saved === 'config_cardapio' || saved === 'configuracoes_cardapio') return 'cardapio_digital';
     if (saved === 'dashboard' || saved === 'indicadores') return 'relatorios';
-    if (saved === 'robo_ia' || saved === 'chat_copiloto') return 'assistente_koma';
+    if (saved === 'robo_ia' || saved === 'assistente_koma' || saved === 'chat_copiloto') return 'operacao';
     return (saved as any) || 'operacao';
   });
 
@@ -504,12 +485,11 @@ export function CaixaPanel({
     if (['pessoas', 'convites'].includes(saved)) return 'pessoas';
     if (['cargos', 'cargos_permissoes', 'permissoes'].includes(saved)) return 'cargos_permissoes';
     // Clientes mappings
-    if (['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(saved)) return 'clientes';
-    if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'cupons';
-    // Assistente Kôma mappings
-    if (['chat_copiloto', 'chat'].includes(saved)) return 'chat';
-    if (['robo_ia', 'prompt', 'prompt_atendente', 'configuracao'].includes(saved)) return 'configuracao';
-    if (['simulador', 'simulador_chat'].includes(saved)) return 'simulador';
+    if (['clientes', 'crm', 'banco_clientes'].includes(saved)) return 'clientes';
+    if (['fidelidade', 'programa_fidelidade'].includes(saved)) return 'fidelidade';
+    if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'clientes';
+    // Legacy assistant routes were prototypes; return users to the real order queue.
+    if (['chat_copiloto', 'chat', 'robo_ia', 'prompt', 'prompt_atendente', 'configuracao', 'simulador', 'simulador_chat'].includes(saved)) return 'pedidos';
     // Placeholders redirection
     if (['fiscal', 'notas_fiscais'].includes(saved)) return 'turno_atual';
     if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'clientes';
@@ -1034,10 +1014,6 @@ export function CaixaPanel({
       case 'clientes':
         setActiveSubTab('clientes');
         break;
-      case 'robo_ia':
-      case 'assistente_koma':
-        setActiveSubTab('chat');
-        break;
       case 'permissoes_cargos':
         setActiveSubTab('pessoas');
         break;
@@ -1056,39 +1032,12 @@ export function CaixaPanel({
     }
   };
 
-  const [coupons, setCoupons] = useState([
-    { id: "c-1", codigo: "KOMA10", tipo: "percentual", valor: 10, ativo: true }
-  ]);
-  const [newCouponCode, setNewCouponCode] = useState("");
-  const [newCouponVal, setNewCouponVal] = useState(10);
-  const [newCouponTipo, setNewCouponTipo] = useState<'percentual' | 'fixo'>('percentual');
-
-  const [cashbackPercent, setCashbackPercent] = useState(5);
-  const [cashbackActive, setCashbackActive] = useState(true);
-  const [cashbackHistory, setCashbackHistory] = useState<{ id: number; cliente: string; valorCompra: number; cashbackGerado: number; data: string; }[]>([]);
-  const [abandonedCarts, setAbandonedCarts] = useState<{ id: number; cliente: string; telefone: string; itens: string; total: number; abandonadoEm: string; status: string; }[]>([]);
   const [loyaltyUsers, setLoyaltyUsers] = useState<LoyaltyCustomer[]>([]);
-  const [compreGanheRules, setCompreGanheRules] = useState<{ id: number; titulo: string; descricao: string; ativa: boolean; }[]>([]);
 
-  const handleRecuperarCart = (id: number, cliente: string, telefone: string) => {
-    const msg = `Olá, ${cliente || 'Cliente'}! Notamos que seu pedido no *Kôma* não foi concluído. 🍔\n\nEstamos à disposição para te ajudar a finalizar seu pedido com o melhor atendimento!`;
-    openWhatsAppMessage(telefone, msg);
-    setAbandonedCarts(prev => prev.map(c => c.id === id ? { ...c, status: 'recuperado' } : c));
-  };
-
-  const handleAddCoupon = (e: React.FormEvent) => {
+  const handleSaveFidelidadeConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCouponCode.trim()) return;
-    setCoupons(prev => [
-      ...prev,
-      { id: 'c-' + Date.now(), codigo: newCouponCode.trim().toUpperCase(), tipo: newCouponTipo, valor: newCouponVal, ativo: true }
-    ]);
-    setNewCouponCode("");
-  };
-
-  const handleSaveFidelidadeConfig = async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/fidelidade/configuracao`, {
+      const res = await fetch(`${apiBaseUrl}/fidelidade/config`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(fidelidadeConfig)
@@ -1709,25 +1658,6 @@ export function CaixaPanel({
   const [printSettingsSaveState, setPrintSettingsSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
 
-  // AI Chatbot State
-  const [aiBotActive, setAiBotActive] = useState(true);
-  const [aiSystemPrompt, setAiSystemPrompt] = useState(
-    "Você é o atendente virtual do restaurante Kôma. Nosso cardápio é focado em Pastéis Crocantes e Hambúrgueres Gourmet. Responda sempre de forma educada, curta e prestativa, sugerindo pratos específicos quando o cliente perguntar o que comer."
-  );
-  const [chatbotMessages, setChatbotMessages] = useState<BotChatMessage[]>([
-    { sender: 'bot', text: "Olá! Seja bem-vindo ao Kôma. Como posso ajudar você com o nosso cardápio hoje?", timestamp: "23:00" }
-  ]);
-  const [chatInputText, setChatInputText] = useState('');
-  const [isBotTyping, setIsBotTyping] = useState(false);
-
-  // Simulated deliveries zones
-  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([
-    { id: 1, bairro: "Boa Viagem", taxa: 7.00, tempo: "20-30 min" },
-    { id: 2, bairro: "Casa Forte", taxa: 12.00, tempo: "35-45 min" },
-    { id: 3, bairro: "Pina", taxa: 5.00, tempo: "15-25 min" },
-    { id: 4, bairro: "Espinheiro", taxa: 10.00, tempo: "30-40 min" }
-  ]);
-
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
@@ -1902,12 +1832,12 @@ export function CaixaPanel({
   const [isOperatorDrawerOpen, setIsOperatorDrawerOpen] = useState(false);
 
   const handleLogoutOperator = () => {
+    clearOperatorSession();
     localStorage.removeItem("koma_token");
     localStorage.removeItem("koma_user_id");
     localStorage.removeItem("koma_user_name");
     localStorage.removeItem("koma_user_role");
     localStorage.removeItem("koma_auth_token");
-    localStorage.clear();
     window.location.reload();
   };
 
@@ -2507,7 +2437,9 @@ export function CaixaPanel({
       });
       if (res.ok) {
         showToast('Fretista cadastrado com sucesso!');
-        fetchMotoboys();
+        await fetchMotoboys();
+        setNewMotoboyNome('');
+        setNewMotoboyTelefone('');
       } else {
         showToast('Erro ao cadastrar fretista.', 'error');
       }
@@ -2523,51 +2455,6 @@ export function CaixaPanel({
   });
   // Real products loaded from backend
   const [apiProdutos, setApiProdutos] = useState<Product[]>([]);
-  // Mantidos enquanto a implementação visual anterior permanece fora do runtime.
-  const [disponibilidadeSearch, setDisponibilidadeSearch] = useState<string>('');
-  const [cardapioProdutosSearch, setCardapioProdutosSearch] = useState<string>('');
-  // Online payments & billing plan states
-  const [payPixActive, setPayPixActive] = useState(true);
-  const [payCardActive, setPayCardActive] = useState(true);
-  const [supportChats, setSupportChats] = useState<{ id: number; cliente: string; ultimaMsg: string; status: string; canal: string; }[]>([]);
-
-  const [customerFeedbacks, setCustomerFeedbacks] = useState<{ id: number; cliente: string; estrelas: number; comentario: string; data: string; }[]>([]);
-  // NEW Phase 13 States (Hybrid AI & White-Label Architecture)
-  const [iaPilotMode, setIaPilotMode] = useState<'copilot' | 'autopilot'>('copilot');
-  const [iaDiscountEnabled, setIaDiscountEnabled] = useState(false);
-  const [iaMaxDiscount, setIaMaxDiscount] = useState(10);
-  const [iaUpsellEnabled, setIaUpsellEnabled] = useState(true);
-  const [iaVoiceTone, setIaVoiceTone] = useState<'direto' | 'conversador'>('conversador');
-  const [iaMaxInteractions, setIaMaxInteractions] = useState(5);
-
-  const [restaurantNicho, setRestaurantNicho] = useState<'hamburgueria' | 'pizzaria' | 'doceria' | 'alacarte' | 'selfservice'>('hamburgueria');
-  const [modulesActive, setModulesActive] = useState({
-    salon: true,
-    delivery: true
-  });
-
-  // Co-pilot Chat thread state (demonstration data)
-  const [activeChatContactId, setActiveChatContactId] = useState<number>(1);
-  const [copilotContacts, setCopilotContacts] = useState([
-    { id: 1, name: "Bruno Santos", phone: "(81) 98877-6655", lastMsg: "Quero 2 pastéis de carne e uma Coca em lata, pfvr", time: "10:32", pendingAction: true, iaStatus: "Aguardando Co-Piloto", audio: true, audioText: "Quero dois pastéis de carne e uma Coca em lata, por favor." },
-    { id: 2, name: "Fernanda Costa", phone: "(81) 99988-1122", lastMsg: "Vocês entregam na Jaqueira?", time: "10:15", pendingAction: false, iaStatus: "Piloto Automático", audio: false },
-    { id: 3, name: "Carlos Eduardo", phone: "(81) 98777-4433", lastMsg: "Qual a taxa de entrega?", time: "09:45", pendingAction: false, iaStatus: "Atendimento Humano", audio: false }
-  ]);
-
-  const [copilotMessages, setCopilotMessages] = useState<{ id: number, contactId: number, sender: 'cliente' | 'ia' | 'humano', text: string, time: string, isAudio?: boolean, audioText?: string }[]>([
-    { id: 1, contactId: 1, sender: 'cliente', text: "🎤 Mensagem de Voz (0:12)", time: "10:32", isAudio: true, audioText: "Quero dois pastéis de carne e uma Coca em lata, por favor." },
-    { id: 2, contactId: 2, sender: 'cliente', text: "Vocês entregam na Jaqueira?", time: "10:15" },
-    { id: 3, contactId: 2, sender: 'ia', text: "Olá Fernanda! Sim, entregamos na Jaqueira. A taxa para sua região é de R$ 8,00 e o prazo estimado é de 30 a 40 minutos.", time: "10:15" },
-    { id: 4, contactId: 3, sender: 'cliente', text: "Qual a taxa de entrega?", time: "09:45" },
-    { id: 5, contactId: 3, sender: 'humano', text: "Bom dia Carlos! Qual seria o seu bairro de entrega?", time: "09:47" }
-  ]);
-
-  // Draft carts generated by AI Co-pilot
-  const [copilotDraftCarts, setCopilotDraftCarts] = useState<{ [contactId: number]: { product: Product; quantity: number }[] }>({});
-
-  const [copilotDraftResponses, setCopilotDraftResponses] = useState<{ [contactId: number]: string }>({
-    1: "Olá Bruno! Perfeito, acabo de anotar o seu pedido de 2 pastéis de carne e 1 Coca-Cola em lata. Deseja adicionar alguma observação ou prato de sobremesa?"
-  });
 
   // Fetch current shift status
   const fetchTurno = async () => {
@@ -3517,7 +3404,7 @@ export function CaixaPanel({
   };
 
   const openWaInvite = (telefone: string, nome: string, token: string) => {
-    const link = `https://sistema-gourmet-bistro.pages.dev/ativar?token=${token}`;
+    const link = `${window.location.origin}/ativar?token=${encodeURIComponent(token)}`;
     const msg = `Olá ${nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: ${link}`;
     openWhatsAppMessage(telefone, msg);
   };
@@ -3546,7 +3433,7 @@ export function CaixaPanel({
       }
     } catch (err: any) {
       console.error(err);
-      alert(`Erro: ${err.message || 'Falha ao enviar convite'}`);
+      alert(`Erro: ${err.message || 'Falha ao cadastrar convite'}`);
     }
   };
 
@@ -3886,49 +3773,6 @@ export function CaixaPanel({
     }
   };
 
-  // Chatbot conversation simulation handler
-  const handleSendChatbotMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInputText.trim()) return;
-
-    const userMsg: BotChatMessage = {
-      sender: 'user',
-      text: chatInputText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    setChatbotMessages(prev => [...prev, userMsg]);
-    const promptText = chatInputText;
-    setChatInputText('');
-    setIsBotTyping(true);
-
-    // Simulate smart bot typing answers based on AI context
-    setTimeout(() => {
-      let replyText = "Desculpe, não entendi muito bem. Você gostaria de ver nossas opções de pastéis ou hambúrgueres?";
-      const lower = promptText.toLowerCase();
-
-      if (lower.includes('pastel') || lower.includes('pasteis')) {
-        replyText = "Temos pastéis tradicionais incríveis (carne, queijo, frango) a partir de R$ 12.00 e pastel doce de Nutella com Morango! Qual sabor gostaria?";
-      } else if (lower.includes('burger') || lower.includes('hambur') || lower.includes('carne')) {
-        replyText = "Nosso carro-chefe é o Hambúrguer Kôma, com blend artesanal de 150g, muito queijo derretido e molho especial no pão brioche! Deseja um?";
-      } else if (lower.includes('bebida') || lower.includes('refrigerante') || lower.includes('coca')) {
-        replyText = "Temos Coca-Cola, Guaraná, Sucos Naturais geladinhos e Cerveja Heineken em lata! Qual vai querer para acompanhar?";
-      } else if (lower.includes('oi') || lower.includes('olá') || lower.includes('bom dia')) {
-        replyText = "Olá! Como posso ajudar você a escolher as delícias do Kôma hoje?";
-      }
-
-      setChatbotMessages(prev => [
-        ...prev,
-        {
-          sender: 'bot',
-          text: replyText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-      setIsBotTyping(false);
-    }, 1200);
-  };
-
   // O mesmo snapshot ativo alimenta balcão, garçom e cardápio digital.
   // Produtos desativados permanecem no administrativo para preservar histórico,
   // mas nunca aparecem como vendáveis.
@@ -4128,19 +3972,16 @@ export function CaixaPanel({
   }, [filteredCol1, filteredDigitalProduction, filteredCol2Table, filteredDeliveryFinalization]);
 
   const ordersStages = [
-    { id: 'salon' as const, label: 'Salão', count: filteredCol1.length, enabled: modulesActive.salon },
-    { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length, enabled: modulesActive.delivery },
-    { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length, enabled: true },
+    { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
+    { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length },
+    { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
   ];
-  const visibleOrdersStages = ordersStages.filter(stage => stage.enabled);
-  const effectiveMobileOrdersStage = visibleOrdersStages.some(stage => stage.id === mobileOrdersStage)
-    ? mobileOrdersStage
-    : visibleOrdersStages[0].id;
-  const ordersColumnCounts = visibleOrdersStages.map(stage => stage.count);
+  const effectiveMobileOrdersStage = mobileOrdersStage;
+  const ordersColumnCounts = ordersStages.map(stage => stage.count);
   const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
   const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
   const ordersColumnsTemplate = activeOrdersColumns === 0
-    ? `repeat(${visibleOrdersStages.length}, minmax(0, 1fr))`
+    ? `repeat(${ordersStages.length}, minmax(0, 1fr))`
     : ordersColumnCounts
       .map(count => count === 0 ? 'minmax(0, 0.68fr)' : `minmax(0, ${ordersColumnWeight}fr)`)
       .join(' ');
@@ -4211,7 +4052,6 @@ export function CaixaPanel({
     : tabId === 'impressao_salao' ? (activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras'))
     : tabId === 'assinatura_pix' ? (activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos'))
     : tabId === 'relatorios' ? (activeTab === 'relatorios' || activeTab === 'dashboard')
-    : tabId === 'assistente_koma' ? (activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto'))
     : activeTab === tabId
   );
 
@@ -4245,9 +4085,6 @@ export function CaixaPanel({
     } else if (tabId === 'relatorios') {
       setActiveTab('relatorios');
       if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
-    } else if (tabId === 'assistente_koma') {
-      setActiveTab('assistente_koma');
-      if (!['chat', 'configuracao', 'simulador'].includes(activeSubTab)) setActiveSubTab('chat');
     } else {
       handleTabChange(tabId as any);
     }
@@ -4618,7 +4455,6 @@ export function CaixaPanel({
             </button>
             <h2 className={clsx('font-serif', 'font-bold', 'text-xs', 'sm:text-sm', 'tracking-tight', 'text-koma-foreground', 'uppercase', 'tracking-wider', 'truncate')}>
               {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
-              {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && 'Assistente Kôma'}
               {activeTab === 'operacao' && 'OPERAÇÃO DE VENDAS'}
               {activeTab === 'cardapio' && 'CARDÁPIO DO RESTAURANTE'}
               {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
@@ -4654,36 +4490,11 @@ export function CaixaPanel({
 
         {/* Sub-tabs Navigation Bar */}
         <div className={clsx('cashier-subnav', 'bg-koma-panel/80', 'backdrop-blur-md', 'border-b', 'border-koma-border', 'px-6', 'py-1.5', 'flex', 'gap-2', 'shrink-0', 'overflow-x-auto', 'scrollbar-none')}>
-          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && [
-            { id: 'chat', label: 'Chat' },
-            { id: 'configuracao', label: 'Configuração' },
-            { id: 'simulador', label: 'Simulador' }
-          ].map(sub => {
-            const isSubActive = (
-              (sub.id === 'chat' && ['chat', 'chat_copiloto'].includes(activeSubTab)) ||
-              (sub.id === 'configuracao' && ['configuracao', 'prompt', 'prompt_atendente'].includes(activeSubTab)) ||
-              (sub.id === 'simulador' && ['simulador', 'simulador_chat'].includes(activeSubTab)) ||
-              activeSubTab === sub.id
-            );
-            return (
-              <button
-                key={sub.id}
-                onClick={() => setActiveSubTab(sub.id)}
-                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
-                  }`}
-              >
-                {sub.label}
-              </button>
-            );
-          })}
-
           {activeTab === 'operacao' && [
             { id: 'pedidos', label: 'Pedidos' },
             { id: 'balcao', label: 'Novo pedido' },
-            { id: 'mesas', label: 'Salão', show: modulesActive.salon }
-          ].filter(sub => sub.show !== false).map(sub => (
+            { id: 'mesas', label: 'Salão' }
+          ].map(sub => (
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
@@ -4765,11 +4576,11 @@ export function CaixaPanel({
 
           {activeTab === 'clientes' && [
             { id: 'clientes', label: 'Clientes' },
-            { id: 'cupons', label: 'Cupons' }
+            { id: 'fidelidade', label: 'Fidelidade' }
           ].map(sub => {
             const isSubActive = (
-              (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
-              (sub.id === 'cupons' && ['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(activeSubTab)) ||
+              (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
+              (sub.id === 'fidelidade' && ['fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
               activeSubTab === sub.id
             );
             return (
@@ -5127,7 +4938,7 @@ export function CaixaPanel({
               )}
 
               <div className="orders-mobile-stages" role="tablist" aria-label="Etapa dos pedidos">
-                {visibleOrdersStages.map(stage => (
+                {ordersStages.map(stage => (
                   <button
                     key={stage.id}
                     type="button"
@@ -5150,7 +4961,7 @@ export function CaixaPanel({
 
 
                 {/* COLUMN 1: Em produção */}
-                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', !modulesActive.salon && 'is-channel-disabled', filteredCol1.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">01 / SALÃO</span>
@@ -5285,7 +5096,7 @@ export function CaixaPanel({
                 </div>
 
                 {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
-                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', !modulesActive.delivery && 'is-channel-disabled', filteredDigitalProduction.length === 0 && 'is-empty')}>
+                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">02 / SEM MESA</span>
@@ -6771,7 +6582,7 @@ export function CaixaPanel({
                 <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'shadow-xs')}>
                   <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'mb-4')}>
                     <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>Cadastrar Membro</span>
-                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">Envio automático do convite de acesso</span>
+                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">O WhatsApp será aberto para você revisar e enviar o convite</span>
                   </div>
 
                   <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3.5', 'text-left')}>
@@ -6811,7 +6622,7 @@ export function CaixaPanel({
                       </select>
                     </div>
                     <button type="submit" className={clsx('w-full', 'py-3', 'koma-btn-success', 'font-bold', 'text-xs', 'uppercase', 'tracking-wider', 'rounded-xl', 'transition-all', 'cursor-pointer', 'shadow-xs', 'mt-2')}>
-                      Cadastrar e Enviar Convite
+                      Cadastrar e Preparar Convite
                     </button>
                   </form>
                 </div>
@@ -7355,222 +7166,15 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* VIEW 8A: ROBÔ & IA - CONFIGURAÇÕES DO PROMPT & GOVERNANÇA */}
-          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && ['configuracao', 'prompt', 'prompt_atendente'].includes(activeSubTab) && (
-            <AssistenteConfigTab
-              aiBotActive={aiBotActive}
-              setAiBotActive={setAiBotActive}
-              aiSystemPrompt={aiSystemPrompt}
-              setAiSystemPrompt={setAiSystemPrompt}
-              iaDiscountEnabled={iaDiscountEnabled}
-              setIaDiscountEnabled={setIaDiscountEnabled}
-              iaMaxDiscount={iaMaxDiscount}
-              setIaMaxDiscount={setIaMaxDiscount}
-              iaUpsellEnabled={iaUpsellEnabled}
-              setIaUpsellEnabled={setIaUpsellEnabled}
-              iaVoiceTone={iaVoiceTone}
-              setIaVoiceTone={setIaVoiceTone}
-              iaMaxInteractions={iaMaxInteractions}
-              setIaMaxInteractions={setIaMaxInteractions}
-            />
-          )}
-
-          {/* VIEW 8B: ROBÔ & IA - SIMULADOR DE CHAT */}
-          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia') && ['simulador', 'simulador_chat'].includes(activeSubTab) && (
-            <AssistenteSimuladorTab
-              aiBotActive={aiBotActive}
-              chatbotMessages={chatbotMessages}
-              isBotTyping={isBotTyping}
-              chatInputText={chatInputText}
-              setChatInputText={setChatInputText}
-              handleSendChatbotMessage={handleSendChatbotMessage}
-              supportChats={supportChats}
-              setSupportChats={setSupportChats}
-              customerFeedbacks={customerFeedbacks}
-            />
-          )}
-
           {/* VIEW 9: PAGAMENTOS & PLANOS */}
           {activeSubTab === 'planos' && (
             <AssinaturaPixTab
               currentPlanId={currentPlanId}
               hasPrinting={hasPrinting}
               hasOnlineMenu={hasOnlineMenu}
-              payPixActive={payPixActive}
-              setPayPixActive={setPayPixActive}
-              payCardActive={payCardActive}
-              setPayCardActive={setPayCardActive}
               isTestPlan={restauranteConfig?.plano_modo_teste === true}
               bannerNotice={planNoticeBanner}
             />
-          )}
-
-          {/* VIEW: RECUPERADOR DE VENDAS */}
-          {activeSubTab === 'recuperador' && (
-            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground')}>Recuperador de Vendas Abandonadas</h3>
-                <p className={clsx('text-[10px]', 'text-koma-subtle', 'leading-relaxed')}>
-                  Monitore carrinhos de compras que foram iniciados no site de delivery ou pelo robô, mas não foram concluídos pelo cliente. Envie uma mensagem automática de incentivo no WhatsApp.
-                </p>
-              </div>
-
-              <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'overflow-hidden')}>
-                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                  <thead>
-                    <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                      <th className="p-3.5">Cliente</th>
-                      <th className="p-3.5">WhatsApp</th>
-                      <th className="p-3.5">Itens do Carrinho</th>
-                      <th className="p-3.5">Total</th>
-                      <th className="p-3.5">Abandonado há</th>
-                      <th className="p-3.5">Status</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                    {abandonedCarts.map((cart) => (
-                      <tr key={cart.id} className={clsx('hover:bg-koma-panel/35', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{cart.cliente}</td>
-                        <td className={clsx('p-3.5', 'text-koma-secondary', 'font-mono')}>{cart.telefone}</td>
-                        <td className={clsx('p-3.5', 'text-koma-subtle', 'italic', 'max-w-xs', 'truncate')}>{cart.itens}</td>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-emerald-500', 'font-mono')}>R$ {cart.total.toFixed(2)}</td>
-                        <td className={clsx('p-3.5', 'text-koma-subtle')}>{cart.abandonadoEm}</td>
-                        <td className="p-3.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase ${cart.status === 'recuperado'
-                            ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                            }`}>
-                            {cart.status === 'recuperado' ? 'Recuperado' : 'Pendente'}
-                          </span>
-                        </td>
-                        <td className={clsx('p-3.5', 'text-right')}>
-                          <button
-                            onClick={() => handleRecuperarCart(cart.id, cart.cliente, cart.telefone)}
-                            disabled={cart.status === 'recuperado'}
-                            className={`px-2.5 py-1 text-[9px] font-bold rounded-lg uppercase tracking-wider cursor-pointer transition-all ${cart.status === 'recuperado'
-                              ? 'bg-koma-raised text-koma-muted border border-transparent cursor-not-allowed'
-                              : 'bg-[#10b981] hover:bg-[#059669] text-[#121214] border border-transparent'
-                              }`}
-                          >
-                            Recuperar no Whats
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-
-
-          {/* VIEW: CUPONS DE DESCONTO */}
-          {['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4', 'sm:gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('md:col-span-1', 'bg-koma-card', 'border', 'border-koma-border', 'p-3.5', 'sm:p-5', 'rounded-2xl', 'sm:rounded-3xl', 'space-y-3', 'sm:space-y-4', 'h-fit')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Criar Novo Cupom</span>
-                <form onSubmit={handleAddCoupon} className="space-y-3">
-                  <div className="space-y-1">
-                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Código do Cupom:</label>
-                    <input
-                      type="text"
-                      placeholder="EX: FESTA20"
-                      value={newCouponCode}
-                      onChange={(e) => setNewCouponCode(e.target.value)}
-                      className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Tipo:</label>
-                      <select
-                        value={newCouponTipo}
-                        onChange={(e) => setNewCouponTipo(e.target.value as any)}
-                        className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]')}
-                      >
-                        <option value="percentual">Percentual (%)</option>
-                        <option value="fixo">Fixo (R$)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Valor:</label>
-                      {newCouponTipo === 'fixo' ? (
-              <MoneyInput
-                value={newCouponVal}
-                onValueChange={(value) => setNewCouponVal(Number(value || 0))}
-                className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
-              />
-            ) : (
-              <input
-                type="number"
-                value={newCouponVal}
-                onChange={(e) => setNewCouponVal(Number(e.target.value))}
-                className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-[10px]')}
-              />
-            )}
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className={clsx('w-full', 'py-2.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                  >
-                    Salvar Cupom
-                  </button>
-                </form>
-              </div>
-
-              <div className={clsx('md:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'p-3.5', 'sm:p-5', 'space-y-3', 'sm:space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Cupons Cadastrados</span>
-                <div className={clsx('overflow-x-auto', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'min-w-[420px]', 'text-left', 'text-[10px]')}>
-                    <thead>
-                      <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3">Código</th>
-                        <th className="p-3">Tipo</th>
-                        <th className="p-3">Desconto</th>
-                        <th className="p-3">Status</th>
-                        <th className={clsx('p-3', 'text-right')}>Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                      {coupons.map((coupon) => (
-                        <tr key={coupon.id} className={clsx('hover:bg-koma-panel/20', 'transition-colors')}>
-                          <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-koma-foreground', 'tracking-wide')}>{coupon.codigo}</td>
-                          <td className={clsx('p-3', 'text-koma-subtle', 'capitalize')}>{coupon.tipo === 'percentual' ? 'Percentual' : 'Fixo'}</td>
-                          <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>
-                            {coupon.tipo === 'percentual' ? `${coupon.valor}%` : `R$ ${coupon.valor.toFixed(2)}`}
-                          </td>
-                          <td className="p-3">
-                            <button
-                              onClick={() => setCoupons(prev => prev.map(c => c.id === coupon.id ? { ...c, ativo: !c.ativo } : c))}
-                              className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase transition-all cursor-pointer ${coupon.ativo
-                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
-                                : 'bg-koma-raised text-koma-muted border border-transparent'
-                                }`}
-                            >
-                              {coupon.ativo ? 'Ativo' : 'Inativo'}
-                            </button>
-                          </td>
-                          <td className={clsx('p-3', 'text-right')}>
-                            <button
-                              onClick={() => setCoupons(prev => prev.filter(c => c.id !== coupon.id))}
-                              className={clsx('p-1', 'hover:bg-emerald-600/20', 'text-emerald-500', 'hover:text-[#FF5C75]', 'rounded-lg', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
           )}
 
           {/* VIEW: FIDELIDADE */}
@@ -7579,7 +7183,7 @@ export function CaixaPanel({
               <div className={clsx('md:col-span-1', 'bg-koma-card', 'border', 'border-koma-border', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
                 <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Ajustes de Fidelização</span>
 
-                <form onSubmit={handleSaveFidelityConfig} className="space-y-4">
+                <form onSubmit={handleSaveFidelidadeConfig} className="space-y-4">
                   <div className={clsx('flex', 'items-center', 'justify-between')}>
                     <span className={clsx('text-[10px]', 'text-koma-subtle')}>Ativar Programa</span>
                     <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0')}>
@@ -7660,7 +7264,6 @@ export function CaixaPanel({
                         ) : (
                           <th className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>Saldo Cashback Disponível</th>
                         )}
-                        <th className={clsx('p-3', 'text-right')}>Ação</th>
                       </tr>
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-koma-border')}>
@@ -7675,14 +7278,6 @@ export function CaixaPanel({
                           ) : (
                             <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>R$ {user.saldoCashback.toFixed(2)}</td>
                           )}
-                          <td className={clsx('p-3', 'text-right')}>
-                            <button
-                              onClick={() => alert(`Lançamento manual para ${user.cliente}`)}
-                              className={clsx('px-2', 'py-1', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'text-koma-secondary', 'font-bold', 'rounded-lg', 'text-[9px]', 'uppercase', 'tracking-wider', 'cursor-pointer')}
-                            >
-                              Creditar
-                            </button>
-                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -7710,67 +7305,6 @@ export function CaixaPanel({
           {/* VIEW: RELATÓRIOS — EQUIPE (reutiliza o mesmo componente de desempenho) */}
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && activeSubTab === 'equipe' && (
             <EquipeDesempenhoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
-          )}
-
-          {/* FICHA TÉCNICA (OCULTO — implementação real futura) */}
-          {false && activeTab === 'cardapio' && activeSubTab === 'ficha_tecnica' && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('lg:col-span-1', 'bg-koma-card', 'border', 'border-koma-border', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Simulador de Custos (CMV)</span>
-                <p className={clsx('text-[10px]', 'text-koma-subtle', 'leading-relaxed')}>
-                  Cruza a quantidade e preço médio de compras de ingredientes para definir a margem de lucro de cada prato.
-                </p>
-                <div className={clsx('space-y-3.5', 'text-[10px]', 'font-mono')}>
-                  <div className={clsx('p-3', 'bg-koma-panel', 'rounded-2xl', 'border', 'border-koma-border/50', 'space-y-2')}>
-                    <span className={clsx('text-[9px]', 'font-bold', 'font-sans', 'text-emerald-700 dark:text-emerald-400', 'block', 'uppercase', 'tracking-wider')}>Hambúrguer Kôma</span>
-                    <div className={clsx('flex', 'justify-between')}><span>Pão Brioche (1 un):</span> <span>R$ 1.50</span></div>
-                    <div className={clsx('flex', 'justify-between')}><span>Blend Carne 150g:</span> <span>R$ 4.20</span></div>
-                    <div className={clsx('flex', 'justify-between')}><span>Queijo Cheddar 30g:</span> <span>R$ 1.10</span></div>
-                    <div className={clsx('flex', 'justify-between')}><span>Embalagem + Caixa:</span> <span>R$ 1.20</span></div>
-                    <div className={clsx('border-t', 'border-koma-border/60', 'pt-2', 'flex', 'justify-between', 'font-bold', 'text-koma-foreground')}>
-                      <span>Custo Total Ingredientes:</span>
-                      <span>R$ 8.00</span>
-                    </div>
-                    <div className={clsx('flex', 'justify-between', 'text-emerald-400', 'font-bold')}>
-                      <span>Margem Bruta (venda R$ 22.00):</span>
-                      <span>63.6%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className={clsx('lg:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Fichas Técnicas Cadastradas</span>
-                <div className={clsx('overflow-hidden', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                    <thead>
-                      <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3">Nome</th>
-                        <th className="p-3">Categoria</th>
-                        <th className={clsx('p-3', 'font-mono')}>Preço de Venda</th>
-                        <th className={clsx('p-3', 'font-mono')}>Custo Ingredientes</th>
-                        <th className={clsx('p-3', 'text-right')}>Margem de Lucro</th>
-                      </tr>
-                    </thead>
-                    <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                      {[
-                        { nome: "Hambúrguer Kôma", cat: "Burgers", venda: 22.00, custo: 8.00, margem: "63.6%" },
-                        { nome: "Pastel de Carne", cat: "Pastéis", venda: 12.00, custo: 3.50, margem: "70.8%" },
-                        { nome: "Coca-Cola Lata", cat: "Bebidas", venda: 6.00, custo: 2.20, margem: "63.3%" }
-                      ].map((p, idx) => (
-                        <tr key={idx} className={clsx('hover:bg-koma-panel/20', 'transition-colors')}>
-                          <td className={clsx('p-3', 'font-bold', 'text-koma-foreground')}>{p.nome}</td>
-                          <td className={clsx('p-3', 'text-koma-subtle')}>{p.cat}</td>
-                          <td className={clsx('p-3', 'font-mono', 'text-koma-secondary')}>R$ {p.venda.toFixed(2)}</td>
-                          <td className={clsx('p-3', 'font-mono', 'text-rose-400')}>R$ {p.custo.toFixed(2)}</td>
-                          <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'text-right')}>{p.margem}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
           )}
 
           {/* CATÁLOGO CENTRAL: produtos e disponibilidade usam o mesmo snapshot. */}
@@ -7866,440 +7400,6 @@ export function CaixaPanel({
               }}
             />
           )}
-
-          {/* Implementação anterior mantida temporariamente fora do runtime. */}
-          {false && activeTab === 'cardapio' && activeSubTab === 'produtos' && (
-            <div className={clsx('space-y-4', 'animate-fade-in', 'text-left')}>
-              <div className={clsx('flex', 'justify-between', 'items-center')}>
-                <div>
-                  <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'text-base', 'block')}>Cardápio</span>
-                  <span className={clsx('text-[9px]', 'text-koma-muted')}>{apiProdutos.length} produtos cadastrados</span>
-                </div>
-                <div className={clsx('flex', 'gap-2')}>
-                  <button
-                    onClick={() => {
-                      setEditingProduct(null);
-                      setProdFormId('');
-                      setProdFormNome('');
-                      setProdFormPreco('');
-                      setProdFormCategoriaId(apiCategorias[0]?.id || '');
-                      setProdFormDescricao('');
-                      setProdFormImagem('');
-                      setProdFormImagem2('');
-                      setProdFormImagem3('');
-                      setProdFormAtivo(true);
-                      setShowProductModal(true);
-                    }}
-                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                  >
-                    <Plus size={11} />
-                    Novo Item
-                  </button>
-                  <button
-                    onClick={() => setShowCategoryModal(true)}
-                    className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-emerald-500/15', 'hover:bg-[#10b981]/25', 'border', 'border-emerald-500/30', 'text-emerald-700 dark:text-emerald-400', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                  >
-                    <Plus size={11} />
-                    Nova Categoria
-                  </button>
-                  {/* Oculto no painel do restaurante (reservado para Super Admin) */}
-                  {false && (
-                    <>
-                      <button
-                        onClick={() => {
-                          const json = JSON.stringify(apiProdutos, null, 2);
-                          const blob = new Blob([json], { type: 'application/json' });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a'); a.href = url; a.download = 'cardapio_koma.json'; a.click();
-                          URL.revokeObjectURL(url);
-                        }}
-                        className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-[#10b981]/40', 'text-koma-secondary', 'hover:text-emerald-700 dark:text-emerald-400', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                      >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                        Exportar JSON
-                      </button>
-                      <label className={clsx('flex', 'items-center', 'gap-1.5', 'px-3', 'py-1.5', 'bg-emerald-500/15', 'border', 'border-emerald-500/30', 'hover:bg-[#10b981]/20', 'text-emerald-700 dark:text-emerald-400', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                        Importar JSON
-                        <input type="file" accept=".json" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0]; if (!file) return;
-                          const text = await file.text();
-                          try {
-                            const data = JSON.parse(text);
-                            const items = Array.isArray(data) ? data : [data];
-                            if (confirm(`Deseja importar/atualizar ${items.length} produtos no cardápio?`)) {
-                              const res = await fetch(`${apiBaseUrl}/produtos/importar`, {
-                                method: 'POST',
-                                headers: {
-                                  ...authHeaders,
-                                  'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify(items)
-                              });
-                              if (res.ok) {
-                                alert('Produtos importados com sucesso!');
-                                await fetchProdutos();
-                              } else {
-                                const err = await res.json();
-                                alert(`Erro na importação: ${err.detail || 'Erro desconhecido'}`);
-                              }
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            alert('Arquivo JSON inválido ou erro de processamento.');
-                          }
-                        }} />
-                      </label>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Search bar */}
-              <div className={clsx('relative')}>
-                <input
-                  type="text"
-                  placeholder="Pesquisar produto..."
-                  value={cardapioProdutosSearch}
-                  onChange={e => setCardapioProdutosSearch(e.target.value)}
-                  className={clsx('w-full', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'px-3', 'py-2', 'text-[10px]', 'text-koma-foreground', 'placeholder:text-gray-500', 'focus:outline-none', 'focus:border-[#10b981]/50', 'transition-colors')}
-                />
-                {cardapioProdutosSearch && (
-                  <button onClick={() => setCardapioProdutosSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'hover:text-koma-foreground')}>
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-
-              {/* Grouped by dynamically loaded apiCategorias */}
-              {apiCategorias.map((cat) => {
-                const prods = apiProdutos
-                  .filter(p => (p as any).categoria_id === cat.id)
-                  .filter(p => !cardapioProdutosSearch.trim() || smartSearchMatch(p.nome, cardapioProdutosSearch) || smartSearchMatch(p.descricao || '', cardapioProdutosSearch))
-                  .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
-                if (prods.length === 0) return null;
-                return (
-                  <div key={cat.id} className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-2xl', 'overflow-hidden')}>
-                    <div className={clsx('bg-koma-raised', 'px-4', 'py-2.5', 'border-b', 'border-koma-border')}>
-                      <span className={clsx('font-bold', 'text-emerald-700 dark:text-emerald-400', 'text-[10px]', 'uppercase', 'tracking-wider')}>{cat.nome}</span>
-                    </div>
-                    <div className={clsx('divide-y', 'divide-koma-border')}>
-                      {prods.map(prod => (
-                        <div key={prod.id} className={clsx('flex', 'items-center', 'justify-between', 'px-4', 'py-3', 'hover:bg-koma-panel/30', 'transition-colors')}>
-                          <div className={clsx('flex', 'items-center', 'gap-3')}>
-                            {(prod as any).imagem && <img src={(prod as any).imagem} alt={prod.nome} className={clsx('w-8', 'h-8', 'rounded-lg', 'object-cover')} />}
-                            <div>
-                              <span className={clsx('text-koma-foreground', 'text-xs', 'font-semibold', 'block')}>{prod.nome}</span>
-                              {(prod as any).descricao && <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>{(prod as any).descricao}</span>}
-                            </div>
-                          </div>
-                          <div className={clsx('flex', 'items-center', 'gap-3', 'shrink-0')}>
-                            <span className={clsx('font-mono', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'text-xs')}>R$ {prod.preco.toFixed(2)}</span>
-                            <span title="Item publicado no catálogo do cardápio" className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${(prod as any).ativo !== false ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-500/20' : 'bg-koma-raised text-koma-subtle border border-koma-border'}`}>
-                              {(prod as any).ativo !== false ? '🟢 No Cardápio' : '🔴 Oculto'}
-                            </span>
-                            <div className={clsx('flex', 'gap-1', 'pl-2')}>
-                              <button
-                                onClick={() => {
-                                  setEditingProduct(null);
-                                  setProdFormId('');
-                                  setProdFormNome(`${prod.nome} (Cópia)`);
-                                  setProdFormPreco(Number(prod.preco) || 0);
-                                  setProdFormCategoriaId((prod as any).categoria_id || '');
-                                  setProdFormDescricao((prod as any).descricao || '');
-                                  const galeriaDup = (prod as any).imagens_galeria || [];
-                                  setProdFormImagem((prod as any).imagem || galeriaDup[0] || '');
-                                  setProdFormImagem2(galeriaDup[1] || '');
-                                  setProdFormImagem3(galeriaDup[2] || '');
-                                  setProdFormAtivo(true);
-                                  setShowProductModal(true);
-                                }}
-                                className={clsx('p-1', 'hover:bg-koma-raised', 'rounded', 'text-emerald-400', 'hover:text-emerald-600 dark:text-emerald-300', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
-                                title="Duplicar Produto (Criar variação)"
-                              >
-                                <Copy size={11} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingProduct(prod);
-                                  setProdFormId(prod.id);
-                                  setProdFormNome(prod.nome);
-                                  setProdFormPreco(Number(prod.preco) || 0);
-                                  setProdFormCategoriaId((prod as any).categoria_id || '');
-                                  setProdFormDescricao((prod as any).descricao || '');
-                                  const galeriaEdit = (prod as any).imagens_galeria || [];
-                                  setProdFormImagem((prod as any).imagem || galeriaEdit[0] || '');
-                                  setProdFormImagem2(galeriaEdit[1] || '');
-                                  setProdFormImagem3(galeriaEdit[2] || '');
-                                  setProdFormAtivo((prod as any).ativo !== false);
-                                  setShowProductModal(true);
-                                }}
-                                className={clsx('p-1', 'hover:bg-koma-raised', 'rounded', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
-                                title="Editar Produto"
-                              >
-                                <Edit3 size={11} />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  if (confirm(`Deseja realmente remover "${prod.nome}" do cardápio? Esta ação não pode ser desfeita.`)) {
-                                    try {
-                                      const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                        method: 'DELETE',
-                                        headers: authHeaders
-                                      });
-                                      if (res.ok) {
-                                        fetchProdutos();
-                                      } else {
-                                        alert('Erro ao excluir produto.');
-                                      }
-                                    } catch (e) {
-                                      console.error(e);
-                                      alert('Erro de conexão ao excluir produto.');
-                                    }
-                                  }
-                                }}
-                                className={clsx('p-1', 'hover:bg-red-950/20', 'rounded', 'text-red-400', 'hover:text-red-300', 'transition-all', 'cursor-pointer', 'border', 'border-transparent')}
-                                title="Excluir Produto"
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-              {apiProdutos.length === 0 && (
-                <div className={clsx('py-20', 'text-center', 'text-koma-muted', 'italic', 'text-xs')}>Nenhum produto encontrado. Cadastre em "Novo Item".</div>
-              )}
-            </div>
-          )}
-
-          {/* DISPONIBILIDADE CARDAPIO — REAL API com busca e categorias */}
-          {false && activeTab === 'cardapio' && activeSubTab === 'disponibilidade' && (() => {
-            const source = apiProdutos;
-            const handleBatchAvailability = async (keyword: string, active: boolean) => {
-              const targetProducts = source.filter(p => {
-                const name = p.nome.toLowerCase();
-                const catId = (p as any).categoria_id || '';
-                
-                if (keyword === 'hambúrguer') {
-                  return name.includes('hambúrguer') || 
-                         name.includes('hamburguer') || 
-                         name.includes('burguer') || 
-                         name.includes('burger') ||
-                         catId.includes('hamburguer') ||
-                         catId.includes('frango') ||
-                         catId.includes('suinos');
-                }
-                
-                if (keyword === 'pastel') {
-                  return name.includes('pastel') || catId.includes('pastel');
-                }
-                
-                if (keyword === 'baguete') {
-                  return name.includes('baguete') || catId.includes('baguete');
-                }
-
-                // Fallback
-                const catObj = (p as any).categoria;
-                const cat = obterNomeCategoria(catObj).toLowerCase();
-                return name.includes(keyword) || cat.includes(keyword) || catId.includes(keyword);
-              });
-
-              if (targetProducts.length === 0) return;
-
-              if (confirm(`Deseja realmente ${active ? 'disponibilizar' : 'esgotar'} todos os itens relacionados a "${keyword}" (${targetProducts.length} itens)?`)) {
-                try {
-                  await Promise.all(targetProducts.map(prod =>
-                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                      method: 'PUT',
-                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ativo: active })
-                    })
-                  ));
-                  await fetchProdutos();
-                } catch (e) {
-                  console.error(e);
-                  alert('Erro ao processar alteração em massa.');
-                }
-              }
-            };
-
-            const filtered = disponibilidadeSearch.trim()
-              ? source.filter(p => smartSearchMatch(p.nome, disponibilidadeSearch) || smartSearchMatch(p.descricao, disponibilidadeSearch))
-              : source;
-            const byCat: Record<string, typeof source> = {};
-            filtered.forEach(p => {
-              const catObj = (p as any).categoria;
-              const cat = obterNomeCategoria(catObj) || 'Geral';
-              if (!byCat[cat]) byCat[cat] = [];
-              byCat[cat].push(p);
-            });
-            return (
-              <div className={clsx('space-y-4', 'animate-fade-in', 'text-left', 'w-full')}>
-                {/* Header */}
-                <div className={clsx('flex', 'justify-between', 'items-center')}>
-                  <div>
-                    <h3 className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-sm', 'sm:text-base', 'block')}>Disponibilidade Rápida do Cardápio</h3>
-                    <p className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5')}>Itens pausados não aparecem no aplicativo do garçom.</p>
-                  </div>
-                </div>
-
-                {/* Search */}
-                <div className="relative">
-                  <Search className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'text-koma-muted', 'w-4', 'h-4')} />
-                  <input
-                    value={disponibilidadeSearch}
-                    onChange={e => setDisponibilidadeSearch(e.target.value)}
-                    placeholder="Pesquisar produto..."
-                    className={clsx('w-full', 'pl-9', 'pr-8', 'py-2', 'bg-koma-card', 'border', 'border-[#252832]', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'sm:text-sm', 'placeholder-zinc-500', 'focus:outline-none', 'focus:border-[#059669]', 'focus:ring-1', 'focus:ring-[#059669]', 'transition-all')}
-                  />
-                  {disponibilidadeSearch && (
-                    <button onClick={() => setDisponibilidadeSearch('')} className={clsx('absolute', 'right-3', 'top-1/2', '-translate-y-1/2', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer')}>
-                      <X size={13} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Dynamic Category Grouping */}
-                {apiCategorias.map((catObj) => {
-                  const prods = filtered
-                    .filter(p => (p as any).categoria_id === catObj.id)
-                    .sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true, sensitivity: 'base' }));
-                  if (prods.length === 0) return null;
-                  return (
-                    <div key={catObj.id} className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-2xl', 'overflow-hidden', 'w-full', 'shadow-sm')}>
-                      <div className={clsx('bg-koma-raised', 'px-4', 'py-3', 'border-b', 'border-koma-border', 'flex', 'justify-between', 'items-center', 'gap-3')}>
-                        <div className={clsx('flex', 'items-baseline', 'gap-2')}>
-                          <span className={clsx('font-bold', 'text-emerald-700 dark:text-emerald-400', 'text-xs', 'sm:text-sm', 'uppercase', 'tracking-wider')}>{catObj.nome}</span>
-                          <span className={clsx('text-xs', 'text-koma-subtle')}>({prods.length} {prods.length === 1 ? 'item' : 'itens'})</span>
-                        </div>
-                        
-                        <div className={clsx('flex', 'items-center', 'gap-2')}>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (confirm(`Deseja realmente pausar todos os itens da categoria "${catObj.nome}"?`)) {
-                                try {
-                                  await Promise.all(prods.map(prod => 
-                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                      method: 'PUT',
-                                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ ativo: false })
-                                    })
-                                  ));
-                                  await fetchProdutos();
-                                } catch (e) {
-                                  console.error(e);
-                                  alert('Erro ao atualizar categoria.');
-                                }
-                              }
-                            }}
-                            className={clsx('px-2.5', 'py-1', 'border', 'border-rose-500/20', 'bg-rose-500/10', 'hover:bg-rose-500/20', 'text-rose-400', 'text-xs', 'font-bold', 'rounded-lg', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
-                          >
-                            Pausar Categoria
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (confirm(`Deseja realmente ativar todos os itens da categoria "${catObj.nome}"?`)) {
-                                try {
-                                  await Promise.all(prods.map(prod => 
-                                    fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                      method: 'PUT',
-                                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ ativo: true })
-                                    })
-                                  ));
-                                  await fetchProdutos();
-                                } catch (e) {
-                                  console.error(e);
-                                  alert('Erro ao atualizar categoria.');
-                                }
-                              }
-                            }}
-                            className={clsx('px-2.5', 'py-1', 'border', 'border-emerald-500/20', 'bg-emerald-500/10', 'hover:bg-emerald-500/20', 'text-emerald-700 dark:text-emerald-400', 'text-xs', 'font-bold', 'rounded-lg', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider')}
-                          >
-                            Ativar Categoria
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Grid de 2 a 3 colunas preenchendo 100% da página */}
-                      <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'lg:grid-cols-3', 'gap-3', 'p-3', 'w-full')}>
-                        {prods.map(prod => {
-                          const isAtivo = (prod as any).ativo !== false;
-                          const codigoFormatado = `#${String(prod.id).padStart(3, '0')}`;
-
-                          return (
-                            <div
-                              key={prod.id}
-                              className={clsx(
-                                'bg-koma-raised hover:bg-koma-panel border border-koma-border rounded-xl p-3 flex items-center justify-between shadow-sm transition-colors gap-3',
-                                !isAtivo && 'opacity-70'
-                              )}
-                            >
-                              <div className={clsx('flex', 'items-center', 'gap-2.5', 'min-w-0', 'flex-1')}>
-                                {(prod as any).imagem && (
-                                  <img
-                                    src={(prod as any).imagem}
-                                    alt={prod.nome}
-                                    className={clsx('w-10 h-10 rounded-lg object-cover shrink-0', !isAtivo && 'opacity-40 grayscale')}
-                                  />
-                                )}
-                                <div className={clsx('min-w-0', 'flex-1')}>
-                                  <div className={clsx('flex', 'items-center', 'gap-1.5', 'truncate')}>
-                                    <span className={clsx('text-xs', 'text-koma-subtle', 'font-mono', 'shrink-0')}>{codigoFormatado}</span>
-                                    <span className={clsx('text-sm font-bold truncate', isAtivo ? 'text-koma-foreground' : 'text-koma-subtle line-through')}>
-                                      {prod.nome}
-                                    </span>
-                                  </div>
-                                  <span className={clsx('text-xs', 'font-mono', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'mt-0.5', 'block')}>
-                                    R$ {prod.preco.toFixed(2)}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(`${apiBaseUrl}/produtos/${prod.id}`, {
-                                      method: 'PUT',
-                                      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ ativo: !isAtivo })
-                                    });
-                                    if (res.ok) { await fetchProdutos(); }
-                                    else { alert('Erro ao atualizar disponibilidade.'); }
-                                  } catch { alert('Erro de conexão.'); }
-                                }}
-                                className={clsx(
-                                  'px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border shrink-0 flex items-center gap-1.5',
-                                  isAtivo
-                                    ? 'bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
-                                    : 'bg-rose-600/15 hover:bg-rose-600/25 text-rose-400 border-rose-500/20'
-                                )}
-                              >
-                                <span>{isAtivo ? '🟢 Disponível' : '🔴 Pausado'}</span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <div className={clsx('py-16', 'text-center', 'text-koma-subtle', 'italic', 'text-xs')}>
-                    Nenhum produto encontrado para "{disponibilidadeSearch}".
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
           {/* ABA CATEGORIAS */}
           {activeTab === 'cardapio' && activeSubTab === 'categorias' && (
@@ -8641,50 +7741,6 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* PAINEL FISCAL NFC-e (dados estáticos de exemplo — implementação futura) */}
-          {activeTab === 'financeiro' && activeSubTab === 'fiscal' && (
-            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'space-y-2')}>
-                <h3 className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground')}>Notas Fiscais de Consumidor (NFC-e)</h3>
-                <p className={clsx('text-[10px]', 'text-koma-subtle', 'leading-relaxed')}>
-                  Acompanhe e retransmita notas fiscais rejeitadas ou em contingência para a SEFAZ.
-                </p>
-              </div>
-
-              <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'overflow-hidden')}>
-                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                  <thead>
-                    <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                      <th className="p-3.5">Mesa / Ref</th>
-                      <th className="p-3.5">Data Emissão</th>
-                      <th className={clsx('p-3.5', 'font-mono')}>Valor Comanda</th>
-                      <th className="p-3.5">Chave de Acesso SEFAZ</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                    {[
-                      { ref: "Mesa 12", data: "01/07/2026 22:30", valor: 145.00, chave: "3526 0712 3456 7800 0199 6500 1000 0019 2314 5678", status: "Autorizada" },
-                      { ref: "Mesa 05", data: "01/07/2026 21:15", valor: 89.90, chave: "3526 0712 3456 7800 0199 6500 1000 0018 5514 5678", status: "Autorizada" }
-                    ].map((f, idx) => (
-                      <tr key={idx} className={clsx('hover:bg-koma-panel/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{f.ref}</td>
-                        <td className={clsx('p-3.5', 'text-koma-subtle')}>{f.data}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-emerald-400')}>R$ {f.valor.toFixed(2)}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'tracking-wider', 'text-[8px]')}>{f.chave}</td>
-                        <td className={clsx('p-3.5', 'text-right')}>
-                          <span className={clsx('px-2', 'py-0.5', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase', 'bg-emerald-500/10', 'text-emerald-500', 'border', 'border-emerald-500/20')}>
-                            {f.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
             <div className={clsx('space-y-5', 'text-left', 'animate-fade-in', 'max-w-4xl')}>
@@ -8769,254 +7825,6 @@ export function CaixaPanel({
             </div>
           )}
 
-          {/* CHAT CO-PILOTO (demonstração) */}
-          {(activeTab === 'assistente_koma' || activeTab === 'robo_ia' || (activeTab === 'operacao' && activeSubTab === 'chat_copiloto')) && ['chat', 'chat_copiloto'].includes(activeSubTab) && (
-            <div className={clsx('h-[calc(82vh-100px)]', 'flex', 'gap-4', 'text-left', 'animate-fade-in')}>
-              {/* Left Column: Contatos */}
-              <div className={clsx('w-1/4', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden')}>
-                <div className={clsx('p-4', 'border-b', 'border-koma-border', 'space-y-3')}>
-                  <div className={clsx('flex', 'justify-between', 'items-center')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-xs', 'text-koma-foreground')}>Conversas WhatsApp</span>
-                    <span className={clsx('bg-emerald-500/15', 'text-emerald-700 dark:text-emerald-400', 'text-[8px]', 'font-bold', 'px-1.5', 'py-0.5', 'rounded-full')}>3 Ativos</span>
-                  </div>
-                  {/* Global Toggle */}
-                  <div className={clsx('bg-koma-panel', 'border', 'border-koma-border/60', 'rounded-xl', 'p-2.5', 'flex', 'justify-between', 'items-center')}>
-                    <div className="space-y-0.5">
-                      <span className={clsx('text-[9px]', 'font-bold', 'text-koma-foreground', 'block')}>Piloto Automático</span>
-                      <span className={clsx('text-[7px]', 'text-koma-muted', 'block')}>IA responde sem intervenção</span>
-                    </div>
-                    <button
-                      onClick={() => setIaPilotMode(iaPilotMode === 'copilot' ? 'autopilot' : 'copilot')}
-                      className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 focus:outline-none cursor-pointer ${iaPilotMode === 'autopilot' ? 'bg-[#10b981]' : 'bg-koma-raised'}`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-koma-card shadow-md transform duration-200 ${iaPilotMode === 'autopilot' ? 'translate-x-4' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className={clsx('flex-1', 'overflow-y-auto', 'p-2.5', 'space-y-1.5')}>
-                  {copilotContacts.map(contact => (
-                    <button
-                      key={contact.id}
-                      onClick={() => setActiveChatContactId(contact.id)}
-                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer relative ${activeChatContactId === contact.id
-                        ? 'bg-emerald-50 dark:bg-emerald-950/25 border-emerald-400/80 dark:border-emerald-800 text-koma-foreground shadow-xs'
-                        : 'bg-koma-raised/60 border-transparent hover:bg-koma-raised text-koma-muted'
-                        }`}
-                    >
-                      <div className={clsx('flex', 'justify-between', 'items-center')}>
-                        <span className={clsx('text-xs', 'font-bold', 'text-koma-foreground', 'block')}>{contact.name}</span>
-                        <span className={clsx('text-[9px]', 'text-koma-muted', 'font-medium')}>{contact.time}</span>
-                      </div>
-                      <span className={clsx('text-[10px]', 'truncate', 'leading-relaxed', 'block', 'text-koma-muted')}>{contact.lastMsg}</span>
-                      <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
-                        <span className={`text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'koma-badge-warning' :
-                          contact.iaStatus === 'Piloto Automático' ? 'koma-badge-success' :
-                            'koma-badge-neutral'
-                          }`}>
-                          {contact.iaStatus}
-                        </span>
-                        {contact.pendingAction && (
-                          <span className={clsx('h-2', 'w-2', 'rounded-full', 'bg-amber-500', 'animate-pulse')} />
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Center Column: Janela de Chat */}
-              <div className={clsx('flex-1', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'flex', 'flex-col', 'overflow-hidden', 'relative', 'shadow-xs')}>
-                {/* Active Contact Header */}
-                {(() => {
-                  const contact = copilotContacts.find(c => c.id === activeChatContactId);
-                  if (!contact) return null;
-                  return (
-                    <div className={clsx('p-4', 'border-b', 'border-koma-border', 'bg-koma-raised', 'flex', 'justify-between', 'items-center')}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 font-bold flex items-center justify-center text-xs border border-emerald-300 dark:border-emerald-800">
-                          {contact.name.substring(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <strong className={clsx('text-xs', 'text-koma-foreground', 'block', 'font-bold')}>{contact.name}</strong>
-                          <span className={clsx('text-[10px]', 'text-koma-muted', 'font-mono')}>{contact.phone}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[8px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${contact.iaStatus === 'Aguardando Co-Piloto' ? 'koma-badge-warning' : 'koma-badge-success'}`}>
-                          {contact.iaStatus}
-                        </span>
-                        <button
-                          onClick={() => {
-                            setCopilotContacts(prev => prev.map(c => c.id === contact.id ? { ...c, iaStatus: 'Intervenção Humana' } : c));
-                            alert('A IA foi pausada. Modo de intervenção manual ativo.');
-                          }}
-                          className={clsx('px-3', 'py-1.5', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'rounded-xl', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                        >
-                          Assumir Atendimento
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Conversation area */}
-                <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-4', 'bg-koma-page/40')}>
-                  {copilotMessages.filter(m => m.contactId === activeChatContactId).map((msg, index) => (
-                    <div key={index} className={`flex ${msg.sender === 'cliente' ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[75%] rounded-2xl p-3.5 text-xs space-y-1.5 shadow-2xs ${msg.sender === 'cliente'
-                        ? 'bg-koma-panel text-koma-foreground border border-koma-border'
-                        : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-950 dark:text-emerald-100 border border-emerald-300/80 dark:border-emerald-800/80'
-                        }`}>
-                        <div className={clsx('flex', 'justify-between', 'gap-4', 'text-koma-muted', 'text-[9px]', 'font-semibold')}>
-                          <span className={clsx('font-bold', 'uppercase', msg.sender !== 'cliente' ? 'text-emerald-800 dark:text-emerald-300' : '')}>{msg.sender === 'cliente' ? 'Cliente' : msg.sender === 'ia' ? 'IA Co-Piloto' : 'Atendente'}</span>
-                          <span>{msg.time}</span>
-                        </div>
-                        {msg.isAudio ? (
-                          <div className="space-y-2">
-                            <div className={clsx('flex', 'items-center', 'gap-2', 'bg-koma-raised', 'p-2', 'rounded-xl', 'border', 'border-koma-border')}>
-                              <button className={clsx('h-6', 'w-6', 'koma-btn-success', 'rounded-full', 'flex', 'items-center', 'justify-center', 'cursor-pointer', 'text-[9px]')}>▶</button>
-                              <div className={clsx('flex', 'gap-0.5', 'items-center', 'flex-1', 'h-3')}>
-                                {[3, 6, 4, 8, 12, 6, 4, 9, 14, 10, 7, 5, 8, 3, 2, 6, 9, 11, 8, 4].map((h, i) => (
-                                  <div key={i} className={clsx('bg-emerald-600', 'flex-1', 'rounded-sm')} style={{ height: `${h * 7}%` }} />
-                                ))}
-                              </div>
-                            </div>
-                            <div className={clsx('bg-emerald-50/60 dark:bg-emerald-950/40', 'border', 'border-emerald-300 dark:border-emerald-800', 'p-2.5', 'rounded-xl', 'space-y-1.5')}>
-                              <span className={clsx('bg-emerald-700', 'text-white', 'text-[8px]', 'font-extrabold', 'px-2', 'py-0.5', 'rounded-full', 'uppercase', 'tracking-wider', 'inline-block')}>IA Transcrição</span>
-                              <p className={clsx('text-emerald-950 dark:text-emerald-100', 'leading-relaxed', 'font-medium', 'text-xs')}>"{msg.audioText}"</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className={clsx('leading-relaxed', 'whitespace-pre-wrap')}>{msg.text}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Send raw message */}
-                <div className={clsx('p-4', 'border-t', 'border-koma-border', 'bg-koma-panel/30', 'flex', 'gap-2')}>
-                  <input
-                    type="text"
-                    placeholder="Escreva uma mensagem de intervenção humana..."
-                    className={clsx('flex-1', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                  />
-                  <button className={clsx('px-4', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'cursor-pointer', 'shadow-xs')}>Enviar</button>
-                </div>
-              </div>
-
-              {/* Right Column: Painel Co-Piloto */}
-              <div className={clsx('w-1/4', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-4', 'flex', 'flex-col', 'justify-between', 'overflow-y-auto', 'shadow-xs')}>
-                <div className="space-y-4">
-                  <div className={clsx('border-b', 'border-koma-border', 'pb-2')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-xs', 'text-koma-foreground', 'block')}>Ações do Co-Piloto</span>
-                    <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'leading-relaxed')}>Revise e edite a resposta e os itens antes de enviar ao cliente.</span>
-                  </div>
-
-                  {/* Resposta Sugerida */}
-                  <div className="space-y-1.5">
-                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-widest', 'block')}>Resposta Sugerida pela IA:</label>
-                    <textarea
-                      value={copilotDraftResponses[activeChatContactId] || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: val }));
-                      }}
-                      rows={4}
-                      className={clsx('w-full', 'p-3', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[11px]', 'leading-relaxed', 'resize-none', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                    />
-                  </div>
-
-                  {/* Carrinho Rascunhado */}
-                  <div className="space-y-2">
-                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-widest', 'block')}>Carrinho Rascunhado (IA):</label>
-                    {copilotDraftCarts[activeChatContactId] && copilotDraftCarts[activeChatContactId].length > 0 ? (
-                      <div className={clsx('bg-koma-raised', 'border', 'border-koma-border', 'rounded-2xl', 'p-3', 'space-y-2')}>
-                        {copilotDraftCarts[activeChatContactId].map((item, idx) => (
-                          <div key={idx} className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-1.5', 'last:border-b-0', 'last:pb-0', 'text-[10px]')}>
-                            <div>
-                              <strong className={clsx('text-koma-foreground', 'block', 'font-bold')}>{item.product.nome}</strong>
-                              <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>{item.quantity}x • R$ {item.product.preco.toFixed(2)}</span>
-                            </div>
-                            <span className={clsx('font-bold', 'font-mono', 'text-emerald-700 dark:text-emerald-400')}>R$ {(item.product.preco * item.quantity).toFixed(2)}</span>
-                          </div>
-                        ))}
-                        <div className={clsx('pt-1.5', 'border-t', 'border-koma-border', 'flex', 'justify-between', 'items-center', 'text-xs')}>
-                          <strong className={clsx('text-koma-foreground', 'font-serif')}>Subtotal Rascunho</strong>
-                          <strong className={clsx('text-emerald-700 dark:text-emerald-400', 'font-mono', 'font-bold')}>
-                            R$ {copilotDraftCarts[activeChatContactId].reduce((acc, c) => acc + (c.product.preco * c.quantity), 0).toFixed(2)}
-                          </strong>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={clsx('text-center', 'p-4', 'bg-koma-raised/60', 'border', 'border-koma-border', 'rounded-2xl')}>
-                        <span className={clsx('text-[10px]', 'text-koma-muted', 'italic', 'block')}>Nenhum carrinho detectado neste chat.</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className={clsx('pt-4', 'border-t', 'border-koma-border', 'space-y-2')}>
-                  <button
-                    disabled={!copilotDraftResponses[activeChatContactId]}
-                    onClick={() => {
-                      // Process approval
-                      const contact = copilotContacts.find(c => c.id === activeChatContactId);
-                      if (!contact) return;
-
-                      // 1. Add suggested response to messages history
-                      setCopilotMessages(prev => [
-                        ...prev,
-                        { id: Date.now(), contactId: activeChatContactId, sender: 'ia', text: copilotDraftResponses[activeChatContactId], time: "10:33" }
-                      ]);
-                      // 2. Generate delivery order from Co-pilot draft
-                      const draft = copilotDraftCarts[activeChatContactId];
-                      if (draft && draft.length > 0) {
-                        const newOrd: DeliveryOrderView = {
-                          id: `d-${Date.now().toString().slice(-3)}`,
-                          cliente: contact.name,
-                          telefone: contact.phone,
-                          itens: draft.map(d => `${d.quantity}x ${d.product.nome}`).join(" + "),
-                          total: draft.reduce((acc, c) => acc + (c.product.preco * c.quantity), 0),
-                          canal: 'whats',
-                          origemOperacional: 'cardapio',
-                          isQuickSale: false,
-                          quantidadeItens: draft.reduce((acc, item) => acc + item.quantity, 0),
-                          modalidade: 'delivery',
-                          pago: false,
-                          status: 'analise',
-                          endereco: "Av. Conselheiro Aguiar, 2300, Apto 502 - Boa Viagem",
-                          criadoEm: "10:33"
-                        };
-                        setDeliveryOrders(prev => [newOrd, ...prev]);
-                        alert(`Carrinho de Bruno Santos aprovado! Um novo pedido ${newOrd.id} foi gerado no painel e a resposta foi enviada ao WhatsApp.`);
-                      } else {
-                        alert('Resposta enviada ao cliente.');
-                      }
-
-                      // 3. Update contact status to responded / clear pending
-                      setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, iaStatus: "Resposta Enviada", pendingAction: false } : c));
-                    }}
-                    className={clsx('w-full', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs', 'disabled:opacity-50')}
-                  >
-                    Aprovar e Enviar (WhatsApp)
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCopilotDraftCarts(prev => ({ ...prev, [activeChatContactId]: [] }));
-                      setCopilotDraftResponses(prev => ({ ...prev, [activeChatContactId]: "" }));
-                      setCopilotContacts(prev => prev.map(c => c.id === activeChatContactId ? { ...c, pendingAction: false, iaStatus: "Rascunho Limpo" } : c));
-                    }}
-                    className={clsx('w-full', 'py-2', 'bg-koma-raised', 'hover:bg-koma-card', 'border', 'border-koma-border', 'text-koma-muted', 'hover:text-koma-foreground', 'rounded-xl', 'text-[10px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                  >
-                    Limpar Rascunhos
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* VIEW: FRETISTAS & LOGÍSTICA */}
           {activeSubTab === 'entregadores' && (
             <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}>
@@ -9071,7 +7879,7 @@ export function CaixaPanel({
                                 <button
                                   type="button"
                                   disabled={!motoboyId}
-                                  onClick={() => handleDespacharPedido(order.id, parseInt(motoboyId))}
+                                  onClick={() => handleDespacharKanban(order.id, motoboyId)}
                                   className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-500', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                                 >
                                   Despachar
@@ -9173,7 +7981,10 @@ export function CaixaPanel({
                 </div>
 
                 {/* Cadastro de novo Motoboy */}
-                <form onSubmit={handleCadastrarMotoboy} className={clsx('pt-4', 'border-t', 'border-koma-border', 'space-y-3', 'shrink-0')}>
+                <form
+                  onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}
+                  className={clsx('pt-4', 'border-t', 'border-koma-border', 'space-y-3', 'shrink-0')}
+                >
                   <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'uppercase', 'tracking-wider', 'block')}>Novo Fretista</span>
 
                   <input

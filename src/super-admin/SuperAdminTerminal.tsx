@@ -14,6 +14,7 @@ import {
   Filter
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
 export interface FailedWebhook {
   id: string;
@@ -46,6 +47,7 @@ export interface SentryIssue {
 
 interface SuperAdminTerminalProps {
   failedWebhooks: FailedWebhook[];
+  webhooksAvailable: boolean;
   onForceConfirmWebhook: (id: string) => Promise<boolean>;
   sentryLogs: SentryLog[];
   onAddLog: (text: string, type: "info" | "success" | "warning" | "error" | "critical") => void;
@@ -55,6 +57,7 @@ interface SuperAdminTerminalProps {
 
 export default function SuperAdminTerminal({
   failedWebhooks: initialWebhooks,
+  webhooksAvailable,
   onForceConfirmWebhook,
   sentryLogs,
   onAddLog,
@@ -71,17 +74,18 @@ export default function SuperAdminTerminal({
   const [activeSentryTab, setActiveSentryTab] = useState<"stream" | "issues">("issues");
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[]>([]);
   const [isLoadingIssues, setIsLoadingIssues] = useState(false);
+  const [sentryError, setSentryError] = useState<string | null>(null);
 
   const fetchIssues = async () => {
     setIsLoadingIssues(true);
+    setSentryError(null);
     try {
-      const res = await fetch("/api/super-admin/sentry/issues");
-      if (res.ok) {
-        const data = await res.json();
-        setSentryIssues(data);
-      }
+      const res = await superAdminFetch("/api/super-admin/sentry/issues");
+      const data = await res.json();
+      setSentryIssues(data);
     } catch (e) {
-      console.error("[SENTRY] Fetch issues frontend error:", e);
+      setSentryIssues([]);
+      setSentryError(superAdminErrorMessage(e));
     } finally {
       setIsLoadingIssues(false);
     }
@@ -96,19 +100,14 @@ export default function SuperAdminTerminal({
   const handleResolveIssue = async (id: string) => {
     onAddLog(`Silenciando exceção Sentry: ID ${id}...`, "warning");
     try {
-      const res = await fetch(`/api/super-admin/sentry/issues/${id}/resolve`, {
-        method: "PUT"
+      await superAdminFetch(`/api/super-admin/sentry/issues/${encodeURIComponent(id)}/resolve`, {
+        method: "POST"
       });
-      if (res.ok) {
-        setSentryIssues(prev => prev.filter(issue => issue.id !== id));
-        onAddLog(`✅ Exceção Sentry #${id} silenciada com sucesso na produção!`, "success");
-        onTriggerTelegramAlert(`🤫 SILENCIADO: Erro #${id} foi silenciado via SuperAdmin.`);
-      } else {
-        onAddLog(`Failed to resolve Sentry issue. Check backend logs.`, "error");
-      }
+      setSentryIssues(prev => prev.filter(issue => issue.id !== id));
+      onAddLog(`Exceção Sentry #${id} silenciada e confirmada pela API.`, "success");
+      onTriggerTelegramAlert(`Erro #${id} foi silenciado via SuperAdmin.`);
     } catch (e) {
-      console.error(e);
-      onAddLog(`Communication failure resolving Sentry issue.`, "error");
+      onAddLog(`Issue Sentry #${id} não foi alterada: ${superAdminErrorMessage(e)}`, "error");
     }
   };
 
@@ -125,15 +124,14 @@ export default function SuperAdminTerminal({
 
   // Handle the manual confirmation click
   const handleForceConfirm = async (webhook: FailedWebhook) => {
-    onAddLog(`Forcing manual confirmation for webhook: ${webhook.id}`, "warning");
+    onAddLog(`Solicitando confirmação manual do webhook ${webhook.id}.`, "warning");
     const success = await onForceConfirmWebhook(webhook.id);
     if (success) {
-      // Remove webhook or mark resolved
       setWebhooks(prev => prev.map(w => w.id === webhook.id ? { ...w, resolved: true } : w));
-      onAddLog(`✅ Webhook ${webhook.id} successfully bypassed! Payment confirmed, order ${webhook.orderId} sent to cashier kitchen.`, "success");
-      onTriggerTelegramAlert(`✅ BYPASS EFETUADO: Pedido ${webhook.orderId} (${webhook.tenantName}) liberado via SuperAdmin.`);
+      onAddLog(`Webhook ${webhook.id} confirmado pela API.`, "success");
+      onTriggerTelegramAlert(`Webhook do pedido ${webhook.orderId} (${webhook.tenantName}) confirmado pelo SuperAdmin.`);
     } else {
-      onAddLog(`Failed to force webhook confirmation. Check server logs.`, "error");
+      onAddLog(`Webhook ${webhook.id} permaneceu pendente.`, "error");
     }
   };
 
@@ -162,15 +160,14 @@ export default function SuperAdminTerminal({
           </div>
 
           <div className="space-y-4 overflow-y-auto flex-1 max-h-[450px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-            {webhooks.filter(w => !w.resolved).length === 0 ? (
-              <div className="bg-emerald-950/20 border border-emerald-500/30 p-8 rounded-lg text-center my-4 animate-fade-in" id="webhooks-empty-state">
-                <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3 animate-bounce" />
-                <h4 className="text-emerald-400 font-mono font-bold text-sm">
-                  🎉 Fila de Webhooks limpa e operando em tempo real!
-                </h4>
-                <p className="text-[10px] text-emerald-600/80 font-mono mt-1">
-                  Todos os pagamentos processados com sucesso pelo gateway Asaas.
-                </p>
+            {!webhooksAvailable ? (
+              <div className="my-4 rounded-lg border border-amber-700/50 bg-amber-950/20 p-8 text-center text-xs text-amber-300" id="webhooks-unavailable-state">
+                Fonte de webhooks indisponível. O painel não pode afirmar que a fila está vazia.
+              </div>
+            ) : webhooks.filter(w => !w.resolved).length === 0 ? (
+              <div className="bg-emerald-950/20 border border-emerald-500/30 p-8 rounded-lg text-center my-4" id="webhooks-empty-state">
+                <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
+                <h4 className="text-emerald-400 font-mono font-bold text-sm">Nenhum webhook pendente retornado pela API.</h4>
               </div>
             ) : (
               <AnimatePresence>
@@ -327,7 +324,7 @@ export default function SuperAdminTerminal({
             /* Real Sentry Issues Panel List */
             <div className="bg-koma-page border border-[#1e293b]/40 rounded p-4 flex-1 flex flex-col font-mono text-xs overflow-hidden h-[360px]">
               <div className="flex items-center justify-between text-[10px] text-koma-muted border-b border-[#1e293b]/40 pb-2 mb-2 shrink-0">
-                <span>API SENTRY CONECTADA & EXCEÇÕES</span>
+                <span>CONSULTA DE ISSUES DO SENTRY</span>
                 <button 
                   onClick={fetchIssues} 
                   className="text-[#00b894] hover:underline cursor-pointer"
@@ -342,9 +339,13 @@ export default function SuperAdminTerminal({
                   <div className="text-koma-muted text-center py-16 animate-pulse">
                     Conectando à API oficial do Sentry e extraindo exceções de produção...
                   </div>
+                ) : sentryError ? (
+                  <div className="text-amber-300 text-center py-16" role="status">
+                    {sentryError}
+                  </div>
                 ) : sentryIssues.length === 0 ? (
                   <div className="text-koma-muted italic text-center py-16">
-                    🟢 Excelente! Nenhuma exceção não resolvida registrada na produção do Sentry.
+                    Nenhuma issue foi retornada pela API.
                   </div>
                 ) : (
                   sentryIssues.map(issue => {
@@ -402,11 +403,8 @@ export default function SuperAdminTerminal({
             /* Sentry Logs Console Terminal Window (Log Stream) */
             <div className="bg-koma-page border border-[#1e293b]/40 rounded p-4 flex-1 flex flex-col font-mono text-xs overflow-hidden h-[360px]">
               <div className="flex items-center justify-between text-[10px] text-koma-muted border-b border-[#1e293b]/40 pb-2 mb-2">
-                <span>SENTRY_ENGINE_v2.4_STREAMING</span>
-                <span className="flex items-center gap-1 font-bold">
-                  <span className={`w-1.5 h-1.5 rounded-full bg-red-500 ${isStreamingLogs ? "animate-ping" : ""}`}></span>
-                  SENTRY_API_ONLINE
-                </span>
+                <span>LOGS LOCAIS DA INTERFACE</span>
+                <span className="font-bold">{isStreamingLogs ? "ROLAGEM AUTOMÁTICA" : "PAUSADO"}</span>
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
@@ -439,14 +437,14 @@ export default function SuperAdminTerminal({
 
       </div>
 
-      {/* Real Sentry Integration Explanation */}
+      {/* Integration status */}
       <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-2 animate-fade-in">
         <h4 className="text-xs font-mono text-koma-subtle font-bold flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#00b894]" />
-          [SISTEMA_DOCKER] INTEGRAÇÃO CENTRAL SENTRY & FASTAPI
+          INTEGRAÇÃO SENTRY & FASTAPI
         </h4>
         <p className="text-[10px] text-koma-muted font-mono leading-relaxed">
-          The FastAPI backend imports the Sentry SDK. For any unhandled exception across your tenant schemas (e.g., PostgreSQL connection pools breaking, missing column references, printer gateway offline), Sentry catches the event, logs the stack trace, and instantly broadcasts the payload through our centralized logging service and pushes an alert directly to your Telegram Bot.
+          Este painel só exibe issues confirmadas pela API autenticada. Quando a integração real não está configurada, a capacidade permanece marcada como indisponível e nenhuma ausência de erros é presumida.
         </p>
       </div>
     </div>

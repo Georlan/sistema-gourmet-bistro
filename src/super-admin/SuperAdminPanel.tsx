@@ -1,19 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { 
   Terminal, 
-  Settings2, 
   ShieldAlert, 
-  Activity, 
-  HelpCircle, 
   Building2, 
   Bell, 
-  Lock, 
   Cpu, 
-  Menu, 
-  User,
-  RefreshCw,
   LogOut,
-  Code,
   Database,
   Key,
   Sliders
@@ -26,6 +18,12 @@ import SuperAdminTelegram, { TelegramAlert } from "./SuperAdminTelegram";
 import SuperAdminDatabaseEditor from "./SuperAdminDatabaseEditor";
 import SuperAdminCredentials from "./SuperAdminCredentials";
 import SuperAdminWhitelabel from "./SuperAdminWhitelabel";
+import {
+  clearSuperAdminSession,
+  publicApiFetch,
+  superAdminErrorMessage,
+  superAdminFetch,
+} from "./superAdminApi";
 
 type TabId = "metrics" | "webhooks" | "database" | "devops" | "telegram" | "credentials" | "whitelabel";
 
@@ -42,136 +40,57 @@ export default function SuperAdminPanel() {
   const [activeTab, setActiveTab] = useState<TabId>("metrics");
   const [selectedWhitelabelTenantId, setSelectedWhitelabelTenantId] = useState<string>("");
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantsAvailable, setTenantsAvailable] = useState(false);
   const [failedWebhooks, setFailedWebhooks] = useState<FailedWebhook[]>([]);
+  const webhooksAvailable = false;
   const [sentryLogs, setSentryLogs] = useState<SentryLog[]>([]);
   const [telegramMessages, setTelegramMessages] = useState<TelegramAlert[]>([]);
-  const [alertRules, setAlertRules] = useState<any[]>([]);
-  const [firedAlertsHistory, setFiredAlertsHistory] = useState<any[]>([]);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
-  const [logCounter, setLogCounter] = useState(0);
   const [currentTime, setCurrentTime] = useState("");
   const [socketDevices, setSocketDevices] = useState<ActiveDevice[]>([]);
   const [flashAlert, setFlashAlert] = useState<{ id: string; title: string; message: string; timestamp: string; type: "sentry" | "webhook" } | null>(null);
   const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null } | null>(null);
+  const [apiNotice, setApiNotice] = useState<string | null>(null);
 
-  const fetchAlertRules = async () => {
-    try {
-      const response = await fetch("/api/super-admin/telegram/rules");
-      if (response.ok) {
-        const data = await response.json();
-        setAlertRules(data);
-      }
-    } catch (err) {
-      console.warn("Could not fetch alert rules", err);
-    }
-  };
-
-  const fetchFiredAlertsHistory = async () => {
-    try {
-      const response = await fetch("/api/super-admin/telegram/history");
-      if (response.ok) {
-        const data = await response.json();
-        setFiredAlertsHistory(data);
-      }
-    } catch (err) {
-      console.warn("Could not fetch fired alerts history", err);
-    }
-  };
-
-  const updateAlertRules = async (newRules: any[]) => {
-    try {
-      const response = await fetch("/api/super-admin/telegram/rules", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rules: newRules })
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setAlertRules(data.rules);
-        addSentryLog("Configurações de alerta do Telegram atualizadas com sucesso", "success");
-      }
-    } catch (err) {
-      addSentryLog("Falha de rede ao salvar regras do Telegram", "error");
-    }
-  };
-
-  const clearFiredAlertsHistory = async () => {
-    try {
-      const response = await fetch("/api/super-admin/telegram/history/clear", {
-        method: "POST"
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setFiredAlertsHistory(data.history);
-        addSentryLog("Histórico de alertas do Telegram limpo", "success");
-      }
-    } catch (err) {
-      addSentryLog("Falha de rede ao limpar histórico", "error");
-    }
+  const reportApiError = (context: string, error: unknown) => {
+    const message = `${context}: ${superAdminErrorMessage(error)}`;
+    setApiNotice(message);
+    console.warn(`[SUPERADMIN] ${message}`);
   };
 
   const fetchTenants = async () => {
     setIsLoadingTenants(true);
     try {
-      const response = await fetch("/api/super-admin/restaurantes");
+      const response = await superAdminFetch("/api/super-admin/restaurantes");
       if (response.ok) {
         const data = await response.json();
         setTenants(data);
-      } else {
-        setFallbackTenants();
+        setTenantsAvailable(true);
       }
     } catch (err) {
-      setFallbackTenants();
+      setTenants([]);
+      setTenantsAvailable(false);
+      reportApiError("Restaurantes indisponíveis", err);
     } finally {
       setIsLoadingTenants(false);
     }
   };
 
-  const setFallbackTenants = () => {
-    setTenants([]);
-  };
-
-  const fetchWebhooks = async () => {
-    try {
-      const response = await fetch("/api/super-admin/webhooks/asaas/failed");
-      if (response.ok) {
-        const data = await response.json();
-        setFailedWebhooks(data);
-      } else {
-        setFallbackWebhooks();
-      }
-    } catch (err) {
-      setFallbackWebhooks();
-    }
-  };
-
-  const fetchSentryLogs = async () => {
-    try {
-      const response = await fetch("/api/super-admin/sentry-logs");
-      if (response.ok) {
-        const data = await response.json();
-        setSentryLogs(data);
-      }
-    } catch (err) {
-      console.warn("[SUPERADMIN] HTTP fallback: Could not fetch sentry logs", err);
-    }
-  };
-
   const fetchSocketDevices = async () => {
     try {
-      const response = await fetch("/api/super-admin/websocket-clients");
+      const response = await superAdminFetch("/api/super-admin/websocket-clients");
       if (response.ok) {
         const data = await response.json();
         setSocketDevices(data);
       }
     } catch (err) {
-      console.warn("[SUPERADMIN] HTTP fallback: Could not fetch active devices", err);
+      reportApiError("Inventário WebSocket indisponível", err);
     }
   };
 
   const fetchActiveSentryIssue = async () => {
     try {
-      const response = await fetch("/api/super-admin/sentry/issues");
+      const response = await superAdminFetch("/api/super-admin/sentry/issues");
       if (response.ok) {
         const data = await response.json();
         if (data && data.length > 0) {
@@ -189,126 +108,20 @@ export default function SuperAdminPanel() {
         }
       }
     } catch (err) {
-      console.warn("[SUPERADMIN] Could not fetch active Sentry issues for top banner", err);
+      reportApiError("Issues do Sentry indisponíveis", err);
     }
   };
 
-  const setFallbackWebhooks = () => {
-    setFailedWebhooks([]);
-  };
-
-  // Populate initially and open WebSocket channel
+  // Populate from authenticated HTTP endpoints. There is no SuperAdmin WebSocket
+  // contract in the backend yet, so the UI must not connect to an invented channel.
   useEffect(() => {
-    fetch("/health/live")
-      .then(async response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
+    publicApiFetch("/health/live")
+      .then(response => response.json())
       .then(data => setRuntimeHealth({ status: data.status === "ok" ? "ok" : "unavailable", commit: data.commit }))
       .catch(() => setRuntimeHealth({ status: "unavailable" }));
     fetchTenants();
-    fetchWebhooks();
-    fetchSentryLogs();
     fetchSocketDevices();
     fetchActiveSentryIssue();
-    fetchAlertRules();
-    fetchFiredAlertsHistory();
-
-    // Establish WebSocket connection
-    const wsProtocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-    const wsUrl = `${wsProtocol}${window.location.host}/ws`;
-    
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: any = null;
-    let stopped = false;
-
-    const connectWS = () => {
-      if (stopped || (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN))) return;
-      console.log("[SUPERADMIN] Connecting to WebSocket on:", wsUrl);
-      const socket = new WebSocket(wsUrl);
-      ws = socket;
-
-      socket.onmessage = (event) => {
-        if (stopped || ws !== socket) return;
-        try {
-          const msg = JSON.parse(event.data);
-          
-          if (msg.type === "INIT_TELEMETRY") {
-            const { activeDevices: devices, sentryLogs: logs, failedWebhooks: webhooks } = msg.payload;
-            if (devices) setSocketDevices(devices);
-            if (logs) setSentryLogs(logs);
-            if (webhooks) setFailedWebhooks(webhooks);
-          } else if (msg.type === "NEW_SENTRY_LOG") {
-            const newLog = msg.payload;
-            setSentryLogs(prev => {
-              if (prev.some(l => l.id === newLog.id)) return prev;
-              const next = [...prev, newLog];
-              return next.length > 100 ? next.slice(1) : next;
-            });
-            
-            if (newLog.level === "CRITICAL" || newLog.level === "ERROR") {
-              setFlashAlert({
-                id: newLog.id,
-                title: "ALERTA SENTRY CRÍTICO DETECTADO",
-                message: `Serviço: ${newLog.service} - ${newLog.message}`,
-                timestamp: newLog.timestamp,
-                type: "sentry"
-              });
-            }
-          } else if (msg.type === "NEW_WEBHOOK_FAILURE") {
-            const newWebhook = msg.payload;
-            setFailedWebhooks(prev => {
-              if (prev.some(w => w.id === newWebhook.id)) return prev;
-              return [newWebhook, ...prev];
-            });
-            
-            setFlashAlert({
-              id: newWebhook.id,
-              title: "FALHA DE WEBHOOK ASAAS",
-              message: `Pedido: ${newWebhook.orderId} (${newWebhook.tenantName}) - Erro: ${newWebhook.errorReason}`,
-              timestamp: new Date().toTimeString().split(" ")[0],
-              type: "webhook"
-            });
-          } else if (msg.type === "WEBHOOK_CONFIRMED") {
-            const { id } = msg.payload;
-            setFailedWebhooks(prev => prev.map(w => w.id === id ? { ...w, resolved: true } : w));
-          } else if (msg.type === "DEVICES_UPDATE") {
-            const updatedDevices = msg.payload;
-            setSocketDevices(updatedDevices);
-          } else if (msg.type === "TELEGRAM_ALERTER") {
-            const text = msg.payload;
-            const now = new Date();
-            const timeStr = now.toTimeString().split(" ")[0].substring(0, 5);
-            setTelegramMessages(prev => [...prev, {
-              id: `tg_ws_${Date.now()}`,
-              sender: "bot",
-              text,
-              timestamp: timeStr
-            }]);
-          } else if (msg.type === "TELEGRAM_RULES_UPDATE") {
-            const { rules, history } = msg.payload;
-            if (rules) setAlertRules(rules);
-            if (history) setFiredAlertsHistory(history);
-          }
-        } catch (err) {
-          console.error("Error parsing WebSocket packet", err);
-        }
-      };
-
-      socket.onclose = () => {
-        if (stopped || ws !== socket) return;
-        ws = null;
-        console.warn("[SUPERADMIN] WebSocket closed. Reconnecting in 3s...");
-        if (reconnectTimeout) clearTimeout(reconnectTimeout);
-        reconnectTimeout = setTimeout(connectWS, 3000);
-      };
-
-      socket.onerror = (err) => {
-        console.warn("[SUPERADMIN] WebSocket connection not available in this environment. Seamlessly relying on robust background HTTP Polling fallback.");
-      };
-    };
-
-    connectWS();
 
     const updateClock = () => {
       const now = new Date();
@@ -323,31 +136,16 @@ export default function SuperAdminPanel() {
     updateClock();
     const intervalId = setInterval(updateClock, 1000);
 
-    // Setup periodic robust HTTP polling synchronization as a fallback / backup
+    // Poll only the authenticated sources exposed by the panel.
     const pollIntervalId = setInterval(() => {
-      fetchWebhooks();
-      fetchSentryLogs();
       fetchSocketDevices();
       fetchActiveSentryIssue();
-    }, 4000);
+    }, 15000);
 
     return () => {
-      stopped = true;
       clearInterval(intervalId);
       clearInterval(pollIntervalId);
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) {
-        ws.onmessage = null;
-        ws.onclose = null;
-        ws.onerror = null;
-        ws.close();
-      }
     };
-  }, []);
-
-  // Sentry logs background generator disabled for clean production mode
-  useEffect(() => {
-    // Sentry logs fetched via APIs
   }, []);
 
   const addSentryLog = (text: string, type: "info" | "success" | "warning" | "error" | "critical") => {
@@ -372,38 +170,29 @@ export default function SuperAdminPanel() {
   const handleToggleTenantStatus = async (id: string, currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING") => {
     const targetStatus = currentStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
     try {
-      const response = await fetch(`/api/super-admin/restaurantes/${id}/status`, {
+      await superAdminFetch(`/api/super-admin/restaurantes/${encodeURIComponent(id)}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: targetStatus })
       });
-      if (response.ok) {
-        setTenants(prev => prev.map(t => t.id === id ? { ...t, status: targetStatus } : t));
-      } else {
-        // Fallback local toggle
-        setTenants(prev => prev.map(t => t.id === id ? { ...t, status: targetStatus } : t));
-      }
-    } catch (err) {
       setTenants(prev => prev.map(t => t.id === id ? { ...t, status: targetStatus } : t));
+      return true;
+    } catch (err) {
+      addSentryLog(`Status do restaurante não foi alterado: ${superAdminErrorMessage(err)}`, "error");
+      return false;
     }
   };
 
   const handleForceConfirmWebhook = async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/super-admin/webhooks/asaas/${id}/confirm`, {
+      await superAdminFetch(`/api/super-admin/webhooks/asaas/${encodeURIComponent(id)}/confirm`, {
         method: "POST"
       });
-      if (response.ok) {
-        setFailedWebhooks(prev => prev.map(w => w.id === id ? { ...w, resolved: true } : w));
-        return true;
-      } else {
-        // Mock fallback
-        setFailedWebhooks(prev => prev.map(w => w.id === id ? { ...w, resolved: true } : w));
-        return true;
-      }
-    } catch (err) {
       setFailedWebhooks(prev => prev.map(w => w.id === id ? { ...w, resolved: true } : w));
       return true;
+    } catch (err) {
+      addSentryLog(`Webhook não foi confirmado: ${superAdminErrorMessage(err)}`, "error");
+      return false;
     }
   };
 
@@ -416,25 +205,26 @@ export default function SuperAdminPanel() {
       text,
       timestamp: timeStr
     };
-    setTelegramMessages(prev => [...prev, newMsg]);
-
-    // Push a Sentry Log
-    addSentryLog(`Disparando notificação real para o Telegram: "${text.substring(0, 45)}..."`, "info");
-
     try {
-      const response = await fetch("/api/super-admin/telegram/notify", {
+      const safeText = text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+      const response = await superAdminFetch("/api/super-admin/telegram/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text: safeText })
       });
-      if (response.ok) {
-        addSentryLog(`Telegram: Mensagem entregue com sucesso via bot.`, "success");
-      } else {
-        const data = await response.json();
-        addSentryLog(`Telegram: Erro no bot - ${data.error || "falha na resposta"}`, "error");
+      const data = await response.json() as { success?: boolean };
+      if (!data.success) {
+        throw new Error("o servidor não confirmou a entrega");
       }
+      setTelegramMessages(prev => [...prev, newMsg]);
+      addSentryLog("Telegram: mensagem entregue com sucesso via bot.", "success");
+      return true;
     } catch (err) {
-      addSentryLog("Telegram: Falha de rede ao contactar o servidor central", "error");
+      addSentryLog(`Telegram: mensagem não enviada — ${superAdminErrorMessage(err)}`, "error");
+      return false;
     }
   };
 
@@ -463,8 +253,8 @@ export default function SuperAdminPanel() {
               {flashAlert.type === "webhook" && (
                 <button
                   onClick={async () => {
-                    await handleForceConfirmWebhook(flashAlert.id);
-                    setFlashAlert(null);
+                    const confirmed = await handleForceConfirmWebhook(flashAlert.id);
+                    if (confirmed) setFlashAlert(null);
                   }}
                   className="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1 rounded font-bold text-[10px] transition-colors border border-red-400 cursor-pointer"
                 >
@@ -481,6 +271,13 @@ export default function SuperAdminPanel() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {apiNotice && (
+        <div className="flex items-center justify-between gap-4 border-b border-amber-700 bg-amber-950/40 px-6 py-2 text-xs text-amber-200" role="status">
+          <span>{apiNotice}</span>
+          <button type="button" className="underline" onClick={() => setApiNotice(null)}>fechar</button>
+        </div>
+      )}
 
       {/* Immersive UI Header */}
       <header className="flex flex-col md:flex-row md:items-center justify-between px-6 py-4 bg-koma-card border-b border-[#1e293b]/40 shadow-lg shrink-0 gap-4" id="superadmin-header">
@@ -518,8 +315,17 @@ export default function SuperAdminPanel() {
           </div>
           <div className="flex flex-col items-start md:items-end">
             <span className="text-koma-muted uppercase text-[9px] tracking-wider">Server Time</span>
-            <span className="text-koma-foreground font-mono font-bold tracking-tight">{currentTime || "2026-07-14 18:41:49"}</span>
+            <span className="text-koma-foreground font-mono font-bold tracking-tight">{currentTime || "NÃO INFORMADO"}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => clearSuperAdminSession()}
+            className="flex items-center gap-1 self-center rounded border border-[#334155] px-2 py-1 text-[10px] text-koma-secondary hover:border-red-700 hover:text-red-300"
+            title="Encerrar a sessão de SuperAdmin"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            SAIR
+          </button>
         </div>
       </header>
 
@@ -654,13 +460,13 @@ export default function SuperAdminPanel() {
                       <button
                         onClick={async () => {
                           try {
-                            await fetch("/api/super-admin/websocket-clients/toggle", {
+                            await superAdminFetch("/api/super-admin/websocket-clients/toggle", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({ restaurantId: d.restaurantId, device: d.device })
                             });
                           } catch (e) {
-                            console.error(e);
+                            reportApiError("Controle WebSocket indisponível", e);
                           }
                         }}
                         className={`px-1 py-0.5 rounded text-[8px] font-bold font-mono transition-all border cursor-pointer ${
@@ -683,19 +489,19 @@ export default function SuperAdminPanel() {
               <span className="text-koma-muted block uppercase font-bold border-b border-[#1e293b]/30 pb-1.5 tracking-wider">[LOCAL_TELEMETRY]</span>
               <div className="flex justify-between">
                 <span>FASTAPI PORT</span>
-                <span className="text-[#00b894] font-bold">:3000</span>
+                <span className="text-koma-muted font-bold">NÃO VERIFICADO</span>
               </div>
               <div className="flex justify-between">
                 <span>REDIS CACHE</span>
-                <span className="text-[#00b894] font-bold">ONLINE</span>
+                <span className="text-koma-muted font-bold">NÃO VERIFICADO</span>
               </div>
               <div className="flex justify-between">
                 <span>SENTRY STATUS</span>
-                <span className="text-[#00b894] font-bold">CONNECTED</span>
+                <span className="text-koma-muted font-bold">NÃO VERIFICADO</span>
               </div>
               <div className="flex justify-between">
                 <span>SUPABASE PG</span>
-                <span className="text-[#00b894] font-bold">STABLE</span>
+                <span className="text-koma-muted font-bold">NÃO VERIFICADO</span>
               </div>
             </div>
           </div>
@@ -722,6 +528,7 @@ export default function SuperAdminPanel() {
               {activeTab === "metrics" && (
                 <SuperAdminTenantControl
                   tenants={tenants}
+                  dataAvailable={tenantsAvailable}
                   onToggleStatus={handleToggleTenantStatus}
                   onAddLog={addSentryLog}
                   onTriggerTelegramAlert={triggerTelegramAlert}
@@ -733,12 +540,14 @@ export default function SuperAdminPanel() {
                   }}
                   socketDevices={socketDevices}
                   failedWebhooks={failedWebhooks}
+                  webhooksAvailable={webhooksAvailable}
                 />
               )}
 
               {activeTab === "webhooks" && (
                 <SuperAdminTerminal
                   failedWebhooks={failedWebhooks}
+                  webhooksAvailable={webhooksAvailable}
                   onForceConfirmWebhook={handleForceConfirmWebhook}
                   sentryLogs={sentryLogs}
                   onAddLog={addSentryLog}
@@ -766,10 +575,6 @@ export default function SuperAdminPanel() {
                   telegramMessages={telegramMessages}
                   onTriggerTelegramAlert={triggerTelegramAlert}
                   onClearMessages={() => setTelegramMessages([])}
-                  alertRules={alertRules}
-                  firedAlertsHistory={firedAlertsHistory}
-                  onUpdateAlertRules={updateAlertRules}
-                  onClearFiredAlertsHistory={clearFiredAlertsHistory}
                 />
               )}
 
@@ -796,11 +601,11 @@ export default function SuperAdminPanel() {
       {/* Immersive UI Bottom Status Footer */}
       <footer className="h-8 bg-koma-card border-t border-[#1e293b]/40 px-4 flex items-center justify-between text-[10px] text-koma-muted shrink-0 select-none font-mono" id="superadmin-footer">
         <div>
-          DOCKER-COMPOSE: <span className="text-[#00b894] font-bold">UP</span> | ELK STACK: <span className="text-[#00b894] font-bold">SYNCED</span> | SWAGGER: <span className="text-[#00b894]">/api/docs</span>
+          SERVIÇOS: <span className="text-koma-muted font-bold">CONSULTE O DIAGNÓSTICO AUTENTICADO</span>
         </div>
         <div className="flex items-center space-x-4">
-          <span>TESTS: <span className="text-[#00b894] font-bold">PASSED (442)</span></span>
-          <span className="text-koma-foreground opacity-40">KÔMA DATA CONSOLE v2.4</span>
+          <span>BUILD: <span className="text-koma-foreground font-bold">{frontendBuildSha}</span></span>
+          <span className="text-koma-foreground opacity-40">KÔMA DATA CONSOLE</span>
         </div>
       </footer>
     </div>

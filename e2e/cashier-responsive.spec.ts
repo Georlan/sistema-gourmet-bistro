@@ -124,6 +124,26 @@ async function seedCashierSession(page: Page) {
   });
 }
 
+async function seedKitchenSession(page: Page) {
+  await page.addInitScript(() => {
+    const token = 'playwright-kitchen-token';
+    const user = {
+      id: 'cozinha-e2e',
+      nome: 'Cozinha E2E',
+      role: 'cozinha',
+    };
+    localStorage.setItem('koma_operator_session', JSON.stringify({
+      token,
+      user,
+      expiresAt: Date.now() + 60_000,
+    }));
+    localStorage.setItem('koma_caixa_token', token);
+    localStorage.setItem('koma_caixa_id', user.id);
+    localStorage.setItem('koma_caixa_name', user.nome);
+    localStorage.setItem('koma_caixa_role', user.role);
+  });
+}
+
 async function expectNoHorizontalOverflow(page: Page) {
   const dimensions = await page.evaluate(() => ({
     viewport: window.innerWidth,
@@ -214,4 +234,23 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     expect(positions[0].right).toBeLessThanOrEqual(positions[1].left + 1);
     expect(positions[1].right).toBeLessThanOrEqual(positions[2].left + 1);
   }
+});
+
+test('Cozinha conclui preparo pela API operacional', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedKitchenSession(page);
+  await page.goto('/?view=caixa');
+
+  const finishButton = page.locator('#kitchen-finish-btn-item-e2e-1');
+  await expect(finishButton).toBeVisible();
+
+  const statusRequest = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return request.method() === 'PUT'
+      && url.pathname === '/comandas/itens/item-e2e-1/status'
+      && url.searchParams.get('status') === 'pronto';
+  });
+
+  await finishButton.click();
+  await statusRequest;
 });

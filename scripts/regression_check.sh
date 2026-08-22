@@ -9,10 +9,22 @@ NC='\033[0m'
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
-VENV_PYTHON="${BACKEND_DIR}/venv/bin/python"
+ROOT_VENV_PYTHON="${ROOT_DIR}/.venv/bin/python"
+BACKEND_DOT_VENV_PYTHON="${BACKEND_DIR}/.venv/bin/python"
+BACKEND_VENV_PYTHON="${BACKEND_DIR}/venv/bin/python"
 
-if [ -x "$VENV_PYTHON" ]; then
-  PYTHON_BIN="$VENV_PYTHON"
+if [ -n "${KOMA_PYTHON_BIN:-}" ]; then
+  if [ ! -x "$KOMA_PYTHON_BIN" ]; then
+    echo -e "${RED}Erro: KOMA_PYTHON_BIN não aponta para um executável: ${KOMA_PYTHON_BIN}.${NC}"
+    exit 1
+  fi
+  PYTHON_BIN="$KOMA_PYTHON_BIN"
+elif [ -x "$ROOT_VENV_PYTHON" ]; then
+  PYTHON_BIN="$ROOT_VENV_PYTHON"
+elif [ -x "$BACKEND_DOT_VENV_PYTHON" ]; then
+  PYTHON_BIN="$BACKEND_DOT_VENV_PYTHON"
+elif [ -x "$BACKEND_VENV_PYTHON" ]; then
+  PYTHON_BIN="$BACKEND_VENV_PYTHON"
 elif command -v python3 >/dev/null 2>&1; then
   PYTHON_BIN="$(command -v python3)"
 elif command -v python >/dev/null 2>&1; then

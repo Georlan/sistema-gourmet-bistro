@@ -507,7 +507,9 @@ def test_admin_team_listing_is_scoped_to_authenticated_tenant():
     response = client.get("/auth/usuarios", headers=headers)
 
     assert response.status_code == 200
-    returned_ids = {user["id"] for user in response.json()}
+    returned_users = response.json()
+    returned_ids = {user["id"] for user in returned_users}
+    assert all("token_convite" not in user for user in returned_users)
     assert "u-admin" in returned_ids
     assert "u-outro-tenant" not in returned_ids
 

@@ -20,7 +20,6 @@ from ..services.staff_login_rate_limit import (
     record_staff_login_failure,
     staff_login_is_blocked,
 )
-from ..services.whatsapp import enviar_texto_whatsapp
 from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.auth")
@@ -415,13 +414,13 @@ def delete_usuario(
     return
 
 
-# ----------------- LGPD COMPLIANCE ENDPOINTS -----------------
-from pydantic import BaseModel
+# ----------------- PRIVACY REQUEST OPERATIONS -----------------
+from pydantic import BaseModel, Field
 from typing import Optional
 from ..models import Comanda, RascunhoPedido, MensagemWhatsApp, ActivityLog
 
 class GdprOptOutRequest(BaseModel):
-    telefone: str
+    telefone: str = Field(min_length=8, max_length=32)
     nome: Optional[str] = None
     anonimizar: bool = True
 
@@ -431,8 +430,11 @@ def gdpr_opt_out(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("privacidade:administrar"))
 ):
-    """
-    LGPD Compliance: Erases or anonymizes client's personal data.
+    """Executa o escopo automatizado de uma solicitação de privacidade.
+
+    Este fluxo não representa, sozinho, atendimento integral à LGPD. Dados
+    financeiros, fiscais, backups e fornecedores devem seguir a política de
+    retenção e a revisão manual do responsável pelo tratamento.
     """
     target_phone = req.telefone.strip()
 
@@ -464,7 +466,7 @@ def gdpr_opt_out(
             for c in matched_comandas:
                 c.identificador = "Cliente Anonimizado (LGPD)"
 
-            detail_msg = f"Anonimização realizada para telefone {target_phone}."
+            detail_msg = "Anonimização concluída no escopo automatizado."
         else:
             # Hard delete
             for msg in matched_msgs:
@@ -474,14 +476,18 @@ def gdpr_opt_out(
             for c in matched_comandas:
                 c.identificador = "Cliente Anonimizado (LGPD)"
 
-            detail_msg = f"Remoção de dados concluída para telefone {target_phone}."
+            detail_msg = "Remoção concluída no escopo automatizado."
 
-        # Write immutable log record
+        # Registra a operação sem reintroduzir o telefone do titular no log.
         log = ActivityLog(
             restaurante_id=current_restaurante_id.get(),
             garcom_id="admin",
-            action="GDPR_DELETE",
-            details=detail_msg
+            action="PRIVACY_REQUEST",
+            details=(
+                f"{detail_msg} mensagens={len(matched_msgs)}; "
+                f"rascunhos={len(matched_drafts)}; comandas={len(matched_comandas)}; "
+                f"modo={'anonimizar' if req.anonimizar else 'remover'}."
+            ),
         )
         db.add(log)
         db.commit()
@@ -495,7 +501,12 @@ def gdpr_opt_out(
             detail="Erro ao processar dado sensível, contate o suporte."
         )
 
-    return {"status": "success", "detail": detail_msg}
+    return {
+        "status": "success",
+        "detail": detail_msg,
+        "automated_scope": ["mensagens_whatsapp", "rascunhos_pedido", "identificador_comanda"],
+        "manual_review_required": True,
+    }
 
 
 @router.post("/usuarios/{user_id}/reenviar-convite")
@@ -504,7 +515,7 @@ def reenviar_convite_usuario(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Reenvia o link de convite por WhatsApp para o usuário pendente de ativação."""
+    """Renova o convite para compartilhamento manual pelo administrador."""
     import datetime
     from datetime import timezone
 
@@ -532,20 +543,9 @@ def reenviar_convite_usuario(
     db.refresh(usuario)
 
     tel_clean = usuario.telefone or ""
-    convite_link = f"https://sistema-gourmet-bistro.pages.dev/ativar?token={usuario.token_convite}"
-    mensagem_texto = f"Olá {usuario.nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: {convite_link}"
-
-    evolution_sent = enviar_texto_whatsapp(
-        tel_clean,
-        mensagem_texto,
-        contexto="reenvio de convite de funcionário",
-    )
-
     return {
-        "message": f"Convite gerado com sucesso para {usuario.nome}.",
+        "message": f"Convite renovado para {usuario.nome}.",
         "token_convite": usuario.token_convite,
         "telefone": tel_clean,
         "nome": usuario.nome,
-        "link": convite_link,
-        "mensagem": mensagem_texto
     }

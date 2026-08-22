@@ -218,13 +218,6 @@ export interface Courier {
   corridas: number;
 }
 
-export interface DeliveryZone {
-  id: number;
-  bairro: string;
-  taxa: number;
-  tempo: string;
-}
-
 export interface AccountItem {
   id: number;
   descricao: string;

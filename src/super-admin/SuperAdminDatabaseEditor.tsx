@@ -15,6 +15,7 @@ import {
   History
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
 interface DatabaseEditorProps {
   onAddLog: (text: string, type: "info" | "success" | "warning" | "error" | "critical") => void;
@@ -58,7 +59,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
   } | null>(null);
   const [showColumnConfirm, setShowColumnConfirm] = useState(false);
 
-  // Dynamic table column models from PostgreSQL / memory fallback
+  // Dynamic table column models returned by the authenticated API.
   const [tableColumns, setTableColumns] = useState<{ name: string; type: string }[]>([]);
 
   // Fetch list of available tables
@@ -71,19 +72,19 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
       "failed_webhooks"
     ];
     try {
-      const res = await fetch("/api/super-admin/db/tables");
+      const res = await superAdminFetch("/api/super-admin/db/tables");
       if (res.ok) {
         const data = await res.json();
         // Filter tables to only allow the requested 6 tables
         const filtered = data.filter((t: string) => ALLOWED_TABLES.includes(t.toLowerCase()));
-        setTables(filtered.length > 0 ? filtered : ALLOWED_TABLES);
+        setTables(filtered);
       } else {
         setTables([]);
         setDbEditError("Fonte real de tabelas indisponível; nenhum dado simulado foi carregado.");
       }
-    } catch {
+    } catch (error) {
       setTables([]);
-      setDbEditError("Falha ao consultar a fonte real de tabelas.");
+      setDbEditError(superAdminErrorMessage(error));
     }
   };
 
@@ -94,7 +95,8 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
     setDeletingRowId(null);
     try {
       // 1. Fetch exact physical table schema/columns first
-      const schemaRes = await fetch(`/api/super-admin/db/${tableName}/schema`);
+      const encodedTable = encodeURIComponent(tableName);
+      const schemaRes = await superAdminFetch(`/api/super-admin/db/${encodedTable}/schema`);
       let columnsData: { name: string; type: string }[] = [];
       if (schemaRes.ok) {
         const schemaJson = await schemaRes.json();
@@ -103,7 +105,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
       }
 
       // 2. Fetch table rows
-      const res = await fetch(`/api/super-admin/db/${tableName}`);
+      const res = await superAdminFetch(`/api/super-admin/db/${encodedTable}`);
       if (res.ok) {
         const data = await res.json();
         setRows(data);
@@ -126,7 +128,9 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
         setDbEditError(error.detail || "Fonte real de dados indisponível.");
       }
     } catch (err) {
-      console.error("Error fetching table data:", err);
+      setRows([]);
+      setTableColumns([]);
+      setDbEditError(superAdminErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -161,7 +165,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
 
   const executeSaveCell = async (rowId: string, colKey: string, finalValue: any) => {
     try {
-      const res = await fetch(`/api/super-admin/db/${selectedTable}/${rowId}`, {
+      const res = await superAdminFetch(`/api/super-admin/db/${encodeURIComponent(selectedTable)}/${encodeURIComponent(rowId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [colKey]: finalValue })
@@ -202,13 +206,14 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
   const fetchAuditLog = async () => {
     setIsFetchingAudit(true);
     try {
-      const res = await fetch("/api/super-admin/db/audit-log");
+      const res = await superAdminFetch("/api/super-admin/db/audit-log");
       if (res.ok) {
         const data = await res.json();
         setAuditLogs(data);
       }
     } catch (err) {
-      console.error("Error fetching audit logs:", err);
+      setAuditLogs([]);
+      setDbEditError(superAdminErrorMessage(err));
     } finally {
       setIsFetchingAudit(false);
     }
@@ -264,7 +269,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
     }
 
     try {
-      const res = await fetch(`/api/super-admin/db/${selectedTable}`, {
+      const res = await superAdminFetch(`/api/super-admin/db/${encodeURIComponent(selectedTable)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sanitizedPayload)
@@ -290,25 +295,19 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
     }
   };
 
-  // Handle instant deleting of a row (Optimistic UI Update)
+  // Delete only after the server confirms persistence.
   const handleDeleteRow = async (rowId: string) => {
     setDeletingRowId(null);
-    const rowToRestore = rows.find(r => r.id === rowId);
-    if (!rowToRestore) return;
-
-    // Backup current rows for potential rollback
-    const originalRows = [...rows];
-
-    // Optimistic UI update: remove row immediately from screen
-    setRows(prev => prev.filter(r => r.id !== rowId));
-    onAddLog(`Tabela '${selectedTable}': Removendo registro ${rowId} (Otimista)...`, "info");
+    if (!rows.some(r => r.id === rowId)) return;
+    onAddLog(`Tabela '${selectedTable}': solicitando remoção do registro ${rowId}...`, "info");
 
     try {
-      const res = await fetch(`/api/super-admin/db/${selectedTable}/${rowId}`, {
+      const res = await superAdminFetch(`/api/super-admin/db/${encodeURIComponent(selectedTable)}/${encodeURIComponent(rowId)}`, {
         method: "DELETE"
       });
 
       if (res.ok) {
+        setRows(prev => prev.filter(r => r.id !== rowId));
         onAddLog(`Registro ${rowId} excluído com sucesso da tabela '${selectedTable}'.`, "success");
         setDbEditError(null);
         if (selectedTable === "restaurantes" && refreshTenantsList) {
@@ -319,8 +318,6 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
         throw new Error(errorData.error || "Erro de restrição de integridade (PostgreSQL) ou permissão.");
       }
     } catch (err: any) {
-      // Revert optimistic update immediately
-      setRows(originalRows);
       const msg = err.message || "Erro de conexão.";
       setDbEditError(`Falha ao excluir o registro '${rowId}': ${msg}`);
       onAddLog(`Erro ao excluir na tabela '${selectedTable}': ID ${rowId} (${msg})`, "error");
@@ -350,7 +347,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
 
     const { name: colName, type: colType } = newColumnData;
     try {
-      const res = await fetch(`/api/super-admin/db/${selectedTable}/column`, {
+      const res = await superAdminFetch(`/api/super-admin/db/${encodeURIComponent(selectedTable)}/column`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ columnName: colName, columnType: colType })
@@ -389,7 +386,7 @@ export default function SuperAdminDatabaseEditor({ onAddLog, refreshTenantsList 
     setIsBackingUp(true);
     setBackupResult(null);
     try {
-      const res = await fetch("/api/super-admin/db/backup", { method: "POST" });
+      const res = await superAdminFetch("/api/super-admin/db/backup", { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setBackupResult({ filename: data.filename, size: data.size });

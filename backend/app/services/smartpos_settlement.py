@@ -5,10 +5,12 @@ import uuid
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import CaixaTurno, Comanda, Item, Pagamento
+from ..operational_models import AtendimentoComanda, AtendimentoMesa
 from ..smartpos_models import SmartPosPaymentIntent
 
 
@@ -59,6 +61,139 @@ def _settlement_key(intent_id: str) -> str:
     return f"smartpos:settlement:{intent_id}"
 
 
+def _atendimento_family_ids(
+    db: Session,
+    *,
+    restaurante_id: int,
+    atendimento_id: str,
+    lock: bool,
+) -> list[str]:
+    account_query = db.query(AtendimentoMesa).filter(
+        AtendimentoMesa.restaurante_id == restaurante_id,
+        AtendimentoMesa.id == atendimento_id,
+    )
+    if lock:
+        account_query = account_query.with_for_update()
+    account = account_query.first()
+    if account is None:
+        raise SmartPosSettlementError(
+            "O atendimento vinculado ao PaymentIntent não pertence a este restaurante."
+        )
+
+    root_id = account.principal_id or account.id
+    root_query = db.query(AtendimentoMesa).filter(
+        AtendimentoMesa.restaurante_id == restaurante_id,
+        AtendimentoMesa.id == root_id,
+    )
+    if lock:
+        root_query = root_query.with_for_update()
+    root = root_query.first()
+    if root is None or root.principal_id is not None:
+        raise SmartPosSettlementError(
+            "A família principal vinculada ao PaymentIntent está inconsistente."
+        )
+
+    members_query = (
+        db.query(AtendimentoMesa)
+        .filter(
+            AtendimentoMesa.restaurante_id == restaurante_id,
+            or_(
+                AtendimentoMesa.id == root.id,
+                AtendimentoMesa.principal_id == root.id,
+            ),
+        )
+        .order_by(AtendimentoMesa.criado_em.asc(), AtendimentoMesa.id.asc())
+    )
+    if lock:
+        members_query = members_query.with_for_update()
+    return [member.id for member in members_query.all()]
+
+
+def _open_atendimento_comandas(
+    db: Session,
+    *,
+    restaurante_id: int,
+    atendimento_id: str,
+    lock: bool,
+) -> list[Comanda]:
+    family_ids = _atendimento_family_ids(
+        db,
+        restaurante_id=restaurante_id,
+        atendimento_id=atendimento_id,
+        lock=lock,
+    )
+    linked_ids = [
+        str(comanda_id)
+        for (comanda_id,) in (
+            db.query(AtendimentoComanda.comanda_id)
+            .filter(
+                AtendimentoComanda.restaurante_id == restaurante_id,
+                AtendimentoComanda.atendimento_id.in_(family_ids),
+            )
+            .all()
+        )
+    ]
+    if not linked_ids:
+        return []
+
+    commands_query = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id.in_(linked_ids),
+            Comanda.fechada == False,
+        )
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+    )
+    if lock:
+        commands_query = commands_query.with_for_update()
+    return commands_query.all()
+
+
+def _intent_open_comandas(
+    db: Session,
+    *,
+    restaurante_id: int,
+    intent: SmartPosPaymentIntent,
+    lock: bool,
+) -> list[Comanda]:
+    if intent.atendimento_id is not None:
+        return _open_atendimento_comandas(
+            db,
+            restaurante_id=restaurante_id,
+            atendimento_id=intent.atendimento_id,
+            lock=lock,
+        )
+
+    # Compatibilidade exclusiva com intents anteriores à identidade operacional.
+    commands_query = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.mesa_id == intent.mesa_id,
+            Comanda.fechada == False,
+        )
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+    )
+    if lock:
+        commands_query = commands_query.with_for_update()
+    return commands_query.all()
+
+
+def _intent_service_released(
+    db: Session,
+    *,
+    restaurante_id: int,
+    intent: SmartPosPaymentIntent,
+) -> bool:
+    return not _intent_open_comandas(
+        db,
+        restaurante_id=restaurante_id,
+        intent=intent,
+        lock=False,
+    )
+
+
 def settle_approved_smartpos_intent(
     db: Session,
     *,
@@ -90,11 +225,11 @@ def settle_approved_smartpos_intent(
         ).first()
         if pagamento is None:
             raise SmartPosSettlementError("O vínculo financeiro do PaymentIntent está inconsistente.")
-        mesa_liberada = db.query(Comanda.id).filter(
-            Comanda.restaurante_id == restaurante_id,
-            Comanda.mesa_id == intent.mesa_id,
-            Comanda.fechada == False,
-        ).first() is None
+        mesa_liberada = _intent_service_released(
+            db,
+            restaurante_id=restaurante_id,
+            intent=intent,
+        )
         return SmartPosSettlementResult(intent, pagamento, True, mesa_liberada)
 
     if intent.status != "aprovada":
@@ -136,31 +271,40 @@ def settle_approved_smartpos_intent(
         intent.liquidado_em = intent.liquidado_em or existing.criado_em
         db.commit()
         db.refresh(intent)
-        return SmartPosSettlementResult(intent, existing, True, False)
-
-    comandas = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == restaurante_id,
-            Comanda.mesa_id == intent.mesa_id,
-            Comanda.fechada == False,
+        return SmartPosSettlementResult(
+            intent,
+            existing,
+            True,
+            _intent_service_released(
+                db,
+                restaurante_id=restaurante_id,
+                intent=intent,
+            ),
         )
-        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
-        .with_for_update()
-        .all()
+
+    comandas = _intent_open_comandas(
+        db,
+        restaurante_id=restaurante_id,
+        intent=intent,
+        lock=True,
     )
     if not comandas:
+        if intent.atendimento_id is not None:
+            raise SmartPosSettlementError(
+                "O atendimento vinculado não possui mais comanda aberta válida para receber esta aprovação."
+            )
         raise SmartPosSettlementError(
             "A mesa não possui mais comanda aberta para receber esta aprovação."
         )
 
-    current_table_cycle_started_at = min(
-        _timeline_value(comanda.criado_em) for comanda in comandas
-    )
-    if _timeline_value(intent.criado_em) < current_table_cycle_started_at:
-        raise SmartPosSettlementError(
-            "A aprovação pertence a um atendimento anterior desta mesa e não pode ser aplicada à comanda atual."
+    if intent.atendimento_id is None:
+        current_table_cycle_started_at = min(
+            _timeline_value(comanda.criado_em) for comanda in comandas
         )
+        if _timeline_value(intent.criado_em) < current_table_cycle_started_at:
+            raise SmartPosSettlementError(
+                "A aprovação pertence a um atendimento anterior desta mesa e não pode ser aplicada à comanda atual."
+            )
 
     debitos: list[tuple[Comanda, Decimal, Decimal]] = []
     saldo_mesa = Decimal("0.00")
@@ -264,11 +408,11 @@ def settle_approved_smartpos_intent(
                 recovered_intent.pagamento_id = recovered_payment.id
                 recovered_intent.liquidado_em = recovered_payment.criado_em
                 db.commit()
-            mesa_liberada = db.query(Comanda.id).filter(
-                Comanda.restaurante_id == restaurante_id,
-                Comanda.mesa_id == recovered_intent.mesa_id,
-                Comanda.fechada == False,
-            ).first() is None
+            mesa_liberada = _intent_service_released(
+                db,
+                restaurante_id=restaurante_id,
+                intent=recovered_intent,
+            )
             return SmartPosSettlementResult(
                 recovered_intent,
                 recovered_payment,
@@ -279,9 +423,9 @@ def settle_approved_smartpos_intent(
 
     db.refresh(intent)
     db.refresh(pagamento)
-    mesa_liberada = db.query(Comanda.id).filter(
-        Comanda.restaurante_id == restaurante_id,
-        Comanda.mesa_id == intent.mesa_id,
-        Comanda.fechada == False,
-    ).first() is None
+    mesa_liberada = _intent_service_released(
+        db,
+        restaurante_id=restaurante_id,
+        intent=intent,
+    )
     return SmartPosSettlementResult(intent, pagamento, False, mesa_liberada)

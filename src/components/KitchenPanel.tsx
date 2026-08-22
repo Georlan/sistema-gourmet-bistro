@@ -77,8 +77,8 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
             <ChefHat size={22} />
           </div>
           <div>
-            <h3 className="font-serif text-lg font-bold text-koma-foreground tracking-wide">Monitor de Alta Gastronomia</h3>
-            <p className="text-xs text-koma-muted">Fila prioritária de preparos de pratos e observações da cozinha do Kôma</p>
+            <h3 className="font-serif text-lg font-bold text-koma-foreground tracking-wide">Fila da cozinha</h3>
+            <p className="text-xs text-koma-muted">Itens em preparo e observações da operação</p>
           </div>
         </div>
 
@@ -98,9 +98,9 @@ export const KitchenPanel: React.FC<KitchenPanelProps> = ({
             <Utensils size={32} />
           </div>
           <div className="space-y-1">
-            <p className="font-serif text-lg text-koma-foreground">Cozinha em perfeita harmonia</p>
+            <p className="font-serif text-lg text-koma-foreground">Nenhum item aguardando preparo</p>
             <p className="text-xs text-koma-muted leading-relaxed">
-              Todos os pratos e vinhos do Kôma foram encaminhados e estão em perfeita sintonia com as mesas.
+              Novos itens aparecerão aqui quando forem enviados para a cozinha.
             </p>
           </div>
         </div>

@@ -14,6 +14,7 @@ import {
   Sliders
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
 export interface Tenant {
   id: string;
@@ -51,7 +52,8 @@ export interface FailedWebhook {
 
 interface SuperAdminTenantControlProps {
   tenants: Tenant[];
-  onToggleStatus: (id: string, currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING") => void;
+  dataAvailable: boolean;
+  onToggleStatus: (id: string, currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING") => Promise<boolean>;
   onAddLog: (text: string, type: "info" | "success" | "warning" | "error" | "critical") => void;
   onTriggerTelegramAlert: (text: string) => void;
   refreshTenants: () => void;
@@ -59,10 +61,12 @@ interface SuperAdminTenantControlProps {
   onConfigureTenant?: (id: string) => void;
   socketDevices: ActiveDevice[];
   failedWebhooks: FailedWebhook[];
+  webhooksAvailable: boolean;
 }
 
 export default function SuperAdminTenantControl({
   tenants,
+  dataAvailable,
   onToggleStatus,
   onAddLog,
   onTriggerTelegramAlert,
@@ -70,7 +74,8 @@ export default function SuperAdminTenantControl({
   isLoading,
   onConfigureTenant,
   socketDevices,
-  failedWebhooks
+  failedWebhooks,
+  webhooksAvailable,
 }: SuperAdminTenantControlProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<string>("ALL");
@@ -100,67 +105,40 @@ export default function SuperAdminTenantControl({
     const slug = onboardName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
     const subdomain = `${slug}.koma.com`;
 
-    const logs = [
-      `[INIT] Starting 1-Click Onboarding for "${onboardName}"...`,
-      `[AUTH] Authenticating SuperAdmin session context via JWT...`,
-      `[SUPABASE] Connecting to pool postgres://supabase_admin@db.koma.supabase.co:5432...`,
-      `[SUPABASE] Creating tenant record in "public.tenants" with schema schema_${slug}...`,
-      `[SCHEMA] Creating schema "schema_${slug}" for multi-tenant database isolation...`,
-      `[SCHEMA] Creating tables inside "schema_${slug}": categories, products, orders, users, sessions...`,
-      `[SEED] Seeding default menus (Burgers, Drinks, Sides, Desserts) for "schema_${slug}"...`,
-      `[SEED] Inserting sample product: "Burger Suprema Koma" ($34.90) with stock constraints...`,
-      `[CLOUDFLARE] Dispatching CNAME creation request to Cloudflare API...`,
-      `[CLOUDFLARE] Successfully mapped ${subdomain} -> k-ingress-prod.railway.app (ID: cf_rec_896321)`,
-      `[TELEGRAM] Dispatching alert message to owner channel...`,
-      `[SUCCESS] Onboarding completed! Tenant is LIVE at https://${subdomain}`
-    ];
-
-    onAddLog(`Starting 1-Click onboarding for: ${onboardName}`, "info");
-
-    for (let i = 0; i < logs.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      setOnboardConsole(prev => [...prev, logs[i]]);
-      setOnboardProgress(Math.round(((i + 1) / (logs.length + 1)) * 100));
-      setOnboardStatusText(logs[i].substring(0, 45) + "...");
-    }
-
-    setOnboardStatusText("Aguardando Banco...");
-    setOnboardProgress(95);
+    setOnboardConsole([`[REQUEST] Solicitando onboarding real de "${onboardName}"...`]);
+    setOnboardStatusText("Aguardando confirmação da API...");
+    setOnboardProgress(20);
+    onAddLog(`Onboarding solicitado para: ${onboardName}`, "info");
 
     try {
-      const response = await fetch("/api/super-admin/restaurantes/onboarding", {
+      const response = await superAdminFetch("/api/super-admin/restaurantes/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: onboardName, plan: onboardPlan, subdomain })
       });
-      const data = await response.json();
-      
-      if (response.ok) {
-        setOnboardProgress(100);
-        setOnboardStatusText("Sucesso!");
-        onAddLog(`🎉 Onboarding completed for ${onboardName}!`, "success");
-        onTriggerTelegramAlert(`🎉 Novo cliente! ${onboardName} se cadastrou no plano ${onboardPlan}.`);
-        
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setOnboardName("");
-        refreshTenants();
-      } else {
-        setOnboardStatusText("Erro no banco!");
-        setOnboardProgress(0);
-        onAddLog(`Error during database onboarding: ${data.error || "Unknown error"}`, "error");
-      }
+      await response.json();
+      setOnboardProgress(100);
+      setOnboardStatusText("Confirmado pela API");
+      setOnboardConsole(prev => [...prev, "[CONFIRMED] Onboarding persistido pelo servidor."]);
+      onAddLog(`Onboarding concluído para ${onboardName}.`, "success");
+      onTriggerTelegramAlert(`Novo cliente confirmado: ${onboardName}, plano ${onboardPlan}.`);
+      setOnboardName("");
+      refreshTenants();
     } catch (err) {
-      setOnboardStatusText("Erro de rede!");
+      const message = superAdminErrorMessage(err);
+      setOnboardStatusText("Operação indisponível");
       setOnboardProgress(0);
-      onAddLog("Network error during restaurant onboarding.", "error");
+      setOnboardConsole(prev => [...prev, `[ERROR] ${message}`]);
+      onAddLog(`Onboarding não executado: ${message}`, "error");
     } finally {
       setIsOnboarding(false);
     }
   };
 
-  const handleFinancialToggle = (tenant: Tenant) => {
+  const handleFinancialToggle = async (tenant: Tenant) => {
     const targetStatus = tenant.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    onToggleStatus(tenant.id, tenant.status);
+    const changed = await onToggleStatus(tenant.id, tenant.status);
+    if (!changed) return;
     
     if (targetStatus === "SUSPENDED") {
       onAddLog(`⚠️ BLOQUEIO FINANCEIRO ATIVADO: ${tenant.name} suspenso por inadimplência.`, "warning");
@@ -173,17 +151,13 @@ export default function SuperAdminTenantControl({
 
   const handleFlushRedis = async (id: string, name: string) => {
     try {
-      const res = await fetch(`/api/super-admin/restaurantes/${id}/flush-cache`, {
+      await superAdminFetch(`/api/super-admin/restaurantes/${encodeURIComponent(id)}/flush-cache`, {
         method: "POST"
       });
-      if (res.ok) {
-        onAddLog(`🧼 Cache Redis limpo para: ${name}.`, "success");
-        onTriggerTelegramAlert(`🧼 Cache Redis: ${name} teve seu cache limpo por comando do SuperAdmin.`);
-      } else {
-        onAddLog(`Erro ao limpar cache de ${name}`, "error");
-      }
-    } catch {
-      onAddLog(`Erro de rede ao limpar cache de ${name}`, "error");
+      onAddLog(`Cache Redis limpo para: ${name}.`, "success");
+      onTriggerTelegramAlert(`Cache Redis de ${name} foi limpo pelo SuperAdmin.`);
+    } catch (error) {
+      onAddLog(`Cache de ${name} não foi limpo: ${superAdminErrorMessage(error)}`, "error");
     }
   };
 
@@ -198,12 +172,13 @@ export default function SuperAdminTenantControl({
           <p className="text-xs text-[#9ca3af] font-mono">[TOTAL_TENANTS]</p>
           {isLoading ? (
             <div className="w-20 h-7 bg-slate-800/60 rounded animate-pulse mt-1"></div>
+          ) : !dataAvailable ? (
+            <p className="mt-1 text-2xl font-bold text-koma-muted">—</p>
           ) : (
             <p className="text-2xl font-mono font-bold text-koma-foreground mt-1">{tenants.length}</p>
           )}
-          <div className="text-[10px] text-[#00b894] font-mono mt-2 flex items-center gap-1 font-bold">
-            <span className="w-1.5 h-1.5 bg-[#00b894] rounded-full animate-pulse shadow-[0_0_6px_#00b894]"></span>
-            100% MONITORADO
+          <div className="text-[10px] text-koma-muted font-mono mt-2 flex items-center gap-1 font-bold">
+            FONTE: API AUTENTICADA
           </div>
         </div>
 
@@ -211,16 +186,18 @@ export default function SuperAdminTenantControl({
           <div className="absolute top-0 right-0 p-3 opacity-10">
             <DollarSign className="w-12 h-12 text-koma-foreground" />
           </div>
-          <p className="text-xs text-[#9ca3af] font-mono">[MRR_REAL]</p>
+          <p className="text-xs text-[#9ca3af] font-mono">[MRR_INFORMADO]</p>
           {isLoading ? (
             <div className="w-32 h-7 bg-slate-800/60 rounded animate-pulse mt-1"></div>
+          ) : !dataAvailable ? (
+            <p className="mt-1 text-2xl font-bold text-koma-muted">—</p>
           ) : (
             <p className="text-2xl font-mono font-bold text-[#00b894] mt-1">
               R$ {tenants.reduce((acc, curr) => acc + curr.monthlyBilling, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
           )}
           <div className="text-[10px] text-[#9ca3af] font-mono mt-2">
-            FATURAMENTO REAL DOS CLIENTES ATIVOS
+            VALOR RETORNADO PELA API
           </div>
         </div>
 
@@ -231,6 +208,8 @@ export default function SuperAdminTenantControl({
           <p className="text-xs text-[#9ca3af] font-mono">[PEDIDOS_MES_CORRENTE]</p>
           {isLoading ? (
             <div className="w-24 h-7 bg-slate-800/60 rounded animate-pulse mt-1"></div>
+          ) : !dataAvailable ? (
+            <p className="mt-1 text-2xl font-bold text-koma-muted">—</p>
           ) : (
             <p className="text-2xl font-mono font-bold text-koma-foreground mt-1">
               {tenants.reduce((acc, curr) => acc + curr.monthlyOrders, 0).toLocaleString()}
@@ -248,6 +227,8 @@ export default function SuperAdminTenantControl({
           <p className="text-xs text-[#9ca3af] font-mono">[INADIMPLENTES_BLOQUEADOS]</p>
           {isLoading ? (
             <div className="w-16 h-7 bg-slate-800/60 rounded animate-pulse mt-1"></div>
+          ) : !dataAvailable ? (
+            <p className="mt-1 text-2xl font-bold text-koma-muted">—</p>
           ) : (
             <p className="text-2xl font-mono font-bold text-[#ef4444] mt-1">
               {tenants.filter(t => t.status === "SUSPENDED").length}
@@ -255,7 +236,7 @@ export default function SuperAdminTenantControl({
           )}
           <div className="text-[10px] text-red-400 font-mono mt-2 flex items-center gap-1.5 font-bold">
             <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-            AÇÕES FINANCEIRAS EM LOTE
+            ALTERAÇÃO INDIVIDUAL CONFIRMADA PELA API
           </div>
         </div>
       </div>
@@ -279,7 +260,7 @@ export default function SuperAdminTenantControl({
               <input
                 type="text"
                 className="w-full bg-black/60 border border-[#1e293b]/40 rounded px-3 py-2 text-sm font-mono text-koma-foreground focus:outline-none focus:border-[#00b894] transition-colors"
-                placeholder="Ex: Pizzaria Sol"
+                placeholder="Ex.: Restaurante Central"
                 value={onboardName}
                 onChange={e => setOnboardName(e.target.value)}
                 disabled={isOnboarding}
@@ -295,10 +276,10 @@ export default function SuperAdminTenantControl({
                 onChange={e => setOnboardPlan(e.target.value as any)}
                 disabled={isOnboarding}
               >
-                <option value="Pocket">Pocket (R$ 99/mês)</option>
-                <option value="Bistro">Bistro (R$ 199/mês)</option>
-                <option value="Delivery">Delivery (R$ 299/mês)</option>
-                <option value="Premium">Premium (R$ 499/mês)</option>
+                <option value="Pocket">Pocket</option>
+                <option value="Bistro">Bistro</option>
+                <option value="Delivery">Delivery</option>
+                <option value="Premium">Premium</option>
               </select>
             </div>
 
@@ -425,6 +406,12 @@ export default function SuperAdminTenantControl({
                       Consultando registros no PostgreSQL (Supabase)...
                     </td>
                   </tr>
+                ) : !dataAvailable ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-amber-300">
+                      Fonte de restaurantes indisponível. Nenhum total ou estado foi presumido.
+                    </td>
+                  </tr>
                 ) : filteredTenants.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center py-8 text-koma-muted italic">
@@ -433,13 +420,13 @@ export default function SuperAdminTenantControl({
                   </tr>
                 ) : (
                   filteredTenants.map(t => {
-                    const pricing = { Pocket: 99, Bistro: 199, Delivery: 299, Premium: 499 };
-                    const mrrVal = pricing[t.plan];
                     const isSuspended = t.status === "SUSPENDED";
 
                     // Determine printer status reactively from socketDevices
                     const printer = socketDevices?.find(d => d.restaurantId === t.id && d.device === "Printer Gateway");
-                    const printerStatus = printer ? (printer.status === "CONNECTED" ? "online" : "offline") : (t.printerStatus || "online");
+                    const printerStatus: "online" | "offline" | "unknown" = printer
+                      ? (printer.status === "CONNECTED" ? "online" : "offline")
+                      : (t.printerStatus || "unknown");
 
                     // Filter failed webhooks for this tenant name in the last 24 hours (unresolved)
                     const now = Date.now();
@@ -454,10 +441,12 @@ export default function SuperAdminTenantControl({
                       return (now - time) <= oneDayMs;
                     }) || [];
 
-                    const failedWebhooksCount24h = tenantWebhooks.length;
+                    const failedWebhooksCount24h = webhooksAvailable ? tenantWebhooks.length : null;
 
                     // Combine to calculate healthStatus
-                    const healthStatus = (printerStatus === "offline" && failedWebhooksCount24h > 0) || failedWebhooksCount24h >= 2
+                    const healthStatus = printerStatus === "unknown" || failedWebhooksCount24h === null
+                      ? "unknown"
+                      : (printerStatus === "offline" && failedWebhooksCount24h > 0) || failedWebhooksCount24h >= 2
                       ? "red"
                       : (printerStatus === "offline" || failedWebhooksCount24h === 1)
                       ? "yellow"
@@ -538,21 +527,23 @@ export default function SuperAdminTenantControl({
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500" title="Saúde Operacional: Atenção Requerida"></span>
                                 </>
-                              ) : (
+                              ) : healthStatus === "red" ? (
                                 <>
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" title="Saúde Operacional: Crítica"></span>
                                 </>
+                              ) : (
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500" title="Saúde operacional não verificada"></span>
                               )}
                             </span>
 
                             {/* Printer and Webhook failure details */}
                             <div className="flex flex-col items-start gap-0.5 text-[9px] font-semibold text-left">
-                              <span className={printerStatus === "online" ? "text-emerald-400" : "text-red-400 animate-pulse font-bold"}>
-                                🖨️ {printerStatus === "online" ? "Online" : "Offline"}
+                              <span className={printerStatus === "online" ? "text-emerald-400" : printerStatus === "offline" ? "text-red-400 font-bold" : "text-koma-muted"}>
+                                🖨️ {printerStatus === "online" ? "Online" : printerStatus === "offline" ? "Offline" : "Não verificada"}
                               </span>
-                              <span className={failedWebhooksCount24h > 0 ? "text-amber-400 font-bold" : "text-koma-muted"}>
-                                ⚠️ {failedWebhooksCount24h} {failedWebhooksCount24h === 1 ? "erro" : "erros"} (24h)
+                              <span className={failedWebhooksCount24h !== null && failedWebhooksCount24h > 0 ? "text-amber-400 font-bold" : "text-koma-muted"}>
+                                ⚠️ {failedWebhooksCount24h === null ? "Não consultado" : `${failedWebhooksCount24h} ${failedWebhooksCount24h === 1 ? "erro" : "erros"} (24h)`}
                               </span>
                             </div>
                           </div>
@@ -632,7 +623,7 @@ export default function SuperAdminTenantControl({
               <div className="bg-amber-950/20 border border-amber-900/30 p-3 rounded text-amber-400 text-[11px] leading-relaxed">
                 <strong>O que vai acontecer:</strong>
                 <p className="mt-1">
-                  Isso forçará o banco de dados a reconstruir todos os itens do menu, configurações e layout no próximo acesso do cliente. O cardápio digital poderá apresentar uma leve latência inicial no primeiro carregamento pós-limpeza.
+                  A API receberá uma solicitação de limpeza. O painel só registrará a operação como concluída se o executor real confirmar o comando.
                 </p>
               </div>
               <div className="flex items-center justify-end gap-3 pt-2">

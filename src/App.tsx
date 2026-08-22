@@ -8,7 +8,7 @@ import { KomaLogo } from './components/KomaLogo';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag, Sun, Moon } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResumo } from './types';
-import { TABLES, WAITERS, RESTAURANT_CONFIG } from './data';
+import { RESTAURANT_CONFIG } from './data';
 import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
 import { getTableTotal } from './domain';
 import { MesaCard } from './components/MesaCard';
@@ -16,7 +16,7 @@ import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import clsx from 'clsx';
 import CardapioPage from './cardapio/CardapioPage';
-import SuperAdminPanel from './super-admin/SuperAdminPanel';
+import { SuperAdminGate } from './super-admin/SuperAdminGate';
 import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 import { MotoboyPwaPage } from './components/MotoboyPwaPage';
 import { KitchenPanel } from './components/KitchenPanel';
@@ -69,7 +69,7 @@ export default function App() {
   const isSuperAdmin = window.location.pathname.startsWith('/super-admin');
 
   if (isSuperAdmin) {
-    return <SuperAdminPanel />;
+    return <SuperAdminGate />;
   }
 
   // Detect activation page (?view=ativar or /ativar)
@@ -2580,7 +2580,7 @@ export default function App() {
         {activeRole === 'cozinha' ? (
           <KitchenPanel
             orders={orders}
-            onFinishPreparation={() => {}}
+            onFinishPreparation={handleFinishPreparation}
             currentTime={currentTime}
           />
         ) : isManagementRole(activeRole) ? (

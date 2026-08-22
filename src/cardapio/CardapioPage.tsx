@@ -15,7 +15,6 @@ import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
-import CardapioAiChefAssistant from "./components/CardapioAiChefAssistant";
 import { ShoppingBag, Eye, X, ArrowRight, Clock, RefreshCw } from "lucide-react";
 import { smartSearchMatch } from "../domain";
 import clsx from "clsx";
@@ -1576,9 +1575,6 @@ export default function CardapioPage() {
         isOpen={isStoreInfoOpen}
         onClose={() => setIsStoreInfoOpen(false)}
       />
-
-      {/* FLOATING AI ASSISTANT */}
-      <CardapioAiChefAssistant activeBrand={activeBrand} hasCart={cartCount > 0} />
 
     </div>
   );

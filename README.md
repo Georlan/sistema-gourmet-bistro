@@ -7,17 +7,17 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![License: Proprietary](https://img.shields.io/badge/License-Proprietary-red.svg?style=for-the-badge)](LICENSE)
 
-O **KÔMA** é uma plataforma SaaS multi-tenant moderna desenvolvida para a gestão completa de restaurantes, bistrôs, lanchonetes e operações de food service. O sistema integra Frente de Caixa (PDV), Gestão de Mesas e Comandas, Cozinha (KDS), Cardápio Digital Whitelabel com OTP via WhatsApp, Painel de Logística/Delivery com PWA para entregadores e Spooler de Impressão Térmica.
+O **KÔMA** é uma plataforma SaaS multi-tenant em desenvolvimento para a gestão de restaurantes, bistrôs, lanchonetes e operações de food service. O sistema reúne Frente de Caixa (PDV), Gestão de Mesas e Comandas, Cozinha (KDS), Cardápio Digital Whitelabel, Painel de Logística/Delivery e Spooler de Impressão Térmica. A disponibilidade e a maturidade de cada integração variam; consulte [Status do Projeto](#-status-do-projeto).
 
 ---
 
 ## 🚀 Visão Geral do Produto
 
-O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de alimentação, unificando toda a operação em uma arquitetura em nuvem segura, ágil e multi-tenant.
+O objetivo do KÔMA é reduzir a fragmentação de sistemas em estabelecimentos de alimentação, reunindo os fluxos operacionais em uma arquitetura em nuvem multi-tenant.
 
 - **Operação de Salão & Caixa**: Agilidade no atendimento de mesas e comandas com fechamento cego de caixa.
 - **Autoatendimento & Delivery**: Cardápio digital direto no navegador do cliente sem necessidade de baixar aplicativos.
-- **Engajamento & WhatsApp**: Identificação de clientes via código OTP no WhatsApp (Meta Cloud API oficial) e envio automático de atualizações de status do pedido.
+- **Engajamento & WhatsApp**: Fluxo de identificação por OTP e notificações projetado para a Meta WhatsApp Cloud API oficial, condicionado à configuração e aprovação do provedor.
 - **Cozinha Inteligente (KDS)**: Kanban de produção com cronômetros visuais por pedido e setorização de pratos.
 - **Logística Integrada**: Portal PWA otimizado para motoboys acompanharem entregas com rota direta no Waze/Google Maps.
 
@@ -42,7 +42,7 @@ O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de a
 - Campo de observações de itens e recado no carrinho salvo no pedido e impresso no cupom.
 
 ### 🔐 Autenticação OTP & Notificações por WhatsApp
-- **Meta WhatsApp Cloud API Oficial**: Disparo direto de mensagens via `graph.facebook.com`.
+- **Meta WhatsApp Cloud API Oficial**: Integração prevista via `graph.facebook.com`, dependente de credenciais, templates e aprovação válidos.
 - Login de clientes no cardápio digital via código OTP de 6 dígitos enviado ao WhatsApp.
 - Envio automático de status do pedido (*Em Preparo*, *Pronto para Retirada*, *Saiu para Entrega*, *Recusado*).
 - Handshake de validação de Webhook integrado e verificado.
@@ -54,7 +54,7 @@ O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de a
 
 ### 🛵 PWA do Entregador & Logística
 - Interface web progressiva (`/entregador?token=xxx`) para motoboys.
-- Autenticação por token seguro com revogação e limite de requisições.
+- Autenticação por token com revogação e limite de requisições nos fluxos implementados.
 - Integração direta com Waze e Google Maps para navegação até o endereço de entrega.
 
 ### 🖨️ Agente de Impressão Térmica
@@ -66,10 +66,12 @@ O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de a
 - Bridge Android de desenvolvimento com terminal simulado e reconciliação segura após retry/reinício.
 - A integração real PagBank/PlugPag, o estorno no adquirente e a homologação física ainda são gates obrigatórios da Fase A.
 
-### 🛡️ Multi-Tenant & Segurança (LGPD)
-- Isolamento rígido de dados por restaurante (`restaurante_id`) com Row Level Security (RLS) no PostgreSQL.
-- Criptografia Fernet para dados sensíveis de clientes (PII).
-- Tokens JWT sanitizados e controle de acessos por perfil (admin, caixa, garçom).
+### 🛡️ Multi-Tenant, Segurança e Privacidade
+- Escopo de dados por restaurante (`restaurante_id`) na aplicação e políticas de Row Level Security (RLS) no PostgreSQL onde configuradas.
+- Criptografia Fernet em campos e fluxos que a implementam explicitamente; isso não equivale a cifrar todo dado pessoal do sistema.
+- Autenticação por JWT e controle de acessos por perfil (admin, caixa, garçom) nos fluxos implementados.
+
+Esses controles precisam ser verificados por ambiente e não representam, isoladamente, certificação de segurança ou conformidade integral com a LGPD.
 
 ---
 
@@ -91,7 +93,7 @@ O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de a
            ▼                            ▼                            ▼
 ┌────────────────────┐       ┌────────────────────┐       ┌────────────────────┐
 │ Supabase PostgreSQL│       │ Meta WhatsApp API  │       │ Agente Impressão   │
-│   (RLS Enabled)    │       │  (Cloud API / OTP) │       │   Python USB/Rede  │
+│ (RLS por ambiente) │       │  (Cloud API / OTP) │       │   Python USB/Rede  │
 └────────────────────┘       └────────────────────┘       └────────────────────┘
 ```
 
@@ -108,7 +110,7 @@ O KÔMA resolve o desafio da fragmentação de sistemas em estabelecimentos de a
 - **Deploy**: Railway
 
 ### Banco de Dados & Infraestrutura
-- **Produção**: PostgreSQL (Supabase us-west-2) com RLS ativado
+- **Alvo de produção**: PostgreSQL gerenciado; região e políticas RLS devem ser verificadas por ambiente
 - **Desenvolvimento Local**: SQLite (`bistro.db`)
 - **Mensageria & Notificações**: WebSockets + Meta Cloud API Webhook Handshake
 
@@ -204,8 +206,9 @@ SECRET_KEY="SUA_CHAVE_SECRET_KEY_ALEATORIA"
 ENCRYPTION_KEY="SUA_CHAVE_FERNET_ENCRYPTION_KEY"
 
 # Meta Cloud API (WhatsApp Oficial)
-META_VERIFY_TOKEN="1505"
-META_PHONE_NUMBER_ID="1206090279260222"
+META_VERIFY_TOKEN="SEU_TOKEN_DE_VERIFICACAO_META"
+META_APP_SECRET="SEU_APP_SECRET_META"
+META_PHONE_NUMBER_ID="SEU_PHONE_NUMBER_ID_META"
 META_ACCESS_TOKEN="SEU_TOKEN_DE_ACESSO_META"
 
 # Impressão Térmica
@@ -222,8 +225,10 @@ KOMA_SMARTPOS_PROVIDER="disabled"
 
 O KÔMA utiliza uma arquitetura multi-tenant por isolamento de registros baseada em `restaurante_id`:
 
-- **Nível da Aplicação**: Todo request autenticado carrega o `restaurante_id` no contexto da requisição FastAPI (`current_restaurante_id`), garantindo que nenhuma consulta acesse registros de outros estabelecimentos.
-- **Nível do Banco de Dados**: No PostgreSQL (Supabase), as tabelas possuem **Row Level Security (RLS)** ativado. As queries de cada tenant utilizam sessões vinculadas com `SET LOCAL app.current_restaurante_id`.
+- **Nível da Aplicação**: Requests autenticados devem carregar o `restaurante_id` no contexto da requisição FastAPI (`current_restaurante_id`), e as consultas devem aplicar esse escopo.
+- **Nível do Banco de Dados**: A arquitetura prevê **Row Level Security (RLS)** no PostgreSQL e sessões vinculadas com `SET LOCAL app.current_restaurante_id`.
+
+O isolamento efetivo depende da configuração do banco, das migrações e de cada consulta. Ele deve ser coberto por testes de autorização entre tenants antes de cada liberação.
 
 ---
 
@@ -249,19 +254,25 @@ npm run build
 
 ---
 
-## 🌐 Deploy em Produção
+## 🌐 Topologia de Deploy Prevista
 
-- **Frontend**: Hospedado no **Cloudflare Pages** com build automático conectado à branch `main`.
-- **Backend**: Hospedado no **Railway** como contêiner Python FastAPI em alta disponibilidade.
-- **Banco de Dados**: Instância gerenciada **PostgreSQL no Supabase** (região US West) com migrações gerenciadas via Alembic.
+- **Frontend**: Cloudflare Pages, com build conectado à branch `main` quando habilitado no ambiente.
+- **Backend**: Railway como contêiner Python/FastAPI.
+- **Banco de Dados**: PostgreSQL gerenciado, com migrações via Alembic.
+
+Este diagrama de implantação não constitui evidência de alta disponibilidade, homologação ou prontidão para produção. A configuração efetiva deve ser validada no provedor e nos gates de release.
 
 ---
 
 ## 🔒 Segurança & LGPD
 
-- **Dados Sensíveis (PII)**: Nomes e números de telefone de clientes são tratados com criptografia at-rest via biblioteca `cryptography` (Fernet).
-- **Sem Exposição de Segredos**: O repositório não armazena chaves privadas, senhas ou tokens no histórico do Git.
-- **Validação de Webhook**: O endpoint do Webhook da Meta implementa a verificação por handshake via token seguro (`hub.verify_token`).
+- **Criptografia**: Fernet é aplicado somente nos modelos e fluxos que o implementam e que recebem uma chave válida. Não se presume criptografia integral de toda PII.
+- **Segredos**: Credenciais pertencem ao gerenciador de segredos de cada ambiente e nunca devem ser copiadas para código, documentação, logs ou fixtures.
+- **Histórico público**: O histórico do repositório já conteve credenciais e artefatos sensíveis. A remoção do branch atual não revoga credenciais nem elimina cópias históricas; os valores afetados devem ser rotacionados/revogados antes de uma sanitização coordenada do histórico.
+- **Privacidade**: Controles técnicos não substituem inventário de dados, base legal, transparência, retenção, atendimento a titulares e avaliação de fornecedores.
+- **Webhooks**: Endpoints públicos devem validar assinatura/autenticidade, replay e escopo de tenant conforme o provedor; um handshake de verificação, sozinho, não autentica eventos posteriores.
+
+Falhas de segurança não devem ser publicadas em issues. Consulte [SECURITY.md](SECURITY.md) para o processo de reporte privado e resposta a incidentes.
 
 ---
 
@@ -269,18 +280,20 @@ npm run build
 
 © 2026 **Georlan** — Todos os direitos reservados.
 
-Este Software é **proprietário e confidencial**. O código-fonte, design, arquitetura e documentação são protegidos por lei. É proibido copiar, distribuir, modificar, sublicenciar, revender ou utilizar este Software para criar produto concorrente sem autorização escrita.
+O arquivo [LICENSE](LICENSE) registra a licença proprietária adotada neste repositório. Ela se aplica somente ao material que o titular tem direito de licenciar e não substitui licenças de terceiros, licenças por arquivo, direitos sobre contribuições ou licenças que já tenham sido concedidas em revisões anteriores.
 
-Clientes com **assinatura ativa** recebem permissão limitada, não exclusiva e intransferível para utilizar o serviço pelo período contratado.
+Este é um repositório público. Sua disponibilidade para leitura não deve ser descrita como confidencialidade ou segredo industrial, nem resolve por si só a titularidade de código, marcas, imagens, vídeos, apresentações ou outros ativos. Proveniência, autorizações e cessões devem ser documentadas separadamente.
 
-**Componentes de terceiros** (React, FastAPI, Supabase SDK, etc.) permanecem sujeitos às suas respectivas licenças, detalhadas em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+**Componentes e arquivos de terceiros** permanecem sujeitos às suas respectivas licenças, detalhadas em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Cabeçalhos SPDX existentes, inclusive `Apache-2.0`, devem ser preservados até que a proveniência e os direitos aplicáveis sejam verificados. Logos, imagens e mockups são controlados pelo [registro de proveniência de ativos](ASSET_PROVENANCE.md).
 
-> **Nota histórica:** Versões do projeto disponibilizadas anteriormente a 2026-08-06 sob licença MIT permanecem sujeitas aos termos daquela licença. A licença proprietária aplica-se somente a versões e modificações distribuídas a partir dessa data.
+> **Histórico documentado:** o commit `0901cc9ef75f138845a6d32b681388ebf0f9225b` introduziu uma licença MIT em 2026-08-03. O commit `396f16bfd2fa5a252dd91bdda2e8add28b7f7bd5` adotou o arquivo de licença proprietária em 2026-08-06. A alteração posterior não apaga permissões já concedidas para revisões efetivamente distribuídas sob MIT.
 
-Veja o arquivo [LICENSE](LICENSE) para o texto completo da licença proprietária.
+Veja [LICENSE](LICENSE) e [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) antes de usar ou distribuir qualquer parte do projeto. Esta seção registra o estado documental do repositório e não substitui revisão jurídica.
 
 ---
 
 ## 🟢 Status do Projeto
 
-O KÔMA está em **desenvolvimento ativo e em uso operacional em produção**. O SmartPOS permanece em beta técnica simulada até a integração e homologação do terminal físico.
+O KÔMA está em **desenvolvimento ativo**. Este README não declara o sistema pronto para uso profissional ou homologado para produção. Cada release deve passar pelos testes automatizados, revisão de segurança, validação de isolamento multi-tenant, migrações, backup/restore, observabilidade, privacidade e revisão das integrações externas.
+
+O SmartPOS permanece restrito a desenvolvimento/testes com terminal simulado. Integração real PagBank/PlugPag, estorno no adquirente, homologação física, requisitos contratuais e validações financeiras/fiscais são gates obrigatórios antes da ativação comercial.

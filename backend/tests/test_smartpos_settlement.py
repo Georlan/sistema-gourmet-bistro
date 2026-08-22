@@ -21,6 +21,18 @@ from app.routes.smartpos_provider import (
     SmartPosTerminalResultRequest,
     registrar_resultado_terminal,
 )
+from app.operational_models import (
+    AtendimentoComanda,
+    AtendimentoMesa,
+    LancamentoIdentidade,
+    MovimentoAtendimento,
+    NumeradorOperacional,
+)
+from app.services.atendimentos import (
+    ensure_atendimento_for_comanda,
+    merge_tables,
+    transfer_group_by_comanda,
+)
 from app.services.smartpos_settlement import (
     SmartPosSettlementError,
     settle_approved_smartpos_intent,
@@ -53,7 +65,22 @@ def setup_settlement_flow(monkeypatch):
         ).delete()
         db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).delete()
         db.query(Item).filter(Item.restaurante_id == RESTAURANTE_ID).delete()
+        db.query(LancamentoIdentidade).filter(
+            LancamentoIdentidade.restaurante_id == RESTAURANTE_ID
+        ).delete()
         db.query(Lancamento).filter(Lancamento.restaurante_id == RESTAURANTE_ID).delete()
+        db.query(MovimentoAtendimento).filter(
+            MovimentoAtendimento.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(AtendimentoComanda).filter(
+            AtendimentoComanda.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(AtendimentoMesa).filter(
+            AtendimentoMesa.restaurante_id == RESTAURANTE_ID
+        ).delete()
+        db.query(NumeradorOperacional).filter(
+            NumeradorOperacional.restaurante_id == RESTAURANTE_ID
+        ).delete()
         db.query(Comanda).filter(Comanda.restaurante_id == RESTAURANTE_ID).delete()
         db.query(CaixaTurno).filter(CaixaTurno.restaurante_id == RESTAURANTE_ID).delete()
 
@@ -100,6 +127,9 @@ def setup_settlement_flow(monkeypatch):
             db.flush()
         if db.query(Mesa).filter(Mesa.restaurante_id == RESTAURANTE_ID, Mesa.id == 82).first() is None:
             db.add(Mesa(id=82, restaurante_id=RESTAURANTE_ID, capacidade=4, nome="Mesa 82"))
+            db.flush()
+        if db.query(Mesa).filter(Mesa.restaurante_id == RESTAURANTE_ID, Mesa.id == 83).first() is None:
+            db.add(Mesa(id=83, restaurante_id=RESTAURANTE_ID, capacidade=4, nome="Mesa 83"))
             db.flush()
 
         turno = CaixaTurno(
@@ -155,11 +185,19 @@ def _turno(db):
     ).one()
 
 
-def _approved_intent(db, *, value="42.00", method="debito", key="settlement-intent-0001"):
+def _approved_intent(
+    db,
+    *,
+    value="42.00",
+    method="debito",
+    key="settlement-intent-0001",
+    atendimento_id=None,
+):
     intent = SmartPosPaymentIntent(
         restaurante_id=RESTAURANTE_ID,
         turno_id=_turno(db).id,
         mesa_id=82,
+        atendimento_id=atendimento_id,
         operador_id=USER_ID,
         valor=Decimal(value),
         metodo=method,
@@ -177,6 +215,46 @@ def _approved_intent(db, *, value="42.00", method="debito", key="settlement-inte
     db.commit()
     db.refresh(intent)
     return intent
+
+
+def _open_command_with_item(db, *, suffix, mesa_id, numero_pedido, price=42):
+    command = Comanda(
+        id=f"cmd-settlement-{suffix}",
+        restaurante_id=RESTAURANTE_ID,
+        mesa_id=mesa_id,
+        garcom_id=USER_ID,
+        tipo="Consumo no Local",
+        numero_pedido=numero_pedido,
+        valor_pago=0,
+        fechada=False,
+    )
+    db.add(command)
+    db.flush()
+    launch = Lancamento(
+        id=f"lan-settlement-{suffix}",
+        restaurante_id=RESTAURANTE_ID,
+        comanda_id=command.id,
+        garcom_id=USER_ID,
+    )
+    db.add(launch)
+    db.flush()
+    item = Item(
+        id=f"item-settlement-{suffix}",
+        restaurante_id=RESTAURANTE_ID,
+        comanda_id=command.id,
+        lancamento_id=launch.id,
+        produto_id="prod-settlement",
+        preco_unit=price,
+        status="pronto",
+        pago=False,
+    )
+    db.add(item)
+    attendance = ensure_atendimento_for_comanda(
+        db,
+        command,
+        actor_id=USER_ID,
+    )
+    return command, item, attendance
 
 
 def test_approved_debit_settles_into_canonical_payment_and_closes_table():
@@ -230,6 +308,128 @@ def test_approved_intent_cannot_settle_against_a_reused_table_cycle():
         db.refresh(comanda)
         assert comanda.fechada is False
         assert Decimal(str(comanda.valor_pago)) == Decimal("0")
+    finally:
+        db.close()
+
+
+def test_identified_intent_follows_transferred_service_and_never_settles_reused_table():
+    db = SessionLocal()
+    try:
+        command_a = db.query(Comanda).filter_by(id="cmd-settlement").one()
+        attendance_a = ensure_atendimento_for_comanda(
+            db,
+            command_a,
+            actor_id=USER_ID,
+        )
+        intent = _approved_intent(
+            db,
+            key="settlement-transferred-service",
+            atendimento_id=attendance_a.id,
+        )
+
+        transfer_group_by_comanda(
+            db,
+            RESTAURANTE_ID,
+            command_a.id,
+            83,
+            actor_id=USER_ID,
+        )
+
+        command_b, item_b, attendance_b = _open_command_with_item(
+            db,
+            suffix="reused-table",
+            mesa_id=82,
+            numero_pedido=9821,
+        )
+        db.commit()
+
+        assert attendance_b.id != attendance_a.id
+        assert command_a.mesa_id == 83
+        assert command_b.mesa_id == 82
+
+        result = settle_approved_smartpos_intent(
+            db,
+            restaurante_id=RESTAURANTE_ID,
+            intent_id=intent.id,
+        )
+        db.refresh(command_a)
+        db.refresh(command_b)
+        db.refresh(item_b)
+
+        assert result.pagamento.comanda_id == command_a.id
+        assert result.mesa_liberada is True
+        assert command_a.fechada is True
+        assert Decimal(str(command_a.valor_pago)) == Decimal("42.0")
+        assert command_b.fechada is False
+        assert Decimal(str(command_b.valor_pago)) == Decimal("0")
+        assert item_b.pago is False
+
+        replay = settle_approved_smartpos_intent(
+            db,
+            restaurante_id=RESTAURANTE_ID,
+            intent_id=intent.id,
+        )
+        assert replay.replayed is True
+        assert replay.pagamento.id == result.pagamento.id
+        assert replay.mesa_liberada is True
+        db.refresh(command_b)
+        assert command_b.fechada is False
+        assert Decimal(str(command_b.valor_pago)) == Decimal("0")
+    finally:
+        db.close()
+
+
+def test_identified_intent_settles_all_open_accounts_in_the_same_merged_family():
+    db = SessionLocal()
+    try:
+        command_a = db.query(Comanda).filter_by(id="cmd-settlement").one()
+        attendance_a = ensure_atendimento_for_comanda(
+            db,
+            command_a,
+            actor_id=USER_ID,
+        )
+        command_b, item_b, attendance_b = _open_command_with_item(
+            db,
+            suffix="merged-family",
+            mesa_id=83,
+            numero_pedido=9821,
+        )
+        root = merge_tables(
+            db,
+            RESTAURANTE_ID,
+            83,
+            82,
+            actor_id=USER_ID,
+        )
+        db.commit()
+        db.refresh(attendance_b)
+
+        assert root.id == attendance_a.id
+        assert attendance_b.principal_id == attendance_a.id
+        assert command_b.mesa_id == 82
+
+        intent = _approved_intent(
+            db,
+            value="84.00",
+            key="settlement-merged-family",
+            atendimento_id=root.id,
+        )
+        result = settle_approved_smartpos_intent(
+            db,
+            restaurante_id=RESTAURANTE_ID,
+            intent_id=intent.id,
+        )
+        db.refresh(command_a)
+        db.refresh(command_b)
+        db.refresh(item_b)
+
+        assert result.pagamento.comanda_id == command_a.id
+        assert result.mesa_liberada is True
+        assert command_a.fechada is True
+        assert command_b.fechada is True
+        assert Decimal(str(command_a.valor_pago)) == Decimal("42.0")
+        assert Decimal(str(command_b.valor_pago)) == Decimal("42.0")
+        assert item_b.pago is True
     finally:
         db.close()
 

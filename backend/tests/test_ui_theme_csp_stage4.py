@@ -160,7 +160,7 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     assert "divide-[#252b28]" not in closing
 
 
-def test_orders_kanban_keeps_every_enabled_stage_side_by_side_on_desktop():
+def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
     css = source("src/index.css")
     caixa = source("src/components/CaixaPanel.tsx")
 
@@ -180,15 +180,15 @@ def test_orders_kanban_keeps_every_enabled_stage_side_by_side_on_desktop():
     assert "display: flex;" in desktop_block
     assert "min-width: 0;" in desktop_block
 
-    # Os canais configurados controlam a quantidade de trilhas sem deixar
-    # mínimos rígidos capazes de ampliar a página.
-    assert "visibleOrdersStages = ordersStages.filter(stage => stage.enabled)" in caixa
-    assert "repeat(${visibleOrdersStages.length}, minmax(0, 1fr))" in caixa
+    # As três trilhas reais não dependem de feature flags locais sempre
+    # verdadeiras e continuam sem mínimos rígidos capazes de ampliar a página.
+    assert "const ordersStages = [" in caixa
+    assert "repeat(${ordersStages.length}, minmax(0, 1fr))" in caixa
+    assert "visibleOrdersStages" not in caixa
+    assert "modulesActive" not in caixa
     assert "minmax(15rem" not in caixa
     assert "minmax(20rem" not in caixa
-    assert "is-channel-disabled" in css
-    assert "!modulesActive.salon && 'is-channel-disabled'" in caixa
-    assert "!modulesActive.delivery && 'is-channel-disabled'" in caixa
+    assert "is-channel-disabled" not in css
 
     # A etapa de fechamento continua estruturalmente presente no Kanban.
     assert "orders-column--closing" in caixa

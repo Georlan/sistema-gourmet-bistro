@@ -1,6 +1,7 @@
 """
 Tests for print agent authentication, atomic claiming, anti-duplication, and stuck job recovery.
 """
+import hashlib
 import pytest
 import datetime
 from fastapi.testclient import TestClient
@@ -21,6 +22,13 @@ engine = create_engine(
     connect_args={"check_same_thread": False, "timeout": 30}
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def test_agent_token_hash_never_matches_the_raw_secret():
+    raw_token = "koma_ag_test_token"
+
+    assert hash_token(raw_token) != raw_token
+    assert hash_token(raw_token) == hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 def override_get_db():

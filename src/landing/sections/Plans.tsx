@@ -26,8 +26,7 @@ const LANDING_PLAN_FEATURES: Record<string, string[]> = {
     'Tudo do Pro',
     'Cardápio online e QR Code inclusos',
     'Aceite de pedidos digitais no PDV',
-    'Maior franquia do Chef Virtual',
-    'Mais automação para a operação',
+    'Suporte prioritário',
   ],
 };
 

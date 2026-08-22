@@ -14,7 +14,6 @@ from .config import settings
 from .database import Base, current_restaurante_id, engine
 from .logging_security import install_sensitive_query_log_filter
 from .routes import (
-    ai,
     atendimento_printing,
     atendimentos,
     auth,
@@ -363,7 +362,6 @@ app.include_router(printing.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
 app.include_router(super_admin.router, prefix="/api")
-app.include_router(ai.router, prefix="/api")
 
 if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
     app.include_router(whatsapp_webhook.router)

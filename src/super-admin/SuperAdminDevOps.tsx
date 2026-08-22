@@ -1,904 +1,349 @@
-import React, { useState, useEffect } from "react";
-import { 
-  Cpu, 
-  Database, 
-  GitBranch, 
-  Globe, 
-  Server, 
-  Zap, 
-  ShieldAlert, 
-  RefreshCw, 
-  Plus, 
-  CloudLightning,
-  Play
+import React, { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  ExternalLink,
+  GitBranch,
+  Globe,
+  Plus,
+  RefreshCw,
+  Server,
+  ShieldAlert,
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
 interface SuperAdminDevOpsProps {
   onAddLog: (text: string, type: "info" | "success" | "warning" | "error" | "critical") => void;
   onTriggerTelegramAlert: (text: string) => void;
 }
 
-export default function SuperAdminDevOps({
-  onAddLog,
-  onTriggerTelegramAlert
-}: SuperAdminDevOpsProps) {
-  const [isRestarting, setIsRestarting] = useState(false);
-  const [restartCountdown, setRestartCountdown] = useState(0);
-  const [showRestartModal, setShowRestartModal] = useState(false);
-  const [dnsList, setDnsList] = useState<any[]>([]);
-  const [newSubdomain, setNewSubdomain] = useState("");
-  const [newTarget, setNewTarget] = useState("k-ingress-prod.railway.app");
-  const [isAddingDns, setIsAddingDns] = useState(false);
+interface IntegrationHealth {
+  status?: string;
+  source?: string;
+  simulated?: boolean;
+  latency_ms?: number;
+}
 
-  // Stats / Metrics real-world values
-  const [railwayCpu, setRailwayCpu] = useState<number | null>(null);
-  const [railwayRam, setRailwayRam] = useState<number | null>(null); // MB
-  const [dbConnections, setDbConnections] = useState<number | null>(null);
-  const [deployLogs, setDeployLogs] = useState<string[]>([]);
-  const [githubCommits, setGithubCommits] = useState<any[]>([]);
+interface DnsRecord {
+  id?: string;
+  name?: string;
+  type?: string;
+  content?: string;
+  proxied?: boolean;
+}
 
-  // Connection error states
-  const [railwayError, setRailwayError] = useState<string | null>(null);
-  const [cloudflareError, setCloudflareError] = useState<string | null>(null);
+interface GithubRun {
+  id: number | string;
+  name?: string;
+  head_branch?: string;
+  status?: string;
+  conclusion?: string | null;
+  html_url?: string;
+  updated_at?: string;
+}
+
+function healthLabel(health: IntegrationHealth | undefined): string {
+  if (!health) return "NÃO CONSULTADO";
+  if (health.status === "available") return "DISPONÍVEL";
+  if (health.status === "configured_unverified") return "CONFIGURADO — NÃO VERIFICADO";
+  if (health.status === "not_configured") return "NÃO CONFIGURADO";
+  return (health.status || "INDISPONÍVEL").replaceAll("_", " ").toUpperCase();
+}
+
+function normalizeGithubRuns(payload: unknown): GithubRun[] {
+  if (Array.isArray(payload)) return payload as GithubRun[];
+  if (!payload || typeof payload !== "object") return [];
+  const runs = (payload as { workflow_runs?: unknown }).workflow_runs;
+  return Array.isArray(runs) ? runs as GithubRun[] : [];
+}
+
+export default function SuperAdminDevOps({ onAddLog, onTriggerTelegramAlert }: SuperAdminDevOpsProps) {
+  const [health, setHealth] = useState<Record<string, IntegrationHealth>>({});
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [dnsRecords, setDnsRecords] = useState<DnsRecord[]>([]);
+  const [dnsError, setDnsError] = useState<string | null>(null);
+  const [githubRuns, setGithubRuns] = useState<GithubRun[]>([]);
   const [githubError, setGithubError] = useState<string | null>(null);
+  const [railwayError, setRailwayError] = useState<string | null>(null);
+  const [railwayMetrics, setRailwayMetrics] = useState<Record<string, unknown> | null>(null);
+  const [newSubdomain, setNewSubdomain] = useState("");
+  const [isAddingDns, setIsAddingDns] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showRestartConfirmation, setShowRestartConfirmation] = useState(false);
 
-  // Health check status of credentials and APIs
-  const [apiHealth, setApiHealth] = useState<any>(null);
-  const [isRefreshingHealth, setIsRefreshingHealth] = useState(false);
-
-  // Deploy Global states (v3.5 automation)
-  const [commitMessage, setCommitMessage] = useState("");
-  const [deployLogsState, setDeployLogsState] = useState<string[]>([]);
-  const [isDeploying, setIsDeploying] = useState(false);
-
-  const fetchApiHealth = async () => {
-    setIsRefreshingHealth(true);
+  const fetchHealth = async () => {
     try {
-      const res = await fetch("/api/super-admin/integrations/health");
-      if (res.ok) {
-        const data = await res.json();
-        setApiHealth(data);
-      }
-    } catch (e) {
-      console.error("[HEALTH CHECK] Error fetching api health:", e);
-    } finally {
-      setIsRefreshingHealth(false);
+      const response = await superAdminFetch("/api/super-admin/integrations/health");
+      setHealth(await response.json());
+      setHealthError(null);
+    } catch (error) {
+      setHealth({});
+      setHealthError(superAdminErrorMessage(error));
     }
   };
 
-  // Fetch Cloudflare CNAME Records list
-  const fetchDnsList = async () => {
+  const fetchDns = async () => {
     try {
-      const res = await fetch("/api/super-admin/cloudflare/dns");
-      if (res.ok) {
-        const data = await res.json();
-        setDnsList(data || []);
-        setCloudflareError(null);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setCloudflareError(data.error || "SEM CONEXÃO — CREDENCIAL INVÁLIDA");
-        setDnsList([]);
-      }
-    } catch (e: any) {
-      console.error("[CLOUDFLARE] Frontend list fetch error:", e);
-      setCloudflareError(e.message || "Erro de rede");
-      setDnsList([]);
+      const response = await superAdminFetch("/api/super-admin/cloudflare/dns");
+      const payload = await response.json();
+      setDnsRecords(Array.isArray(payload) ? payload : []);
+      setDnsError(null);
+    } catch (error) {
+      setDnsRecords([]);
+      setDnsError(superAdminErrorMessage(error));
     }
   };
 
-  // Fetch Railway Telemetry resource states
-  const fetchRailwayTelemetry = async () => {
+  const fetchGithub = async () => {
     try {
-      const res = await fetch("/api/super-admin/railway/telemetry");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.offline || data.cpu === null) {
-          setRailwayCpu(null);
-          setRailwayRam(null);
-          setDbConnections(null);
-        } else {
-          setRailwayCpu(data.cpu);
-          setRailwayRam(data.ram);
-          setDbConnections(data.dbConnections);
-        }
-        setDeployLogs(data.deployLogs || []);
-        setRailwayError(null);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setRailwayError(data.error || "SEM CONEXÃO — CREDENCIAL INVÁLIDA");
-        setRailwayCpu(null);
-        setRailwayRam(null);
-        setDbConnections(null);
-        setDeployLogs([]);
-      }
-    } catch (e: any) {
-      console.error("[RAILWAY] Frontend telemetry fetch error:", e);
-      setRailwayError(e.message || "Erro de rede");
-      setRailwayCpu(null);
-      setRailwayRam(null);
-      setDbConnections(null);
-      setDeployLogs([]);
+      const response = await superAdminFetch("/api/super-admin/github/runs");
+      setGithubRuns(normalizeGithubRuns(await response.json()));
+      setGithubError(null);
+    } catch (error) {
+      setGithubRuns([]);
+      setGithubError(superAdminErrorMessage(error));
     }
   };
 
-  // Fetch GitHub Workflow Deploy runs
-  const fetchGithubRuns = async () => {
+  const fetchRailway = async () => {
     try {
-      const res = await fetch("/api/super-admin/github/runs");
-      if (res.ok) {
-        const data = await res.json();
-        setGithubCommits(data || []);
-        setGithubError(null);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setGithubError(data.error || "SEM CONEXÃO — CREDENCIAL INVÁLIDA");
-        setGithubCommits([]);
-      }
-    } catch (e: any) {
-      console.error("[GITHUB] Frontend runs fetch error:", e);
-      setGithubError(e.message || "Erro de rede");
-      setGithubCommits([]);
+      const response = await superAdminFetch("/api/super-admin/railway/telemetry");
+      setRailwayMetrics(await response.json());
+      setRailwayError(null);
+    } catch (error) {
+      setRailwayMetrics(null);
+      setRailwayError(superAdminErrorMessage(error));
     }
   };
 
-  // Initialize and poll resources on mount
+  const refresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([fetchHealth(), fetchDns(), fetchGithub(), fetchRailway()]);
+    setIsRefreshing(false);
+  };
+
   useEffect(() => {
-    fetchApiHealth();
-    fetchDnsList();
-    fetchRailwayTelemetry();
-    fetchGithubRuns();
-
-    // Poll resource metrics every 8 seconds
-    const interval = setInterval(() => {
-      fetchRailwayTelemetry();
-    }, 8000);
-
-    return () => clearInterval(interval);
+    void refresh();
   }, []);
 
-  const handleAddDns = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubdomain.trim()) return;
+  const addDns = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const subdomain = newSubdomain.trim().toLowerCase();
+    if (!/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(subdomain)) {
+      setDnsError("Informe um hostname válido, sem protocolo ou caminho.");
+      return;
+    }
 
     setIsAddingDns(true);
-    onAddLog(`Creating Cloudflare dynamic CNAME record for ${newSubdomain}...`, "info");
-    
+    setDnsError(null);
     try {
-      const res = await fetch("/api/super-admin/cloudflare/cname", {
+      const response = await superAdminFetch("/api/super-admin/cloudflare/cname", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subdomain: newSubdomain })
+        body: JSON.stringify({ subdomain }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const recordName = data.record.name || data.record.subdomain;
-        const recordTarget = data.record.content || data.record.target;
-        const sourceLabel = data.dataStatus === "simulated" ? "SIMULAÇÃO" : "API REAL";
-        onAddLog(`✅ [${sourceLabel}] Cloudflare CNAME: ${recordName} -> ${recordTarget}.`, data.dataStatus === "simulated" ? "warning" : "success");
-        if (data.dataStatus !== "simulated") {
-          onTriggerTelegramAlert(`🌐 Cloudflare: Novo subdomínio DNS mapeado! https://${recordName}`);
-        }
-        setNewSubdomain("");
-        fetchDnsList();
-      } else {
-        onAddLog(`Failed to configure Cloudflare CNAME record. Check zone configurations.`, "error");
-      }
-    } catch (e) {
-      console.error(e);
-      onAddLog(`Network error contacting Cloudflare endpoint.`, "error");
+      const payload = await response.json() as { success?: boolean; record?: DnsRecord };
+      if (!payload.success || !payload.record) throw new Error("a API não confirmou a criação do CNAME");
+      setNewSubdomain("");
+      onAddLog(`Cloudflare confirmou o CNAME ${payload.record.name || subdomain}.`, "success");
+      onTriggerTelegramAlert(`Cloudflare confirmou um novo CNAME: ${payload.record.name || subdomain}.`);
+      await fetchDns();
+    } catch (error) {
+      const message = superAdminErrorMessage(error);
+      setDnsError(message);
+      onAddLog(`CNAME não criado: ${message}`, "error");
     } finally {
       setIsAddingDns(false);
     }
   };
 
-  const handleRestartServer = () => {
-    if (isRestarting) return;
-    setShowRestartModal(true);
-  };
-
-  const executeRestartServer = async () => {
-    setShowRestartModal(false);
+  const restartRailway = async () => {
+    setShowRestartConfirmation(false);
     setIsRestarting(true);
-    setRestartCountdown(0);
-    onAddLog("Solicitando reinicialização ao executor Railway...", "warning");
-
     try {
-      const response = await fetch("/api/super-admin/railway/restart", {
-        method: "POST"
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.reboot_dispatched) {
-        throw new Error(data.detail || `Railway respondeu HTTP ${response.status}`);
-      }
-      onAddLog("Railway confirmou o recebimento do comando de reinicialização.", "success");
-      onTriggerTelegramAlert("🚨 Railway confirmou o recebimento de uma reinicialização solicitada pelo SuperAdmin.");
-    } catch (e: any) {
-      onAddLog(`Reinicialização não executada: ${e.message}`, "error");
+      const response = await superAdminFetch("/api/super-admin/railway/restart", { method: "POST" });
+      const payload = await response.json() as { reboot_dispatched?: boolean };
+      if (!payload.reboot_dispatched) throw new Error("o executor não confirmou a reinicialização");
+      onAddLog("Railway confirmou o comando de reinicialização.", "success");
+      onTriggerTelegramAlert("Railway confirmou uma reinicialização solicitada pelo SuperAdmin.");
+      await fetchRailway();
+    } catch (error) {
+      const message = superAdminErrorMessage(error);
+      setRailwayError(message);
+      onAddLog(`Reinicialização não executada: ${message}`, "error");
     } finally {
       setIsRestarting(false);
-      fetchRailwayTelemetry();
     }
   };
 
-  const triggerGithubWorkflow = async (branch: string) => {
-    onAddLog(`Solicitando workflow GitHub para a branch [${branch}]...`, "info");
-    
+  const dispatchGithub = async (branch: string) => {
     try {
-      const res = await fetch("/api/super-admin/github/dispatch", {
+      await superAdminFetch("/api/super-admin/github/dispatch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branch })
+        body: JSON.stringify({ branch }),
       });
-      if (res.ok) {
-        onTriggerTelegramAlert(`⚙️ GitHub confirmou o workflow de CI/CD para a branch [${branch}].`);
-        onAddLog(`[CI/CD] Deployment successfully pushed to build pipeline!`, "success");
-        setTimeout(() => fetchGithubRuns(), 1500);
-      } else {
-        onAddLog(`Failed to trigger GitHub Actions dispatch.`, "error");
-      }
-    } catch (e) {
-      console.error(e);
-      onAddLog(`Network error contacting GitHub API.`, "error");
-    }
-  };
-
-  const handleDeployGlobal = async () => {
-    if (!commitMessage.trim()) return;
-    setIsDeploying(true);
-    setDeployLogsState(["Initializing Global Deploy sequence..."]);
-    onAddLog(`🚀 DEPLOY GLOBAL: Disparando commit "${commitMessage}" para o GitHub.`, "info");
-    onTriggerTelegramAlert(`🚀 Deploy Global Iniciado: Enviando alterações para a branch main. Acompanhe os logs no cockpit.`);
-
-    try {
-      const response = await fetch("/api/super-admin/git/deploy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: commitMessage })
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || `Deploy respondeu HTTP ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error("No response body available for streaming.");
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        // Keep the last partial line in the buffer
-        buffer = lines.pop() || "";
-
-        setDeployLogsState(prev => {
-          const updated = [...prev];
-          lines.forEach(line => {
-            if (line.trim()) {
-              updated.push(line);
-            }
-          });
-          return updated;
-        });
-      }
-
-      if (buffer.trim()) {
-        setDeployLogsState(prev => [...prev, buffer]);
-      }
-
-      setCommitMessage("");
-      onAddLog(`🚀 DEPLOY GLOBAL: Concluído com sucesso! Código integrado ao GitHub.`, "success");
-      onTriggerTelegramAlert(`🟢 Deploy Global Finalizado: Código sincronizado no GitHub. Railway/Cloudflare iniciando builds automáticas.`);
-    } catch (err: any) {
-      console.error(err);
-      setDeployLogsState(prev => [...prev, `>>> [ERROR] Falha de comunicação: ${err.message}`]);
-      onAddLog(`❌ DEPLOY GLOBAL ERROR: Falha ao executar deploy.`, "error");
-    } finally {
-      setIsDeploying(false);
+      onAddLog(`GitHub confirmou o workflow para ${branch}.`, "success");
+      onTriggerTelegramAlert(`GitHub confirmou um workflow para ${branch}.`);
+      await fetchGithub();
+    } catch (error) {
+      const message = superAdminErrorMessage(error);
+      setGithubError(message);
+      onAddLog(`Workflow não disparado: ${message}`, "error");
     }
   };
 
   return (
     <div className="space-y-6" id="superadmin-devops-control">
-
-      {/* Real-time API Connection Diagnostics Panel */}
-      <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="api-diagnostics-panel">
-        <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <span className="absolute inline-flex h-2.5 w-2.5 rounded-full bg-[#00b894] opacity-75 animate-ping"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#00b894]"></span>
-            </div>
-            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-[#00b894]" />
-              DIAGNÓSTICO E SAÚDE DAS INTEGRAÇÕES (API GATEWAY)
-            </h3>
-          </div>
-          <button
-            onClick={fetchApiHealth}
-            disabled={isRefreshingHealth}
-            className="text-xs bg-koma-card hover:bg-black border border-[#1e293b]/40 text-koma-secondary font-mono py-1 px-3 rounded flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3 h-3 text-[#00b894] ${isRefreshingHealth ? "animate-spin" : ""}`} />
-            {isRefreshingHealth ? "REFRESCANDO..." : "REFRESCAR CONEXÕES"}
-          </button>
+      <header className="flex flex-col justify-between gap-4 rounded border border-[#1e293b]/40 bg-koma-card p-5 md:flex-row md:items-center">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-koma-foreground">
+            <ShieldAlert className="h-4 w-4 text-[#00b894]" />
+            Infraestrutura e integrações
+          </h2>
+          <p className="mt-1 text-xs text-koma-muted">Somente dados e ações confirmados pelas APIs configuradas.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={isRefreshing}
+          className="flex items-center gap-2 rounded border border-[#334155] px-3 py-2 text-xs disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          Atualizar
+        </button>
+      </header>
 
-        {!apiHealth ? (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="bg-black/40 border border-zinc-900 p-3.5 rounded animate-pulse space-y-2">
-                <div className="h-4 bg-koma-raised rounded w-1/2"></div>
-                <div className="h-3 bg-koma-raised rounded w-3/4"></div>
-                <div className="h-2 bg-koma-raised rounded w-1/3"></div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 text-xs">
-            {/* Cloudflare */}
-            <div className={`p-3.5 rounded border transition-all ${
-              apiHealth.cloudflare?.status === "CONNECTED"
-                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
-                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
-            }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-koma-subtle" />
-                  Cloudflare DNS
-                </span>
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  apiHealth.cloudflare?.status === "CONNECTED"
-                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
-                    : "bg-amber-950/40 border border-amber-850 text-amber-400"
-                }`}>
-                  {apiHealth.cloudflare?.status === "CONNECTED" ? "CONECTADO" : "AJUSTE REQ."}
-                </span>
-              </div>
-              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.cloudflare?.message}</p>
-              {apiHealth.cloudflare?.status !== "CONNECTED" && (
-                <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
-                  * Dica: Verifique se o CLOUDFLARE_ZONE_ID no painel de configurações é o ID real, não "test".
-                </p>
-              )}
-            </div>
-
-            {/* GitHub */}
-            <div className={`p-3.5 rounded border transition-all ${
-              apiHealth.github?.status === "CONNECTED"
-                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
-                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
-            }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
-                  <GitBranch className="w-3.5 h-3.5 text-koma-subtle" />
-                  GitHub CI/CD
-                </span>
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  apiHealth.github?.status === "CONNECTED"
-                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
-                    : "bg-amber-950/40 border border-amber-850 text-amber-400"
-                }`}>
-                  {apiHealth.github?.status === "CONNECTED" ? "CONECTADO" : "FALHA CONEXÃO"}
-                </span>
-              </div>
-              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.github?.message}</p>
-              {apiHealth.github?.status !== "CONNECTED" && (
-                <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
-                  * Dica: Garanta que o GITHUB_TOKEN possui permissões de "workflow" e "repo" ativas.
-                </p>
-              )}
-            </div>
-
-            {/* Railway */}
-            <div className={`p-3.5 rounded border transition-all ${
-              apiHealth.railway?.status === "CONNECTED"
-                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
-                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
-            }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
-                  <Server className="w-3.5 h-3.5 text-koma-subtle" />
-                  Railway Core
-                </span>
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  apiHealth.railway?.status === "CONNECTED"
-                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
-                    : "bg-amber-950/40 border border-amber-850 text-amber-400"
-                }`}>
-                  {apiHealth.railway?.status === "CONNECTED" ? "CONECTADO" : "NÃO AUTORIZADO"}
-                </span>
-              </div>
-              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.railway?.message}</p>
-              {apiHealth.railway?.status !== "CONNECTED" && (
-                <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
-                  * Dica: Verifique se o RAILWAY_TOKEN é um token de desenvolvedor válido para o projeto.
-                </p>
-              )}
-            </div>
-
-            {/* Sentry */}
-            <div className={`p-3.5 rounded border transition-all ${
-              apiHealth.sentry?.status === "CONNECTED"
-                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
-                : "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
-            }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
-                  <CloudLightning className="w-3.5 h-3.5 text-koma-subtle" />
-                  Sentry Telemetria
-                </span>
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  apiHealth.sentry?.status === "CONNECTED"
-                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
-                    : "bg-amber-950/40 border border-amber-850 text-amber-400"
-                }`}>
-                  {apiHealth.sentry?.status === "CONNECTED" ? "CONECTADO" : "ACESSO NEGADO"}
-                </span>
-              </div>
-              <p className="text-[11px] font-mono text-koma-subtle">{apiHealth.sentry?.message}</p>
-              {apiHealth.sentry?.status !== "CONNECTED" && (
-                <p className="text-[10px] text-amber-500/90 mt-1.5 italic">
-                  * Dica: O token de autenticação do Sentry requer o escopo "project:read" habilitado.
-                </p>
-              )}
-            </div>
-
-            {/* Evolution API */}
-            <div className={`p-3.5 rounded border transition-all ${
-              apiHealth.evolution?.status === "green"
-                ? "bg-emerald-950/10 border-emerald-950 text-koma-secondary"
-                : apiHealth.evolution?.status === "yellow"
-                  ? "bg-amber-950/10 border-amber-900/40 text-koma-secondary"
-                  : "bg-red-950/10 border-red-900/40 text-koma-secondary"
-            }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="font-bold font-mono text-koma-foreground flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-koma-subtle" />
-                  WhatsApp OTP
-                </span>
-                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                  apiHealth.evolution?.status === "green"
-                    ? "bg-emerald-950/40 border border-[#00b894]/20 text-[#00b894]"
-                    : apiHealth.evolution?.status === "yellow"
-                      ? "bg-amber-950/40 border border-amber-850 text-amber-400"
-                      : "bg-red-950/40 border border-red-900/60 text-red-400"
-                }`}>
-                  {apiHealth.evolution?.status === "green"
-                    ? "CONECTADO"
-                    : apiHealth.evolution?.configured
-                      ? "AGUARDANDO QR"
-                      : "NÃO CONFIGURADO"}
-                </span>
-              </div>
-              <p className="text-[11px] font-mono text-koma-subtle">
-                {apiHealth.evolution?.details || "Diagnóstico indisponível"}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Informative fallback toggle indicator */}
-        <div className="mt-3 text-[10px] font-mono text-koma-muted flex items-center gap-1.5 bg-black/20 p-2 rounded border border-zinc-900">
-          <span className="inline-block w-2 h-2 rounded-full bg-[#00b894]"></span>
-          <span>
-            <strong>Transparência de Conexão:</strong> Este painel opera estritamente com dados de telemetria e fluxos obtidos via conexões de API reais. Se uma credencial for inválida, um aviso de erro persistente será exibido no lugar de dados simulados.
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Railway Server Health Stats */}
-        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded flex flex-col" id="railway-panel">
-          <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
-              <Server className="w-4 h-4 text-[#00b894]" />
-              [01] RAILWAY CONTAINER SAÚDE (CORE API)
-            </h3>
-            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/60">
-              RAILWAY_API
-            </span>
-          </div>
-
-          {railwayError ? (
-            <div className="flex-1 flex flex-col items-center justify-center bg-red-950/20 border border-red-900/50 rounded p-6 text-center text-red-400 font-mono space-y-3 my-auto min-h-[350px]">
-              <ShieldAlert className="w-10 h-10 text-red-500 animate-pulse" />
-              <span className="font-bold text-sm tracking-wider uppercase">SEM CONEXÃO — CREDENCIAL INVÁLIDA</span>
-              <p className="text-xs text-red-300/85 max-w-[280px]">
-                {railwayError}
-              </p>
-              <p className="text-[10px] text-koma-muted font-sans italic mt-2">
-                Verifique se o token, o project ID e o service ID foram fornecidos corretamente.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-5 flex-1">
-              {/* CPU Bar */}
-              <div>
-                <div className="flex items-center justify-between text-xs font-mono mb-1.5">
-                  <span className="text-koma-subtle flex items-center gap-1">
-                    <Cpu className="w-3.5 h-3.5 text-koma-muted" />
-                    CPU_USAGE
-                  </span>
-                  <span className="font-bold text-koma-foreground">
-                    {railwayCpu !== null ? `${railwayCpu.toFixed(1)}%` : "Carregando..."}
-                  </span>
-                </div>
-                <div className="w-full bg-koma-page rounded-full h-2 border border-[#1e293b]/40 overflow-hidden">
-                  {railwayCpu !== null ? (
-                    <div 
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        railwayCpu > 80 ? "bg-red-500" : railwayCpu > 50 ? "bg-amber-500" : "bg-[#00b894]"
-                      }`}
-                      style={{ width: `${Math.min(railwayCpu, 100)}%` }}
-                    ></div>
-                  ) : (
-                    <div className="h-full bg-zinc-700/50 rounded-full animate-pulse w-1/3"></div>
-                  )}
-                </div>
-              </div>
-
-              {/* RAM Bar */}
-              <div>
-                <div className="flex items-center justify-between text-xs font-mono mb-1.5">
-                  <span className="text-koma-subtle flex items-center gap-1">
-                    <Cpu className="w-3.5 h-3.5 text-koma-muted" />
-                    RAM_ALLOCATED (512MB LIMIT)
-                  </span>
-                  <span className="font-bold text-koma-foreground">
-                    {railwayRam !== null ? `${railwayRam}MB / 512MB` : "Carregando..."}
-                  </span>
-                </div>
-                <div className="w-full bg-koma-page rounded-full h-2 border border-[#1e293b]/40 overflow-hidden">
-                  {railwayRam !== null ? (
-                    <div 
-                      className="h-full bg-[#00b894] rounded-full transition-all duration-500"
-                      style={{ width: `${(railwayRam / 512) * 100}%` }}
-                    ></div>
-                  ) : (
-                    <div className="h-full bg-zinc-700/50 rounded-full animate-pulse w-1/2"></div>
-                  )}
-                </div>
-              </div>
-
-              {/* Supabase connections stat */}
-              <div className="bg-koma-page border border-[#1e293b]/40 p-3.5 rounded flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-[#00b894]" />
-                  <div className="text-xs font-mono">
-                    <p className="text-koma-foreground font-bold">SUPABASE_POOL_CONN</p>
-                    <p className="text-[10px] text-koma-muted">PostgreSQL isolated multi-tenant</p>
-                  </div>
-                </div>
-                <span className="text-sm font-mono font-bold text-[#00b894]">
-                  {dbConnections !== null ? `${dbConnections} / 100` : "--- / 100"}
-                </span>
-              </div>
-
-              {/* Railway Terminal Outputs */}
-              <div className="bg-black/80 border border-[#1e293b]/40 p-3 rounded font-mono text-[10px] space-y-1 text-koma-subtle h-[140px] overflow-y-auto">
-                <span className="text-koma-muted block border-b border-zinc-950 pb-1 mb-1">LIVE_RAILWAY_STDERR_STREAM</span>
-                {deployLogs.length > 0 ? (
-                  deployLogs.map((log, idx) => (
-                    <div key={idx} className="whitespace-nowrap overflow-hidden text-ellipsis text-koma-subtle">
-                      {log}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-slate-600 italic">Nenhum log disponível ou servidor offline.</div>
-                )}
-              </div>
-
-              {/* Emergency Restart button */}
-              <button
-                onClick={handleRestartServer}
-                disabled={isRestarting}
-                className="w-full bg-red-950/40 hover:bg-red-900/60 disabled:bg-zinc-900 border border-red-900/40 disabled:border-transparent text-red-400 disabled:text-zinc-600 font-mono text-xs font-bold py-3 rounded transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_8px_rgba(239,68,68,0.1)]"
-              >
-                <ShieldAlert className={`w-4 h-4 text-red-500 ${isRestarting ? "animate-spin" : ""}`} />
-                {isRestarting ? `REINICIANDO EM ${restartCountdown}s...` : "REINICIAR SERVIDOR DE EMERGÊNCIA"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Cloudflare DNS Domains Automation Panel */}
-        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="cloudflare-panel">
-          <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
-              <Globe className="w-4 h-4 text-[#00b894]" />
-              [02] CLOUDFLARE DOMÍNIOS AUTOMÁTICOS
-            </h3>
-            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/60">
-              CLOUDFLARE_API
-            </span>
-          </div>
-
-          {cloudflareError ? (
-            <div className="flex-1 flex flex-col items-center justify-center bg-red-950/20 border border-red-900/50 rounded p-6 text-center text-red-400 font-mono space-y-3 my-auto min-h-[350px]">
-              <ShieldAlert className="w-10 h-10 text-red-500 animate-pulse" />
-              <span className="font-bold text-sm tracking-wider uppercase">SEM CONEXÃO — CREDENCIAL INVÁLIDA</span>
-              <p className="text-xs text-red-300/85 max-w-[280px]">
-                {cloudflareError}
-              </p>
-              <p className="text-[10px] text-koma-muted font-sans italic mt-2">
-                Verifique se o token e o Zone ID foram fornecidos e estão válidos.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 flex-1">
-              {/* Create subdomain form */}
-              <form onSubmit={handleAddDns} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded space-y-3">
-                <p className="text-[10px] text-[#00b894] font-mono uppercase font-bold">Novo Mapeamento CNAME Dinâmico</p>
-                
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      className="w-full bg-koma-page border border-[#1e293b]/40 rounded px-2.5 py-1.5 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
-                      placeholder="Ex: pizzaria-sol"
-                      value={newSubdomain}
-                      onChange={e => setNewSubdomain(e.target.value)}
-                      disabled={isAddingDns}
-                      required
-                    />
-                    <span className="absolute right-2 top-2 text-[10px] font-mono text-koma-muted">.koma.com</span>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isAddingDns || !newSubdomain.trim()}
-                    className="bg-[#00b894] hover:bg-[#059669] disabled:bg-zinc-800 border border-emerald-600 disabled:border-transparent text-black p-2 rounded transition-colors cursor-pointer flex items-center justify-center"
-                    title="Create DNS record"
-                  >
-                    {isAddingDns ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 text-black font-bold" />}
-                  </button>
-                </div>
-              </form>
-
-              {/* Subdomain List */}
-              <div className="space-y-2 overflow-y-auto max-h-[280px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent pr-1">
-                {dnsList.length === 0 ? (
-                  <div className="text-center py-8 text-xs font-mono text-koma-muted border border-dashed border-koma-border rounded bg-black/30 px-4">
-                    Nenhum subdomínio ativo no momento. Digite um slug no campo acima para criar.
-                  </div>
-                ) : (
-                  dnsList.map((dns, idx) => (
-                    <div key={idx} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded flex items-center justify-between text-xs font-mono">
-                      <div>
-                        <p className="text-koma-foreground font-bold">{dns.subdomain}</p>
-                        <p className="text-[9px] text-[#00b894] mt-0.5">CNAME &rarr; {dns.target}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="text-[9px] text-[#00b894] bg-emerald-950/40 border border-emerald-950 px-1.5 rounded font-bold">
-                          🟢 PROXIED
-                        </span>
-                        <span className="text-[9px] text-koma-subtle bg-zinc-950 px-1.5 rounded">
-                          SSL: {dns.ssl}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* GitHub Actions CI/CD Branch Panel */}
-        <div className="bg-koma-card border border-[#1e293b]/40 p-5 rounded" id="github-panel">
-          <div className="border-b border-[#1e293b]/40 pb-3 mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-mono text-koma-foreground font-bold flex items-center gap-2">
-              <GitBranch className="w-4 h-4 text-[#00b894]" />
-              [03] GITHUB CI/CD WORKFLOW RUNS
-            </h3>
-            <span className="text-[9px] text-[#00b894] bg-[#00b894]/15 px-2 py-0.5 rounded font-mono font-bold border border-[#00b894]/60">
-              GITHUB_API
-            </span>
-          </div>
-
-          {githubError ? (
-            <div className="flex-1 flex flex-col items-center justify-center bg-red-950/20 border border-red-900/50 rounded p-6 text-center text-red-400 font-mono space-y-3 my-auto min-h-[350px]">
-              <ShieldAlert className="w-10 h-10 text-red-500 animate-pulse" />
-              <span className="font-bold text-sm tracking-wider uppercase">SEM CONEXÃO — CREDENCIAL INVÁLIDA</span>
-              <p className="text-xs text-red-300/85 max-w-[280px]">
-                {githubError}
-              </p>
-              <p className="text-[10px] text-koma-muted font-sans italic mt-2">
-                Verifique se o token de autenticação e o repositório foram preenchidos corretamente.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4 flex-1">
-              <div className="space-y-3 overflow-y-auto max-h-[300px] scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
-                {githubCommits.length === 0 ? (
-                  <div className="text-center py-8 text-xs font-mono text-koma-muted border border-dashed border-koma-border rounded bg-black/30 px-4">
-                    Sem dados de deploy ativos. Verifique as credenciais GITHUB_TOKEN.
-                  </div>
-                ) : (
-                  githubCommits.map((commit, idx) => (
-                    <div key={idx} className="bg-koma-page border border-[#1e293b]/40 p-3 rounded flex flex-col space-y-2 text-xs font-mono">
-                      <div className="flex items-center justify-between">
-                        <span className="text-koma-foreground font-bold flex items-center gap-1 bg-koma-input border border-[#1e293b]/40 px-1.5 py-0.5 rounded text-[10px]">
-                          <GitBranch className="w-3.5 h-3.5 text-[#00b894]" />
-                          {commit.branch}
-                        </span>
-                        {commit.status === "success" ? (
-                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-500 px-1.5 rounded">
-                            Success
-                          </span>
-                        ) : commit.status === "failure" ? (
-                          <span className="text-[9px] font-bold text-red-400 bg-red-950/40 border border-red-500 px-1.5 rounded">
-                            Failure
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold text-amber-400 bg-amber-950/40 border border-amber-500 px-1.5 rounded animate-pulse">
-                            In Progress
-                          </span>
-                        )}
-                      </div>
-                      
-                      <p className="text-koma-secondary font-sans text-xs">{commit.text}</p>
-
-                      <div className="flex items-center justify-between text-[10px] text-koma-muted pt-1.5 border-t border-zinc-900/60">
-                        <span>COMMIT: {commit.id} by {commit.author}</span>
-                        <span>{commit.time}</span>
-                      </div>
-                      
-                      <div className="pt-1">
-                        <button
-                          onClick={() => triggerGithubWorkflow(commit.branch)}
-                          className="text-[9px] bg-emerald-950/60 hover:bg-emerald-900/60 border border-[#00b894]/40 text-[#00b894] font-mono py-1 px-2 rounded cursor-pointer transition-all"
-                        >
-                          FORÇAR REDEPLOY (WORKFLOW_DISPATCH)
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Deploy Global Section */}
-              <div className="mt-6 pt-6 border-t border-[#1e293b]/40 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-mono text-koma-foreground font-bold flex items-center gap-1.5 uppercase">
-                    🚀 DISPARAR DEPLOY GLOBAL
-                  </h4>
-                  <span className="text-[8px] text-koma-muted font-mono">AUTOMATION_V3.5</span>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-mono text-koma-subtle uppercase">
-                    Mensagem de Commit (Obrigatório)
-                  </label>
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={commitMessage}
-                      onChange={(e) => setCommitMessage(e.target.value)}
-                      placeholder="Ex: refactor: optimization of memory caching"
-                      className="flex-1 bg-koma-page border border-[#1e293b]/40 rounded px-3 py-2 text-xs font-mono text-koma-foreground focus:outline-none focus:border-[#00b894]"
-                      disabled={isDeploying}
-                    />
-                    <button
-                      onClick={handleDeployGlobal}
-                      disabled={isDeploying || !commitMessage.trim()}
-                      className={`px-5 py-2 rounded font-mono text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                        isDeploying || !commitMessage.trim()
-                          ? "bg-koma-raised text-koma-muted border-transparent cursor-not-allowed"
-                          : "bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold"
-                      }`}
-                    >
-                      {isDeploying ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          DEPLOYING...
-                        </>
-                      ) : (
-                        <>
-                          <span>🚀 DISPARAR DEPLOY GLOBAL</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Provisioning Terminal for Git Output */}
-                  <div className="bg-black/90 border border-zinc-900 rounded p-3 font-mono text-[10px] text-koma-secondary h-[180px] overflow-y-auto flex flex-col space-y-1">
-                    <div className="text-koma-muted border-b border-zinc-950 pb-1 mb-2 flex items-center justify-between">
-                      <span>PROVISIONING_TERMINAL</span>
-                      <span className={`w-2 h-2 rounded-full ${isDeploying ? "bg-[#00b894] animate-pulse" : "bg-zinc-600"}`}></span>
-                    </div>
-                    <div className="flex-1 overflow-y-auto space-y-1 pr-1">
-                      {deployLogsState.length === 0 ? (
-                        <span className="text-slate-600 italic">No deployment running. Enter a commit message and trigger.</span>
-                      ) : (
-                        deployLogsState.map((line, idx) => (
-                          <div key={idx} className={
-                            line.startsWith(">>> [SUCCESS]") 
-                              ? "text-emerald-400 font-bold" 
-                              : line.startsWith(">>> [ERROR]") 
-                              ? "text-red-400 font-bold" 
-                              : line.startsWith("$") 
-                              ? "text-sky-400 font-bold" 
-                              : "text-koma-subtle"
-                          }>
-                            {line}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* DevOps Architecture Details */}
-      <div className="bg-koma-card border border-[#1e293b]/40 p-4 rounded flex flex-col space-y-2 animate-fade-in">
-        <h4 className="text-xs font-mono text-koma-subtle font-bold flex items-center gap-1.5">
-          <CloudLightning className="w-3.5 h-3.5 text-[#00b894]" />
-          [SISTEMA_DOCKER] ARQUITETURA DO ORQUESTRADOR DE INFRAESTRUTURA
-        </h4>
-        <p className="text-[10px] text-koma-muted font-mono leading-relaxed">
-          The SuperAdmin console communicates directly with our Python FastAPI backend. The FastAPI application makes use of decoupled services using standard Dependency Injection design patterns to talk directly to Cloudflare, Sentry, and Railway. All credentials, API keys, and auth scopes are safely hidden on our servers, ensuring your restaurant's digital gateways are completely secure.
+      {healthError && (
+        <p className="rounded border border-amber-800 bg-amber-950/30 p-3 text-xs text-amber-200" role="status">
+          Diagnóstico: {healthError}
         </p>
+      )}
+
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" id="api-diagnostics-panel">
+        {Object.entries(health).map(([name, item]) => (
+          <div key={name} className="rounded border border-[#1e293b]/40 bg-koma-card p-4">
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-xs font-bold uppercase text-koma-foreground">{name}</span>
+              <span className="rounded border border-amber-800 px-1.5 py-0.5 text-[8px] text-amber-300">
+                {healthLabel(item)}
+              </span>
+            </div>
+            <p className="mt-2 text-[10px] text-koma-muted">
+              Fonte: {item.source || "não informada"}
+              {typeof item.latency_ms === "number" ? ` · ${item.latency_ms} ms` : ""}
+            </p>
+          </div>
+        ))}
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <section className="rounded border border-[#1e293b]/40 bg-koma-card p-5" id="railway-panel">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-koma-foreground">
+            <Server className="h-4 w-4" /> Railway
+          </h3>
+          {railwayError ? (
+            <p className="my-5 rounded border border-amber-800 bg-amber-950/30 p-3 text-xs text-amber-200">{railwayError}</p>
+          ) : (
+            <pre className="my-5 max-h-48 overflow-auto rounded bg-black/30 p-3 text-[10px] text-koma-subtle">
+              {JSON.stringify(railwayMetrics, null, 2)}
+            </pre>
+          )}
+          <button
+            type="button"
+            disabled={isRestarting}
+            onClick={() => setShowRestartConfirmation(true)}
+            className="w-full rounded border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-bold text-red-300 disabled:opacity-50"
+          >
+            {isRestarting ? "Solicitando..." : "Solicitar reinicialização"}
+          </button>
+        </section>
+
+        <section className="rounded border border-[#1e293b]/40 bg-koma-card p-5" id="cloudflare-panel">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-koma-foreground">
+            <Globe className="h-4 w-4" /> Cloudflare DNS
+          </h3>
+          <form onSubmit={addDns} className="my-4 flex gap-2">
+            <input
+              value={newSubdomain}
+              onChange={event => setNewSubdomain(event.target.value)}
+              disabled={isAddingDns}
+              placeholder="app.exemplo.com"
+              aria-label="Hostname CNAME"
+              className="min-w-0 flex-1 rounded border border-[#334155] bg-black/30 px-3 py-2 text-xs"
+            />
+            <button type="submit" disabled={isAddingDns || !newSubdomain.trim()} className="rounded bg-[#00b894] p-2 text-black disabled:opacity-40">
+              {isAddingDns ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            </button>
+          </form>
+          {dnsError ? (
+            <p className="rounded border border-amber-800 bg-amber-950/30 p-3 text-xs text-amber-200">{dnsError}</p>
+          ) : dnsRecords.length === 0 ? (
+            <p className="py-6 text-center text-xs text-koma-muted">Nenhum registro retornado pela API.</p>
+          ) : (
+            <ul className="max-h-56 space-y-2 overflow-auto">
+              {dnsRecords.map(record => (
+                <li key={record.id || `${record.name}-${record.content}`} className="rounded border border-[#1e293b]/40 p-3 text-xs">
+                  <p className="font-bold text-koma-foreground">{record.name}</p>
+                  <p className="mt-1 text-[10px] text-koma-muted">{record.type} → {record.content} · proxy {record.proxied ? "ativo" : "inativo"}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded border border-[#1e293b]/40 bg-koma-card p-5" id="github-panel">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-koma-foreground">
+            <GitBranch className="h-4 w-4" /> GitHub Actions
+          </h3>
+          {githubError ? (
+            <p className="my-4 rounded border border-amber-800 bg-amber-950/30 p-3 text-xs text-amber-200">{githubError}</p>
+          ) : githubRuns.length === 0 ? (
+            <p className="py-6 text-center text-xs text-koma-muted">Nenhum workflow retornado pela API.</p>
+          ) : (
+            <ul className="mt-4 max-h-72 space-y-2 overflow-auto">
+              {githubRuns.slice(0, 20).map(run => (
+                <li key={run.id} className="rounded border border-[#1e293b]/40 p-3 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-bold text-koma-foreground">{run.name || `Workflow ${run.id}`}</p>
+                      <p className="mt-1 text-[10px] text-koma-muted">{run.head_branch || "branch não informada"} · {run.conclusion || run.status || "sem status"}</p>
+                    </div>
+                    {run.html_url && (
+                      <a href={run.html_url} target="_blank" rel="noreferrer" aria-label="Abrir workflow no GitHub">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
+                  {run.head_branch && (
+                    <button type="button" onClick={() => void dispatchGithub(run.head_branch!)} className="mt-2 text-[10px] text-[#00b894] underline">
+                      Solicitar workflow_dispatch
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
-      {/* Modal: Confirm Restart Server */}
-      <AnimatePresence>
-        {showRestartModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-mono text-xs text-koma-secondary">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-koma-page border border-red-900/40 rounded-lg max-w-md w-full p-5 space-y-4 shadow-[0_0_35px_rgba(239,68,68,0.25)]"
-            >
-              <div className="flex items-center gap-2 text-red-500 font-bold border-b border-[#1e293b]/40 pb-3 uppercase text-sm">
-                <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
-                <span>Confirmar Reinicialização de Emergência</span>
-              </div>
-              <p className="leading-relaxed">
-                Você tem certeza que deseja realizar a <strong className="text-koma-foreground">REINICIALIZAÇÃO DE EMERGÊNCIA</strong> do servidor central no Railway em produção?
-              </p>
-              <div className="bg-red-950/20 border border-red-900/30 p-3 rounded text-red-400 text-[11px] leading-relaxed">
-                <strong>🚨 PERIGO: Ações Irreversíveis</strong>
-                <p className="mt-1">
-                  Esta ação derrubará temporariamente o cardápio e o PDV (ponto de venda) de todos os restaurantes em produção. Clientes ativos não conseguirão finalizar pedidos durante o tempo de inicialização do servidor.
-                </p>
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowRestartModal(false)}
-                  className="bg-koma-card hover:bg-koma-raised border border-koma-border/50 px-3 py-2 rounded text-koma-subtle hover:text-koma-foreground cursor-pointer transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={executeRestartServer}
-                  className="bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 px-4 py-2 rounded font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-[0_0_8px_rgba(239,68,68,0.2)]"
-                >
-                  <ShieldAlert className="w-3.5 h-3.5" />
-                  Sim, Reiniciar Servidor
-                </button>
-              </div>
-            </motion.div>
+      <div className="flex items-start gap-2 rounded border border-amber-800/60 bg-amber-950/20 p-4 text-xs text-amber-200">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        Deploy global, dispatch e reinicialização não são apresentados como ativos por configuração. Cada ação só é considerada concluída após confirmação explícita da API; respostas 501/503 permanecem indisponíveis.
+      </div>
+
+      {showRestartConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-md rounded border border-red-900 bg-koma-page p-5">
+            <h3 className="flex items-center gap-2 font-bold text-red-300"><ShieldAlert className="h-5 w-5" /> Confirmar reinicialização</h3>
+            <p className="mt-3 text-xs leading-relaxed text-koma-secondary">A operação pode interromper todos os restaurantes. O painel enviará uma solicitação; só registrará sucesso se o executor confirmar.</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setShowRestartConfirmation(false)} className="rounded border border-[#334155] px-3 py-2 text-xs">Cancelar</button>
+              <button type="button" onClick={() => void restartRailway()} className="rounded border border-red-800 bg-red-950 px-3 py-2 text-xs font-bold text-red-300">Confirmar solicitação</button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 }

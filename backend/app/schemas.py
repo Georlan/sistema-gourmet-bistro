@@ -20,16 +20,19 @@ class UsuarioResponse(BaseModel):
     created_at: Optional[datetime] = None
     usuario: Optional[str] = None
     role: Optional[str] = None
-    token_convite: Optional[Union[str, Any]] = None
-
-    @field_validator('token_convite', mode='before')
-    @classmethod
-    def convert_uuid_to_str(cls, v):
-        if v is not None:
-            return str(v)
-        return v
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UsuarioInviteResponse(UsuarioResponse):
+    """Resposta restrita ao momento em que o administrador cria o convite."""
+
+    token_convite: str
+
+    @field_validator("token_convite", mode="before")
+    @classmethod
+    def convert_uuid_to_str(cls, value):
+        return str(value)
 
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
@@ -423,7 +426,7 @@ class CaixaTurnoDetalhe(CaixaTurnoResponse):
     total_esperado_cartao: float = 0.0
 
 
-# ----------------- WHITE-LABEL & HYBRID IA -----------------
+# ----------------- WHITE-LABEL CONFIGURATION -----------------
 class ConfiguracaoRestauranteResponse(BaseModel):
     id: int
     restaurante_id: int
@@ -496,40 +499,6 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     perm_garcom_ociosas: Optional[bool] = None
 
     model_config = ConfigDict(extra="forbid")
-
-
-class ConfiguracaoIAResponse(BaseModel):
-    id: int
-    permitir_descontos: bool
-    desconto_maximo: float
-    permitir_upsell: bool
-    tom_de_voz: str
-    teto_interacoes: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class MensagemWhatsAppResponse(BaseModel):
-    id: str
-    cliente_telefone: str
-    remetente: str
-    conteudo: str
-    transcricao: Optional[str] = None
-    audio_url: Optional[str] = None
-    criado_em: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class RascunhoPedidoResponse(BaseModel):
-    id: str
-    cliente_telefone: str
-    conteudo_json: str
-    ia_sugestao_resposta: Optional[str] = None
-    status: str
-    criado_em: datetime
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 class InsumoResponse(BaseModel):

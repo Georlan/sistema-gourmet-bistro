@@ -8,7 +8,7 @@ import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, Arro
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
 import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
 import { MenuPanel } from './MenuPanel';
-import { TABLES, RESTAURANT_CONFIG } from '../data';
+import { RESTAURANT_CONFIG } from '../data';
 import type { CatalogCategory } from '../catalog/catalog';
 import { formatBackendDateTime, formatBackendTime } from '../utils/dateTime';
 
@@ -1183,10 +1183,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </div>
             )}
 
-            {/* Simulated Print Button */}
+            {/* Printing actions are enabled only when the server-backed handler exists. */}
             <div className="flex gap-2 w-full">
               <button
-                id="finalize-physical-print-mock-btn"
+                id="finalize-physical-print-btn"
+                disabled={!onPrintReceipt}
                 onClick={async () => {
                   if (onPrintReceipt) {
                     try {
@@ -1200,21 +1201,16 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       console.error("Error printing receipt:", err);
                       alert("Erro ao enviar impressão do recibo completo");
                     }
-                  } else {
-                    setPrintSuccess(true);
-                    setTimeout(() => {
-                      setPrintSuccess(false);
-                      setShowPrintPreview(false);
-                    }, 1500);
                   }
                 }}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Printer size={13} className="text-koma-foreground" />
                 <span>Extrato Completo</span>
               </button>
 
               <button
+                disabled={!onPrintReceipt}
                 onClick={async () => {
                   if (onPrintReceipt) {
                     try {
@@ -1228,15 +1224,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                       console.error("Error printing receipt:", err);
                       alert("Erro ao enviar impressão do extrato resumido");
                     }
-                  } else {
-                    setPrintSuccess(true);
-                    setTimeout(() => {
-                      setPrintSuccess(false);
-                      setShowPrintPreview(false);
-                    }, 1500);
                   }
                 }}
-                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-amber-500/20 transition-all shadow-lg shadow-amber-500/10"
+                className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-amber-500/20 transition-all shadow-lg shadow-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Printer size={13} className="text-koma-foreground" />
                 <span>Apenas Valores</span>
@@ -1354,8 +1344,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </div>
             )}
 
-            {/* Simulated Print Button */}
+            {/* Reprint is enabled only when the server-backed handler exists. */}
             <button
+              disabled={!onPrintKitchenLaunch || !selectedOrderToPrint}
               onClick={async () => {
                 if (onPrintKitchenLaunch && selectedOrderToPrint) {
                   try {
@@ -1369,15 +1360,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                     console.error("Error reprinting kitchen launch:", err);
                     alert("Erro ao enviar reimpressão para a cozinha");
                   }
-                } else {
-                  setPrintSuccess(true);
-                  setTimeout(() => {
-                    setPrintSuccess(false);
-                    setSelectedOrderToPrint(null);
-                  }, 1500);
                 }
               }}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Printer size={13} className="text-koma-foreground" />
               <span>Imprimir Via Cozinha</span>

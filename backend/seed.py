@@ -3,7 +3,7 @@ import uuid
 import datetime
 import os
 from app.database import engine, Base, SessionLocal
-from app.models import Restaurante, Usuario, Categoria, Produto, Mesa, ObservacaoPredefinida, Motoboy, Comanda, Item, Lancamento, ConfiguracaoRestaurante, ConfiguracaoIA
+from app.models import Restaurante, Usuario, Categoria, Produto, Mesa, ObservacaoPredefinida, Motoboy, Comanda, Item, Lancamento, ConfiguracaoRestaurante
 from app.security import get_password_hash
 
 def seed_database():
@@ -169,22 +169,12 @@ def seed_database():
         )
         db.add(config_restaurante)
 
-        # 8. Configurações de IA padrão
-        config_ia = ConfiguracaoIA(
-            restaurante_id=1,
-            permitir_descontos=False,
-            desconto_maximo=10.0,
-            permitir_upsell=True,
-            tom_de_voz="direto",
-            teto_interacoes=5
-        )
-        db.add(config_ia)
         print("Configurações do restaurante semeadas com sucesso!")
 
         # Commit here so we can query products next
         db.commit()
 
-        # 9. Semeando comanda de exemplo na Mesa 1 para demonstração
+        # 8. Semeando comanda de exemplo na Mesa 1 para desenvolvimento local
         comanda_del = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
             restaurante_id=1,

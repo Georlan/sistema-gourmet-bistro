@@ -1,86 +1,98 @@
-# THIRD_PARTY_NOTICES.md — Kôma Sistema de Gestão Gourmet
+# Avisos de componentes de terceiros — KÔMA
 
-Este documento lista os componentes de terceiros utilizados no projeto Kôma, suas licenças e obrigações de atribuição.
+Este documento é um inventário operacional das dependências diretas e dos identificadores de licença presentes no checkout. Ele não altera licenças, não presume autoria ou titularidade e não substitui os textos de licença distribuídos por cada fornecedor.
 
----
+Revisão de referência: commit `b7276bf038f1a0ae8c093432b7904884ac76f183`, em 2026-08-22. As faixas de versão abaixo vêm dos manifests; as versões efetivamente resolvidas devem ser conferidas nos lockfiles e nos artefatos de cada release.
 
-## 1. Dependências do Frontend (Node.js / TypeScript)
+## 1. Frontend e ferramentas Node.js
 
-As dependências abaixo são declaradas em `package.json` e instaladas via npm.
+Fonte: `package.json` e `package-lock.json`. A coluna “licença declarada” reproduz o identificador informado nos metadados dos pacotes instalados durante esta revisão; valide-o novamente ao atualizar o lockfile.
 
-| Pacote | Versão mínima | Licença | Uso |
-|---|---|---|---|
-| `react` | ^19.0.1 | MIT | Framework de UI |
-| `react-dom` | ^19.0.1 | MIT | Renderização no DOM |
-| `@supabase/supabase-js` | ^2.110.5 | MIT | Cliente Supabase (cardápio digital) |
-| `@sentry/react` | ^10.64.0 | MIT (modo cloud SDK) | Monitoramento de erros |
-| `@tailwindcss/vite` | ^4.1.14 | MIT | Integração Tailwind + Vite |
-| `@vitejs/plugin-react` | ^5.0.4 | MIT | Plugin React para Vite |
-| `clsx` | ^2.1.1 | MIT | Utilitário de classes CSS condicionais |
-| `lucide-react` | ^0.546.0 | ISC | Ícones SVG |
-| `motion` (Framer Motion) | ^12.23.24 | MIT | Animações |
-| `vite` | ^6.2.3 | MIT | Bundler |
-| `typescript` | ~5.8.2 | Apache-2.0 | Compilador TypeScript |
-| `tailwindcss` | ^4.1.14 | MIT | Utilitários CSS |
-| `autoprefixer` | ^10.4.21 | MIT | Prefixos CSS automáticos |
-| `esbuild` | ^0.25.0 | MIT | Bundler rápido (usado pelo Vite) |
-| `tsx` | ^4.21.0 | MIT | Execução TypeScript |
-| `@types/react` | ^19.2.17 | MIT | Tipos TypeScript para React |
-| `@types/react-dom` | ^19.2.3 | MIT | Tipos TypeScript para React DOM |
-| `@types/express` | ^4.17.21 | MIT | Tipos TypeScript para Express |
-| `@types/node` | ^22.14.0 | MIT | Tipos TypeScript para Node.js |
+### Dependências de execução
 
----
+| Pacote | Faixa declarada | Licença declarada |
+|---|---:|---|
+| `@number-flow/react` | `^0.6.2` | MIT |
+| `@sentry/react` | `^10.64.0` | MIT |
+| `@tailwindcss/vite` | `^4.1.14` | MIT |
+| `@vitejs/plugin-react` | `^5.0.4` | MIT |
+| `clsx` | `^2.1.1` | MIT |
+| `lucide-react` | `^0.546.0` | ISC |
+| `motion` | `^12.23.24` | MIT |
+| `react` | `^19.0.1` | MIT |
+| `react-dom` | `^19.0.1` | MIT |
+| `recharts` | `^3.10.1` | MIT |
+| `vite` | `^6.2.3` | MIT |
 
-## 2. Dependências do Backend (Python / FastAPI)
+### Dependências de desenvolvimento e teste
 
-As dependências abaixo são declaradas em `backend/requirements.txt`.
+| Pacote | Faixa declarada | Licença declarada |
+|---|---:|---|
+| `@playwright/test` | `^1.58.2` | Apache-2.0 |
+| `@types/node` | `^22.14.0` | MIT |
+| `@types/react` | `^19.2.17` | MIT |
+| `@types/react-dom` | `^19.2.3` | MIT |
+| `tailwindcss` | `^4.1.14` | MIT |
+| `tsx` | `^4.21.0` | MIT |
+| `typescript` | `~5.8.2` | Apache-2.0 |
 
-| Pacote | Versão mínima | Licença | Uso |
-|---|---|---|---|
-| `fastapi` | >=0.110.0 | MIT | Framework web API |
-| `uvicorn[standard]` | >=0.28.0 | BSD-3-Clause | Servidor ASGI |
-| `sqlalchemy` | >=2.0.0 | MIT | ORM / SQL |
-| `pydantic` | >=2.6.0 | MIT | Validação de dados |
-| `pyjwt` | >=2.8.0 | MIT | Tokens JWT |
-| `bcrypt` | >=4.0.0 | Apache-2.0 | Hash de senhas |
-| `python-multipart` | >=0.0.9 | Apache-2.0 | Upload de arquivos |
-| `cryptography` | >=42.0.0 | Apache-2.0 / BSD | Criptografia Fernet (PII) |
-| `sentry-sdk` | >=1.40.0 | MIT | Monitoramento de erros |
-| `psycopg2-binary` | >=2.9.0 | LGPL-3.0 | Driver PostgreSQL |
-| `alembic` | >=1.13.0 | MIT | Migrations de banco de dados |
-| `httpx` | >=0.27.0 | BSD-3-Clause | Cliente HTTP assíncrono |
-| `pywin32` | >=306 (Windows only) | PSF | APIs Win32 (impressora térmica) |
+Dependências transitivas também podem impor obrigações. O `package-lock.json`, e não apenas esta tabela, deve alimentar o inventário completo do artefato distribuído.
 
-### Nota sobre psycopg2-binary (LGPL-3.0)
-A licença LGPL-3.0 é compatível com software proprietário desde que a biblioteca seja utilizada por importação dinâmica (não vinculação estática). O uso em Python via `import psycopg2` atende a esse requisito. Nenhuma modificação foi feita na biblioteca.
+## 2. Backend Python
 
----
+Fonte: `backend/requirements.txt` e `backend/requirements-dev.txt`. Como esses manifests usam intervalos, a licença deve ser confirmada na versão resolvida no ambiente de build.
 
-## 3. Dependências do Print Agent (Python)
+| Distribuição | Faixa declarada | Licença/expressão declarada nos metadados revisados |
+|---|---:|---|
+| `fastapi` | `>=0.110.0` | MIT |
+| `uvicorn[standard]` | `>=0.28.0` | BSD-3-Clause |
+| `sqlalchemy` | `>=2.0.0` | MIT |
+| `pydantic` | `>=2.6.0` | MIT |
+| `pyjwt` | `>=2.8.0` | MIT |
+| `bcrypt` | `>=4.0.0` | Apache-2.0 |
+| `pywin32` (Windows) | `>=306` | Python Software Foundation License |
+| `python-multipart` | `>=0.0.9` | Apache-2.0 |
+| `cryptography` | `>=42.0.0` | Apache-2.0 OR BSD-3-Clause |
+| `sentry-sdk` | `>=1.40.0` | MIT |
+| `psycopg2-binary` | `>=2.9.0` | LGPL com exceções, conforme metadados do pacote |
+| `alembic` | `>=1.13.0` | MIT |
+| `httpx` | `>=0.27.0` | BSD-3-Clause |
+| `pytest` (desenvolvimento) | `>=8.0,<9.0` | MIT |
 
-As dependências abaixo são declaradas em `print-agent/requirements.txt`.
+Este documento não declara que uma forma específica de empacotamento, linking ou distribuição satisfaz uma licença. Essa análise depende do artefato efetivamente entregue e deve preservar avisos, textos e código-fonte/ofertas quando exigidos pela licença aplicável.
 
-| Pacote | Versão mínima | Licença | Uso |
-|---|---|---|---|
-| `requests` | >=2.28.0 | Apache-2.0 | Requisições HTTP |
-| `pywin32` | >=305 (Windows only) | PSF | APIs Win32 (impressora) |
+## 3. Agente de impressão
 
----
+Fonte: `print-agent/requirements.txt`.
 
-## 4. Inventário de Cabeçalhos de Licença no Código-Fonte e Proveniência
+| Distribuição | Faixa declarada | Licença declarada |
+|---|---:|---|
+| `requests` | `>=2.28.0` | Apache-2.0 |
+| `pywin32` (Windows) | `>=305` | Python Software Foundation License |
 
-### Grupo A — 27 arquivos com `SPDX-License-Identifier: Apache-2.0`
+As dependências transitivas do `requests` devem constar do inventário do instalador final.
 
-Os seguintes arquivos possuem cabeçalho inserido automaticamente por ferramentas Google (Google AI Studio / Gemini), que injeta `Apache-2.0` em código gerado:
+## 4. Bridge SmartPOS Android
 
-```
+Fontes: `smartpos-android/build.gradle.kts`, `smartpos-android/app/build.gradle.kts` e `smartpos-android/settings.gradle.kts`.
+
+| Componente | Versão declarada | Licença upstream a verificar no artefato |
+|---|---:|---|
+| Kotlin Gradle/JVM plugin e `kotlin-test-junit5` | `2.4.10` | Apache-2.0 |
+| Android Gradle Plugin | `9.1.1` | Apache-2.0 |
+| JUnit Jupiter Engine | `5.11.4` | EPL-2.0 |
+
+O Android SDK, as ferramentas de build, os SDKs de adquirentes e eventuais bibliotecas embarcadas podem ter termos próprios. A presença nos repositórios `google()` ou `mavenCentral()` não concede automaticamente permissão de redistribuição. O bridge atual não documenta um lockfile Gradle; registre e arquive as dependências resolvidas no build de release.
+
+## 5. Licenças por arquivo e proveniência
+
+Um inventário jurídico anterior registrava 27 arquivos com indicação Apache-2.0. A verificação automatizada desta revisão, após a remoção do protótipo `CardapioAiChefAssistant.tsx`, encontrou 25 arquivos **de código-fonte** com o cabeçalho `SPDX-License-Identifier: Apache-2.0`:
+
+```text
 src/App.tsx
 src/cardapio/CardapioConfig.ts
 src/cardapio/CardapioPage.tsx
 src/cardapio/CardapioTypes.ts
-src/cardapio/SupabaseClient.ts
-src/cardapio/components/CardapioAiChefAssistant.tsx
 src/cardapio/components/CardapioAuthModal.tsx
 src/cardapio/components/CardapioCartDrawer.tsx
 src/cardapio/components/CardapioCategoryNav.tsx
@@ -90,13 +102,13 @@ src/cardapio/components/CardapioProductCard.tsx
 src/cardapio/components/CardapioProductModal.tsx
 src/cardapio/components/CardapioStoreInfoDrawer.tsx
 src/cardapio/components/CardapioUserProfileModal.tsx
-src/cardapio/supabaseSync.ts
 src/components/FechamentoCegoModal.tsx
 src/components/KitchenPanel.tsx
 src/components/ManagerPinModal.tsx
 src/components/MenuPanel.tsx
 src/components/MesaCard.tsx
-src/components/MesaDetailsModal.tsx
+src/components/MesaDetailsModalBase.tsx
+src/components/mesas/MesasView.tsx
 src/config/api.ts
 src/data.ts
 src/domain.ts
@@ -104,35 +116,46 @@ src/types.ts
 src/utils/authSession.ts
 ```
 
-**Classificação:** Código gerado por IA (Google AI Studio/Gemini) com cabeçalho Apache-2.0 inserido automaticamente pela ferramenta geradora.
+A diferença para o inventário anterior decorre de arquivos removidos, não de retirada de cabeçalhos em arquivos mantidos. Reproduza e reconcilie o inventário em cada release com:
 
-**Situação legal:** Código gerado por IA não é obra de autoria de terceiros. O cabeçalho Apache-2.0 é inserido como template pela ferramenta — não indica que o código é uma cópia de obra Apache-2.0 pré-existente. Esses arquivos foram substancialmente editados e expandidos pelo autor (Georlan) após a geração inicial.
+```bash
+rg -l 'SPDX-License-Identifier: Apache-2\.0' src | sort
+```
 
-**⚠️ Ponto para revisão jurídica:** A relicenciamento desses 27 arquivos de Apache-2.0 para proprietário deve ser avaliado por um advogado que considere:
-1. Em que medida o conteúdo é obra original do autor versus template gerado.
-2. Se os termos de uso do Google AI Studio transferem direitos autorais ao usuário.
-3. Se o cabeçalho Apache-2.0 foi inserido intencionalmente ou como boilerplate automático.
+Regras para esses arquivos:
 
-Enquanto essa análise não for concluída, **os cabeçalhos Apache-2.0 são mantidos** nesses 27 arquivos por precaução.
+- preserve o cabeçalho e os avisos associados;
+- não presuma que um cabeçalho foi “apenas inserido por IA” nem que isso elimina obrigações;
+- não relicencie sem cadeia documental de titularidade e revisão dos termos aplicáveis;
+- registre a origem, autores/revisores humanos, ferramentas usadas, termos vigentes na data e mudanças substanciais;
+- trate arquivos sem cabeçalho como “licença/proveniência a verificar”, e não automaticamente como propriedade exclusiva do projeto.
 
-### Grupo B — Arquivos sem cabeçalho de licença
+O histórico registra a introdução de MIT no commit `0901cc9ef75f138845a6d32b681388ebf0f9225b` e a adoção do arquivo proprietário no commit `396f16bfd2fa5a252dd91bdda2e8add28b7f7bd5`. Licenças já concedidas para revisões efetivamente distribuídas e licenças de terceiros ou por arquivo continuam relevantes; este documento não tenta revogá-las.
 
-Todos os demais arquivos em `src/` (ex.: `CaixaPanel.tsx`, subcomponentes de `caixa/`, `equipe/`, `estoque/`, `relatorios/`, etc.) e todo o backend Python (`backend/app/**/*.py`) **não possuem cabeçalho de licença**.
+## 6. Marcas, mídia, fontes e outros ativos
 
-**Classificação:** Código autoral do projeto, criado exclusivamente pelo autor (Georlan) sem geração automática de cabeçalhos por ferramentas de IA.
+Imagens, logotipos, vídeos, apresentações, cardápios, textos, dados de demonstração, fontes e material produzido com ferramentas generativas não estão validados apenas por aparecerem no repositório. Antes de distribuição comercial, mantenha um registro de ativos contendo, no mínimo:
 
-**Ação recomendada:** Após resolução jurídica dos 27 arquivos do Grupo A, adicionar cabeçalho proprietário a todos os arquivos do Grupo B.
+- caminho e hash do arquivo;
+- criador e vínculo contratual;
+- origem ou ferramenta utilizada e data;
+- licença, autorização ou cessão aplicável;
+- restrições de marca, imagem, dados pessoais e redistribuição;
+- comprovante armazenado fora do repositório público.
 
----
+As fontes carregadas de serviços externos e serviços de telemetria também exigem análise de termos, privacidade e fluxo internacional de dados, independentemente da licença do código cliente.
 
-## 5. Obrigações de Atribuição
+## 7. Processo de atualização e release
 
-Os componentes listados nas seções 1, 2 e 3 são utilizados como dependências externas sem modificação do código-fonte. As licenças MIT, ISC, BSD-3-Clause e Apache-2.0 exigem a preservação de avisos de copyright, que são atendidos pela manutenção das dependências em seus respectivos diretórios de distribuição.
+Em toda alteração de dependências ou preparação de release:
 
-A licença LGPL-3.0 do `psycopg2-binary` é satisfeita pelo uso via importação dinâmica Python.
+1. instale de forma reproduzível (`npm ci`) e registre as versões Python/Gradle resolvidas;
+2. gere um SBOM e um relatório de licenças com ferramentas versionadas no CI;
+3. compare dependências diretas e transitivas com os manifests e lockfiles;
+4. preserve os textos completos de licença e avisos exigidos no artefato distribuído;
+5. execute varredura de vulnerabilidades, segredos, PII e arquivos binários inesperados;
+6. reconcilie os cabeçalhos SPDX e o registro de proveniência de ativos;
+7. revise manualmente licenças copyleft, exceções, SDKs proprietários e termos de serviços externos;
+8. atualize este arquivo com o commit/data de referência e arquive as evidências da revisão.
 
----
-
-*Documento gerado em: 2026-08-06*
-*Versão: 1.0*
-*Responsável: Georlan*
+Uma tabela desatualizada não constitui comprovação de conformidade. Os textos originais das licenças e os termos dos fornecedores prevalecem sobre este resumo.

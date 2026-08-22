@@ -5,11 +5,16 @@ Copyright (c) 2026 Georlan. Todos os direitos reservados.
 AVISO IMPORTANTE — LEIA ANTES DE USAR, COPIAR OU ACESSAR ESTE SOFTWARE
 ═══════════════════════════════════════════════════════════════════
 
-Este Software, incluindo todo o seu código-fonte, documentação, materiais
-de design, estrutura de banco de dados, lógica de negócio e arquivos
-associados (coletivamente, o "Software"), é propriedade exclusiva de
-Georlan ("Titular") e é protegido pelas leis de direito autoral, segredo
-industrial e tratados internacionais de propriedade intelectual.
+Na medida em que os respectivos direitos pertençam a Georlan ("Titular"),
+o código-fonte, a documentação e os materiais autorais deste repositório
+(coletivamente, o "Software") são protegidos pela legislação aplicável.
+Esta licença não abrange componentes de terceiros, arquivos sujeitos a
+licença própria, contribuições cuja titularidade não tenha sido formalizada
+ou versões anteriormente distribuídas sob outros termos.
+
+Este repositório é público. A publicação do código não o transforma em
+domínio público, mas o conteúdo publicado não é tratado por esta licença
+como confidencial ou como segredo industrial.
 
 ───────────────────────────────────────────────────────────────────
 1. DIREITOS RESERVADOS
@@ -65,22 +70,22 @@ listados em THIRD_PARTY_NOTICES.md. Tais componentes permanecem sujeitos
 às suas licenças originais (MIT, Apache-2.0, BSD, LGPL, etc.), que não
 são afetadas por esta licença proprietária.
 
-O Titular reconhece e cumpre as obrigações impostas por essas licenças
-de terceiros. Os avisos de atribuição exigidos por essas licenças são
-preservados nos arquivos originais e em THIRD_PARTY_NOTICES.md.
+A identificação e o cumprimento dessas obrigações dependem do artefato
+efetivamente distribuído. Cabeçalhos e avisos existentes devem ser
+preservados; THIRD_PARTY_NOTICES.md registra o inventário conhecido e as
+pendências, mas não constitui comprovação automática de conformidade.
 
 ───────────────────────────────────────────────────────────────────
 5. VERSÕES ANTERIORES SOB LICENÇA MIT
 ───────────────────────────────────────────────────────────────────
 
-Versões do Software anteriormente disponibilizadas sob a licença MIT
-(identificáveis pelos commits anteriores à adoção desta licença, em
-2026-08-06) permanecem sujeitas aos termos da licença MIT aplicáveis
-àquelas versões específicas.
+O commit 0901cc9ef75f138845a6d32b681388ebf0f9225b introduziu uma licença
+MIT em 2026-08-03. Revisões efetivamente distribuídas sob aqueles termos
+permanecem sujeitas às permissões então concedidas.
 
-Esta licença proprietária aplica-se EXCLUSIVAMENTE às versões e
-modificações do Software distribuídas a partir de 2026-08-06, data de
-adoção desta licença.
+O commit 396f16bfd2fa5a252dd91bdda2e8add28b7f7bd5 adotou esta licença
+proprietária em 2026-08-06. Ela se aplica apenas ao material e às
+modificações que o Titular tem direito de licenciar sob estes termos.
 
 Para acesso a versões históricas sob MIT, consulte o histórico de commits
 do repositório. O Titular não concede, nesta data ou retroativamente,
@@ -120,8 +125,8 @@ Para solicitações de licenciamento, parcerias ou autorizações especiais:
 contato via repositório GitHub: github.com/Georlan
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  AVISO: ESTE REPOSITÓRIO PODE CONTER CÓDIGO SUJEITO TAMBÉM À
-    LICENÇA APACHE-2.0 EM ARQUIVOS INDIVIDUAIS (ver THIRD_PARTY_NOTICES.md
-    e cabeçalhos SPDX nos arquivos). ESSA SITUAÇÃO ESTÁ SOB REVISÃO
-    JURÍDICA E SERÁ REGULARIZADA EM VERSÃO FUTURA.
+⚠️  AVISO: ESTE REPOSITÓRIO CONTÉM ARQUIVOS COM IDENTIFICADOR
+    SPDX APACHE-2.0. ESSES CABEÇALHOS E AS LICENÇAS DE TERCEIROS OU
+    POR ARQUIVO PREVALECEM SOBRE TERMOS INCOMPATÍVEIS DESTA LICENÇA.
+    CONSULTE THIRD_PARTY_NOTICES.md ANTES DE USAR OU DISTRIBUIR.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,25 +1,21 @@
 import os
 import time
-import logging
 import uuid
-from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict
 
 import jwt
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Body, BackgroundTasks
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
 from sqlalchemy import text
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..database import engine
-from ..security import create_access_token, verify_password
+from ..security import IPRateLimiter, create_access_token, verify_password
 from .super_admin_services import (
-    SupabaseService,
     CloudflareService,
     RailwayService,
     TelegramService,
-    is_mock_allowed,
     logger
 )
 from ..services.whatsapp import obter_status_evolution
@@ -54,32 +50,19 @@ def _unavailable(detail: str, *, not_implemented: bool = False) -> None:
     )
 
 
-def _simulated_rows(rows: list[dict], capability: str) -> list[dict]:
-    if not is_mock_allowed():
-        _unavailable(f"{capability}: fonte real não configurada.")
-    return [
-        {**row, "dataStatus": "simulated", "dataSource": "development_fixture"}
-        for row in rows
-    ]
-
-# Fixtures visíveis somente em development/test e sempre marcadas como simuladas.
-SIMULATED_TENANTS = [
-    { "id": "ten_01a", "name": "Pizzaria Sol", "subdomain": "pizzaria-sol.koma.com", "plan": "Bistro", "phone": "+55 (11) 99999-1111", "status": "ACTIVE", "monthlyOrders": 1420, "monthlyBilling": 49550.0, "createdAt": "2026-01-15", "lastActivity": "2026-07-15 15:30", "printerStatus": "online", "failedWebhooksCount24h": 0, "healthStatus": "green" },
-    { "id": "ten_02b", "name": "Koma Burgers", "subdomain": "burgers.koma.com", "plan": "Delivery", "phone": "+55 (11) 98888-2222", "status": "ACTIVE", "monthlyOrders": 2890, "monthlyBilling": 86700.0, "createdAt": "2026-02-10", "lastActivity": "2026-07-15 15:24", "printerStatus": "online", "failedWebhooksCount24h": 0, "healthStatus": "green" },
-    { "id": "ten_03c", "name": "Hamburgueria Silva", "subdomain": "hamburgueria-silva.koma.com", "plan": "Pocket", "phone": "+55 (11) 97777-3333", "status": "ACTIVE", "monthlyOrders": 540, "monthlyBilling": 16200.0, "createdAt": "2026-03-24", "lastActivity": "2026-07-15 14:15", "printerStatus": "online", "failedWebhooksCount24h": 2, "healthStatus": "red" },
-    { "id": "ten_04d", "name": "Sushi Premium Co.", "subdomain": "sushi-premium.koma.com", "plan": "Premium", "phone": "+55 (11) 96666-4444", "status": "SUSPENDED", "monthlyOrders": 1200, "monthlyBilling": 120000.0, "createdAt": "2026-04-01", "lastActivity": "2026-07-15 11:00", "printerStatus": "offline", "failedWebhooksCount24h": 1, "healthStatus": "yellow" }
-]
-
 # (credentialsStore removido conforme regra P0.1 - credenciais não devem ficar em memória global)
 
-# --- SECURITY / MOCK JWT VALIDATION ---
+# --- SUPERADMIN AUTHENTICATION ---
 class TokenRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
+
+
+superadmin_login_rate_limiter = IPRateLimiter(requests_per_minute=8)
 
 def _get_superadmin_credentials() -> tuple[str, str]:
     username = os.getenv("SUPERADMIN_USERNAME")
@@ -89,10 +72,11 @@ def _get_superadmin_credentials() -> tuple[str, str]:
     return username, password_hash
 
 @router.post("/token", response_model=TokenResponse)
-def login_for_access_token(payload: TokenRequest):
+def login_for_access_token(payload: TokenRequest, request: Request):
     """
     Verifies superadmin credentials and encodes a signed JWT token for session security.
     """
+    superadmin_login_rate_limiter.check(request)
     try:
         expected_username, expected_password_hash = _get_superadmin_credentials()
     except RuntimeError as exc:
@@ -160,9 +144,11 @@ def get_current_admin(authorization: str = Header(None)) -> Dict[str, Any]:
 @router.get("/restaurantes")
 async def list_tenants(
     admin: dict = Depends(get_current_admin),
-    supabase: SupabaseService = Depends(SupabaseService)
 ):
-    return _simulated_rows(SIMULATED_TENANTS, "Restaurantes SuperAdmin")
+    _unavailable(
+        "Listagem cross-tenant não possui fonte real e auditável.",
+        not_implemented=True,
+    )
 
 class OnboardingRequest(BaseModel):
     name: str
@@ -173,53 +159,11 @@ class OnboardingRequest(BaseModel):
 async def trigger_onboarding(
     payload: OnboardingRequest,
     admin: dict = Depends(get_current_admin),
-    supabase: SupabaseService = Depends(SupabaseService),
-    cloudflare: CloudflareService = Depends(CloudflareService),
-    telegram: TelegramService = Depends(TelegramService)
 ):
-    if not is_mock_allowed():
-        _unavailable(
-            "Onboarding automático ainda não possui provisionamento real completo.",
-            not_implemented=True,
-        )
-    try:
-        slug = payload.name.lower().replace(" ", "-")
-        db_res = await supabase.create_tenant_schema(slug, payload.plan)
-        dns_res = await cloudflare.create_cname_record(payload.subdomain)
-        
-        telegram_text = f"🎉 <b>Novo cliente!</b> {payload.name} se cadastrou no plano <b>{payload.plan}</b>!"
-        await telegram.send_alert(telegram_text)
-
-        new_tenant = {
-            "id": f"ten_{uuid.uuid4().hex[:4]}",
-            "name": payload.name,
-            "subdomain": payload.subdomain,
-            "plan": payload.plan,
-            "phone": "+55 (11) 99999-0000",
-            "status": "ACTIVE",
-            "monthlyOrders": 0,
-            "monthlyBilling": 0.0,
-            "createdAt": datetime.now().strftime("%Y-%m-%d"),
-            "lastActivity": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "printerStatus": "online",
-            "failedWebhooksCount24h": 0,
-            "healthStatus": "green"
-        }
-        SIMULATED_TENANTS.insert(0, new_tenant)
-
-        return {
-            "success": True,
-            "dataStatus": "simulated",
-            "tenant_slug": slug,
-            "database": db_res,
-            "dns": dns_res,
-            "alert_dispatched": True,
-            "tenant": new_tenant
-        }
-    except Exception as e:
-        logger.error(f"[ONBOARDING FAILED] {str(e)}")
-        await telegram.send_alert(f"🚨 <b>Alerta Sentry:</b> Exceção crítica durante Onboarding de {payload.name}! Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Onboarding pipeline failed: {str(e)}")
+    _unavailable(
+        "Onboarding automático não possui provisionamento transacional e auditável.",
+        not_implemented=True,
+    )
 
 class StatusUpdateRequest(BaseModel):
     status: str
@@ -229,24 +173,11 @@ async def update_tenant_status(
     tenant_id: str,
     payload: StatusUpdateRequest,
     admin: dict = Depends(get_current_admin),
-    telegram: TelegramService = Depends(TelegramService)
 ):
-    if not is_mock_allowed():
-        _unavailable(
-            "Alteração real de status de tenant não configurada.",
-            not_implemented=True,
-        )
-    for tenant in SIMULATED_TENANTS:
-        if tenant["id"] == tenant_id:
-            tenant["status"] = payload.status
-            break
-            
-    if payload.status == "SUSPENDED":
-        await telegram.send_alert(f"⚠️ <b>Alerta Financeiro:</b> Inquilino ID {tenant_id} foi <b>SUSPENSO</b> devido a inadimplência no pagamento Asaas.")
-    else:
-        await telegram.send_alert(f"🟢 <b>Status Financeiro:</b> Inquilino ID {tenant_id} re-ativado e liberado.")
-        
-    return {"success": True, "dataStatus": "simulated", "tenant_id": tenant_id, "status": payload.status}
+    _unavailable(
+        "Alteração cross-tenant de status não possui persistência e auditoria reais.",
+        not_implemented=True,
+    )
 
 @router.post("/restaurantes/{tenant_id}/flush-cache")
 async def flush_tenant_cache(tenant_id: str, admin: dict = Depends(get_current_admin)):
@@ -330,11 +261,10 @@ async def create_cloudflare_cname(
         record = await cloudflare.create_cname_record(subdomain)
     except RuntimeError as exc:
         _unavailable(str(exc))
-    is_simulated = str(record.get("status") or "").startswith("MOCK_")
     return {
         "success": True,
         "record": record,
-        "dataStatus": "simulated" if is_simulated else "real",
+        "dataStatus": "real",
     }
 
 @router.get("/integrations/health")
@@ -392,7 +322,10 @@ async def trigger_developer_alert(
     admin: dict = Depends(get_current_admin),
     telegram: TelegramService = Depends(TelegramService)
 ):
-    pushed = await telegram.send_alert(f"🚨 <b>Alerta Manual:</b> {text}")
+    try:
+        pushed = await telegram.send_alert(f"🚨 <b>Alerta Manual:</b> {text}")
+    except RuntimeError as exc:
+        _unavailable(str(exc))
     return {"success": pushed}
 
 

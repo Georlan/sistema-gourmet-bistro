@@ -18,7 +18,7 @@ from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
     CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest,
     PagamentoMesaRequest, PagamentoResponse,
-    UsuarioResponse, UsuarioCreate, SangriaCreate, SuprimentoCreate, CaixaTurnoResumoResponse,
+    UsuarioResponse, UsuarioInviteResponse, UsuarioCreate, SangriaCreate, SuprimentoCreate, CaixaTurnoResumoResponse,
     FechamentoCaixaRequest, FechamentoCaixaResponse
 )
 from ..security import (
@@ -38,7 +38,6 @@ from ..services.clientes import (
     cadastrar_ou_atualizar_cliente,
     registrar_movimento_fidelidade,
 )
-from ..services.whatsapp import enviar_texto_whatsapp
 from ..services.capabilities import has_capability
 from ..timezone_utils import elapsed_minutes_since, to_utc
 
@@ -252,7 +251,7 @@ def obter_funcionarios(
     return db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
 
 
-@router.post("/funcionarios", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/funcionarios", response_model=UsuarioInviteResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_funcionario(
     user_in: UsuarioCreate,
     db: Session = Depends(get_db),
@@ -304,20 +303,6 @@ def cadastrar_funcionario(
         )
     db.refresh(novo_usuario)
     
-    convite_link = f"https://sistema-gourmet-bistro.pages.dev/ativar?token={token_convite}"
-    mensagem_texto = f"Olá {novo_usuario.nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: {convite_link}"
-    evolution_sent = enviar_texto_whatsapp(
-        tel_clean,
-        mensagem_texto,
-        contexto="convite de funcionário",
-    )
-
-    if not evolution_sent:
-        logger.info(
-            "[WHATSAPP SIMULADO] Convite disponível para usuario_id=%s",
-            novo_usuario.id,
-        )
-
     return novo_usuario
 
 

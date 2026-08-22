@@ -2266,10 +2266,6 @@ body {
   }
 }
 
-.orders-column.is-channel-disabled {
-  display: none !important;
-}
-
 @container cashier-content (max-width: 30rem) {
   .closing-workspace {
     gap: 0.75rem;
