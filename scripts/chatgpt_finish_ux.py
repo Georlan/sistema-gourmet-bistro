@@ -51,7 +51,7 @@ for old, new in {
 path.write_text(text, encoding='utf-8')
 
 
-# Simpler movement header and human CSV output.
+# Simpler movement header and human search/CSV output.
 path = Path('src/components/caixa/CaixaMovimentacoesTab.tsx')
 text = path.read_text(encoding='utf-8')
 text = replace_once(
@@ -67,12 +67,11 @@ text = replace_once(
 """,
     'movement metrics',
 )
-text = replace_once(
-    text,
-    '      movimentacao.tipo,\n',
-    "      movimentacao.tipo === 'suprimento' ? 'Dinheiro adicionado' : movimentacao.tipo === 'sangria' ? 'Dinheiro retirado' : movimentacao.tipo,\n",
-    'movement CSV type',
-)
+type_line = '      movimentacao.tipo,\n'
+human_type_line = "      movimentacao.tipo === 'suprimento' ? 'Dinheiro adicionado' : movimentacao.tipo === 'sangria' ? 'Dinheiro retirado' : movimentacao.tipo,\n"
+if text.count(type_line) != 2:
+    raise SystemExit(f'movement type usages: expected 2 matches, found {text.count(type_line)}')
+text = text.replace(type_line, human_type_line)
 path.write_text(text, encoding='utf-8')
 
 
