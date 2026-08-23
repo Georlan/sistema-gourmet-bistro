@@ -4486,7 +4486,7 @@ export function CaixaPanel({
               {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
               {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
               {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
-              {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
+              {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Configurações do cardápio online'}
             </h2>
           </div>
 
