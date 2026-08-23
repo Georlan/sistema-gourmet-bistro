@@ -1,0 +1,622 @@
+name: One-off cashier UX refinement
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/chatgpt-cashier-ux-pass.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Apply focused UX changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          # ------------------------------------------------------------------
+          # Remove the separate emergency/exception UI. Cancellation now lives
+          # in the regular order-card detail flow.
+          # ------------------------------------------------------------------
+          main_path = Path('src/main.tsx')
+          main = main_path.read_text(encoding='utf-8')
+          main = replace_once(
+              main,
+              '''const OnlineOrderEmergencyActions = isSmartPosRoute
+            ? null
+            : React.lazy(() => import("./components/OnlineOrderEmergencyActions"));
+
+          ''',
+              '',
+              'remove emergency lazy component',
+          )
+          main = replace_once(
+              main,
+              '      {OnlineOrderEmergencyActions && <OnlineOrderEmergencyActions />}\n',
+              '',
+              'remove emergency component render',
+          )
+          main_path.write_text(main, encoding='utf-8')
+
+          emergency_path = Path('src/components/OnlineOrderEmergencyActions.tsx')
+          if emergency_path.exists():
+              emergency_path.unlink()
+
+          # ------------------------------------------------------------------
+          # Remove the global network-status badge (Offline/Online/Reconnecting).
+          # Connectivity remains internal; the operator no longer sees noisy
+          # technical state in the main interface.
+          # ------------------------------------------------------------------
+          app_path = Path('src/App.tsx')
+          app = app_path.read_text(encoding='utf-8')
+          reconnect_pos = app.find("Reconectando...")
+          if reconnect_pos == -1:
+              raise SystemExit('network badge: Reconectando... not found')
+          status_start = app.rfind('<div className={clsx(', 0, reconnect_pos)
+          if status_start == -1:
+              raise SystemExit('network badge: parent div not found')
+          status_line_start = app.rfind('\n', 0, status_start) + 1
+          status_end = app.find('</div>', reconnect_pos)
+          if status_end == -1:
+              raise SystemExit('network badge: closing div not found')
+          status_end += len('</div>')
+          app = app[:status_line_start] + app[status_end:]
+          if 'Reconectando...' in app:
+              raise SystemExit('network badge: visible reconnecting copy still present')
+          app_path.write_text(app, encoding='utf-8')
+
+          # ------------------------------------------------------------------
+          # Cashier / operations UX.
+          # ------------------------------------------------------------------
+          caixa_path = Path('src/components/CaixaPanel.tsx')
+          caixa = caixa_path.read_text(encoding='utf-8')
+
+          caixa = replace_once(
+              caixa,
+              "      { id: 'impressao_salao', label: 'Salão e impressão', icon: Printer },",
+              "      { id: 'impressao_salao', label: 'Configurações', icon: SlidersHorizontal },",
+              'rename settings navigation',
+          )
+          caixa = caixa.replace("&& 'Configurações do Salão'", "&& 'Configurações'")
+
+          caixa, online_count = re.subn(
+              r'^\s*<span><i /> Sistema online</span>\n',
+              '',
+              caixa,
+              flags=re.MULTILINE,
+          )
+          if online_count != 2:
+              raise SystemExit(f'Sistema online: expected 2 removals, got {online_count}')
+
+          caixa = replace_once(
+              caixa,
+              "  const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');\n",
+              "  const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');\n  const [pdvProductDetailId, setPdvProductDetailId] = useState<string | null>(null);\n",
+              'add product detail state',
+          )
+
+          caixa = replace_once(
+              caixa,
+              "              onClick={() => setActiveSubTab(sub.id)}\n",
+              """              onClick={() => {
+                if (sub.id === 'balcao') {
+                  // Abrir Novo pedido pela navegação sempre começa neutro.
+                  // A seleção de mesa continua preservada quando o fluxo nasce no Salão.
+                  setPdvOrderType('retirada');
+                  setPdvTargetMesaId(0);
+                  setBalcaoMobileView('produtos');
+                  setPdvProductDetailId(null);
+                }
+                setActiveSubTab(sub.id);
+              }}
+""",
+              'reset leaked table selection on new-order tab',
+          )
+
+          # Header: Pedidos — only stage/actionable information.
+          old_orders_banner = '''                eyebrow="OPERAÇÃO AO VIVO"
+                title="Pedidos"
+                accent="em movimento"
+                description="Do salão ao recebimento, sem perder nenhuma etapa."
+                metrics={[
+                  { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
+                  { label: 'valor em aberto', value: formatCompactCurrency(operationalOrderInsights.openValue) },
+                  {
+                    label: 'exigem atenção',
+                    value: operationalOrderInsights.attentionCount,
+                    valueClassName: operationalOrderInsights.attentionCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
+                  },
+                ]}
+                isConnected={isWsConnected}
+'''
+          new_orders_banner = '''                eyebrow="OPERAÇÃO"
+                title="Pedidos"
+                accent="por etapa"
+                description="Clique em qualquer card para ver detalhes e agir no pedido."
+                metrics={[
+                  { label: 'em produção', value: filteredCol1.length + filteredDigitalProduction.length },
+                  { label: 'para concluir', value: filteredCol2Table.length + filteredDeliveryFinalization.length },
+                  {
+                    label: 'exigem atenção',
+                    value: operationalOrderInsights.attentionCount,
+                    valueClassName: operationalOrderInsights.attentionCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
+                  },
+                ]}
+'''
+          caixa = replace_once(caixa, old_orders_banner, new_orders_banner, 'orders header')
+
+          # Header: Novo pedido — cart/destination instead of analytics noise.
+          old_pdv_banner = '''                eyebrow="VENDA / NOVO PEDIDO"
+                title="Novo pedido,"
+                accent="sem atrito"
+                description="Escolha os itens, indique o destino e envie para a cozinha."
+                metrics={[
+                  { label: 'faixa de preços', value: pdvMenuInsights.priceRange },
+                  { label: 'categorias ativas', value: pdvMenuInsights.categoryCount },
+                  {
+                    label: 'itens pausados',
+                    value: pdvMenuInsights.pausedCount,
+                    valueClassName: pdvMenuInsights.pausedCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
+                  },
+                ]}
+                isConnected={isWsConnected}
+'''
+          new_pdv_banner = '''                eyebrow="VENDA"
+                title="Novo pedido"
+                accent="rápido e simples"
+                description="Escolha os itens e o destino. Os detalhes aparecem só quando forem úteis."
+                metrics={[
+                  { label: 'itens disponíveis', value: sellableProducts.length },
+                  { label: 'no carrinho', value: pdvCartItemCount },
+                  {
+                    label: 'destino',
+                    value: pdvOrderType === 'mesa'
+                      ? (selectedPdvTableOption?.label || 'Escolher mesa')
+                      : pdvOrderType === 'entrega' ? 'Delivery' : 'Retirada',
+                  },
+                ]}
+'''
+          caixa = replace_once(caixa, old_pdv_banner, new_pdv_banner, 'new order header')
+
+          # Header: Salão — direct counts that drive the next action.
+          old_salon_banner = '''                eyebrow="OPERAÇÃO DO SALÃO"
+                title="Salão"
+                accent="em tempo real"
+                description="Acompanhe atendimentos e veja rapidamente quais mesas precisam de atenção."
+                metrics={[
+                  { label: 'ocupação', value: `${salonInsights.occupancy}%` },
+                  { label: 'consumo em aberto', value: formatCompactCurrency(salonInsights.openValue) },
+                  { label: 'maior atendimento', value: salonInsights.oldestService },
+                ]}
+                isConnected={isWsConnected}
+'''
+          new_salon_banner = '''                eyebrow="SALÃO"
+                title="Mesas"
+                accent="em atendimento"
+                description="Abra, acompanhe ou receba uma mesa com um clique."
+                metrics={[
+                  { label: 'livres', value: tableStatusCounts.free },
+                  { label: 'em atendimento', value: tableStatusCounts.occupied },
+                  {
+                    label: 'para receber',
+                    value: tableStatusCounts.payment,
+                    valueClassName: tableStatusCounts.payment > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
+                  },
+                ]}
+'''
+          caixa = replace_once(caixa, old_salon_banner, new_salon_banner, 'salon header')
+
+          # Cash headers: concise and decision-oriented.
+          caixa = replace_once(caixa, '                eyebrow="CAIXA / CONFERÊNCIA AO VIVO"\n                title="Seu caixa,"\n                accent="sob controle"\n                description="Vendas, recebimentos e troco conciliados em um só lugar."\n', '                eyebrow="CAIXA"\n                title="Turno atual"\n                accent="em ordem"\n                description="Saldo, ritmo de vendas e pendências do turno."\n', 'cash header copy')
+          caixa = replace_once(caixa, '                eyebrow="CAIXA / ENCERRAMENTO SEGURO"\n                title="Feche o turno,"\n                accent="sem retrabalho"\n                description="Valores esperados, divergências e pendências em uma única conferência."\n', '                eyebrow="CAIXA"\n                title="Fechamento"\n                accent="sem surpresa"\n                description="Confira pendências antes de encerrar o turno."\n', 'cash closing header copy')
+          caixa = replace_once(
+              caixa,
+              "                  { label: 'último recebimento', value: latestReceiptTime },\n                  { label: 'modo de conferência', value: 'Assistida', valueClassName: 'text-emerald-800 dark:text-emerald-300' },\n",
+              "                  { label: 'pagamentos pendentes', value: pagamentosPendentes.length, valueClassName: pagamentosPendentes.length > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },\n                  { label: 'valor pendente', value: formatCompactCurrency(pendingPaymentsTotal) },\n",
+              'cash closing metrics',
+          )
+
+          # Settings headers: remove non-actionable counters.
+          caixa = caixa.replace('                  eyebrow="SALÃO / ORGANIZAÇÃO"', '                  eyebrow="CONFIGURAÇÕES / SALÃO"')
+          caixa = caixa.replace('                  title="Mesas"\n                  accent="prontas para receber"', '                  title="Mesas"\n                  accent="organizadas"')
+          caixa = caixa.replace('                  description="Capacidade e identificação do salão sem misturar configuração com comandas abertas."', '                  description="Cadastre nomes e capacidades; a operação usa essa mesma estrutura."')
+          caixa = caixa.replace('                  eyebrow="SALÃO / APP DO GARÇOM"', '                  eyebrow="CONFIGURAÇÕES / EQUIPE"')
+          caixa = caixa.replace('                  title="Atendimento"\n                  accent="com autonomia controlada"', '                  title="App do garçom"\n                  accent="com regras claras"')
+          caixa = caixa.replace('                  description="Veja rapidamente o que a equipe pode fazer antes de ajustar cada permissão."', '                  description="Controle apenas o que a equipe pode fazer durante o atendimento."')
+          caixa = replace_once(caixa, "                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' },\n                    { label: 'integrações pendentes', value: 7 }\n", "                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' }\n", 'remove integrations pending metric')
+          caixa = caixa.replace('                  eyebrow="SALÃO / TAXA DE SERVIÇO"', '                  eyebrow="CONFIGURAÇÕES / SERVIÇO"')
+          caixa = caixa.replace('                  title="Taxa"', '                  title="Taxa de serviço"')
+          caixa = caixa.replace('                  description="A regra é única para o salão e chega ao fechamento sem cálculo paralelo."', '                  description="Defina uma regra única para o salão e para o fechamento."')
+          caixa = replace_once(caixa, "                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },\n                    { label: 'aplicação', value: 'Fechamento' },\n                    { label: 'alcance', value: 'Caixa e salão' }\n", "                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },\n                    { label: 'alcance', value: 'Caixa e salão' }\n", 'simplify service fee metrics')
+
+          # Simplify product cards: default view = name, image, price, add.
+          # Ingredients/details stay available on hover and through an explicit click.
+          product_start_token = '                    {filteredProducts.map((p) => {'
+          product_end_token = '                    )})}\n                  </div>'
+          product_start = caixa.find(product_start_token)
+          if product_start == -1:
+              raise SystemExit('product cards: start not found')
+          product_end = caixa.find(product_end_token, product_start)
+          if product_end == -1:
+              raise SystemExit('product cards: end not found')
+          product_end += len('                    )})}')
+          new_product_block = '''                    {filteredProducts.map((p) => {
+                      const productLabel = splitProductLabel(p.nome);
+                      const productDetailKey = String(p.id);
+                      const hasProductDetails = Boolean(p.descricao || productLabel.code);
+                      return (
+                        <div
+                          key={p.id}
+                          className={clsx(
+                            'group', 'relative', 'min-h-[96px]', 'sm:min-h-[112px]',
+                            'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-emerald-500/60',
+                            'rounded-xl', 'sm:rounded-2xl', 'transition-colors', 'shadow-sm'
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPdvProductDetailId(null);
+                              handlePdvAddToCart(p);
+                            }}
+                            className={clsx(
+                              'flex', 'h-full', 'w-full', 'flex-col', 'justify-between', 'gap-2', 'sm:gap-3',
+                              'p-2.5', 'sm:p-3.5', 'text-left', 'cursor-pointer', 'rounded-xl', 'sm:rounded-2xl',
+                              'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-emerald-500/40'
+                            )}
+                            title={hasProductDetails
+                              ? `Adicionar ${productLabel.name}. Use detalhes para ver ingredientes.`
+                              : `Adicionar ${productLabel.name}`}
+                          >
+                            {p.imagem && (
+                              <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-16', 'sm:h-20', 'object-cover', 'rounded-lg', 'sm:rounded-xl')} />
+                            )}
+                            <div className="min-h-[28px] sm:min-h-[34px] pr-6">
+                              <h4 className={clsx('font-semibold', 'text-koma-foreground', 'text-xs', 'sm:text-[13px]', 'leading-snug', 'line-clamp-2')}>
+                                {productLabel.name}
+                              </h4>
+                            </div>
+                            <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-koma-border', 'pt-2', 'sm:pt-2.5')}>
+                              <span className={clsx('font-bold', 'text-emerald-700 dark:text-emerald-400', 'font-mono', 'text-xs')}>
+                                R$ {p.preco.toFixed(2).replace('.', ',')}
+                              </span>
+                              <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-emerald-700 dark:text-[#4fe0bc]')}>
+                                <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
+                              </span>
+                            </div>
+                          </button>
+
+                          {hasProductDetails && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setPdvProductDetailId(current => current === productDetailKey ? null : productDetailKey);
+                                }}
+                                aria-expanded={pdvProductDetailId === productDetailKey}
+                                aria-controls={`pdv-product-details-${productDetailKey}`}
+                                aria-label={`Ver ingredientes e detalhes de ${productLabel.name}`}
+                                title="Ver ingredientes e detalhes"
+                                className={clsx(
+                                  'absolute', 'right-2', 'top-2', 'z-20', 'flex', 'size-7', 'items-center', 'justify-center',
+                                  'rounded-lg', 'border', 'border-koma-border', 'bg-koma-card/95', 'text-koma-muted',
+                                  'hover:border-emerald-500/40', 'hover:text-emerald-700', 'dark:hover:text-emerald-300'
+                                )}
+                              >
+                                <HelpCircle size={13} />
+                              </button>
+                              <div
+                                id={`pdv-product-details-${productDetailKey}`}
+                                role="note"
+                                className={clsx(
+                                  'pointer-events-none', 'absolute', 'inset-x-2', 'top-10', 'z-10',
+                                  'rounded-xl', 'border', 'border-koma-border', 'bg-koma-dialog/95', 'backdrop-blur-md',
+                                  'p-2.5', 'text-left', 'shadow-xl', 'translate-y-1', 'opacity-0', 'transition-all',
+                                  'group-hover:translate-y-0', 'group-hover:opacity-100',
+                                  pdvProductDetailId === productDetailKey && 'translate-y-0 opacity-100'
+                                )}
+                              >
+                                <span className={clsx('block', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-emerald-700 dark:text-emerald-300')}>
+                                  Ingredientes e detalhes
+                                </span>
+                                {productLabel.code && (
+                                  <span className={clsx('mt-1', 'block', 'font-mono', 'text-[8px]', 'text-koma-muted')}>
+                                    Cód. {productLabel.code}
+                                  </span>
+                                )}
+                                <p className={clsx('mt-1', 'text-[10px]', 'leading-relaxed', 'text-koma-secondary')}>
+                                  {p.descricao || 'Sem descrição cadastrada.'}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}'''
+          caixa = caixa[:product_start] + new_product_block + caixa[product_end:]
+
+          # Delivery details now carry authoritative ids/prices so the same
+          # cancellation flow can be used from every order card.
+          old_delivery_map = '''      ? fullComanda.itens.map((it: any) => ({
+          nome: it.produto?.nome || it.nome || 'Item',
+          observacao: it.observacao || '',
+          cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
+          status: it.status,
+          lancamentoId: it.lancamentoId || it.lancamento_id,
+        }))
+'''
+          new_delivery_map = '''      ? fullComanda.itens.map((it: any) => ({
+          id: it.id,
+          comandaId: fullComanda.id,
+          nome: it.produto?.nome || it.nome || 'Item',
+          preco: it.preco_unit || it.preco || 0,
+          observacao: it.observacao || '',
+          cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
+          status: it.status,
+          pago: it.pago,
+          lancamentoId: it.lancamentoId || it.lancamento_id,
+        }))
+'''
+          caixa = replace_once(caixa, old_delivery_map, new_delivery_map, 'delivery detail item ids')
+          caixa = replace_once(
+              caixa,
+              "      id: order.id,\n      mesaId: 0,\n",
+              "      id: order.id,\n      comandaId: order.id,\n      mesaId: 0,\n      quantidadeItens: order.quantidadeItens,\n",
+              'delivery detail order identity',
+          )
+
+          old_cancel_state = '''  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
+    scope: 'order' | 'table';
+    mesaId: number;
+    comandas: number;
+    itens: number;
+    total: number;
+    itemIds: string[];
+  } | null>(null);
+'''
+          new_cancel_state = '''  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
+    scope: 'order' | 'table' | 'digital';
+    mesaId: number;
+    orderId?: string;
+    comandas: number;
+    itens: number;
+    total: number;
+    itemIds: string[];
+  } | null>(null);
+'''
+          caixa = replace_once(caixa, old_cancel_state, new_cancel_state, 'cancel target scope')
+
+          old_open_cancel = '''  const openCancelOrderConfirmation = (order: any) => {
+    const activeItems = (order?.itens || []).filter(
+      (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
+    );
+    const comandaIds = new Set(
+      activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean),
+    );
+    setCancelConsumptionTarget({
+      scope: 'order',
+      mesaId: Number(order.mesaId),
+      comandas: comandaIds.size,
+      itens: activeItems.length,
+      total: activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
+      itemIds: activeItems.map((item: any) => String(item.id)),
+    });
+    setCancelTableReason('');
+    setSelectedKanbanOrder(null);
+  };
+'''
+          new_open_cancel = '''  const openCancelOrderConfirmation = (order: any) => {
+    const activeItems = (order?.itens || []).filter(
+      (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
+    );
+    const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
+    const isDigitalOrder = Number(order?.mesaId || 0) <= 0
+      || ['delivery', 'entrega', 'retirada'].includes(normalizedType);
+    const comandaIds = new Set(
+      activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean),
+    );
+    setCancelConsumptionTarget({
+      scope: isDigitalOrder ? 'digital' : 'order',
+      mesaId: Number(order.mesaId || 0),
+      orderId: isDigitalOrder ? String(order.id || order.comandaId || '') : undefined,
+      comandas: isDigitalOrder ? 1 : comandaIds.size,
+      itens: activeItems.length || Number(order.quantidadeItens || 0),
+      total: Number(order.total) || activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
+      itemIds: activeItems.map((item: any) => String(item.id)),
+    });
+    setCancelTableReason('');
+    setSelectedKanbanOrder(null);
+  };
+'''
+          caixa = replace_once(caixa, old_open_cancel, new_open_cancel, 'unified cancel target')
+
+          old_cancel_handler = '''  const handleCancelTableConsumption = async () => {
+    if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
+    setIsCancellingTable(true);
+    try {
+      const isOrderScope = cancelConsumptionTarget.scope === 'order';
+      const response = await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          motivo: cancelTableReason.trim(),
+          ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o consumo.');
+
+      setCancelConsumptionTarget(null);
+      setCancelTableReason('');
+      await onRefreshOrders();
+      showToast(
+        isOrderScope
+          ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
+          : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+        'success',
+      );
+    } catch (error: any) {
+      showToast(error?.message || 'Não foi possível cancelar o consumo.', 'error');
+    } finally {
+      setIsCancellingTable(false);
+    }
+  };
+'''
+          new_cancel_handler = '''  const handleCancelTableConsumption = async () => {
+    if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
+    setIsCancellingTable(true);
+    try {
+      const isOrderScope = cancelConsumptionTarget.scope === 'order';
+      const isDigitalScope = cancelConsumptionTarget.scope === 'digital';
+      const response = isDigitalScope
+        ? await fetch(
+            `${apiBaseUrl}/comandas/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/delivery/status?status_novo=recusado`,
+            { method: 'PUT', headers: authHeaders },
+          )
+        : await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              motivo: cancelTableReason.trim(),
+              ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
+            }),
+          });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o pedido.');
+
+      const cancelledOrderId = cancelConsumptionTarget.orderId;
+      setCancelConsumptionTarget(null);
+      setCancelTableReason('');
+      if (isDigitalScope) {
+        setDeliveryOrders(current => current.filter(order => String(order.id) !== String(cancelledOrderId)));
+        await onRefreshOrders();
+        window.dispatchEvent(new Event('koma_orders_updated'));
+        showToast('Pedido cancelado e removido da operação ativa.', 'success');
+      } else {
+        await onRefreshOrders();
+        showToast(
+          isOrderScope
+            ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
+            : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+          'success',
+        );
+      }
+    } catch (error: any) {
+      showToast(error?.message || 'Não foi possível cancelar o pedido.', 'error');
+    } finally {
+      setIsCancellingTable(false);
+    }
+  };
+'''
+          caixa = replace_once(caixa, old_cancel_handler, new_cancel_handler, 'unified cancellation handler')
+
+          # Add the same cancel action to delivery/retirada detail cards.
+          existing_table_cancel = '''                    <button
+                      type="button"
+                      onClick={() => selectedKanbanOrder.contextoSalao
+                        ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
+                        : openCancelOrderConfirmation(selectedKanbanOrder)}
+                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
+                    >
+                      <Trash2 size={13} />
+                      {selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : 'Cancelar somente este pedido'}
+                    </button>
+                  </div>
+                )}
+'''
+          unified_table_cancel = existing_table_cancel + '''                {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openCancelOrderConfirmation(selectedKanbanOrder)}
+                    className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
+                  >
+                    <Trash2 size={13} />
+                    Cancelar pedido
+                  </button>
+                )}
+'''
+          caixa = replace_once(caixa, existing_table_cancel, unified_table_cancel, 'digital cancel action in normal card detail')
+
+          caixa = replace_once(
+              caixa,
+              "                  {cancelConsumptionTarget.scope === 'table'\n                    ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`\n                    : 'Cancelar somente este pedido?'}\n",
+              "                  {cancelConsumptionTarget.scope === 'table'\n                    ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`\n                    : cancelConsumptionTarget.scope === 'digital'\n                      ? 'Cancelar este pedido?'\n                      : 'Cancelar somente este pedido?'}\n",
+              'cancel dialog title',
+          )
+          caixa = replace_once(
+              caixa,
+              "                  {cancelConsumptionTarget.scope === 'table'\n                    ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'\n                    : 'Somente os itens do card escolhido serão cancelados; os demais pedidos da mesa serão preservados.'}\n",
+              "                  {cancelConsumptionTarget.scope === 'table'\n                    ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'\n                    : cancelConsumptionTarget.scope === 'digital'\n                      ? 'O pedido sairá da operação ativa e seus itens serão cancelados no backend.'\n                      : 'Somente os itens do card escolhido serão cancelados; os demais pedidos da mesa serão preservados.'}\n",
+              'cancel dialog description',
+          )
+          caixa = replace_once(
+              caixa,
+              ">Manter atendimento</button>\n",
+              ">{cancelConsumptionTarget.scope === 'digital' ? 'Manter pedido' : 'Manter atendimento'}</button>\n",
+              'cancel dialog keep label',
+          )
+          caixa = replace_once(
+              caixa,
+              "                {isCancellingTable ? 'Cancelando…' : cancelConsumptionTarget.scope === 'table' ? 'Cancelar e liberar' : 'Cancelar este pedido'}\n",
+              "                {isCancellingTable ? 'Cancelando…' : cancelConsumptionTarget.scope === 'table' ? 'Cancelar e liberar' : 'Cancelar pedido'}\n",
+              'cancel dialog submit label',
+          )
+
+          # Guardrails for the requested cleanup.
+          if 'Sistema online' in caixa:
+              raise SystemExit('Sistema online copy still present in CaixaPanel')
+          if 'Salão e impressão' in caixa:
+              raise SystemExit('old Salão e impressão label still present in CaixaPanel')
+          if 'Exceção' in main:
+              raise SystemExit('exception UI still referenced by main')
+
+          caixa_path.write_text(caixa, encoding='utf-8')
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit validated UX refinement
+        shell: bash
+        run: |
+          git config user.name "ChatGPT"
+          git config user.email "chatgpt@users.noreply.github.com"
+          git rm .github/workflows/chatgpt-cashier-ux-pass.yml
+          git add -A
+          git commit -m "feat: simplify cashier order workflows"
+          git push origin HEAD:main
