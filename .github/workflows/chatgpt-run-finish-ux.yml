@@ -1,17 +1,15 @@
-# second push intentionally triggers this already-registered workflow
 name: Run final UX completion
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths: [.github/workflows/chatgpt-run-finish-ux.yml]
 
 permissions:
   contents: write
 
 jobs:
   finish:
-    if: github.event.head_commit.message == 'chore: run final UX completion'
+    if: github.head_ref == 'chatgpt/finish-ux-partials-20260823'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
