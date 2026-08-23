@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Activity, CheckCircle2, Grid2X2, Radio, Utensils } from 'lucide-react';
+import { Activity, CheckCircle2, Grid2X2, Utensils } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
 
@@ -82,18 +82,14 @@ export function MesasView({
 
         <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-5 xl:gap-8">
           <div className="max-w-2xl">
-            <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-mono font-bold uppercase tracking-[0.18em] text-koma-accent">
-              <Radio size={13} className="animate-pulse" />
-              Operação ao vivo
-            </div>
-            <div className="mt-2 flex items-end gap-3 sm:gap-4">
+            <div className="flex items-end gap-3 sm:gap-4">
               <h2 className="font-serif text-[2rem] sm:text-4xl lg:text-5xl font-black tracking-[-0.055em] leading-none text-koma-foreground">
-                Mapa de mesas
+                Salão
               </h2>
               <span className="hidden sm:inline-block mb-1.5 h-1 w-14 bg-koma-accent -rotate-2" aria-hidden="true" />
             </div>
             <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-koma-subtle leading-relaxed">
-              Veja o salão inteiro, identifique prioridades e abra uma mesa com um toque.
+              As mesas mudam de aparência conforme o atendimento. Toque para abrir ou agir.
             </p>
           </div>
 
@@ -101,9 +97,9 @@ export function MesasView({
             <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
               <div className="flex items-center gap-1.5 text-koma-muted">
                 <Grid2X2 size={12} />
-                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Salão</span>
+                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Livres</span>
               </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.todos}</p>
+              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.livres}</p>
             </div>
             <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
               <div className="flex items-center gap-1.5 text-koma-danger-text">
@@ -126,7 +122,7 @@ export function MesasView({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-4">
         <div className="flex items-center gap-2 text-koma-subtle">
           <Activity size={14} className="text-koma-accent" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Estrutura física do salão</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Filtrar mesas</span>
         </div>
 
         <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full gap-1.5 overflow-x-auto rounded-xl p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 lg:w-auto">

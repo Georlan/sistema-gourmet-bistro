@@ -2204,19 +2204,7 @@ export default function App() {
 
             {/* Right: Network Status Badge */}
             <div className="flex items-center gap-2">
-              <div className={clsx(
-                'flex', 'items-center', 'gap-1.5', 'px-2.5', 'py-1', 'rounded-full', 'text-[10px]', 'font-semibold', 'transition-all',
-                !isOnline 
-                  ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20'
-                  : isWsConnected 
-                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20'
-              )}>
-                {!isOnline ? <WifiOff size={12} /> : isWsConnected ? <Wifi size={12} /> : <RefreshCw size={12} className="animate-spin" />}
-                <span className="hidden sm:inline">
-                  {!isOnline ? 'Offline' : isWsConnected ? 'Online' : 'Reconectando...'}
-                </span>
-              </div>
+
             </div>
 
           </div>

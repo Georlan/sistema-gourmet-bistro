@@ -142,11 +142,11 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         eyebrow="HISTÓRICO DO CAIXA"
         title="Movimentações"
         accent="do caixa"
-        description={`Sangrias e suprimentos do período${turnoResumo?.operador_nome ? ` · ${turnoResumo.operador_nome}` : ''}.`}
+        description={`Entradas e retiradas de dinheiro do período${turnoResumo?.operador_nome ? ` · ${turnoResumo.operador_nome}` : ''}.`}
         metrics={[
-          { label: 'suprimentos', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },
-          { label: 'sangrias', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },
-          { label: 'saldo dos ajustes', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300' },
+          { label: 'dinheiro adicionado', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },
+          { label: 'dinheiro retirado', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },
+          { label: 'saldo das movimentações', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300' },
           { label: 'último no recorte', value: latestMovementTime },
         ]}
       />
@@ -169,8 +169,8 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           </label>
           <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500">
             <option value="todos">Todas as operações</option>
-            <option value="suprimento">Suprimentos</option>
-            <option value="sangria">Sangrias</option>
+            <option value="suprimento">Dinheiro adicionado</option>
+            <option value="sangria">Dinheiro retirado</option>
           </select>
           <div className="grid grid-cols-2 gap-2 sm:col-span-2 xl:col-span-2">
             <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-[11px] text-koma-foreground outline-none focus:border-emerald-500" /></label>
@@ -182,11 +182,11 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
       <section>
         <article className="overflow-hidden rounded-[20px] border border-koma-border bg-koma-panel">
           <header className="flex items-center justify-between gap-3 border-b border-koma-border px-4 py-3 sm:px-5">
-            <div><h3 className="text-xs font-bold text-koma-foreground">Histórico de ajustes</h3><p className="mt-0.5 text-[10px] text-koma-muted">Ordem cronológica, do registro mais recente ao mais antigo</p></div>
+            <div><h3 className="text-xs font-bold text-koma-foreground">Movimentações do caixa</h3><p className="mt-0.5 text-[10px] text-koma-muted">Ordem cronológica, do registro mais recente ao mais antigo</p></div>
             <span className="rounded-full border border-koma-border bg-koma-card px-2.5 py-1 text-[9px] font-bold text-koma-muted">{filteredMovs.length} registro(s)</span>
           </header>
           {filteredMovs.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-koma-muted" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Revise os filtros ou use o Turno atual para registrar sangria ou suprimento.</span></div>
+            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-koma-muted" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Revise os filtros ou use o Turno atual para adicionar ou retirar dinheiro.</span></div>
           ) : (
             <ul className="divide-y divide-koma-border">
               {filteredMovs.map(movimentacao => {
@@ -201,7 +201,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                 return (
                   <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
                     <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
-                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{movimentacao.descricao || (isSupply ? 'Suprimento' : 'Sangria')}</strong><span className="text-[9px] text-koma-muted">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-koma-muted">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
+                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{movimentacao.descricao || (isSupply ? 'Dinheiro adicionado' : 'Dinheiro retirado')}</strong><span className="text-[9px] text-koma-muted">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-koma-muted">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
                     <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
                   </li>
                 );
