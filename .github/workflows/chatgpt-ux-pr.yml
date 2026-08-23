@@ -31,11 +31,7 @@ jobs:
           marker = "          python - <<'PY'\n"
           start = workflow.index(marker) + len(marker)
           end = workflow.index("\n          PY", start)
-          source_lines = workflow[start:end].splitlines()
-          code = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in source_lines
-          )
+          code = "if True:\n" + workflow[start:end]
           exec(compile(code, 'cashier_ux_patch.py', 'exec'))
           PY
 
