@@ -3,6 +3,8 @@ name: One-off UX PR runner
 on:
   pull_request:
     branches: [main]
+    paths:
+      - .chatgpt-ux-trigger
 
 permissions:
   contents: write
