@@ -24,7 +24,6 @@ interface CaixaFechamentoTabProps {
   turnoResumo: CaixaTurnoResumo | null;
   pendingPaymentsCount: number;
   pendingPaymentsTotal: number;
-  isConnected?: boolean;
   onConfirmFechamento: (payload: {
     declarado_dinheiro: number;
     declarado_cartao: number;
@@ -32,7 +31,6 @@ interface CaixaFechamentoTabProps {
     observacao: string;
   }) => Promise<void>;
   onOpenNovoTurnoModal?: () => void;
-  onRefresh?: () => Promise<void> | void;
   onNavigateToPendingPayments?: () => void;
   onNavigateToOpenComandas?: () => void;
 }
@@ -76,7 +74,7 @@ const CountField: React.FC<CountFieldProps> = ({
 
   return (
     <div className="closing-count-field min-w-0 rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-koma-accent">
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="closing-count-field__header flex min-w-0 items-start justify-between gap-3">
         <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
             <Icon size={15} />
@@ -463,7 +461,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             />
           </label>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="closing-toolbar-actions mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
             {closingMode === 'rapida' ? (
               <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
                 <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Registrado</span>

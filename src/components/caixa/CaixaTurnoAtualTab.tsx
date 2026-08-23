@@ -19,10 +19,8 @@ import { EstornoModal } from './EstornoModal';
 interface CaixaTurnoAtualTabProps {
   turnoResumo: CaixaTurnoResumo | null;
   isLoading: boolean;
-  isConnected?: boolean;
   pendingPaymentsCount: number;
   pendingPaymentsTotal: number;
-  onRefresh: () => void;
   onNavigateToFechamento: () => void;
   onNavigateToMovimentacoes: () => void;
   onNavigateToPendingPayments: () => void;
@@ -82,12 +80,15 @@ const ActivityIcon = ({ type }: { type: string }) => {
   return <ReceiptText size={15} />;
 };
 
-const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
+const ActivityRow = ({ activity, onRefund }: { activity: CaixaAtividadeRecente; onRefund?: (paymentId: string) => void }) => {
   const isOutflow = activity.tipo === 'sangria' || activity.tipo === 'estorno';
   const timestamp = normalizeOperationalTimestamp(activity.criado_em);
   const date = timestamp !== null ? new Date(timestamp) : null;
   const validDate = date !== null && !Number.isNaN(date.getTime());
   const method = activity.metodo ? paymentMethodLabel[activity.metodo] || activity.metodo : null;
+  const refundPaymentId = activity.tipo === 'recebimento' && activity.id.startsWith('pagamento:')
+    ? activity.id.slice('pagamento:'.length)
+    : null;
 
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-[#202522] px-4 py-3 first:border-t-0 sm:px-5">
@@ -109,9 +110,16 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
           {activity.origem}{method ? ` · ${method}` : ''}{activity.operador_nome ? ` · ${activity.operador_nome}` : ''}
         </span>
       </span>
-      <strong className={`whitespace-nowrap text-xs tabular-nums ${isOutflow ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
-        {isOutflow ? '−' : '+'} {formatCurrency(activity.valor)}
-      </strong>
+      <span className="flex flex-col items-end gap-1">
+        <strong className={`whitespace-nowrap text-xs tabular-nums ${isOutflow ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>
+          {isOutflow ? '−' : '+'} {formatCurrency(activity.valor)}
+        </strong>
+        {refundPaymentId && onRefund && (
+          <button type="button" onClick={() => onRefund(refundPaymentId)} className="text-[9px] font-bold text-rose-700 hover:text-rose-600 dark:text-rose-300 dark:hover:text-rose-200" aria-label={`Devolver pagamento de ${activity.origem}`}>
+            Devolver
+          </button>
+        )}
+      </span>
     </li>
   );
 };
@@ -128,7 +136,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   onOpenSuprimentoModal,
   onOpenNovoTurnoModal,
 }) => {
-  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
 
   if (!turnoResumo) return <CaixaSummarySkeleton />;
 
@@ -168,12 +176,6 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
       icon: ReceiptText,
     },
     {
-      label: 'Dinheiro esperado',
-      value: turnoResumo.saldo_esperado_dinheiro,
-      help: 'Valor físico previsto no caixa após devoluções',
-      icon: Banknote,
-    },
-    {
       label: 'Pix e cartões líquidos',
       value: digitalTotal,
       help: `${formatCurrency(turnoResumo.total_pix)} Pix · ${formatCurrency(turnoResumo.total_cartao)} cartões`,
@@ -208,16 +210,13 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
             <ArrowUpRight size={14} className="text-rose-700 dark:text-rose-400" /> Retirar dinheiro
           </button>
-          <button type="button" onClick={() => setShowRefundModal(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
-            <RotateCcw size={14} /> Devolver pagamento
-          </button>
           <button type="button" onClick={onNavigateToFechamento} className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2.5 sm:py-2 text-[11px] font-bold uppercase tracking-[0.08em] transition-all cursor-pointer shadow-sm">
             <Lock size={14} /> Fechar caixa
           </button>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
         {metrics.map(metric => (
           <article key={metric.label} className="min-w-0 rounded-[16px] border border-koma-border bg-koma-panel p-3 sm:rounded-[18px] sm:p-4">
             <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted">
@@ -242,7 +241,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             <button type="button" onClick={onNavigateToMovimentacoes} className="shrink-0 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:text-[#7becce]">Ver movimentações</button>
           </header>
           {activities.length > 0 ? (
-            <ul>{activities.map(activity => <ActivityRow key={activity.id} activity={activity} />)}</ul>
+            <ul>{activities.map(activity => <ActivityRow key={activity.id} activity={activity} onRefund={setRefundPaymentId} />)}</ul>
           ) : (
             <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
               <History size={22} className="text-koma-muted" />
@@ -292,9 +291,10 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
         </div>
       </section>
 
-      {showRefundModal && (
+      {refundPaymentId && (
         <EstornoModal
-          onClose={() => setShowRefundModal(false)}
+          initialPaymentId={refundPaymentId}
+          onClose={() => setRefundPaymentId(null)}
           onSuccess={() => undefined}
         />
       )}

@@ -11,6 +11,7 @@ import { formatBackendDateTime } from '../../utils/dateTime';
 interface EstornoModalProps {
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
+  initialPaymentId?: string | null;
 }
 
 const currency = new Intl.NumberFormat('pt-BR', {
@@ -30,9 +31,9 @@ const normalizeCardMethod = (method: string) => (
   ['cartao', 'cartao_credito', 'cartao_debito'].includes(method) ? 'cartao' : method
 );
 
-export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }) => {
+export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, initialPaymentId = null }) => {
   const [payments, setPayments] = useState<RefundablePayment[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('');
+  const [selectedId, setSelectedId] = useState<string>(initialPaymentId || '');
   const [search, setSearch] = useState('');
   const [value, setValue] = useState<number | ''>('');
   const [reason, setReason] = useState('');
@@ -50,7 +51,9 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
     try {
       const data = await listarPagamentosEstornaveis();
       setPayments(data);
-      if (selectedId && !data.some(payment => payment.id === selectedId)) {
+      if (initialPaymentId && data.some(payment => payment.id === initialPaymentId)) {
+        setSelectedId(initialPaymentId);
+      } else if (selectedId && !data.some(payment => payment.id === selectedId)) {
         setSelectedId('');
       }
     } catch (err) {
