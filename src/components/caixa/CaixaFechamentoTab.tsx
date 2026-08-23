@@ -461,7 +461,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             />
           </label>
 
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="closing-toolbar-actions mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
             {closingMode === 'rapida' ? (
               <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
                 <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Registrado</span>
