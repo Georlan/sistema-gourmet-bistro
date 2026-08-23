@@ -33,71 +33,72 @@ jobs:
                   raise SystemExit(f"{label}: expected exactly one match, found {count}")
               return text.replace(old, new, 1)
 
-          # ------------------------------------------------------------------
-          # Remove the separate emergency/exception UI. Cancellation now lives
-          # in the regular order-card detail flow.
-          # ------------------------------------------------------------------
+          def replace_between(text: str, start: str, end: str, replacement: str, label: str) -> str:
+              start_at = text.find(start)
+              if start_at < 0:
+                  raise SystemExit(f"{label}: start marker not found")
+              end_at = text.find(end, start_at)
+              if end_at < 0:
+                  raise SystemExit(f"{label}: end marker not found")
+              return text[:start_at] + replacement + text[end_at:]
+
+          # Remove the separate online-order exception UI. Cancellation now
+          # belongs to the regular card detail flow.
           main_path = Path('src/main.tsx')
           main = main_path.read_text(encoding='utf-8')
-          main = replace_once(
-              main,
-              '''const OnlineOrderEmergencyActions = isSmartPosRoute
-            ? null
-            : React.lazy(() => import("./components/OnlineOrderEmergencyActions"));
-
-          ''',
+          main, count = re.subn(
+              r'const OnlineOrderEmergencyActions = isSmartPosRoute\n\s*\? null\n\s*: React\.lazy\(\(\) => import\("\.\/components\/OnlineOrderEmergencyActions"\)\);\n',
               '',
-              'remove emergency lazy component',
-          )
-          main = replace_once(
               main,
-              '      {OnlineOrderEmergencyActions && <OnlineOrderEmergencyActions />}\n',
-              '',
-              'remove emergency component render',
+              count=1,
           )
+          if count != 1:
+              raise SystemExit(f'emergency component declaration: expected 1, got {count}')
+          main, count = re.subn(
+              r'^\s*\{OnlineOrderEmergencyActions && <OnlineOrderEmergencyActions \/>\}\n',
+              '',
+              main,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          if count != 1:
+              raise SystemExit(f'emergency component render: expected 1, got {count}')
           main_path.write_text(main, encoding='utf-8')
-
           emergency_path = Path('src/components/OnlineOrderEmergencyActions.tsx')
           if emergency_path.exists():
               emergency_path.unlink()
 
-          # ------------------------------------------------------------------
-          # Remove the global network-status badge (Offline/Online/Reconnecting).
-          # Connectivity remains internal; the operator no longer sees noisy
-          # technical state in the main interface.
-          # ------------------------------------------------------------------
+          # Remove the visible network-status badge. Connectivity itself stays
+          # internal so refresh/retry behavior continues to work normally.
           app_path = Path('src/App.tsx')
           app = app_path.read_text(encoding='utf-8')
           reconnect_pos = app.find("Reconectando...")
-          if reconnect_pos == -1:
+          if reconnect_pos < 0:
               raise SystemExit('network badge: Reconectando... not found')
           status_start = app.rfind('<div className={clsx(', 0, reconnect_pos)
-          if status_start == -1:
-              raise SystemExit('network badge: parent div not found')
+          if status_start < 0:
+              raise SystemExit('network badge: status div not found')
           status_line_start = app.rfind('\n', 0, status_start) + 1
           status_end = app.find('</div>', reconnect_pos)
-          if status_end == -1:
-              raise SystemExit('network badge: closing div not found')
+          if status_end < 0:
+              raise SystemExit('network badge: status closing div not found')
           status_end += len('</div>')
           app = app[:status_line_start] + app[status_end:]
           if 'Reconectando...' in app:
-              raise SystemExit('network badge: visible reconnecting copy still present')
+              raise SystemExit('network badge: reconnecting copy remains')
           app_path.write_text(app, encoding='utf-8')
 
-          # ------------------------------------------------------------------
-          # Cashier / operations UX.
-          # ------------------------------------------------------------------
           caixa_path = Path('src/components/CaixaPanel.tsx')
           caixa = caixa_path.read_text(encoding='utf-8')
 
+          # Navigation and visible connection noise.
           caixa = replace_once(
               caixa,
               "      { id: 'impressao_salao', label: 'Salão e impressão', icon: Printer },",
               "      { id: 'impressao_salao', label: 'Configurações', icon: SlidersHorizontal },",
-              'rename settings navigation',
+              'settings nav label',
           )
           caixa = caixa.replace("&& 'Configurações do Salão'", "&& 'Configurações'")
-
           caixa, online_count = re.subn(
               r'^\s*<span><i /> Sistema online</span>\n',
               '',
@@ -111,16 +112,29 @@ jobs:
               caixa,
               "  const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');\n",
               "  const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');\n  const [pdvProductDetailId, setPdvProductDetailId] = useState<string | null>(null);\n",
-              'add product detail state',
+              'product detail state',
           )
 
-          caixa = replace_once(
-              caixa,
-              "              onClick={() => setActiveSubTab(sub.id)}\n",
-              """              onClick={() => {
+          old_operation_tabs = '''          {activeTab === 'operacao' && [
+            { id: 'pedidos', label: 'Pedidos' },
+            { id: 'balcao', label: 'Novo pedido' },
+            { id: 'mesas', label: 'Salão' }
+          ].map(sub => (
+            <button
+              key={sub.id}
+              onClick={() => setActiveSubTab(sub.id)}
+'''
+          new_operation_tabs = '''          {activeTab === 'operacao' && [
+            { id: 'pedidos', label: 'Pedidos' },
+            { id: 'balcao', label: 'Novo pedido' },
+            { id: 'mesas', label: 'Salão' }
+          ].map(sub => (
+            <button
+              key={sub.id}
+              onClick={() => {
                 if (sub.id === 'balcao') {
-                  // Abrir Novo pedido pela navegação sempre começa neutro.
-                  // A seleção de mesa continua preservada quando o fluxo nasce no Salão.
+                  // A navegação para Novo pedido sempre começa neutra. A mesa
+                  // só é preservada quando o fluxo nasce explicitamente no Salão.
                   setPdvOrderType('retirada');
                   setPdvTargetMesaId(0);
                   setBalcaoMobileView('produtos');
@@ -128,11 +142,10 @@ jobs:
                 }
                 setActiveSubTab(sub.id);
               }}
-""",
-              'reset leaked table selection on new-order tab',
-          )
+'''
+          caixa = replace_once(caixa, old_operation_tabs, new_operation_tabs, 'operation tabs')
 
-          # Header: Pedidos — only stage/actionable information.
+          # Action-oriented operational headers.
           old_orders_banner = '''                eyebrow="OPERAÇÃO AO VIVO"
                 title="Pedidos"
                 accent="em movimento"
@@ -164,7 +177,6 @@ jobs:
 '''
           caixa = replace_once(caixa, old_orders_banner, new_orders_banner, 'orders header')
 
-          # Header: Novo pedido — cart/destination instead of analytics noise.
           old_pdv_banner = '''                eyebrow="VENDA / NOVO PEDIDO"
                 title="Novo pedido,"
                 accent="sem atrito"
@@ -197,7 +209,6 @@ jobs:
 '''
           caixa = replace_once(caixa, old_pdv_banner, new_pdv_banner, 'new order header')
 
-          # Header: Salão — direct counts that drive the next action.
           old_salon_banner = '''                eyebrow="OPERAÇÃO DO SALÃO"
                 title="Salão"
                 accent="em tempo real"
@@ -225,38 +236,57 @@ jobs:
 '''
           caixa = replace_once(caixa, old_salon_banner, new_salon_banner, 'salon header')
 
-          # Cash headers: concise and decision-oriented.
-          caixa = replace_once(caixa, '                eyebrow="CAIXA / CONFERÊNCIA AO VIVO"\n                title="Seu caixa,"\n                accent="sob controle"\n                description="Vendas, recebimentos e troco conciliados em um só lugar."\n', '                eyebrow="CAIXA"\n                title="Turno atual"\n                accent="em ordem"\n                description="Saldo, ritmo de vendas e pendências do turno."\n', 'cash header copy')
-          caixa = replace_once(caixa, '                eyebrow="CAIXA / ENCERRAMENTO SEGURO"\n                title="Feche o turno,"\n                accent="sem retrabalho"\n                description="Valores esperados, divergências e pendências em uma única conferência."\n', '                eyebrow="CAIXA"\n                title="Fechamento"\n                accent="sem surpresa"\n                description="Confira pendências antes de encerrar o turno."\n', 'cash closing header copy')
+          caixa = replace_once(
+              caixa,
+              '                eyebrow="CAIXA / CONFERÊNCIA AO VIVO"\n                title="Seu caixa,"\n                accent="sob controle"\n                description="Vendas, recebimentos e troco conciliados em um só lugar."\n',
+              '                eyebrow="CAIXA"\n                title="Turno atual"\n                accent="em ordem"\n                description="Saldo, ritmo de vendas e pendências do turno."\n',
+              'cash header',
+          )
+          caixa = replace_once(
+              caixa,
+              '                eyebrow="CAIXA / ENCERRAMENTO SEGURO"\n                title="Feche o turno,"\n                accent="sem retrabalho"\n                description="Valores esperados, divergências e pendências em uma única conferência."\n',
+              '                eyebrow="CAIXA"\n                title="Fechamento"\n                accent="sem surpresa"\n                description="Confira pendências antes de encerrar o turno."\n',
+              'closing header',
+          )
           caixa = replace_once(
               caixa,
               "                  { label: 'último recebimento', value: latestReceiptTime },\n                  { label: 'modo de conferência', value: 'Assistida', valueClassName: 'text-emerald-800 dark:text-emerald-300' },\n",
               "                  { label: 'pagamentos pendentes', value: pagamentosPendentes.length, valueClassName: pagamentosPendentes.length > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },\n                  { label: 'valor pendente', value: formatCompactCurrency(pendingPaymentsTotal) },\n",
-              'cash closing metrics',
+              'closing metrics',
           )
 
-          # Settings headers: remove non-actionable counters.
+          # Settings headers show only configuration facts that help a decision.
           caixa = caixa.replace('                  eyebrow="SALÃO / ORGANIZAÇÃO"', '                  eyebrow="CONFIGURAÇÕES / SALÃO"')
           caixa = caixa.replace('                  title="Mesas"\n                  accent="prontas para receber"', '                  title="Mesas"\n                  accent="organizadas"')
           caixa = caixa.replace('                  description="Capacidade e identificação do salão sem misturar configuração com comandas abertas."', '                  description="Cadastre nomes e capacidades; a operação usa essa mesma estrutura."')
           caixa = caixa.replace('                  eyebrow="SALÃO / APP DO GARÇOM"', '                  eyebrow="CONFIGURAÇÕES / EQUIPE"')
           caixa = caixa.replace('                  title="Atendimento"\n                  accent="com autonomia controlada"', '                  title="App do garçom"\n                  accent="com regras claras"')
           caixa = caixa.replace('                  description="Veja rapidamente o que a equipe pode fazer antes de ajustar cada permissão."', '                  description="Controle apenas o que a equipe pode fazer durante o atendimento."')
-          caixa = replace_once(caixa, "                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' },\n                    { label: 'integrações pendentes', value: 7 }\n", "                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' }\n", 'remove integrations pending metric')
+          caixa = replace_once(
+              caixa,
+              "                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' },\n                    { label: 'integrações pendentes', value: 7 }\n",
+              "                    { label: 'fechamento no app', value: permCloseAccount ? 'Permitido' : 'Bloqueado' }\n",
+              'waiter settings metrics',
+          )
           caixa = caixa.replace('                  eyebrow="SALÃO / TAXA DE SERVIÇO"', '                  eyebrow="CONFIGURAÇÕES / SERVIÇO"')
           caixa = caixa.replace('                  title="Taxa"', '                  title="Taxa de serviço"')
           caixa = caixa.replace('                  description="A regra é única para o salão e chega ao fechamento sem cálculo paralelo."', '                  description="Defina uma regra única para o salão e para o fechamento."')
-          caixa = replace_once(caixa, "                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },\n                    { label: 'aplicação', value: 'Fechamento' },\n                    { label: 'alcance', value: 'Caixa e salão' }\n", "                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },\n                    { label: 'alcance', value: 'Caixa e salão' }\n", 'simplify service fee metrics')
+          caixa = replace_once(
+              caixa,
+              "                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },\n                    { label: 'aplicação', value: 'Fechamento' },\n                    { label: 'alcance', value: 'Caixa e salão' }\n",
+              "                    { label: 'percentual padrão', value: taxaServicoAtiva ? `${serviceTaxRate}%` : '—' },\n                    { label: 'alcance', value: 'Caixa e salão' }\n",
+              'service fee metrics',
+          )
 
-          # Simplify product cards: default view = name, image, price, add.
-          # Ingredients/details stay available on hover and through an explicit click.
+          # Product cards: name/price are primary. Ingredients and description
+          # stay available on hover or by clicking the detail icon.
           product_start_token = '                    {filteredProducts.map((p) => {'
           product_end_token = '                    )})}\n                  </div>'
           product_start = caixa.find(product_start_token)
-          if product_start == -1:
+          if product_start < 0:
               raise SystemExit('product cards: start not found')
           product_end = caixa.find(product_end_token, product_start)
-          if product_end == -1:
+          if product_end < 0:
               raise SystemExit('product cards: end not found')
           product_end += len('                    )})}')
           new_product_block = '''                    {filteredProducts.map((p) => {
@@ -355,17 +385,12 @@ jobs:
                     })}'''
           caixa = caixa[:product_start] + new_product_block + caixa[product_end:]
 
-          # Delivery details now carry authoritative ids/prices so the same
-          # cancellation flow can be used from every order card.
-          old_delivery_map = '''      ? fullComanda.itens.map((it: any) => ({
-          nome: it.produto?.nome || it.nome || 'Item',
-          observacao: it.observacao || '',
-          cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-          status: it.status,
-          lancamentoId: it.lancamentoId || it.lancamento_id,
-        }))
-'''
-          new_delivery_map = '''      ? fullComanda.itens.map((it: any) => ({
+          # Build delivery details with ids/prices so cancellation is handled by
+          # the same normal modal as table/balcony orders.
+          delivery_function = '''  const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
+    const fullComanda = orders.find(o => o.id === order.id);
+    const itemsMapped = fullComanda
+      ? fullComanda.itens.map((it: any) => ({
           id: it.id,
           comandaId: fullComanda.id,
           nome: it.produto?.nome || it.nome || 'Item',
@@ -376,25 +401,49 @@ jobs:
           pago: it.pago,
           lancamentoId: it.lancamentoId || it.lancamento_id,
         }))
+      : order.itens.split(' + ').map((itStr: string) => {
+          const match = itStr.match(/^(\\d+)x\\s+(.+)$/);
+          return {
+            nome: match ? match[2] : itStr,
+            observacao: '',
+            cliente_nome: 'Consumo Geral',
+            status: order.status === 'pronto' ? 'pronto' : (order.status === 'transito' ? 'entregue' : 'preparando'),
+            lancamentoId: undefined,
+          };
+        });
+
+    setSelectedKanbanOrder({
+      id: order.id,
+      comandaId: order.id,
+      mesaId: 0,
+      quantidadeItens: order.quantidadeItens,
+      identificador: order.cliente,
+      itens: itemsMapped,
+      total: order.total,
+      numeroPedido: order.numeroPedido,
+      origemOperacional: order.origemOperacional,
+      isQuickSale: order.isQuickSale,
+      modalidade: order.modalidade,
+      deliveryStatus: order.status,
+      canal: order.canal,
+      telefone: order.telefone,
+      endereco: order.endereco,
+      criadoEm: order.criadoEm,
+      created_at: order.created_at,
+      lancamentoId: itemsMapped.find((item: any) => item.lancamentoId)?.lancamentoId,
+    });
+  };
+
 '''
-          caixa = replace_once(caixa, old_delivery_map, new_delivery_map, 'delivery detail item ids')
-          caixa = replace_once(
+          caixa = replace_between(
               caixa,
-              "      id: order.id,\n      mesaId: 0,\n",
-              "      id: order.id,\n      comandaId: order.id,\n      mesaId: 0,\n      quantidadeItens: order.quantidadeItens,\n",
-              'delivery detail order identity',
+              '  const openDeliveryOrderDetails = (order: DeliveryOrderView) => {',
+              '  const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {',
+              delivery_function,
+              'delivery details',
           )
 
-          old_cancel_state = '''  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
-    scope: 'order' | 'table';
-    mesaId: number;
-    comandas: number;
-    itens: number;
-    total: number;
-    itemIds: string[];
-  } | null>(null);
-'''
-          new_cancel_state = '''  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
+          cancel_state = '''  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
     scope: 'order' | 'table' | 'digital';
     mesaId: number;
     orderId?: string;
@@ -404,28 +453,15 @@ jobs:
     itemIds: string[];
   } | null>(null);
 '''
-          caixa = replace_once(caixa, old_cancel_state, new_cancel_state, 'cancel target scope')
+          caixa = replace_between(
+              caixa,
+              '  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{',
+              '  const [cancelTableReason, setCancelTableReason] = useState',
+              cancel_state,
+              'cancel target state',
+          )
 
-          old_open_cancel = '''  const openCancelOrderConfirmation = (order: any) => {
-    const activeItems = (order?.itens || []).filter(
-      (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
-    );
-    const comandaIds = new Set(
-      activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean),
-    );
-    setCancelConsumptionTarget({
-      scope: 'order',
-      mesaId: Number(order.mesaId),
-      comandas: comandaIds.size,
-      itens: activeItems.length,
-      total: activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
-      itemIds: activeItems.map((item: any) => String(item.id)),
-    });
-    setCancelTableReason('');
-    setSelectedKanbanOrder(null);
-  };
-'''
-          new_open_cancel = '''  const openCancelOrderConfirmation = (order: any) => {
+          open_cancel_function = '''  const openCancelOrderConfirmation = (order: any) => {
     const activeItems = (order?.itens || []).filter(
       (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
     );
@@ -447,42 +483,17 @@ jobs:
     setCancelTableReason('');
     setSelectedKanbanOrder(null);
   };
-'''
-          caixa = replace_once(caixa, old_open_cancel, new_open_cancel, 'unified cancel target')
 
-          old_cancel_handler = '''  const handleCancelTableConsumption = async () => {
-    if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
-    setIsCancellingTable(true);
-    try {
-      const isOrderScope = cancelConsumptionTarget.scope === 'order';
-      const response = await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          motivo: cancelTableReason.trim(),
-          ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o consumo.');
-
-      setCancelConsumptionTarget(null);
-      setCancelTableReason('');
-      await onRefreshOrders();
-      showToast(
-        isOrderScope
-          ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
-          : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
-        'success',
-      );
-    } catch (error: any) {
-      showToast(error?.message || 'Não foi possível cancelar o consumo.', 'error');
-    } finally {
-      setIsCancellingTable(false);
-    }
-  };
 '''
-          new_cancel_handler = '''  const handleCancelTableConsumption = async () => {
+          caixa = replace_between(
+              caixa,
+              '  const openCancelOrderConfirmation = (order: any) => {',
+              '  const handleCancelTableConsumption = async () => {',
+              open_cancel_function,
+              'open cancellation',
+          )
+
+          cancel_handler = '''  const handleCancelTableConsumption = async () => {
     if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
     setIsCancellingTable(true);
     try {
@@ -527,24 +538,27 @@ jobs:
       setIsCancellingTable(false);
     }
   };
-'''
-          caixa = replace_once(caixa, old_cancel_handler, new_cancel_handler, 'unified cancellation handler')
 
-          # Add the same cancel action to delivery/retirada detail cards.
-          existing_table_cancel = '''                    <button
-                      type="button"
-                      onClick={() => selectedKanbanOrder.contextoSalao
-                        ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
-                        : openCancelOrderConfirmation(selectedKanbanOrder)}
-                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
-                    >
-                      <Trash2 size={13} />
-                      {selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : 'Cancelar somente este pedido'}
-                    </button>
-                  </div>
-                )}
 '''
-          unified_table_cancel = existing_table_cancel + '''                {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
+          caixa = replace_between(
+              caixa,
+              '  const handleCancelTableConsumption = async () => {',
+              '  const handleTransferTableFromSalon = async (order: any) => {',
+              cancel_handler,
+              'cancellation handler',
+          )
+
+          selected_detail_end = '''                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelConsumptionTarget && (
+'''
+          selected_detail_end_new = '''                )}
+                {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
                   <button
                     type="button"
                     onClick={() => openCancelOrderConfirmation(selectedKanbanOrder)}
@@ -554,8 +568,15 @@ jobs:
                     Cancelar pedido
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelConsumptionTarget && (
 '''
-          caixa = replace_once(caixa, existing_table_cancel, unified_table_cancel, 'digital cancel action in normal card detail')
+          caixa = replace_once(caixa, selected_detail_end, selected_detail_end_new, 'digital cancel button')
 
           caixa = replace_once(
               caixa,
@@ -571,7 +592,7 @@ jobs:
           )
           caixa = replace_once(
               caixa,
-              ">Manter atendimento</button>\n",
+              '>Manter atendimento</button>\n',
               ">{cancelConsumptionTarget.scope === 'digital' ? 'Manter pedido' : 'Manter atendimento'}</button>\n",
               'cancel dialog keep label',
           )
@@ -582,13 +603,14 @@ jobs:
               'cancel dialog submit label',
           )
 
-          # Guardrails for the requested cleanup.
           if 'Sistema online' in caixa:
-              raise SystemExit('Sistema online copy still present in CaixaPanel')
+              raise SystemExit('visible Sistema online copy remains')
           if 'Salão e impressão' in caixa:
-              raise SystemExit('old Salão e impressão label still present in CaixaPanel')
-          if 'Exceção' in main:
-              raise SystemExit('exception UI still referenced by main')
+              raise SystemExit('old settings label remains')
+          if 'Reconectando...' in app:
+              raise SystemExit('visible Reconectando copy remains')
+          if 'OnlineOrderEmergencyActions' in main:
+              raise SystemExit('emergency component remains in main')
 
           caixa_path.write_text(caixa, encoding='utf-8')
           PY
