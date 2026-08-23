@@ -1,0 +1,191 @@
+name: Finish cashier UX partials
+
+on:
+  push:
+    branches:
+      - chatgpt/finish-ux-partials-20260823
+    paths:
+      - .github/workflows/chatgpt-finish-ux-partials.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply focused UX fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected 1 match, found {count}")
+              return text.replace(old, new, 1)
+
+          path = Path('src/components/caixa/SuprimentoModal.tsx')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'O valor do suprimento deve ser maior que zero.': 'O valor adicionado deve ser maior que zero.',
+              "err.message || 'Erro ao registrar suprimento.'": "err.message || 'Não foi possível adicionar dinheiro ao caixa.'",
+              'Novo Suprimento de Caixa': 'Adicionar dinheiro ao caixa',
+              'Aporte de fundo de troco extra no caixa aberto.': 'Registre um valor extra colocado na gaveta, como reforço de troco.',
+              'Valor do Suprimento (R$)': 'Valor adicionado (R$)',
+              'aria-label="Valor do suprimento"': 'aria-label="Valor adicionado ao caixa"',
+              'placeholder="ex: Troco inicial extra para início de pico..."': 'placeholder="Ex.: reforço de troco para o horário de pico"',
+              "{isSubmitting ? 'Salvando...' : 'Confirmar Suprimento'}": "{isSubmitting ? 'Salvando...' : 'Confirmar entrada'}",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'SuprimentoModal missing: {old}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/components/caixa/SangriaModal.tsx')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'O valor da sangria deve ser maior que zero.': 'O valor retirado deve ser maior que zero.',
+              'Saldo em dinheiro insuficiente! O caixa possui R$ ${saldoDisponivelDinheiro.toFixed(2)} disponível.': 'Não há dinheiro suficiente no caixa. Disponível: R$ ${saldoDisponivelDinheiro.toFixed(2)}.',
+              'O Motivo / Justificativa é OBRIGATÓRIO (mínimo de 5 caracteres). Ex: "Pagamento de hortifrúti"': 'Explique o motivo da retirada com pelo menos 5 caracteres. Ex.: pagamento de fornecedor.',
+              "err.message || 'Erro ao registrar sangria.'": "err.message || 'Não foi possível registrar a retirada de dinheiro.'",
+              'Nova Sangria de Caixa': 'Retirar dinheiro do caixa',
+              'Retirada de dinheiro físico do caixa com auditoria por PIN.': 'Registre a retirada de dinheiro físico. A autorização do gerente será solicitada.',
+              'Saldo em Dinheiro Disponível:': 'Dinheiro disponível:',
+              'Valor da Sangria (R$)': 'Valor a retirar (R$)',
+              'aria-label="Valor da sangria"': 'aria-label="Valor a retirar do caixa"',
+              'Motivo / Justificativa': 'Motivo da retirada',
+              'placeholder="ex: Pagamento emergencial de hortifrúti, sangria de segurança..."': 'placeholder="Ex.: pagamento de fornecedor ou retirada de segurança"',
+              "{isSubmitting ? 'Gravando...' : 'Solicitar PIN do Gerente'}": "{isSubmitting ? 'Gravando...' : 'Pedir autorização'}",
+              'actionTitle="Autorização de Sangria"': 'actionTitle="Autorizar retirada de dinheiro"',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'SangriaModal missing: {old}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/components/caixa/CaixaMovimentacoesTab.tsx')
+          text = path.read_text(encoding='utf-8')
+          old = """          { label: 'dinheiro adicionado', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },\n          { label: 'dinheiro retirado', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },\n          { label: 'saldo das movimentações', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300' },\n          { label: 'último no recorte', value: latestMovementTime },\n"""
+          new = """          { label: 'dinheiro adicionado', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },\n          { label: 'dinheiro retirado', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },\n          { label: 'última movimentação', value: latestMovementTime },\n"""
+          text = replace_once(text, old, new, 'movement metrics')
+          text = replace_once(
+              text,
+              '      movimentacao.tipo,\n',
+              "      movimentacao.tipo === 'suprimento' ? 'Dinheiro adicionado' : movimentacao.tipo === 'sangria' ? 'Dinheiro retirado' : movimentacao.tipo,\n",
+              'movement csv type',
+          )
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/components/caixa/EstornoModal.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              "interface EstornoModalProps {\n  onClose: () => void;\n  onSuccess: () => Promise<void> | void;\n}",
+              "interface EstornoModalProps {\n  onClose: () => void;\n  onSuccess: () => Promise<void> | void;\n  initialPaymentId?: string | null;\n}",
+              'refund props',
+          )
+          text = replace_once(
+              text,
+              'export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }) => {',
+              'export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, initialPaymentId = null }) => {',
+              'refund component signature',
+          )
+          text = replace_once(
+              text,
+              "  const [selectedId, setSelectedId] = useState<string>('');",
+              "  const [selectedId, setSelectedId] = useState<string>(initialPaymentId || '');",
+              'refund initial selection',
+          )
+          text = replace_once(
+              text,
+              "      setPayments(data);\n      if (selectedId && !data.some(payment => payment.id === selectedId)) {\n        setSelectedId('');\n      }",
+              "      setPayments(data);\n      if (initialPaymentId && data.some(payment => payment.id === initialPaymentId)) {\n        setSelectedId(initialPaymentId);\n      } else if (selectedId && !data.some(payment => payment.id === selectedId)) {\n        setSelectedId('');\n      }",
+              'refund selection after load',
+          )
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/components/caixa/CaixaTurnoAtualTab.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = replace_once(
+              text,
+              "const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {",
+              "const ActivityRow = ({ activity, onRefund }: { activity: CaixaAtividadeRecente; onRefund?: (paymentId: string) => void }) => {",
+              'activity row signature',
+          )
+          text = replace_once(
+              text,
+              "  const method = activity.metodo ? paymentMethodLabel[activity.metodo] || activity.metodo : null;\n",
+              "  const method = activity.metodo ? paymentMethodLabel[activity.metodo] || activity.metodo : null;\n  const refundPaymentId = activity.tipo === 'recebimento' && activity.id.startsWith('pagamento:')\n    ? activity.id.slice('pagamento:'.length)\n    : null;\n",
+              'activity refund id',
+          )
+          old = """      <strong className={`whitespace-nowrap text-xs tabular-nums ${isOutflow ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>\n        {isOutflow ? '−' : '+'} {formatCurrency(activity.valor)}\n      </strong>\n"""
+          new = """      <span className=\"flex flex-col items-end gap-1\">\n        <strong className={`whitespace-nowrap text-xs tabular-nums ${isOutflow ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300'}`}>\n          {isOutflow ? '−' : '+'} {formatCurrency(activity.valor)}\n        </strong>\n        {refundPaymentId && onRefund && (\n          <button\n            type=\"button\"\n            onClick={() => onRefund(refundPaymentId)}\n            className=\"text-[9px] font-bold text-rose-700 hover:text-rose-600 dark:text-rose-300 dark:hover:text-rose-200\"\n            aria-label={`Devolver pagamento de ${activity.origem}`}\n          >\n            Devolver\n          </button>\n        )}\n      </span>\n"""
+          text = replace_once(text, old, new, 'activity refund action')
+          text = replace_once(
+              text,
+              '  const [showRefundModal, setShowRefundModal] = useState(false);',
+              '  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);',
+              'refund state',
+          )
+          old_metric = """    {\n      label: 'Dinheiro esperado',\n      value: turnoResumo.saldo_esperado_dinheiro,\n      help: 'Valor físico previsto no caixa após devoluções',\n      icon: Banknote,\n    },\n"""
+          text = replace_once(text, old_metric, '', 'duplicate cash KPI')
+          text = replace_once(
+              text,
+              '<section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">',
+              '<section className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">',
+              'cash KPI grid',
+          )
+          global_button = """          <button type=\"button\" onClick={() => setShowRefundModal(true)} className=\"inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs\">\n            <RotateCcw size={14} /> Devolver pagamento\n          </button>\n"""
+          text = replace_once(text, global_button, '', 'global refund button')
+          text = replace_once(
+              text,
+              '<ul>{activities.map(activity => <ActivityRow key={activity.id} activity={activity} />)}</ul>',
+              '<ul>{activities.map(activity => <ActivityRow key={activity.id} activity={activity} onRefund={setRefundPaymentId} />)}</ul>',
+              'activity refund callback',
+          )
+          old_modal = """      {showRefundModal && (\n        <EstornoModal\n          onClose={() => setShowRefundModal(false)}\n          onSuccess={() => undefined}\n        />\n      )}\n"""
+          new_modal = """      {refundPaymentId && (\n        <EstornoModal\n          initialPaymentId={refundPaymentId}\n          onClose={() => setRefundPaymentId(null)}\n          onSuccess={() => undefined}\n        />\n      )}\n"""
+          text = replace_once(text, old_modal, new_modal, 'contextual refund modal')
+          text = text.replace('  isConnected?: boolean;\n', '').replace('  onRefresh: () => void;\n', '')
+          path.write_text(text, encoding='utf-8')
+
+          path = Path('src/components/caixa/CaixaFechamentoTab.tsx')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('  isConnected?: boolean;\n', '').replace('  onRefresh?: () => Promise<void> | void;\n', '')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test -- --run
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit validated changes
+        shell: bash
+        run: |
+          git config user.name "ChatGPT"
+          git config user.email "chatgpt@users.noreply.github.com"
+          git add src/components/caixa
+          git commit -m "UX: concluir simplificação operacional do caixa"
+          git push origin HEAD:chatgpt/finish-ux-partials-20260823
