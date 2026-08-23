@@ -75,7 +75,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
         : 'border-rose-400/80 dark:border-rose-900 hover:border-rose-600 focus-visible:ring-rose-400',
       accent: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-500',
       dot: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-400',
-      label: hasPendingPayment ? 'Aprovar dinheiro' : 'Em atendimento',
+      label: hasPendingPayment ? 'Confirmar pagamento' : 'Em preparo',
       labelColor: hasPendingPayment ? 'text-amber-900 dark:text-amber-300' : 'text-rose-900 dark:text-rose-300',
     },
     pronto: {
@@ -83,7 +83,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       border: 'border-amber-400/80 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400',
       accent: 'bg-amber-500 dark:bg-amber-400',
       dot: 'bg-amber-500 dark:bg-amber-400 animate-pulse',
-      label: 'Pronto para servir',
+      label: 'Tem item pronto',
       labelColor: 'text-amber-900 dark:text-amber-300',
     },
     entregue: {
@@ -91,7 +91,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       border: 'border-sky-300 dark:border-sky-900/60 hover:border-sky-500 focus-visible:ring-sky-400',
       accent: 'bg-sky-500 dark:bg-sky-400',
       dot: 'bg-sky-500 dark:bg-sky-400',
-      label: 'Aguardando conta',
+      label: 'Pronta para pagar',
       labelColor: 'text-sky-800 dark:text-sky-300',
     },
     mesclada: {
@@ -99,7 +99,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       border: 'border-dashed border-koma-border hover:border-zinc-400 dark:hover:border-zinc-600 focus-visible:ring-zinc-400',
       accent: 'bg-zinc-400 dark:bg-zinc-600',
       dot: 'bg-zinc-400 dark:bg-zinc-600',
-      label: `Unida à mesa ${mergedIntoMesaId}`,
+      label: `Junto com mesa ${mergedIntoMesaId}`,
       labelColor: 'text-koma-muted',
     },
   }[status];
@@ -194,14 +194,14 @@ export const MesaCard = React.memo<MesaCardProps>(({
 
           {status === 'mesclada' && (
             <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2 text-[9px] text-koma-muted">
-              <span>Atendimento unificado</span>
+              <span>Atendimento junto</span>
               <span className="font-mono">M{mergedIntoMesaId}</span>
             </div>
           )}
 
           {otherWaitersServing.length > 0 && (
             <p className="mt-1.5 truncate text-[8px] text-amber-400" title={`Em atendimento por ${otherWaitersServing.join(', ')}`}>
-              Em edição por {otherWaitersServing.join(', ')}
+              Atendida por {otherWaitersServing.join(', ')}
             </p>
           )}
         </div>

@@ -122,9 +122,9 @@ const CASHIER_SIDEBAR_GROUPS = [
   {
     category: 'Ferramentas',
     items: [
-      { id: 'impressao_salao', label: 'Salão e impressão', icon: Printer },
+      { id: 'impressao_salao', label: 'Configurações', icon: SlidersHorizontal },
       { id: 'assinatura_pix', label: 'Assinatura e planos', icon: CreditCard },
-      { id: 'cardapio_digital', label: 'Cardápio digital', icon: Globe }
+      { id: 'cardapio_digital', label: 'Cardápio online', icon: Globe }
     ]
   }
 ] as const;
@@ -600,6 +600,7 @@ export function CaixaPanel({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
   const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');
+  const [pdvProductDetailId, setPdvProductDetailId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isMobileSidebarOpen) return;
@@ -645,8 +646,9 @@ export function CaixaPanel({
 
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
   const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
-    scope: 'order' | 'table';
+    scope: 'order' | 'table' | 'digital';
     mesaId: number;
+    orderId?: string;
     comandas: number;
     itens: number;
     total: number;
@@ -677,15 +679,19 @@ export function CaixaPanel({
     const activeItems = (order?.itens || []).filter(
       (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
     );
+    const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
+    const isDigitalOrder = Number(order?.mesaId || 0) <= 0
+      || ['delivery', 'entrega', 'retirada'].includes(normalizedType);
     const comandaIds = new Set(
       activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean),
     );
     setCancelConsumptionTarget({
-      scope: 'order',
-      mesaId: Number(order.mesaId),
-      comandas: comandaIds.size,
-      itens: activeItems.length,
-      total: activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
+      scope: isDigitalOrder ? 'digital' : 'order',
+      mesaId: Number(order.mesaId || 0),
+      orderId: isDigitalOrder ? String(order.id || order.comandaId || '') : undefined,
+      comandas: isDigitalOrder ? 1 : comandaIds.size,
+      itens: activeItems.length || Number(order.quantidadeItens || 0),
+      total: Number(order.total) || activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
       itemIds: activeItems.map((item: any) => String(item.id)),
     });
     setCancelTableReason('');
@@ -697,28 +703,41 @@ export function CaixaPanel({
     setIsCancellingTable(true);
     try {
       const isOrderScope = cancelConsumptionTarget.scope === 'order';
-      const response = await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          motivo: cancelTableReason.trim(),
-          ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
-        }),
-      });
+      const isDigitalScope = cancelConsumptionTarget.scope === 'digital';
+      const response = isDigitalScope
+        ? await fetch(
+            `${apiBaseUrl}/comandas/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/delivery/status?status_novo=recusado`,
+            { method: 'PUT', headers: authHeaders },
+          )
+        : await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
+            method: 'POST',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              motivo: cancelTableReason.trim(),
+              ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
+            }),
+          });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o consumo.');
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o pedido.');
 
+      const cancelledOrderId = cancelConsumptionTarget.orderId;
       setCancelConsumptionTarget(null);
       setCancelTableReason('');
-      await onRefreshOrders();
-      showToast(
-        isOrderScope
-          ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
-          : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
-        'success',
-      );
+      if (isDigitalScope) {
+        setDeliveryOrders(current => current.filter(order => String(order.id) !== String(cancelledOrderId)));
+        window.dispatchEvent(new Event('koma_orders_updated'));
+        showToast('Pedido cancelado e removido da operação ativa.', 'success');
+      } else {
+        await onRefreshOrders();
+        showToast(
+          isOrderScope
+            ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
+            : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
+          'success',
+        );
+      }
     } catch (error: any) {
-      showToast(error?.message || 'Não foi possível cancelar o consumo.', 'error');
+      showToast(error?.message || 'Não foi possível cancelar o pedido.', 'error');
     } finally {
       setIsCancellingTable(false);
     }
@@ -806,7 +825,7 @@ export function CaixaPanel({
   };
 
 
-  // Configurações do Cardápio Digital Whitelabel
+  // Configurações do cardápio online Whitelabel
   const [cardapioStatusOverride, setCardapioStatusOverride] = useState<string>('Automático');
   const [cardapioCorPrimaria, setCardapioCorPrimaria] = useState<string>('#00b894');
   const [cardapioCorFundo, setCardapioCorFundo] = useState<string>('#090a0f');
@@ -2223,10 +2242,14 @@ export function CaixaPanel({
     const fullComanda = orders.find(o => o.id === order.id);
     const itemsMapped = fullComanda
       ? fullComanda.itens.map((it: any) => ({
+          id: it.id,
+          comandaId: fullComanda.id,
           nome: it.produto?.nome || it.nome || 'Item',
+          preco: it.preco_unit || it.preco || 0,
           observacao: it.observacao || '',
           cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
           status: it.status,
+          pago: it.pago,
           lancamentoId: it.lancamentoId || it.lancamento_id,
         }))
       : order.itens.split(' + ').map((itStr: string) => {
@@ -2242,7 +2265,9 @@ export function CaixaPanel({
 
     setSelectedKanbanOrder({
       id: order.id,
+      comandaId: order.id,
       mesaId: 0,
+      quantidadeItens: order.quantidadeItens,
       identificador: order.cliente,
       itens: itemsMapped,
       total: order.total,
@@ -4290,7 +4315,6 @@ export function CaixaPanel({
                   <span className="cashier-operator__copy">
                     <small>Operador</small>
                     <strong>{activeWaiterNome}</strong>
-                    <span><i /> Sistema online</span>
                   </span>
                 </div>
               </SidebarFooter>
@@ -4429,7 +4453,6 @@ export function CaixaPanel({
               <span className="cashier-operator__copy">
                 <small>Operador</small>
                 <strong>{activeWaiterNome}</strong>
-                <span><i /> Sistema online</span>
               </span>
             </div>
           </SidebarFooter>
@@ -4461,7 +4484,7 @@ export function CaixaPanel({
               {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
               {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
               {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
-              {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações do Salão'}
+              {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
               {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
               {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio Digital — Identidade Whitelabel'}
             </h2>
@@ -4497,7 +4520,15 @@ export function CaixaPanel({
           ].map(sub => (
             <button
               key={sub.id}
-              onClick={() => setActiveSubTab(sub.id)}
+              onClick={() => {
+                if (sub.id === 'balcao') {
+                  setPdvOrderType('retirada');
+                  setPdvTargetMesaId(0);
+                  setBalcaoMobileView('produtos');
+                  setPdvProductDetailId(null);
+                }
+                setActiveSubTab(sub.id);
+              }}
               className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
                 ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
                 : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
@@ -4681,10 +4712,10 @@ export function CaixaPanel({
 
               <OperationalBanner
                 id="orders-heading"
-                eyebrow="OPERAÇÃO AO VIVO"
+                eyebrow="OPERAÇÃO"
                 title="Pedidos"
-                accent="em movimento"
-                description="Do salão ao recebimento, sem perder nenhuma etapa."
+                accent="por etapa"
+                description="Clique no card para ver o pedido e escolher a próxima ação."
                 metrics={[
                   { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
                   { label: 'valor em aberto', value: formatCompactCurrency(operationalOrderInsights.openValue) },
@@ -4694,7 +4725,6 @@ export function CaixaPanel({
                     valueClassName: operationalOrderInsights.attentionCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
                   },
                 ]}
-                isConnected={isWsConnected}
               />
 
               {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
@@ -5485,10 +5515,10 @@ export function CaixaPanel({
             <div className={clsx('orders-workspace', 'h-full', 'min-h-0', 'flex', 'flex-col', 'gap-3', 'sm:gap-4')}>
               <OperationalBanner
                 id="counter-heading"
-                eyebrow="VENDA / NOVO PEDIDO"
-                title="Novo pedido,"
-                accent="sem atrito"
-                description="Escolha os itens, indique o destino e envie para a cozinha."
+                eyebrow="VENDA"
+                title="Novo pedido"
+                accent="rápido e simples"
+                description="Escolha os itens e o destino. Os detalhes aparecem só quando forem úteis."
                 metrics={[
                   { label: 'faixa de preços', value: pdvMenuInsights.priceRange },
                   { label: 'categorias ativas', value: pdvMenuInsights.categoryCount },
@@ -5498,7 +5528,6 @@ export function CaixaPanel({
                     valueClassName: pdvMenuInsights.pausedCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
                   },
                 ]}
-                isConnected={isWsConnected}
               />
 
               <div className={clsx('min-h-0', 'flex-1', 'flex', 'flex-col', 'xl:flex-row', 'gap-3', 'sm:gap-4', 'overflow-hidden', 'relative')}>
@@ -5628,29 +5657,98 @@ export function CaixaPanel({
                   <div className={clsx('grid', 'grid-cols-2', 'sm:grid-cols-2', 'md:grid-cols-3', '2xl:grid-cols-4', 'gap-2', 'sm:gap-2.5', 'pb-2')}>
                     {filteredProducts.map((p) => {
                       const productLabel = splitProductLabel(p.nome);
+                      const productDetailKey = String(p.id);
+                      const hasProductDetails = Boolean(p.descricao || productLabel.code);
                       return (
-                      <button
-                        type="button"
-                        key={p.id}
-                        onClick={() => handlePdvAddToCart(p)}
-                        className={clsx('relative', 'min-h-[96px]', 'sm:min-h-[112px]', 'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-emerald-500/60', 'active:border-emerald-500', 'p-2.5', 'sm:p-3.5', 'rounded-xl', 'sm:rounded-2xl', 'flex', 'flex-col', 'justify-between', 'gap-2', 'sm:gap-3', 'cursor-pointer', 'group', 'transition-colors', 'text-left', 'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-emerald-500/40 shadow-sm')}
-                      >
-                        {p.imagem && (
-                          <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-16', 'sm:h-20', 'object-cover', 'rounded-lg', 'sm:rounded-xl')} />
-                        )}
-                        <div className="min-h-[28px] sm:min-h-[34px]">
-                          {productLabel.code && <span className={clsx('mb-0.5', 'sm:mb-1', 'block', 'font-mono', 'text-[8px]', 'font-bold', 'tracking-[0.14em]', 'text-koma-muted')}>CÓD. {productLabel.code}</span>}
-                          <h4 className={clsx('font-semibold', 'text-koma-foreground', 'text-xs', 'sm:text-[13px]', 'group-hover:text-koma-foreground', 'transition-colors', 'leading-snug', 'line-clamp-2')}>{productLabel.name}</h4>
-                          {p.descricao && <p className={clsx('hidden', 'sm:block', 'text-[9px]', 'sm:text-[10px]', 'text-koma-muted', 'mt-1', 'line-clamp-1', 'leading-tight')}>{p.descricao}</p>}
+                        <div
+                          key={p.id}
+                          className={clsx(
+                            'group', 'relative', 'min-h-[96px]', 'sm:min-h-[112px]',
+                            'bg-koma-panel', 'border', 'border-koma-border', 'hover:border-emerald-500/60',
+                            'rounded-xl', 'sm:rounded-2xl', 'transition-colors', 'shadow-sm'
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPdvProductDetailId(null);
+                              handlePdvAddToCart(p);
+                            }}
+                            className={clsx(
+                              'flex', 'h-full', 'w-full', 'flex-col', 'justify-between', 'gap-2', 'sm:gap-3',
+                              'p-2.5', 'sm:p-3.5', 'text-left', 'cursor-pointer', 'rounded-xl', 'sm:rounded-2xl',
+                              'focus:outline-none', 'focus-visible:ring-2', 'focus-visible:ring-emerald-500/40'
+                            )}
+                            title={hasProductDetails
+                              ? `Adicionar ${productLabel.name}. Use detalhes para ver ingredientes.`
+                              : `Adicionar ${productLabel.name}`}
+                          >
+                            {p.imagem && (
+                              <img src={p.imagem} alt="" loading="lazy" className={clsx('w-full', 'h-16', 'sm:h-20', 'object-cover', 'rounded-lg', 'sm:rounded-xl')} />
+                            )}
+                            <div className="min-h-[28px] sm:min-h-[34px] pr-6">
+                              <h4 className={clsx('font-semibold', 'text-koma-foreground', 'text-xs', 'sm:text-[13px]', 'leading-snug', 'line-clamp-2')}>
+                                {productLabel.name}
+                              </h4>
+                            </div>
+                            <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-koma-border', 'pt-2', 'sm:pt-2.5')}>
+                              <span className={clsx('font-bold', 'text-emerald-700 dark:text-emerald-400', 'font-mono', 'text-xs')}>
+                                R$ {p.preco.toFixed(2).replace('.', ',')}
+                              </span>
+                              <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-emerald-700 dark:text-[#4fe0bc]')}>
+                                <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
+                              </span>
+                            </div>
+                          </button>
+
+                          {hasProductDetails && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setPdvProductDetailId(current => current === productDetailKey ? null : productDetailKey);
+                                }}
+                                aria-expanded={pdvProductDetailId === productDetailKey}
+                                aria-controls={`pdv-product-details-${productDetailKey}`}
+                                aria-label={`Ver ingredientes e detalhes de ${productLabel.name}`}
+                                title="Ver ingredientes e detalhes"
+                                className={clsx(
+                                  'absolute', 'right-2', 'top-2', 'z-20', 'flex', 'size-7', 'items-center', 'justify-center',
+                                  'rounded-lg', 'border', 'border-koma-border', 'bg-koma-card/95', 'text-koma-muted',
+                                  'hover:border-emerald-500/40', 'hover:text-emerald-700', 'dark:hover:text-emerald-300'
+                                )}
+                              >
+                                <HelpCircle size={13} />
+                              </button>
+                              <div
+                                id={`pdv-product-details-${productDetailKey}`}
+                                role="note"
+                                className={clsx(
+                                  'pointer-events-none', 'absolute', 'inset-x-2', 'top-10', 'z-10',
+                                  'rounded-xl', 'border', 'border-koma-border', 'bg-koma-dialog/95', 'backdrop-blur-md',
+                                  'p-2.5', 'text-left', 'shadow-xl', 'translate-y-1', 'opacity-0', 'transition-all',
+                                  'group-hover:translate-y-0', 'group-hover:opacity-100',
+                                  pdvProductDetailId === productDetailKey && 'translate-y-0 opacity-100'
+                                )}
+                              >
+                                <span className={clsx('block', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-emerald-700 dark:text-emerald-300')}>
+                                  Ingredientes e detalhes
+                                </span>
+                                {productLabel.code && (
+                                  <span className={clsx('mt-1', 'block', 'font-mono', 'text-[8px]', 'text-koma-muted')}>
+                                    Cód. {productLabel.code}
+                                  </span>
+                                )}
+                                <p className={clsx('mt-1', 'text-[10px]', 'leading-relaxed', 'text-koma-secondary')}>
+                                  {p.descricao || 'Sem descrição cadastrada.'}
+                                </p>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <div className={clsx('flex', 'justify-between', 'items-center', 'border-t', 'border-koma-border', 'pt-2', 'sm:pt-2.5')}>
-                          <span className={clsx('font-bold', 'text-emerald-700 dark:text-emerald-400', 'font-mono', 'text-xs')}>R$ {p.preco.toFixed(2).replace('.', ',')}</span>
-                          <span className={clsx('inline-flex', 'items-center', 'gap-1', 'text-[9px]', 'font-bold', 'text-emerald-700 dark:text-[#4fe0bc]', 'group-hover:text-emerald-800 dark:group-hover:text-[#75ebce]')}>
-                            <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
-                          </span>
-                        </div>
-                      </button>
-                    )})}
+                      );
+                    })}
                   </div>
                   ) : (
                     <div className={clsx('h-full', 'min-h-52', 'rounded-2xl', 'border', 'border-dashed', 'border-koma-border', 'bg-white/[0.015]', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'px-6')}>
@@ -6005,16 +6103,15 @@ export function CaixaPanel({
             <div className={clsx('orders-workspace', 'flex', 'h-full', 'min-h-0', 'flex-col', 'gap-3')}>
               <OperationalBanner
                 id="tables-heading"
-                eyebrow="OPERAÇÃO DO SALÃO"
-                title="Salão"
-                accent="em tempo real"
-                description="Acompanhe atendimentos e veja rapidamente quais mesas precisam de atenção."
+                eyebrow="SALÃO"
+                title="Mesas"
+                accent="por situação"
+                description="A cor e o texto de cada mesa mostram o que precisa acontecer agora."
                 metrics={[
                   { label: 'ocupação', value: `${salonInsights.occupancy}%` },
                   { label: 'consumo em aberto', value: formatCompactCurrency(salonInsights.openValue) },
                   { label: 'maior atendimento', value: salonInsights.oldestService },
                 ]}
-                isConnected={isWsConnected}
               />
 
               <section className={clsx('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden', 'rounded-[22px]', 'border', 'border-koma-border', 'bg-koma-panel')}>
@@ -6694,7 +6791,7 @@ export function CaixaPanel({
               {printingSettingsTab === 'mesas' && (
                 <OperationalBanner
                   id="salon-tables-title"
-                  eyebrow="SALÃO / ORGANIZAÇÃO"
+                  eyebrow="CONFIGURAÇÕES / SALÃO"
                   title="Mesas"
                   accent="prontas para receber"
                   description="Capacidade e identificação do salão sem misturar configuração com comandas abertas."
@@ -6715,7 +6812,7 @@ export function CaixaPanel({
               {printingSettingsTab === 'garcom' && (
                 <OperationalBanner
                   id="waiter-app-title"
-                  eyebrow="SALÃO / APP DO GARÇOM"
+                  eyebrow="CONFIGURAÇÕES / EQUIPE"
                   title="Atendimento"
                   accent="com autonomia controlada"
                   description="Veja rapidamente o que a equipe pode fazer antes de ajustar cada permissão."
@@ -6738,7 +6835,7 @@ export function CaixaPanel({
               {printingSettingsTab === 'taxa' && (
                 <OperationalBanner
                   id="service-tax-title"
-                  eyebrow="SALÃO / TAXA DE SERVIÇO"
+                  eyebrow="CONFIGURAÇÕES / SERVIÇO"
                   title="Taxa"
                   accent={taxaServicoAtiva ? 'aplicada com clareza' : 'sob decisão do caixa'}
                   description="A regra é única para o salão e chega ao fechamento sem cálculo paralelo."
@@ -7656,10 +7753,10 @@ export function CaixaPanel({
             <div className={clsx('orders-workspace', 'space-y-4')}>
               <OperationalBanner
                 id="cash-heading"
-                eyebrow="CAIXA / CONFERÊNCIA AO VIVO"
-                title="Seu caixa,"
-                accent="sob controle"
-                description="Vendas, recebimentos e troco conciliados em um só lugar."
+                eyebrow="CAIXA"
+                title="Turno atual"
+                accent="em ordem"
+                description="Veja o dinheiro, os recebimentos e o que precisa de atenção."
                 metrics={[
                   { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
                   { label: 'ritmo de vendas', value: turnoResumo?.status === 'aberto' ? `${formatCompactCurrency(cashSalesPerHour)}/h` : '—' },
@@ -7669,12 +7766,10 @@ export function CaixaPanel({
                     valueClassName: turnoResumo?.turno_esquecido ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
                   },
                 ]}
-                isConnected={isWsConnected}
               />
               <CaixaTurnoAtualTab
                 turnoResumo={turnoResumo}
                 isLoading={isTurnoResumoLoading}
-                isConnected={isWsConnected}
                 pendingPaymentsCount={pagamentosPendentes.length}
                 pendingPaymentsTotal={pendingPaymentsTotal}
                 onRefresh={fetchTurnoResumo}
@@ -7703,16 +7798,15 @@ export function CaixaPanel({
             <div className={clsx('orders-workspace', 'space-y-4')}>
               <OperationalBanner
                 id="cash-closing-heading"
-                eyebrow="CAIXA / ENCERRAMENTO SEGURO"
-                title="Feche o turno,"
-                accent="sem retrabalho"
-                description="Valores esperados, divergências e pendências em uma única conferência."
+                eyebrow="CAIXA"
+                title="Fechamento"
+                accent="do seu jeito"
+                description="Use a conferência rápida ou faça uma conferência totalmente cega."
                 metrics={[
                   { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
                   { label: 'último recebimento', value: latestReceiptTime },
                   { label: 'modo de conferência', value: 'Assistida', valueClassName: 'text-emerald-800 dark:text-emerald-300' },
                 ]}
-                isConnected={isWsConnected}
               />
               <CaixaFechamentoTab
                 isTurnoAberto={turnoResumo?.status === 'aberto'}
@@ -7720,7 +7814,6 @@ export function CaixaPanel({
                 turnoResumo={turnoResumo}
                 pendingPaymentsCount={pagamentosPendentes.length}
                 pendingPaymentsTotal={pendingPaymentsTotal}
-                isConnected={isWsConnected}
                 onConfirmFechamento={handleConfirmarFechamento}
                 onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
                 onRefresh={async () => {
@@ -8041,8 +8134,8 @@ export function CaixaPanel({
               {/* Coluna 1: Formulário de Configuração (7 cols) */}
               <div className={clsx('lg:col-span-7', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'space-y-6', 'shadow-xs')}>
                 <div className={clsx('border-b', 'border-koma-border', 'pb-3')}>
-                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'block')}>Configurações do Cardápio Digital</span>
-                  <span className={clsx('text-[11px]', 'text-koma-muted', 'block', 'mt-1')}>Personalize a identidade visual, cores e conteúdo do cardápio digital (Whitelabel).</span>
+                  <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'block')}>Configurações do cardápio online</span>
+                  <span className={clsx('text-[11px]', 'text-koma-muted', 'block', 'mt-1')}>Defina a aparência, as informações e o comportamento do cardápio que seus clientes acessam online.</span>
                 </div>
 
                 <div className="space-y-4">
@@ -8153,7 +8246,7 @@ export function CaixaPanel({
                     onClick={saveCardapioConfig}
                     className={clsx('px-6', 'py-2.5', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'disabled:opacity-50')}
                   >
-                    {isSavingCardapioConfig ? 'Salvando...' : 'Salvar Configurações Whitelabel'}
+                    {isSavingCardapioConfig ? 'Salvando...' : 'Salvar configurações'}
                   </button>
                 </div>
               </div>
@@ -9390,6 +9483,16 @@ export function CaixaPanel({
                     </button>
                   </div>
                 )}
+                {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openCancelOrderConfirmation(selectedKanbanOrder)}
+                    className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
+                  >
+                    <Trash2 size={13} />
+                    Cancelar pedido
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -9405,12 +9508,16 @@ export function CaixaPanel({
                 <h3 id="cancel-table-title" className={clsx('mt-1', 'text-lg', 'font-bold', 'text-koma-foreground')}>
                   {cancelConsumptionTarget.scope === 'table'
                     ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`
-                    : 'Cancelar somente este pedido?'}
+                    : cancelConsumptionTarget.scope === 'digital'
+                      ? 'Cancelar este pedido?'
+                      : 'Cancelar somente este pedido?'}
                 </h3>
                 <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-koma-subtle')}>
                   {cancelConsumptionTarget.scope === 'table'
                     ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'
-                    : 'Somente os itens do card escolhido serão cancelados; os demais pedidos da mesa serão preservados.'}
+                    : cancelConsumptionTarget.scope === 'digital'
+                      ? 'O pedido sairá da operação ativa.'
+                      : 'Somente os itens deste pedido serão cancelados; os demais pedidos da mesa serão preservados.'}
                 </p>
               </div>
               <button type="button" onClick={() => setCancelConsumptionTarget(null)} disabled={isCancellingTable} className={clsx('rounded-lg', 'p-2', 'text-koma-muted', 'hover:bg-white/[0.05]', 'hover:text-koma-foreground', 'disabled:opacity-40')} aria-label="Fechar">
@@ -9438,10 +9545,10 @@ export function CaixaPanel({
             </label>
 
             <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'sm:flex-row')}>
-              <button type="button" onClick={() => setCancelConsumptionTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-koma-subtle', 'hover:text-koma-foreground', 'disabled:opacity-40')}>Manter atendimento</button>
+              <button type="button" onClick={() => setCancelConsumptionTarget(null)} disabled={isCancellingTable} className={clsx('min-h-11', 'flex-1', 'rounded-xl', 'border', 'border-[#343936]', 'text-xs', 'font-bold', 'text-koma-subtle', 'hover:text-koma-foreground', 'disabled:opacity-40')}>{cancelConsumptionTarget.scope === 'digital' ? 'Manter pedido' : 'Manter atendimento'}</button>
               <button type="button" onClick={handleCancelTableConsumption} disabled={cancelTableReason.trim().length < 3 || isCancellingTable} className={clsx('flex', 'min-h-11', 'flex-1', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'bg-rose-600', 'px-3', 'text-xs', 'font-extrabold', 'text-koma-foreground', 'hover:bg-rose-500', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}>
                 {isCancellingTable ? <RefreshCw className="animate-spin" size={14} /> : <Trash2 size={14} />}
-                {isCancellingTable ? 'Cancelando…' : cancelConsumptionTarget.scope === 'table' ? 'Cancelar e liberar' : 'Cancelar este pedido'}
+                {isCancellingTable ? 'Cancelando…' : cancelConsumptionTarget.scope === 'table' ? 'Cancelar e liberar' : 'Cancelar pedido'}
               </button>
             </div>
           </div>

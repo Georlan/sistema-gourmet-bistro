@@ -23,9 +23,6 @@ const isSmartPosRoute = window.location.pathname.startsWith("/smartpos");
 const RootApp = React.lazy(isSmartPosRoute
   ? () => import("./smartpos/SmartPosPage")
   : () => import("./App"));
-const OnlineOrderEmergencyActions = isSmartPosRoute
-  ? null
-  : React.lazy(() => import("./components/OnlineOrderEmergencyActions"));
 
 const RouteLoading = () => (
   <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
@@ -37,7 +34,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <React.Suspense fallback={<RouteLoading />}>
       <RootApp />
-      {OnlineOrderEmergencyActions && <OnlineOrderEmergencyActions />}
     </React.Suspense>
   </React.StrictMode>
 );

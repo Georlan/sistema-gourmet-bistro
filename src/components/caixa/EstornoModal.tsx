@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, RefreshCw, RotateCcw, Search, X } from 'lucide-react';
+import { AlertTriangle, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { MoneyInput } from '../MoneyInput';
 import {
   RefundablePayment,
@@ -114,7 +114,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
       return;
     }
     if (needsOriginAllocation && Math.abs(explicitOriginTotal - refundValue) >= 0.005) {
-      setError('Distribua exatamente o valor do estorno entre as Contas de origem.');
+      setError('Distribua exatamente o valor da devolução entre as contas de origem.');
       return;
     }
 
@@ -143,7 +143,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
       await onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao registrar estorno.');
+      setError(err instanceof Error ? err.message : 'Não foi possível registrar a devolução.');
       await load();
     } finally {
       setSubmitting(false);
@@ -159,8 +159,8 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
               <RotateCcw size={18} />
             </span>
             <div>
-              <h2 className="text-sm font-bold text-koma-foreground">Estornar recebimento</h2>
-              <p className="mt-0.5 text-[10px] text-koma-muted">A venda original permanece no histórico; a devolução é registrada como evento financeiro separado.</p>
+              <h2 className="text-sm font-bold text-koma-foreground">Devolver um pagamento</h2>
+              <p className="mt-0.5 text-[10px] text-koma-muted">Escolha o pagamento, informe o valor e registre o motivo da devolução.</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl p-2 text-koma-muted hover:bg-koma-raised hover:text-koma-foreground" aria-label="Fechar">
@@ -176,20 +176,17 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                 <input
                   value={search}
                   onChange={event => setSearch(event.target.value)}
-                  placeholder="Mesa, Conta, pedido ou meio..."
+                  placeholder="Mesa, conta, pedido ou forma..."
                   className="w-full rounded-xl border border-koma-border bg-koma-input py-2.5 pl-9 pr-3 text-xs text-koma-foreground outline-none focus:border-emerald-500/50"
                 />
               </div>
-              <button type="button" onClick={() => void load()} disabled={loading} className="rounded-xl border border-koma-border bg-koma-card p-2.5 text-koma-muted hover:text-koma-foreground disabled:opacity-50" title="Atualizar">
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              </button>
             </div>
 
             <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto pr-1">
               {loading ? (
                 <div className="flex items-center justify-center gap-2 py-10 text-xs text-koma-muted"><Loader2 size={16} className="animate-spin" /> Carregando recebimentos…</div>
               ) : filtered.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-koma-border px-4 py-8 text-center text-xs text-koma-muted">Nenhum pagamento com saldo estornável.</div>
+                <div className="rounded-2xl border border-dashed border-koma-border px-4 py-8 text-center text-xs text-koma-muted">Nenhum pagamento disponível para devolução.</div>
               ) : filtered.map(payment => {
                 const active = payment.id === selectedId;
                 return (
@@ -217,14 +214,18 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
             {!selected ? (
               <div className="flex min-h-72 flex-col items-center justify-center text-center">
                 <RotateCcw size={24} className="text-koma-muted" />
-                <strong className="mt-3 text-sm text-koma-foreground">Selecione um recebimento</strong>
-                <span className="mt-1 max-w-sm text-[11px] leading-relaxed text-koma-muted">Somente pagamentos aprovados e ainda estornáveis aparecem na lista.</span>
+                <strong className="mt-3 text-sm text-koma-foreground">Selecione um pagamento</strong>
+                <span className="mt-1 max-w-sm text-[11px] leading-relaxed text-koma-muted">A lista mostra pagamentos aprovados que ainda podem ser devolvidos.</span>
               </div>
             ) : (
               <div className="space-y-4">
+                <div>
+                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Pagamento escolhido</span>
+                  <h3 className="mt-1 text-sm font-bold text-koma-foreground">Devolver de {selected.origem}</h3>
+                </div>
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border border-koma-border bg-koma-card p-3 text-[10px]">
                   <div><span className="block text-koma-muted">Recebimento original</span><strong className="mt-1 block text-koma-foreground">{currency.format(selected.valor_original)}</strong></div>
-                  <div><span className="block text-koma-muted">Saldo estornável</span><strong className="mt-1 block text-rose-800 dark:text-rose-300">{currency.format(selected.saldo_estornavel)}</strong></div>
+                  <div><span className="block text-koma-muted">Disponível para devolução</span><strong className="mt-1 block text-rose-800 dark:text-rose-300">{currency.format(selected.saldo_estornavel)}</strong></div>
                 </div>
 
                 <div>
@@ -241,7 +242,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Meio efetivo da devolução</label>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Forma da devolução</label>
                   <select value={payoutMethod} onChange={event => setPayoutMethod(event.target.value)} className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-xs text-koma-foreground outline-none focus:border-rose-500/50">
                     <option value="dinheiro">Dinheiro</option>
                     <option value="pix">Pix</option>
@@ -261,7 +262,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                   <div className="rounded-2xl border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-3">
                     <div className="flex gap-2 text-[10px] leading-relaxed text-amber-900 dark:text-amber-200">
                       <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-                      <span>Este recebimento foi dividido entre mais de uma Conta. Como o estorno é parcial, informe de qual origem sai cada parcela. O sistema não faz rateio automático.</span>
+                      <span>Este recebimento foi dividido entre mais de uma Conta. Como a devolução é parcial, informe de qual conta sai cada parte. O sistema não faz rateio automático.</span>
                     </div>
                     <div className="mt-3 space-y-2">
                       {selected.origens_financeiras.filter(origin => origin.saldo_estornavel > 0).map(origin => (
@@ -293,7 +294,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess }
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-koma-border bg-koma-card px-4 py-2.5 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
                   <button type="button" onClick={() => void submit()} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50">
-                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} Confirmar estorno
+                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} Confirmar devolução
                   </button>
                 </div>
               </div>

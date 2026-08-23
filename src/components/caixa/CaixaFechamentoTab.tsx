@@ -10,11 +10,7 @@ import {
   DollarSign,
   Lock,
   ReceiptText,
-  RefreshCw,
   Smartphone,
-  Zap,
-  Wifi,
-  WifiOff,
   Printer,
 } from 'lucide-react';
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
@@ -28,7 +24,7 @@ interface CaixaFechamentoTabProps {
   turnoResumo: CaixaTurnoResumo | null;
   pendingPaymentsCount: number;
   pendingPaymentsTotal: number;
-  isConnected: boolean;
+  isConnected?: boolean;
   onConfirmFechamento: (payload: {
     declarado_dinheiro: number;
     declarado_cartao: number;
@@ -57,8 +53,9 @@ interface CountFieldProps {
   expected: number;
   required?: boolean;
   allowNegative?: boolean;
+  hideExpected?: boolean;
+  automatic?: boolean;
   onChange: (value: number | '') => void;
-  onUseExpected: () => void;
 }
 
 const CountField: React.FC<CountFieldProps> = ({
@@ -70,24 +67,27 @@ const CountField: React.FC<CountFieldProps> = ({
   expected,
   required,
   allowNegative = false,
+  hideExpected = false,
+  automatic = false,
   onChange,
-  onUseExpected,
 }) => {
   const difference = value === '' ? null : Number(value) - expected;
   const isExact = difference !== null && Math.abs(difference) < 0.01;
 
   return (
     <div className="closing-count-field min-w-0 rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-koma-accent">
-      <div className="closing-count-field__header flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start justify-between gap-3">
         <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
             <Icon size={15} />
           </span>
           <span className="min-w-0">{label}{required ? <span className="ml-1 text-emerald-800 dark:text-emerald-300">*</span> : null}</span>
         </label>
-        <button type="button" onClick={onUseExpected} className="closing-count-field__use-expected min-w-0 rounded-lg border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 text-center text-[9px] font-bold leading-tight text-emerald-800 dark:text-emerald-300 transition-colors hover:border-koma-accent hover:text-koma-foreground">
-          Usar {formatMoney(expected)}
-        </button>
+        {automatic && (
+          <span className="rounded-full border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+            Automático
+          </span>
+        )}
       </div>
       <label htmlFor={id} className="mt-3 flex w-full min-w-0 items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-koma-accent">
         <span className="text-sm font-semibold text-koma-muted">R$</span>
@@ -102,13 +102,19 @@ const CountField: React.FC<CountFieldProps> = ({
           className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700"
         />
       </label>
-      <div className="closing-count-field__meta mt-2 flex min-w-0 items-center justify-between gap-3 text-[10px]">
+      <div className="mt-2 flex min-w-0 items-center justify-between gap-3 text-[10px]">
         <span className="min-w-0 leading-relaxed text-koma-muted">{help}</span>
         <span className={clsx(
-          'closing-count-field__expected shrink-0 font-semibold tabular-nums',
-          difference === null ? 'text-koma-muted' : isExact ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300',
+          'shrink-0 font-semibold tabular-nums',
+          hideExpected || difference === null ? 'text-koma-muted' : isExact ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300',
         )}>
-          {difference === null ? `Esperado ${formatMoney(expected)}` : isExact ? 'Confere' : `${difference > 0 ? '+' : ''}${formatMoney(difference)}`}
+          {hideExpected
+            ? 'Valor oculto'
+            : difference === null
+              ? 'Informe para comparar'
+              : isExact
+                ? 'Confere'
+                : `${difference > 0 ? '+' : ''}${formatMoney(difference)}`}
         </span>
       </div>
     </div>
@@ -121,20 +127,20 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   turnoResumo,
   pendingPaymentsCount,
   pendingPaymentsTotal,
-  isConnected,
   onConfirmFechamento,
   onOpenNovoTurnoModal,
-  onRefresh,
   onNavigateToPendingPayments,
   onNavigateToOpenComandas,
 }) => {
+  const [closingMode, setClosingMode] = useState<'rapida' | 'cega'>('rapida');
+  const [cardAutomatic, setCardAutomatic] = useState(true);
+  const [pixAutomatic, setPixAutomatic] = useState(true);
   const [declaradoDinheiro, setDeclaradoDinheiro] = useState<number | ''>('');
   const [declaradoCartao, setDeclaradoCartao] = useState<number | ''>('');
   const [declaradoPix, setDeclaradoPix] = useState<number | ''>('');
   const [observacao, setObservacao] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -150,31 +156,43 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     [declaradoCartao, declaradoDinheiro, declaradoPix],
   );
   const liveDifference = declaredTotal - expectedTotal;
-  const isDivergent = !hasMissingDeclarations && Math.abs(liveDifference) >= 0.01;
+  const isDivergent = closingMode === 'rapida' && !hasMissingDeclarations && Math.abs(liveDifference) >= 0.01;
 
   useEffect(() => {
+    setClosingMode('rapida');
+    setCardAutomatic(true);
+    setPixAutomatic(true);
     setDeclaradoDinheiro('');
-    setDeclaradoCartao('');
-    setDeclaradoPix('');
+    setDeclaradoCartao(expectedCard);
+    setDeclaradoPix(expectedPix);
     setObservacao('');
     setShowConfirmModal(false);
     setErrorMsg(null);
   }, [turnoResumo?.turno_id]);
 
-  const useExpectedValues = () => {
-    setDeclaradoDinheiro(expectedCash);
-    setDeclaradoCartao(expectedCard);
-    setDeclaradoPix(expectedPix);
-    setErrorMsg(null);
-  };
+  useEffect(() => {
+    if (closingMode === 'rapida' && cardAutomatic) setDeclaradoCartao(expectedCard);
+  }, [cardAutomatic, closingMode, expectedCard]);
 
-  const handleRefresh = async () => {
-    if (!onRefresh || isRefreshing) return;
-    try {
-      setIsRefreshing(true);
-      await onRefresh();
-    } finally {
-      setIsRefreshing(false);
+  useEffect(() => {
+    if (closingMode === 'rapida' && pixAutomatic) setDeclaradoPix(expectedPix);
+  }, [closingMode, expectedPix, pixAutomatic]);
+
+  const handleModeChange = (mode: 'rapida' | 'cega') => {
+    setClosingMode(mode);
+    setErrorMsg(null);
+    setObservacao('');
+    setDeclaradoDinheiro('');
+    if (mode === 'rapida') {
+      setCardAutomatic(true);
+      setPixAutomatic(true);
+      setDeclaradoCartao(expectedCard);
+      setDeclaradoPix(expectedPix);
+    } else {
+      setCardAutomatic(false);
+      setPixAutomatic(false);
+      setDeclaradoCartao('');
+      setDeclaradoPix('');
     }
   };
 
@@ -190,7 +208,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
       return;
     }
     if (isDivergent && !observacao.trim()) {
-      setErrorMsg('Diferença de caixa identificada. É obrigatório informar o motivo na observação para auditoria gerencial.');
+      setErrorMsg('Há uma diferença nos valores. Informe o motivo antes de continuar.');
       return;
     }
     setShowConfirmModal(true);
@@ -208,7 +226,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
       });
       setShowConfirmModal(false);
     } catch (error: unknown) {
-      setErrorMsg(error instanceof Error ? error.message : 'Erro ao processar fechamento de caixa.');
+      setErrorMsg(error instanceof Error ? error.message : 'Não foi possível fechar o caixa.');
       setShowConfirmModal(false);
     } finally {
       setIsSubmitting(false);
@@ -355,18 +373,28 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   return (
     <div className="cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
       <section className="cashier-fluid-panel rounded-2xl sm:rounded-3xl border border-koma-border bg-koma-panel p-4 sm:p-6">
-        <div className="flex flex-col gap-2.5 border-b border-koma-border pb-3 sm:pb-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Conferência assistida</p>
-            <h2 className="mt-0.5 text-base sm:text-lg font-bold text-koma-foreground">Confira e feche mais rápido</h2>
-            <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted hidden sm:block">Compare cada meio com o sistema. Use os valores esperados e altere apenas quando houver divergência.</p>
-          </div>
-          <div className="closing-toolbar-actions flex min-w-0 items-center gap-2">
-            <button type="button" onClick={handleRefresh} disabled={!onRefresh || isRefreshing} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-2 text-[10px] font-semibold text-koma-secondary hover:border-[#3a4540] hover:text-koma-foreground disabled:opacity-50">
-              <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} /> Atualizar
+        <div className="border-b border-koma-border pb-4">
+          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Como você quer conferir?</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Modo de conferência do caixa">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={closingMode === 'rapida'}
+              onClick={() => handleModeChange('rapida')}
+              className={clsx('rounded-2xl border p-4 text-left transition-colors', closingMode === 'rapida' ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30' : 'border-koma-border bg-koma-card hover:bg-koma-raised')}
+            >
+              <strong className="block text-sm text-koma-foreground">Conferência rápida</strong>
+              <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">Pix e cartões vêm dos pagamentos registrados. Você conta o dinheiro e pode corrigir qualquer valor.</span>
             </button>
-            <button type="button" onClick={useExpectedValues} className="inline-flex w-fit items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-[10px] font-bold text-white transition-colors hover:bg-emerald-600 hover:bg-emerald-500">
-              <Zap size={13} /> Preencher esperados
+            <button
+              type="button"
+              role="radio"
+              aria-checked={closingMode === 'cega'}
+              onClick={() => handleModeChange('cega')}
+              className={clsx('rounded-2xl border p-4 text-left transition-colors', closingMode === 'cega' ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30' : 'border-koma-border bg-koma-card hover:bg-koma-raised')}
+            >
+              <strong className="block text-sm text-koma-foreground">Conferência cega</strong>
+              <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">Nenhum valor esperado aparece antes do fechamento. Informe dinheiro, cartões e Pix manualmente.</span>
             </button>
           </div>
         </div>
@@ -380,43 +408,91 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
 
         <form onSubmit={handlePreSubmit} className="mt-5">
           <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-            <CountField id="closing-cash" label="Dinheiro na gaveta" help="Fundo + vendas líquidas em dinheiro + suprimentos − sangrias." icon={DollarSign} value={declaradoDinheiro} expected={expectedCash} required onChange={setDeclaradoDinheiro} onUseExpected={() => setDeclaradoDinheiro(expectedCash)} />
-            <CountField id="closing-card" label="Cartões" help="Recebimentos aprovados − devoluções efetivadas em cartão." icon={CreditCard} value={declaradoCartao} expected={expectedCard} required allowNegative onChange={setDeclaradoCartao} onUseExpected={() => setDeclaradoCartao(expectedCard)} />
-            <CountField id="closing-pix" label="Pix" help="Recebimentos aprovados − devoluções efetivadas via Pix." icon={Smartphone} value={declaradoPix} expected={expectedPix} required allowNegative onChange={setDeclaradoPix} onUseExpected={() => setDeclaradoPix(expectedPix)} />
+            <CountField
+              id="closing-cash"
+              label="Dinheiro contado"
+              help="Conte as notas e moedas que estão no caixa."
+              icon={DollarSign}
+              value={declaradoDinheiro}
+              expected={expectedCash}
+              required
+              hideExpected={closingMode === 'cega' || declaradoDinheiro === ''}
+              onChange={setDeclaradoDinheiro}
+            />
+            <CountField
+              id="closing-card"
+              label="Cartões"
+              help={closingMode === 'rapida' ? 'Valor registrado nos pagamentos. Edite somente se precisar corrigir.' : 'Informe o total conferido nos comprovantes.'}
+              icon={CreditCard}
+              value={declaradoCartao}
+              expected={expectedCard}
+              required
+              allowNegative
+              hideExpected={closingMode === 'cega'}
+              automatic={closingMode === 'rapida' && cardAutomatic}
+              onChange={(next) => { setDeclaradoCartao(next); setCardAutomatic(false); }}
+            />
+            <CountField
+              id="closing-pix"
+              label="Pix"
+              help={closingMode === 'rapida' ? 'Valor registrado nos pagamentos. Edite somente se precisar corrigir.' : 'Informe o total conferido no Pix.'}
+              icon={Smartphone}
+              value={declaradoPix}
+              expected={expectedPix}
+              required
+              allowNegative
+              hideExpected={closingMode === 'cega'}
+              automatic={closingMode === 'rapida' && pixAutomatic}
+              onChange={(next) => { setDeclaradoPix(next); setPixAutomatic(false); }}
+            />
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">
-            <span className={clsx("text-[9px] font-bold uppercase tracking-[0.12em]", isDivergent ? "text-rose-800 dark:text-rose-300" : "text-koma-muted")}>
-              Observação do fechamento {isDivergent ? <span className="normal-case tracking-normal ml-1 text-rose-800 dark:text-rose-300">* Obrigatório para justificar divergência</span> : <span className="normal-case tracking-normal">(opcional)</span>}
+            <span className={clsx('text-[9px] font-bold uppercase tracking-[0.12em]', isDivergent ? 'text-rose-800 dark:text-rose-300' : 'text-koma-muted')}>
+              Observação {isDivergent ? <span className="normal-case tracking-normal ml-1">* explique a diferença</span> : <span className="normal-case tracking-normal">(opcional)</span>}
             </span>
-            <textarea id="closing-note" rows={2} maxLength={500} placeholder={isDivergent ? "Justifique a diferença de caixa..." : "Ex.: comprovante ausente, valor deixado para troco..."} value={observacao} onChange={(event) => setObservacao(event.target.value)} required={isDivergent} className={clsx("mt-2 w-full resize-none rounded-xl border bg-koma-panel px-3 py-3 text-xs text-koma-foreground outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]", isDivergent && !observacao.trim() ? "border-rose-300 dark:border-rose-900/50 focus:border-[#f0b3aa]" : "border-koma-border")} />
+            <textarea
+              id="closing-note"
+              rows={2}
+              maxLength={500}
+              placeholder={isDivergent ? 'Explique a diferença encontrada...' : 'Ex.: comprovante ausente, valor deixado para troco...'}
+              value={observacao}
+              onChange={(event) => setObservacao(event.target.value)}
+              required={isDivergent}
+              className={clsx('mt-2 w-full resize-none rounded-xl border bg-koma-panel px-3 py-3 text-xs text-koma-foreground outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]', isDivergent && !observacao.trim() ? 'border-rose-300 dark:border-rose-900/50' : 'border-koma-border')}
+            />
           </label>
 
           <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Esperado</span>
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Declarado</span>
-              <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
-              <strong className="text-sm tabular-nums text-koma-secondary sm:text-base">{formatMoney(expectedTotal)}</strong>
-              <strong className="text-sm tabular-nums text-koma-foreground sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
-              <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-koma-muted' : Math.abs(liveDifference) < 0.01 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>
-                {hasMissingDeclarations ? '—' : `${liveDifference > 0 ? '+' : ''}${formatMoney(liveDifference)}`}
-              </strong>
-            </div>
-            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-600 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:border-koma-border-subtle disabled:bg-koma-raised disabled:text-zinc-600">
-              <Lock size={15} /> Revisar e fechar caixa <ArrowRight size={15} />
+            {closingMode === 'rapida' ? (
+              <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Registrado</span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Informado</span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
+                <strong className="text-sm tabular-nums text-koma-secondary sm:text-base">{formatMoney(expectedTotal)}</strong>
+                <strong className="text-sm tabular-nums text-koma-foreground sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
+                <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-koma-muted' : Math.abs(liveDifference) < 0.01 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>
+                  {hasMissingDeclarations ? '—' : `${liveDifference > 0 ? '+' : ''}${formatMoney(liveDifference)}`}
+                </strong>
+              </div>
+            ) : (
+              <div>
+                <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Total informado</span>
+                <strong className="mt-1 block text-base tabular-nums text-koma-foreground">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
+                <span className="mt-1 block text-[10px] text-koma-muted">A comparação com o sistema só aparece depois de fechar.</span>
+              </div>
+            )}
+            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:border-koma-border-subtle disabled:bg-koma-raised disabled:text-zinc-600">
+              <Lock size={15} /> Revisar fechamento <ArrowRight size={15} />
             </button>
           </div>
         </form>
       </section>
 
       <aside className="cashier-fluid-panel rounded-3xl border border-koma-border bg-koma-panel p-5">
-        <div className="flex items-center justify-between border-b border-koma-border pb-4">
-          <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Validação do turno</p>
-            <h2 className="mt-1 text-base font-bold text-koma-foreground">Antes de fechar</h2>
-          </div>
-          {isConnected ? <Wifi size={17} className="text-emerald-800 dark:text-emerald-300" /> : <WifiOff size={17} className="text-koma-muted" />}
+        <div className="border-b border-koma-border pb-4">
+          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Antes de fechar</p>
+          <h2 className="mt-1 text-base font-bold text-koma-foreground">Resolva só o que está pendente</h2>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -425,10 +501,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-emerald-800 dark:text-emerald-300"><ReceiptText size={17} /></span>
               <strong className="text-xl tabular-nums text-koma-foreground">{pendingPaymentsCount}</strong>
             </div>
-            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Pagamentos aguardando confirmação</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa ser conferido.` : 'Nenhum recebimento pendente neste momento.'}</p>
+            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Pagamentos para confirmar</h3>
+            <p className="mt-1 text-[10px] text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa de confirmação.` : 'Nenhum pagamento aguardando confirmação.'}</p>
             {pendingPaymentsCount > 0 && onNavigateToPendingPayments && (
-              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Resolver pagamentos <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver pagamentos <ArrowRight size={13} /></button>
             )}
           </div>
 
@@ -437,10 +513,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-emerald-800 dark:text-emerald-300"><ClipboardCheck size={17} /></span>
               <strong className="text-xl tabular-nums text-koma-foreground">{openAccountsCount}</strong>
             </div>
-            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Comandas ainda abertas</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">{openAccountsCount > 0 ? 'Finalize as contas para não levar valores ao próximo turno.' : 'Todas as comandas estão finalizadas.'}</p>
+            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Contas ainda abertas</h3>
+            <p className="mt-1 text-[10px] text-koma-muted">{openAccountsCount > 0 ? 'Finalize essas contas antes de encerrar o turno.' : 'Todas as contas estão finalizadas.'}</p>
             {openAccountsCount > 0 && onNavigateToOpenComandas && (
-              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Revisar comandas <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver contas <ArrowRight size={13} /></button>
             )}
           </div>
         </div>
@@ -448,8 +524,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
         <div className={clsx('mt-4 flex items-start gap-3 rounded-2xl border p-4', hasBlockingPending ? 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30' : 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30')}>
           {hasBlockingPending ? <AlertCircle size={18} className="mt-0.5 shrink-0 text-rose-800 dark:text-rose-300" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-800 dark:text-emerald-300" />}
           <div>
-            <strong className={clsx('block text-xs', hasBlockingPending ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300')}>{hasBlockingPending ? 'Fechamento bloqueado com segurança' : 'Turno pronto para conferência'}</strong>
-            <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{hasBlockingPending ? 'Resolva as pendências acima. O sistema também valida tudo novamente no servidor.' : 'A confirmação fará uma última validação no servidor antes de encerrar.'}</p>
+            <strong className={clsx('block text-xs', hasBlockingPending ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300')}>{hasBlockingPending ? 'Ainda não dá para fechar' : 'Pronto para conferir'}</strong>
+            <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{hasBlockingPending ? 'Resolva os itens acima para continuar.' : closingMode === 'cega' ? 'Os valores do sistema ficarão ocultos até o fechamento.' : 'Cartões e Pix já estão preenchidos; conte o dinheiro para continuar.'}</p>
           </div>
         </div>
       </aside>
@@ -460,40 +536,48 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             <div className="flex items-start gap-3 border-b border-koma-border pb-4">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300"><Lock size={18} /></span>
               <div>
-                <h2 id="confirm-closing-title" className="text-base font-bold text-koma-foreground">Confirmar encerramento do turno?</h2>
-                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Depois de confirmar, os lançamentos deste turno ficam encerrados e a conferência será exibida.</p>
+                <h2 id="confirm-closing-title" className="text-base font-bold text-koma-foreground">Confirmar fechamento?</h2>
+                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Depois de confirmar, este turno fica encerrado.</p>
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-2xl border border-koma-border bg-koma-panel text-[10px]">
-              <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2 font-bold uppercase tracking-wider text-koma-muted">
-                <span>Meio</span><span>Esperado</span><span>Informado</span><span>Dif.</span>
+            {closingMode === 'rapida' ? (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-koma-border bg-koma-panel text-[10px]">
+                <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2 font-bold uppercase tracking-wider text-koma-muted">
+                  <span>Meio</span><span>Registrado</span><span>Informado</span><span>Dif.</span>
+                </div>
+                {[
+                  ['Dinheiro', expectedCash, Number(declaradoDinheiro || 0)],
+                  ['Cartão', expectedCard, Number(declaradoCartao || 0)],
+                  ['Pix', expectedPix, Number(declaradoPix || 0)],
+                ].map(([label, expected, declared]) => {
+                  const rowDifference = Number(declared) - Number(expected);
+                  return (
+                    <div key={String(label)} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2.5 tabular-nums last:border-0">
+                      <strong className="text-koma-secondary">{label}</strong>
+                      <span className="text-koma-muted">{formatMoney(Number(expected))}</span>
+                      <span className="text-koma-foreground">{formatMoney(Number(declared))}</span>
+                      <span className={Math.abs(rowDifference) < 0.01 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}>{rowDifference > 0 ? '+' : ''}{formatMoney(rowDifference)}</span>
+                    </div>
+                  );
+                })}
               </div>
-              {[
-                ['Dinheiro', expectedCash, Number(declaradoDinheiro || 0)],
-                ['Cartão', expectedCard, Number(declaradoCartao || 0)],
-                ['Pix', expectedPix, Number(declaradoPix || 0)],
-              ].map(([label, expected, declared]) => {
-                const rowDifference = Number(declared) - Number(expected);
-                return (
-                  <div key={String(label)} className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2.5 tabular-nums last:border-0">
-                    <strong className="text-koma-secondary">{label}</strong>
-                    <span className="text-koma-muted">{formatMoney(Number(expected))}</span>
-                    <span className="text-koma-foreground">{formatMoney(Number(declared))}</span>
-                    <span className={Math.abs(rowDifference) < 0.01 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}>{rowDifference > 0 ? '+' : ''}{formatMoney(rowDifference)}</span>
-                  </div>
-                );
-              })}
-              <div className="flex items-center justify-between bg-koma-panel px-4 py-3 text-xs font-bold text-koma-foreground">
-                <span>Diferença total</span>
-                <span className={Math.abs(liveDifference) < 0.01 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}>{liveDifference > 0 ? '+' : ''}{formatMoney(liveDifference)}</span>
+            ) : (
+              <div className="mt-4 rounded-2xl border border-koma-border bg-koma-card p-4">
+                <strong className="block text-xs text-koma-foreground">Conferência cega mantida</strong>
+                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Os valores registrados pelo sistema continuam ocultos. A comparação aparece somente depois que o turno for encerrado.</p>
+                <dl className="mt-3 space-y-2 text-[10px] text-koma-secondary">
+                  <div className="flex justify-between"><dt>Dinheiro informado</dt><dd className="font-bold tabular-nums text-koma-foreground">{formatMoney(Number(declaradoDinheiro || 0))}</dd></div>
+                  <div className="flex justify-between"><dt>Cartões informados</dt><dd className="font-bold tabular-nums text-koma-foreground">{formatMoney(Number(declaradoCartao || 0))}</dd></div>
+                  <div className="flex justify-between"><dt>Pix informado</dt><dd className="font-bold tabular-nums text-koma-foreground">{formatMoney(Number(declaradoPix || 0))}</dd></div>
+                </dl>
               </div>
-            </div>
+            )}
 
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Voltar e conferir</button>
-              <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-3 py-3 text-xs font-bold text-white hover:bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">
-                <Check size={15} /> {isSubmitting ? 'Encerrando...' : 'Confirmar fechamento'}
+              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Voltar</button>
+              <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 px-3 py-3 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50">
+                <Check size={15} /> {isSubmitting ? 'Fechando...' : 'Fechar caixa'}
               </button>
             </div>
           </div>
@@ -501,4 +585,5 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
       )}
     </div>
   );
+
 };

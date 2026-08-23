@@ -9,10 +9,8 @@ import {
   History,
   Lock,
   ReceiptText,
-  RefreshCw,
   RotateCcw,
   WalletCards,
-  WifiOff,
 } from 'lucide-react';
 import { CaixaAtividadeRecente, CaixaTurnoResumo } from '../../types';
 import { normalizeOperationalTimestamp } from '../../domain';
@@ -21,7 +19,7 @@ import { EstornoModal } from './EstornoModal';
 interface CaixaTurnoAtualTabProps {
   turnoResumo: CaixaTurnoResumo | null;
   isLoading: boolean;
-  isConnected: boolean;
+  isConnected?: boolean;
   pendingPaymentsCount: number;
   pendingPaymentsTotal: number;
   onRefresh: () => void;
@@ -49,9 +47,9 @@ const formatCurrency = (value: number) => currencyFormatter.format(Number(value)
 
 const activityLabel: Record<string, string> = {
   recebimento: 'Venda recebida',
-  suprimento: 'Suprimento',
-  sangria: 'Sangria',
-  estorno: 'Estorno',
+  suprimento: 'Dinheiro adicionado',
+  sangria: 'Dinheiro retirado',
+  estorno: 'Devolução ao cliente',
 };
 
 const paymentMethodLabel: Record<string, string> = {
@@ -63,7 +61,7 @@ const paymentMethodLabel: Record<string, string> = {
 };
 
 const CaixaSummarySkeleton = () => (
-  <div className="space-y-4" aria-busy="true" aria-label="Sincronizando resumo do caixa">
+  <div className="space-y-4" aria-busy="true" aria-label="Carregando resumo do caixa">
     <div className="h-14 animate-pulse rounded-[18px] border border-koma-border bg-koma-panel" />
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[0, 1, 2, 3].map(item => (
@@ -121,10 +119,8 @@ const ActivityRow = ({ activity }: { activity: CaixaAtividadeRecente }) => {
 export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   turnoResumo,
   isLoading,
-  isConnected,
   pendingPaymentsCount,
   pendingPaymentsTotal,
-  onRefresh,
   onNavigateToFechamento,
   onNavigateToMovimentacoes,
   onNavigateToPendingPayments,
@@ -202,23 +198,18 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           </span>
           <div className="min-w-0">
             <h2 className="text-xs font-bold text-koma-foreground">Ações do turno</h2>
-            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Registre entradas, saídas e devoluções antes de fechar o caixa.</p>
+            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Adicione ou retire dinheiro e faça devoluções quando necessário.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-          {!isConnected && (
-            <button type="button" onClick={onRefresh} disabled={isLoading} className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-emerald-500 hover:text-emerald-800 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs">
-              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} /> Tentar sincronizar
-            </button>
-          )}
           <button type="button" onClick={onOpenSuprimentoModal} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-500/50 transition-all cursor-pointer shadow-xs">
-            <ArrowDownRight size={14} className="text-emerald-700 dark:text-emerald-400" /> Suprimento
+            <ArrowDownRight size={14} className="text-emerald-700 dark:text-emerald-400" /> Adicionar dinheiro
           </button>
           <button type="button" onClick={onOpenSangriaModal} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
-            <ArrowUpRight size={14} className="text-rose-700 dark:text-rose-400" /> Sangria
+            <ArrowUpRight size={14} className="text-rose-700 dark:text-rose-400" /> Retirar dinheiro
           </button>
           <button type="button" onClick={() => setShowRefundModal(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[11px] font-bold text-rose-800 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-500/50 transition-all cursor-pointer shadow-xs">
-            <RotateCcw size={14} /> Estornar
+            <RotateCcw size={14} /> Devolver pagamento
           </button>
           <button type="button" onClick={onNavigateToFechamento} className="col-span-2 sm:col-span-1 inline-flex items-center justify-center gap-2 rounded-xl koma-btn-success px-4 py-2.5 sm:py-2 text-[11px] font-bold uppercase tracking-[0.08em] transition-all cursor-pointer shadow-sm">
             <Lock size={14} /> Fechar caixa
@@ -244,11 +235,11 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             <div className="flex items-center gap-2">
               <History size={15} className="text-emerald-800 dark:text-emerald-300" />
               <div>
-                <h3 className="text-xs font-bold text-koma-foreground">Atividade recente</h3>
-                <p className="mt-0.5 text-[10px] text-koma-muted">Últimos recebimentos, devoluções e ajustes deste turno</p>
+                <h3 className="text-xs font-bold text-koma-foreground">Movimentações recentes</h3>
+                <p className="mt-0.5 text-[10px] text-koma-muted">O que entrou, saiu ou foi devolvido neste turno</p>
               </div>
             </div>
-            <button type="button" onClick={onNavigateToMovimentacoes} className="shrink-0 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:text-[#7becce]">Ver ajustes</button>
+            <button type="button" onClick={onNavigateToMovimentacoes} className="shrink-0 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 transition-colors hover:text-[#7becce]">Ver movimentações</button>
           </header>
           {activities.length > 0 ? (
             <ul>{activities.map(activity => <ActivityRow key={activity.id} activity={activity} />)}</ul>
@@ -256,7 +247,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             <div className="flex min-h-48 flex-col items-center justify-center px-5 text-center">
               <History size={22} className="text-koma-muted" />
               <strong className="mt-3 text-xs text-koma-subtle">O turno ainda não teve movimentações</strong>
-              <span className="mt-1 text-[10px] text-koma-muted">Vendas recebidas, estornos, sangrias e suprimentos aparecerão aqui.</span>
+              <span className="mt-1 text-[10px] text-koma-muted">Vendas recebidas, devoluções, entradas e retiradas aparecerão aqui.</span>
             </div>
           )}
         </article>
@@ -265,30 +256,30 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           <article className="rounded-[18px] border border-koma-border bg-koma-panel p-4">
             <div className="flex items-center gap-2 border-b border-koma-border pb-3">
               <Banknote size={15} className="text-emerald-800 dark:text-emerald-300" />
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-koma-secondary">Conferência do dinheiro</h3>
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-koma-secondary">Dinheiro no caixa</h3>
             </div>
             <dl className="mt-3 space-y-2.5 text-xs">
               <div className="flex justify-between gap-3 text-koma-subtle"><dt>Saldo inicial</dt><dd className="tabular-nums text-koma-foreground">{formatCurrency(turnoResumo.saldo_inicial)}</dd></div>
               <div className="flex justify-between gap-3 text-koma-subtle"><dt>Líquido em dinheiro</dt><dd className={`tabular-nums ${turnoResumo.total_dinheiro < 0 ? 'text-rose-800 dark:text-rose-300' : 'text-koma-foreground'}`}>{turnoResumo.total_dinheiro >= 0 ? '+' : '−'} {formatCurrency(Math.abs(turnoResumo.total_dinheiro))}</dd></div>
-              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Suprimentos</dt><dd className="tabular-nums text-koma-foreground">+ {formatCurrency(turnoResumo.total_suprimentos)}</dd></div>
-              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Sangrias</dt><dd className="tabular-nums text-rose-800 dark:text-rose-300">− {formatCurrency(turnoResumo.total_sangrias)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Dinheiro adicionado</dt><dd className="tabular-nums text-koma-foreground">+ {formatCurrency(turnoResumo.total_suprimentos)}</dd></div>
+              <div className="flex justify-between gap-3 text-koma-subtle"><dt>Dinheiro retirado</dt><dd className="tabular-nums text-rose-800 dark:text-rose-300">− {formatCurrency(turnoResumo.total_sangrias)}</dd></div>
               <div className="flex items-end justify-between gap-3 border-t border-koma-border pt-3"><dt className="font-bold text-koma-secondary">Esperado no caixa</dt><dd className="text-base font-bold tabular-nums text-emerald-800 dark:text-emerald-300">{formatCurrency(turnoResumo.saldo_esperado_dinheiro)}</dd></div>
             </dl>
           </article>
 
           <article className={`rounded-[18px] border p-3 ${
-            !isConnected || isTurnoEsquecido || pendingPaymentsCount > 0
+            isTurnoEsquecido || pendingPaymentsCount > 0
               ? 'border-[#3d3a30] bg-koma-card'
               : 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30'
           }`}>
             <div className="flex items-start gap-3">
-              {!isConnected ? <WifiOff size={17} className="mt-0.5 shrink-0 text-koma-subtle" /> : isTurnoEsquecido || pendingPaymentsCount > 0 ? <AlertCircle size={17} className="mt-0.5 shrink-0 text-koma-subtle" /> : <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-800 dark:text-emerald-300" />}
+              {isTurnoEsquecido || pendingPaymentsCount > 0 ? <AlertCircle size={17} className="mt-0.5 shrink-0 text-koma-subtle" /> : <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-emerald-800 dark:text-emerald-300" />}
               <div className="min-w-0">
                 <h3 className="text-xs font-bold text-koma-foreground">
-                  {!isConnected ? 'Sincronização reconectando' : isTurnoEsquecido ? 'Turno aberto há mais de 24 horas' : pendingPaymentsCount > 0 ? 'Há contas aguardando confirmação' : 'Operação em dia'}
+                  {isTurnoEsquecido ? 'Turno aberto há mais de 24 horas' : pendingPaymentsCount > 0 ? 'Há pagamentos para confirmar' : 'Turno em ordem'}
                 </h3>
                 <p className="mt-0.5 text-[10px] leading-relaxed text-koma-muted">
-                  {!isConnected ? 'As informações salvas continuam disponíveis e serão atualizadas ao reconectar.' : isTurnoEsquecido ? 'Confira os valores e encerre o turno anterior antes de continuar.' : pendingPaymentsCount > 0 ? `${pendingPaymentsCount} pagamento(s) precisam de conferência.` : 'Resumo conciliado e atualização em tempo real ativa.'}
+                  {isTurnoEsquecido ? 'Confira os valores e encerre o turno anterior antes de continuar.' : pendingPaymentsCount > 0 ? `${pendingPaymentsCount} pagamento(s) precisam de conferência.` : 'Nenhuma pendência precisa da sua atenção agora.'}
                 </p>
                 {(isTurnoEsquecido || pendingPaymentsCount > 0) && (
                   <button type="button" onClick={isTurnoEsquecido ? onNavigateToFechamento : onNavigateToPendingPayments} className="mt-3 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-[#7becce]">
@@ -304,9 +295,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
       {showRefundModal && (
         <EstornoModal
           onClose={() => setShowRefundModal(false)}
-          onSuccess={() => {
-            onRefresh();
-          }}
+          onSuccess={() => undefined}
         />
       )}
     </div>
