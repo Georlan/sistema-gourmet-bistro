@@ -24,10 +24,7 @@ export function OperationalBanner({
   accent,
   description,
   metrics,
-  isConnected,
 }: OperationalBannerProps) {
-  const showConnectionStatus = typeof isConnected === 'boolean';
-
   return (
     <section className="orders-hero shrink-0" aria-labelledby={id}>
       <div className="orders-hero__copy">
@@ -42,12 +39,6 @@ export function OperationalBanner({
             <span>{metric.label}</span>
           </div>
         ))}
-        {showConnectionStatus && (
-          <div className={clsx('orders-hero__status', isConnected ? 'is-live' : 'is-offline')}>
-            <span className="orders-live-dot" />
-            <span>{isConnected ? 'Tempo real ativo' : 'Reconectando'}</span>
-          </div>
-        )}
       </div>
     </section>
   );
