@@ -23,7 +23,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
 
     const valorNumerico = Number(valor || 0);
     if (valorNumerico <= 0) {
-      setErrorMsg('O valor do suprimento deve ser maior que zero.');
+      setErrorMsg('O valor adicionado deve ser maior que zero.');
       return;
     }
 
@@ -36,7 +36,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
       });
       onClose();
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao registrar suprimento.');
+      setErrorMsg(err.message || 'Não foi possível adicionar dinheiro ao caixa.');
     } finally {
       setIsSubmitting(false);
     }
@@ -50,8 +50,8 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
       <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
         <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
-            <h3 className="font-serif text-sm font-bold text-koma-foreground">Novo Suprimento de Caixa</h3>
-            <p className="text-[9px] text-koma-subtle">Aporte de fundo de troco extra no caixa aberto.</p>
+            <h3 className="font-serif text-sm font-bold text-koma-foreground">Adicionar dinheiro ao caixa</h3>
+            <p className="text-[9px] text-koma-subtle">Registre um valor extra colocado na gaveta, como reforço de troco.</p>
           </div>
           <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer">
             <X size={16} />
@@ -68,7 +68,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
-              Valor do Suprimento (R$) <span className="text-red-400">*</span>:
+              Valor adicionado (R$) <span className="text-red-400">*</span>:
             </label>
             <MoneyInput
               required
@@ -76,7 +76,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               value={valor}
               onValueChange={setValor}
               selectOnFocus
-              aria-label="Valor do suprimento"
+              aria-label="Valor adicionado ao caixa"
               className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-sm font-mono focus:outline-none focus:border-emerald-500"
             />
           </div>
@@ -85,7 +85,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Motivo (Opcional):</label>
             <input
               type="text"
-              placeholder="ex: Troco inicial extra para início de pico..."
+              placeholder="Ex.: reforço de troco para o horário de pico"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
@@ -116,7 +116,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
               disabled={isSubmitting}
               className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
             >
-              {isSubmitting ? 'Salvando...' : 'Confirmar Suprimento'}
+              {isSubmitting ? 'Salvando...' : 'Confirmar entrada'}
             </button>
           </div>
         </form>

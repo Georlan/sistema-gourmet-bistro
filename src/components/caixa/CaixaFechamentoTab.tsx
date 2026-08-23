@@ -24,7 +24,6 @@ interface CaixaFechamentoTabProps {
   turnoResumo: CaixaTurnoResumo | null;
   pendingPaymentsCount: number;
   pendingPaymentsTotal: number;
-  isConnected?: boolean;
   onConfirmFechamento: (payload: {
     declarado_dinheiro: number;
     declarado_cartao: number;
@@ -32,7 +31,6 @@ interface CaixaFechamentoTabProps {
     observacao: string;
   }) => Promise<void>;
   onOpenNovoTurnoModal?: () => void;
-  onRefresh?: () => Promise<void> | void;
   onNavigateToPendingPayments?: () => void;
   onNavigateToOpenComandas?: () => void;
 }

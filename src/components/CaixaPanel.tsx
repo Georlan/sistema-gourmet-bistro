@@ -7772,7 +7772,6 @@ export function CaixaPanel({
                 isLoading={isTurnoResumoLoading}
                 pendingPaymentsCount={pagamentosPendentes.length}
                 pendingPaymentsTotal={pendingPaymentsTotal}
-                onRefresh={fetchTurnoResumo}
                 onNavigateToFechamento={() => setActiveSubTab('fechamento')}
                 onNavigateToMovimentacoes={() => setActiveSubTab('movimentacoes')}
                 onNavigateToPendingPayments={() => {
@@ -7804,8 +7803,8 @@ export function CaixaPanel({
                 description="Use a conferência rápida ou faça uma conferência totalmente cega."
                 metrics={[
                   { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
-                  { label: 'último recebimento', value: latestReceiptTime },
-                  { label: 'modo de conferência', value: 'Assistida', valueClassName: 'text-emerald-800 dark:text-emerald-300' },
+                  { label: 'pagamentos pendentes', value: pagamentosPendentes.length, valueClassName: pagamentosPendentes.length > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
+                  { label: 'valor pendente', value: formatCompactCurrency(pendingPaymentsTotal) },
                 ]}
               />
               <CaixaFechamentoTab
@@ -7816,12 +7815,6 @@ export function CaixaPanel({
                 pendingPaymentsTotal={pendingPaymentsTotal}
                 onConfirmFechamento={handleConfirmarFechamento}
                 onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
-                onRefresh={async () => {
-                  await Promise.all([
-                    fetchTurnoResumo(),
-                    onRefreshPagamentosPendentes?.(),
-                  ]);
-                }}
                 onNavigateToPendingPayments={() => {
                   setActiveTab('operacao');
                   setActiveSubTab('pedidos');

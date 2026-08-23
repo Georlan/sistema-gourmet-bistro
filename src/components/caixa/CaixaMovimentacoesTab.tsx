@@ -62,7 +62,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           movimentacao.descricao,
           movimentacao.observacao,
           movimentacao.usuario_nome,
-          movimentacao.tipo,
+          movimentacao.tipo === 'suprimento' ? 'Dinheiro adicionado' : movimentacao.tipo === 'sangria' ? 'Dinheiro retirado' : movimentacao.tipo,
         ].join(' ').toLocaleLowerCase('pt-BR');
         if (!searchable.includes(normalizedSearch)) return false;
       }
@@ -106,7 +106,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
     const header = ['Data e hora', 'Tipo', 'Valor', 'Saldo anterior', 'Saldo posterior', 'Descrição', 'Observação', 'Operador'];
     const rows = filteredMovs.map(movimentacao => [
       formatBackendDateTime(movimentacao.criado_em),
-      movimentacao.tipo,
+      movimentacao.tipo === 'suprimento' ? 'Dinheiro adicionado' : movimentacao.tipo === 'sangria' ? 'Dinheiro retirado' : movimentacao.tipo,
       Number(movimentacao.valor).toFixed(2),
       Number(movimentacao.saldo_anterior || 0).toFixed(2),
       Number(movimentacao.saldo_posterior || 0).toFixed(2),
@@ -146,8 +146,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
         metrics={[
           { label: 'dinheiro adicionado', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },
           { label: 'dinheiro retirado', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },
-          { label: 'saldo das movimentações', value: formatCurrency(totals.suprimentos - totals.sangrias), valueClassName: totals.suprimentos >= totals.sangrias ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300' },
-          { label: 'último no recorte', value: latestMovementTime },
+          { label: 'última movimentação', value: latestMovementTime },
         ]}
       />
 
