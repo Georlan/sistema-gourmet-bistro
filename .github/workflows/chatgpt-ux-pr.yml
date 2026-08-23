@@ -26,13 +26,16 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import textwrap
 
           workflow = Path('.github/workflows/chatgpt-cashier-ux-pass.yml').read_text(encoding='utf-8')
           marker = "          python - <<'PY'\n"
           start = workflow.index(marker) + len(marker)
           end = workflow.index("\n          PY", start)
-          code = textwrap.dedent(workflow[start:end])
+          source_lines = workflow[start:end].splitlines()
+          code = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in source_lines
+          )
           exec(compile(code, 'cashier_ux_patch.py', 'exec'))
           PY
 
