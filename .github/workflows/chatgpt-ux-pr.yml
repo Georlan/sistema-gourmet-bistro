@@ -1,0 +1,64 @@
+name: One-off UX PR runner
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    if: startsWith(github.head_ref, 'chatgpt/cashier-ux-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply requested UX patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/chatgpt-cashier-ux-pass.yml').read_text(encoding='utf-8')
+          marker = "          python - <<'PY'\n"
+          start = workflow.index(marker) + len(marker)
+          end = workflow.index("\n          PY", start)
+          code = textwrap.dedent(workflow[start:end])
+          exec(compile(code, 'cashier_ux_patch.py', 'exec'))
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit validated changes to PR branch
+        shell: bash
+        run: |
+          git config user.name "ChatGPT"
+          git config user.email "chatgpt@users.noreply.github.com"
+          rm -f .chatgpt-ux-trigger
+          git rm -f .github/workflows/chatgpt-cashier-ux-pass.yml .github/workflows/chatgpt-ux-pr.yml
+          git add -A
+          git commit -m "feat: simplify cashier order workflows"
+          git push origin HEAD:${{ github.head_ref }}
