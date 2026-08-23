@@ -33,6 +33,15 @@ jobs:
           end = workflow.index("\n          PY", start)
           code = "if True:\n" + workflow[start:end]
           exec(compile(code, 'cashier_ux_patch.py', 'exec'))
+
+          for rel_path in (
+              'src/components/caixa/CaixaTurnoAtualTab.tsx',
+              'src/components/caixa/CaixaFechamentoTab.tsx',
+          ):
+              path = Path(rel_path)
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('  isConnected: boolean;\n', '  isConnected?: boolean;\n')
+              path.write_text(text, encoding='utf-8')
           PY
 
       - name: Setup Node
