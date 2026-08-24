@@ -10,6 +10,7 @@ test("novo pedido emite uma única nota e não tenta tocar antes do desbloqueio 
   assert.match(block, /Um único bipe curto confirma um novo pedido/);
   assert.equal((block.match(/\{ freq:/g) || []).length, 1);
   assert.match(caixa, /audioUnlockedRef\.current/);
+  assert.match(caixa, /addEventListener\('pointerdown', unlock/);
   assert.doesNotMatch(caixa, /Bipe duplo suave e moderno de novo pedido/);
 });
 
