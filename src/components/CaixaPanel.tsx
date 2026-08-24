@@ -8629,6 +8629,11 @@ export function CaixaPanel({
 
                   {(() => {
                     const { subtotal, taxa } = getCheckoutTotals(selectedOrder);
+                    const currentBalance = getCheckoutBalance(selectedOrder);
+                    const selectedTotal = selectedItemIds.length > 0
+                      ? getSelectedItemsTotal(selectedOrder, selectedItemIds)
+                      : 0;
+                    const projectedBalance = Math.max(0, currentBalance - selectedTotal);
                     return (
                       <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'p-4', 'rounded-2xl', 'font-mono', 'text-[11px]', 'space-y-2')}>
                         <div className={clsx('flex', 'justify-between')}>
@@ -8646,10 +8651,7 @@ export function CaixaPanel({
                         {selectedItemIds.length > 0 && (
                           <div className={clsx('flex', 'justify-between', 'text-emerald-700 dark:text-emerald-400', 'font-bold', 'border-t', 'border-koma-border/40', 'pt-2')}>
                             <span className="font-sans">Total Selecionado:</span>
-                            <span>R$ {getSelectedItemsTotal(
-                              selectedOrder,
-                              selectedItemIds
-                            ).toFixed(2)}</span>
+                            <span>R$ {selectedTotal.toFixed(2)}</span>
                           </div>
                         )}
                         {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
@@ -8659,8 +8661,8 @@ export function CaixaPanel({
                           </div>
                         ) : null}
                         <div className={clsx('flex', 'justify-between', 'border-t', 'border-koma-border', 'pt-2', 'text-sm', 'text-emerald-700 dark:text-emerald-400', 'font-bold')}>
-                          <span className="font-sans">Saldo Restante:</span>
-                          <span>R$ {getCheckoutBalance(selectedOrder).toFixed(2)}</span>
+                          <span className="font-sans">{selectedItemIds.length > 0 ? 'Restará após receber:' : 'Saldo restante:'}</span>
+                          <span>R$ {(selectedItemIds.length > 0 ? projectedBalance : currentBalance).toFixed(2)}</span>
                         </div>
                       </div>
                     );
@@ -8733,33 +8735,47 @@ export function CaixaPanel({
                 <div className="space-y-4">
                   <h4 className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'border-b', 'border-koma-border', 'pb-1.5')}>Divisão e Recebimento</h4>
 
-                  <div className={clsx('grid', 'grid-cols-2', 'gap-3', 'bg-koma-card', 'p-3', 'rounded-2xl', 'border', 'border-koma-border')}>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Pessoas:</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={splitPeople}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSplitPeople(val);
-                          setSelectedItemIds([]);
-                          const peopleNum = parseInt(val, 10) || 1;
-                          setPaymentValor((getCheckoutBalance(selectedOrder) / peopleNum));
-                        }}
-                        className={clsx('w-full', 'px-3', 'py-1.5', 'text-xs', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'text-koma-foreground', 'text-center', 'font-mono')}
-                      />
+                  {selectedItemIds.length > 0 ? (
+                    <div className={clsx('grid', 'grid-cols-2', 'gap-3', 'bg-koma-card', 'p-3', 'rounded-2xl', 'border', 'border-koma-border')}>
+                      <div>
+                        <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens prontos</span>
+                        <strong className={clsx('mt-1', 'block', 'text-sm', 'text-koma-foreground', 'font-mono')}>{selectedItemIds.length}</strong>
+                      </div>
+                      <div className="text-right">
+                        <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Recebendo agora</span>
+                        <strong className={clsx('mt-1', 'block', 'text-sm', 'text-emerald-700 dark:text-emerald-300', 'font-mono')}>
+                          R$ {getSelectedItemsTotal(selectedOrder, selectedItemIds).toFixed(2)}
+                        </strong>
+                      </div>
                     </div>
-                    <div className={clsx('space-y-1', 'flex', 'flex-col', 'justify-end', 'text-right')}>
-                      <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Valor por Pessoa:</span>
-                      <span className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'leading-relaxed')}>
-                        R$ {(() => {
-                          const peopleNum = parseInt(splitPeople, 10) || 1;
-                          return (getCheckoutBalance(selectedOrder) / peopleNum).toFixed(2);
-                        })()}
-                      </span>
+                  ) : (
+                    <div className={clsx('grid', 'grid-cols-2', 'gap-3', 'bg-koma-card', 'p-3', 'rounded-2xl', 'border', 'border-koma-border')}>
+                      <div className="space-y-1">
+                        <label className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Pessoas:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={splitPeople}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSplitPeople(val);
+                            const peopleNum = parseInt(val, 10) || 1;
+                            setPaymentValor((getCheckoutBalance(selectedOrder) / peopleNum));
+                          }}
+                          className={clsx('w-full', 'px-3', 'py-1.5', 'text-xs', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'text-koma-foreground', 'text-center', 'font-mono')}
+                        />
+                      </div>
+                      <div className={clsx('space-y-1', 'flex', 'flex-col', 'justify-end', 'text-right')}>
+                        <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Valor por pessoa:</span>
+                        <span className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'leading-relaxed')}>
+                          R$ {(() => {
+                            const peopleNum = parseInt(splitPeople, 10) || 1;
+                            return (getCheckoutBalance(selectedOrder) / peopleNum).toFixed(2);
+                          })()}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <form onSubmit={handleProcessPayment} className={clsx('space-y-4', 'bg-koma-card/40', 'p-4', 'rounded-2xl', 'border', 'border-koma-border/50')}>
                     <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'uppercase', 'tracking-wider', 'block')}>Receber Pagamento</span>

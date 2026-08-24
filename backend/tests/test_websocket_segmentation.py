@@ -89,3 +89,18 @@ async def _exercise_websocket_broadcast_failure_isolation():
     healthy_socket.send_json.assert_called_once_with(event)
     assert failing_socket not in manager.active_connections[7]["internal"]
     assert healthy_socket in manager.active_connections[7]["internal"]
+
+
+def test_internal_websocket_negotiates_auth_subprotocol():
+    async def exercise():
+        manager = ConnectionManager()
+        socket = AsyncMock()
+        await manager.connect(
+            socket,
+            9,
+            client_type="internal",
+            subprotocol="koma-auth",
+        )
+        socket.accept.assert_awaited_once_with(subprotocol="koma-auth")
+
+    asyncio.run(exercise())

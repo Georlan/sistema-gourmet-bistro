@@ -202,7 +202,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
           </button>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(280px,.85fr)_minmax(0,1.15fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(280px,.85fr)_minmax(0,1.15fr)] lg:overflow-hidden">
           <section className="min-h-0 border-b border-koma-border p-4 lg:border-b-0 lg:border-r">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
@@ -244,7 +244,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
             </div>
           </section>
 
-          <section className="min-h-0 overflow-y-auto p-5">
+          <section className="p-5 lg:min-h-0 lg:overflow-y-auto">
             {!selected ? (
               <div className="flex min-h-72 flex-col items-center justify-center text-center">
                 <RotateCcw size={24} className="text-koma-muted" />
