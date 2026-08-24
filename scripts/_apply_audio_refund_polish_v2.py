@@ -19,6 +19,16 @@ patch_path.write_text(
 )
 subprocess.run([sys.executable, str(patch_path)], check=True)
 
+# The implementation deliberately uses a ref so the one-shot guard survives
+# React renders. Align the focused source regression with that implementation.
+test_path = Path('tests/manual_operational_regressions.test.ts')
+test_text = test_path.read_text()
+old_assertion = "  assert.match(caixa, /let attempted = false/);"
+new_assertion = "  assert.match(caixa, /audioUnlockAttemptedRef\\.current/);"
+if old_assertion not in test_text:
+    raise SystemExit('legacy audio one-shot assertion not found')
+test_path.write_text(test_text.replace(old_assertion, new_assertion, 1))
+
 caixa_path = Path('src/components/CaixaPanel.tsx')
 text = caixa_path.read_text()
 section_start_marker = '  // ── Gaveta de Aceite (Floating Drawer) & Sistema de Áudio Unificado do Caixa ────\n'
@@ -50,11 +60,8 @@ block_replace(
     "    try {\n      const ctx = audioCtxRef.current;\n      if (!ctx || ctx.state !== 'running') return;\n      const t = ctx.currentTime;\n",
 )
 old_unlock_start = block.find('  // Desbloqueia o contexto de áudio somente dentro de uma interação real.\n  useEffect(() => {')
-old_unlock_end_marker = '\n\n'
 if old_unlock_start < 0:
     raise SystemExit('old audio unlock effect not found')
-# Locate the end of this effect through the stable dependency line immediately
-# before the section boundary.
 old_unlock_end = block.find('  }, []);', old_unlock_start)
 if old_unlock_end < 0:
     raise SystemExit('old audio unlock effect end not found')
