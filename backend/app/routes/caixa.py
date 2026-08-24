@@ -1114,7 +1114,7 @@ def registrar_pagamento_mesa(
             item.id: item
             for comanda in comandas
             for item in comanda.itens
-            if item.status != "cancelado" and not item.pago
+            if item.status in {"pronto", "entregue"} and not item.pago
         }
         itens_selecionados = [
             itens_disponiveis[item_id]
@@ -1126,7 +1126,7 @@ def registrar_pagamento_mesa(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     "Um ou mais itens selecionados não pertencem à mesa, "
-                    "foram cancelados ou já estão pagos."
+                    "ainda estão em preparo, foram cancelados ou já estão pagos."
                 ),
             )
 

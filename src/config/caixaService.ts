@@ -89,15 +89,38 @@ export const imprimirComprovanteFechamento = async (turnoId: number): Promise<vo
   }
 };
 
-export const listarPagamentosEstornaveis = async (): Promise<RefundablePayment[]> => {
-  const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/estornaveis?limite=50`, {
+const refundablePaymentCache = new Map<string, { expiresAt: number; payment: RefundablePayment }>();
+
+export const obterPagamentoEstornavel = async (pagamentoId: string, force = false): Promise<RefundablePayment> => {
+  const key = String(pagamentoId);
+  const cached = refundablePaymentCache.get(key);
+  if (!force && cached && cached.expiresAt > Date.now()) return cached.payment;
+
+  const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/${encodeURIComponent(key)}/estornavel`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.detail || 'Falha ao carregar o pagamento.');
+  }
+  const payment: RefundablePayment = await res.json();
+  refundablePaymentCache.set(key, { expiresAt: Date.now() + 15_000, payment });
+  return payment;
+};
+
+export const listarPagamentosEstornaveis = async (limite = 25): Promise<RefundablePayment[]> => {
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limite) || 25));
+  const res = await fetch(`${API_BASE_URL}/caixa/pagamentos/estornaveis?limite=${safeLimit}`, {
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
     throw new Error(errData.detail || 'Falha ao carregar pagamentos estornáveis.');
   }
-  return res.json();
+  const payments: RefundablePayment[] = await res.json();
+  const expiresAt = Date.now() + 15_000;
+  payments.forEach(payment => refundablePaymentCache.set(payment.id, { expiresAt, payment }));
+  return payments;
 };
 
 export const estornarPagamento = async (
@@ -122,6 +145,7 @@ export const estornarPagamento = async (
     const errData = await res.json().catch(() => ({}));
     throw new Error(errData.detail || 'Falha ao registrar estorno.');
   }
+  refundablePaymentCache.delete(String(pagamentoId));
   return res.json();
 };
 
@@ -129,6 +153,7 @@ export const API = {
   getFuncionarios,
   cadastrarFuncionario,
   imprimirComprovanteFechamento,
+  obterPagamentoEstornavel,
   listarPagamentosEstornaveis,
   estornarPagamento,
 };

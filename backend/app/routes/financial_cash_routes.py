@@ -169,6 +169,27 @@ def listar_pagamentos_estornaveis(
     return result
 
 
+@legacy_cash.router.get("/pagamentos/{pagamento_id}/estornavel")
+def obter_pagamento_estornavel(
+    pagamento_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
+):
+    """Carrega um único recebimento para abertura imediata da devolução contextual."""
+    rest_id = require_tenant_id()
+    payment = db.query(Pagamento).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.id == pagamento_id,
+        Pagamento.status == "aprovado",
+    ).first()
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Pagamento não encontrado.")
+    payload = _refundable_payment_payload(db, rest_id, payment)
+    if payload["saldo_estornavel"] <= 0:
+        raise HTTPException(status_code=409, detail="Este pagamento não possui valor disponível para devolução.")
+    return payload
+
+
 @legacy_cash.router.get("/pagamentos/{pagamento_id}/estornos")
 def listar_estornos_pagamento(
     pagamento_id: str,

@@ -5,6 +5,7 @@ import {
   RefundablePayment,
   estornarPagamento,
   listarPagamentosEstornaveis,
+  obterPagamentoEstornavel,
 } from '../../config/caixaService';
 import { formatBackendDateTime } from '../../utils/dateTime';
 
@@ -45,26 +46,56 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
 
   const selected = payments.find(payment => payment.id === selectedId) || null;
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
+  const mergePayments = (items: RefundablePayment[]) => {
+    setPayments(current => {
+      const map = new Map(current.map(payment => [payment.id, payment]));
+      items.forEach(payment => map.set(payment.id, payment));
+      return Array.from(map.values()).sort((a, b) => (
+        new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime()
+      ));
+    });
+  };
+
+  const load = async (background = false) => {
+    if (!background) setLoading(true);
+    if (!background) setError(null);
     try {
-      const data = await listarPagamentosEstornaveis();
-      setPayments(data);
-      if (initialPaymentId && data.some(payment => payment.id === initialPaymentId)) {
-        setSelectedId(initialPaymentId);
-      } else if (selectedId && !data.some(payment => payment.id === selectedId)) {
+      const data = await listarPagamentosEstornaveis(25);
+      if (background) mergePayments(data);
+      else setPayments(data);
+      if (!initialPaymentId && selectedId && !data.some(payment => payment.id === selectedId)) {
         setSelectedId('');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar pagamentos.');
+      if (!background) setError(err instanceof Error ? err.message : 'Falha ao carregar pagamentos.');
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    const bootstrap = async () => {
+      if (!initialPaymentId) {
+        await load();
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const payment = await obterPagamentoEstornavel(initialPaymentId);
+        if (cancelled) return;
+        setPayments([payment]);
+        setSelectedId(payment.id);
+        setLoading(false);
+        void load(true);
+      } catch (err) {
+        if (cancelled) return;
+        await load();
+      }
+    };
+    void bootstrap();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
