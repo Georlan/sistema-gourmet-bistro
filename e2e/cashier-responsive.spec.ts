@@ -71,7 +71,16 @@ async function mockCashierBackend(page: Page) {
 
     if (pathname === '/mesas/') body = tables;
     else if (pathname === '/comandas/detalhes/todos') body = commands;
-    else if (pathname === '/produtos/catalogo') body = { produtos: [], categorias: [] };
+    else if (pathname === '/produtos/catalogo') body = {
+      categorias: [
+        { id: 'cat-pratos', nome: 'Pratos', destino_impressao: 'COZINHA' },
+        { id: 'cat-bebidas', nome: 'Bebidas', destino_impressao: 'BAR' },
+      ],
+      produtos: [
+        { id: '101', nome: 'Risoto da casa', preco: 42, categoria_id: 'cat-pratos', ativo: true },
+        { id: '201', nome: 'Suco natural', preco: 12, categoria_id: 'cat-bebidas', ativo: false },
+      ],
+    };
     else if (pathname === '/caixa/configuracoes') body = cashierConfig;
     else if (pathname === '/caixa/turno/atual') body = openShift;
     else if (pathname === '/caixa/turno-atual/resumo') {
@@ -93,6 +102,20 @@ async function mockCashierBackend(page: Page) {
         total_pedidos_pagos: 0,
         atividades_recentes: [],
       };
+    } else if (pathname === '/estoque/insumos') {
+      body = [{ id: 'ins-arroz', nome: 'Arroz arbóreo', estoque_atual: 4, estoque_minimo: 5, estoque_maximo: 20, unidade_medida: 'kg', preco_medio_custo: 18 }];
+    } else if (pathname === '/estoque/entradas') {
+      body = [{ id: 'ent-1', numero_documento: 'NF-900', observacao: '', valor_total: 180, tipo_entrada: 'XML', created_at: new Date().toISOString(), distribuidor: { nome_fantasia: 'Distribuidora E2E' }, itens: [{ insumo_id: 'ins-arroz', quantidade: 10, unidade_medida: 'kg', custo_unitario: 18, subtotal: 180 }] }];
+    } else if (pathname === '/estoque/movimentacoes') {
+      body = [{ id: 1, insumo_id: 'ins-arroz', tipo: 'perda', quantidade: 1, saldo_anterior: 5, saldo_posterior: 4, custo_unitario: 18, motivo: 'Avaria', observacao: '', origem: 'manual', created_at: new Date().toISOString() }];
+    } else if (pathname === '/estoque/notas' || pathname === '/estoque/contagens' || pathname === '/estoque/sugestoes') {
+      body = [];
+    } else if (pathname === '/estoque/distribuidores') {
+      body = [{ id: 'dist-1', nome_fantasia: 'Distribuidora E2E', razao_social: 'Distribuidora E2E Ltda.', cnpj: '00.000.000/0001-00', lead_time_dias: 2 }];
+    } else if (pathname === '/fidelidade/clientes') {
+      body = [{ id: 'cli-1', nome: 'Cliente E2E', telefone: '85999999999', saldo_pontos: 25, saldo_cashback: 0 }];
+    } else if (pathname === '/fidelidade/config') {
+      body = { ativo: true, tipo_recompensa: 'PONTOS', taxa_conversao: 1, valor_ponto_em_dinheiro: 0.05 };
     } else if (
       pathname === '/caixa/pagamentos/pendentes'
       || pathname === '/comandas/delivery/ativos'
@@ -253,4 +276,39 @@ test('Cozinha conclui preparo pela API operacional', async ({ page }) => {
 
   await finishButton.click();
   await statusRequest;
+});
+
+test('áreas de gestão usam navegação consolidada sem listas redundantes', async ({ page }) => {
+  const viewport = page.viewportSize();
+  test.skip(!viewport || viewport.width < DESKTOP_BREAKPOINT, 'Fluxo coberto nas variações desktop.');
+
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.goto('/?view=caixa');
+
+  await page.getByRole('button', { name: 'Cardápio', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Categorias', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Buscar produtos')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Estoque', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Ingredientes', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Histórico', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Inventário', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Fornecedores', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Entradas', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await expect(page.getByLabel('Buscar no histórico de estoque')).toBeVisible();
+  await expect(page.getByText('Distribuidora E2E · NF-900')).toBeVisible();
+  await expect(page.getByText('Avaria')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Clientes', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Programa de Fidelidade', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Buscar clientes')).toBeVisible();
+  await page.getByRole('button', { name: 'Programa de Fidelidade', exact: true }).click();
+  await expect(page.getByText('Configuração do programa')).toBeVisible();
+  await expect(page.getByText('Os saldos continuam visíveis e editáveis na aba')).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
 });

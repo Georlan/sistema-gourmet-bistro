@@ -12,7 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { CategoriaModal, DeleteCategoryModal, CategoryData } from './CategoriaModal';
-import { OperationalBanner } from '../shared/OperationalBanner';
+import { KomaEmptyState } from '../shared/KomaEmptyState';
 import type { Product } from '../../types';
 
 interface CardapioCategoriasTabProps {
@@ -131,64 +131,52 @@ export function CardapioCategoriasTab({
   };
 
   return (
-    <div className="orders-workspace w-full space-y-4 pb-8 text-left animate-fade-in">
-      <OperationalBanner
-        id="catalog-categories-heading"
-        eyebrow="ORGANIZAÇÃO DO CARDÁPIO"
-        title="Categorias"
-        accent="prontas para produzir"
-        description="Organize os produtos e defina para onde cada pedido será enviado na operação."
-        metrics={[
-          { label: 'Com rota de impressão', value: `${Math.round((apiCategorias.filter((c) => c.destino_impressao !== 'NENHUM').length / (apiCategorias.length || 1)) * 100)}%` },
-          { label: 'Categorias vazias', value: apiCategorias.filter((c) => !apiProdutos.some((p) => String(p.categoria_id) === String(c.id))).length },
-          { label: 'Produtos sem categoria', value: apiProdutos.filter((p) => !p.categoria_id).length },
-          { label: 'Destinos ativos', value: new Set(apiCategorias.map((c) => c.destino_impressao)).size },
-        ]}
-      />
+    <div className="orders-workspace w-full space-y-3.5 pb-8 text-left animate-fade-in" aria-labelledby="catalog-categories-heading">
+      <h1 id="catalog-categories-heading" className="sr-only">Categorias do cardápio</h1>
 
-      <section className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar categoria..."
-            className="w-full rounded-xl border border-koma-border bg-koma-input py-2 pl-9 pr-3 text-xs text-koma-foreground placeholder:text-koma-muted focus:border-emerald-500 focus:outline-none"
-          />
+      <section className="koma-toolbar">
+        <div className="koma-toolbar__search">
+          <Search size={14} aria-hidden="true" />
+          <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar categoria…" aria-label="Buscar categorias" />
+          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
         </div>
-        <button type="button" onClick={handleOpenCreate} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-3.5 py-2.5 text-[10px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 cursor-pointer shadow-sm">
-          <Plus size={14} /> Nova categoria
-        </button>
+        <p className="shrink-0 text-[10px] font-medium text-koma-muted">
+          <strong className="font-mono text-koma-foreground">{apiCategorias.length}</strong> categorias · {catalogInsights.emptyCategories} vazias · {catalogInsights.routeCoverage}% com impressão
+        </p>
+        <div className="koma-toolbar__actions">
+          <button type="button" onClick={handleOpenCreate} className="koma-btn-success"><Plus size={14} /> Nova categoria</button>
+        </div>
       </section>
 
       {filteredCategories.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl sm:rounded-[22px] border border-dashed border-koma-border bg-koma-panel px-6 text-center">
-          <Layers3 size={28} className="text-koma-muted" />
-          <strong className="mt-4 text-sm text-koma-secondary">Nenhuma categoria encontrada</strong>
-          <p className="mt-1 text-[10px] text-koma-muted">Ajuste a busca ou crie uma nova categoria.</p>
-        </div>
+        <KomaEmptyState
+          icon={Layers3}
+          title={apiCategorias.length === 0 ? 'Crie a primeira categoria' : 'Nenhuma categoria encontrada'}
+          description={apiCategorias.length === 0 ? 'Categorias agrupam produtos e definem o destino de impressão dos pedidos.' : 'Limpe a busca para voltar a ver todas as categorias.'}
+          action={apiCategorias.length === 0 ? { label: 'Nova categoria', onClick: handleOpenCreate, icon: Plus } : { label: 'Limpar busca', onClick: () => setSearch(''), variant: 'secondary' }}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-2.5 sm:gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel">
           {filteredCategories.map((category) => {
             const meta = destinationMeta[category.destino_impressao as keyof typeof destinationMeta] || destinationMeta.NENHUM;
             const Icon = meta.icon;
+            const productCount = apiProdutos.filter(product => (
+              String(product.categoria_id || product.categoria) === String(category.id)
+              || product.categoria === category.nome
+            )).length;
             return (
-              <article key={category.id} className="group flex min-h-[118px] sm:min-h-[160px] flex-col justify-between rounded-xl sm:rounded-[22px] border border-koma-border bg-koma-card p-3 sm:p-4 shadow-sm transition-colors hover:border-koma-border-strong">
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <span className={clsx('flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl border', meta.className)}><Icon size={14} className="sm:w-4 sm:h-4" /></span>
-                    <span className="max-w-[60%] truncate rounded-full border border-koma-border bg-koma-input px-2 py-0.5 font-mono text-[8px] text-koma-muted">{category.id}</span>
+              <article key={category.id} className="group grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-koma-border px-3 py-2.5 transition-colors last:border-b-0 hover:bg-koma-raised/50 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,auto)_auto] sm:px-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={clsx('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border', meta.className)}><Icon size={15} /></span>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-xs font-bold text-koma-foreground">{category.nome}</h2>
+                    <p className="mt-0.5 text-[9px] text-koma-muted">{productCount} {productCount === 1 ? 'produto' : 'produtos'} · <span className="font-mono">{category.id}</span></p>
                   </div>
-                  <h2 className="mt-2 sm:mt-4 text-xs sm:text-sm font-bold text-koma-foreground">{category.nome}</h2>
-                  <p className="mt-0.5 sm:mt-1 text-[9px] sm:text-[10px] leading-relaxed text-koma-muted line-clamp-1 sm:line-clamp-2">{meta.description}</p>
                 </div>
-                <div className="mt-2 sm:mt-4 flex items-center justify-between border-t border-koma-border pt-2 sm:pt-3">
-                  <span className={clsx('text-[8px] sm:text-[9px] font-bold', meta.className.split(' ').at(-1))}>{meta.label}</span>
-                  <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[9px] font-bold text-koma-subtle transition-colors hover:bg-white/[0.05] hover:text-koma-foreground cursor-pointer"><Edit3 size={11} /> Editar</button>
-                    <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-1.5 text-koma-muted transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={12} /></button>
-                  </div>
+                <span className={clsx('hidden w-fit rounded-full border px-2.5 py-1 text-[9px] font-bold sm:inline-flex sm:items-center sm:gap-1.5', meta.className)}><Icon size={11} /> {meta.label}</span>
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[9px] font-bold text-koma-subtle transition-colors hover:bg-koma-raised hover:text-koma-foreground cursor-pointer"><Edit3 size={12} /> <span className="hidden sm:inline">Editar</span></button>
+                  <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-1.5 text-koma-muted transition-colors hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-300 cursor-pointer" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={13} /></button>
                 </div>
               </article>
             );

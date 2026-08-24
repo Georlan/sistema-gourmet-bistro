@@ -751,6 +751,214 @@ body {
   backdrop-filter: blur(18px);
 }
 
+/* Unified management navigation and toolbars */
+.cashier-subnav {
+  gap: 0.25rem !important;
+  padding: 0.45rem 1.25rem !important;
+}
+
+.cashier-subnav__button {
+  min-height: 2rem;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.72rem;
+  color: var(--koma-text-muted);
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  background: transparent;
+  font-size: 0.66rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+
+.cashier-subnav__button:hover {
+  color: var(--koma-text-primary);
+  background: var(--koma-surface-raised);
+}
+
+.cashier-subnav__button.is-active {
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.22);
+  background: rgba(5, 150, 105, 0.1);
+}
+
+[data-koma-theme="dark"] .cashier-subnav__button.is-active {
+  color: #79ddbd;
+  border-color: rgba(121, 221, 189, 0.18);
+  background: rgba(0, 201, 150, 0.085);
+}
+
+[data-collapsible="icon"] .cashier-sidebar__brand-copy,
+[data-collapsible="icon"] .cashier-sidebar__utility-button,
+[data-collapsible="icon"] .cashier-shift-card,
+[data-collapsible="icon"] .cashier-nav-label,
+[data-collapsible="icon"] [data-sidebar="menu-badge"],
+[data-collapsible="icon"] .cashier-nav-plan,
+[data-collapsible="icon"] .cashier-sidebar__secondary-label,
+[data-collapsible="icon"] .cashier-font-control,
+[data-collapsible="icon"] .cashier-operator__copy {
+  display: none !important;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__header,
+[data-collapsible="icon"] .cashier-sidebar__footer {
+  align-items: center;
+  padding-inline: 0.45rem !important;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__brand-row,
+[data-collapsible="icon"] .cashier-sidebar__brand,
+[data-collapsible="icon"] .cashier-operator {
+  justify-content: center;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__content {
+  padding-inline: 0.3rem !important;
+}
+
+[data-collapsible="icon"] .cashier-sidebar [data-sidebar="menu-button"] {
+  justify-content: center;
+  padding-inline: 0.25rem;
+}
+
+.cashier-sidebar__secondary {
+  display: grid;
+  gap: 0.25rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--koma-border-default);
+}
+
+.cashier-sidebar__secondary-label {
+  color: var(--koma-text-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.koma-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: 1rem;
+  background: var(--koma-surface-panel);
+}
+
+.koma-toolbar__search {
+  position: relative;
+  display: flex;
+  min-width: 12rem;
+  flex: 1 1 22rem;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.35rem;
+  padding: 0 0.7rem;
+  color: var(--koma-text-muted);
+  border: 1px solid var(--koma-border-default);
+  border-radius: 0.75rem;
+  background: var(--koma-surface-input);
+}
+
+.koma-toolbar__search:focus-within {
+  color: var(--koma-text-secondary);
+  border-color: rgba(5, 150, 105, 0.45);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.08);
+}
+
+.koma-toolbar__search input {
+  width: 100%;
+  min-width: 0;
+  color: var(--koma-text-primary);
+  background: transparent;
+  font-size: 0.72rem;
+  outline: none;
+}
+
+.koma-toolbar__search input::placeholder { color: var(--koma-text-muted); }
+.koma-toolbar__search button { display: grid; flex: 0 0 auto; place-items: center; cursor: pointer; }
+
+.koma-toolbar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.koma-toolbar__actions :where(.koma-btn-primary, .koma-btn-secondary, .koma-btn-success) {
+  display: inline-flex;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.72rem;
+  font-size: 0.66rem;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.koma-filterbar {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(9rem, 0.6fr) minmax(9rem, 0.6fr) auto;
+  align-items: end;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: 1rem;
+  background: var(--koma-surface-raised);
+}
+
+.koma-filterbar label { display: grid; min-width: 0; gap: 0.3rem; }
+.koma-filterbar label > span { display: flex; align-items: center; gap: 0.3rem; color: var(--koma-text-muted); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.koma-filterbar :where(input, select) { width: 100%; min-height: 2.1rem; padding: 0.4rem 0.55rem; color: var(--koma-text-primary); border: 1px solid var(--koma-border-default); border-radius: 0.65rem; background: var(--koma-surface-input); font-size: 0.68rem; outline: none; }
+.koma-filterbar :where(input, select):focus { border-color: rgba(5, 150, 105, 0.45); }
+
+.koma-filterbar__summary { display: flex; min-height: 2.1rem; align-items: center; gap: 0.35rem; padding: 0.35rem 0.55rem; color: var(--koma-text-muted); white-space: nowrap; }
+.koma-filterbar__summary strong { color: var(--koma-text-primary); font-family: var(--font-mono); font-size: 0.76rem; }
+.koma-filterbar__summary span { font-size: 0.65rem; }
+.koma-filterbar__summary button { margin-left: 0.3rem; color: #047857; font-size: 0.62rem; font-weight: 750; cursor: pointer; }
+[data-koma-theme="dark"] .koma-filterbar__summary button { color: #79ddbd; }
+
+.koma-feedback { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid; border-radius: 0.85rem; font-size: 0.7rem; }
+.koma-feedback button { font-size: 0.62rem; font-weight: 750; cursor: pointer; }
+.koma-feedback--info { color: #0369a1; border-color: rgba(14, 165, 233, 0.25); background: rgba(14, 165, 233, 0.08); }
+.koma-feedback--success { color: #047857; border-color: rgba(16, 185, 129, 0.25); background: rgba(16, 185, 129, 0.08); }
+.koma-feedback--danger { color: #be123c; border-color: rgba(244, 63, 94, 0.25); background: rgba(244, 63, 94, 0.08); }
+[data-koma-theme="dark"] .koma-feedback--info { color: #7dd3fc; }
+[data-koma-theme="dark"] .koma-feedback--success { color: #79ddbd; }
+[data-koma-theme="dark"] .koma-feedback--danger { color: #fda4af; }
+
+.koma-data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.68rem; }
+.koma-data-table thead { color: var(--koma-text-muted); border-bottom: 1px solid var(--koma-border-default); background: var(--koma-surface-raised); font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.koma-data-table th,
+.koma-data-table td { padding: 0.72rem 0.8rem; }
+.koma-data-table tbody tr { border-bottom: 1px solid var(--koma-border-default); transition: background-color 140ms ease; }
+.koma-data-table tbody tr:last-child { border-bottom: 0; }
+.koma-data-table tbody tr:hover { background: color-mix(in srgb, var(--koma-surface-raised) 65%, transparent); }
+.koma-data-table td > strong { display: block; color: var(--koma-text-primary); font-weight: 750; }
+.koma-data-table td > span:not(.koma-status-badge) { display: block; max-width: 28rem; margin-top: 0.15rem; overflow: hidden; color: var(--koma-text-muted); font-size: 0.61rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.koma-status-badge { display: inline-flex; width: fit-content; align-items: center; gap: 0.3rem; padding: 0.22rem 0.48rem; border-radius: 999px; font-size: 0.56rem; font-weight: 800; white-space: nowrap; text-transform: uppercase; }
+
+@media (max-width: 900px) {
+  .koma-toolbar { align-items: stretch; flex-direction: column; }
+  .koma-toolbar__search { flex-basis: auto; }
+  .koma-toolbar__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .koma-filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .cashier-subnav { padding-inline: 0.75rem !important; }
+  .koma-toolbar__actions { grid-template-columns: 1fr; }
+  .koma-filterbar { grid-template-columns: 1fr; }
+  .koma-filterbar__summary { padding-inline: 0.1rem; }
+}
+
 .cashier-content {
   width: 100%;
   max-width: 100%;
