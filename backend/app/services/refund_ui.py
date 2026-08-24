@@ -76,6 +76,10 @@ def refundable_payment_payload_human(
             label = f"Conta #{attendance.numero_conta}"
             if attendance.mesa_id:
                 label += f" · Mesa {attendance.mesa_id}"
+            if command is not None and command.numero_pedido:
+                label += f" · Pedido #{command.numero_pedido}"
+            elif command is not None:
+                label += f" · Parte {str(command.id)[-6:]}"
         else:
             label = _command_label(command)
         origins.append({

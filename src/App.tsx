@@ -21,7 +21,7 @@ import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 import { MotoboyPwaPage } from './components/MotoboyPwaPage';
 import { KitchenPanel } from './components/KitchenPanel';
 import LandingPage from './landing/LandingPage';
-import { API_BASE_URL } from './config/api';
+import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
 import { parseBackendTimestamp } from './utils/dateTime';
@@ -63,6 +63,19 @@ const aplicarMascaraTelefoneInput = (valor: string) => {
   if (apenasNumeros.length <= 6) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
   if (apenasNumeros.length <= 10) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 6)}-${apenasNumeros.slice(6)}`;
   return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
+};
+
+const readJwtSubject = (token: string): string => {
+  try {
+    const payloadPart = token.split('.')[1];
+    if (!payloadPart) return '';
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const payload = JSON.parse(window.atob(padded));
+    return String(payload?.sub || '').trim();
+  } catch {
+    return '';
+  }
 };
 
 export default function App() {
@@ -835,10 +848,12 @@ export default function App() {
         reconnectTimeout = undefined;
       }
 
-      const wsBase = API_BASE_URL.replace(/^http/, 'ws');
+      const wsBase = WS_BASE_URL.replace(/\/+$/, '');
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey) || "";
-      const wsUrl = `${wsBase}/ws/${encodeURIComponent(activeWaiterId)}`;
+      const wsIdentity = readJwtSubject(token) || activeWaiterId;
+      if (!token || !wsIdentity) return;
+      const wsUrl = `${wsBase}/ws/${encodeURIComponent(wsIdentity)}`;
       const socket = openAuthenticatedWebSocket(wsUrl, token);
       activeSocket = socket;
       wsRef.current = socket;

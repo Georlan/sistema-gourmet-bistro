@@ -168,7 +168,12 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(websocket, restaurante_id_val, client_type="internal")
+    await manager.connect(
+        websocket,
+        restaurante_id_val,
+        client_type="internal",
+        subprotocol=KOMA_AUTH_SUBPROTOCOL,
+    )
 
     await manager.broadcast({
         "event": "waiter_connected",
