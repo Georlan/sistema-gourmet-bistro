@@ -1,0 +1,56 @@
+name: ChatGPT manual bugfix runner
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'chatgpt/fix-manual-bugs-20260824'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Apply fixes
+        run: python scripts/apply_manual_bugfixes_20260824.py
+
+      - name: Frontend validation
+        run: |
+          npm ci
+          npm run lint
+          npm run test:unit
+          npm run build
+
+      - name: Backend focused validation
+        run: |
+          python -m pip install -r backend/requirements-dev.txt
+          python -m pytest -q \
+            backend/tests/test_websocket_credentials.py \
+            backend/tests/test_websocket_segmentation.py \
+            backend/tests/test_ui_theme_csp_stage4.py
+
+      - name: Remove temporary branch helper
+        run: rm -f scripts/apply_manual_bugfixes_20260824.py
+
+      - name: Commit validated changes to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: repair realtime and manual checkout bugs"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
