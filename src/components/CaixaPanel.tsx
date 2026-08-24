@@ -12,10 +12,9 @@ import {
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
   SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
-import { EstoqueEntradasTab } from './estoque/EstoqueEntradasTab';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
 import MoneyInput from './MoneyInput';
-import { EstoqueMovimentacoesTab } from './estoque/EstoqueMovimentacoesTab';
+import { EstoqueHistoricoTab } from './estoque/EstoqueHistoricoTab';
 import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
 import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
 import { ContagemEstoqueModal } from './estoque/ContagemEstoqueModal';
@@ -70,7 +69,9 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarMenuBadge,
-  SidebarFooter
+  SidebarFooter,
+  SidebarRail,
+  SidebarTrigger
 } from '@/components/ui/sidebar';
 
 
@@ -103,10 +104,15 @@ interface CaixaPanelProps {
 
 const CASHIER_SIDEBAR_GROUPS = [
   {
-    category: 'Operação diária',
+    category: 'Operação',
     items: [
       { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
-      { id: 'financeiro', label: 'Caixa', icon: DollarSign },
+      { id: 'financeiro', label: 'Caixa', icon: DollarSign }
+    ]
+  },
+  {
+    category: 'Cadastros',
+    items: [
       { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
       { id: 'estoque', label: 'Estoque', icon: Package },
       { id: 'clientes', label: 'Clientes', icon: Users }
@@ -120,13 +126,16 @@ const CASHIER_SIDEBAR_GROUPS = [
     ]
   },
   {
-    category: 'Ferramentas',
+    category: 'Sistema',
     items: [
-      { id: 'impressao_salao', label: 'Configurações', icon: SlidersHorizontal },
-      { id: 'assinatura_pix', label: 'Assinatura e planos', icon: CreditCard },
-      { id: 'cardapio_digital', label: 'Cardápio online', icon: Globe }
+      { id: 'impressao_salao', label: 'Configurações', icon: SlidersHorizontal }
     ]
   }
+] as const;
+
+const CASHIER_SIDEBAR_SECONDARY_ITEMS = [
+  { id: 'cardapio_digital', label: 'Cardápio online', icon: Globe },
+  { id: 'assinatura_pix', label: 'Assinatura e planos', icon: CreditCard },
 ] as const;
 
 // Operational view models used by the cashier screens.
@@ -467,12 +476,14 @@ export function CaixaPanel({
 
   const [activeSubTab, setActiveSubTab] = useState<string>(() => {
     const saved = sessionStorage.getItem('koma_active_subtab');
+    const savedTab = sessionStorage.getItem('koma_active_tab');
     if (!saved) return 'pedidos';
     if (saved === 'fila_pedidos') return 'pedidos';
     if (saved === 'terminal_balcao' || saved === 'pdv') return 'balcao';
     if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
     if (['insumos', 'estoque_insumos'].includes(saved)) return 'insumos';
-    if (['xml', 'notas', 'entradas'].includes(saved)) return 'xml';
+    if (savedTab === 'estoque' && ['xml', 'notas', 'entradas', 'movimentacoes', 'historico'].includes(saved)) return 'historico';
+    if (savedTab === 'estoque' && ['contagem', 'inventario'].includes(saved)) return 'inventario';
     // Caixa mappings
     if (['fluxo', 'turno_atual'].includes(saved)) return 'turno_atual';
     if (['ajustes', 'ajustes_caixa', 'movimentacoes', 'suprimento', 'sangria'].includes(saved)) return 'movimentacoes';
@@ -1054,6 +1065,12 @@ export function CaixaPanel({
   };
 
   const [loyaltyUsers, setLoyaltyUsers] = useState<LoyaltyCustomer[]>([]);
+  const [clientesSearch, setClientesSearch] = useState('');
+  const filteredLoyaltyUsers = useMemo(() => {
+    const term = clientesSearch.trim().toLocaleLowerCase('pt-BR');
+    if (!term) return loyaltyUsers;
+    return loyaltyUsers.filter(user => `${user.cliente} ${user.telefone}`.toLocaleLowerCase('pt-BR').includes(term));
+  }, [clientesSearch, loyaltyUsers]);
 
   const handleSaveFidelidadeConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1100,6 +1117,17 @@ export function CaixaPanel({
   const [entradasEstoque, setEntradasEstoque] = useState<EntradaEstoque[]>([]);
   const [movimentacoesEstoque, setMovimentacoesEstoque] = useState<MovimentacaoEstoque[]>([]);
   const [sessoesContagemEstoque, setSessoesContagemEstoque] = useState<SessaoContagemEstoque[]>([]);
+  const [estoqueSearch, setEstoqueSearch] = useState('');
+  const [estoqueStatusFilter, setEstoqueStatusFilter] = useState<'todos' | 'baixo' | 'normal'>('todos');
+  const filteredEstoqueInsumos = useMemo(() => {
+    const term = estoqueSearch.trim().toLocaleLowerCase('pt-BR');
+    return estoqueInsumos.filter(insumo => {
+      const isLow = insumo.estoque_atual <= insumo.estoque_minimo;
+      if (estoqueStatusFilter === 'baixo' && !isLow) return false;
+      if (estoqueStatusFilter === 'normal' && isLow) return false;
+      return !term || `${insumo.nome} ${insumo.id}`.toLocaleLowerCase('pt-BR').includes(term);
+    });
+  }, [estoqueInsumos, estoqueSearch, estoqueStatusFilter]);
   const [showEntradaManualModal, setShowEntradaManualModal] = useState<boolean>(false);
   const [showMovimentacaoModal, setShowMovimentacaoModal] = useState<boolean>(false);
   const [showContagemModal, setShowContagemModal] = useState<boolean>(false);
@@ -4318,6 +4346,20 @@ export function CaixaPanel({
               </SidebarContent>
 
               <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3', 'flex', 'flex-col', 'gap-2')}>
+                <div className="cashier-sidebar__secondary">
+                  <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
+                  {CASHIER_SIDEBAR_SECONDARY_ITEMS.map(item => {
+                    const Icon = item.icon;
+                    const isLocked = item.id === 'cardapio_digital' && !hasOnlineMenu;
+                    return (
+                      <button key={item.id} type="button" onClick={() => handleSidebarNavigation(item.id, true)} className="cashier-nav-item flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground">
+                        <span className="cashier-nav-icon"><Icon size={14} /></span>
+                        <span className="cashier-nav-label">{item.label}</span>
+                        {isLocked && <Lock size={10} className="ml-auto text-amber-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="cashier-font-control flex-1">
                     <span className="cashier-font-control__label">Texto</span>
@@ -4367,7 +4409,7 @@ export function CaixaPanel({
         )}
 
         {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
-        <Sidebar className={clsx('cashier-sidebar', 'hidden', 'lg:flex', 'w-[17rem]', 'flex-col', 'justify-between', 'shrink-0')}>
+        <Sidebar collapsible="icon" className={clsx('cashier-sidebar', 'hidden', 'lg:flex', 'flex-col', 'justify-between', 'shrink-0')}>
           <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3.5')}>
             <div className="cashier-sidebar__brand-row">
               <div className="cashier-sidebar__brand">
@@ -4456,6 +4498,20 @@ export function CaixaPanel({
 
           {/* Sidebar Footer */}
           <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3', 'flex', 'flex-col', 'gap-2')}>
+            <div className="cashier-sidebar__secondary">
+              <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
+              {CASHIER_SIDEBAR_SECONDARY_ITEMS.map(item => {
+                const Icon = item.icon;
+                const isLocked = item.id === 'cardapio_digital' && !hasOnlineMenu;
+                return (
+                  <button key={item.id} type="button" onClick={() => handleSidebarNavigation(item.id)} className="cashier-nav-item flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground" title={item.label}>
+                    <span className="cashier-nav-icon"><Icon size={14} /></span>
+                    <span className="cashier-nav-label">{item.label}</span>
+                    {isLocked && <Lock size={10} className="ml-auto text-amber-500" />}
+                  </button>
+                );
+              })}
+            </div>
             <div className="flex items-center gap-2">
               <div className="cashier-font-control flex-1">
                 <span className="cashier-font-control__label">Texto</span>
@@ -4500,8 +4556,8 @@ export function CaixaPanel({
               </span>
             </div>
           </SidebarFooter>
+          <SidebarRail />
         </Sidebar>
-      </SidebarProvider>
 
       {/* CONTENT AREA */}
       <main className={clsx('cashier-main', 'min-w-0', 'min-h-0', 'flex-1', 'bg-koma-canvas', 'flex', 'flex-col', 'w-full')}>
@@ -4520,13 +4576,14 @@ export function CaixaPanel({
             >
               <Menu size={16} />
             </button>
-            <h2 className={clsx('font-serif', 'font-bold', 'text-xs', 'sm:text-sm', 'tracking-tight', 'text-koma-foreground', 'uppercase', 'tracking-wider', 'truncate')}>
+            <SidebarTrigger className="hidden lg:flex" title="Recolher ou expandir menu" aria-label="Recolher ou expandir menu" />
+            <h2 className={clsx('font-serif', 'font-bold', 'text-xs', 'sm:text-sm', 'tracking-tight', 'text-koma-foreground', 'truncate')}>
               {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
-              {activeTab === 'operacao' && 'OPERAÇÃO DE VENDAS'}
-              {activeTab === 'cardapio' && 'CARDÁPIO DO RESTAURANTE'}
-              {activeTab === 'estoque' && 'GESTÃO DE ESTOQUE'}
-              {activeTab === 'financeiro' && 'GESTÃO DO CAIXA'}
-              {activeTab === 'clientes' && 'GESTÃO DE CLIENTES'}
+              {activeTab === 'operacao' && 'Vendas'}
+              {activeTab === 'cardapio' && 'Cardápio'}
+              {activeTab === 'estoque' && 'Estoque'}
+              {activeTab === 'financeiro' && 'Caixa'}
+              {activeTab === 'clientes' && 'Clientes'}
               {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
               {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
               {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
@@ -4573,26 +4630,20 @@ export function CaixaPanel({
                 }
                 setActiveSubTab(sub.id);
               }}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
-                : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
-                }`}
+              className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}
             >
               {sub.label}
             </button>
           ))}
 
           {activeTab === 'cardapio' && [
-            { id: 'produtos', label: 'Produtos e disponibilidade' },
+            { id: 'produtos', label: 'Produtos' },
             { id: 'categorias', label: 'Categorias' }
           ].map(sub => (
             <button
               key={sub.id}
               onClick={() => setActiveSubTab(sub.id)}
-              className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeSubTab === sub.id
-                ? 'bg-[#046c4e] text-emerald-100 border border-emerald-700/30'
-                : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
-                }`}
+              className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}
             >
               {sub.label}
             </button>
@@ -4600,13 +4651,13 @@ export function CaixaPanel({
 
           {activeTab === 'estoque' && [
             { id: 'insumos', label: 'Ingredientes' },
-            { id: 'entradas', label: 'Entradas' },
-            { id: 'movimentacoes', label: 'Movimentações' },
-            { id: 'contagem', label: 'Contagem' },
+            { id: 'historico', label: 'Histórico' },
+            { id: 'inventario', label: 'Inventário' },
             { id: 'fornecedores', label: 'Fornecedores' }
           ].map(sub => {
             const isSubActive = (
-              (sub.id === 'entradas' && ['entradas', 'xml', 'notas_entrada'].includes(activeSubTab)) ||
+              (sub.id === 'historico' && ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(activeSubTab)) ||
+              (sub.id === 'inventario' && ['inventario', 'contagem'].includes(activeSubTab)) ||
               (sub.id === 'fornecedores' && ['fornecedores', 'distribuidores'].includes(activeSubTab)) ||
               activeSubTab === sub.id
             );
@@ -4614,10 +4665,7 @@ export function CaixaPanel({
               <button
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
-                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
-                  }`}
+                className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
               >
                 {sub.label}
               </button>
@@ -4639,10 +4687,7 @@ export function CaixaPanel({
               <button
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
-                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
-                  }`}
+                className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
               >
                 {sub.label}
               </button>
@@ -4651,7 +4696,7 @@ export function CaixaPanel({
 
           {activeTab === 'clientes' && [
             { id: 'clientes', label: 'Clientes' },
-            { id: 'fidelidade', label: 'Fidelidade' }
+            { id: 'fidelidade', label: 'Programa de Fidelidade' }
           ].map(sub => {
             const isSubActive = (
               (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
@@ -4662,10 +4707,7 @@ export function CaixaPanel({
               <button
                 key={sub.id}
                 onClick={() => setActiveSubTab(sub.id)}
-                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
-                  }`}
+                className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
               >
                 {sub.label}
               </button>
@@ -4690,10 +4732,7 @@ export function CaixaPanel({
                 key={sub.id}
                 id={`relatorios-subtab-${sub.id}`}
                 onClick={() => setActiveSubTab(sub.id)}
-                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
-                  }`}
+                className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
               >
                 {sub.label}
               </button>
@@ -4714,10 +4753,7 @@ export function CaixaPanel({
                 key={sub.id}
                 id={`equipe-subtab-${sub.id}`}
                 onClick={() => setActiveSubTab(sub.id)}
-                className={`px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer ${isSubActive
-                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 shadow-xs'
-                  : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-panel'
-                  }`}
+                className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
               >
                 {sub.label}
               </button>
@@ -7319,10 +7355,13 @@ export function CaixaPanel({
           )}
 
           {/* VIEW: FIDELIDADE */}
-          {activeSubTab === 'fidelidade' && (
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-5', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('md:col-span-1', 'bg-koma-card', 'border', 'border-koma-border', 'p-5', 'rounded-3xl', 'space-y-4', 'h-fit')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>Ajustes de Fidelização</span>
+          {activeTab === 'clientes' && activeSubTab === 'fidelidade' && (
+            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4', 'text-left', 'animate-fade-in', 'max-w-4xl')}>
+              <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-5', 'rounded-2xl', 'space-y-4', 'h-fit')}>
+                <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-3">
+                  <div><span className="block text-sm font-bold text-koma-foreground">Configuração do programa</span><span className="mt-0.5 block text-[10px] text-koma-muted">Defina como os clientes acumulam e resgatam benefícios.</span></div>
+                  <span className={clsx('koma-status-badge', fidelidadeConfig.ativo ? 'koma-badge-success' : 'koma-badge-neutral')}>{fidelidadeConfig.ativo ? 'Ativo' : 'Inativo'}</span>
+                </div>
 
                 <form onSubmit={handleSaveFidelidadeConfig} className="space-y-4">
                   <div className={clsx('flex', 'items-center', 'justify-between')}>
@@ -7380,50 +7419,36 @@ export function CaixaPanel({
 
                   <button
                     type="submit"
-                    className={clsx('w-full', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
+                    className="koma-btn-success flex min-h-10 w-full items-center justify-center rounded-xl text-[10px] font-bold"
                   >
-                    Salvar Ajustes
+                    Salvar programa
                   </button>
                 </form>
               </div>
 
-              <div className={clsx('md:col-span-2', 'bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'pb-1', 'border-b', 'border-koma-border')}>
-                  {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Saldo de Clientes (Clube de Pontos)' : 'Saldo de Clientes (Programa Cashback)'}
-                </span>
-
-                <div className={clsx('overflow-hidden', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
-                    <thead>
-                      <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3">Cliente</th>
-                        {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
-                          <>
-                            <th className="p-3">Pontos Acumulados</th>
-                            <th className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>Valor Equivalente (R$)</th>
-                          </>
-                        ) : (
-                          <th className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>Saldo Cashback Disponível</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                      {loyaltyUsers.map((user) => (
-                        <tr key={user.id} className={clsx('hover:bg-koma-panel/20', 'transition-colors')}>
-                          <td className={clsx('p-3', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
-                          {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
-                            <>
-                              <td className={clsx('p-3', 'font-mono', 'font-bold', 'text-emerald-700 dark:text-emerald-400')}>{user.pontos} pts</td>
-                              <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>R$ {(user.pontos * fidelidadeConfig.valor_ponto_em_dinheiro).toFixed(2)}</td>
-                            </>
-                          ) : (
-                            <td className={clsx('p-3', 'font-bold', 'text-emerald-400', 'font-mono')}>R$ {user.saldoCashback.toFixed(2)}</td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-2xl', 'p-5', 'space-y-4', 'h-fit')}>
+                <div className="border-b border-koma-border pb-3">
+                  <span className="block text-sm font-bold text-koma-foreground">Como funciona</span>
+                  <span className="mt-0.5 block text-[10px] text-koma-muted">Uma visão simples da regra aplicada nas próximas vendas identificadas.</span>
                 </div>
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Exemplo em uma compra de R$ 100</span>
+                  <strong className="mt-2 block font-mono text-xl text-koma-foreground">
+                    {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                      ? `${Math.max(0, fidelidadeConfig.taxa_conversao * 100).toFixed(0)} pontos`
+                      : `R$ ${Math.max(0, fidelidadeConfig.taxa_conversao).toFixed(2)} de cashback`}
+                  </strong>
+                  <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+                    {fidelidadeConfig.tipo_recompensa === 'PONTOS'
+                      ? `Cada ponto vale R$ ${Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0).toFixed(2)} no resgate.`
+                      : `O cliente recebe ${Number(fidelidadeConfig.taxa_conversao || 0).toFixed(2)}% do valor da compra.`}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-koma-border bg-koma-raised px-3 py-2.5">
+                  <span className="text-[10px] text-koma-muted">Clientes participantes</span>
+                  <strong className="font-mono text-sm text-koma-foreground">{loyaltyUsers.length}</strong>
+                </div>
+                <p className="text-[10px] leading-relaxed text-koma-muted">Os saldos continuam visíveis e editáveis na aba <strong className="text-koma-secondary">Clientes</strong>, evitando uma segunda lista com os mesmos registros.</p>
               </div>
             </div>
           )}
@@ -7556,10 +7581,29 @@ export function CaixaPanel({
 
           {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
-            <div className={clsx('animate-fade-in', 'space-y-4', 'text-left')}>
-              <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'p-3', 'sm:p-5', 'space-y-3')}>
-                <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'border-b', 'border-koma-border', 'pb-3', 'sm:flex', 'sm:items-center', 'sm:justify-between')}>
-                  <span className={clsx('col-span-2', 'font-serif', 'font-bold', 'text-koma-secondary', 'sm:col-span-1', 'sm:mr-auto')}>Ingredientes</span>
+            <div className={clsx('animate-fade-in', 'space-y-3.5', 'text-left')}>
+              <section className="koma-toolbar">
+                <div className="koma-toolbar__search">
+                  <Search size={14} aria-hidden="true" />
+                  <input value={estoqueSearch} onChange={event => setEstoqueSearch(event.target.value)} placeholder="Buscar ingrediente…" aria-label="Buscar ingredientes" />
+                  {estoqueSearch && <button type="button" onClick={() => setEstoqueSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
+                </div>
+                <select value={estoqueStatusFilter} onChange={event => setEstoqueStatusFilter(event.target.value as 'todos' | 'baixo' | 'normal')} className="min-h-9 rounded-xl border border-koma-border bg-koma-input px-3 text-[10px] text-koma-foreground" aria-label="Filtrar por status do estoque">
+                  <option value="todos">Todos os status</option>
+                  <option value="baixo">Estoque baixo</option>
+                  <option value="normal">Estoque normal</option>
+                </select>
+                <div className="koma-toolbar__actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSubTab('historico');
+                      window.setTimeout(() => xmlFileInputRef.current?.click(), 0);
+                    }}
+                    className="koma-btn-secondary"
+                  >
+                    <Upload size={14} /> Importar NF-e
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -7571,22 +7615,14 @@ export function CaixaPanel({
                       setInsumoFormCusto(0);
                       setShowNewInsumoModal(true);
                     }}
-                    className={clsx('min-h-9', 'sm:min-h-10', 'px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
+                    className="koma-btn-success"
                   >
-                    + Novo Ingrediente
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSubTab('entradas')}
-                    className={clsx('min-h-9', 'sm:min-h-10', 'px-3', 'py-1', 'bg-koma-raised', 'hover:bg-koma-raised', 'text-emerald-700 dark:text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-xl', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm', 'flex', 'items-center', 'justify-center', 'gap-1')}
-                    title="Importar Nota Fiscal Eletrônica XML"
-                  >
-                    <Upload size={11} />
-                    <span>Importar NF-e (XML)</span>
+                    <Plus size={14} /> Novo ingrediente
                   </button>
                 </div>
-                <div className={clsx('overflow-x-auto', 'overscroll-x-contain', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                  <table className={clsx('w-full', 'min-w-[580px]', 'text-left', 'text-[10px]')}>
+              </section>
+              <div className={clsx('overflow-x-auto', 'overscroll-x-contain', 'border', 'border-koma-border', 'rounded-2xl', 'bg-koma-panel')}>
+                  <table className={clsx('koma-data-table', 'min-w-[580px]')}>
                     <thead>
                       <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
                         <th className="p-3">Ingrediente</th>
@@ -7598,9 +7634,9 @@ export function CaixaPanel({
                       </tr>
                     </thead>
                     <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                      {estoqueInsumos.length === 0 ? (
-                        <tr><td colSpan={6} className={clsx('p-6 sm:p-8', 'text-center', 'text-koma-muted', 'italic', 'text-[11px]')}>Nenhum ingrediente cadastrado. Clique em Novo Ingrediente ou importe uma NF-e para começar.</td></tr>
-                      ) : estoqueInsumos.map(ins => {
+                      {filteredEstoqueInsumos.length === 0 ? (
+                        <tr><td colSpan={6} className={clsx('p-6 sm:p-8', 'text-center', 'text-koma-muted', 'text-[11px]')}>{estoqueInsumos.length === 0 ? 'Nenhum ingrediente cadastrado. Cadastre ou importe uma NF-e para começar.' : 'Nenhum ingrediente corresponde aos filtros.'}</td></tr>
+                      ) : filteredEstoqueInsumos.map(ins => {
                         const isLow = ins.estoque_atual <= ins.estoque_minimo;
                         return (
                           <tr key={ins.id} className={clsx('transition-colors', isLow ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-koma-panel/20')}>
@@ -7612,8 +7648,8 @@ export function CaixaPanel({
                             <td className={clsx('p-3', 'font-mono', 'text-koma-secondary')}>R$ {ins.preco_medio_custo.toFixed(2)}</td>
                             <td className={clsx('p-3', 'text-right')}>
                               {isLow
-                                ? <span className={clsx('px-2', 'py-0.5', 'bg-amber-500/15', 'text-amber-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>Baixo</span>
-                                : <span className={clsx('px-2', 'py-0.5', 'bg-emerald-500/10', 'text-emerald-400', 'rounded-full', 'text-[8px]', 'font-bold', 'uppercase')}>Normal</span>
+                                ? <span className="koma-status-badge koma-badge-warning">Baixo</span>
+                                : <span className="koma-status-badge koma-badge-success">Normal</span>
                               }
                             </td>
                             <td className={clsx('p-3', 'text-right', 'space-x-1.5', 'whitespace-nowrap')}>
@@ -7649,20 +7685,20 @@ export function CaixaPanel({
                       })}
                     </tbody>
                   </table>
-                </div>
               </div>
             </div>
           )}
 
-          {/* LIVE VIEW: ENTRADAS (MANUAIS E XML) */}
-          {activeTab === 'estoque' && ['entradas', 'xml', 'notas_entrada'].includes(activeSubTab) && (
-            <EstoqueEntradasTab
+          {/* LIVE VIEW: HISTÓRICO UNIFICADO DE ESTOQUE */}
+          {activeTab === 'estoque' && ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(activeSubTab) && (
+            <EstoqueHistoricoTab
               entradas={entradasEstoque}
               notasEntradaXml={notasEntrada}
-              distribuidores={distribuidores}
+              movimentacoes={movimentacoesEstoque}
               insumos={estoqueInsumos}
               isLoading={isLoading}
               onOpenNovaEntradaModal={() => setShowEntradaManualModal(true)}
+              onOpenNovaMovimentacaoModal={() => setShowMovimentacaoModal(true)}
               onUploadXmlFile={async (file: File) => {
                 if (!file || !file.name.endsWith('.xml')) {
                   setXmlUploadState(s => ({ ...s, error: 'Por favor, selecione um arquivo .xml válido.', result: null }));
@@ -7692,24 +7728,16 @@ export function CaixaPanel({
               xmlUploadState={xmlUploadState}
               onResetXmlState={() => setXmlUploadState(s => ({ ...s, result: null, error: null }))}
               xmlFileInputRef={xmlFileInputRef}
-            />
-          )}
-
-          {/* LIVE VIEW: MOVIMENTAÇÕES DE ESTOQUE */}
-          {activeTab === 'estoque' && activeSubTab === 'movimentacoes' && (
-            <EstoqueMovimentacoesTab
-              movimentacoes={movimentacoesEstoque}
-              insumos={estoqueInsumos}
-              isLoading={isLoading}
-              onOpenNovaMovimentacaoModal={() => setShowMovimentacaoModal(true)}
-              onRefreshMovimentacoes={() => {
+              onRefresh={() => {
+                fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setEntradasEstoque(d); });
                 fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMovimentacoesEstoque(d); });
+                fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
               }}
             />
           )}
 
           {/* LIVE VIEW: CONTAGEM FÍSICA (INVENTÁRIO) */}
-          {activeTab === 'estoque' && activeSubTab === 'contagem' && (
+          {activeTab === 'estoque' && ['inventario', 'contagem'].includes(activeSubTab) && (
             <EstoqueContagemTab
               contagens={sessoesContagemEstoque}
               isLoading={isLoading}
@@ -7725,9 +7753,10 @@ export function CaixaPanel({
 
           {/* LIVE VIEW: DISTRIBUIDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
-            <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'animate-fade-in')}>
-              <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-2')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Fornecedores</span>
+            <div className={clsx('space-y-3.5', 'text-left', 'animate-fade-in')}>
+              <section className="koma-toolbar">
+                <p className="text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{distribuidores.length}</strong> fornecedores cadastrados</p>
+                <div className="koma-toolbar__actions ml-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -7738,13 +7767,14 @@ export function CaixaPanel({
                     setDistFormLeadTime(3);
                     setShowNewDistModal(true);
                   }}
-                  className={clsx('px-3', 'py-1', 'bg-emerald-600', 'hover:bg-emerald-500', 'text-white', 'rounded-lg', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-sm')}
+                  className="koma-btn-success"
                 >
-                  + Novo Fornecedor
+                  <Plus size={14} /> Novo fornecedor
                 </button>
-              </div>
-              <div className={clsx('overflow-hidden', 'border', 'border-koma-border/40', 'rounded-2xl')}>
-                <table className={clsx('w-full', 'text-left', 'text-[10px]')}>
+                </div>
+              </section>
+              <div className={clsx('overflow-x-auto', 'border', 'border-koma-border', 'rounded-2xl', 'bg-koma-panel')}>
+                <table className="koma-data-table min-w-[680px]">
                   <thead>
                     <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
                       <th className="p-3.5">Nome Fantasia</th>
@@ -7872,16 +7902,16 @@ export function CaixaPanel({
           )}
 
           {/* CRM CLIENTES — REAL DATA */}
-          {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes', 'fidelidade', 'programa_fidelidade'].includes(activeSubTab) && (
-            <div className={clsx('space-y-5', 'text-left', 'animate-fade-in', 'max-w-4xl')}>
-              <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4', 'shadow-xs')}>
-                <div className={clsx('flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-3', 'border-b', 'border-koma-border', 'pb-3')}>
-                  <div>
-                    <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>CRM & Fidelidade</span>
-                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">
-                      {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente cadastrado' : 'clientes cadastrados'} no restaurante
-                    </span>
-                  </div>
+          {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab) && (
+            <div className={clsx('space-y-3.5', 'text-left', 'animate-fade-in')}>
+              <section className="koma-toolbar">
+                <div className="koma-toolbar__search">
+                  <Search size={14} aria-hidden="true" />
+                  <input value={clientesSearch} onChange={event => setClientesSearch(event.target.value)} placeholder="Buscar por nome ou WhatsApp…" aria-label="Buscar clientes" />
+                  {clientesSearch && <button type="button" onClick={() => setClientesSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
+                </div>
+                <p className="shrink-0 text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de {loyaltyUsers.length} clientes</p>
+                <div className="koma-toolbar__actions">
                   <button
                     type="button"
                     onClick={() => {
@@ -7890,13 +7920,15 @@ export function CaixaPanel({
                       setNewCrmSaldo(0);
                       setShowNewCrmModal(true);
                     }}
-                    className={clsx('px-4', 'py-2', 'koma-btn-success', 'rounded-xl', 'text-xs', 'font-bold', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer', 'shadow-xs', 'self-start', 'sm:self-auto')}
+                    className="koma-btn-success"
                   >
-                    + Novo Cliente
+                    <Plus size={14} /> Novo cliente
                   </button>
                 </div>
+              </section>
 
-                {loyaltyUsers.length > 0 ? (
+              <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-2xl', 'p-3', 'space-y-4', 'shadow-xs')}>
+                {filteredLoyaltyUsers.length > 0 ? (
                   <div className={clsx('overflow-x-auto', 'border', 'border-koma-border', 'rounded-2xl')}>
                     <table className={clsx('w-full', 'text-left', 'text-xs')}>
                       <thead>
@@ -7908,7 +7940,7 @@ export function CaixaPanel({
                         </tr>
                       </thead>
                       <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                        {loyaltyUsers.map((user) => (
+                        {filteredLoyaltyUsers.map((user) => (
                           <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
                             <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone)}</td>
                             <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
@@ -7937,17 +7969,17 @@ export function CaixaPanel({
                 ) : (
                   <KomaEmptyState
                     icon={<Users size={24} className="text-koma-muted" />}
-                    title="Nenhum cliente cadastrado ainda"
-                    description="Cadastre clientes para acumular cashback e pontos de fidelidade, ou aguarde os primeiros pedidos identificados no cardápio e balcão."
-                    action={{
-                      label: '+ Cadastrar Primeiro Cliente',
+                    title={loyaltyUsers.length === 0 ? 'Nenhum cliente cadastrado ainda' : 'Nenhum cliente encontrado'}
+                    description={loyaltyUsers.length === 0 ? 'Cadastre clientes ou aguarde os primeiros pedidos identificados no cardápio e balcão.' : 'Ajuste ou limpe a busca para ver outros clientes.'}
+                    action={loyaltyUsers.length === 0 ? {
+                      label: 'Cadastrar primeiro cliente',
                       onClick: () => {
                         setNewCrmNome('');
                         setNewCrmTelefone('');
                         setNewCrmSaldo(0);
                         setShowNewCrmModal(true);
                       },
-                    }}
+                    } : { label: 'Limpar busca', onClick: () => setClientesSearch(''), variant: 'secondary' }}
                     variant="panel"
                   />
                 )}
@@ -10919,6 +10951,7 @@ export function CaixaPanel({
         </div>
       )}
 
+      </SidebarProvider>
     </div>
   );
 }

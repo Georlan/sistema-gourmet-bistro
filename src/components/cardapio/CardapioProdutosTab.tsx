@@ -17,7 +17,7 @@ import clsx from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import { smartSearchMatch } from '../../domain';
-import { OperationalBanner } from '../shared/OperationalBanner';
+import { KomaEmptyState } from '../shared/KomaEmptyState';
 
 type AvailabilityFilter = 'todos' | 'publicados' | 'pausados';
 
@@ -250,71 +250,55 @@ export function CardapioProdutosTab({
   };
 
   return (
-    <div className="orders-workspace w-full space-y-4 pb-8 text-left animate-fade-in">
-      <OperationalBanner
-        id="catalog-products-heading"
-        eyebrow="CATÁLOGO CENTRAL"
-        title="Cardápio"
-        accent="organizado para vender"
-        description="Produtos, preços e disponibilidade sincronizados entre caixa, atendimento e cardápio digital."
-        metrics={[
-          { label: 'publicação', value: `${summary.publicationRate}%`, valueClassName: 'text-emerald-600 dark:text-emerald-300' },
-          { label: 'itens pausados', value: summary.paused, valueClassName: summary.paused > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
-          { label: 'sem imagem', value: summary.withoutImage, valueClassName: summary.withoutImage > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
-          { label: 'categorias vazias', value: summary.emptyCategories, valueClassName: summary.emptyCategories > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
-        ]}
-      />
+    <div className="orders-workspace w-full space-y-3.5 pb-8 text-left animate-fade-in" aria-labelledby="catalog-products-heading">
+      <h1 id="catalog-products-heading" className="sr-only">Produtos do cardápio</h1>
 
-      <section className="space-y-2.5 sm:space-y-3 rounded-2xl sm:rounded-[22px] border border-koma-border bg-koma-panel/60 p-2.5 sm:p-4">
-        <div className="flex flex-col gap-2 sm:gap-3 xl:flex-row xl:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" size={14} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" className="h-9 sm:h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-9 text-[11px] text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-koma-accent" />
-            {search && <button type="button" onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-koma-muted hover:text-koma-foreground cursor-pointer" aria-label="Limpar busca"><X size={13} /></button>}
-          </div>
-          <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-0.5 sm:p-1 lg:w-auto">
-            {([
-              ['todos', 'Todos'],
-              ['publicados', 'Disponíveis'],
-              ['pausados', 'Pausados'],
-            ] as Array<[AvailabilityFilter, string]>).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 text-[9px] font-bold transition-colors cursor-pointer text-center', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-koma-secondary')}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-1.5 sm:flex sm:flex-wrap sm:gap-2">
-            {previewUrl && (
-              <a href={previewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl border border-koma-border bg-koma-card px-2 sm:px-3 py-2 sm:py-2.5 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised">
-                <Eye size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="truncate">Ver cardápio</span>
-              </a>
-            )}
-            <button type="button" onClick={onCreateCategory} className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] px-2 sm:px-3 py-2 sm:py-2.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300 transition-colors hover:bg-emerald-300/[0.11] cursor-pointer">
-              <Layers3 size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="truncate">Nova categoria</span>
-            </button>
-            <button type="button" onClick={onCreateProduct} className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl bg-emerald-500 px-2 sm:px-3 py-2 sm:py-2.5 text-[9px] font-black text-zinc-950 transition-colors hover:bg-emerald-400 cursor-pointer shadow-sm">
-              <Plus size={12} className="sm:w-3.5 sm:h-3.5" /> <span className="truncate">Novo produto</span>
-            </button>
-          </div>
+      <section className="koma-toolbar">
+        <div className="koma-toolbar__search">
+          <Search size={14} aria-hidden="true" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" aria-label="Buscar produtos" />
+          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
         </div>
-        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-0.5 scrollbar-none">
-          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>Todas as categorias</button>
-          {categorias.map((category) => (
-            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>
-              {category.nome}
+        <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-0.5 sm:p-1 lg:w-auto">
+          {([
+            ['todos', 'Todos'],
+            ['publicados', 'Disponíveis'],
+            ['pausados', 'Pausados'],
+          ] as Array<[AvailabilityFilter, string]>).map(([value, label]) => (
+            <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 text-[9px] font-bold transition-colors cursor-pointer text-center', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-koma-secondary')}>
+              {label}
             </button>
           ))}
         </div>
+        <div className="koma-toolbar__actions">
+          {previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer" className="koma-btn-secondary"><Eye size={14} /> Ver cardápio</a>}
+          <button type="button" onClick={onCreateCategory} className="koma-btn-secondary"><Layers3 size={14} /> Nova categoria</button>
+          <button type="button" onClick={onCreateProduct} className="koma-btn-success"><Plus size={14} /> Novo produto</button>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/60 p-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>Todas as categorias</button>
+          {categorias.map((category) => (
+            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>{category.nome}</button>
+          ))}
+        </div>
+        <p className="shrink-0 px-1 text-[10px] font-medium text-koma-muted">
+          <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong> de {produtos.length} produtos · {summary.publicationRate}% disponíveis
+          {summary.paused > 0 && <> · <span className="text-amber-600 dark:text-amber-300">{summary.paused} pausados</span></>}
+        </p>
       </section>
 
       {!catalogReady && produtos.length === 0 ? (
         <div className="flex min-h-64 items-center justify-center rounded-[22px] border border-koma-border bg-koma-panel/60 text-[10px] font-bold uppercase tracking-[0.16em] text-koma-muted">Carregando catálogo…</div>
       ) : filteredProducts.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-[22px] border border-dashed border-koma-border bg-koma-panel/60 px-6 text-center">
-          <PackageOpen size={28} className="text-koma-muted" />
-          <strong className="mt-4 text-sm text-koma-secondary">Nenhum produto encontrado</strong>
-          <p className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Ajuste os filtros ou cadastre o primeiro produto desta categoria.</p>
-        </div>
+        <KomaEmptyState
+          icon={PackageOpen}
+          title={produtos.length === 0 ? 'Cadastre o primeiro produto' : 'Nenhum produto encontrado'}
+          description={produtos.length === 0 ? 'Produtos cadastrados aqui ficam disponíveis no caixa, atendimento e cardápio online.' : 'Ajuste a busca ou os filtros para ver outros produtos.'}
+          action={produtos.length === 0 ? { label: 'Novo produto', onClick: onCreateProduct, icon: Plus } : undefined}
+        />
       ) : (
         <div className="space-y-3.5">
           {groups.map(({ category, products }) => renderGroup(category, products))}
