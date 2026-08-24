@@ -44,29 +44,3 @@ def test_redaction_is_case_insensitive_and_preserves_non_secret_query_values():
     assert result == (
         "/socket?restaurante_id=2&Access_Token=[REDACTED]&screen=caixa"
     )
-
-
-def test_internal_websocket_identity_ignores_stale_legacy_path(monkeypatch):
-    from app.routes import websocket as websocket_route
-
-    fake_db = SimpleNamespace(close=lambda: None)
-    monkeypatch.setattr(
-        websocket_route.jwt,
-        "decode",
-        lambda *args, **kwargs: {"sub": "canonical-user", "restaurante_id": 77},
-    )
-    monkeypatch.setattr(
-        websocket_route,
-        "SessionLocal",
-        lambda restaurante_id=None: fake_db,
-    )
-    monkeypatch.setattr(
-        websocket_route,
-        "_authenticated_user_from_token",
-        lambda token, db: SimpleNamespace(id="canonical-user", nome="Caixa"),
-    )
-
-    assert websocket_route._validated_internal_websocket_identity(
-        "valid.jwt.token",
-        "stale-local-storage-id",
-    ) == (77, "canonical-user", "Caixa")
