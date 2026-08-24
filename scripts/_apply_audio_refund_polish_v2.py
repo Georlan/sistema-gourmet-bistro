@@ -19,15 +19,19 @@ patch_path.write_text(
 )
 subprocess.run([sys.executable, str(patch_path)], check=True)
 
-# The implementation deliberately uses a ref so the one-shot guard survives
-# React renders. Align the focused source regression with that implementation.
+# Keep focused source regressions behavior-oriented rather than tied to an exact
+# declaration shape/formatting.
 test_path = Path('tests/manual_operational_regressions.test.ts')
 test_text = test_path.read_text()
-old_assertion = "  assert.match(caixa, /let attempted = false/);"
-new_assertion = "  assert.match(caixa, /audioUnlockAttemptedRef\\.current/);"
-if old_assertion not in test_text:
-    raise SystemExit('legacy audio one-shot assertion not found')
-test_path.write_text(test_text.replace(old_assertion, new_assertion, 1))
+replacements = {
+    "  assert.match(caixa, /let attempted = false/);": "  assert.match(caixa, /audioUnlockAttemptedRef\\.current/);",
+    "  assert.match(refund, /const \\[listLoading, setListLoading\\]/);": "  assert.match(refund, /setListLoading\\(true\\)/);",
+}
+for old_assertion, new_assertion in replacements.items():
+    if old_assertion not in test_text:
+        raise SystemExit(f'legacy focused assertion not found: {old_assertion}')
+    test_text = test_text.replace(old_assertion, new_assertion, 1)
+test_path.write_text(test_text)
 
 caixa_path = Path('src/components/CaixaPanel.tsx')
 text = caixa_path.read_text()
