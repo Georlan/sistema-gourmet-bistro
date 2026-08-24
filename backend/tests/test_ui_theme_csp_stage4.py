@@ -144,8 +144,11 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
 
     assert "grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4" in mesas
     assert "pl-[4.25rem]" not in products
-    assert "flex flex-wrap items-center justify-between gap-2 pl-0" in products
-    assert "min-w-0 flex-1 items-center sm:min-w-[112px] sm:flex-none" in products
+    # O catálogo agora usa uma única lista responsiva: no mobile, categoria e
+    # preço acompanham o nome; no desktop, viram colunas alinhadas.
+    assert "text-koma-subtle lg:hidden" in products
+    assert "lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_6.75rem]" in products
+    assert "flex items-center justify-end gap-0.5" in products
 
     assert "KOMA_CHART_COLORS" in finance
     assert "grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4" in finance
