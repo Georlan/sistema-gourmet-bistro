@@ -46,8 +46,8 @@ def _validated_internal_websocket_identity(token: str, requested_user_id: str):
     token_user_id = str(payload.get("sub") or "").strip()
     restaurante_id_raw = payload.get("restaurante_id")
 
-    if not token_user_id:
-        raise ValueError("Identidade ausente no token do WebSocket.")
+    if not token_user_id or not requested_user_id or token_user_id != requested_user_id:
+        raise ValueError("Identidade do WebSocket diverge do token autenticado.")
     if (
         not isinstance(restaurante_id_raw, int)
         or isinstance(restaurante_id_raw, bool)
