@@ -1695,6 +1695,7 @@ export function CaixaPanel({
   // ── Gaveta de Aceite (Floating Drawer) & Sistema de Áudio Unificado do Caixa ────
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioUnlockedRef = useRef(false);
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     return localStorage.getItem('@koma:sound_enabled') !== 'false';
@@ -1711,22 +1712,28 @@ export function CaixaPanel({
 
   // Motor de Síntese Sonora Web Audio API — Independente, sem arquivo de áudio externo
   const playOrderAlert = useCallback((type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
-    if (type !== 'test' && !soundEnabled) return;
+    if (type !== 'test' && (!soundEnabled || !audioUnlockedRef.current)) return;
     try {
       if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
         audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
       const ctx = audioCtxRef.current;
       if (ctx.state === 'suspended') {
-        ctx.resume();
+        // Fora de uma interação do usuário o navegador bloqueia resume().
+        // O desbloqueio é feito pelo listener abaixo; não poluímos o console
+        // nem criamos alertas parciais enquanto o áudio ainda está suspenso.
+        if (type !== 'test') return;
+        void ctx.resume().then(() => { audioUnlockedRef.current = true; }).catch(() => undefined);
+      } else if (ctx.state === 'running') {
+        audioUnlockedRef.current = true;
       }
       const t = ctx.currentTime;
 
       if (type === 'new_order') {
-        // Bipe duplo suave e moderno de novo pedido (Garçom / Caixa / Balcão): D5 (587Hz) -> A5 (880Hz)
+        // Um único bipe curto confirma um novo pedido. Outros eventos mantêm
+        // assinaturas sonoras próprias, evitando a sensação de evento duplicado.
         const notes = [
-          { freq: 587.33, start: 0, dur: 0.12, vol: 0.28 },
-          { freq: 880.00, start: 0.10, dur: 0.22, vol: 0.35 },
+          { freq: 783.99, start: 0, dur: 0.18, vol: 0.34 },
         ];
         notes.forEach(({ freq, start, dur, vol }) => {
           const osc = ctx.createOscillator();
@@ -1804,20 +1811,29 @@ export function CaixaPanel({
     } catch (e) { /* audio context unavailable */ }
   }, [soundEnabled]);
 
-  // Desbloqueia o contexto de áudio na primeira interação do usuário na tela
+  // Desbloqueia o contexto de áudio somente dentro de uma interação real.
   useEffect(() => {
     const unlock = () => {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      if (audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume();
+      try {
+        if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+          audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        const ctx = audioCtxRef.current;
+        if (ctx.state === 'running') {
+          audioUnlockedRef.current = true;
+          return;
+        }
+        void ctx.resume()
+          .then(() => { audioUnlockedRef.current = ctx.state === 'running'; })
+          .catch(() => { audioUnlockedRef.current = false; });
+      } catch {
+        audioUnlockedRef.current = false;
       }
     };
-    window.addEventListener('click', unlock, { passive: true });
+    window.addEventListener('pointerdown', unlock, { passive: true });
     window.addEventListener('keydown', unlock, { passive: true });
     return () => {
-      window.removeEventListener('click', unlock);
+      window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
   }, []);
@@ -4072,28 +4088,30 @@ export function CaixaPanel({
       ...activeDigitalOrders.map(order => order.criadoEm),
     ];
 
-    const attentionKeys = new Set<string>();
-    activeTableList.forEach(order => {
-      if (getOrderSlaData(order, nowTimestamp).minutes >= 15) {
-        attentionKeys.add(`mesa:${order.id}`);
-      }
-    });
-    activeDigitalOrders.forEach(order => {
-      if (
-        ['pendente', 'analise'].includes(order.status)
-        || getOrderSlaData(order, nowTimestamp).minutes >= 15
-      ) {
-        attentionKeys.add(`digital:${order.id}`);
-      }
-    });
-    pagamentosPendentes.forEach((payment, index) => {
-      attentionKeys.add(`pagamento:${payment?.id || index}`);
-    });
+    const pendingPaymentCount = pagamentosPendentes.length;
+    const pendingAcceptanceCount = activeDigitalOrders.filter(order =>
+      ['pendente', 'analise'].includes(order.status)
+    ).length;
+    const readyToFinishCount = tableOrdersReady.length;
+    const overdueCount = [
+      ...activeTableList,
+      ...activeDigitalOrders,
+    ].filter(order => getOrderSlaData(order, nowTimestamp).minutes >= 15).length;
+
+    const actionMetric = pendingPaymentCount > 0
+      ? { label: 'pagamentos para confirmar', value: pendingPaymentCount, needsAttention: true }
+      : pendingAcceptanceCount > 0
+        ? { label: 'pedidos para aceitar', value: pendingAcceptanceCount, needsAttention: true }
+        : readyToFinishCount > 0
+          ? { label: 'prontos para concluir', value: readyToFinishCount, needsAttention: true }
+          : overdueCount > 0
+            ? { label: 'pedidos há +15 min', value: overdueCount, needsAttention: true }
+            : { label: 'sem pendências', value: 0, needsAttention: false };
 
     return {
       oldestOrder: formatOldestAge(timestamps),
       openValue: tableValue + digitalValue,
-      attentionCount: attentionKeys.size,
+      actionMetric,
     };
   }, [deliveryOrders, nowTimestamp, pagamentosPendentes, tableOrdersInProduction, tableOrdersReady]);
 
@@ -4746,9 +4764,9 @@ export function CaixaPanel({
                   { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
                   { label: 'valor em aberto', value: formatCompactCurrency(operationalOrderInsights.openValue) },
                   {
-                    label: 'exigem atenção',
-                    value: operationalOrderInsights.attentionCount,
-                    valueClassName: operationalOrderInsights.attentionCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
+                    label: operationalOrderInsights.actionMetric.label,
+                    value: operationalOrderInsights.actionMetric.value,
+                    valueClassName: operationalOrderInsights.actionMetric.needsAttention ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
                   },
                 ]}
               />

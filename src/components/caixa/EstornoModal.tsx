@@ -46,6 +46,27 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
 
   const selected = payments.find(payment => payment.id === selectedId) || null;
 
+  const selectPayment = (payment: RefundablePayment | null) => {
+    if (!payment) {
+      setSelectedId('');
+      setValue('');
+      setReason('');
+      setPayoutMethod('');
+      setOriginValues({});
+      setError(null);
+      return;
+    }
+
+    // Todos os campos ligados ao pagamento mudam no mesmo evento. Isso evita
+    // um frame intermediário com os dados da mesa anterior (o "piscar").
+    setSelectedId(payment.id);
+    setValue(payment.saldo_estornavel);
+    setPayoutMethod(payment.metodo_original);
+    setReason('');
+    setOriginValues({});
+    setError(null);
+  };
+
   const mergePayments = (items: RefundablePayment[]) => {
     setPayments(current => {
       const map = new Map(current.map(payment => [payment.id, payment]));
@@ -64,7 +85,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
       if (background) mergePayments(data);
       else setPayments(data);
       if (!initialPaymentId && selectedId && !data.some(payment => payment.id === selectedId)) {
-        setSelectedId('');
+        selectPayment(null);
       }
     } catch (err) {
       if (!background) setError(err instanceof Error ? err.message : 'Falha ao carregar pagamentos.');
@@ -86,7 +107,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
         const payment = await obterPagamentoEstornavel(initialPaymentId);
         if (cancelled) return;
         setPayments([payment]);
-        setSelectedId(payment.id);
+        selectPayment(payment);
         setLoading(false);
         void load(true);
       } catch (err) {
@@ -98,20 +119,6 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!selected) {
-      setValue('');
-      setReason('');
-      setPayoutMethod('');
-      setOriginValues({});
-      return;
-    }
-    setValue(selected.saldo_estornavel);
-    setPayoutMethod(selected.metodo_original);
-    setReason('');
-    setOriginValues({});
-    setError(null);
-  }, [selectedId]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -227,7 +234,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                   <button
                     key={payment.id}
                     type="button"
-                    onClick={() => setSelectedId(payment.id)}
+                    onClick={() => selectPayment(payment)}
                     className={`w-full rounded-2xl border p-3 text-left transition-colors ${active ? 'border-rose-500/50 bg-rose-500/10' : 'border-koma-border bg-koma-card hover:bg-koma-raised'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -299,10 +306,12 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                       <span>Este recebimento foi dividido entre mais de uma Conta. Como a devolução é parcial, informe de qual conta sai cada parte. O sistema não faz rateio automático.</span>
                     </div>
                     <div className="mt-3 space-y-2">
-                      {selected.origens_financeiras.filter(origin => origin.saldo_estornavel > 0).map(origin => (
+                      {selected.origens_financeiras.filter(origin => origin.saldo_estornavel > 0).map((origin, index, origins) => (
                         <div key={origin.comanda_id} className="grid grid-cols-[minmax(0,1fr)_130px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5">
                           <div className="min-w-0">
-                            <strong className="block truncate text-[10px] text-koma-foreground">{origin.label}</strong>
+                            <strong className="block truncate text-[10px] text-koma-foreground">
+                              {origin.label}{origins.filter(candidate => candidate.label === origin.label).length > 1 ? ` · Parte ${index + 1}` : ''}
+                            </strong>
                             <span className="mt-0.5 block text-[9px] text-koma-muted">Disponível {currency.format(origin.saldo_estornavel)}</span>
                           </div>
                           <MoneyInput
