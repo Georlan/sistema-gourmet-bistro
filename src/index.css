@@ -898,6 +898,24 @@ body {
 .koma-toolbar__search input::placeholder { color: var(--koma-text-muted); }
 .koma-toolbar__search button { display: grid; flex: 0 0 auto; place-items: center; cursor: pointer; }
 
+.koma-toolbar__select {
+  min-height: 2.35rem;
+  max-width: 12rem;
+  padding: 0.45rem 2rem 0.45rem 0.7rem;
+  color: var(--koma-text-primary);
+  border: 1px solid var(--koma-border-default);
+  border-radius: 0.75rem;
+  background: var(--koma-surface-input);
+  font-size: 0.66rem;
+  font-weight: 700;
+  outline: none;
+}
+
+.koma-toolbar__select:focus {
+  border-color: rgba(5, 150, 105, 0.45);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.08);
+}
+
 .koma-toolbar__actions {
   display: flex;
   flex: 0 0 auto;
@@ -966,6 +984,7 @@ body {
 @media (max-width: 900px) {
   .koma-toolbar { align-items: stretch; flex-direction: column; }
   .koma-toolbar__search { flex-basis: auto; }
+  .koma-toolbar__select { width: 100%; max-width: none; }
   .koma-toolbar__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .koma-filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

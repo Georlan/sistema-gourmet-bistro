@@ -312,6 +312,16 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Categorias', exact: true })).toBeVisible();
   await expect(page.getByLabel('Buscar produtos')).toBeVisible();
+  await expect(page.getByLabel('Filtrar produtos por categoria')).toBeVisible();
+  await expect(page.getByLabel('Filtrar disponibilidade')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Pratos', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Categorias', exact: true }).click();
+  await expect(page.getByLabel('Buscar categorias')).toBeVisible();
+  await expect(page.getByLabel('Filtrar categorias por destino')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toBeVisible();
+  await expect(page.getByText('cat-pratos', { exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Estoque', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Ingredientes', exact: true })).toBeVisible();

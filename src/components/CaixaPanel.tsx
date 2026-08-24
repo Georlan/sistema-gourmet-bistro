@@ -7498,7 +7498,6 @@ export function CaixaPanel({
                 setProdFormAtivo(true);
                 setShowProductModal(true);
               }}
-              onCreateCategory={() => setShowCategoryModal(true)}
               onEditProduct={(product) => {
                 setEditingProduct(product);
                 setProdFormId(product.id);

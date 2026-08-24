@@ -3,14 +3,11 @@ import {
   Copy,
   Edit3,
   Eye,
-  EyeOff,
   Image as ImageIcon,
-  Layers3,
   PackageOpen,
   Plus,
   Search,
   Trash2,
-  Utensils,
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -27,7 +24,6 @@ interface CardapioProdutosTabProps {
   catalogReady: boolean;
   previewUrl?: string;
   onCreateProduct: () => void;
-  onCreateCategory: () => void;
   onEditProduct: (product: Product) => void;
   onDuplicateProduct: (product: Product) => void;
   onRemoveProduct: (product: Product) => Promise<void>;
@@ -48,7 +44,6 @@ export function CardapioProdutosTab({
   catalogReady,
   previewUrl,
   onCreateProduct,
-  onCreateCategory,
   onEditProduct,
   onDuplicateProduct,
   onRemoveProduct,
@@ -61,22 +56,21 @@ export function CardapioProdutosTab({
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
   const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
 
+  const categoryById = useMemo(
+    () => new Map(categorias.map((category) => [String(category.id), category])),
+    [categorias],
+  );
+
+  const categoryNameFor = (product: Product) => (
+    categoryById.get(String(productCategoryId(product)))?.nome
+    || product.categoria
+    || 'Sem categoria'
+  );
+
   const summary = useMemo(() => {
-    const published = produtos.filter((product) => product.ativo !== false).length;
-    const withoutImage = produtos.filter((product) => (
-      !product.imagem && !product.imagens_galeria?.some(Boolean)
-    )).length;
-    const categoryHasProduct = (category: CatalogCategory) => produtos.some(product => (
-      productCategoryId(product) === category.id
-      || product.categoria === category.nome
-    ));
-    return {
-      paused: produtos.length - published,
-      publicationRate: produtos.length > 0 ? Math.round((published / produtos.length) * 100) : 0,
-      withoutImage,
-      emptyCategories: categorias.filter(category => !categoryHasProduct(category)).length,
-    };
-  }, [categorias, produtos]);
+    const available = produtos.filter((product) => product.ativo !== false).length;
+    return { available, paused: produtos.length - available };
+  }, [produtos]);
 
   const filteredProducts = useMemo(() => produtos.filter((product) => {
     if (categoryFilter !== 'todos' && productCategoryId(product) !== categoryFilter) return false;
@@ -86,23 +80,19 @@ export function CardapioProdutosTab({
     if (!term) return true;
     return smartSearchMatch(product.nome, term)
       || smartSearchMatch(product.descricao || '', term)
-      || smartSearchMatch(product.id, term);
-  }), [availabilityFilter, categoryFilter, produtos, search]);
+      || smartSearchMatch(product.id, term)
+      || smartSearchMatch(categoryNameFor(product), term);
+  }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })), [availabilityFilter, categoryById, categoryFilter, produtos, search]);
 
-  const groups = useMemo(() => categorias.map((category) => ({
-    category,
-    products: filteredProducts
-      .filter((product) => productCategoryId(product) === category.id)
-      .sort((a, b) => String(a.id).localeCompare(String(b.id), 'pt-BR', {
-        numeric: true,
-        sensitivity: 'base',
-      })),
-  })).filter((group) => group.products.length > 0), [categorias, filteredProducts]);
-
-  const orphanProducts = useMemo(
-    () => filteredProducts.filter((product) => !categorias.some((category) => category.id === productCategoryId(product))),
-    [categorias, filteredProducts],
+  const selectedCategory = categoryFilter === 'todos' ? null : categoryById.get(categoryFilter) || null;
+  const selectedCategoryProducts = useMemo(
+    () => categoryFilter === 'todos'
+      ? []
+      : produtos.filter((product) => productCategoryId(product) === categoryFilter),
+    [categoryFilter, produtos],
   );
+  const selectedCategoryIsAvailable = selectedCategoryProducts.length > 0
+    && selectedCategoryProducts.every((product) => product.ativo !== false);
 
   const handleToggle = async (product: Product) => {
     if (pendingProductId) return;
@@ -114,180 +104,51 @@ export function CardapioProdutosTab({
     }
   };
 
-  const handleCategoryAvailability = async (
-    categoryId: string,
-    productIds: string[],
-    ativo: boolean,
-  ) => {
-    if (pendingCategoryId || productIds.length === 0) return;
-    setPendingCategoryId(categoryId);
+  const handleCategoryAvailability = async () => {
+    if (!selectedCategory || pendingCategoryId || selectedCategoryProducts.length === 0) return;
+    setPendingCategoryId(selectedCategory.id);
     try {
-      await onSetCategoryAvailability(productIds, ativo);
+      await onSetCategoryAvailability(
+        selectedCategoryProducts.map((product) => product.id),
+        !selectedCategoryIsAvailable,
+      );
     } finally {
       setPendingCategoryId(null);
     }
   };
 
-  const renderProduct = (product: Product) => {
-    const isPublished = product.ativo !== false;
-    const isPending = pendingProductId === product.id;
-    return (
-      <article
-        key={product.id}
-        className={clsx(
-          'group grid gap-3 border-b border-koma-border px-3 py-3.5 transition-colors last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-4',
-          'hover:bg-koma-raised/50',
-          !isPublished && 'bg-koma-canvas/40',
-        )}
-      >
-        <div className="flex min-w-0 items-start gap-3">
-          <div className={clsx(
-            'relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-koma-border bg-koma-raised',
-            !isPublished && 'opacity-60 grayscale',
-          )}>
-            {product.imagem ? (
-              <img src={product.imagem} alt="" className="h-full w-full object-cover" loading="lazy" />
-            ) : (
-              <ImageIcon size={20} className="text-koma-muted" aria-hidden="true" />
-            )}
-            <span className="absolute bottom-1 left-1 rounded-md bg-zinc-900/80 px-1.5 py-0.5 font-mono text-[8px] font-bold text-white backdrop-blur-sm">
-              #{product.id}
-            </span>
-          </div>
-
-          <div className="min-w-0 flex-1 pt-0.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <h3 className={clsx('truncate text-[13px] font-bold text-koma-foreground', !isPublished && 'text-koma-muted')}>
-                {product.nome}
-              </h3>
-              <span className={clsx(
-                'rounded-full px-2 py-0.5 text-[8px] font-extrabold uppercase tracking-wider',
-                isPublished
-                  ? 'koma-badge-success'
-                  : 'koma-badge-warning',
-              )}>
-                {isPublished ? 'Publicado' : 'Pausado'}
-              </span>
-            </div>
-            <p className="mt-1 line-clamp-2 max-w-3xl text-[10px] leading-relaxed text-koma-muted font-medium">
-              {product.descricao || 'Sem descrição. Adicione detalhes para facilitar a escolha do cliente.'}
-            </p>
-            <strong className="mt-1.5 block font-mono text-xs font-extrabold text-emerald-700 dark:text-emerald-400">
-              {currency.format(Number(product.preco) || 0)}
-            </strong>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 pl-0 sm:flex-nowrap sm:justify-end">
-          <button
-            type="button"
-            onClick={() => void handleToggle(product)}
-            disabled={isPending || Boolean(pendingCategoryId)}
-            aria-pressed={isPublished}
-            aria-label={`${isPublished ? 'Pausar' : 'Publicar'} ${product.nome}`}
-            className={clsx(
-              'inline-flex min-w-0 flex-1 items-center sm:min-w-[112px] sm:flex-none justify-center gap-2 rounded-xl px-3 py-2 text-[10px] font-extrabold uppercase tracking-wider transition-all disabled:cursor-wait disabled:opacity-50 cursor-pointer shadow-xs',
-              isPublished
-                ? 'koma-badge-success'
-                : 'koma-badge-warning',
-            )}
-          >
-            <span className={clsx('h-2 w-2 rounded-full', isPublished ? 'bg-emerald-600 dark:bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,.7)]' : 'bg-amber-600 dark:bg-amber-400')} />
-            {isPending ? 'Salvando…' : isPublished ? 'Disponível' : 'Pausado'}
-          </button>
-
-          <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
-            <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-emerald-700 dark:hover:text-emerald-300 cursor-pointer" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}>
-              <Copy size={14} />
-            </button>
-            <button type="button" onClick={() => onEditProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground cursor-pointer" title="Editar produto" aria-label={`Editar ${product.nome}`}>
-              <Edit3 size={14} />
-            </button>
-            <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-rose-600 dark:text-rose-400 transition-colors hover:bg-rose-500/10 hover:text-rose-700 cursor-pointer" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}>
-              <Trash2 size={14} />
-            </button>
-          </div>
-        </div>
-      </article>
-    );
-  };
-
-  const renderGroup = (category: CatalogCategory, products: Product[]) => {
-    const publishedCount = products.filter((product) => product.ativo !== false).length;
-    const allPublished = publishedCount === products.length;
-    return (
-      <section key={category.id} className="overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel shadow-xs">
-        <header className="flex flex-col gap-3 border-b border-koma-border bg-koma-raised/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
-              <Utensils size={15} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="truncate text-xs font-bold text-koma-foreground">{category.nome}</h2>
-              <p className="mt-0.5 text-[9px] text-koma-muted font-medium">
-                {products.length} {products.length === 1 ? 'produto' : 'produtos'} · {publishedCount} disponíveis
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleCategoryAvailability(category.id, products.map((product) => product.id), !allPublished)}
-            disabled={Boolean(pendingCategoryId)}
-            className={clsx(
-              'inline-flex items-center justify-center gap-1.5 self-start rounded-xl px-3 py-1.5 text-[9px] font-extrabold uppercase tracking-wider transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto cursor-pointer shadow-xs',
-              allPublished
-                ? 'koma-badge-warning hover:bg-amber-200 dark:hover:bg-amber-900/40'
-                : 'koma-badge-success hover:bg-emerald-200 dark:hover:bg-emerald-900/40',
-            )}
-          >
-            {allPublished ? <EyeOff size={13} /> : <Eye size={13} />}
-            {pendingCategoryId === category.id ? 'Salvando…' : allPublished ? 'Pausar categoria' : 'Publicar categoria'}
-          </button>
-        </header>
-        <div>{products.map(renderProduct)}</div>
-      </section>
-    );
+  const clearFilters = () => {
+    setSearch('');
+    setCategoryFilter('todos');
+    setAvailabilityFilter('todos');
   };
 
   return (
     <div className="orders-workspace w-full space-y-3.5 pb-8 text-left animate-fade-in" aria-labelledby="catalog-products-heading">
       <h1 id="catalog-products-heading" className="sr-only">Produtos do cardápio</h1>
 
-      <section className="koma-toolbar">
+      <section className="koma-toolbar" aria-label="Ferramentas do catálogo">
         <div className="koma-toolbar__search">
           <Search size={14} aria-hidden="true" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, descrição ou código…" aria-label="Buscar produtos" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar produto, categoria ou código…" aria-label="Buscar produtos" />
           {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
         </div>
-        <div className="grid grid-cols-3 rounded-xl border border-koma-border bg-koma-input p-0.5 sm:p-1 lg:w-auto">
-          {([
-            ['todos', 'Todos'],
-            ['publicados', 'Disponíveis'],
-            ['pausados', 'Pausados'],
-          ] as Array<[AvailabilityFilter, string]>).map(([value, label]) => (
-            <button key={value} type="button" onClick={() => setAvailabilityFilter(value)} className={clsx('rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 text-[9px] font-bold transition-colors cursor-pointer text-center', availabilityFilter === value ? 'bg-koma-card text-koma-foreground' : 'text-koma-subtle hover:text-koma-secondary')}>
-              {label}
-            </button>
-          ))}
-        </div>
+
+        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="koma-toolbar__select" aria-label="Filtrar produtos por categoria">
+          <option value="todos">Todas as categorias</option>
+          {categorias.map((category) => <option key={category.id} value={category.id}>{category.nome}</option>)}
+        </select>
+
+        <select value={availabilityFilter} onChange={(event) => setAvailabilityFilter(event.target.value as AvailabilityFilter)} className="koma-toolbar__select" aria-label="Filtrar disponibilidade">
+          <option value="todos">Todos os status</option>
+          <option value="publicados">Disponíveis</option>
+          <option value="pausados">Pausados</option>
+        </select>
+
         <div className="koma-toolbar__actions">
           {previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer" className="koma-btn-secondary"><Eye size={14} /> Ver cardápio</a>}
-          <button type="button" onClick={onCreateCategory} className="koma-btn-secondary"><Layers3 size={14} /> Nova categoria</button>
           <button type="button" onClick={onCreateProduct} className="koma-btn-success"><Plus size={14} /> Novo produto</button>
         </div>
-      </section>
-
-      <section className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/60 p-2.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-          <button type="button" onClick={() => setCategoryFilter('todos')} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === 'todos' ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>Todas as categorias</button>
-          {categorias.map((category) => (
-            <button key={category.id} type="button" onClick={() => setCategoryFilter(category.id)} className={clsx('shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-bold transition-colors cursor-pointer', categoryFilter === category.id ? 'border-emerald-300/25 bg-emerald-300/[0.09] text-emerald-600 dark:text-emerald-300' : 'border-koma-border text-koma-subtle hover:text-koma-secondary')}>{category.nome}</button>
-          ))}
-        </div>
-        <p className="shrink-0 px-1 text-[10px] font-medium text-koma-muted">
-          <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong> de {produtos.length} produtos · {summary.publicationRate}% disponíveis
-          {summary.paused > 0 && <> · <span className="text-amber-600 dark:text-amber-300">{summary.paused} pausados</span></>}
-        </p>
       </section>
 
       {!catalogReady && produtos.length === 0 ? (
@@ -297,13 +158,90 @@ export function CardapioProdutosTab({
           icon={PackageOpen}
           title={produtos.length === 0 ? 'Cadastre o primeiro produto' : 'Nenhum produto encontrado'}
           description={produtos.length === 0 ? 'Produtos cadastrados aqui ficam disponíveis no caixa, atendimento e cardápio online.' : 'Ajuste a busca ou os filtros para ver outros produtos.'}
-          action={produtos.length === 0 ? { label: 'Novo produto', onClick: onCreateProduct, icon: Plus } : undefined}
+          action={produtos.length === 0
+            ? { label: 'Novo produto', onClick: onCreateProduct, icon: Plus }
+            : { label: 'Limpar filtros', onClick: clearFilters, variant: 'secondary' }}
         />
       ) : (
-        <div className="space-y-3.5">
-          {groups.map(({ category, products }) => renderGroup(category, products))}
-          {orphanProducts.length > 0 && renderGroup({ id: 'sem-categoria', nome: 'Sem categoria', destino_impressao: 'NENHUM' }, orphanProducts)}
-        </div>
+        <section className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel" aria-label="Catálogo de produtos">
+          <header className="flex flex-col gap-2 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <p className="text-[10px] font-medium text-koma-muted">
+              <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong> de {produtos.length} produtos
+              {' · '}<span className="text-emerald-700 dark:text-emerald-300">{summary.available} disponíveis</span>
+              {summary.paused > 0 && <> · <span className="text-amber-700 dark:text-amber-300">{summary.paused} pausados</span></>}
+            </p>
+            {selectedCategory && selectedCategoryProducts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleCategoryAvailability()}
+                disabled={Boolean(pendingCategoryId)}
+                className={clsx(
+                  'inline-flex min-h-8 items-center justify-center self-start rounded-lg border px-2.5 text-[9px] font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto',
+                  selectedCategoryIsAvailable ? 'koma-badge-warning' : 'koma-badge-success',
+                )}
+              >
+                {pendingCategoryId ? 'Salvando…' : selectedCategoryIsAvailable ? `Pausar ${selectedCategory.nome}` : `Disponibilizar ${selectedCategory.nome}`}
+              </button>
+            )}
+          </header>
+
+          <div className="hidden grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_6.75rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted lg:grid">
+            <span>Produto</span><span>Categoria</span><span>Preço</span><span>Disponibilidade</span><span className="text-right">Ações</span>
+          </div>
+
+          {filteredProducts.map((product) => {
+            const isAvailable = product.ativo !== false;
+            const isPending = pendingProductId === product.id;
+            const categoryName = categoryNameFor(product);
+            return (
+              <article
+                key={product.id}
+                className={clsx(
+                  'group grid gap-3 border-b border-koma-border px-3 py-3 transition-colors last:border-b-0 hover:bg-koma-raised/50 sm:px-4 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_6.75rem] lg:items-center',
+                  !isAvailable && 'bg-koma-canvas/35',
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className={clsx('flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-koma-border bg-koma-raised', !isAvailable && 'opacity-60 grayscale')}>
+                    {product.imagem ? <img src={product.imagem} alt="" className="h-full w-full object-cover" loading="lazy" /> : <ImageIcon size={17} className="text-koma-muted" aria-hidden="true" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h2 className={clsx('truncate text-xs font-bold text-koma-foreground', !isAvailable && 'text-koma-muted')}>{product.nome}</h2>
+                      <span className="shrink-0 font-mono text-[9px] text-koma-muted">#{product.id}</span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[10px] text-koma-muted">{product.descricao || 'Sem descrição'}</p>
+                    <p className="mt-1 text-[9px] font-semibold text-koma-subtle lg:hidden">{categoryName} · {currency.format(Number(product.preco) || 0)}</p>
+                  </div>
+                </div>
+
+                <span className="hidden truncate text-[10px] font-semibold text-koma-secondary lg:block">{categoryName}</span>
+                <strong className="hidden font-mono text-xs text-emerald-700 dark:text-emerald-400 lg:block">{currency.format(Number(product.preco) || 0)}</strong>
+
+                <button
+                  type="button"
+                  onClick={() => void handleToggle(product)}
+                  disabled={isPending || Boolean(pendingCategoryId)}
+                  aria-pressed={isAvailable}
+                  aria-label={`${isAvailable ? 'Pausar' : 'Disponibilizar'} ${product.nome}`}
+                  className={clsx(
+                    'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-[9px] font-extrabold uppercase tracking-wide transition-colors disabled:cursor-wait disabled:opacity-50',
+                    isAvailable ? 'koma-badge-success' : 'koma-badge-warning',
+                  )}
+                >
+                  <span className={clsx('h-1.5 w-1.5 rounded-full', isAvailable ? 'bg-emerald-600 dark:bg-emerald-300' : 'bg-amber-600 dark:bg-amber-300')} />
+                  {isPending ? 'Salvando…' : isAvailable ? 'Disponível' : 'Pausado'}
+                </button>
+
+                <div className="flex items-center justify-end gap-0.5">
+                  <button type="button" onClick={() => onEditProduct(product)} className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground" title="Editar produto" aria-label={`Editar ${product.nome}`}><Edit3 size={13} /><span>Editar</span></button>
+                  <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-emerald-700 dark:hover:text-emerald-300" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}><Copy size={13} /></button>
+                  <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-rose-600 transition-colors hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}><Trash2 size={13} /></button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
       )}
     </div>
   );
