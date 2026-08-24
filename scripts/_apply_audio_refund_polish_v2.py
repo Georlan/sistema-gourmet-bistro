@@ -24,7 +24,7 @@ subprocess.run([sys.executable, str(patch_path)], check=True)
 test_path = Path('tests/manual_operational_regressions.test.ts')
 test_text = test_path.read_text()
 replacements = {
-    "  assert.match(caixa, /navigator\\.userActivation/);": "  assert.match(caixa, /window\\.navigator/);",
+    "  assert.match(caixa, /navigator\\.userActivation/);": "  assert.doesNotMatch(caixa, /userActivation/);",
     "  assert.match(caixa, /let attempted = false/);": "  assert.match(caixa, /audioUnlockAttemptedRef\\.current/);",
     "  assert.match(refund, /const \\[listLoading, setListLoading\\]/);": "  assert.match(refund, /setListLoading\\(true\\)/);",
 }
@@ -52,11 +52,9 @@ def block_replace(old: str, new: str) -> None:
     block = block.replace(old, new, 1)
 
 
-activation_lookup = "const activation = typeof window !== 'undefined' ? (window.navigator as typeof window.navigator & { userActivation?: { isActive?: boolean } }).userActivation : undefined;"
-
 block_replace(
     "  const audioCtxRef = useRef<AudioContext | null>(null);\n  const audioUnlockedRef = useRef(false);\n\n  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {\n",
-    "  const audioCtxRef = useRef<AudioContext | null>(null);\n  const audioUnlockedRef = useRef(false);\n  const audioUnlockAttemptedRef = useRef(false);\n\n  const primeAudioFromGesture = useCallback(async (): Promise<boolean> => {\n    if (audioUnlockedRef.current && audioCtxRef.current?.state === 'running') return true;\n    " + activation_lookup + "\n    if (activation?.isActive === false) return false;\n    try {\n      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;\n      if (!AudioContextCtor) return false;\n      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {\n        audioCtxRef.current = new AudioContextCtor();\n      }\n      const ctx = audioCtxRef.current;\n      if (ctx.state === 'suspended') await ctx.resume();\n      const ready = ctx.state === 'running';\n      audioUnlockedRef.current = ready;\n      return ready;\n    } catch {\n      audioUnlockedRef.current = false;\n      return false;\n    }\n  }, []);\n\n  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {\n",
+    "  const audioCtxRef = useRef<AudioContext | null>(null);\n  const audioUnlockedRef = useRef(false);\n  const audioUnlockAttemptedRef = useRef(false);\n\n  const primeAudioFromGesture = useCallback(async (): Promise<boolean> => {\n    if (audioUnlockedRef.current && audioCtxRef.current?.state === 'running') return true;\n    try {\n      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;\n      if (!AudioContextCtor) return false;\n      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {\n        audioCtxRef.current = new AudioContextCtor();\n      }\n      const ctx = audioCtxRef.current;\n      if (ctx.state === 'suspended') await ctx.resume();\n      const ready = ctx.state === 'running';\n      audioUnlockedRef.current = ready;\n      return ready;\n    } catch {\n      audioUnlockedRef.current = false;\n      return false;\n    }\n  }, []);\n\n  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {\n",
 )
 block_replace(
     "    if (next) {\n      playOrderAlert('test');\n    }\n",
@@ -79,8 +77,6 @@ new_unlock = """  // Chrome libera WebAudio a partir de uma ativação real do u
   useEffect(() => {
     const unlock = (event: Event) => {
       if (audioUnlockedRef.current || audioUnlockAttemptedRef.current || !event.isTrusted) return;
-      ACTIVATION_LOOKUP
-      if (activation?.isActive === false) return;
       audioUnlockAttemptedRef.current = true;
       window.removeEventListener('click', unlock, true);
       window.removeEventListener('keydown', unlock, true);
@@ -92,7 +88,7 @@ new_unlock = """  // Chrome libera WebAudio a partir de uma ativação real do u
       window.removeEventListener('click', unlock, true);
       window.removeEventListener('keydown', unlock, true);
     };
-  }, [primeAudioFromGesture]);""".replace('ACTIVATION_LOOKUP', activation_lookup)
+  }, [primeAudioFromGesture]);"""
 block = block[:old_unlock_start] + new_unlock + block[old_unlock_end:]
 
 caixa_path.write_text(text[:start] + block + text[end:])
