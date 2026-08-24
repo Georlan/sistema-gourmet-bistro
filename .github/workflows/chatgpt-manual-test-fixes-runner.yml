@@ -27,7 +27,9 @@ jobs:
           cache: npm
 
       - name: Apply fixes
-        run: python scripts/apply_manual_test_fixes.py
+        run: |
+          python scripts/prepare_manual_test_patch.py
+          python scripts/apply_manual_test_fixes.py
 
       - name: Frontend validation
         run: |
@@ -44,6 +46,7 @@ jobs:
       - name: Remove temporary branch helpers
         run: |
           rm -f scripts/apply_manual_test_fixes.py
+          rm -f scripts/prepare_manual_test_patch.py
           rm -f .github/workflows/apply-manual-test-fixes.yml
 
       - name: Commit validated changes to PR branch
