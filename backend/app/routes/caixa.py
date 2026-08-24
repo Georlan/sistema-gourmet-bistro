@@ -1465,14 +1465,14 @@ def registrar_pagamento_comanda(
                 Item.restaurante_id == rest_id,
                 Item.comanda_id == comanda_id,
                 Item.id.in_(pag_in.item_ids),
-                Item.status.in_(("pronto", "entregue")),
+                Item.status != 'cancelado',
                 Item.pago == False
             ).all()
             
             if not itens_selecionados:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Nenhum item pronto e pendente de pagamento foi selecionado."
+                    detail="Nenhum item válido pendente de pagamento foi selecionado."
                 )
                 
             # Settle selected items only if the payment valor covers their subtotal

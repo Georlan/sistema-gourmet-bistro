@@ -8970,8 +8970,8 @@ export function CaixaPanel({
                       <Check size={14} />
                       <span>
                         {selectedItemIds.length > 0
-                          ? 'Receber itens prontos'
-                          : 'Registrar adiantamento'}
+                          ? (isTableCheckoutOrder(selectedOrder) ? 'Receber itens prontos' : 'Receber itens selecionados')
+                          : (isTableCheckoutOrder(selectedOrder) ? 'Registrar adiantamento' : 'Lançar pagamento / baixa')}
                       </span>
                     </button>
                   </form>
