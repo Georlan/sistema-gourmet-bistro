@@ -256,6 +256,28 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     expect(positions.every(position => position.width > 0)).toBe(true);
     expect(positions[0].right).toBeLessThanOrEqual(positions[1].left + 1);
     expect(positions[1].right).toBeLessThanOrEqual(positions[2].left + 1);
+
+    await page.getByRole('button', { name: 'Recolher ou expandir menu' }).click();
+    const collapsedSidebar = page.locator('.cashier-sidebar:visible');
+    const compactLogo = collapsedSidebar.locator('.cashier-sidebar__logo-wrap--compact');
+    await expect(compactLogo).toBeVisible();
+    await expect(collapsedSidebar.locator('.cashier-sidebar__logo-wrap--expanded')).toBeHidden();
+    await expect(compactLogo.locator('[data-koma-logo="icon"]')).toBeVisible();
+
+    const logoBounds = await compactLogo.evaluate(element => {
+      const logo = element.getBoundingClientRect();
+      const sidebar = element.closest('.cashier-sidebar')?.getBoundingClientRect();
+      return {
+        logoWidth: logo.width,
+        logoLeft: logo.left,
+        logoRight: logo.right,
+        sidebarLeft: sidebar?.left ?? 0,
+        sidebarRight: sidebar?.right ?? 0,
+      };
+    });
+    expect(logoBounds.logoWidth).toBeLessThanOrEqual(35);
+    expect(logoBounds.logoLeft).toBeGreaterThanOrEqual(logoBounds.sidebarLeft - 1);
+    expect(logoBounds.logoRight).toBeLessThanOrEqual(logoBounds.sidebarRight + 1);
   }
 });
 

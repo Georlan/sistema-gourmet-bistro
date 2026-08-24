@@ -11,6 +11,7 @@ export interface KomaLogoProps {
   alt?: string;
   withText?: boolean;
   withSlogan?: boolean;
+  contextualWordmark?: boolean;
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'custom';
 }
 
@@ -42,6 +43,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
   alt = 'Kôma',
   withText = false,
   withSlogan = false,
+  contextualWordmark = true,
   size = 'md',
 }) => {
   const sizeClass = SIZE_MAP[size] || SIZE_MAP.md;
@@ -50,7 +52,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
   const [contextWordmark, setContextWordmark] = React.useState(false);
 
   React.useEffect(() => {
-    if (withText || withSlogan) {
+    if (!contextualWordmark || withText || withSlogan) {
       if (contextWordmark) setContextWordmark(false);
       return undefined;
     }

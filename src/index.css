@@ -335,6 +335,10 @@ body {
   background: var(--koma-border-subtle);
 }
 
+.cashier-sidebar__logo-wrap--compact {
+  display: none;
+}
+
 .cashier-sidebar__brand-copy {
   display: flex;
   min-width: 0;
@@ -811,6 +815,20 @@ body {
 [data-collapsible="icon"] .cashier-sidebar__brand,
 [data-collapsible="icon"] .cashier-operator {
   justify-content: center;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__logo-wrap--expanded {
+  display: none;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__logo-wrap--compact {
+  display: grid;
+  width: 2.15rem !important;
+  height: 2.15rem !important;
+  overflow: hidden !important;
+  border: 1px solid var(--koma-border-subtle) !important;
+  border-radius: 0.72rem !important;
+  background: var(--koma-border-subtle) !important;
 }
 
 [data-collapsible="icon"] .cashier-sidebar__content {

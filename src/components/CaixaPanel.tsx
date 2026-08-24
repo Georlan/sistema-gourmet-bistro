@@ -4413,8 +4413,11 @@ export function CaixaPanel({
           <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3.5')}>
             <div className="cashier-sidebar__brand-row">
               <div className="cashier-sidebar__brand">
-                <span className="cashier-sidebar__logo-wrap">
+                <span className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--expanded">
                   <KomaLogo size="md" />
+                </span>
+                <span className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--compact" aria-hidden="true">
+                  <KomaLogo size="md" contextualWordmark={false} alt="" />
                 </span>
                 <span className="cashier-sidebar__brand-copy">
                   <strong>Kôma</strong>
