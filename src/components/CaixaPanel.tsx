@@ -176,6 +176,8 @@ type KanbanDetailItem = {
 };
 
 function humanOrderNumber(order: any): string {
+  const rawId = String(order?.comandaId || order?.id || '');
+  if (rawId.startsWith('temp-')) return '…';
   const number = Number(order?.numeroPedido ?? order?.numero_pedido);
   if (Number.isFinite(number) && number > 0) return String(number);
   return String(order?.comandaId || order?.id || '—').slice(-4).toUpperCase();
@@ -1491,6 +1493,7 @@ export function CaixaPanel({
 
   const handlePdvCategoryPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    if ((event.target as HTMLElement).closest('button')) return;
     const element = pdvCategoryScrollRef.current;
     if (!element || element.scrollWidth <= element.clientWidth) return;
     pdvCategoryDragRef.current = {
@@ -1600,11 +1603,17 @@ export function CaixaPanel({
     }
   }, [selectedOrder]);
 
-  // Auto-initialize paymentValor with open balance when checkout modal opens
+  // Auto-initialize paymentValor when checkout modal opens. Mesas priorizam itens prontos;
+  // sem itens prontos, o operador precisa optar conscientemente por um adiantamento.
   useEffect(() => {
     if (showCheckoutModal && selectedOrder) {
       if (!paymentValor || Number(paymentValor || 0) <= 0) {
-        const balance = getCheckoutBalance(selectedOrder);
+        const readyItemIds = selectedOrder.itens
+          .filter(item => !item.pago && isItemReadyForCheckout(item))
+          .map(item => item.id);
+        const balance = isTableCheckoutOrder(selectedOrder)
+          ? (readyItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, readyItemIds) : 0)
+          : getCheckoutBalance(selectedOrder);
         if (balance > 0) {
           setPaymentValor(balance);
         }
@@ -1821,7 +1830,11 @@ export function CaixaPanel({
   });
 
   useEffect(() => {
-    const active = orders.filter(o => o.status !== 'fechada' && o.status !== 'cancelado');
+    const active = orders.filter(o =>
+      !String(o.id || '').startsWith('temp-')
+      && o.status !== 'fechada'
+      && o.status !== 'cancelado'
+    );
     const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
     const billRequestedCount = active.filter(o =>
       (o as any).status_comanda === 'aguardando_pagamento' ||
@@ -2044,9 +2057,12 @@ export function CaixaPanel({
         .map(number => Number(number))
         .filter(number => Number.isFinite(number) && number > 0)
     ));
-    const orderLabel = orderNumbers.length > 1
-      ? `Pedidos ${orderNumbers.map(number => `#${number}`).join(' + ')}`
-      : `Pedido #${orderNumbers[0] || humanOrderNumber(order)}`;
+    const isPendingConfirmation = String(order.id || '').startsWith('temp-');
+    const orderLabel = isPendingConfirmation
+      ? 'Pedido em envio'
+      : orderNumbers.length > 1
+        ? `Pedidos ${orderNumbers.map(number => `#${number}`).join(' + ')}`
+        : `Pedido #${orderNumbers[0] || humanOrderNumber(order)}`;
 
     return {
       shortLabel: mesaId > 0 ? `M${mesaId}` : 'B',
@@ -3526,6 +3542,10 @@ export function CaixaPanel({
     }
   };
 
+  const isItemReadyForCheckout = (item: OrderItem) => (
+    item.status === 'pronto' || item.status === 'entregue'
+  );
+
   // Checkout calculations helper
   const getCheckoutTotals = (
     order: Order,
@@ -3559,6 +3579,7 @@ export function CaixaPanel({
       itemIds.includes(item.id)
       && !item.pago
       && (item.status as string) !== 'cancelado'
+      && isItemReadyForCheckout(item)
     );
     const subtotal = selectedItems.reduce((sum, item) => sum + item.preco, 0);
     const taxa = (taxaServicoAtiva && includeServiceTax)
@@ -3722,7 +3743,7 @@ export function CaixaPanel({
 
       if (res.ok) {
         pdvPendingOperationRef.current = null;
-        playOrderAlert('new_order');
+        showToast('Pedido confirmado e enviado à cozinha.', 'success');
         onRefreshOrders();
         fetchDeliveryOrders();
         window.dispatchEvent(new Event('koma_orders_updated'));
@@ -3812,15 +3833,20 @@ export function CaixaPanel({
     return apiCategorias.filter((category) => activeCategoryIds.has(category.id));
   }, [apiCategorias, sellableProducts]);
   const pdvMenuInsights = useMemo(() => {
-    const prices = sellableProducts.map(product => Number(product.preco) || 0);
+    const itemCount = pdvCart.reduce((total, item) => total + item.quantity, 0);
+    const cartTotal = pdvCart.reduce((total, item) => total + (item.product.preco * item.quantity), 0);
+    const destination = pdvOrderType === 'mesa'
+      ? (pdvTargetMesaId > 0 ? `Mesa ${pdvTargetMesaId}` : 'Escolher mesa')
+      : pdvOrderType === 'entrega'
+        ? 'Delivery'
+        : 'Retirada';
     return {
-      priceRange: prices.length > 0
-        ? `${formatCompactCurrency(Math.min(...prices))}–${formatCompactCurrency(Math.max(...prices))}`
-        : '—',
-      categoryCount: pdvCategories.length,
+      destination,
+      itemCount,
+      total: formatCompactCurrency(cartTotal),
       pausedCount: Math.max(0, dynamicMenu.length - sellableProducts.length),
     };
-  }, [dynamicMenu.length, pdvCategories.length, sellableProducts]);
+  }, [dynamicMenu.length, pdvCart, pdvOrderType, pdvTargetMesaId, sellableProducts.length]);
   const filteredProducts = useMemo(() => sellableProducts.filter((product) => {
     const category = apiCategorias.find((item) =>
       item.id === product.categoria_id
@@ -5363,20 +5389,19 @@ export function CaixaPanel({
                                   const checkoutOrder = buildTableCheckoutOrder(tableComandas);
                                   if (!checkoutOrder) return;
 
+                                  const readyItemIds = checkoutOrder.itens
+                                    .filter(item => !item.pago && isItemReadyForCheckout(item))
+                                    .map(item => item.id);
                                   setSelectedOrder(checkoutOrder);
                                   setShowCheckoutModal(true);
                                   setCheckoutServiceTax(true);
                                   setSplitPeople('1');
-                                  setSelectedItemIds([]);
+                                  setSelectedItemIds(readyItemIds);
                                   setSmartPosRecoveryError('');
-                                  
-                                  const sub = checkoutOrder.itens
-                                    .filter(item => (item.status as string) !== 'cancelado')
-                                    .reduce((sum, item) => sum + item.preco, 0);
-                                  const total = sub * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
-                                  setPaymentValor(
-                                    Math.max(0, total - Number(checkoutOrder.valorPago || 0))
-                                  );
+                                  const readyTotal = readyItemIds.length > 0
+                                    ? getSelectedItemsTotal(checkoutOrder, readyItemIds, true)
+                                    : 0;
+                                  setPaymentValor(readyTotal > 0 ? readyTotal : '');
                                 }}
                                 className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
@@ -5518,15 +5543,16 @@ export function CaixaPanel({
                 eyebrow="VENDA"
                 title="Novo pedido"
                 accent="rápido e simples"
-                description="Escolha os itens e o destino. Os detalhes aparecem só quando forem úteis."
-                metrics={[
-                  { label: 'faixa de preços', value: pdvMenuInsights.priceRange },
-                  { label: 'categorias ativas', value: pdvMenuInsights.categoryCount },
-                  {
-                    label: 'itens pausados',
-                    value: pdvMenuInsights.pausedCount,
-                    valueClassName: pdvMenuInsights.pausedCount > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
-                  },
+                description="Clique para adicionar. Passe o mouse ou use o ícone de detalhes para conferir ingredientes."
+                metrics={pdvMenuInsights.pausedCount > 0 ? [
+                  { label: 'destino', value: pdvMenuInsights.destination },
+                  { label: 'itens', value: pdvMenuInsights.itemCount },
+                  { label: 'total', value: pdvMenuInsights.total },
+                  { label: 'pausados', value: pdvMenuInsights.pausedCount, valueClassName: 'text-amber-600 dark:text-amber-300' },
+                ] : [
+                  { label: 'destino', value: pdvMenuInsights.destination },
+                  { label: 'itens', value: pdvMenuInsights.itemCount },
+                  { label: 'total', value: pdvMenuInsights.total },
                 ]}
               />
 
@@ -5616,7 +5642,7 @@ export function CaixaPanel({
                     >
                     <button
                       type="button"
-                      onClick={() => setPdvSelectedCategory('todos')}
+                      onClick={() => { setPdvSelectedCategory('todos'); setPdvProductDetailId(null); }}
                       className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${pdvSelectedCategory === 'todos'
                         ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                         : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
@@ -5628,7 +5654,7 @@ export function CaixaPanel({
                       <button
                         key={catObj.id || catObj.nome}
                         type="button"
-                        onClick={() => setPdvSelectedCategory(catObj.nome)}
+                        onClick={() => { setPdvSelectedCategory(catObj.nome); setPdvProductDetailId(null); }}
                         className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${pdvSelectedCategory === catObj.nome
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                           : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
@@ -8504,7 +8530,7 @@ export function CaixaPanel({
                     <div>
                       <h4 className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Extrato Consumo</h4>
                       <span className={clsx('text-[8px]', 'text-koma-muted')}>
-                        Marque itens para pagá-los juntos ou deixe tudo desmarcado para receber qualquer valor.
+                        Itens prontos já podem ser recebidos. Itens em preparo ficam visíveis, mas bloqueados até avançarem na cozinha.
                       </span>
                     </div>
                     {taxaServicoAtiva && (
@@ -8538,7 +8564,8 @@ export function CaixaPanel({
                     {selectedOrder.itens.map((item) => {
                       const isPaid = item.pago;
                       const isCancelled = (item.status as string) === 'cancelado';
-                      const canSelect = !isPaid && !isCancelled;
+                      const isReadyForCheckout = isItemReadyForCheckout(item);
+                      const canSelect = !isPaid && !isCancelled && isReadyForCheckout;
                       return (
                         <div
                           key={item.id}
@@ -8564,9 +8591,11 @@ export function CaixaPanel({
                             ? 'bg-rose-500/5 border-rose-500/10 text-rose-400 opacity-60'
                             : isPaid
                             ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400'
-                            : selectedItemIds.includes(item.id)
-                              ? 'bg-emerald-500/15 border-emerald-500/30 cursor-pointer shadow-inner'
-                              : 'bg-koma-card/60 border-koma-border/50 hover:border-koma-border cursor-pointer'
+                            : !isReadyForCheckout
+                              ? 'bg-amber-500/5 border-amber-500/15 text-koma-secondary cursor-not-allowed opacity-80'
+                              : selectedItemIds.includes(item.id)
+                                ? 'bg-emerald-500/15 border-emerald-500/30 cursor-pointer shadow-inner'
+                                : 'bg-koma-card/60 border-koma-border/50 hover:border-koma-border cursor-pointer'
                             }`}
                         >
                           <div className={clsx('flex', 'gap-2', 'items-start', 'flex-1', 'min-w-0')}>
@@ -8579,6 +8608,11 @@ export function CaixaPanel({
                             <div className={clsx('min-w-0', 'space-y-0.5')}>
                               <span className={clsx('font-semibold', 'text-koma-foreground', 'block', 'truncate')}>{item.nome}</span>
                               <span className={clsx('text-[9px]', 'text-koma-subtle', 'block')}>Cliente: {item.clienteNome}</span>
+                              {!isPaid && !isCancelled && !isReadyForCheckout && (
+                                <span className={clsx('text-[8px]', 'font-semibold', 'text-amber-600', 'dark:text-amber-300', 'block')}>
+                                  Em preparo · avance na cozinha antes de baixar este item
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -8586,6 +8620,7 @@ export function CaixaPanel({
                             <span className={clsx('font-bold', 'text-koma-secondary')}>R$ {item.preco.toFixed(2)}</span>
                             {isPaid && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-emerald-500', 'font-sans', 'mt-0.5')}>Pago</span>}
                             {isCancelled && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-rose-500', 'font-sans', 'mt-0.5')}>Cancelado</span>}
+                            {!isPaid && !isCancelled && !isReadyForCheckout && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-amber-600', 'dark:text-amber-300', 'font-sans', 'mt-0.5')}>Em preparo</span>}
                           </div>
                         </div>
                       );
@@ -8801,9 +8836,12 @@ export function CaixaPanel({
                         <button
                           type="button"
                           onClick={() => {
-                            if (selectedOrder) {
+                            if (!selectedOrder) return;
+                            setSplitPeople('1');
+                            if (selectedItemIds.length > 0) {
                               setSelectedItemIds([]);
-                              setSplitPeople('1');
+                              setPaymentValor('');
+                            } else {
                               setPaymentValor(getCheckoutBalance(selectedOrder));
                             }
                           }}
@@ -8823,14 +8861,14 @@ export function CaixaPanel({
                             'whitespace-nowrap'
                           )}
                         >
-                          {selectedItemIds.length > 0 ? 'Usar Saldo Total' : 'Pagar Valor Exato'}
+                          {selectedItemIds.length > 0 ? 'Adiantar outro valor' : 'Usar saldo total'}
                         </button>
                       </div>
                       <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'mt-1.5', 'leading-normal')}>
                         <strong>Dica:</strong> {selectedItemIds.length > 0
-                          ? 'Os itens marcados serão baixados juntos. Use “Usar Saldo Total” ou desmarque-os para lançar um valor livre.'
+                          ? 'Os itens prontos marcados serão baixados juntos. “Adiantar outro valor” limpa a seleção e libera um valor manual.'
                           : isTableCheckoutOrder(selectedOrder)
-                            ? 'Sem itens marcados, qualquer baixa abate o saldo geral da mesa. Você pode receber uma parte no Pix e o restante no cartão.'
+                            ? 'Sem itens marcados, o lançamento é um adiantamento sobre o saldo geral da mesa; itens em preparo continuam sem baixa individual.'
                             : 'Para pagamentos múltiplos, digite qualquer valor e faça as baixas em sequência.'}
                       </span>
                     </div>
@@ -8909,11 +8947,11 @@ export function CaixaPanel({
                           onClick={() => {
                             setSelectedItemIds([]);
                             setSplitPeople('1');
-                            setPaymentValor(getCheckoutBalance(selectedOrder));
+                            setPaymentValor('');
                           }}
                           className={clsx('shrink-0', 'rounded-lg', 'border', 'border-emerald-500/30', 'px-2', 'py-1', 'text-[8px]', 'font-bold', 'uppercase', 'hover:bg-emerald-500/15')}
                         >
-                          Limpar
+                          Outro valor
                         </button>
                       </div>
                     )}
@@ -8932,8 +8970,8 @@ export function CaixaPanel({
                       <Check size={14} />
                       <span>
                         {selectedItemIds.length > 0
-                          ? 'Receber Itens Selecionados'
-                          : 'Lançar Pagamento / Baixa'}
+                          ? 'Receber itens prontos'
+                          : 'Registrar adiantamento'}
                       </span>
                     </button>
                   </form>
