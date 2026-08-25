@@ -149,7 +149,7 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     # O catálogo agora usa uma única lista responsiva: no mobile, categoria e
     # preço acompanham o nome; no desktop, viram colunas alinhadas.
     assert "text-koma-subtle lg:hidden" in products
-    assert "lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_8rem]" in products
+    assert "lg:grid-cols-[1.25rem_minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_9rem]" in products
     assert "flex items-center justify-end gap-1" in products
 
     # Financeiro consolida os três meios em uma só leitura responsiva, sem
