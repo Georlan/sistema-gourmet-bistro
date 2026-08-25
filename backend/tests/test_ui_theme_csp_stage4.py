@@ -197,7 +197,7 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
     # A etapa de fechamento continua estruturalmente presente no Kanban.
     assert "orders-column--closing" in caixa
     assert "03 / FECHAMENTO" in caixa
-    assert "Prontos para concluir" in caixa
+    assert "Itens prontos e conclusão" in caixa
 
 
 def test_cashier_mobile_uses_one_natural_scroll_owner():

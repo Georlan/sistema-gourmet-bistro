@@ -284,7 +284,7 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
 
     await expandedThemeButton.click();
     await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
-    const pendingItemsWarning = page.getByText('Esta mesa ainda tem 1 item em preparo.', { exact: true });
+    const pendingItemsWarning = page.getByText('Outro item continua em preparo.', { exact: true });
     await expect(pendingItemsWarning).toBeVisible();
     await expect.poll(() => pendingItemsWarning.evaluate(element => getComputedStyle(element).color)).toBe('rgb(146, 64, 14)');
 
@@ -371,17 +371,18 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await page.getByRole('button', { name: 'Fechar fichas técnicas' }).click();
 
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Cada movimento tem origem' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tudo que mudou em um só lugar' })).toBeVisible();
   await expect(page.getByLabel('Buscar no histórico de estoque')).toBeVisible();
   await expect(page.getByText('Distribuidora E2E · NF-900')).toBeVisible();
   await expect(page.getByText('Avaria')).toBeVisible();
 
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Programa de Fidelidade', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Clientes em uma única lista' })).toBeVisible();
   await expect(page.getByLabel('Buscar clientes')).toBeVisible();
   await page.getByRole('button', { name: 'Programa de Fidelidade', exact: true }).click();
   await expect(page.getByText('Configuração do programa')).toBeVisible();
-  await expect(page.getByText('Os saldos continuam visíveis e editáveis na aba')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ver pontos dos clientes' })).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
@@ -414,17 +415,17 @@ test('estoque mantém banners, filtros e fichas técnicas utilizáveis em qualqu
 
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
   if (viewportWidth > 768) {
-    await expect(page.getByRole('heading', { name: 'Cada movimento tem origem' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tudo que mudou em um só lugar' })).toBeVisible();
   } else {
-    await expect(page.getByRole('heading', { name: 'Cada movimento tem origem' })).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Tudo que mudou em um só lugar' })).toBeHidden();
   }
   await expectNoHorizontalOverflow(page);
 
   await page.getByRole('button', { name: 'Inventário', exact: true }).click();
   if (viewportWidth > 768) {
-    await expect(page.getByRole('heading', { name: 'Estoque real confere com o sistema' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Faça a primeira conferência' })).toBeVisible();
   } else {
-    await expect(page.getByRole('heading', { name: 'Estoque real confere com o sistema' })).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Faça a primeira conferência' })).toBeHidden();
   }
   await expectNoHorizontalOverflow(page);
 

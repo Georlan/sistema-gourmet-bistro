@@ -8,7 +8,7 @@ import {
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronLeft, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
-  Send, Printer, HelpCircle, Smartphone,
+  Send, Printer, Info, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
   SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult, Distribuidor, FichaTecnicaProduto, Insumo } from '../types';
@@ -5208,7 +5208,7 @@ export function CaixaPanel({
                                 className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
                                 <Check size={13} />
-                                <span>Pronto para pagamento</span>
+                                <span>{preparingItems.length === 1 ? 'Marcar item como pronto' : 'Marcar itens como prontos'}</span>
                               </button>
                             </div>
                           );
@@ -5337,8 +5337,8 @@ export function CaixaPanel({
                   <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
                     <div>
                       <span className="orders-column__number">03 / FECHAMENTO</span>
-                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Prontos para concluir</span>
-                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Receba ou finalize conforme a modalidade</span>
+                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Itens prontos e conclusão</span>
+                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Veja o que já pode ser recebido ou finalizado</span>
                     </div>
                     <span className="orders-column__count">
                       {filteredCol2Table.length + filteredDeliveryFinalization.length}
@@ -5363,6 +5363,8 @@ export function CaixaPanel({
                           const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
                           const tableMovement = getTableMovementContext(order);
                           const pendingTableItems = Number((order as any).itensEmPreparoCount || 0);
+                          const readyTableItems = order.itens.filter(item => (item.status as string) !== 'cancelado').length;
+                          const totalTableItems = readyTableItems + pendingTableItems;
                           const smartPosState = getSmartPosCardState(order);
                           const presentation = getTableOrderPresentation(order);
 
@@ -5391,8 +5393,14 @@ export function CaixaPanel({
                                   <strong>{presentation.shortLabel}</strong>
                                 </div>
                                 <div className="min-w-0">
-                                  <strong className="orders-card__identity-title">{presentation.title}</strong>
-                                  <span className="orders-card__identity-subtitle">{presentation.subtitle}</span>
+                                  <strong className="orders-card__identity-title">
+                                    {pendingTableItems > 0 ? `Itens prontos · ${presentation.title}` : presentation.title}
+                                  </strong>
+                                  <span className="orders-card__identity-subtitle">
+                                    {pendingTableItems > 0
+                                      ? `${readyTableItems} de ${totalTableItems} ${totalTableItems === 1 ? 'item pronto' : 'itens prontos'} · ${presentation.subtitle}`
+                                      : presentation.subtitle}
+                                  </span>
                                   <div className="orders-card__identity-chips">
                                     <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
                                     <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
@@ -5418,7 +5426,7 @@ export function CaixaPanel({
                                   </div>
                                 </div>
                                 <div className="orders-card__identity-side">
-                                  <span className="orders-card__price">{formatCurrency(totalVal)}</span>
+                                  <span className="orders-card__price" title={pendingTableItems > 0 ? 'Valor dos itens prontos' : 'Valor a receber'}>{formatCurrency(totalVal)}</span>
                                   <button
                                     type="button"
                                     onClick={(e) => handleQuickPrintOrder(order, e)}
@@ -5435,7 +5443,7 @@ export function CaixaPanel({
                                 <div className={clsx('flex', 'items-center', 'gap-2', 'rounded-lg', 'border', 'border-koma-warning-border', 'bg-koma-warning-bg', 'px-2.5', 'py-2', 'text-[11px]', 'font-semibold', 'text-koma-warning-text')}>
                                   <Clock size={13} className="shrink-0" />
                                   <span>
-                                    Esta mesa ainda tem {pendingTableItems} {pendingTableItems === 1 ? 'item em preparo' : 'itens em preparo'}.
+                                    {pendingTableItems === 1 ? 'Outro item continua em preparo.' : `Outros ${pendingTableItems} itens continuam em preparo.`}
                                   </span>
                                 </div>
                               )}
@@ -5475,7 +5483,7 @@ export function CaixaPanel({
                                 {smartPosState?.blocksPayment ? (
                                   <><Smartphone size={13} /><span>{smartPosState.ctaLabel}</span></>
                                 ) : (
-                                  <><Check size={13} /><span>Abrir pagamento</span></>
+                                  <><Check size={13} /><span>{pendingTableItems > 0 ? 'Receber itens prontos' : 'Abrir pagamento'}</span></>
                                 )}
                               </button>
                             </div>
@@ -5812,7 +5820,7 @@ export function CaixaPanel({
                                   'hover:border-emerald-500/40', 'hover:text-emerald-700', 'dark:hover:text-emerald-300'
                                 )}
                               >
-                                <HelpCircle size={13} />
+                                <Info size={13} />
                               </button>
                               <div
                                 id={`pdv-product-details-${productDetailKey}`}
@@ -5874,7 +5882,7 @@ export function CaixaPanel({
                     <div className={clsx('h-full', 'min-h-44', 'flex', 'flex-col', 'items-center', 'justify-center', 'text-center', 'px-6', 'text-koma-muted')}>
                       <ShoppingCart size={22} className={clsx('mb-3', 'opacity-60')} />
                       <p className={clsx('text-xs', 'font-semibold', 'text-koma-subtle')}>Comece escolhendo um item</p>
-                      <p className={clsx('text-[9px]', 'mt-1')}>Toque em “Adicionar” para montar o pedido.</p>
+                      <p className={clsx('text-[9px]', 'mt-1')}>Selecione um item para montar o pedido.</p>
                     </div>
                   ) : (
                     pdvCart.map((item, idx) => (
@@ -5997,7 +6005,10 @@ export function CaixaPanel({
                         </button>
                       ))}
                     </div>
-                    <span className={clsx('text-[8px]', 'text-koma-muted', 'font-mono', 'block', 'mt-0.5', 'text-left')}>Atalhos de Tipo: [F2] Retirada • [F3] Mesa • [F8] Delivery</span>
+                    <details className="mt-1 text-left text-[9px] text-koma-muted">
+                      <summary className="w-fit cursor-pointer list-none font-semibold hover:text-koma-secondary">Ver atalhos de teclado</summary>
+                      <span className="mt-1 block font-mono">F2 Retirada · F3 Mesa · F8 Delivery · F4 Finalizar</span>
+                    </details>
                   </div>
 
                   {pdvOrderType === 'mesa' && (
@@ -6213,8 +6224,8 @@ export function CaixaPanel({
                     {[
                       { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
                       { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
-                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied, dot: 'bg-[#b95764]' },
-                      { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment, dot: 'bg-[#d17a86]' },
+                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied, dot: 'bg-sky-500' },
+                      { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment, dot: 'bg-amber-500' },
                     ].map(filter => (
                       <button
                         key={filter.id}
@@ -6225,7 +6236,7 @@ export function CaixaPanel({
                           'shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
                           tableStatusFilter === filter.id
                             ? filter.id === 'occupied'
-                              ? 'bg-rose-100 text-rose-800 dark:bg-[#38191f] dark:text-[#e4a3ac]'
+                              ? 'bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-300'
                               : filter.id === 'payment'
                                 ? 'bg-amber-100 text-amber-900 dark:bg-[#46212a] dark:text-[#efb2bc]'
                                 : filter.id === 'free'
@@ -6291,7 +6302,7 @@ export function CaixaPanel({
                               'group flex min-h-[106px] sm:min-h-[148px] flex-col justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5 transition-colors shadow-sm',
                               isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
                               hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
-                              isOccupied && !hasPendingPayment && 'border-rose-300 dark:border-[#5f2831] bg-rose-50/90 dark:bg-[#1b1013] hover:border-rose-500',
+                              isOccupied && !hasPendingPayment && 'border-sky-300 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 hover:border-sky-500',
                               !isOccupied && !isMerged && 'border-koma-border bg-koma-card hover:border-emerald-500'
                             )}
                           >
@@ -6310,7 +6321,7 @@ export function CaixaPanel({
                                   className={clsx('shrink-0', 'rounded-lg', 'border', 'border-koma-border', 'bg-black/10', 'px-2', 'py-1', 'font-mono', 'text-[9px]', 'font-extrabold', 'text-koma-secondary')}
                                   title={`Pedido ${tableOrderNumbers.map(number => `#${number}`).join(' + ')}`}
                                 >
-                                  #{tableOrderNumbers[0]}{tableOrderNumbers.length > 1 ? ` +${tableOrderNumbers.length - 1}` : ''}
+                                  Pedido {tableOrderNumbers[0]}{tableOrderNumbers.length > 1 ? ` +${tableOrderNumbers.length - 1}` : ''}
                                 </span>
                               )}
                             </div>
@@ -6321,13 +6332,13 @@ export function CaixaPanel({
                                   'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
                                   isMerged && 'border-koma-border bg-koma-card text-koma-muted',
                                   hasPendingPayment && 'border-amber-300 dark:border-[#8a4753] bg-amber-100 dark:bg-[#4b222b] text-amber-900 dark:text-[#efb2bc]',
-                                  isOccupied && !hasPendingPayment && 'border-rose-300 dark:border-[#6b2e38] bg-rose-100 dark:bg-[#38191f] text-rose-800 dark:text-[#e4a3ac]',
+                                  isOccupied && !hasPendingPayment && 'border-sky-300 dark:border-sky-900/60 bg-sky-100 dark:bg-sky-950/40 text-sky-900 dark:text-sky-300',
                                   !isOccupied && !isMerged && 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
                                 )}>
                                   <span
                                     className={clsx(
                                       'mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
-                                      hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-rose-500' : 'bg-emerald-500'
+                                      hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-sky-500' : 'bg-emerald-500'
                                     )}
                                     aria-hidden="true"
                                   />
@@ -6345,7 +6356,7 @@ export function CaixaPanel({
                                       <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo</span>
                                       <strong className={clsx(
                                         'font-mono text-xs sm:text-sm',
-                                        hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-rose-800 dark:text-[#e4a3ac]'
+                                        hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-sky-800 dark:text-sky-300'
                                       )}>
                                         {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                       </strong>
@@ -6401,10 +6412,10 @@ export function CaixaPanel({
                                         itens: tableOrders.flatMap(order => order.itens || []),
                                         comandaIds: tableOrders.map(order => order.id),
                                       })}
-                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-danger', 'hover:bg-rose-200 dark:hover:bg-rose-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
+                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'border', 'border-sky-300', 'dark:border-sky-900/60', 'bg-sky-100', 'dark:bg-sky-950/40', 'text-sky-900', 'dark:text-sky-300', 'hover:bg-sky-200', 'dark:hover:bg-sky-900/50', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
                                       <Receipt size={11} />
-                                      Comanda
+                                      Ver comanda
                                     </button>
                                   )
                                 ) : (
@@ -7369,16 +7380,27 @@ export function CaixaPanel({
 
           {/* VIEW: FIDELIDADE */}
           {activeTab === 'clientes' && activeSubTab === 'fidelidade' && (
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4', 'text-left', 'animate-fade-in', 'max-w-4xl')}>
+            <div className="space-y-4 text-left animate-fade-in">
+              <OperationalBanner
+                id="loyalty-heading"
+                eyebrow="RELACIONAMENTO"
+                title="Fidelidade"
+                accent={fidelidadeConfig.ativo ? 'ativa e simples' : 'pronta para começar'}
+                description="Defina uma regra fácil de explicar e acompanhe os pontos de cada cliente em uma única lista."
+                metrics={[
+                  { label: loyaltyUsers.length === 1 ? 'cliente participante' : 'clientes participantes', value: loyaltyUsers.length },
+                  { label: 'situação', value: fidelidadeConfig.ativo ? 'Ativo' : 'Pausado', valueClassName: fidelidadeConfig.ativo ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300' },
+                ]}
+              />
+              <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4', 'max-w-5xl')}>
               <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-5', 'rounded-2xl', 'space-y-4', 'h-fit')}>
-                <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-3">
+                <div className="border-b border-koma-border pb-3">
                   <div><span className="block text-sm font-bold text-koma-foreground">Configuração do programa</span><span className="mt-0.5 block text-[10px] text-koma-muted">Defina como os clientes acumulam e resgatam benefícios.</span></div>
-                  <span className={clsx('koma-status-badge', fidelidadeConfig.ativo ? 'koma-badge-success' : 'koma-badge-neutral')}>{fidelidadeConfig.ativo ? 'Ativo' : 'Inativo'}</span>
                 </div>
 
                 <form onSubmit={handleSaveFidelidadeConfig} className="space-y-4">
                   <div className={clsx('flex', 'items-center', 'justify-between')}>
-                    <span className={clsx('text-[10px]', 'text-koma-subtle')}>Ativar Programa</span>
+                    <span className={clsx('text-[10px]', 'font-semibold', 'text-koma-secondary')}>{fidelidadeConfig.ativo ? 'Programa ativo' : 'Programa pausado'}</span>
                     <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0')}>
                       <input
                         type="checkbox"
@@ -7391,21 +7413,21 @@ export function CaixaPanel({
                   </div>
 
                   <div className="space-y-1">
-                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Tipo de Recompensa:</label>
+                    <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Benefício oferecido</label>
                     <select
                       value={fidelidadeConfig.tipo_recompensa}
                       onChange={(e) => setFidelidadeConfig(prev => ({ ...prev, tipo_recompensa: e.target.value }))}
                       disabled={!fidelidadeConfig.ativo}
                       className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-page', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-[10px]', 'disabled:opacity-50')}
                     >
-                      <option value="PONTOS">Pontos de Fidelidade</option>
-                      <option value="CASHBACK">Retorno (Cashback %)</option>
+                      <option value="PONTOS">Pontos</option>
+                      <option value="CASHBACK">Dinheiro de volta</option>
                     </select>
                   </div>
 
                   <div className="space-y-1">
                     <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>
-                      {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Conversão (R$ 1 = X pontos):' : 'Porcentagem de Cashback (%):'}
+                      {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos ganhos a cada R$ 1' : 'Percentual devolvido ao cliente'}
                     </label>
                     <input
                       type="number"
@@ -7418,7 +7440,7 @@ export function CaixaPanel({
 
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS' && (
                     <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Valor de 1 Ponto em Recompensa (R$):</label>
+                      <label className={clsx('text-[9px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'block')}>Valor de cada ponto</label>
                       <input
                         type="number"
                         step="0.01"
@@ -7461,7 +7483,8 @@ export function CaixaPanel({
                   <span className="text-[10px] text-koma-muted">Clientes participantes</span>
                   <strong className="font-mono text-sm text-koma-foreground">{loyaltyUsers.length}</strong>
                 </div>
-                <p className="text-[10px] leading-relaxed text-koma-muted">Os saldos continuam visíveis e editáveis na aba <strong className="text-koma-secondary">Clientes</strong>, evitando uma segunda lista com os mesmos registros.</p>
+                <button type="button" onClick={() => setActiveSubTab('clientes')} className="koma-btn-secondary inline-flex min-h-9 items-center justify-center px-3 text-[10px] font-bold">Ver pontos dos clientes</button>
+              </div>
               </div>
             </div>
           )}
@@ -7597,17 +7620,17 @@ export function CaixaPanel({
           {/* ABA CATEGORIAS */}
           {activeTab === 'cardapio' && activeSubTab === 'categorias' && (
             <div className="space-y-4">
-            <OperationalBanner
-              id="menu-categories-heading"
-              eyebrow="ORGANIZAÇÃO"
-              title="Categorias"
-              accent="sem excesso"
-              description="Agrupe produtos para agilizar a venda e envie cada grupo ao destino correto de produção."
+              <OperationalBanner
+                id="menu-categories-heading"
+                eyebrow="ORGANIZAÇÃO"
+                title="Categorias"
+                accent="bem organizadas"
+                description="Agrupe produtos para agilizar a venda e envie cada grupo ao destino correto de produção."
               metrics={[
                 { label: 'categorias', value: apiCategorias.length },
                 { label: 'vazias', value: apiCategorias.filter(category => !apiProdutos.some(product => product.categoria_id === category.id)).length },
                 { label: 'cozinha', value: apiCategorias.filter(category => category.destino_impressao === 'COZINHA').length },
-                { label: 'sem impressão', value: apiCategorias.filter(category => category.destino_impressao === 'NENHUM').length },
+                { label: 'não imprimir', value: apiCategorias.filter(category => category.destino_impressao === 'NENHUM').length },
               ]}
             />
             <CardapioCategoriasTab
@@ -7630,7 +7653,7 @@ export function CaixaPanel({
                 title={estoqueInsumos.length === 0 ? 'Estoque' : 'Reposição'}
                 accent={estoqueInsumos.length === 0 ? 'pronto para configurar' : estoqueInsights.low > 0 ? 'pede atenção' : 'em dia'}
                 description={estoqueInsumos.length === 0 ? 'Importe uma NF-e ou cadastre o primeiro ingrediente para começar o controle.' : estoqueInsights.linkedProducts > 0 ? 'Vendas com ficha técnica já baixam ingredientes automaticamente.' : 'Monte fichas técnicas para ativar a baixa automática nas vendas.'}
-                metrics={[
+                metrics={estoqueInsumos.length === 0 ? [] : [
                   { label: 'ingredientes', value: estoqueInsumos.length },
                   { label: 'para repor', value: estoqueInsights.low, valueClassName: estoqueInsights.low > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
                   { label: 'produtos integrados', value: `${estoqueInsights.linkedProducts}/${estoqueInsights.activeProducts}` },
@@ -7678,11 +7701,11 @@ export function CaixaPanel({
             <div className="space-y-4">
             <OperationalBanner
               id="stock-history-heading"
-              eyebrow="RASTREABILIDADE"
-              title="Cada movimento"
-              accent="tem origem"
+              eyebrow="HISTÓRICO DO ESTOQUE"
+              title="Tudo que mudou"
+              accent="em um só lugar"
               description="Compras, vendas, perdas, ajustes e inventários aparecem em uma única linha do tempo."
-              metrics={[
+              metrics={movimentacoesEstoque.length === 0 && entradasEstoque.length === 0 ? [] : [
                 { label: 'movimentos', value: movimentacoesEstoque.length },
                 { label: 'entradas', value: entradasEstoque.length },
                 { label: 'baixas por venda', value: movimentacoesEstoque.filter(item => item.origem === 'venda_automatica').length },
@@ -7741,10 +7764,10 @@ export function CaixaPanel({
             <OperationalBanner
               id="stock-inventory-heading"
               eyebrow="CONFERÊNCIA"
-              title="Estoque real"
-              accent="confere com o sistema"
-              description="Conte fisicamente, salve como rascunho e aplique as diferenças somente ao confirmar."
-              metrics={[
+              title={sessoesContagemEstoque.length === 0 ? 'Faça a primeira' : 'Estoque real'}
+              accent={sessoesContagemEstoque.length === 0 ? 'conferência' : 'sob controle'}
+              description={sessoesContagemEstoque.length === 0 ? 'Compare o estoque físico com o saldo do sistema e registre as diferenças com segurança.' : 'Conte fisicamente, salve como rascunho e aplique as diferenças somente ao confirmar.'}
+              metrics={sessoesContagemEstoque.length === 0 ? [] : [
                 { label: 'inventários', value: sessoesContagemEstoque.length },
                 { label: 'rascunhos', value: estoqueInsights.drafts, valueClassName: estoqueInsights.drafts > 0 ? 'text-amber-600 dark:text-amber-300' : undefined },
                 { label: 'ingredientes', value: estoqueInsumos.length },
@@ -7773,10 +7796,10 @@ export function CaixaPanel({
                 title="Reposição"
                 accent="mais previsível"
                 description="Mantenha contatos e prazos de entrega organizados; fornecedores de NF-e entram automaticamente."
-                metrics={[
+                metrics={distribuidores.length === 0 ? [] : [
                   { label: 'fornecedores', value: distribuidores.length },
                   { label: 'com CNPJ', value: distribuidores.filter(item => Boolean(item.cnpj)).length },
-                  { label: 'prazo médio', value: distribuidores.length > 0 ? `${Math.round(distribuidores.reduce((sum, item) => sum + Number(item.lead_time_dias || 0), 0) / distribuidores.length)} dias` : '—' },
+                  ...(distribuidores.length > 0 ? [{ label: 'prazo médio', value: `${Math.round(distribuidores.reduce((sum, item) => sum + Number(item.lead_time_dias || 0), 0) / distribuidores.length)} dias` }] : []),
                 ]}
               />
               <EstoqueFornecedoresTab
@@ -7808,8 +7831,8 @@ export function CaixaPanel({
                 id="cash-heading"
                 eyebrow="CAIXA"
                 title="Turno atual"
-                accent="em ordem"
-                description="Veja o dinheiro, os recebimentos e o que precisa de atenção."
+                accent={turnoResumo?.turno_esquecido ? 'precisa de revisão' : turnoResumo?.status === 'aberto' ? 'em ordem' : 'ainda fechado'}
+                description={turnoResumo?.turno_esquecido ? 'Este turno está aberto há mais de 24 horas. Confira os valores e encerre quando possível.' : 'Veja o dinheiro, os recebimentos e o que precisa de atenção.'}
                 metrics={[
                   { label: 'aberto há', value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—' },
                   { label: 'ritmo de vendas', value: turnoResumo?.status === 'aberto' ? `${formatCompactCurrency(cashSalesPerHour)}/h` : '—' },
@@ -7883,13 +7906,26 @@ export function CaixaPanel({
           {/* CRM CLIENTES — REAL DATA */}
           {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab) && (
             <div className={clsx('space-y-3.5', 'text-left', 'animate-fade-in')}>
+              <OperationalBanner
+                id="customers-heading"
+                eyebrow="RELACIONAMENTO"
+                title="Clientes"
+                accent="em uma única lista"
+                description="Encontre contatos rapidamente e acompanhe os benefícios sem repetir cadastros."
+                metrics={[
+                  { label: loyaltyUsers.length === 1 ? 'cliente' : 'clientes', value: loyaltyUsers.length },
+                  { label: 'programa de fidelidade', value: fidelidadeConfig.ativo ? 'Ativo' : 'Pausado', valueClassName: fidelidadeConfig.ativo ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300' },
+                ]}
+              />
               <section className="koma-toolbar">
                 <div className="koma-toolbar__search">
                   <Search size={14} aria-hidden="true" />
                   <input value={clientesSearch} onChange={event => setClientesSearch(event.target.value)} placeholder="Buscar por nome ou WhatsApp…" aria-label="Buscar clientes" />
                   {clientesSearch && <button type="button" onClick={() => setClientesSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
                 </div>
-                <p className="shrink-0 text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de {loyaltyUsers.length} clientes</p>
+                {(clientesSearch || filteredLoyaltyUsers.length !== loyaltyUsers.length) && (
+                  <p className="shrink-0 text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{filteredLoyaltyUsers.length}</strong> de {loyaltyUsers.length} {loyaltyUsers.length === 1 ? 'cliente' : 'clientes'}</p>
+                )}
                 <div className="koma-toolbar__actions">
                   <button
                     type="button"
@@ -7912,17 +7948,17 @@ export function CaixaPanel({
                     <table className={clsx('w-full', 'text-left', 'text-xs')}>
                       <thead>
                         <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'uppercase', 'tracking-wider', 'font-extrabold', 'text-[9px]')}>
-                          <th className="p-3.5">WhatsApp</th>
                           <th className="p-3.5">Nome do Cliente</th>
-                          <th className={clsx('p-3.5', 'font-mono')}>Saldo de Fidelidade</th>
+                          <th className="p-3.5">WhatsApp</th>
+                          <th className={clsx('p-3.5', 'font-mono')}>Pontos disponíveis</th>
                           <th className={clsx('p-3.5', 'text-right')}>Ações</th>
                         </tr>
                       </thead>
                       <tbody className={clsx('divide-y', 'divide-koma-border')}>
                         {filteredLoyaltyUsers.map((user) => (
                           <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
-                            <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone)}</td>
                             <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
+                            <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone)}</td>
                             <td className={clsx('p-3.5', 'font-mono', 'text-emerald-700 dark:text-emerald-400', 'font-extrabold', 'text-xs')}>
                               {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? `${user.pontos} pts` : `R$ ${user.saldoCashback.toFixed(2)}`}
                             </td>

@@ -1093,6 +1093,10 @@ body {
   pointer-events: none;
 }
 
+.orders-hero--without-metrics {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .orders-hero__copy {
   min-width: 0;
 }

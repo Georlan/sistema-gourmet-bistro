@@ -26,20 +26,24 @@ export function OperationalBanner({
   metrics,
 }: OperationalBannerProps) {
   return (
-    <section className="orders-hero shrink-0" aria-labelledby={id}>
+    <section className={clsx('orders-hero shrink-0', metrics.length === 0 && 'orders-hero--without-metrics')} aria-labelledby={id}>
       <div className="orders-hero__copy">
         <p className="orders-eyebrow"><span /> {eyebrow}</p>
         <h1 id={id}>{title} <em>{accent}</em></h1>
         <p>{description}</p>
       </div>
-      <div className="orders-hero__metrics" aria-label={`Resumo: ${title} ${accent}`}>
+      {metrics.length > 0 && <div
+        className="orders-hero__metrics"
+        aria-label={`Resumo: ${title} ${accent}`}
+        style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(4.6rem, auto))`, minWidth: `${Math.max(metrics.length * 6.2, 13)}rem` }}
+      >
         {metrics.map(metric => (
           <div key={metric.label} className="orders-hero__metric">
             <strong className={clsx(metric.valueClassName)}>{metric.value}</strong>
             <span>{metric.label}</span>
           </div>
         ))}
-      </div>
+      </div>}
     </section>
   );
 }

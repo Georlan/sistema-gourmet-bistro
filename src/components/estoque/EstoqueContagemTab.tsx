@@ -17,12 +17,12 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
 }) => {
   return (
     <div className="space-y-3.5 text-left animate-fade-in">
-      <div className="koma-toolbar">
+      {contagens.length > 0 && <div className="koma-toolbar">
         <p className="text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{contagens.length}</strong> inventários · <strong>{contagens.filter(item => item.status === 'rascunho').length}</strong> rascunhos</p>
         <div className="koma-toolbar__actions ml-auto">
           <button type="button" onClick={() => onOpenNovaContagemModal()} className="koma-btn-success"><Plus size={14} /> Novo inventário</button>
         </div>
-      </div>
+      </div>}
 
       {contagens.length === 0 ? (
         <KomaEmptyState

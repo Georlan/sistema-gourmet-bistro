@@ -4,6 +4,7 @@ import {
   Edit3,
   Eye,
   Image as ImageIcon,
+  MoreHorizontal,
   PackageOpen,
   Plus,
   Search,
@@ -67,11 +68,6 @@ export function CardapioProdutosTab({
     || 'Sem categoria'
   );
 
-  const summary = useMemo(() => {
-    const available = produtos.filter((product) => product.ativo !== false).length;
-    return { available, paused: produtos.length - available };
-  }, [produtos]);
-
   const filteredProducts = useMemo(() => produtos.filter((product) => {
     if (categoryFilter !== 'todos' && productCategoryId(product) !== categoryFilter) return false;
     if (availabilityFilter === 'publicados' && product.ativo === false) return false;
@@ -93,6 +89,7 @@ export function CardapioProdutosTab({
   );
   const selectedCategoryIsAvailable = selectedCategoryProducts.length > 0
     && selectedCategoryProducts.every((product) => product.ativo !== false);
+  const hasActiveFilters = Boolean(search.trim() || categoryFilter !== 'todos' || availabilityFilter !== 'todos');
 
   const handleToggle = async (product: Product) => {
     if (pendingProductId) return;
@@ -164,11 +161,9 @@ export function CardapioProdutosTab({
         />
       ) : (
         <section className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel" aria-label="Catálogo de produtos">
-          <header className="flex flex-col gap-2 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          {(hasActiveFilters || (selectedCategory && selectedCategoryProducts.length > 0)) && <header className="flex flex-col gap-2 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
             <p className="text-[10px] font-medium text-koma-muted">
-              <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong> de {produtos.length} produtos
-              {' · '}<span className="text-emerald-700 dark:text-emerald-300">{summary.available} disponíveis</span>
-              {summary.paused > 0 && <> · <span className="text-amber-700 dark:text-amber-300">{summary.paused} {summary.paused === 1 ? 'pausado' : 'pausados'}</span></>}
+              <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong> de {produtos.length} {produtos.length === 1 ? 'produto encontrado' : 'produtos encontrados'}
             </p>
             {selectedCategory && selectedCategoryProducts.length > 0 && (
               <button
@@ -183,7 +178,7 @@ export function CardapioProdutosTab({
                 {pendingCategoryId ? 'Salvando…' : selectedCategoryIsAvailable ? `Pausar ${selectedCategory.nome}` : `Disponibilizar ${selectedCategory.nome}`}
               </button>
             )}
-          </header>
+          </header>}
 
           <div className="hidden grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_8rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted lg:grid">
             <span>Produto</span><span>Categoria</span><span>Preço</span><span>Disponibilidade</span><span className="text-right">Ações</span>
@@ -239,8 +234,13 @@ export function CardapioProdutosTab({
 
                 <div className="flex items-center justify-end gap-1">
                   <button type="button" onClick={() => onEditProduct(product)} className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground" title="Editar produto" aria-label={`Editar ${product.nome}`}><Edit3 size={13} /><span>Editar</span></button>
-                  <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-emerald-700 dark:hover:text-emerald-300" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}><Copy size={13} /></button>
-                  <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-rose-600 transition-colors hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}><Trash2 size={13} /></button>
+                  <details className="relative">
+                    <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" aria-label={`Mais ações para ${product.nome}`}><MoreHorizontal size={15} /></summary>
+                    <div className="absolute right-0 z-20 mt-1 min-w-40 overflow-hidden rounded-xl border border-koma-border bg-koma-panel p-1 shadow-xl">
+                      <button type="button" onClick={() => onDuplicateProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[10px] font-semibold text-koma-secondary hover:bg-koma-raised hover:text-koma-foreground"><Copy size={13} /> Duplicar produto</button>
+                      <button type="button" onClick={() => void onRemoveProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[10px] font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"><Trash2 size={13} /> Excluir produto</button>
+                    </div>
+                  </details>
                 </div>
               </article>
             );
