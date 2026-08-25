@@ -9,7 +9,8 @@ const tables = Array.from({ length: 10 }, (_, index) => ({
   nome: `Mesa ${index + 1}`,
 }));
 
-const commands = tables.map((table, index) => ({
+// Mantém uma mesa livre para cobrir visualmente os dois estados do salão.
+const commands = tables.slice(0, -1).map((table, index) => ({
   id: `cmd-e2e-${table.id}`,
   restaurante_id: 99001,
   mesa_id: table.id,
@@ -335,6 +336,14 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     const pendingItemsWarning = page.getByText('Outro item continua em preparo.', { exact: true });
     await expect(pendingItemsWarning).toBeVisible();
     await expect.poll(() => pendingItemsWarning.evaluate(element => getComputedStyle(element).color)).toBe('rgb(146, 64, 14)');
+
+    await page.getByRole('button', { name: 'Salão', exact: true }).click();
+    const freeTableCard = page.locator('[data-table-status="free"]').first();
+    const freeTableAction = freeTableCard.getByRole('button', { name: 'Abrir pedido' });
+    await expect(freeTableCard).toBeVisible();
+    await expect(freeTableAction).toBeVisible();
+    await expect.poll(() => freeTableCard.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(231, 245, 238)');
+    await expect.poll(() => freeTableAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(191, 234, 212)');
 
     await page.getByRole('button', { name: 'Recolher ou expandir menu' }).click();
     const collapsedSidebar = page.locator('.cashier-sidebar:visible');

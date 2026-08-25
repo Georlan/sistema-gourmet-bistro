@@ -6303,7 +6303,7 @@ export function CaixaPanel({
                               isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
                               hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
                               isOccupied && !hasPendingPayment && 'border-koma-danger-border bg-koma-danger-bg hover:border-koma-danger-text',
-                              !isOccupied && !isMerged && 'border-koma-border bg-koma-card hover:border-emerald-500'
+                              !isOccupied && !isMerged && 'koma-table-free-card'
                             )}
                           >
                             <div className={clsx('flex', 'items-start', 'justify-between', 'gap-2')}>
@@ -6427,7 +6427,7 @@ export function CaixaPanel({
                                       setBalcaoMobileView('produtos');
                                       setActiveSubTab('balcao');
                                     }}
-                                    className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-btn-success', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'cursor-pointer', 'shadow-xs')}
+                                    className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-table-free-action', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'cursor-pointer', 'shadow-xs')}
                                   >
                                     <Plus size={11} />
                                     Abrir pedido
