@@ -72,10 +72,28 @@ def upgrade() -> None:
         op.execute(
             """
             CREATE POLICY tenant_isolation ON produto_insumos
+            AS PERMISSIVE
             FOR ALL
-            USING (restaurante_id = current_setting('app.current_restaurante_id', true)::integer)
-            WITH CHECK (restaurante_id = current_setting('app.current_restaurante_id', true)::integer)
+            TO koma_app
+            USING (
+                restaurante_id = NULLIF(
+                    (SELECT current_setting('app.current_restaurante_id', true)),
+                    ''
+                )::integer
+            )
+            WITH CHECK (
+                restaurante_id = NULLIF(
+                    (SELECT current_setting('app.current_restaurante_id', true)),
+                    ''
+                )::integer
+            )
             """
+        )
+        op.execute(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE produto_insumos TO koma_app"
+        )
+        op.execute(
+            "GRANT USAGE, SELECT ON SEQUENCE produto_insumos_id_seq TO koma_app"
         )
 
 
