@@ -212,6 +212,18 @@ async function seedReportSession(page: Page) {
   });
 }
 
+async function seedCatalogSession(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    localStorage.setItem('koma_caixa_role', 'caixa');
+    localStorage.setItem('token', 'playwright-e2e-token');
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+}
+
 async function seedKitchenSession(page: Page) {
   await page.addInitScript(() => {
     const token = 'playwright-kitchen-token';
@@ -407,13 +419,13 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByRole('button', { name: 'Categorias', exact: true })).toBeVisible();
   await expect(page.getByLabel('Buscar produtos')).toBeVisible();
   await expect(page.getByLabel('Filtrar produtos por categoria')).toBeVisible();
-  await expect(page.getByLabel('Filtrar disponibilidade')).toBeVisible();
+  await expect(page.getByLabel('Filtrar por disponibilidade')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Pratos', exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Categorias', exact: true }).click();
   await expect(page.getByLabel('Buscar categorias')).toBeVisible();
-  await expect(page.getByLabel('Filtrar categorias por destino')).toBeVisible();
+  await expect(page.getByLabel('Filtrar por destino de preparo')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toBeVisible();
   await expect(page.getByText('cat-pratos', { exact: true })).toHaveCount(0);
 
@@ -446,6 +458,49 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByText('Configuração do programa')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ver pontos dos clientes' })).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('Cardápio mantém filtros e ações principais fáceis em qualquer largura', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCatalogSession(page);
+  await page.goto('/?view=caixa');
+
+  await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Buscar produtos')).toBeVisible();
+  await expect(page.getByLabel('Filtrar produtos por categoria')).toBeVisible();
+  await expect(page.getByLabel('Filtrar por disponibilidade')).toBeVisible();
+  await expect(page.getByText('Risoto da casa', { exact: true })).toBeVisible();
+  await expect(page.getByText('Suco natural', { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByLabel('Selecionar exibidos').check();
+  await expect(page.getByText('2 produtos selecionados', { exact: true })).toBeVisible();
+  const batchAvailabilityRequest = page.waitForRequest(request => (
+    request.method() === 'PATCH'
+    && new URL(request.url()).pathname === '/produtos/disponibilidade'
+  ));
+  await page.getByRole('button', { name: 'Pausar', exact: true }).click();
+  await batchAvailabilityRequest;
+
+  await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
+  const productDialog = page.getByRole('dialog', { name: 'Novo produto' });
+  await expect(productDialog).toBeVisible();
+  await expect(productDialog.getByLabel('Código do produto')).toHaveValue('202');
+  await expect(productDialog.getByLabel('Nome do produto')).toBeVisible();
+  await expect(productDialog.getByLabel('Preço de venda')).toBeVisible();
+  await expect(productDialog.getByLabel('Categoria', { exact: true })).toHaveValue('cat-pratos');
+  await expect(productDialog.getByText('Fotos do produto')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await productDialog.getByRole('button', { name: 'Fechar' }).click();
+
+  await page.getByRole('button', { name: 'Categorias', exact: true }).click();
+  await expect(page.getByLabel('Buscar categorias')).toBeVisible();
+  await expect(page.getByLabel('Filtrar por destino de preparo')).toBeVisible();
+  await page.getByRole('button', { name: 'Ver os 1 produtos de Pratos', exact: true }).click();
+  await expect(page.getByLabel('Filtrar produtos por categoria')).toHaveValue('cat-pratos');
+  await expect(page.getByText('Risoto da casa', { exact: true })).toBeVisible();
+  await expect(page.getByText('Suco natural', { exact: true })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
 

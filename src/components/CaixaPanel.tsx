@@ -1319,6 +1319,7 @@ export function CaixaPanel({
   const [showProductModal, setShowProductModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [cardapioCategoryFocus, setCardapioCategoryFocus] = useState<string | null>(null);
   const [editingCrmUser, setEditingCrmUser] = useState<any>(null);
   const [crmFormNome, setCrmFormNome] = useState('');
   const [crmFormTelefone, setCrmFormTelefone] = useState('');
@@ -2540,6 +2541,14 @@ export function CaixaPanel({
   });
   // Real products loaded from backend
   const [apiProdutos, setApiProdutos] = useState<Product[]>([]);
+  const suggestedProductCode = useMemo(() => {
+    const numericCodes = apiProdutos
+      .map((product) => String(product.id || '').trim())
+      .filter((code) => /^\d+$/.test(code));
+    const nextNumber = numericCodes.reduce((largest, code) => Math.max(largest, Number(code)), 0) + 1;
+    const width = Math.max(3, ...numericCodes.map((code) => code.length));
+    return String(nextNumber).padStart(width, '0');
+  }, [apiProdutos]);
 
   // Fetch current shift status
   const fetchTurno = async () => {
@@ -4650,8 +4659,8 @@ export function CaixaPanel({
           ))}
 
           {activeTab === 'cardapio' && [
-            { id: 'produtos', label: 'Produtos' },
-            { id: 'categorias', label: 'Categorias' }
+            { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
+            { id: 'categorias', label: 'Categorias', count: apiCategorias.length }
           ].map(sub => (
             <button
               key={sub.id}
@@ -4659,6 +4668,7 @@ export function CaixaPanel({
               className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}
             >
               {sub.label}
+              <span aria-hidden="true" className={clsx('ml-1.5', 'rounded-full', 'px-1.5', 'py-0.5', 'font-mono', 'text-[8px]', activeSubTab === sub.id ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-muted')}>{sub.count}</span>
             </button>
           ))}
 
@@ -7534,7 +7544,7 @@ export function CaixaPanel({
                 : undefined}
               onCreateProduct={() => {
                 setEditingProduct(null);
-                setProdFormId('');
+                setProdFormId(suggestedProductCode);
                 setProdFormNome('');
                 setProdFormPreco('');
                 setProdFormCategoriaId(apiCategorias[0]?.id || '');
@@ -7561,7 +7571,7 @@ export function CaixaPanel({
               }}
               onDuplicateProduct={(product) => {
                 setEditingProduct(null);
-                setProdFormId('');
+                setProdFormId(suggestedProductCode);
                 setProdFormNome(`${product.nome} (Cópia)`);
                 setProdFormPreco(Number(product.preco) || 0);
                 setProdFormCategoriaId(product.categoria_id || '');
@@ -7611,8 +7621,10 @@ export function CaixaPanel({
                   return;
                 }
                 await fetchProdutos();
-                showToast(ativo ? 'Categoria publicada.' : 'Categoria pausada.');
+                showToast(ativo ? 'Produtos disponibilizados.' : 'Produtos pausados.');
               }}
+              focusCategoryId={cardapioCategoryFocus}
+              onFocusCategoryHandled={() => setCardapioCategoryFocus(null)}
             />
             </div>
           )}
@@ -7640,6 +7652,10 @@ export function CaixaPanel({
               authHeaders={authHeaders}
               fetchCategorias={fetchCategorias}
               showToast={showToast}
+              onManageProducts={(categoryId) => {
+                setCardapioCategoryFocus(categoryId);
+                setActiveSubTab('produtos');
+              }}
             />
             </div>
           )}
@@ -9671,16 +9687,23 @@ export function CaixaPanel({
       {showProductModal && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setShowProductModal(false); }}
-          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto', 'cursor-pointer')}
+          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-2', 'sm:p-4', 'overflow-hidden', 'cursor-pointer')}
         >
-          <div className={clsx('w-full', 'max-w-md', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'my-8')}>
+          <div role="dialog" aria-modal="true" aria-labelledby="product-modal-title" className={clsx('w-full', 'max-w-xl', 'max-h-[calc(100dvh-1rem)]', 'sm:max-h-[calc(100dvh-2rem)]', 'overflow-y-auto', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'sm:p-6', 'space-y-4', 'text-left', 'shadow-2xl', 'relative', 'animate-scale-in', 'cursor-default')}>
             <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
-              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground', 'font-serif')}>
-                {editingProduct ? 'Editar Produto' : 'Novo Produto'}
-              </h3>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
+                    {editingProduct ? 'Editar produto' : 'Novo produto'}
+                  </h3>
+                  {editingProduct && <span className="rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 font-mono text-[9px] text-koma-muted">#{editingProduct.id}</span>}
+                </div>
+                <p className="mt-0.5 text-[10px] text-koma-muted">As alterações aparecem no caixa, atendimento e cardápio online.</p>
+              </div>
               <button 
                 type="button" 
                 onClick={() => setShowProductModal(false)} 
+                aria-label="Fechar"
                 className={clsx('p-1', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
               >
                 <X size={16} />
@@ -9695,10 +9718,10 @@ export function CaixaPanel({
                 try {
                   const galeriaUrls = [prodFormImagem, prodFormImagem2, prodFormImagem3].map(u => u.trim()).filter(Boolean);
                   const payload = {
-                    nome: prodFormNome,
+                    nome: prodFormNome.trim(),
                     categoria_id: prodFormCategoriaId,
                     preco: Number(prodFormPreco || 0),
-                    descricao: prodFormDescricao,
+                    descricao: prodFormDescricao.trim(),
                     imagem: galeriaUrls[0] || prodFormImagem || '',
                     imagens_galeria: galeriaUrls,
                     ativo: prodFormAtivo
@@ -9725,37 +9748,47 @@ export function CaixaPanel({
                   if (res.ok) {
                     await fetchProdutos();
                     setShowProductModal(false);
+                    showToast(editingProduct ? 'Produto atualizado.' : 'Produto criado.');
                   } else {
-                    const errData = await res.json();
-                    alert(errData.detail || 'Erro ao salvar produto.');
+                    const errData = await res.json().catch(() => ({}));
+                    showToast(errData.detail || 'Não foi possível salvar o produto.', 'error');
                   }
                 } catch (err) {
                   console.error(err);
-                  alert('Erro de conexão ao salvar produto.');
+                  showToast('Erro de conexão ao salvar produto.', 'error');
                 } finally {
                   setIsLoading(false);
                 }
               }}
-              className={clsx('space-y-4', 'text-xs')}
+              className={clsx('space-y-5', 'text-xs')}
             >
+              {apiCategorias.length === 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
+                  <span>Crie uma categoria antes de salvar o primeiro produto.</span>
+                  <button type="button" onClick={() => setShowCategoryModal(true)} className="shrink-0 font-bold underline underline-offset-2">Criar categoria</button>
+                </div>
+              )}
               {!editingProduct && (
-                <div className="space-y-1">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Código/Ref do Produto (ID único):</label>
+                <div className="space-y-1.5">
+                  <label htmlFor="product-code" className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}>Código do produto</label>
                   <input
                     type="text"
+                    id="product-code"
                     required
-                    placeholder="Ex: 001, 104, burger-duplo"
+                    placeholder="Ex.: 001"
                     value={prodFormId}
                     onChange={(e) => setProdFormId(e.target.value)}
                     className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
+                  <p className="text-[9px] leading-relaxed text-koma-muted">Sugerimos o próximo código livre. Você pode trocar agora; depois de criado, ele não muda.</p>
                 </div>
               )}
 
-              <div className="space-y-1">
-                <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Nome do Produto:</label>
+              <div className="space-y-1.5">
+                <label htmlFor="product-name" className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}>Nome do produto</label>
                 <input
                   type="text"
+                  id="product-name"
                   required
                   placeholder="Ex: Cheeseburger Duplo"
                   value={prodFormNome}
@@ -9764,10 +9797,11 @@ export function CaixaPanel({
                 />
               </div>
 
-              <div className={clsx('grid', 'grid-cols-2', 'gap-3')}>
-                <div className="space-y-1">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Preço (R$):</label>
+              <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-3')}>
+                <div className="space-y-1.5">
+                  <label htmlFor="product-price" className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}>Preço de venda</label>
                   <MoneyInput
+                    id="product-price"
                     required
                     placeholder="25.90"
                     value={prodFormPreco}
@@ -9775,10 +9809,11 @@ export function CaixaPanel({
                     className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-[11px]')}
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Categoria:</label>
+                <div className="space-y-1.5">
+                  <label htmlFor="product-category" className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}>Categoria</label>
                   <div className={clsx('flex', 'gap-1.5')}>
                     <select
+                      id="product-category"
                       required
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
@@ -9793,51 +9828,74 @@ export function CaixaPanel({
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
                       title="Criar nova categoria"
-                      className={clsx('px-3', 'bg-emerald-500/15', 'hover:bg-[#10b981]/20', 'text-emerald-700 dark:text-emerald-400', 'border', 'border-emerald-500/30', 'hover:border-emerald-500/30', 'rounded-xl', 'font-bold', 'text-sm', 'cursor-pointer', 'transition-colors')}
+                      aria-label="Criar nova categoria"
+                      className={clsx('inline-flex', 'items-center', 'gap-1', 'px-2.5', 'bg-emerald-500/15', 'hover:bg-[#10b981]/20', 'text-emerald-700 dark:text-emerald-400', 'border', 'border-emerald-500/30', 'rounded-xl', 'font-bold', 'text-[9px]', 'cursor-pointer', 'transition-colors')}
                     >
-                      +
+                      <Plus size={13} /> Nova
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Descrição / Ingredientes:</label>
+              <div className="space-y-1.5">
+                <label htmlFor="product-description" className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}>Descrição para o cliente</label>
                 <textarea
+                  id="product-description"
                   placeholder="Hambúrguer bovino 150g, queijo cheddar derretido..."
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
                   className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
+                <p className="text-[9px] text-koma-muted">Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.</p>
               </div>
 
-              <div className="space-y-2">
-                <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>URLs das Imagens do Produto (Até 3 fotos):</label>
+              <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
+                  <span>
+                    Fotos do produto
+                    <span className="ml-1 font-normal text-koma-muted">
+                      {([prodFormImagem, prodFormImagem2, prodFormImagem3].filter((url) => url.trim()).length > 0)
+                        ? `(${[prodFormImagem, prodFormImagem2, prodFormImagem3].filter((url) => url.trim()).length} adicionada${[prodFormImagem, prodFormImagem2, prodFormImagem3].filter((url) => url.trim()).length === 1 ? '' : 's'})`
+                        : '(opcional)'}
+                    </span>
+                  </span>
+                  <span className="text-[9px] font-medium text-koma-muted group-open:hidden">
+                    {[prodFormImagem, prodFormImagem2, prodFormImagem3].some((url) => url.trim()) ? 'Ver fotos' : 'Adicionar fotos'}
+                  </span>
+                  <span className="hidden text-[9px] font-medium text-koma-muted group-open:inline">Ocultar</span>
+                </summary>
+                <div className="space-y-2 border-t border-koma-border p-3">
+                  <p className="text-[9px] leading-relaxed text-koma-muted">Cole o endereço de até três fotos. A primeira será a imagem principal.</p>
                 <input
                   type="text"
-                  placeholder="Foto 1 (Principal): https://exemplo.com/foto1.jpg"
+                  placeholder="Foto principal: https://…"
                   value={prodFormImagem}
                   onChange={(e) => setProdFormImagem(e.target.value)}
                   className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
                 <input
                   type="text"
-                  placeholder="Foto 2 (Opcional): https://exemplo.com/foto2.jpg"
+                  placeholder="Segunda foto: https://…"
                   value={prodFormImagem2}
                   onChange={(e) => setProdFormImagem2(e.target.value)}
                   className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
                 <input
                   type="text"
-                  placeholder="Foto 3 (Opcional): https://exemplo.com/foto3.jpg"
+                  placeholder="Terceira foto: https://…"
                   value={prodFormImagem3}
                   onChange={(e) => setProdFormImagem3(e.target.value)}
                   className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-[#10b981]')}
                 />
-              </div>
+                </div>
+              </details>
 
-              <div className={clsx('flex', 'items-center', 'gap-2', 'py-1')}>
+              <label htmlFor="prod-form-ativo" className={clsx('flex', 'cursor-pointer', 'items-center', 'justify-between', 'gap-3', 'rounded-xl', 'border', 'border-koma-border', 'bg-koma-panel', 'p-3')}>
+                <span>
+                  <strong className="block text-[10px] text-koma-foreground">Disponível para venda</strong>
+                  <span className="mt-0.5 block text-[9px] text-koma-muted">Desative para manter o produto cadastrado sem oferecê-lo nos canais de venda.</span>
+                </span>
                 <input
                   type="checkbox"
                   id="prod-form-ativo"
@@ -9845,8 +9903,7 @@ export function CaixaPanel({
                   onChange={(e) => setProdFormAtivo(e.target.checked)}
                   className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-koma-card')}
                 />
-                <label htmlFor="prod-form-ativo" className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'uppercase', 'tracking-wider', 'cursor-pointer')}>Disponível em estoque (Ativo)</label>
-              </div>
+              </label>
 
               <div className={clsx('flex', 'gap-2', 'pt-2')}>
                 <button
@@ -9858,10 +9915,10 @@ export function CaixaPanel({
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || apiCategorias.length === 0}
                   className={clsx('flex-1', 'py-2', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]', 'rounded-xl', 'font-bold', 'cursor-pointer', 'transition-colors', 'disabled:opacity-50')}
                 >
-                  {isLoading ? 'Salvando...' : 'Salvar'}
+                  {isLoading ? 'Salvando…' : editingProduct ? 'Salvar alterações' : 'Criar produto'}
                 </button>
               </div>
             </form>
@@ -9875,12 +9932,13 @@ export function CaixaPanel({
         onClose={() => setShowCategoryModal(false)}
         apiBaseUrl={apiBaseUrl}
         authHeaders={authHeaders}
-        onSuccess={async () => {
+        onSuccess={async (category) => {
           if (onRefreshCategorias) {
             await onRefreshCategorias();
           } else {
             await fetchCategorias();
           }
+          setProdFormCategoriaId(category.id);
         }}
         showToast={showToast}
       />
