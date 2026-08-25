@@ -2969,7 +2969,7 @@ export function CaixaPanel({
   }, [isWsConnected, activeTab, onRefreshOrders]);
 
   useEffect(() => {
-    if (activeTab === 'permissoes_cargos' || activeSubTab === 'equipe' || activeSubTab === 'pessoas') {
+    if (activeTab === 'permissoes_cargos' || activeSubTab === 'pessoas') {
       fetchSystemUsers();
     }
   }, [activeTab, activeSubTab]);
@@ -3064,7 +3064,7 @@ export function CaixaPanel({
       fetchTurnoResumo();
       fetchCaixaMovimentacoes();
     }
-    if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['equipe', 'relatorio_garçons'].includes(activeSubTab)) {
+    if (activeTab === 'operacao' && ['equipe', 'relatorio_garçons'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/garcons/relatorio?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
@@ -3072,7 +3072,7 @@ export function CaixaPanel({
         })
         .catch(err => console.error('Error fetching waiter report:', err));
     }
-    if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['visao_geral', 'vendas', 'produtos_mais_vendidos', 'desempenho', 'relatorio_geral', 'top10'].includes(activeSubTab)) {
+    if (activeTab === 'operacao' && ['visao_geral', 'vendas', 'produtos_mais_vendidos', 'desempenho', 'relatorio_geral', 'top10'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${startStr}&data_fim=${endStr}`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => {
@@ -7501,7 +7501,7 @@ export function CaixaPanel({
 
           {/* VIEW: RELATÓRIOS — PRODUTOS */}
           {(activeTab === 'relatorios' || activeTab === 'dashboard') && ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab) && (
-            <RelatoriosProdutosTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
+            <RelatoriosProdutosTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} categorias={apiCategorias} showToast={showToast} />
           )}
 
           {/* VIEW: RELATÓRIOS — EQUIPE (reutiliza o mesmo componente de desempenho) */}

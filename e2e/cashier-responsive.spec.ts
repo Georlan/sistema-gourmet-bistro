@@ -130,6 +130,42 @@ async function mockCashierBackend(page: Page) {
       body = [{ id: 'cli-1', nome: 'Cliente E2E', telefone: '85999999999', saldo_pontos: 25, saldo_cashback: 0 }];
     } else if (pathname === '/fidelidade/config') {
       body = { ativo: true, tipo_recompensa: 'PONTOS', taxa_conversao: 1, valor_ponto_em_dinheiro: 0.05 };
+    } else if (pathname === '/relatorios/visao-geral') {
+      body = {
+        faturamento_total: 870,
+        vendas_brutas: 900,
+        estornos: 30,
+        total_pedidos: 18,
+        ticket_medio: 48.33,
+        clientes_ativos: 12,
+        meta_mensal: 12000,
+        meta_realizada: 5300,
+        meta_restante: 6700,
+        meta_percentual: 44.2,
+        meta_projecao: 10100,
+        meta_media_diaria_necessaria: 305,
+        vendas_por_dia: [{ data: '2026-08-25', quantidade_pedidos: 18, total: 870 }],
+        horarios_pico: [{ hora: '20h', total_pedidos: 18, faturamento: 870 }],
+      };
+    } else if (pathname === '/comandas/estatisticas/geral') {
+      body = {
+        faturamento: 870,
+        faturamento_hoje: 220,
+        vendas_brutas: 900,
+        estornos: 30,
+        vendas_liquidas: 870,
+        total_pedidos: 18,
+        ticket_medio: 48.33,
+        breakdown_bruto: { pix: 300, cartao: 500, dinheiro: 100 },
+        breakdown_estornos: { pix: 0, cartao: 30, dinheiro: 0 },
+        breakdown_pagamentos: { pix: 300, cartao: 470, dinheiro: 100 },
+        dia_operacional_inicio: '2026-07-26',
+        dia_operacional_fim: '2026-08-25',
+      };
+    } else if (pathname === '/relatorios/produtos') {
+      body = [{ ranking: 1, produto_id: '101', produto_nome: 'Risoto da casa', categoria_nome: 'Pratos', quantidade_consumida: 8, valor_consumido: 336, preco_medio_item: 42, natureza_valor: 'consumo_operacional_nao_receita' }];
+    } else if (pathname === '/relatorios/equipe/desempenho') {
+      body = { taxa_servico_ativa: true, taxa_servico_padrao: 10, membros: [{ id: 'caixa-e2e', nome: 'Caixa E2E', email: 'caixa@koma.test', role: 'caixa', pedidos_atendidos: 18, faturamento: 870, ticket_medio: 48.33, comissao: 87, taxa_servico_usada: 10 }] };
     } else if (
       pathname === '/caixa/pagamentos/pendentes'
       || pathname === '/comandas/delivery/ativos'
@@ -158,6 +194,18 @@ async function seedCashierSession(page: Page) {
     localStorage.setItem('token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_tab', 'operacao');
     sessionStorage.setItem('koma_active_subtab', 'pedidos');
+  });
+}
+
+async function seedReportSession(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    localStorage.setItem('koma_caixa_role', 'caixa');
+    localStorage.setItem('token', 'playwright-e2e-token');
+    sessionStorage.setItem('koma_active_tab', 'relatorios');
+    sessionStorage.setItem('koma_active_subtab', 'visao_geral');
   });
 }
 
@@ -384,6 +432,36 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByText('Configuração do programa')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ver pontos dos clientes' })).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('Relatórios preservam uma leitura responsiva sem consultas legadas duplicadas', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => requests.push(new URL(request.url()).pathname));
+  await mockCashierBackend(page);
+  await seedReportSession(page);
+  await page.goto('/?view=caixa');
+
+  await expect(page.getByText('Dados financeiros consolidados por turno', { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  expect(requests.filter(path => path === '/relatorios/visao-geral')).toHaveLength(1);
+  expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Financeiro', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Recebimentos por meio' })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Produtos', exact: true }).click();
+  await expect(page.getByText('Consumo não é faturamento.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Unidades', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Valor', exact: true })).toBeVisible();
+  expect(requests.filter(path => path === '/produtos/categorias')).toHaveLength(0);
+  await expectNoHorizontalOverflow(page);
+
+  await page.locator('#relatorios-subtab-equipe').click();
+  await expect(page.getByText('Desempenho por Funcionário', { exact: true })).toBeVisible();
+  await expect(page.getByText('Valor recebido', { exact: true })).toBeVisible();
+  expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
   await expectNoHorizontalOverflow(page);
 });
 
