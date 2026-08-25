@@ -59,9 +59,10 @@ def test_cashier_theme_toggle_uses_shared_realtime_theme_contract():
     assert "type KomaTheme" in caixa
     assert "useState<KomaTheme>(() => readKomaTheme())" in caixa
 
-    # Desktop e mobile usam a mesma operação, que persiste e aplica o tema no DOM
-    # antes de emitir o evento de sincronização para os outros shells.
-    assert caixa.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 2
+    # Desktop expandido, desktop recolhido e mobile usam a mesma operação, que
+    # persiste e aplica o tema antes de sincronizar os outros shells.
+    assert caixa.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 3
+    assert 'className="cashier-sidebar__compact-theme"' in caixa
     assert "localStorage.setItem('@koma:theme'" not in caixa
     assert "new Event('koma_theme_changed')" not in caixa
 
@@ -147,8 +148,8 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     # O catálogo agora usa uma única lista responsiva: no mobile, categoria e
     # preço acompanham o nome; no desktop, viram colunas alinhadas.
     assert "text-koma-subtle lg:hidden" in products
-    assert "lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_6.75rem]" in products
-    assert "flex items-center justify-end gap-0.5" in products
+    assert "lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_8rem]" in products
+    assert "flex items-center justify-end gap-1" in products
 
     assert "KOMA_CHART_COLORS" in finance
     assert "grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4" in finance
