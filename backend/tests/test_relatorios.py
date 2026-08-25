@@ -8,7 +8,8 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db, current_restaurante_id
 from app.models import (
     Usuario, Produto, Categoria, Comanda, Item,
-    CaixaTurno, ConfiguracaoRestaurante, Lancamento, Pagamento, Restaurante
+    CaixaTurno, ConfiguracaoRestaurante, Insumo, Lancamento, Pagamento,
+    ProdutoInsumo, Restaurante
 )
 from app.security import get_password_hash
 from app.main import app
@@ -72,6 +73,15 @@ def setup_database():
         cat = Categoria(id=1, restaurante_id=1, nome="Lanches")
         db.add(cat)
         db.add(Produto(id="p-1", restaurante_id=1, nome="X-Salada", categoria_id=1, preco=25.0, ativo=True))
+        db.add(Insumo(
+            id="insumo-pao", restaurante_id=1, nome="Pão",
+            estoque_atual=20, estoque_minimo=5, estoque_maximo=40,
+            unidade_medida="un", preco_medio_custo=10.0,
+        ))
+        db.flush()
+        db.add(ProdutoInsumo(
+            restaurante_id=1, produto_id="p-1", insumo_id="insumo-pao", quantidade=0.2,
+        ))
 
         db.add(ConfiguracaoRestaurante(
             restaurante_id=1, meta_mensal=5000.0,
@@ -180,6 +190,7 @@ def test_relatorios_full_suite():
     assert data["total_pedidos"] == 1
     assert data["faturamento_total"] == 50.0
     assert data["ticket_medio"] == 50.0
+    assert "tem_base_anterior" in data["comparativo_anterior"]
 
     resp = client.get("/relatorios/vendas-detalhes", headers=headers)
     assert resp.status_code == 200
@@ -187,7 +198,11 @@ def test_relatorios_full_suite():
 
     resp = client.get("/relatorios/produtos?ordenacao=mais_vendidos", headers=headers)
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    products = resp.json()
+    assert isinstance(products, list)
+    assert products[0]["cmv_estimado"] == 4.0
+    assert products[0]["margem_contribuicao_estimada"] == 46.0
+    assert products[0]["margem_percentual_estimada"] == 92.0
 
     # Desempenho padrão — sem motoboy, sem admin
     resp = client.get("/relatorios/equipe/desempenho", headers=headers)
@@ -319,6 +334,7 @@ def test_financeiro_counts_paid_comandas_and_consolidates_split_payments():
         "cartao": 20.0,
     }
     assert sum(data["pedidos_modalidade"].values()) == 1
+    assert "tem_base_anterior" in data["comparativo_anterior"]
 
 
 # ---------------------------------------------------------------------------
@@ -344,6 +360,11 @@ def test_equipe_desempenho_cargo_filter():
         f"cargo=todos deve retornar 3 membros do tenant 1, obteve {len(membros_todos)}"
     ids_todos = {m["id"] for m in membros_todos}
     assert "u-admin" in ids_todos, "u-admin deve aparecer com cargo=todos"
+
+    resp = client.get("/relatorios/equipe/desempenho?cargo=atendimento", headers=headers)
+    assert resp.status_code == 200
+    roles_atendimento = {m["role"] for m in resp.json()["membros"]}
+    assert roles_atendimento == {"garcom"}
 
 
 # ---------------------------------------------------------------------------

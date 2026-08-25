@@ -147,6 +147,7 @@ async function mockCashierBackend(page: Page) {
         meta_media_diaria_necessaria: 305,
         vendas_por_dia: [{ data: '2026-08-25', quantidade_pedidos: 18, total: 870 }],
         horarios_pico: [{ hora: '20h', total_pedidos: 18, faturamento: 870 }],
+        comparativo_anterior: { tem_base_anterior: true, faturamento_anterior: 725, variacao_faturamento_pct: 20, pedidos_anteriores: 15, variacao_pedidos_pct: 20 },
       };
     } else if (pathname === '/comandas/estatisticas/geral') {
       body = {
@@ -162,11 +163,12 @@ async function mockCashierBackend(page: Page) {
         breakdown_pagamentos: { pix: 300, cartao: 470, dinheiro: 100 },
         dia_operacional_inicio: '2026-07-26',
         dia_operacional_fim: '2026-08-25',
+        comparativo_anterior: { tem_base_anterior: true, recebido_anterior: 725, variacao_recebido_pct: 20, contas_anteriores: 15, variacao_contas_pct: 20 },
       };
     } else if (pathname === '/relatorios/produtos') {
-      body = [{ ranking: 1, produto_id: '101', produto_nome: 'Risoto da casa', categoria_nome: 'Pratos', quantidade_consumida: 8, valor_consumido: 336, preco_medio_item: 42, natureza_valor: 'consumo_operacional_nao_receita' }];
+      body = [{ ranking: 1, produto_id: '101', produto_nome: 'Risoto da casa', categoria_nome: 'Pratos', quantidade_consumida: 8, valor_consumido: 336, preco_medio_item: 42, natureza_valor: 'consumo_operacional_nao_receita', ficha_tecnica_configurada: true, custo_unitario_estimado: 3.6, cmv_estimado: 28.8, margem_contribuicao_estimada: 307.2, margem_percentual_estimada: 91.4 }];
     } else if (pathname === '/relatorios/equipe/desempenho') {
-      body = { taxa_servico_ativa: true, taxa_servico_padrao: 10, membros: [{ id: 'caixa-e2e', nome: 'Caixa E2E', email: 'caixa@koma.test', role: 'caixa', pedidos_atendidos: 18, faturamento: 870, ticket_medio: 48.33, comissao: 87, taxa_servico_usada: 10 }] };
+      body = { taxa_servico_ativa: true, taxa_servico_padrao: 10, membros: [{ id: 'garcom-e2e', nome: 'Atendente E2E', email: 'atendente@koma.test', role: 'garcom', pedidos_atendidos: 18, faturamento: 870, ticket_medio: 48.33, comissao: 87, taxa_servico_usada: 10 }] };
     } else if (
       pathname === '/caixa/pagamentos/pendentes'
       || pathname === '/comandas/delivery/ativos'
@@ -454,7 +456,7 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   await seedReportSession(page);
   await page.goto('/?view=caixa');
 
-  await expect(page.getByText('Dados financeiros consolidados por turno', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pagamentos aprovados menos estornos', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(requests.filter(path => path === '/relatorios/visao-geral')).toHaveLength(1);
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
@@ -467,12 +469,13 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   await expect(page.getByText('Consumo não é faturamento.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Unidades', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Valor', exact: true })).toBeVisible();
+  await expect(page.getByText('CMV estimado', { exact: true })).toBeVisible();
   expect(requests.filter(path => path === '/produtos/categorias')).toHaveLength(0);
   await expectNoHorizontalOverflow(page);
 
   await page.locator('#relatorios-subtab-equipe').click();
   await expect(page.getByText('Desempenho por Funcionário', { exact: true })).toBeVisible();
-  await expect(page.getByText('Valor recebido', { exact: true })).toBeVisible();
+  await expect(page.getByText('Valor atribuído', { exact: true })).toBeVisible();
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
   await expectNoHorizontalOverflow(page);
 });

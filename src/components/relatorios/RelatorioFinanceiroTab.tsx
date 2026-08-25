@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Filter, RefreshCw, WalletCards } from 'lucide-react';
-import { localCalendarDate } from '../../utils/dateTime';
+import { AlertCircle, Calendar as CalendarIcon, RefreshCw, WalletCards } from 'lucide-react';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
+import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
+import { ReportActionBar } from './ReportActionBar';
+import { useSharedReportPeriod } from './useSharedReportPeriod';
 
 interface RelatorioFinanceiroTabProps {
   apiBaseUrl: string;
@@ -17,10 +19,11 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   apiBaseUrl,
   authHeaders,
 }) => {
-  const [periodoDias, setPeriodoDias] = useState('30');
+  const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
   const [isLoading, setIsLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const requestRef = useRef(0);
 
   const fetchFinanceiroData = useCallback(async () => {
@@ -28,11 +31,8 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(endDate.getDate() - Number(periodoDias));
       const nextStats = await fetchReportJson<any>(
-        `${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${localCalendarDate(startDate)}&data_fim=${localCalendarDate(endDate)}`,
+        `${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${dataInicio}&data_fim=${dataFim}`,
         authHeaders,
       );
       if (requestRef.current === requestId) setStats(nextStats);
@@ -42,7 +42,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
     } finally {
       if (requestRef.current === requestId) setIsLoading(false);
     }
-  }, [apiBaseUrl, authHeaders, periodoDias]);
+  }, [apiBaseUrl, authHeaders, dataFim, dataInicio]);
 
   useEffect(() => {
     void fetchFinanceiroData();
@@ -60,6 +60,9 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   const grossBreakdown = stats?.breakdown_bruto || {};
   const refundBreakdown = stats?.breakdown_estornos || {};
   const netBreakdown = stats?.breakdown_pagamentos || {};
+  const comparison = stats?.comparativo_anterior || {};
+  const hasPrevious = Boolean(comparison.tem_base_anterior);
+  const netDelta = Number(comparison.variacao_recebido_pct || 0);
 
   const methods = useMemo(() => [
     { key: 'pix', name: 'Pix', gross: Number(grossBreakdown.pix || 0), refunds: Number(refundBreakdown.pix || 0), net: Number(netBreakdown.pix || 0) },
@@ -69,44 +72,38 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
   const operationalRange = stats?.dia_operacional_inicio && stats?.dia_operacional_fim
     ? `${formatDate(stats.dia_operacional_inicio)} a ${formatDate(stats.dia_operacional_fim)}`
-    : `últimos ${periodoDias} dias`;
+    : `${formatDate(dataInicio)} a ${formatDate(dataFim)}`;
 
   return (
     <div className="space-y-5 text-left animate-fade-in">
       <OperationalBanner
         id="reports-financial-heading"
         eyebrow="FINANCEIRO"
-        title="Dinheiro"
-        accent="sem desencontro"
-        description={`Pagamentos aprovados menos estornos, por dia operacional · ${operationalRange}.`}
+        title="Recebimentos"
+        accent="sob controle"
+        description={`O que foi aprovado e devolvido, por dia operacional · ${operationalRange}.`}
         metrics={[
-          { label: 'receita líquida', value: formatMoney(net) },
-          { label: 'vendas brutas', value: formatMoney(gross) },
-          { label: 'estornos', value: formatMoney(refunds), valueClassName: refunds > 0 ? 'text-rose-600 dark:text-rose-300' : undefined },
-          { label: 'ticket médio', value: formatMoney(netAverageTicket) },
+          { label: 'recebido após estornos', value: formatMoney(net) },
+          { label: 'pagamentos aprovados', value: formatMoney(gross) },
+          { label: 'valor devolvido', value: formatMoney(refunds), valueClassName: refunds > 0 ? 'text-rose-600 dark:text-rose-300' : undefined },
+          { label: 'média por conta', value: formatMoney(netAverageTicket) },
         ]}
       />
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-koma-muted">
+      <ReportActionBar info={(
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span><strong className="text-koma-foreground">{totalAccounts}</strong> {totalAccounts === 1 ? 'conta recebida' : 'contas recebidas'}</span>
           <span>Hoje: <strong className="text-emerald-700 dark:text-emerald-300">{formatMoney(todayNet)}</strong></span>
-          <span className="hidden md:inline">Bruto − estornos = líquido</span>
+          {hasPrevious && <span className={netDelta < 0 ? 'font-bold text-rose-700 dark:text-rose-300' : 'font-bold text-emerald-700 dark:text-emerald-300'}>Recebido {netDelta >= 0 ? '+' : ''}{netDelta.toLocaleString('pt-BR')}% vs. período anterior</span>}
         </div>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-2.5 py-2 sm:flex-none">
-            <Filter size={12} className="text-koma-subtle" />
-            <select value={periodoDias} onChange={(event) => setPeriodoDias(event.target.value)} className="min-w-0 flex-1 cursor-pointer bg-transparent text-xs font-bold text-koma-foreground focus:outline-none">
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-              <option value="90">Últimos 90 dias</option>
-            </select>
-          </div>
+      )}>
+          <button type="button" onClick={() => setShowCalendarModal(true)} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-koma-foreground transition-all hover:bg-koma-card">
+            <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-300" /> Período
+          </button>
           <button type="button" onClick={() => void fetchFinanceiroData()} className="cursor-pointer rounded-xl border border-koma-border bg-koma-raised p-2 text-koma-subtle transition-all hover:text-koma-foreground" title="Atualizar relatório" aria-label="Atualizar relatório financeiro">
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
-        </div>
-      </div>
+      </ReportActionBar>
 
       {errorMsg && (
         <div className="flex items-center gap-2 rounded-2xl border border-koma-danger-border bg-koma-danger-bg p-3 text-xs text-koma-danger-text">
@@ -153,6 +150,20 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
           <span className="font-mono">{formatMoney(gross)} − {formatMoney(refunds)} = {formatMoney(net)}</span>
         </div>
       </section>
+
+      <div className="flex items-start gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 text-[10px] leading-relaxed text-koma-muted">
+        <AlertCircle size={14} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+        <span><strong className="text-koma-foreground">Sobre o valor exibido:</strong> taxas da maquininha, antecipação e delivery ainda não são descontadas. O total mostra pagamentos aprovados menos devoluções registradas.</span>
+      </div>
+
+      {showCalendarModal && (
+        <PeriodoCalendarioModal
+          onClose={() => setShowCalendarModal(false)}
+          dataInicio={dataInicio}
+          dataFim={dataFim}
+          onApply={applyPeriod}
+        />
+      )}
     </div>
   );
 };
