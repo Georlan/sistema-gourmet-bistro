@@ -55,6 +55,9 @@ const typeMeta = {
   inventario: { label: 'Inventário', icon: CheckCircle2, className: 'koma-badge-neutral' },
 } as const;
 
+const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const quantity = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
 function movementKind(tipo: MovimentacaoEstoque['tipo']): HistoryRow['kind'] {
   if (tipo === 'entrada') return 'entrada';
   if (tipo === 'saida') return 'saida';
@@ -70,7 +73,8 @@ function originLabel(origin?: string) {
     entrada_manual: 'Entrada manual',
     movimentacao_manual: 'Ajuste manual',
     contagem: 'Inventário',
-    xml: 'NF-e XML',
+    xml: 'NF-e',
+    manual: 'Manual',
   } as Record<string, string>)[origin || ''] || origin || 'Manual';
 }
 
@@ -109,8 +113,8 @@ export function EstoqueHistoricoTab({
         detail: itemLabels.length > 0 ? itemLabels.join(', ') : entry.observacao || 'Entrada de estoque',
         quantity: `${itemCount} ${itemCount === 1 ? 'item' : 'itens'}`,
         balance: '—',
-        amount: `R$ ${Number(entry.valor_total || 0).toFixed(2)}`,
-        origin: entry.tipo_entrada === 'XML' ? 'NF-e XML' : 'Manual',
+        amount: currency.format(Number(entry.valor_total || 0)),
+        origin: entry.tipo_entrada === 'XML' ? 'NF-e' : 'Manual',
         searchText: [supplier, document, entry.observacao, ...itemLabels].join(' '),
       };
     });
@@ -128,8 +132,8 @@ export function EstoqueHistoricoTab({
           detail: itemLabels.length > 0 ? itemLabels.join(', ') : 'Importação de NF-e',
           quantity: `${note.itens?.length || 0} itens`,
           balance: '—',
-          amount: `R$ ${Number(note.valor_total || 0).toFixed(2)}`,
-          origin: 'NF-e XML',
+          amount: currency.format(Number(note.valor_total || 0)),
+          origin: 'NF-e',
           searchText: [supplier, note.numero_nota, ...itemLabels].join(' '),
         } as HistoryRow;
       });
@@ -145,9 +149,9 @@ export function EstoqueHistoricoTab({
           kind: movementKind(movement.tipo),
           title: ingredient,
           detail: movement.motivo || movement.observacao || 'Movimentação de estoque',
-          quantity: `${Number(movement.quantidade || 0).toFixed(2)} ${unit}`.trim(),
-          balance: `${Number(movement.saldo_anterior || 0).toFixed(2)} → ${Number(movement.saldo_posterior || 0).toFixed(2)}`,
-          amount: movement.custo_unitario ? `R$ ${Number(movement.custo_unitario).toFixed(2)}/un` : '—',
+          quantity: `${quantity.format(Number(movement.quantidade || 0))} ${unit}`.trim(),
+          balance: `${quantity.format(Number(movement.saldo_anterior || 0))} → ${quantity.format(Number(movement.saldo_posterior || 0))}`,
+          amount: movement.custo_unitario ? `${currency.format(Number(movement.custo_unitario))}/un` : '—',
           origin: originLabel(movement.origem),
           searchText: [ingredient, movement.motivo, movement.observacao, movement.origem].join(' '),
         };
@@ -184,7 +188,7 @@ export function EstoqueHistoricoTab({
 
   return (
     <div className="space-y-3.5 text-left animate-fade-in">
-      <section className="koma-toolbar">
+      {rows.length > 0 && <section className="koma-toolbar">
         <div className="koma-toolbar__search">
           <Search size={14} aria-hidden="true" />
           <input
@@ -200,7 +204,7 @@ export function EstoqueHistoricoTab({
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
           <button type="button" onClick={() => xmlFileInputRef.current?.click()} className="koma-btn-secondary">
-            <FileText size={14} /> Importar XML
+            <FileText size={14} /> Importar NF-e
           </button>
           <button type="button" onClick={onOpenNovaMovimentacaoModal} className="koma-btn-secondary">
             <SlidersHorizontal size={14} /> Ajuste / perda
@@ -209,7 +213,7 @@ export function EstoqueHistoricoTab({
             <Plus size={14} /> Nova entrada
           </button>
         </div>
-      </section>
+      </section>}
 
       <input
         ref={xmlFileInputRef}
@@ -238,7 +242,7 @@ export function EstoqueHistoricoTab({
         </div>
       )}
 
-      <section className="koma-filterbar" aria-label="Filtros do histórico">
+      {rows.length > 0 && <section className="koma-filterbar" aria-label="Filtros do histórico">
         <label>
           <span><Filter size={10} /> Tipo</span>
           <select value={kind} onChange={event => setKind(event.target.value as HistoryKind)}>
@@ -257,7 +261,7 @@ export function EstoqueHistoricoTab({
           <span>{filteredRows.length === 1 ? 'registro' : 'registros'}</span>
           {hasFilters && <button type="button" onClick={clearFilters}>Limpar filtros</button>}
         </div>
-      </section>
+      </section>}
 
       {filteredRows.length === 0 ? (
         <KomaEmptyState
@@ -266,7 +270,10 @@ export function EstoqueHistoricoTab({
           description={hasFilters ? 'Limpe ou ajuste os filtros para ampliar a busca.' : 'Entradas, perdas, ajustes e inventários aparecerão juntos nesta linha do tempo.'}
           action={hasFilters
             ? { label: 'Limpar filtros', onClick: clearFilters, variant: 'secondary' }
-            : { label: 'Registrar primeira entrada', onClick: onOpenNovaEntradaModal, icon: Plus }}
+            : <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <button type="button" onClick={() => xmlFileInputRef.current?.click()} className="koma-btn-success inline-flex items-center gap-2 px-4 py-2 text-xs font-bold"><FileText size={14} /> Importar NF-e</button>
+                <button type="button" onClick={onOpenNovaEntradaModal} className="koma-btn-secondary inline-flex items-center gap-2 px-4 py-2 text-xs font-bold"><Plus size={14} /> Registrar manualmente</button>
+              </div>}
         />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-koma-border bg-koma-panel">

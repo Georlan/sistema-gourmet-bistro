@@ -52,7 +52,7 @@ export function EstoqueIngredientesTab({
 
   return (
     <div className="space-y-3.5 text-left animate-fade-in">
-      <section className="koma-toolbar">
+      {insumos.length > 0 && <section className="koma-toolbar">
         <div className="koma-toolbar__search">
           <Search size={14} aria-hidden="true" />
           <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar ingrediente…" aria-label="Buscar ingredientes" />
@@ -69,7 +69,7 @@ export function EstoqueIngredientesTab({
           <button type="button" onClick={onImportXml} className="koma-btn-secondary"><FileUp size={14} /> Importar NF-e</button>
           <button type="button" onClick={onCreate} className="koma-btn-success"><Plus size={14} /> Novo ingrediente</button>
         </div>
-      </section>
+      </section>}
 
       {filtered.length === 0 ? (
         <KomaEmptyState
@@ -79,7 +79,10 @@ export function EstoqueIngredientesTab({
             ? 'Comece importando uma NF-e ou cadastrando manualmente. Depois, vincule os ingredientes aos produtos nas fichas técnicas.'
             : 'Ajuste a busca ou a situação selecionada.'}
           action={insumos.length === 0
-            ? { label: 'Importar primeira NF-e', onClick: onImportXml, icon: FileUp }
+            ? <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <button type="button" onClick={onImportXml} className="koma-btn-success inline-flex items-center gap-2 px-4 py-2 text-xs font-bold"><FileUp size={14} /> Importar NF-e</button>
+                <button type="button" onClick={onCreate} className="koma-btn-secondary inline-flex items-center gap-2 px-4 py-2 text-xs font-bold"><Plus size={14} /> Cadastrar manualmente</button>
+              </div>
             : { label: 'Limpar filtros', onClick: clearFilters, variant: 'secondary' }}
         />
       ) : (

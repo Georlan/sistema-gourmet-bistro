@@ -107,7 +107,7 @@ const CountField: React.FC<CountFieldProps> = ({
           hideExpected || difference === null ? 'text-koma-muted' : isExact ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300',
         )}>
           {hideExpected
-            ? 'Valor oculto'
+            ? 'Esperado não exibido'
             : difference === null
               ? 'Informe para comparar'
               : isExact
@@ -464,7 +464,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
           <div className="closing-toolbar-actions mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
             {closingMode === 'rapida' ? (
               <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Registrado</span>
+                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Vendas registradas</span>
                 <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Informado</span>
                 <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
                 <strong className="text-sm tabular-nums text-koma-secondary sm:text-base">{formatMoney(expectedTotal)}</strong>
@@ -494,38 +494,38 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
         </div>
 
         <div className="mt-4 space-y-3">
-          <div className={clsx('rounded-2xl border p-4', pendingPaymentsCount > 0 ? 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30' : 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30')}>
+          {pendingPaymentsCount > 0 && <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
             <div className="flex items-start justify-between gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-emerald-800 dark:text-emerald-300"><ReceiptText size={17} /></span>
               <strong className="text-xl tabular-nums text-koma-foreground">{pendingPaymentsCount}</strong>
             </div>
             <h3 className="mt-3 text-xs font-bold text-koma-foreground">Pagamentos para confirmar</h3>
             <p className="mt-1 text-[10px] text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa de confirmação.` : 'Nenhum pagamento aguardando confirmação.'}</p>
-            {pendingPaymentsCount > 0 && onNavigateToPendingPayments && (
+            {onNavigateToPendingPayments && (
               <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver pagamentos <ArrowRight size={13} /></button>
             )}
-          </div>
+          </div>}
 
-          <div className={clsx('rounded-2xl border p-4', openAccountsCount > 0 ? 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30' : 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30')}>
+          {openAccountsCount > 0 && <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-900/50 dark:bg-rose-950/30">
             <div className="flex items-start justify-between gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-emerald-800 dark:text-emerald-300"><ClipboardCheck size={17} /></span>
               <strong className="text-xl tabular-nums text-koma-foreground">{openAccountsCount}</strong>
             </div>
             <h3 className="mt-3 text-xs font-bold text-koma-foreground">Contas ainda abertas</h3>
             <p className="mt-1 text-[10px] text-koma-muted">{openAccountsCount > 0 ? 'Finalize essas contas antes de encerrar o turno.' : 'Todas as contas estão finalizadas.'}</p>
-            {openAccountsCount > 0 && onNavigateToOpenComandas && (
+            {onNavigateToOpenComandas && (
               <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver contas <ArrowRight size={13} /></button>
             )}
-          </div>
+          </div>}
         </div>
 
-        <div className={clsx('mt-4 flex items-start gap-3 rounded-2xl border p-4', hasBlockingPending ? 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30' : 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30')}>
-          {hasBlockingPending ? <AlertCircle size={18} className="mt-0.5 shrink-0 text-rose-800 dark:text-rose-300" /> : <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-800 dark:text-emerald-300" />}
+        {!hasBlockingPending && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+          <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-800 dark:text-emerald-300" />
           <div>
-            <strong className={clsx('block text-xs', hasBlockingPending ? 'text-rose-800 dark:text-rose-300' : 'text-emerald-800 dark:text-emerald-300')}>{hasBlockingPending ? 'Ainda não dá para fechar' : 'Pronto para conferir'}</strong>
-            <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{hasBlockingPending ? 'Resolva os itens acima para continuar.' : closingMode === 'cega' ? 'Os valores do sistema ficarão ocultos até o fechamento.' : 'Cartões e Pix já estão preenchidos; conte o dinheiro para continuar.'}</p>
+            <strong className="block text-xs text-emerald-800 dark:text-emerald-300">Pronto para conferir</strong>
+            <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{closingMode === 'cega' ? 'Os valores do sistema ficarão ocultos até o fechamento.' : 'Cartões e Pix já estão preenchidos; conte o dinheiro para continuar.'}</p>
           </div>
-        </div>
+        </div>}
       </aside>
 
       {showConfirmModal && (

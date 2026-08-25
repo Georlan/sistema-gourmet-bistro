@@ -25,14 +25,14 @@ export function EstoqueFornecedoresTab({ fornecedores, onCreate, onEdit, onDelet
 
   return (
     <div className="space-y-3.5 text-left animate-fade-in">
-      <section className="koma-toolbar">
+      {fornecedores.length > 0 && <section className="koma-toolbar">
         <div className="koma-toolbar__search">
           <Search size={14} aria-hidden="true" />
           <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar fornecedor…" aria-label="Buscar fornecedores" />
           {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
         </div>
         <div className="koma-toolbar__actions"><button type="button" onClick={onCreate} className="koma-btn-success"><Plus size={14} /> Novo fornecedor</button></div>
-      </section>
+      </section>}
 
       {filtered.length === 0 ? (
         <KomaEmptyState

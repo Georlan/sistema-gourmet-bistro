@@ -115,9 +115,12 @@ const ActivityRow = ({ activity, onRefund }: { activity: CaixaAtividadeRecente; 
           {isOutflow ? '−' : '+'} {formatCurrency(activity.valor)}
         </strong>
         {refundPaymentId && onRefund && (
-          <button type="button" onClick={() => onRefund(refundPaymentId)} className="text-[9px] font-bold text-rose-700 hover:text-rose-600 dark:text-rose-300 dark:hover:text-rose-200" aria-label={`Devolver pagamento de ${activity.origem}`}>
-            Devolver
-          </button>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-lg px-2 py-1 text-[9px] font-bold text-koma-muted hover:bg-koma-raised hover:text-koma-foreground" aria-label={`Ações do recebimento de ${activity.origem}`}>Ações</summary>
+            <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-xl border border-koma-border bg-koma-panel p-1 shadow-xl">
+              <button type="button" onClick={() => onRefund(refundPaymentId)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[10px] font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300" aria-label={`Devolver pagamento de ${activity.origem}`}><RotateCcw size={12} /> Fazer devolução</button>
+            </div>
+          </details>
         )}
       </span>
     </li>
@@ -170,13 +173,13 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
 
   const metrics = [
     {
-      label: 'Vendas líquidas',
+      label: 'Vendas recebidas',
       value: turnoResumo.total_vendas,
-      help: `${turnoResumo.total_pedidos_pagos} comanda(s) com recebimento`,
+      help: `${turnoResumo.total_pedidos_pagos} ${turnoResumo.total_pedidos_pagos === 1 ? 'conta recebida' : 'contas recebidas'}`,
       icon: ReceiptText,
     },
     {
-      label: 'Pix e cartões líquidos',
+      label: 'Recebido no Pix e cartões',
       value: digitalTotal,
       help: `${formatCurrency(turnoResumo.total_pix)} Pix · ${formatCurrency(turnoResumo.total_cartao)} cartões`,
       icon: WalletCards,
@@ -185,7 +188,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
       label: 'Contas pendentes',
       value: pendingPaymentsTotal,
       help: pendingPaymentsCount > 0
-        ? `${pendingPaymentsCount} confirmação(ões) aguardando`
+        ? `${pendingPaymentsCount} ${pendingPaymentsCount === 1 ? 'confirmação aguardando' : 'confirmações aguardando'}`
         : 'Nenhuma confirmação aguardando',
       icon: CheckCircle2,
     },
@@ -200,7 +203,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           </span>
           <div className="min-w-0">
             <h2 className="text-xs font-bold text-koma-foreground">Ações do turno</h2>
-            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Adicione ou retire dinheiro e faça devoluções quando necessário.</p>
+            <p className="mt-0.5 truncate text-[10px] text-koma-muted">Adicione ou retire dinheiro do caixa. Devoluções ficam junto de cada venda.</p>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
@@ -278,7 +281,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
                   {isTurnoEsquecido ? 'Turno aberto há mais de 24 horas' : pendingPaymentsCount > 0 ? 'Há pagamentos para confirmar' : 'Turno em ordem'}
                 </h3>
                 <p className="mt-0.5 text-[10px] leading-relaxed text-koma-muted">
-                  {isTurnoEsquecido ? 'Confira os valores e encerre o turno anterior antes de continuar.' : pendingPaymentsCount > 0 ? `${pendingPaymentsCount} pagamento(s) precisam de conferência.` : 'Nenhuma pendência precisa da sua atenção agora.'}
+                  {isTurnoEsquecido ? 'Confira os valores e encerre o turno anterior antes de continuar.' : pendingPaymentsCount > 0 ? `${pendingPaymentsCount} ${pendingPaymentsCount === 1 ? 'pagamento precisa' : 'pagamentos precisam'} de conferência.` : 'Nenhuma pendência precisa da sua atenção agora.'}
                 </p>
                 {(isTurnoEsquecido || pendingPaymentsCount > 0) && (
                   <button type="button" onClick={isTurnoEsquecido ? onNavigateToFechamento : onNavigateToPendingPayments} className="mt-3 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-[#7becce]">

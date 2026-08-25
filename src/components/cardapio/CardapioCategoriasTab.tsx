@@ -5,6 +5,7 @@ import {
   Edit3,
   GlassWater,
   Layers3,
+  MoreHorizontal,
   Plus,
   Printer,
   Search,
@@ -41,7 +42,7 @@ const destinationMeta = {
     className: 'border-sky-400/15 bg-sky-400/[0.06] text-sky-600 dark:text-sky-300',
   },
   NENHUM: {
-    label: 'Sem impressão',
+    label: 'Não imprimir',
     description: 'Não gera via de preparação',
     icon: Printer,
     className: 'border-zinc-600/30 bg-zinc-800/35 text-koma-subtle',
@@ -104,6 +105,7 @@ export function CardapioCategoriasTab({
       return category.nome.toLocaleLowerCase('pt-BR').includes(normalized);
     }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
   }, [apiCategorias, destinationFilter, search]);
+  const hasActiveFilters = Boolean(search.trim() || destinationFilter !== 'TODOS');
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -150,7 +152,7 @@ export function CardapioCategoriasTab({
           <option value="TODOS">Todos os destinos</option>
           <option value="COZINHA">Cozinha</option>
           <option value="BAR">Bar</option>
-          <option value="NENHUM">Sem impressão</option>
+          <option value="NENHUM">Não imprimir</option>
         </select>
 
         <div className="koma-toolbar__actions">
@@ -169,16 +171,16 @@ export function CardapioCategoriasTab({
         />
       ) : (
         <section className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel" aria-label="Lista de categorias">
-          <header className="flex flex-col gap-1.5 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          {(hasActiveFilters || emptyCategories > 0 || orphanProducts > 0) && <header className="flex flex-col gap-1.5 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
             <p className="text-[10px] font-medium text-koma-muted">
               <strong className="font-mono text-koma-foreground">{filteredCategories.length}</strong> de {apiCategorias.length} categorias
               {emptyCategories > 0 && <> · <span className="text-amber-700 dark:text-amber-300">{emptyCategories} vazias</span></>}
             </p>
             {orphanProducts > 0 && <p className="text-[9px] font-bold text-amber-700 dark:text-amber-300">{orphanProducts} {orphanProducts === 1 ? 'produto precisa' : 'produtos precisam'} de categoria</p>}
-          </header>
+          </header>}
 
           <div className="hidden grid-cols-[minmax(14rem,1fr)_7rem_11rem_7rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted sm:grid">
-            <span>Categoria</span><span>Produtos</span><span>Produção</span><span className="text-right">Ações</span>
+            <span>Categoria</span><span>Produtos</span><span>Destino do pedido</span><span className="text-right">Ações</span>
           </div>
 
           {filteredCategories.map((category) => {
@@ -204,7 +206,12 @@ export function CardapioCategoriasTab({
 
                 <div className="flex items-center justify-end gap-0.5">
                   <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground"><Edit3 size={13} /> <span>Editar</span></button>
-                  <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="rounded-lg p-2 text-rose-600 transition-colors hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300" title="Excluir categoria" aria-label={`Excluir ${category.nome}`}><Trash2 size={13} /></button>
+                  <details className="relative">
+                    <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" aria-label={`Mais ações para ${category.nome}`}><MoreHorizontal size={15} /></summary>
+                    <div className="absolute right-0 z-20 mt-1 min-w-40 overflow-hidden rounded-xl border border-koma-border bg-koma-panel p-1 shadow-xl">
+                      <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[10px] font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"><Trash2 size={13} /> Excluir categoria</button>
+                    </div>
+                  </details>
                 </div>
               </article>
             );
