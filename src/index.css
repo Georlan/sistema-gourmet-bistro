@@ -114,6 +114,10 @@
   --koma-table-free-action-border: var(--koma-success-border);
   --koma-table-free-action-text: var(--koma-success-text);
   --koma-table-free-action-hover: var(--koma-success-hover);
+  --koma-table-occupied-action-bg: var(--koma-danger-bg);
+  --koma-table-occupied-action-border: var(--koma-danger-border);
+  --koma-table-occupied-action-text: var(--koma-danger-text);
+  --koma-table-occupied-action-hover: var(--koma-danger-hover);
 
   --koma-waiter-bg: radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.06), transparent 25rem), linear-gradient(180deg, var(--koma-surface-shell) 0%, #0c0e0d 58%, var(--koma-surface-shell) 100%);
   --koma-sidebar-bg: radial-gradient(circle at 12% 0%, rgba(0, 201, 150, 0.05), transparent 15rem), linear-gradient(180deg, #101412 0%, #0c0f0d 100%);
@@ -198,6 +202,10 @@
   --koma-table-free-action-border: #4fbd91;
   --koma-table-free-action-text: #064e3b;
   --koma-table-free-action-hover: #a8e3c8;
+  --koma-table-occupied-action-bg: #f7bcbc;
+  --koma-table-occupied-action-border: #e86161;
+  --koma-table-occupied-action-text: #7f1d1d;
+  --koma-table-occupied-action-hover: #f4a9a9;
 
   --koma-waiter-bg: linear-gradient(180deg, #ffffff 0%, #f3f6f7 58%, #ffffff 100%);
   --koma-sidebar-bg: #ffffff;
@@ -3048,6 +3056,18 @@ body {
 .koma-table-free-action:hover {
   background-color: var(--koma-table-free-action-hover);
   border-color: var(--koma-table-free-border-hover);
+}
+
+.koma-table-occupied-action {
+  background-color: var(--koma-table-occupied-action-bg);
+  border: 1px solid var(--koma-table-occupied-action-border);
+  color: var(--koma-table-occupied-action-text);
+  font-weight: 800;
+  transition: all 140ms ease;
+}
+.koma-table-occupied-action:hover {
+  background-color: var(--koma-table-occupied-action-hover);
+  border-color: var(--koma-danger-hover);
 }
 
 .koma-btn-danger {

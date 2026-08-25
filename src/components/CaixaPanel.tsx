@@ -6412,7 +6412,7 @@ export function CaixaPanel({
                                         itens: tableOrders.flatMap(order => order.itens || []),
                                         comandaIds: tableOrders.map(order => order.id),
                                       })}
-                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-danger', 'hover:brightness-110', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-all', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
+                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-table-occupied-action', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-all', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
                                       <Receipt size={11} />
                                       Ver comanda
