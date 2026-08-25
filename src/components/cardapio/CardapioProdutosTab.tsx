@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
 import {
+  Ban,
+  ChefHat,
   Copy,
   Edit3,
   Eye,
-  Image as ImageIcon,
+  GlassWater,
+  ImageIcon,
   MoreHorizontal,
   PackageOpen,
   PauseCircle,
@@ -13,13 +15,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import clsx from 'clsx';
+import { useEffect, useMemo, useState } from 'react';
+import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import { smartSearchMatch } from '../../domain';
-import { KomaEmptyState } from '../shared/KomaEmptyState';
-
-type AvailabilityFilter = 'todos' | 'publicados' | 'pausados';
 
 interface CardapioProdutosTabProps {
   produtos: Product[];
@@ -36,12 +36,19 @@ interface CardapioProdutosTabProps {
   onFocusCategoryHandled?: () => void;
 }
 
-const currency = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-});
+type AvailabilityFilter = 'TODOS' | 'DISPONIVEIS' | 'PAUSADOS';
 
-const productCategoryId = (product: Product) => String(product.categoria_id || '');
+const availabilityOptions: { value: AvailabilityFilter; label: string }[] = [
+  { value: 'TODOS', label: 'Todos' },
+  { value: 'DISPONIVEIS', label: 'Disponíveis' },
+  { value: 'PAUSADOS', label: 'Pausados' },
+];
+
+const routeMeta: Record<string, { label: string; icon: typeof ChefHat }> = {
+  COZINHA: { label: 'Imprime na cozinha', icon: ChefHat },
+  BAR: { label: 'Imprime no bar', icon: GlassWater },
+  NENHUM: { label: 'Sem impressão', icon: Ban },
+};
 
 export function CardapioProdutosTab({
   produtos,
@@ -58,98 +65,78 @@ export function CardapioProdutosTab({
   onFocusCategoryHandled,
 }: CardapioProdutosTabProps) {
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('todos');
-  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('todos');
+  const [categoryFilter, setCategoryFilter] = useState('TODAS');
+  const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('TODOS');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [pendingBatchAction, setPendingBatchAction] = useState(false);
+  const [pendingCategoryAction, setPendingCategoryAction] = useState(false);
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
-  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set());
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!focusCategoryId) return;
     setSearch('');
-    setAvailabilityFilter('todos');
-    setCategoryFilter(String(focusCategoryId));
+    setAvailabilityFilter('TODOS');
+    setCategoryFilter(focusCategoryId);
     onFocusCategoryHandled?.();
   }, [focusCategoryId, onFocusCategoryHandled]);
 
-  const categoryById = useMemo(
-    () => new Map(categorias.map((category) => [String(category.id), category])),
-    [categorias],
-  );
+  const categoryStats = useMemo(() => {
+    const stats = new Map<string, { total: number; available: number; paused: number }>();
+    categorias.forEach((category) => stats.set(category.id, { total: 0, available: 0, paused: 0 }));
+    produtos.forEach((product) => {
+      const categoryId = String(product.categoria_id || '');
+      if (!categoryId) return;
+      const current = stats.get(categoryId) ?? { total: 0, available: 0, paused: 0 };
+      current.total += 1;
+      if (product.ativo !== false) current.available += 1;
+      else current.paused += 1;
+      stats.set(categoryId, current);
+    });
+    return stats;
+  }, [categorias, produtos]);
 
-  const categoryNameFor = (product: Product) => (
-    categoryById.get(String(productCategoryId(product)))?.nome
-    || product.categoria
-    || 'Sem categoria'
-  );
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = search.trim();
+    return produtos
+      .filter((product) => {
+        const categoryName = categorias.find((category) => String(category.id) === String(product.categoria_id))?.nome || product.categoria || '';
+        const matchesSearch = !normalizedSearch
+          || smartSearchMatch(product.nome, normalizedSearch)
+          || smartSearchMatch(product.descricao || '', normalizedSearch)
+          || smartSearchMatch(product.id, normalizedSearch)
+          || smartSearchMatch(categoryName, normalizedSearch);
+        const matchesCategory = categoryFilter === 'TODAS'
+          || String(product.categoria_id) === categoryFilter;
+        const isAvailable = product.ativo !== false;
+        const matchesAvailability = availabilityFilter === 'TODOS'
+          || (availabilityFilter === 'DISPONIVEIS' && isAvailable)
+          || (availabilityFilter === 'PAUSADOS' && !isAvailable);
+        return matchesSearch && matchesCategory && matchesAvailability;
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [availabilityFilter, categorias, categoryFilter, produtos, search]);
 
-  const filteredProducts = useMemo(() => produtos.filter((product) => {
-    if (categoryFilter !== 'todos' && productCategoryId(product) !== categoryFilter) return false;
-    if (availabilityFilter === 'publicados' && product.ativo === false) return false;
-    if (availabilityFilter === 'pausados' && product.ativo !== false) return false;
-    const term = search.trim();
-    if (!term) return true;
-    return smartSearchMatch(product.nome, term)
-      || smartSearchMatch(product.descricao || '', term)
-      || smartSearchMatch(product.id, term)
-      || smartSearchMatch(categoryNameFor(product), term);
-  }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })), [availabilityFilter, categoryById, categoryFilter, produtos, search]);
+  const selectedCategory = categoryFilter === 'TODAS'
+    ? null
+    : categorias.find((category) => String(category.id) === categoryFilter) ?? null;
+  const selectedCategoryStats = selectedCategory
+    ? categoryStats.get(String(selectedCategory.id)) ?? { total: 0, available: 0, paused: 0 }
+    : null;
+  const selectedRoute = selectedCategory
+    ? routeMeta[selectedCategory.destino_impressao || 'NENHUM'] ?? routeMeta.NENHUM
+    : null;
+  const SelectedRouteIcon = selectedRoute?.icon;
+  const visibleIds = filteredProducts.map((product) => product.id);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.has(id));
+  const selectedCount = selectedProductIds.size;
 
-  React.useEffect(() => {
-    const visibleIds = new Set(filteredProducts.map((product) => product.id));
+  useEffect(() => {
+    const validProductIds = new Set(produtos.map((product) => String(product.id)));
     setSelectedProductIds((current) => {
-      const next = new Set([...current].filter((id) => visibleIds.has(id)));
+      const next = new Set(Array.from(current).filter((id) => validProductIds.has(id)));
       return next.size === current.size ? current : next;
     });
-  }, [filteredProducts]);
-
-  const availabilityCounts = useMemo(() => ({
-    todos: produtos.length,
-    publicados: produtos.filter((product) => product.ativo !== false).length,
-    pausados: produtos.filter((product) => product.ativo === false).length,
-  }), [produtos]);
-
-  const selectedCategory = categoryFilter === 'todos' ? null : categoryById.get(categoryFilter) || null;
-  const selectedCategoryProducts = useMemo(
-    () => categoryFilter === 'todos'
-      ? []
-      : produtos.filter((product) => productCategoryId(product) === categoryFilter),
-    [categoryFilter, produtos],
-  );
-  const selectedCategoryIsAvailable = selectedCategoryProducts.length > 0
-    && selectedCategoryProducts.every((product) => product.ativo !== false);
-  const hasActiveFilters = Boolean(search.trim() || categoryFilter !== 'todos' || availabilityFilter !== 'todos');
-  const allVisibleSelected = filteredProducts.length > 0
-    && filteredProducts.every((product) => selectedProductIds.has(product.id));
-
-  const handleToggle = async (product: Product) => {
-    if (pendingProductId) return;
-    setPendingProductId(product.id);
-    try {
-      await onToggleProduct(product, product.ativo === false);
-    } finally {
-      setPendingProductId(null);
-    }
-  };
-
-  const handleCategoryAvailability = async () => {
-    if (!selectedCategory || pendingCategoryId || selectedCategoryProducts.length === 0) return;
-    setPendingCategoryId(selectedCategory.id);
-    try {
-      await onSetCategoryAvailability(
-        selectedCategoryProducts.map((product) => product.id),
-        !selectedCategoryIsAvailable,
-      );
-    } finally {
-      setPendingCategoryId(null);
-    }
-  };
-
-  const clearFilters = () => {
-    setSearch('');
-    setCategoryFilter('todos');
-    setAvailabilityFilter('todos');
-  };
+  }, [produtos]);
 
   const toggleProductSelection = (productId: string) => {
     setSelectedProductIds((current) => {
@@ -163,194 +150,381 @@ export function CardapioProdutosTab({
   const toggleAllVisible = () => {
     setSelectedProductIds((current) => {
       const next = new Set(current);
-      if (allVisibleSelected) filteredProducts.forEach((product) => next.delete(product.id));
-      else filteredProducts.forEach((product) => next.add(product.id));
+      if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
       return next;
     });
   };
 
-  const handleSelectedAvailability = async (ativo: boolean) => {
-    if (selectedProductIds.size === 0 || pendingCategoryId) return;
-    setPendingCategoryId('selected-products');
+  const applyBatchAvailability = async (available: boolean) => {
+    if (!selectedCount || pendingBatchAction) return;
+    setPendingBatchAction(true);
     try {
-      await onSetCategoryAvailability([...selectedProductIds], ativo);
+      await onSetCategoryAvailability(Array.from(selectedProductIds), available);
       setSelectedProductIds(new Set());
     } finally {
-      setPendingCategoryId(null);
+      setPendingBatchAction(false);
     }
   };
 
+  const applyCategoryAvailability = async (available: boolean) => {
+    if (!selectedCategory || pendingCategoryAction) return;
+    setPendingCategoryAction(true);
+    try {
+      const productIds = produtos
+        .filter((product) => String(product.categoria_id) === String(selectedCategory.id))
+        .map((product) => product.id);
+      await onSetCategoryAvailability(productIds, available);
+    } finally {
+      setPendingCategoryAction(false);
+    }
+  };
+
+  const activeCount = produtos.filter((product) => product.ativo !== false).length;
+  const pausedCount = produtos.length - activeCount;
+
+  const handleProductAvailability = async (product: Product) => {
+    if (pendingProductId) return;
+    setPendingProductId(product.id);
+    try {
+      await onToggleProduct(product, product.ativo === false);
+    } finally {
+      setPendingProductId(null);
+    }
+  };
+
+  if (!catalogReady && produtos.length === 0) {
+    return (
+      <div className="grid min-h-64 place-items-center rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-500 dark:border-white/10 dark:bg-[#111713]">
+        Carregando catálogo...
+      </div>
+    );
+  }
+
   return (
-    <div className="orders-workspace w-full space-y-3.5 pb-8 text-left animate-fade-in" aria-labelledby="catalog-products-heading">
-      <h1 id="catalog-products-heading" className="sr-only">Produtos do cardápio</h1>
-
-      <section className="koma-toolbar" aria-label="Ferramentas do catálogo">
-        <div className="koma-toolbar__search">
-          <Search size={14} aria-hidden="true" />
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar produto, categoria ou código…" aria-label="Buscar produtos" />
-          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
-        </div>
-
-        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="koma-toolbar__select" aria-label="Filtrar produtos por categoria">
-          <option value="todos">Todas as categorias</option>
-          {categorias.map((category) => <option key={category.id} value={category.id}>{category.nome}</option>)}
-        </select>
-
-        <div className="inline-flex min-h-[2.35rem] max-w-full shrink-0 items-center overflow-x-auto rounded-xl border border-koma-border bg-koma-input p-1" aria-label="Filtrar por disponibilidade">
-          {([
-            ['todos', 'Todos'],
-            ['publicados', 'Disponíveis'],
-            ['pausados', 'Pausados'],
-          ] as const).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setAvailabilityFilter(value)}
-              aria-pressed={availabilityFilter === value}
-              className={clsx(
-                'inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-bold transition-colors',
-                availabilityFilter === value
-                  ? 'bg-emerald-500/15 text-emerald-800 shadow-sm ring-1 ring-emerald-500/25 dark:text-emerald-200'
-                  : 'text-koma-muted hover:bg-koma-raised hover:text-koma-foreground',
-              )}
-            >
-              {label}
-              <span className="font-mono text-[8px] opacity-75">{availabilityCounts[value]}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="koma-toolbar__actions">
-          {previewUrl && <a href={previewUrl} target="_blank" rel="noreferrer" className="koma-btn-secondary"><Eye size={14} /> Ver cardápio</a>}
-          <button type="button" onClick={onCreateProduct} className="koma-btn-success"><Plus size={14} /> Novo produto</button>
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-[#111713]">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]" aria-label="Categorias do cardápio">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('TODAS')}
+            aria-pressed={categoryFilter === 'TODAS'}
+            className={clsx(
+              'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+              categoryFilter === 'TODAS'
+                ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm dark:border-emerald-500/70 dark:bg-emerald-500/20 dark:text-emerald-200'
+                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-300 dark:border-white/10 dark:bg-black/10 dark:text-slate-300 dark:hover:border-emerald-500/40',
+            )}
+          >
+            <PackageOpen size={16} />
+            <span className="font-black">Todos</span>
+            <span className={clsx('text-xs font-bold', categoryFilter === 'TODAS' ? 'text-white/80 dark:text-emerald-100/70' : 'text-slate-500 dark:text-slate-500')}>
+              {produtos.length}
+            </span>
+          </button>
+          {categorias.map((category) => {
+            const stats = categoryStats.get(category.id) ?? { total: 0, available: 0, paused: 0 };
+            const active = categoryFilter === String(category.id);
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => setCategoryFilter(String(category.id))}
+                aria-pressed={active}
+                className={clsx(
+                  'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+                  active
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/5',
+                )}
+              >
+                <span className="max-w-48 truncate font-black">{category.nome}</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-500">{stats.total}</span>
+                {stats.paused > 0 && (
+                  <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                    {stats.paused} pausado{stats.paused === 1 ? '' : 's'}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {!catalogReady && produtos.length === 0 ? (
-        <div className="flex min-h-64 items-center justify-center rounded-[22px] border border-koma-border bg-koma-panel/60 text-[10px] font-bold uppercase tracking-[0.16em] text-koma-muted">Carregando catálogo…</div>
-      ) : filteredProducts.length === 0 ? (
-        <KomaEmptyState
-          icon={PackageOpen}
-          title={produtos.length === 0 ? 'Cadastre o primeiro produto' : 'Nenhum produto encontrado'}
-          description={produtos.length === 0 ? 'Produtos cadastrados aqui ficam disponíveis no caixa, atendimento e cardápio online.' : 'Ajuste a busca ou os filtros para ver outros produtos.'}
-          action={produtos.length === 0
-            ? { label: 'Novo produto', onClick: onCreateProduct, icon: Plus }
-            : { label: 'Limpar filtros', onClick: clearFilters, variant: 'secondary' }}
-        />
-      ) : (
-        <section className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel" aria-label="Catálogo de produtos">
-          <header className="flex flex-col gap-2 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <label className="inline-flex cursor-pointer items-center gap-2 text-[10px] font-semibold text-koma-secondary">
-                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} className="h-3.5 w-3.5 rounded border-koma-border accent-emerald-600" />
-                Selecionar exibidos
-              </label>
-              <span className="h-4 w-px bg-koma-border" aria-hidden="true" />
-              <p className="text-[10px] font-medium text-koma-muted">
-                <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong>{hasActiveFilters ? ` de ${produtos.length}` : ''} {filteredProducts.length === 1 ? 'produto' : 'produtos'}
-              </p>
-            </div>
-            {selectedCategory && selectedCategoryProducts.length > 0 && (
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <label className="relative min-w-0 flex-1">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar produto, descrição ou código..."
+              aria-label="Buscar produtos"
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-10 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/15 dark:bg-black/20 dark:text-white"
+            />
+            {search && (
               <button
                 type="button"
-                onClick={() => void handleCategoryAvailability()}
-                disabled={Boolean(pendingCategoryId)}
-                className={clsx(
-                  'inline-flex min-h-8 items-center justify-center self-start rounded-lg border px-2.5 text-[9px] font-bold transition-colors disabled:cursor-wait disabled:opacity-50 sm:self-auto',
-                  selectedCategoryIsAvailable ? 'koma-badge-warning' : 'koma-badge-success',
-                )}
+                onClick={() => setSearch('')}
+                aria-label="Limpar busca"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-white"
               >
-                {pendingCategoryId ? 'Salvando…' : selectedCategoryIsAvailable ? `Pausar ${selectedCategory.nome}` : `Disponibilizar ${selectedCategory.nome}`}
+                <X size={16} />
               </button>
             )}
-          </header>
-
-          {selectedProductIds.size > 0 && (
-            <div className="flex flex-col gap-2 border-b border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-              <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-200">
-                {selectedProductIds.size} {selectedProductIds.size === 1 ? 'produto selecionado' : 'produtos selecionados'}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void handleSelectedAvailability(true)} disabled={Boolean(pendingCategoryId)} className="koma-btn-success inline-flex min-h-8 items-center gap-1.5 px-3 text-[9px] font-bold disabled:opacity-50"><PlayCircle size={13} /> Disponibilizar</button>
-                <button type="button" onClick={() => void handleSelectedAvailability(false)} disabled={Boolean(pendingCategoryId)} className="koma-btn-secondary inline-flex min-h-8 items-center gap-1.5 px-3 text-[9px] font-bold disabled:opacity-50"><PauseCircle size={13} /> Pausar</button>
-                <button type="button" onClick={() => setSelectedProductIds(new Set())} className="min-h-8 px-2 text-[9px] font-bold text-koma-muted hover:text-koma-foreground">Limpar seleção</button>
-              </div>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-slate-300 bg-slate-100 p-1 dark:border-white/15 dark:bg-black/20" aria-label="Filtrar por disponibilidade">
+              {availabilityOptions.map((option) => {
+                const count = option.value === 'TODOS' ? produtos.length : option.value === 'DISPONIVEIS' ? activeCount : pausedCount;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setAvailabilityFilter(option.value)}
+                    aria-pressed={availabilityFilter === option.value}
+                    className={clsx(
+                      'rounded-lg px-3 py-2 text-xs font-black transition-colors',
+                      availabilityFilter === option.value
+                        ? 'bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-200'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                    )}
+                  >
+                    {option.label} <span className="ml-1 font-mono opacity-70">{count}</span>
+                  </button>
+                );
+              })}
             </div>
-          )}
-
-          <div className="hidden grid-cols-[1.25rem_minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_9rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted lg:grid">
-            <span aria-hidden="true" /><span>Produto</span><span>Categoria</span><span>Preço</span><span>Disponibilidade</span><span className="text-right">Ações</span>
-          </div>
-
-          {filteredProducts.map((product) => {
-            const isAvailable = product.ativo !== false;
-            const isPending = pendingProductId === product.id;
-            const categoryName = categoryNameFor(product);
-            const normalizedProductName = product.nome.trim().replace(/^#/, '');
-            const productNameAlreadyShowsCode = normalizedProductName === product.id
-              || normalizedProductName.startsWith(`${product.id} `)
-              || normalizedProductName.startsWith(`${product.id}-`);
-            return (
-              <article
-                key={product.id}
-                className={clsx(
-                  'group grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 border-b border-koma-border px-3 py-3 transition-colors last:border-b-0 hover:bg-koma-raised/50 sm:px-4 lg:grid-cols-[1.25rem_minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_9rem] lg:items-center',
-                  !isAvailable && 'bg-koma-canvas/35',
-                )}
+            {previewUrl && (
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-800 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:text-white dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
               >
-                <input
-                  type="checkbox"
-                  checked={selectedProductIds.has(product.id)}
-                  onChange={() => toggleProductSelection(product.id)}
-                  aria-label={`Selecionar ${product.nome}`}
-                  className="mt-3 h-3.5 w-3.5 rounded border-koma-border accent-emerald-600 lg:mt-0"
-                />
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className={clsx('flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-koma-border bg-koma-raised', !isAvailable && 'opacity-60 grayscale')}>
-                    {product.imagem ? <img src={product.imagem} alt="" className="h-full w-full object-cover" loading="lazy" /> : <ImageIcon size={17} className="text-koma-muted" aria-hidden="true" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <h2 className={clsx('truncate text-xs font-bold text-koma-foreground', !isAvailable && 'text-koma-muted')}>{product.nome}</h2>
-                      {!productNameAlreadyShowsCode && <span className="shrink-0 font-mono text-[9px] text-koma-muted">#{product.id}</span>}
-                    </div>
-                    <p className="mt-0.5 truncate text-[10px] text-koma-muted">{product.descricao || 'Sem descrição'}</p>
-                    <p className="mt-1 text-[9px] font-semibold text-koma-subtle lg:hidden">{categoryName} · {currency.format(Number(product.preco) || 0)}</p>
-                  </div>
-                </div>
+                <Eye size={16} /> Ver cardápio
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onCreateProduct}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400"
+            >
+              <Plus size={17} /> Novo produto
+            </button>
+          </div>
+        </div>
+      </section>
 
-                <span className="hidden truncate text-[10px] font-semibold text-koma-secondary lg:block">{categoryName}</span>
-                <strong className="hidden font-mono text-xs text-emerald-700 dark:text-emerald-400 lg:block">{currency.format(Number(product.preco) || 0)}</strong>
+      {selectedCategory && selectedCategoryStats && selectedRoute && SelectedRouteIcon && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-500/[0.07] lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-emerald-300 bg-white text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+              <SelectedRouteIcon size={19} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-black text-slate-950 dark:text-white">{selectedCategory.nome}</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {selectedCategoryStats.available} de {selectedCategoryStats.total} à venda · {selectedRoute.label}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedCategoryStats.paused > 0 && (
+              <button
+                type="button"
+                onClick={() => void applyCategoryAvailability(true)}
+                disabled={pendingCategoryAction}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
+              >
+                <PlayCircle size={16} /> Disponibilizar todos
+              </button>
+            )}
+            {selectedCategoryStats.available > 0 && (
+              <button
+                type="button"
+                onClick={() => void applyCategoryAvailability(false)}
+                disabled={pendingCategoryAction}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300 bg-white px-4 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15"
+              >
+                <PauseCircle size={16} /> Pausar categoria
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
-                <button
-                  type="button"
-                  onClick={() => void handleToggle(product)}
-                  disabled={isPending || Boolean(pendingCategoryId)}
-                  aria-pressed={isAvailable}
-                  aria-label={`${isAvailable ? 'Pausar' : 'Disponibilizar'} ${product.nome}`}
+      {selectedCount > 0 && (
+        <section className="flex flex-col gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-500/[0.08] md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-black text-slate-950 dark:text-white">{selectedCount} produto{selectedCount === 1 ? '' : 's'} selecionado{selectedCount === 1 ? '' : 's'}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">A alteração será aplicada de uma vez.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void applyBatchAvailability(true)}
+              disabled={pendingBatchAction}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
+            >
+              <PlayCircle size={16} /> Voltar a vender
+            </button>
+            <button
+              type="button"
+              onClick={() => void applyBatchAvailability(false)}
+              disabled={pendingBatchAction}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300 bg-white px-4 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300"
+            >
+              <PauseCircle size={16} /> Pausar venda
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedProductIds(new Set())}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-700 dark:border-white/15 dark:text-slate-300"
+            >
+              <X size={15} /> Limpar
+            </button>
+          </div>
+        </section>
+      )}
+
+      {filteredProducts.length === 0 ? (
+        <section className="grid min-h-72 place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-[#111713]">
+          <div className="max-w-md">
+            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+              <PackageOpen size={24} />
+            </div>
+            <h3 className="text-lg font-black text-slate-950 dark:text-white">Nenhum produto encontrado</h3>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Ajuste a busca, escolha outra categoria ou limpe o filtro de disponibilidade.</p>
+          </div>
+        </section>
+      ) : (
+        <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-400">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={toggleAllVisible}
+                className="h-4 w-4 rounded border-slate-400 accent-emerald-500"
+              />
+              Selecionar os {filteredProducts.length} exibidos
+            </label>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-500">
+              Clique em “Pausar venda” para retirar um item imediatamente.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {filteredProducts.map((product) => {
+              const isAvailable = product.ativo !== false;
+              const isSelected = selectedProductIds.has(product.id);
+              return (
+                <article
+                  key={product.id}
                   className={clsx(
-                    'col-start-2 lg:col-start-auto',
-                    'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-[9px] font-extrabold uppercase tracking-wide transition-colors disabled:cursor-wait disabled:opacity-50',
-                    isAvailable ? 'koma-badge-success' : 'koma-badge-warning',
+                    'relative flex min-h-52 flex-col rounded-2xl border p-4 shadow-sm transition',
+                    isAvailable
+                      ? 'border-emerald-200 bg-emerald-50/70 hover:border-emerald-400 dark:border-white/10 dark:bg-[#141b16] dark:hover:border-emerald-500/35'
+                      : 'border-rose-200 bg-rose-50 hover:border-rose-400 dark:border-rose-500/25 dark:bg-rose-950/20 dark:hover:border-rose-500/45',
+                    isSelected && 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#090e0b]',
                   )}
                 >
-                  <span className={clsx('h-1.5 w-1.5 rounded-full', isAvailable ? 'bg-emerald-600 dark:bg-emerald-300' : 'bg-amber-600 dark:bg-amber-300')} />
-                  {isPending ? 'Salvando…' : isAvailable ? 'Disponível' : 'Pausado'}
-                </button>
-
-                <div className="col-start-2 flex items-center justify-end gap-1 lg:col-start-auto">
-                  <button type="button" onClick={() => onEditProduct(product)} className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground" title="Editar produto" aria-label={`Editar ${product.nome}`}><Edit3 size={13} /><span>Editar</span></button>
-                  <button type="button" onClick={() => onDuplicateProduct(product)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}><Copy size={13} /></button>
-                  <details className="relative">
-                    <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" aria-label={`Mais ações para ${product.nome}`}><MoreHorizontal size={15} /></summary>
-                    <div className="absolute right-0 z-20 mt-1 min-w-40 overflow-hidden rounded-xl border border-koma-border bg-koma-panel p-1 shadow-xl">
-                      <button type="button" onClick={() => void onRemoveProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[10px] font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"><Trash2 size={13} /> Excluir produto</button>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleProductSelection(product.id)}
+                      aria-label={`Selecionar ${product.nome}`}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-slate-400 accent-emerald-500"
+                    />
+                    <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                      {product.imagem ? (
+                        <img src={product.imagem} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <ImageIcon size={19} />
+                      )}
                     </div>
-                  </details>
-                </div>
-              </article>
-            );
-          })}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="line-clamp-2 text-sm font-black text-slate-950 dark:text-white">{product.nome}</h3>
+                      <p className="mt-0.5 font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500">#{product.id}</p>
+                    </div>
+                    <details className="relative shrink-0">
+                      <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-white/10 dark:hover:text-white" aria-label={`Mais ações para ${product.nome}`}>
+                        <MoreHorizontal size={16} />
+                      </summary>
+                      <div className="absolute right-0 z-20 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#17201a]">
+                        <button type="button" onClick={() => onDuplicateProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">
+                          <Copy size={14} /> Duplicar
+                        </button>
+                        <button type="button" onClick={() => void onRemoveProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">
+                          <Trash2 size={14} /> Excluir
+                        </button>
+                      </div>
+                    </details>
+                  </div>
+
+                  <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-slate-600 dark:text-slate-400">
+                    {product.descricao || 'Sem descrição cadastrada.'}
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {categoryFilter === 'TODAS' && product.categoria && (
+                      <button
+                        type="button"
+                        onClick={() => product.categoria_id && setCategoryFilter(String(product.categoria_id))}
+                        className="max-w-full truncate rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600 hover:border-emerald-300 hover:text-emerald-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-400 dark:hover:text-emerald-300"
+                      >
+                        {product.categoria}
+                      </button>
+                    )}
+                    <span className={clsx(
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide',
+                      isAvailable
+                        ? 'border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
+                        : 'border-rose-300 bg-rose-100 text-rose-800 dark:border-rose-500/35 dark:bg-rose-500/10 dark:text-rose-300',
+                    )}>
+                      <span className={clsx('h-1.5 w-1.5 rounded-full', isAvailable ? 'bg-emerald-500' : 'bg-rose-500')} />
+                      {isAvailable ? 'À venda' : 'Pausado'}
+                    </span>
+                  </div>
+
+                  <div className="mt-auto pt-4">
+                    <div className="mb-3 flex items-end justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Preço</p>
+                        <p className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">
+                          {Number(product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onEditProduct(product)}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
+                      >
+                        <Edit3 size={14} /> Editar
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleProductAvailability(product)}
+                      disabled={pendingProductId === product.id || pendingBatchAction || pendingCategoryAction}
+                      className={clsx(
+                        'inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border text-xs font-black transition',
+                        isAvailable
+                          ? 'border-rose-300 bg-white text-rose-700 hover:bg-rose-100 dark:border-rose-500/35 dark:bg-rose-500/10 dark:text-rose-300 dark:hover:bg-rose-500/15'
+                          : 'border-emerald-500 bg-emerald-500 text-emerald-950 hover:bg-emerald-400',
+                        'disabled:cursor-wait disabled:opacity-60',
+                      )}
+                    >
+                      {isAvailable ? <PauseCircle size={16} /> : <PlayCircle size={16} />}
+                      {pendingProductId === product.id ? 'Salvando...' : isAvailable ? 'Pausar venda' : 'Voltar a vender'}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </section>
       )}
     </div>

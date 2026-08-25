@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
+  Ban,
   ChefHat,
   Edit3,
   GlassWater,
   Layers3,
   MoreHorizontal,
   Plus,
-  Printer,
   Search,
   Trash2,
   X,
@@ -17,6 +17,7 @@ import { KomaEmptyState } from '../shared/KomaEmptyState';
 import type { Product } from '../../types';
 
 type DestinationFilter = 'TODOS' | 'COZINHA' | 'BAR' | 'NENHUM';
+type PrintDestination = Exclude<DestinationFilter, 'TODOS'>;
 
 interface CardapioCategoriasTabProps {
   apiCategorias: CategoryData[];
@@ -29,26 +30,35 @@ interface CardapioCategoriasTabProps {
   onManageProducts?: (categoryId: string) => void;
 }
 
-const destinationMeta = {
+const destinationMeta: Record<PrintDestination, {
+  label: string;
+  shortLabel: string;
+  description: string;
+  icon: typeof ChefHat;
+}> = {
   COZINHA: {
-    label: 'Cozinha',
-    description: 'Envia os itens para a impressão da cozinha',
+    label: 'Imprimir na cozinha',
+    shortLabel: 'Cozinha',
+    description: 'Gera uma via para a equipe de preparo.',
     icon: ChefHat,
-    className: 'border-emerald-500/20 bg-emerald-500/[0.08] text-emerald-800 dark:text-emerald-200',
   },
   BAR: {
-    label: 'Bar',
-    description: 'Envia os itens para a impressão do bar',
+    label: 'Imprimir no bar',
+    shortLabel: 'Bar',
+    description: 'Separa as bebidas em uma via própria.',
     icon: GlassWater,
-    className: 'border-emerald-500/20 bg-emerald-500/[0.08] text-emerald-800 dark:text-emerald-200',
   },
   NENHUM: {
     label: 'Não imprimir',
-    description: 'Não gera via de preparação',
-    icon: Printer,
-    className: 'border-zinc-600/30 bg-zinc-800/35 text-koma-subtle',
+    shortLabel: 'Sem impressão',
+    description: 'Entrega direta, sem via de preparo.',
+    icon: Ban,
   },
-} as const;
+};
+
+const normalizeDestination = (value: string): PrintDestination => (
+  value === 'COZINHA' || value === 'BAR' ? value : 'NENHUM'
+);
 
 export function CardapioCategoriasTab({
   apiCategorias,
@@ -66,6 +76,7 @@ export function CardapioCategoriasTab({
   const [deletingCategory, setDeletingCategory] = useState<CategoryData | null>(null);
   const [search, setSearch] = useState('');
   const [destinationFilter, setDestinationFilter] = useState<DestinationFilter>('TODOS');
+  const [pendingRouteCategoryId, setPendingRouteCategoryId] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (!onCreateRequest) return;
@@ -73,47 +84,50 @@ export function CardapioCategoriasTab({
     setModalOpen(true);
   }, [onCreateRequest]);
 
+  const categoryLookup = useMemo(() => {
+    const byId = new Map(apiCategorias.map((category) => [String(category.id), category]));
+    const byName = new Map(apiCategorias.map((category) => [category.nome, category]));
+    return { byId, byName };
+  }, [apiCategorias]);
+
   const productCountByCategory = useMemo(() => {
     const counts = new Map<string, number>();
     apiCategorias.forEach((category) => counts.set(String(category.id), 0));
     apiProdutos.forEach((product) => {
-      const matchingCategory = apiCategorias.find((category) => (
-        String(product.categoria_id || product.categoria) === String(category.id)
-        || product.categoria === category.nome
-      ));
-      if (matchingCategory) {
-        const categoryId = String(matchingCategory.id);
-        counts.set(categoryId, (counts.get(categoryId) || 0) + 1);
-      }
+      const category = categoryLookup.byId.get(String(product.categoria_id || product.categoria))
+        ?? categoryLookup.byName.get(product.categoria);
+      if (category) counts.set(String(category.id), (counts.get(String(category.id)) || 0) + 1);
     });
     return counts;
-  }, [apiCategorias, apiProdutos]);
+  }, [apiCategorias, apiProdutos, categoryLookup]);
 
-  const orphanProducts = useMemo(() => apiProdutos.filter((product) => !apiCategorias.some((category) => (
-    String(product.categoria_id || product.categoria) === String(category.id)
-    || product.categoria === category.nome
-  ))).length, [apiCategorias, apiProdutos]);
+  const orphanProducts = useMemo(() => apiProdutos.filter((product) => (
+    !categoryLookup.byId.has(String(product.categoria_id || product.categoria))
+    && !categoryLookup.byName.has(product.categoria)
+  )).length, [apiProdutos, categoryLookup]);
 
-  const emptyCategories = useMemo(
-    () => apiCategorias.filter((category) => (productCountByCategory.get(String(category.id)) || 0) === 0).length,
-    [apiCategorias, productCountByCategory],
-  );
+  const routeStats = useMemo(() => {
+    const stats: Record<DestinationFilter, { categories: number; products: number }> = {
+      TODOS: { categories: apiCategorias.length, products: apiProdutos.length - orphanProducts },
+      COZINHA: { categories: 0, products: 0 },
+      BAR: { categories: 0, products: 0 },
+      NENHUM: { categories: 0, products: 0 },
+    };
+    apiCategorias.forEach((category) => {
+      const destination = normalizeDestination(category.destino_impressao);
+      stats[destination].categories += 1;
+      stats[destination].products += productCountByCategory.get(String(category.id)) || 0;
+    });
+    return stats;
+  }, [apiCategorias, apiProdutos.length, orphanProducts, productCountByCategory]);
 
   const filteredCategories = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase('pt-BR');
     return apiCategorias.filter((category) => {
-      if (destinationFilter !== 'TODOS' && category.destino_impressao !== destinationFilter) return false;
-      if (!normalized) return true;
-      return category.nome.toLocaleLowerCase('pt-BR').includes(normalized);
+      if (destinationFilter !== 'TODOS' && normalizeDestination(category.destino_impressao) !== destinationFilter) return false;
+      return !normalized || category.nome.toLocaleLowerCase('pt-BR').includes(normalized);
     }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
   }, [apiCategorias, destinationFilter, search]);
-  const hasActiveFilters = Boolean(search.trim() || destinationFilter !== 'TODOS');
-  const destinationCounts = useMemo(() => ({
-    TODOS: apiCategorias.length,
-    COZINHA: apiCategorias.filter((category) => category.destino_impressao === 'COZINHA').length,
-    BAR: apiCategorias.filter((category) => category.destino_impressao === 'BAR').length,
-    NENHUM: apiCategorias.filter((category) => category.destino_impressao === 'NENHUM').length,
-  }), [apiCategorias]);
 
   const handleOpenCreate = () => {
     setEditingCategory(null);
@@ -123,6 +137,30 @@ export function CardapioCategoriasTab({
   const clearFilters = () => {
     setSearch('');
     setDestinationFilter('TODOS');
+  };
+
+  const handleRouteChange = async (category: CategoryData, destination: PrintDestination) => {
+    if (normalizeDestination(category.destino_impressao) === destination || pendingRouteCategoryId) return;
+    setPendingRouteCategoryId(String(category.id));
+    try {
+      const response = await fetch(`${apiBaseUrl}/produtos/categorias/${category.id}`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destino_impressao: destination }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        showToast?.(payload.detail || 'Não foi possível alterar a impressão.', 'error');
+        return;
+      }
+      showToast?.(`“${category.nome}” agora está em ${destinationMeta[destination].shortLabel.toLowerCase()}.`, 'success');
+      await fetchCategorias();
+    } catch (error) {
+      console.error(error);
+      showToast?.('Erro de conexão ao alterar a impressão.', 'error');
+    } finally {
+      setPendingRouteCategoryId(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -145,113 +183,177 @@ export function CardapioCategoriasTab({
     }
   };
 
+  const filterCards: Array<{
+    value: DestinationFilter;
+    label: string;
+    description: string;
+    icon: typeof Layers3;
+  }> = [
+    { value: 'TODOS', label: 'Todas as categorias', description: 'Visão completa das rotas', icon: Layers3 },
+    ...(['COZINHA', 'BAR', 'NENHUM'] as const).map((value) => ({
+      value,
+      label: destinationMeta[value].shortLabel,
+      description: destinationMeta[value].description,
+      icon: destinationMeta[value].icon,
+    })),
+  ];
+
   return (
-    <div className="orders-workspace w-full space-y-3.5 pb-8 text-left animate-fade-in" aria-labelledby="catalog-categories-heading">
-      <h1 id="catalog-categories-heading" className="sr-only">Categorias do cardápio</h1>
+    <div className="w-full space-y-4 pb-8 text-left animate-fade-in" aria-labelledby="catalog-categories-heading">
+      <h1 id="catalog-categories-heading" className="sr-only">Preparo e impressão do cardápio</h1>
 
-      <section className="koma-toolbar" aria-label="Ferramentas de categorias">
-        <div className="koma-toolbar__search">
-          <Search size={14} aria-hidden="true" />
-          <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar categoria…" aria-label="Buscar categorias" />
-          {search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
-        </div>
-
-        <div className="inline-flex min-h-[2.35rem] max-w-full shrink-0 items-center overflow-x-auto rounded-xl border border-koma-border bg-koma-input p-1" aria-label="Filtrar por destino de preparo">
-          {([
-            ['TODOS', 'Todos'],
-            ['COZINHA', 'Cozinha'],
-            ['BAR', 'Bar'],
-            ['NENHUM', 'Sem impressão'],
-          ] as const).map(([value, label]) => (
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label="Rotas de impressão">
+        {filterCards.map((card) => {
+          const Icon = card.icon;
+          const active = destinationFilter === card.value;
+          const stats = routeStats[card.value];
+          return (
             <button
-              key={value}
+              key={card.value}
               type="button"
-              onClick={() => setDestinationFilter(value)}
-              aria-pressed={destinationFilter === value}
+              onClick={() => setDestinationFilter(card.value)}
+              aria-pressed={active}
               className={clsx(
-                'inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-bold transition-colors',
-                destinationFilter === value
-                  ? 'bg-emerald-500/15 text-emerald-800 shadow-sm ring-1 ring-emerald-500/25 dark:text-emerald-200'
-                  : 'text-koma-muted hover:bg-koma-raised hover:text-koma-foreground',
+                'flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left shadow-sm transition',
+                active
+                  ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500/20 dark:border-emerald-500/45 dark:bg-emerald-500/10'
+                  : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-white/10 dark:bg-[#111713] dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/5',
               )}
             >
-              {label}
-              <span className="font-mono text-[8px] opacity-75">{destinationCounts[value]}</span>
+              <span className={clsx(
+                'grid h-10 w-10 shrink-0 place-items-center rounded-xl border',
+                active
+                  ? 'border-emerald-300 bg-white text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
+                  : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400',
+              )}>
+                <Icon size={18} />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-black text-slate-950 dark:text-white">{card.label}</span>
+                <span className="mt-1 block text-xs leading-4 text-slate-600 dark:text-slate-400">{card.description}</span>
+                <span className="mt-2 block font-mono text-[10px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  {stats.categories} categoria{stats.categories === 1 ? '' : 's'} · {stats.products} produto{stats.products === 1 ? '' : 's'}
+                </span>
+              </span>
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </section>
 
-        <div className="koma-toolbar__actions">
-          <button type="button" onClick={handleOpenCreate} className="koma-btn-success"><Plus size={14} /> Nova categoria</button>
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]" aria-label="Ferramentas de impressão">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <label className="relative min-w-0 flex-1">
+            <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar categoria..."
+              aria-label="Buscar categorias"
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-10 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/15 dark:bg-black/20 dark:text-white"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-950 dark:hover:text-white">
+                <X size={15} />
+              </button>
+            )}
+          </label>
+          <button type="button" onClick={handleOpenCreate} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400">
+            <Plus size={16} /> Nova categoria
+          </button>
         </div>
       </section>
+
+      {orphanProducts > 0 && (
+        <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-500/25 dark:bg-rose-950/20 dark:text-rose-300">
+          <strong>{orphanProducts} {orphanProducts === 1 ? 'produto está' : 'produtos estão'} sem categoria.</strong>{' '}
+          Organize {orphanProducts === 1 ? 'esse item' : 'esses itens'} para garantir a impressão correta.
+        </section>
+      )}
 
       {filteredCategories.length === 0 ? (
         <KomaEmptyState
           icon={Layers3}
           title={apiCategorias.length === 0 ? 'Crie a primeira categoria' : 'Nenhuma categoria encontrada'}
-          description={apiCategorias.length === 0 ? 'Categorias agrupam produtos e definem o destino de impressão dos pedidos.' : 'Ajuste a busca ou o destino para ver outras categorias.'}
+          description={apiCategorias.length === 0 ? 'Categorias agrupam os produtos e definem onde cada pedido será impresso.' : 'Ajuste a busca ou escolha outra rota de impressão.'}
           action={apiCategorias.length === 0
             ? { label: 'Nova categoria', onClick: handleOpenCreate, icon: Plus }
             : { label: 'Limpar filtros', onClick: clearFilters, variant: 'secondary' }}
         />
       ) : (
-        <section className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel" aria-label="Lista de categorias">
-          <header className="flex flex-col gap-1.5 border-b border-koma-border bg-koma-raised/40 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-            <p className="text-[10px] font-medium text-koma-muted">
-              <strong className="font-mono text-koma-foreground">{filteredCategories.length}</strong> de {apiCategorias.length} categorias
-              {emptyCategories > 0 && <> · <span className="text-amber-700 dark:text-amber-300">{emptyCategories} vazias</span></>}
+        <section>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+            <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+              {filteredCategories.length} de {apiCategorias.length} categorias
             </p>
-            {orphanProducts > 0 && <p className="text-[9px] font-bold text-amber-700 dark:text-amber-300">{orphanProducts} {orphanProducts === 1 ? 'produto precisa' : 'produtos precisam'} de categoria</p>}
-            {!hasActiveFilters && orphanProducts === 0 && emptyCategories === 0 && <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">Tudo organizado</p>}
-          </header>
-
-          <div className="hidden grid-cols-[minmax(14rem,1fr)_7rem_11rem_7rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted lg:grid">
-            <span>Categoria</span><span>Produtos</span><span>Preparo</span><span className="text-right">Ações</span>
+            <p className="text-xs text-slate-500">Troque a impressão diretamente em cada cartão.</p>
           </div>
-
-          {filteredCategories.map((category) => {
-            const meta = destinationMeta[category.destino_impressao as keyof typeof destinationMeta] || destinationMeta.NENHUM;
-            const DestinationIcon = meta.icon;
-            const productCount = productCountByCategory.get(String(category.id)) || 0;
-            return (
-              <article key={category.id} className="group grid gap-3 border-b border-koma-border px-3 py-3 transition-colors last:border-b-0 hover:bg-koma-raised/50 sm:px-4 lg:grid-cols-[minmax(14rem,1fr)_7rem_11rem_7rem] lg:items-center">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/15 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-300"><Layers3 size={15} /></span>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-xs font-bold text-koma-foreground">{category.nome}</h2>
-                    <p className="mt-0.5 text-[9px] text-koma-muted lg:hidden">{productCount} {productCount === 1 ? 'produto' : 'produtos'} · {meta.label}</p>
-                  </div>
-                </div>
-
-                <div className="hidden lg:block">
-                  {productCount > 0 && onManageProducts ? (
-                    <button type="button" onClick={() => onManageProducts(String(category.id))} className="inline-flex min-h-7 items-center rounded-lg px-2 text-[9px] font-bold text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-300" aria-label={`Ver os ${productCount} produtos de ${category.nome}`}>
-                      {productCount} {productCount === 1 ? 'produto' : 'produtos'}
-                    </button>
-                  ) : (
-                    <>
-                      <strong className="font-mono text-xs text-koma-foreground">{productCount}</strong>
-                      {productCount === 0 && <span className="ml-1.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold text-amber-700 dark:text-amber-300">Vazia</span>}
-                    </>
-                  )}
-                </div>
-
-                <span className={clsx('hidden w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-bold lg:inline-flex', meta.className)} title={meta.description}><DestinationIcon size={11} /> {meta.label}</span>
-
-                <div className="flex items-center justify-end gap-0.5">
-                  {productCount > 0 && onManageProducts && <button type="button" onClick={() => onManageProducts(String(category.id))} aria-label={`Ver os ${productCount} produtos de ${category.nome}`} className="mr-auto inline-flex min-h-8 items-center rounded-lg px-2 text-[9px] font-bold text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-300 lg:hidden">Ver produtos</button>}
-                  <button type="button" onClick={() => { setEditingCategory(category); setModalOpen(true); }} className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground"><Edit3 size={13} /> <span>Editar</span></button>
-                  <details className="relative">
-                    <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" aria-label={`Mais ações para ${category.nome}`}><MoreHorizontal size={15} /></summary>
-                    <div className="absolute right-0 z-20 mt-1 min-w-40 overflow-hidden rounded-xl border border-koma-border bg-koma-panel p-1 shadow-xl">
-                      <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[10px] font-semibold text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"><Trash2 size={13} /> Excluir categoria</button>
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3" aria-label="Categorias e impressão">
+            {filteredCategories.map((category) => {
+              const destination = normalizeDestination(category.destino_impressao);
+              const meta = destinationMeta[destination];
+              const DestinationIcon = meta.icon;
+              const productCount = productCountByCategory.get(String(category.id)) || 0;
+              const pending = pendingRouteCategoryId === String(category.id);
+              return (
+                <article key={category.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 dark:border-white/10 dark:bg-[#111713] dark:hover:border-emerald-500/30">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+                      <DestinationIcon size={18} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-sm font-black text-slate-950 dark:text-white">{category.nome}</h2>
+                      {productCount > 0 && onManageProducts ? (
+                        <button type="button" onClick={() => onManageProducts(String(category.id))} className="mt-1 text-xs font-bold text-emerald-700 hover:underline dark:text-emerald-300">
+                          Ver {productCount} {productCount === 1 ? 'produto' : 'produtos'}
+                        </button>
+                      ) : (
+                        <p className="mt-1 text-xs font-bold text-slate-500">Categoria vazia</p>
+                      )}
                     </div>
-                  </details>
-                </div>
-              </article>
-            );
-          })}
+                    <button
+                      type="button"
+                      onClick={() => { setEditingCategory(category); setModalOpen(true); }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-xs font-black text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700 dark:border-white/10 dark:text-slate-300 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+                    >
+                      <Edit3 size={14} /> Editar
+                    </button>
+                    <details className="relative shrink-0">
+                      <summary className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-950 dark:border-white/10 dark:hover:text-white" aria-label={`Mais ações para ${category.nome}`}>
+                        <MoreHorizontal size={15} />
+                      </summary>
+                      <div className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#17201a]">
+                        <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">
+                          <Trash2 size={14} /> Excluir categoria
+                        </button>
+                      </div>
+                    </details>
+                  </div>
+
+                  <div className="mt-4 border-t border-slate-200 pt-3 dark:border-white/10">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500" htmlFor={`route-${category.id}`}>
+                      Impressão do pedido
+                    </label>
+                    <select
+                      id={`route-${category.id}`}
+                      value={destination}
+                      onChange={(event) => void handleRouteChange(category, event.target.value as PrintDestination)}
+                      disabled={pendingRouteCategoryId !== null}
+                      aria-label={`Escolher impressão para ${category.nome}`}
+                      className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-wait disabled:opacity-60 dark:border-white/15 dark:bg-black/20 dark:text-white"
+                    >
+                      <option value="COZINHA">Imprimir na cozinha</option>
+                      <option value="BAR">Imprimir no bar</option>
+                      <option value="NENHUM">Não imprimir</option>
+                    </select>
+                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+                      {pending ? 'Salvando alteração...' : meta.description}
+                    </p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </section>
       )}
 

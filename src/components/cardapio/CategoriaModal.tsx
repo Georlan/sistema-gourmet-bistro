@@ -158,7 +158,7 @@ export function CategoriaModal({
                 {isEditing ? 'Editar categoria' : 'Nova categoria'}
               </h3>
               <p className="text-[10px] text-koma-subtle">
-                Organize os produtos e escolha para onde o pedido será enviado.
+                Organize os produtos e escolha onde a via será impressa.
               </p>
             </div>
           </div>
@@ -202,10 +202,10 @@ export function CategoriaModal({
           {/* Destino de Impressão Cards */}
           <div className="space-y-2 pt-1">
             <label className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider block">
-              Para onde enviar os pedidos?
+              Onde esta categoria deve imprimir?
             </label>
             <p className="text-[10px] text-koma-subtle leading-normal">
-              Essa escolha define onde a via de preparo será impressa.
+              A escolha vale para todos os produtos desta categoria e pode ser trocada depois.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
@@ -232,10 +232,10 @@ export function CategoriaModal({
                 </div>
                 <div>
                   <span className={clsx('font-bold text-xs block', destino === 'COZINHA' ? 'text-emerald-700 dark:text-emerald-300' : 'text-koma-foreground')}>
-                    Cozinha
+                    Imprimir na cozinha
                   </span>
                   <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
-                    Via de preparo da cozinha
+                    Uma via para o preparo
                   </span>
                 </div>
               </button>
@@ -263,10 +263,10 @@ export function CategoriaModal({
                 </div>
                 <div>
                   <span className={clsx('font-bold text-xs block', destino === 'BAR' ? 'text-emerald-700 dark:text-emerald-300' : 'text-koma-foreground')}>
-                    Bar
+                    Imprimir no bar
                   </span>
                   <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
-                    Via de preparo do bar
+                    Bebidas em via separada
                   </span>
                 </div>
               </button>
@@ -297,7 +297,7 @@ export function CategoriaModal({
                     Não imprimir
                   </span>
                   <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
-                    Produto entregue sem via
+                    Entrega direta, sem via
                   </span>
                 </div>
               </button>

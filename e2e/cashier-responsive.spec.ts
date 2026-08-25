@@ -416,16 +416,16 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
 
   await page.getByRole('button', { name: 'Cardápio', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Categorias', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preparo e impressão', exact: true })).toBeVisible();
   await expect(page.getByLabel('Buscar produtos')).toBeVisible();
-  await expect(page.getByLabel('Filtrar produtos por categoria')).toBeVisible();
+  await expect(page.getByLabel('Categorias do cardápio')).toBeVisible();
   await expect(page.getByLabel('Filtrar por disponibilidade')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Pratos', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Categorias', exact: true }).click();
+  await page.getByRole('button', { name: 'Preparo e impressão', exact: true }).click();
   await expect(page.getByLabel('Buscar categorias')).toBeVisible();
-  await expect(page.getByLabel('Filtrar por destino de preparo')).toBeVisible();
+  await expect(page.getByLabel('Rotas de impressão')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toBeVisible();
   await expect(page.getByText('cat-pratos', { exact: true })).toHaveCount(0);
 
@@ -468,19 +468,18 @@ test('Cardápio mantém filtros e ações principais fáceis em qualquer largura
 
   await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
   await expect(page.getByLabel('Buscar produtos')).toBeVisible();
-  await expect(page.getByLabel('Filtrar produtos por categoria')).toBeVisible();
+  await expect(page.getByLabel('Categorias do cardápio')).toBeVisible();
   await expect(page.getByLabel('Filtrar por disponibilidade')).toBeVisible();
   await expect(page.getByText('Risoto da casa', { exact: true })).toBeVisible();
   await expect(page.getByText('Suco natural', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-
-  await page.getByLabel('Selecionar exibidos').check();
+  await page.getByLabel('Selecionar os 2 exibidos').check();
   await expect(page.getByText('2 produtos selecionados', { exact: true })).toBeVisible();
   const batchAvailabilityRequest = page.waitForRequest(request => (
     request.method() === 'PATCH'
     && new URL(request.url()).pathname === '/produtos/disponibilidade'
   ));
-  await page.getByRole('button', { name: 'Pausar', exact: true }).click();
+  await page.locator('section').filter({ hasText: '2 produtos selecionados' }).getByRole('button', { name: 'Pausar venda', exact: true }).click();
   await batchAvailabilityRequest;
 
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
@@ -494,11 +493,17 @@ test('Cardápio mantém filtros e ações principais fáceis em qualquer largura
   await expectNoHorizontalOverflow(page);
   await productDialog.getByRole('button', { name: 'Fechar' }).click();
 
-  await page.getByRole('button', { name: 'Categorias', exact: true }).click();
+  await page.getByRole('button', { name: 'Preparo e impressão', exact: true }).click();
   await expect(page.getByLabel('Buscar categorias')).toBeVisible();
-  await expect(page.getByLabel('Filtrar por destino de preparo')).toBeVisible();
-  await page.getByRole('button', { name: 'Ver os 1 produtos de Pratos', exact: true }).click();
-  await expect(page.getByLabel('Filtrar produtos por categoria')).toHaveValue('cat-pratos');
+  await expect(page.getByLabel('Rotas de impressão')).toBeVisible();
+  const routeRequest = page.waitForRequest(request => (
+    request.method() === 'PUT'
+    && new URL(request.url()).pathname === '/produtos/categorias/cat-pratos'
+  ));
+  await page.getByLabel('Escolher impressão para Pratos').selectOption('NENHUM');
+  await routeRequest;
+  await page.locator('article').filter({ has: page.getByRole('heading', { name: 'Pratos', exact: true }) }).getByRole('button', { name: 'Ver 1 produto', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Pratos 1/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Risoto da casa', { exact: true })).toBeVisible();
   await expect(page.getByText('Suco natural', { exact: true })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);

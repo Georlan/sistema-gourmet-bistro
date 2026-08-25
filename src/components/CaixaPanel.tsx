@@ -4660,7 +4660,7 @@ export function CaixaPanel({
 
           {activeTab === 'cardapio' && [
             { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
-            { id: 'categorias', label: 'Categorias', count: apiCategorias.length }
+            { id: 'categorias', label: 'Preparo e impressão', count: apiCategorias.length }
           ].map(sub => (
             <button
               key={sub.id}
@@ -7526,12 +7526,12 @@ export function CaixaPanel({
               id="menu-products-heading"
               eyebrow="CATÁLOGO"
               title="Produtos"
-              accent="prontos para vender"
-              description="Disponibilidade e organização do cardápio em uma visão única, sem repetir informações."
+              accent="fáceis de controlar"
+              description="Escolha uma categoria e pause um item ou o grupo inteiro sem procurar em listas longas."
               metrics={[
                 { label: 'produtos', value: apiProdutos.length },
                 { label: 'disponíveis', value: apiProdutos.filter(item => item.ativo !== false).length },
-                { label: apiProdutos.filter(item => item.ativo === false).length === 1 ? 'pausado' : 'pausados', value: apiProdutos.filter(item => item.ativo === false).length, valueClassName: apiProdutos.some(item => item.ativo === false) ? 'text-amber-600 dark:text-amber-300' : undefined },
+                { label: apiProdutos.filter(item => item.ativo === false).length === 1 ? 'pausado' : 'pausados', value: apiProdutos.filter(item => item.ativo === false).length, valueClassName: apiProdutos.some(item => item.ativo === false) ? 'text-rose-600 dark:text-rose-300' : undefined },
                 { label: 'categorias', value: apiCategorias.length },
               ]}
             />
@@ -7634,14 +7634,14 @@ export function CaixaPanel({
             <div className="space-y-4">
               <OperationalBanner
                 id="menu-categories-heading"
-                eyebrow="ORGANIZAÇÃO"
-                title="Categorias"
-                accent="bem organizadas"
-                description="Agrupe produtos para agilizar a venda e envie cada grupo ao destino correto de produção."
+                eyebrow="FLUXO DE PREPARO"
+                title="Cada pedido"
+                accent="vai ao lugar certo"
+                description="Escolha quais categorias imprimem na cozinha, no bar ou não precisam de via de preparo."
               metrics={[
                 { label: 'categorias', value: apiCategorias.length },
-                { label: 'vazias', value: apiCategorias.filter(category => !apiProdutos.some(product => product.categoria_id === category.id)).length },
                 { label: 'cozinha', value: apiCategorias.filter(category => category.destino_impressao === 'COZINHA').length },
+                { label: 'bar', value: apiCategorias.filter(category => category.destino_impressao === 'BAR').length },
                 { label: 'não imprimir', value: apiCategorias.filter(category => category.destino_impressao === 'NENHUM').length },
               ]}
             />
