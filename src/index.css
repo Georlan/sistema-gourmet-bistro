@@ -106,6 +106,15 @@
   --koma-info-text: #7dd3fc;
   --koma-info-hover: rgba(56, 189, 248, 0.22);
 
+  /* Salão: superfície e ação da mesa livre mantêm profundidade própria. */
+  --koma-table-free-bg: var(--koma-surface-card);
+  --koma-table-free-border: var(--koma-border-default);
+  --koma-table-free-border-hover: #10b981;
+  --koma-table-free-action-bg: var(--koma-success-bg);
+  --koma-table-free-action-border: var(--koma-success-border);
+  --koma-table-free-action-text: var(--koma-success-text);
+  --koma-table-free-action-hover: var(--koma-success-hover);
+
   --koma-waiter-bg: radial-gradient(circle at 88% 6%, rgba(0, 184, 148, 0.06), transparent 25rem), linear-gradient(180deg, var(--koma-surface-shell) 0%, #0c0e0d 58%, var(--koma-surface-shell) 100%);
   --koma-sidebar-bg: radial-gradient(circle at 12% 0%, rgba(0, 201, 150, 0.05), transparent 15rem), linear-gradient(180deg, #101412 0%, #0c0f0d 100%);
   --koma-main-bg: radial-gradient(circle at 89% 4%, rgba(0, 201, 150, 0.06), transparent 28rem), linear-gradient(180deg, #0a0d0c 0%, #0e1210 100%);
@@ -180,6 +189,15 @@
   --koma-info-border: #cdd5d9;
   --koma-info-text: #1e293b;
   --koma-info-hover: #475569;
+
+  /* Salão: verde suave no card e verde mais presente na ação. */
+  --koma-table-free-bg: #e7f5ee;
+  --koma-table-free-border: #91cdb2;
+  --koma-table-free-border-hover: #269b70;
+  --koma-table-free-action-bg: #bfead4;
+  --koma-table-free-action-border: #4fbd91;
+  --koma-table-free-action-text: #064e3b;
+  --koma-table-free-action-hover: #a8e3c8;
 
   --koma-waiter-bg: linear-gradient(180deg, #ffffff 0%, #f3f6f7 58%, #ffffff 100%);
   --koma-sidebar-bg: #ffffff;
@@ -3008,6 +3026,28 @@ body {
   background-color: var(--koma-success-hover);
   color: #ffffff !important;
   border-color: var(--koma-success-hover);
+}
+
+/* A mesa livre precisa parecer disponível sem se confundir com o fundo da grade. */
+.koma-table-free-card {
+  background-color: var(--koma-table-free-bg);
+  border-color: var(--koma-table-free-border);
+}
+.koma-table-free-card:hover {
+  border-color: var(--koma-table-free-border-hover);
+}
+
+/* Ação principal fica um degrau acima da superfície do card no modo claro. */
+.koma-table-free-action {
+  background-color: var(--koma-table-free-action-bg);
+  border: 1px solid var(--koma-table-free-action-border);
+  color: var(--koma-table-free-action-text);
+  font-weight: 800;
+  transition: all 140ms ease;
+}
+.koma-table-free-action:hover {
+  background-color: var(--koma-table-free-action-hover);
+  border-color: var(--koma-table-free-border-hover);
 }
 
 .koma-btn-danger {
