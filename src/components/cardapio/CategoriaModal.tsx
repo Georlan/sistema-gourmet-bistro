@@ -14,7 +14,7 @@ interface CategoriaModalProps {
   categoryToEdit?: CategoryData | null;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  onSuccess: () => Promise<void>;
+  onSuccess: (category: CategoryData) => Promise<void>;
   showToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
@@ -103,8 +103,8 @@ export function CategoriaModal({
         });
 
         if (res.ok) {
-          if (showToast) showToast('Categoria atualizada com sucesso!', 'success');
-          await onSuccess();
+          if (showToast) showToast('Categoria atualizada.', 'success');
+          await onSuccess({ id: categoryId, nome: nome.trim(), destino_impressao: destino });
           onClose();
         } else {
           const errData = await res.json().catch(() => ({}));
@@ -126,8 +126,8 @@ export function CategoriaModal({
         });
 
         if (res.ok) {
-          if (showToast) showToast('Categoria criada com sucesso!', 'success');
-          await onSuccess();
+          if (showToast) showToast('Categoria criada.', 'success');
+          await onSuccess({ id: categoryId, nome: nome.trim(), destino_impressao: destino });
           onClose();
         } else {
           const errData = await res.json().catch(() => ({}));
@@ -145,8 +145,8 @@ export function CategoriaModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-koma-dialog border border-koma-border rounded-3xl shadow-2xl overflow-hidden text-left font-sans">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fade-in">
+      <div role="dialog" aria-modal="true" aria-labelledby="category-modal-title" className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-koma-border bg-koma-dialog text-left shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-koma-border bg-koma-raised">
           <div className="flex items-center gap-2.5">
@@ -154,17 +154,18 @@ export function CategoriaModal({
               <Printer size={18} />
             </div>
             <div>
-              <h3 className="font-serif text-base font-bold text-koma-foreground leading-tight">
-                {isEditing ? 'Editar Categoria' : 'Nova Categoria'}
+              <h3 id="category-modal-title" className="text-base font-bold leading-tight text-koma-foreground">
+                {isEditing ? 'Editar categoria' : 'Nova categoria'}
               </h3>
               <p className="text-[10px] text-koma-subtle">
-                {isEditing ? 'Atualize as configurações de impressão e exibição' : 'Cadastre uma nova categoria para o cardápio'}
+                Organize os produtos e escolha para onde o pedido será enviado.
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label="Fechar"
             className="p-1.5 text-koma-subtle hover:text-koma-foreground rounded-xl bg-koma-card hover:bg-koma-raised transition-colors cursor-pointer"
           >
             <X size={16} />
@@ -181,11 +182,12 @@ export function CategoriaModal({
 
           {/* Nome Input */}
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider block">
-              Nome da Categoria
+            <label htmlFor="category-name" className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider block">
+              Nome da categoria
             </label>
             <input
               type="text"
+              id="category-name"
               value={nome}
               onChange={(e) => handleNomeChange(e.target.value)}
               placeholder="Ex: Hambúrgueres Bovinos, Bebidas, Sobremesas..."
@@ -200,10 +202,10 @@ export function CategoriaModal({
           {/* Destino de Impressão Cards */}
           <div className="space-y-2 pt-1">
             <label className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider block">
-              Destino de Impressão de Pedidos
+              Para onde enviar os pedidos?
             </label>
             <p className="text-[10px] text-koma-subtle leading-normal">
-              Escolha para onde os itens desta categoria serão enviados ao imprimir a via de preparação:
+              Essa escolha define onde a via de preparo será impressa.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
@@ -214,26 +216,26 @@ export function CategoriaModal({
                 className={clsx(
                   'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
                   destino === 'COZINHA'
-                    ? 'bg-orange-500/15 border-orange-500/50 shadow-lg shadow-orange-950/20'
-                    : 'bg-koma-raised/60 border-koma-border hover:bg-koma-raised hover:border-gray-700'
+                    ? 'border-emerald-500/45 bg-emerald-500/10 ring-1 ring-emerald-500/20'
+                    : 'border-koma-border bg-koma-raised/60 hover:border-emerald-500/25 hover:bg-koma-raised'
                 )}
               >
                 <div className="flex justify-between items-center">
-                  <div className={clsx('p-1.5 rounded-lg', destino === 'COZINHA' ? 'bg-orange-500/20 text-orange-400' : 'bg-koma-raised text-koma-subtle')}>
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'COZINHA' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-subtle')}>
                     <Utensils size={15} />
                   </div>
                   {destino === 'COZINHA' && (
-                    <div className="w-4 h-4 rounded-full bg-orange-500 text-black flex items-center justify-center">
+                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-zinc-950">
                       <Check size={10} strokeWidth={3} />
                     </div>
                   )}
                 </div>
                 <div>
-                  <span className={clsx('font-bold text-xs block', destino === 'COZINHA' ? 'text-orange-400' : 'text-koma-foreground')}>
+                  <span className={clsx('font-bold text-xs block', destino === 'COZINHA' ? 'text-emerald-700 dark:text-emerald-300' : 'text-koma-foreground')}>
                     Cozinha
                   </span>
                   <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
-                    Imprime na via da Cozinha
+                    Via de preparo da cozinha
                   </span>
                 </div>
               </button>
@@ -245,26 +247,26 @@ export function CategoriaModal({
                 className={clsx(
                   'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
                   destino === 'BAR'
-                    ? 'bg-blue-500/15 border-blue-500/50 shadow-lg shadow-blue-950/20'
-                    : 'bg-koma-raised/60 border-koma-border hover:bg-koma-raised hover:border-gray-700'
+                    ? 'border-emerald-500/45 bg-emerald-500/10 ring-1 ring-emerald-500/20'
+                    : 'border-koma-border bg-koma-raised/60 hover:border-emerald-500/25 hover:bg-koma-raised'
                 )}
               >
                 <div className="flex justify-between items-center">
-                  <div className={clsx('p-1.5 rounded-lg', destino === 'BAR' ? 'bg-blue-500/20 text-blue-400' : 'bg-koma-raised text-koma-subtle')}>
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'BAR' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-subtle')}>
                     <Wine size={15} />
                   </div>
                   {destino === 'BAR' && (
-                    <div className="w-4 h-4 rounded-full bg-blue-500 text-black flex items-center justify-center">
+                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-zinc-950">
                       <Check size={10} strokeWidth={3} />
                     </div>
                   )}
                 </div>
                 <div>
-                  <span className={clsx('font-bold text-xs block', destino === 'BAR' ? 'text-blue-400' : 'text-koma-foreground')}>
+                  <span className={clsx('font-bold text-xs block', destino === 'BAR' ? 'text-emerald-700 dark:text-emerald-300' : 'text-koma-foreground')}>
                     Bar
                   </span>
                   <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
-                    Imprime na via do Bar
+                    Via de preparo do bar
                   </span>
                 </div>
               </button>
@@ -276,26 +278,26 @@ export function CategoriaModal({
                 className={clsx(
                   'relative p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2',
                   destino === 'NENHUM'
-                    ? 'bg-zinc-500/15 border-zinc-400/50 shadow-lg'
-                    : 'bg-koma-raised/60 border-koma-border hover:bg-koma-raised hover:border-gray-700'
+                    ? 'border-emerald-500/45 bg-emerald-500/10 ring-1 ring-emerald-500/20'
+                    : 'border-koma-border bg-koma-raised/60 hover:border-emerald-500/25 hover:bg-koma-raised'
                 )}
               >
                 <div className="flex justify-between items-center">
-                  <div className={clsx('p-1.5 rounded-lg', destino === 'NENHUM' ? 'bg-zinc-700 text-koma-secondary' : 'bg-koma-raised text-koma-subtle')}>
+                  <div className={clsx('p-1.5 rounded-lg', destino === 'NENHUM' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-subtle')}>
                     <Ban size={15} />
                   </div>
                   {destino === 'NENHUM' && (
-                    <div className="w-4 h-4 rounded-full bg-zinc-400 text-black flex items-center justify-center">
+                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-zinc-950">
                       <Check size={10} strokeWidth={3} />
                     </div>
                   )}
                 </div>
                 <div>
-                  <span className={clsx('font-bold text-xs block', destino === 'NENHUM' ? 'text-koma-secondary' : 'text-koma-foreground')}>
-                    Não Imprime
+                  <span className={clsx('font-bold text-xs block', destino === 'NENHUM' ? 'text-emerald-700 dark:text-emerald-300' : 'text-koma-foreground')}>
+                    Não imprimir
                   </span>
                   <span className="text-[9px] text-koma-subtle block leading-tight mt-0.5">
-                    Sem via física de preparo
+                    Produto entregue sem via
                   </span>
                 </div>
               </button>
@@ -323,7 +325,7 @@ export function CategoriaModal({
                   <span>Salvando...</span>
                 </>
               ) : (
-                <span>{isEditing ? 'Salvar Alterações' : 'Criar Categoria'}</span>
+                <span>{isEditing ? 'Salvar alterações' : 'Criar categoria'}</span>
               )}
             </button>
           </div>
