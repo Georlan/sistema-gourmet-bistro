@@ -6224,7 +6224,7 @@ export function CaixaPanel({
                     {[
                       { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
                       { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
-                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied, dot: 'bg-sky-500' },
+                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied, dot: 'bg-koma-danger-text' },
                       { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment, dot: 'bg-amber-500' },
                     ].map(filter => (
                       <button
@@ -6236,7 +6236,7 @@ export function CaixaPanel({
                           'shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
                           tableStatusFilter === filter.id
                             ? filter.id === 'occupied'
-                              ? 'bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-300'
+                              ? 'bg-koma-danger-bg text-koma-danger-text'
                               : filter.id === 'payment'
                                 ? 'bg-amber-100 text-amber-900 dark:bg-[#46212a] dark:text-[#efb2bc]'
                                 : filter.id === 'free'
@@ -6302,7 +6302,7 @@ export function CaixaPanel({
                               'group flex min-h-[106px] sm:min-h-[148px] flex-col justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5 transition-colors shadow-sm',
                               isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
                               hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
-                              isOccupied && !hasPendingPayment && 'border-sky-300 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 hover:border-sky-500',
+                              isOccupied && !hasPendingPayment && 'border-koma-danger-border bg-koma-danger-bg hover:border-koma-danger-text',
                               !isOccupied && !isMerged && 'border-koma-border bg-koma-card hover:border-emerald-500'
                             )}
                           >
@@ -6332,13 +6332,13 @@ export function CaixaPanel({
                                   'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
                                   isMerged && 'border-koma-border bg-koma-card text-koma-muted',
                                   hasPendingPayment && 'border-amber-300 dark:border-[#8a4753] bg-amber-100 dark:bg-[#4b222b] text-amber-900 dark:text-[#efb2bc]',
-                                  isOccupied && !hasPendingPayment && 'border-sky-300 dark:border-sky-900/60 bg-sky-100 dark:bg-sky-950/40 text-sky-900 dark:text-sky-300',
+                                  isOccupied && !hasPendingPayment && 'koma-badge-danger',
                                   !isOccupied && !isMerged && 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
                                 )}>
                                   <span
                                     className={clsx(
                                       'mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
-                                      hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-sky-500' : 'bg-emerald-500'
+                                      hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-koma-danger-text' : 'bg-emerald-500'
                                     )}
                                     aria-hidden="true"
                                   />
@@ -6356,7 +6356,7 @@ export function CaixaPanel({
                                       <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo</span>
                                       <strong className={clsx(
                                         'font-mono text-xs sm:text-sm',
-                                        hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-sky-800 dark:text-sky-300'
+                                        hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-koma-danger-text'
                                       )}>
                                         {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                       </strong>
@@ -6412,7 +6412,7 @@ export function CaixaPanel({
                                         itens: tableOrders.flatMap(order => order.itens || []),
                                         comandaIds: tableOrders.map(order => order.id),
                                       })}
-                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'border', 'border-sky-300', 'dark:border-sky-900/60', 'bg-sky-100', 'dark:bg-sky-950/40', 'text-sky-900', 'dark:text-sky-300', 'hover:bg-sky-200', 'dark:hover:bg-sky-900/50', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
+                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-danger', 'hover:brightness-110', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-all', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
                                     >
                                       <Receipt size={11} />
                                       Ver comanda
