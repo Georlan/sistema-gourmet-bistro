@@ -340,10 +340,13 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     await page.getByRole('button', { name: 'Salão', exact: true }).click();
     const freeTableCard = page.locator('[data-table-status="free"]').first();
     const freeTableAction = freeTableCard.getByRole('button', { name: 'Abrir pedido' });
+    const occupiedTableAction = page.locator('[data-table-status="occupied"]').first().getByRole('button', { name: 'Ver comanda' });
     await expect(freeTableCard).toBeVisible();
     await expect(freeTableAction).toBeVisible();
+    await expect(occupiedTableAction).toBeVisible();
     await expect.poll(() => freeTableCard.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(231, 245, 238)');
     await expect.poll(() => freeTableAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(191, 234, 212)');
+    await expect.poll(() => occupiedTableAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(247, 188, 188)');
 
     await page.getByRole('button', { name: 'Recolher ou expandir menu' }).click();
     const collapsedSidebar = page.locator('.cashier-sidebar:visible');

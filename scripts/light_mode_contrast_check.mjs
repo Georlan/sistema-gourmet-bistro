@@ -46,6 +46,7 @@ const checks = [
   ['koma-warning-text', 'koma-warning-bg'],
   ['koma-info-text', 'koma-info-bg'],
   ['koma-table-free-action-text', 'koma-table-free-action-bg'],
+  ['koma-table-occupied-action-text', 'koma-table-occupied-action-bg'],
   ['koma-stage-salon', 'koma-surface-raised'],
   ['koma-stage-digital', 'koma-surface-raised'],
   ['koma-stage-closing', 'koma-surface-raised'],
