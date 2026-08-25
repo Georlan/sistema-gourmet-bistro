@@ -3,7 +3,17 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Restaurante, Usuario, Insumo, Distribuidor, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque
+from app.models import (
+    Categoria,
+    Distribuidor,
+    EntradaEstoque,
+    Insumo,
+    MovimentacaoEstoque,
+    Produto,
+    Restaurante,
+    SessaoContagemEstoque,
+    Usuario,
+)
 from app.security import get_password_hash, create_access_token
 from app.main import app
 
@@ -68,6 +78,16 @@ def setup_database():
         preco_medio_custo=70.0
     )
     db.add_all([insumo_alfa, insumo_beta])
+    db.add(Categoria(id="cat-lanches", restaurante_id=10, nome="Lanches", destino_impressao="NENHUM"))
+    db.flush()
+    db.add(Produto(
+        id="prod-burguer",
+        restaurante_id=10,
+        nome="Búrguer da Casa",
+        categoria_id="cat-lanches",
+        preco=25.0,
+        ativo=True,
+    ))
     db.commit()
     db.close()
     yield
@@ -77,6 +97,82 @@ def get_auth_header(usuario: str = "alfa_op"):
     assert res.status_code == 200, f"Login failed for {usuario}: {res.text}"
     token = res.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_ids_tecnicos_sao_gerados_pelo_backend():
+    headers = get_auth_header()
+    ingrediente = client.post(
+        "/estoque/insumos",
+        headers=headers,
+        json={"nome": "Tomate Italiano", "unidade_medida": "kg"},
+    )
+    assert ingrediente.status_code == 201, ingrediente.text
+    assert ingrediente.json()["id"].startswith("ins-10-tomate-italiano")
+
+    fornecedor = client.post(
+        "/estoque/distribuidores",
+        headers=headers,
+        json={"nome_fantasia": "Hortifruti Central"},
+    )
+    assert fornecedor.status_code == 201, fornecedor.text
+    assert fornecedor.json()["id"].startswith("dist-10-hortifruti-central")
+
+
+def test_ficha_tecnica_baixa_venda_e_estorna_cancelamento():
+    headers = get_auth_header()
+
+    cross_tenant = client.put(
+        "/estoque/fichas-tecnicas/prod-burguer",
+        headers=headers,
+        json={"itens": [{"insumo_id": "ins-carne-beta", "quantidade": 0.25}]},
+    )
+    assert cross_tenant.status_code == 404
+
+    ficha = client.put(
+        "/estoque/fichas-tecnicas/prod-burguer",
+        headers=headers,
+        json={"itens": [{"insumo_id": "ins-carne", "quantidade": 0.25}]},
+    )
+    assert ficha.status_code == 200, ficha.text
+    assert ficha.json()["itens"][0]["insumo"]["nome"] == "Picanha Bovina"
+
+    listagem = client.get("/estoque/fichas-tecnicas", headers=headers)
+    assert listagem.status_code == 200
+    produto = next(item for item in listagem.json() if item["produto_id"] == "prod-burguer")
+    assert produto["itens"][0]["quantidade"] == 0.25
+
+    abertura = client.post("/caixa/turno/abrir", headers=headers, json={"saldo_inicial": 0})
+    assert abertura.status_code == 201, abertura.text
+    venda = client.post(
+        "/comandas/venda-direta",
+        headers=headers,
+        json={
+            "tipo": "Balcão",
+            "itens": [{"produto_id": "prod-burguer"}],
+        },
+    )
+    assert venda.status_code == 201, venda.text
+
+    insumos = client.get("/estoque/insumos", headers=headers).json()
+    carne = next(item for item in insumos if item["id"] == "ins-carne")
+    assert carne["estoque_atual"] == pytest.approx(9.75)
+
+    movimentos = client.get("/estoque/movimentacoes", headers=headers).json()
+    baixa = next(item for item in movimentos if item["origem"] == "venda_automatica")
+    assert baixa["quantidade"] == pytest.approx(0.25)
+    assert baixa["saldo_posterior"] == pytest.approx(9.75)
+
+    recusada = client.put(
+        f"/comandas/{venda.json()['id']}/delivery/status?status_novo=recusado",
+        headers=headers,
+    )
+    assert recusada.status_code == 200, recusada.text
+    insumos_apos = client.get("/estoque/insumos", headers=headers).json()
+    carne_apos = next(item for item in insumos_apos if item["id"] == "ins-carne")
+    assert carne_apos["estoque_atual"] == pytest.approx(10.0)
+
+    movimentos_apos = client.get("/estoque/movimentacoes", headers=headers).json()
+    assert any(item["origem"] == "cancelamento_venda" for item in movimentos_apos)
 
 # 1. Test manual entry with 1 item & multiple items + weighted cost recalculation
 def test_entrada_manual_uma_e_multiplas():
@@ -211,6 +307,23 @@ def test_movimentacao_perda_e_ajustes():
     res_ins = client.get("/estoque/insumos", headers=headers)
     ins = next(i for i in res_ins.json() if i["id"] == "ins-carne")
     assert ins["preco_medio_custo"] == 60.0
+
+
+def test_ajuste_rapido_tambem_aparece_no_historico():
+    headers = get_auth_header()
+    response = client.post(
+        "/estoque/insumos/ins-carne/ajustar",
+        headers=headers,
+        json={"tipo": "ENTRADA", "quantidade": 2, "justificativa": "Sobra conferida"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["estoque_atual"] == 12
+
+    movimentos = client.get("/estoque/movimentacoes", headers=headers).json()
+    assert len(movimentos) == 1
+    assert movimentos[0]["tipo"] == "ajuste_positivo"
+    assert movimentos[0]["origem"] == "movimentacao_manual"
+    assert movimentos[0]["motivo"] == "Sobra conferida"
 
 # 4. Test negative stock prevention
 def test_bloqueio_saldo_negativo():

@@ -45,6 +45,7 @@ from ..services.clientes import (
 )
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..services.capabilities import has_capability
+from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ..services.atendimentos import (
     ensure_atendimento_for_comanda,
     ensure_launch_identity,
@@ -854,6 +855,7 @@ async def criar_venda_direta(
         )
         db.add(novo_lancamento)
 
+        itens_criados = []
         itens_cozinha = []
         for item_in in venda_in.itens:
             produto = db.query(Produto).filter(
@@ -877,12 +879,14 @@ async def criar_venda_direta(
                 status="preparando"
             )
             db.add(novo_item)
+            itens_criados.append(novo_item)
             dest_impressao_val = produto.categoria.destino_impressao if (produto and produto.categoria) else getattr(produto, 'local_impressao', getattr(produto, 'destino', 'COZINHA'))
             dest = (dest_impressao_val or "COZINHA").upper()
             if dest not in ("NENHUM", "NONE", ""):
                 itens_cozinha.append(novo_item)
 
         db.flush()
+        consumir_estoque_dos_itens(db, itens_criados, usuario_id=current_user.id)
         if tipo_pedido == "Consumo no Local" and nova_comanda.mesa_id is not None:
             ensure_atendimento_for_comanda(db, nova_comanda, actor_id=current_user.id)
             ensure_launch_identity(db, novo_lancamento)
@@ -1209,6 +1213,7 @@ def lancar_itens(comanda_id: str, lancamento_in: LancamentoCreate, background_ta
             itens_criados.append(novo_item)
 
         db.flush()
+        consumir_estoque_dos_itens(db, itens_criados, usuario_id=current_user.id)
         if (
             (comanda.tipo or "").strip().casefold()
             in {"consumo no local", "mesa", "local"}
@@ -1622,6 +1627,7 @@ def cancelar_item(
 
     item.status = "cancelado"
     item.cancelado_por = current_garcom.id
+    estornar_estoque_dos_itens(db, [item], usuario_id=current_garcom.id)
     
     # Audit log
     audit = ActivityLog(
@@ -1748,6 +1754,7 @@ def update_item_details(
             item.cliente_nome = update_data.cliente_nome
 
         added_count = 0
+        novos_itens = []
         if update_data.quantidade_adicional and update_data.quantidade_adicional > 1:
             import uuid
             additional_qty = update_data.quantidade_adicional - 1
@@ -1765,8 +1772,13 @@ def update_item_details(
                     impresso_em=None
                 )
                 db.add(new_item)
+                novos_itens.append(new_item)
                 added_count += 1
-            
+
+        if novos_itens:
+            db.flush()
+            consumir_estoque_dos_itens(db, novos_itens, usuario_id=current_garcom.id)
+
         db.commit()
     except HTTPException:
         raise
@@ -2112,10 +2124,13 @@ def atualizar_status_delivery(
         enqueue_initial_production_for_order(db, comanda)
 
     if status_normalizado == "recusado":
+        itens_cancelados = []
         for item in comanda.itens:
             if item.status != "cancelado":
                 item.status = "cancelado"
                 item.cancelado_por = current_user.id
+                itens_cancelados.append(item)
+        estornar_estoque_dos_itens(db, itens_cancelados, usuario_id=current_user.id)
         comanda.fechada = True
         comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 

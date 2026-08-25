@@ -24,6 +24,7 @@ from ..schemas import (
 )
 from ..security import get_current_garcom_optional, get_current_user, require_permission
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
+from ..services.inventory import estornar_estoque_dos_itens
 from ..waiter_permissions import require_waiter_permission
 from ..websocket_manager import manager
 
@@ -234,6 +235,7 @@ def cancelar_consumo_mesa(
     for item in itens_ativos:
         item.status = "cancelado"
         item.cancelado_por = current_user.id
+    estornar_estoque_dos_itens(db, itens_ativos, usuario_id=current_user.id)
     for comanda in comandas:
         comanda.fechada = True
         comanda.fechado_em = fechado_em
@@ -353,6 +355,7 @@ def cancelar_itens_mesa(
     for item in itens_ativos:
         item.status = "cancelado"
         item.cancelado_por = current_user.id
+    estornar_estoque_dos_itens(db, itens_ativos, usuario_id=current_user.id)
 
     fechado_em = datetime.datetime.now(datetime.timezone.utc)
     comandas_fechadas = 0

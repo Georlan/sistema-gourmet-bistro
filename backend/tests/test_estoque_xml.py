@@ -178,6 +178,15 @@ def test_xml_import_success():
     assert len(distribuidores) == 1
     assert distribuidores[0]["cnpj"] == "12345678000199"
 
+    # A NF-e participa da mesma trilha operacional das entradas manuais.
+    entradas = client.get("/estoque/entradas", headers=headers).json()
+    assert len(entradas) == 1
+    assert entradas[0]["tipo_entrada"] == "XML"
+    assert len(entradas[0]["itens"]) == 2
+    movimentos = client.get("/estoque/movimentacoes", headers=headers).json()
+    assert len(movimentos) == 2
+    assert all(item["origem"] == "xml" for item in movimentos)
+
 
 def test_xml_import_update_and_average_cost():
     token = get_auth_token()

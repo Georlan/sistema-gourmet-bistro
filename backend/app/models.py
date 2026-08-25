@@ -180,6 +180,55 @@ class Produto(Base):
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")
+    ficha_tecnica = relationship(
+        "ProdutoInsumo",
+        back_populates="produto",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProdutoInsumo(Base):
+    """Quantidade de um ingrediente consumida por uma unidade vendida."""
+
+    __tablename__ = "produto_insumos"
+    __table_args__ = (
+        UniqueConstraint(
+            "restaurante_id",
+            "produto_id",
+            "insumo_id",
+            name="uq_produto_insumos_tenant_produto_insumo",
+        ),
+        ForeignKeyConstraint(
+            ["restaurante_id", "produto_id"],
+            ["produtos.restaurante_id", "produtos.id"],
+            name="fk_produto_insumos_produto_tenant",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint(
+            "quantidade > 0",
+            name="ck_produto_insumos_quantidade_positive_finite",
+        ),
+        Index(
+            "ix_produto_insumos_tenant_produto",
+            "restaurante_id",
+            "produto_id",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    produto_id = Column(String, nullable=False)
+    insumo_id = Column(String, ForeignKey("insumos.id", ondelete="RESTRICT"), nullable=False)
+    quantidade = Column(Float, nullable=False)
+
+    produto = relationship("Produto", back_populates="ficha_tecnica")
+    insumo = relationship("Insumo")
 
 
 class Mesa(Base):

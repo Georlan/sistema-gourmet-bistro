@@ -352,3 +352,16 @@ export interface SessaoContagemEstoque {
   confirmada_em?: string | null;
   itens: ItemContagemEstoque[];
 }
+
+export interface FichaTecnicaItem {
+  insumo_id: string;
+  quantidade: number;
+  insumo?: Insumo;
+}
+
+export interface FichaTecnicaProduto {
+  produto_id: string;
+  produto_nome: string;
+  produto_ativo: boolean;
+  itens: FichaTecnicaItem[];
+}

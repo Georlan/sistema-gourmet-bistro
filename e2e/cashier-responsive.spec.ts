@@ -108,6 +108,11 @@ async function mockCashierBackend(page: Page) {
       body = [{ id: 'ent-1', numero_documento: 'NF-900', observacao: '', valor_total: 180, tipo_entrada: 'XML', created_at: new Date().toISOString(), distribuidor: { nome_fantasia: 'Distribuidora E2E' }, itens: [{ insumo_id: 'ins-arroz', quantidade: 10, unidade_medida: 'kg', custo_unitario: 18, subtotal: 180 }] }];
     } else if (pathname === '/estoque/movimentacoes') {
       body = [{ id: 1, insumo_id: 'ins-arroz', tipo: 'perda', quantidade: 1, saldo_anterior: 5, saldo_posterior: 4, custo_unitario: 18, motivo: 'Avaria', observacao: '', origem: 'manual', created_at: new Date().toISOString() }];
+    } else if (pathname === '/estoque/fichas-tecnicas') {
+      body = [
+        { produto_id: '101', produto_nome: 'Risoto da casa', produto_ativo: true, itens: [{ insumo_id: 'ins-arroz', quantidade: 0.2, insumo: { id: 'ins-arroz', nome: 'Arroz arbóreo', estoque_atual: 4, estoque_minimo: 5, estoque_maximo: 20, unidade_medida: 'kg', preco_medio_custo: 18 } }] },
+        { produto_id: '201', produto_nome: 'Suco natural', produto_ativo: false, itens: [] },
+      ];
     } else if (pathname === '/estoque/notas' || pathname === '/estoque/contagens' || pathname === '/estoque/sugestoes') {
       body = [];
     } else if (pathname === '/estoque/distribuidores') {
@@ -329,8 +334,17 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByRole('button', { name: 'Inventário', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Fornecedores', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Entradas', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Reposição pede atenção' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Fichas técnicas', exact: true })).toBeVisible();
+  await expect(page.getByText('ID: ins-arroz', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Fichas técnicas', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Fichas técnicas', exact: true })).toBeVisible();
+  await expect(page.getByText(/baixa e o estorno por cancelamento serão automáticos/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar fichas técnicas' }).click();
 
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cada movimento tem origem' })).toBeVisible();
   await expect(page.getByLabel('Buscar no histórico de estoque')).toBeVisible();
   await expect(page.getByText('Distribuidora E2E · NF-900')).toBeVisible();
   await expect(page.getByText('Avaria')).toBeVisible();
@@ -342,5 +356,56 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByText('Configuração do programa')).toBeVisible();
   await expect(page.getByText('Os saldos continuam visíveis e editáveis na aba')).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('estoque mantém banners, filtros e fichas técnicas utilizáveis em qualquer largura', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'estoque');
+    sessionStorage.setItem('koma_active_subtab', 'insumos');
+  });
+  await page.goto('/?view=caixa');
+
+  const viewportWidth = page.viewportSize()?.width ?? 1024;
+  if (viewportWidth > 768) {
+    await expect(page.getByRole('heading', { name: 'Reposição pede atenção' })).toBeVisible();
+  } else {
+    // On compact screens the shared operational banner is intentionally hidden
+    // so the primary stock actions remain above the fold.
+    await expect(page.getByRole('heading', { name: 'Reposição pede atenção' })).toBeHidden();
+  }
+  await expect(page.getByLabel('Buscar ingredientes')).toBeVisible();
+  await expect(page.getByLabel('Filtrar ingredientes por situação')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Fichas técnicas', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole('button', { name: 'Fechar fichas técnicas' }).click();
+
+  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  if (viewportWidth > 768) {
+    await expect(page.getByRole('heading', { name: 'Cada movimento tem origem' })).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { name: 'Cada movimento tem origem' })).toBeHidden();
+  }
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Inventário', exact: true }).click();
+  if (viewportWidth > 768) {
+    await expect(page.getByRole('heading', { name: 'Estoque real confere com o sistema' })).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { name: 'Estoque real confere com o sistema' })).toBeHidden();
+  }
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole('button', { name: 'Fornecedores', exact: true }).click();
+  if (viewportWidth > 768) {
+    await expect(page.getByRole('heading', { name: 'Reposição mais previsível' })).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { name: 'Reposição mais previsível' })).toBeHidden();
+  }
   await expectNoHorizontalOverflow(page);
 });

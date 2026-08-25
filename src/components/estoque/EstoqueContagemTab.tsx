@@ -18,9 +18,7 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
   return (
     <div className="space-y-3.5 text-left animate-fade-in">
       <div className="koma-toolbar">
-        <div>
-          <p className="text-[10px] font-medium text-koma-muted">Conte o estoque, salve rascunhos e confirme divergências quando terminar.</p>
-        </div>
+        <p className="text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{contagens.length}</strong> inventários · <strong>{contagens.filter(item => item.status === 'rascunho').length}</strong> rascunhos</p>
         <div className="koma-toolbar__actions ml-auto">
           <button type="button" onClick={() => onOpenNovaContagemModal()} className="koma-btn-success"><Plus size={14} /> Novo inventário</button>
         </div>
@@ -35,11 +33,10 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
         />
       ) : (
         <div className="overflow-x-auto border border-koma-border rounded-2xl bg-koma-panel">
-          <table className="koma-data-table min-w-[720px]">
+          <table className="koma-data-table min-w-[620px]">
             <thead>
               <tr className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold">
                 <th className="p-3">Data de Início</th>
-                <th className="p-3">ID / Sessão</th>
                 <th className="p-3">Status</th>
                 <th className="p-3 font-mono">Itens Contados</th>
                 <th className="p-3">Observação</th>
@@ -52,9 +49,6 @@ export const EstoqueContagemTab: React.FC<EstoqueContagemTabProps> = ({
                   <tr key={c.id} className="hover:bg-koma-raised/50 transition-colors">
                     <td className="p-3 text-koma-subtle whitespace-nowrap font-mono">
                       {formatBackendDateTime(c.created_at)}
-                    </td>
-                    <td className="p-3 font-bold text-koma-foreground font-mono">
-                      #{c.id.slice(0, 8)}
                     </td>
                     <td className="p-3">
                       {c.status === 'confirmada' ? (

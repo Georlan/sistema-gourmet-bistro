@@ -14,6 +14,7 @@ from ..services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
+from ..services.inventory import consumir_estoque_dos_itens
 from .cardapio_clientes import authenticated_customer
 
 logger = logging.getLogger("koma.cardapio")
@@ -187,6 +188,7 @@ def criar_pedido_online(
         db.flush()
         
         # Criar os Itens do Pedido
+        itens_criados = []
         for item_in in payload.itens:
             produto = db.query(Produto).filter(
                 Produto.id == item_in.produto_id,
@@ -214,7 +216,10 @@ def criar_pedido_online(
                     pago=False
                 )
                 db.add(novo_item)
-            
+                itens_criados.append(novo_item)
+
+        db.flush()
+        consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id)
         db.commit()
         
     except HTTPException:

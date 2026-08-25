@@ -63,6 +63,17 @@ function movementKind(tipo: MovimentacaoEstoque['tipo']): HistoryRow['kind'] {
   return 'ajuste';
 }
 
+function originLabel(origin?: string) {
+  return ({
+    venda_automatica: 'Venda automática',
+    cancelamento_venda: 'Venda cancelada',
+    entrada_manual: 'Entrada manual',
+    movimentacao_manual: 'Ajuste manual',
+    contagem: 'Inventário',
+    xml: 'NF-e XML',
+  } as Record<string, string>)[origin || ''] || origin || 'Manual';
+}
+
 export function EstoqueHistoricoTab({
   entradas,
   notasEntradaXml,
@@ -137,7 +148,7 @@ export function EstoqueHistoricoTab({
           quantity: `${Number(movement.quantidade || 0).toFixed(2)} ${unit}`.trim(),
           balance: `${Number(movement.saldo_anterior || 0).toFixed(2)} → ${Number(movement.saldo_posterior || 0).toFixed(2)}`,
           amount: movement.custo_unitario ? `R$ ${Number(movement.custo_unitario).toFixed(2)}/un` : '—',
-          origin: movement.origem || 'Manual',
+          origin: originLabel(movement.origem),
           searchText: [ingredient, movement.motivo, movement.observacao, movement.origem].join(' '),
         };
       });

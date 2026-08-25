@@ -11,13 +11,16 @@ import {
   Send, Printer, HelpCircle, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
   SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult } from '../types';
+import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult, Distribuidor, FichaTecnicaProduto, Insumo } from '../types';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
 import MoneyInput from './MoneyInput';
 import { EstoqueHistoricoTab } from './estoque/EstoqueHistoricoTab';
 import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
 import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
 import { ContagemEstoqueModal } from './estoque/ContagemEstoqueModal';
+import { EstoqueIngredientesTab } from './estoque/EstoqueIngredientesTab';
+import { EstoqueFornecedoresTab } from './estoque/EstoqueFornecedoresTab';
+import { FichaTecnicaModal } from './estoque/FichaTecnicaModal';
 import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
 import { SangriaModal } from './caixa/SangriaModal';
@@ -1110,24 +1113,23 @@ export function CaixaPanel({
   // Otimizações / Estoque / Desempenho States
   const [waitersPerformance, setWaitersPerformance] = useState<{ nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number }[]>([]);
   const [generalStats, setGeneralStats] = useState<any>(null);
-  const [estoqueInsumos, setEstoqueInsumos] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, preco_medio_custo: number }[]>([]);
-  const [estoqueSugestoes, setEstoqueSugestoes] = useState<{ id: string, nome: string, estoque_atual: number, estoque_minimo: number, estoque_maximo: number, unidade_medida: string, quantidade_sugerida: number }[]>([]);
+  const [estoqueInsumos, setEstoqueInsumos] = useState<Insumo[]>([]);
   const [notasEntrada, setNotasEntrada] = useState<{ id: string, numero_nota: string, chave_acesso: string, data_emissao: string, valor_total: number, distribuidor: { nome_fantasia: string, cnpj: string } | null }[]>([]);
-  const [distribuidores, setDistribuidores] = useState<{ id: string, nome_fantasia: string, razao_social: string, cnpj: string, lead_time_dias: number }[]>([]);
+  const [distribuidores, setDistribuidores] = useState<Distribuidor[]>([]);
   const [entradasEstoque, setEntradasEstoque] = useState<EntradaEstoque[]>([]);
   const [movimentacoesEstoque, setMovimentacoesEstoque] = useState<MovimentacaoEstoque[]>([]);
   const [sessoesContagemEstoque, setSessoesContagemEstoque] = useState<SessaoContagemEstoque[]>([]);
-  const [estoqueSearch, setEstoqueSearch] = useState('');
-  const [estoqueStatusFilter, setEstoqueStatusFilter] = useState<'todos' | 'baixo' | 'normal'>('todos');
-  const filteredEstoqueInsumos = useMemo(() => {
-    const term = estoqueSearch.trim().toLocaleLowerCase('pt-BR');
-    return estoqueInsumos.filter(insumo => {
-      const isLow = insumo.estoque_atual <= insumo.estoque_minimo;
-      if (estoqueStatusFilter === 'baixo' && !isLow) return false;
-      if (estoqueStatusFilter === 'normal' && isLow) return false;
-      return !term || `${insumo.nome} ${insumo.id}`.toLocaleLowerCase('pt-BR').includes(term);
-    });
-  }, [estoqueInsumos, estoqueSearch, estoqueStatusFilter]);
+  const [fichasTecnicas, setFichasTecnicas] = useState<FichaTecnicaProduto[]>([]);
+  const [showFichaTecnicaModal, setShowFichaTecnicaModal] = useState(false);
+  const estoqueInsights = useMemo(() => {
+    const low = estoqueInsumos.filter(item => Number(item.estoque_atual || 0) <= Number(item.estoque_minimo || 0)).length;
+    const negative = estoqueInsumos.filter(item => Number(item.estoque_atual || 0) < 0).length;
+    const activeProducts = fichasTecnicas.filter(item => item.produto_ativo).length;
+    const linkedProducts = fichasTecnicas.filter(item => item.produto_ativo && item.itens.length > 0).length;
+    const inventoryValue = estoqueInsumos.reduce((sum, item) => sum + Math.max(0, Number(item.estoque_atual || 0)) * Number(item.preco_medio_custo || 0), 0);
+    const drafts = sessoesContagemEstoque.filter(item => item.status === 'rascunho').length;
+    return { low, negative, activeProducts, linkedProducts, inventoryValue, drafts };
+  }, [estoqueInsumos, fichasTecnicas, sessoesContagemEstoque]);
   const [showEntradaManualModal, setShowEntradaManualModal] = useState<boolean>(false);
   const [showMovimentacaoModal, setShowMovimentacaoModal] = useState<boolean>(false);
   const [showContagemModal, setShowContagemModal] = useState<boolean>(false);
@@ -1343,7 +1345,6 @@ export function CaixaPanel({
   const [showEditInsumoModal, setShowEditInsumoModal] = useState(false);
   const [showAjusteInsumoModal, setShowAjusteInsumoModal] = useState(false);
   const [selectedInsumo, setSelectedInsumo] = useState<any>(null);
-  const [insumoFormId, setInsumoFormId] = useState('');
   const [insumoFormNome, setInsumoFormNome] = useState('');
   const [insumoFormMinimo, setInsumoFormMinimo] = useState<number>(10);
   const [insumoFormMaximo, setInsumoFormMaximo] = useState<number>(50);
@@ -1357,7 +1358,6 @@ export function CaixaPanel({
   const [showNewDistModal, setShowNewDistModal] = useState(false);
   const [showEditDistModal, setShowEditDistModal] = useState(false);
   const [selectedDist, setSelectedDist] = useState<any>(null);
-  const [distFormId, setDistFormId] = useState('');
   const [distFormNomeFantasia, setDistFormNomeFantasia] = useState('');
   const [distFormRazaoSocial, setDistFormRazaoSocial] = useState('');
   const [distFormCnpj, setDistFormCnpj] = useState('');
@@ -2787,6 +2787,11 @@ export function CaixaPanel({
       .then(res => res.json())
       .then(data => { if (Array.isArray(data)) setDistribuidores(data); })
       .catch(err => console.error('Error fetching distribuidores:', err));
+
+    fetch(`${apiBaseUrl}/estoque/fichas-tecnicas`, { headers: authHeaders })
+      .then(res => res.json())
+      .then(data => { if (Array.isArray(data)) setFichasTecnicas(data); })
+      .catch(err => console.error('Error fetching fichas tecnicas:', err));
   };
 
   const handleSaveInsumo = async (isNew: boolean) => {
@@ -2802,10 +2807,6 @@ export function CaixaPanel({
         unidade_medida: insumoFormUnidade,
         preco_medio_custo: Number(insumoFormCusto)
       };
-      if (isNew) {
-        body.id = insumoFormId;
-        body.estoque_atual = 0.0;
-      }
 
       const res = await fetch(url, {
         method,
@@ -2872,9 +2873,6 @@ export function CaixaPanel({
         cnpj: distFormCnpj || null,
         lead_time_dias: Number(distFormLeadTime)
       };
-      if (isNew) {
-        body.id = distFormId;
-      }
 
       const res = await fetch(url, {
         method,
@@ -3088,11 +3086,6 @@ export function CaixaPanel({
         .then(data => { if (Array.isArray(data)) setEstoqueInsumos(data); })
         .catch(err => console.error('Error fetching insumos:', err));
 
-      fetch(`${apiBaseUrl}/estoque/sugestoes`, { headers: authHeaders })
-        .then(res => res.json())
-        .then(data => { if (Array.isArray(data)) setEstoqueSugestoes(data); })
-        .catch(err => console.error('Error fetching stock suggestions:', err));
-
       fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setNotasEntrada(data); })
@@ -3117,6 +3110,11 @@ export function CaixaPanel({
         .then(res => res.json())
         .then(data => { if (Array.isArray(data)) setSessoesContagemEstoque(data); })
         .catch(err => console.error('Error fetching contagens:', err));
+
+      fetch(`${apiBaseUrl}/estoque/fichas-tecnicas`, { headers: authHeaders })
+        .then(res => res.json())
+        .then(data => { if (Array.isArray(data)) setFichasTecnicas(data); })
+        .catch(err => console.error('Error fetching fichas tecnicas:', err));
     }
     if ((activeTab === 'relatorios' || activeTab === 'dashboard') && ['metas', 'metas_previsoes'].includes(activeSubTab)) {
       fetch(`${apiBaseUrl}/comandas/estatisticas/pico`, { headers: authHeaders })
@@ -7478,6 +7476,20 @@ export function CaixaPanel({
 
           {/* CATÁLOGO CENTRAL: produtos e disponibilidade usam o mesmo snapshot. */}
           {activeTab === 'cardapio' && activeSubTab === 'produtos' && (
+            <div className="space-y-4">
+            <OperationalBanner
+              id="menu-products-heading"
+              eyebrow="CATÁLOGO"
+              title="Produtos"
+              accent="prontos para vender"
+              description="Disponibilidade e organização do cardápio em uma visão única, sem repetir informações."
+              metrics={[
+                { label: 'produtos', value: apiProdutos.length },
+                { label: 'disponíveis', value: apiProdutos.filter(item => item.ativo !== false).length },
+                { label: 'pausados', value: apiProdutos.filter(item => item.ativo === false).length, valueClassName: apiProdutos.some(item => item.ativo === false) ? 'text-amber-600 dark:text-amber-300' : undefined },
+                { label: 'categorias', value: apiCategorias.length },
+              ]}
+            />
             <CardapioProdutosTab
               produtos={apiProdutos}
               categorias={apiCategorias}
@@ -7567,10 +7579,25 @@ export function CaixaPanel({
                 showToast(ativo ? 'Categoria publicada.' : 'Categoria pausada.');
               }}
             />
+            </div>
           )}
 
           {/* ABA CATEGORIAS */}
           {activeTab === 'cardapio' && activeSubTab === 'categorias' && (
+            <div className="space-y-4">
+            <OperationalBanner
+              id="menu-categories-heading"
+              eyebrow="ORGANIZAÇÃO"
+              title="Categorias"
+              accent="sem excesso"
+              description="Agrupe produtos para agilizar a venda e envie cada grupo ao destino correto de produção."
+              metrics={[
+                { label: 'categorias', value: apiCategorias.length },
+                { label: 'vazias', value: apiCategorias.filter(category => !apiProdutos.some(product => product.categoria_id === category.id)).length },
+                { label: 'cozinha', value: apiCategorias.filter(category => category.destino_impressao === 'COZINHA').length },
+                { label: 'sem impressão', value: apiCategorias.filter(category => category.destino_impressao === 'NENHUM').length },
+              ]}
+            />
             <CardapioCategoriasTab
               apiCategorias={apiCategorias}
               apiProdutos={apiProdutos}
@@ -7579,120 +7606,77 @@ export function CaixaPanel({
               fetchCategorias={fetchCategorias}
               showToast={showToast}
             />
+            </div>
           )}
 
           {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
           {activeTab === 'estoque' && activeSubTab === 'insumos' && (
-            <div className={clsx('animate-fade-in', 'space-y-3.5', 'text-left')}>
-              <section className="koma-toolbar">
-                <div className="koma-toolbar__search">
-                  <Search size={14} aria-hidden="true" />
-                  <input value={estoqueSearch} onChange={event => setEstoqueSearch(event.target.value)} placeholder="Buscar ingrediente…" aria-label="Buscar ingredientes" />
-                  {estoqueSearch && <button type="button" onClick={() => setEstoqueSearch('')} aria-label="Limpar busca"><X size={13} /></button>}
-                </div>
-                <select value={estoqueStatusFilter} onChange={event => setEstoqueStatusFilter(event.target.value as 'todos' | 'baixo' | 'normal')} className="min-h-9 rounded-xl border border-koma-border bg-koma-input px-3 text-[10px] text-koma-foreground" aria-label="Filtrar por status do estoque">
-                  <option value="todos">Todos os status</option>
-                  <option value="baixo">Estoque baixo</option>
-                  <option value="normal">Estoque normal</option>
-                </select>
-                <div className="koma-toolbar__actions">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveSubTab('historico');
-                      window.setTimeout(() => xmlFileInputRef.current?.click(), 0);
-                    }}
-                    className="koma-btn-secondary"
-                  >
-                    <Upload size={14} /> Importar NF-e
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInsumoFormId('');
-                      setInsumoFormNome('');
-                      setInsumoFormMinimo(10);
-                      setInsumoFormMaximo(50);
-                      setInsumoFormUnidade('un');
-                      setInsumoFormCusto(0);
-                      setShowNewInsumoModal(true);
-                    }}
-                    className="koma-btn-success"
-                  >
-                    <Plus size={14} /> Novo ingrediente
-                  </button>
-                </div>
-              </section>
-              <div className={clsx('overflow-x-auto', 'overscroll-x-contain', 'border', 'border-koma-border', 'rounded-2xl', 'bg-koma-panel')}>
-                  <table className={clsx('koma-data-table', 'min-w-[580px]')}>
-                    <thead>
-                      <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                        <th className="p-3">Ingrediente</th>
-                        <th className={clsx('p-3', 'font-mono')}>Estoque Atual</th>
-                        <th className={clsx('p-3', 'font-mono')}>Mínimo</th>
-                        <th className={clsx('p-3', 'font-mono')}>Custo Médio</th>
-                        <th className={clsx('p-3', 'text-right')}>Status</th>
-                        <th className={clsx('p-3', 'text-right')}>Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                      {filteredEstoqueInsumos.length === 0 ? (
-                        <tr><td colSpan={6} className={clsx('p-6 sm:p-8', 'text-center', 'text-koma-muted', 'text-[11px]')}>{estoqueInsumos.length === 0 ? 'Nenhum ingrediente cadastrado. Cadastre ou importe uma NF-e para começar.' : 'Nenhum ingrediente corresponde aos filtros.'}</td></tr>
-                      ) : filteredEstoqueInsumos.map(ins => {
-                        const isLow = ins.estoque_atual <= ins.estoque_minimo;
-                        return (
-                          <tr key={ins.id} className={clsx('transition-colors', isLow ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-koma-panel/20')}>
-                            <td className={clsx('p-3', 'font-semibold', 'text-koma-foreground')}>{ins.nome} <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'font-mono')}>ID: {ins.id}</span></td>
-                            <td className={clsx('p-3', 'font-mono', isLow ? 'text-amber-400' : 'text-emerald-400')}>
-                              {ins.estoque_atual.toFixed(2)} <span className="text-koma-muted">{ins.unidade_medida}</span>
-                            </td>
-                            <td className={clsx('p-3', 'font-mono', 'text-koma-subtle')}>{ins.estoque_minimo.toFixed(2)} <span className="text-gray-600">{ins.unidade_medida}</span></td>
-                            <td className={clsx('p-3', 'font-mono', 'text-koma-secondary')}>R$ {ins.preco_medio_custo.toFixed(2)}</td>
-                            <td className={clsx('p-3', 'text-right')}>
-                              {isLow
-                                ? <span className="koma-status-badge koma-badge-warning">Baixo</span>
-                                : <span className="koma-status-badge koma-badge-success">Normal</span>
-                              }
-                            </td>
-                            <td className={clsx('p-3', 'text-right', 'space-x-1.5', 'whitespace-nowrap')}>
-                              <button
-                                onClick={() => {
-                                  setSelectedInsumo(ins);
-                                  setAjusteQtd(0);
-                                  setAjusteTipo('ENTRADA');
-                                  setAjusteJustificativa('');
-                                  setShowAjusteInsumoModal(true);
-                                }}
-                                className={clsx('px-2', 'py-0.5', 'border', 'border-koma-border', 'hover:border-koma-border', 'bg-koma-input', 'hover:bg-koma-raised', 'text-koma-secondary', 'hover:text-koma-foreground', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
-                              >
-                                Ajustar
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedInsumo(ins);
-                                  setInsumoFormNome(ins.nome);
-                                  setInsumoFormMinimo(ins.estoque_minimo);
-                                  setInsumoFormMaximo(ins.estoque_maximo);
-                                  setInsumoFormUnidade(ins.unidade_medida);
-                                  setInsumoFormCusto(ins.preco_medio_custo);
-                                  setShowEditInsumoModal(true);
-                                }}
-                                className={clsx('px-2', 'py-0.5', 'border', 'border-koma-border', 'hover:border-koma-border', 'bg-koma-input', 'hover:bg-koma-panel', 'text-emerald-400', 'hover:text-emerald-600 dark:text-emerald-300', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
-                              >
-                                Editar
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-              </div>
+            <div className="space-y-4">
+              <OperationalBanner
+                id="stock-ingredients-heading"
+                eyebrow="ESTOQUE CONECTADO"
+                title="Reposição"
+                accent={estoqueInsights.low > 0 ? 'pede atenção' : 'em dia'}
+                description={estoqueInsights.linkedProducts > 0 ? 'Vendas com ficha técnica já baixam ingredientes automaticamente.' : 'Cadastre os ingredientes e monte fichas técnicas para ativar a baixa automática nas vendas.'}
+                metrics={[
+                  { label: 'ingredientes', value: estoqueInsumos.length },
+                  { label: 'para repor', value: estoqueInsights.low, valueClassName: estoqueInsights.low > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },
+                  { label: 'produtos integrados', value: `${estoqueInsights.linkedProducts}/${estoqueInsights.activeProducts}` },
+                  { label: 'valor em estoque', value: formatCompactCurrency(estoqueInsights.inventoryValue) },
+                ]}
+              />
+              <EstoqueIngredientesTab
+                insumos={estoqueInsumos}
+                fichasTecnicas={fichasTecnicas}
+                onOpenRecipes={() => setShowFichaTecnicaModal(true)}
+                onImportXml={() => {
+                  setActiveSubTab('historico');
+                  window.setTimeout(() => xmlFileInputRef.current?.click(), 0);
+                }}
+                onCreate={() => {
+                  setInsumoFormNome('');
+                  setInsumoFormMinimo(10);
+                  setInsumoFormMaximo(50);
+                  setInsumoFormUnidade('un');
+                  setInsumoFormCusto(0);
+                  setShowNewInsumoModal(true);
+                }}
+                onAdjust={insumo => {
+                  setSelectedInsumo(insumo);
+                  setAjusteQtd(0);
+                  setAjusteTipo('ENTRADA');
+                  setAjusteJustificativa('');
+                  setShowAjusteInsumoModal(true);
+                }}
+                onEdit={insumo => {
+                  setSelectedInsumo(insumo);
+                  setInsumoFormNome(insumo.nome);
+                  setInsumoFormMinimo(insumo.estoque_minimo);
+                  setInsumoFormMaximo(insumo.estoque_maximo);
+                  setInsumoFormUnidade(insumo.unidade_medida);
+                  setInsumoFormCusto(insumo.preco_medio_custo);
+                  setShowEditInsumoModal(true);
+                }}
+              />
             </div>
           )}
 
           {/* LIVE VIEW: HISTÓRICO UNIFICADO DE ESTOQUE */}
           {activeTab === 'estoque' && ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(activeSubTab) && (
+            <div className="space-y-4">
+            <OperationalBanner
+              id="stock-history-heading"
+              eyebrow="RASTREABILIDADE"
+              title="Cada movimento"
+              accent="tem origem"
+              description="Compras, vendas, perdas, ajustes e inventários aparecem em uma única linha do tempo."
+              metrics={[
+                { label: 'movimentos', value: movimentacoesEstoque.length },
+                { label: 'entradas', value: entradasEstoque.length },
+                { label: 'baixas por venda', value: movimentacoesEstoque.filter(item => item.origem === 'venda_automatica').length },
+                { label: 'perdas', value: movimentacoesEstoque.filter(item => item.tipo === 'perda').length, valueClassName: movimentacoesEstoque.some(item => item.tipo === 'perda') ? 'text-amber-600 dark:text-amber-300' : undefined },
+              ]}
+            />
             <EstoqueHistoricoTab
               entradas={entradasEstoque}
               notasEntradaXml={notasEntrada}
@@ -7736,10 +7720,24 @@ export function CaixaPanel({
                 fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setNotasEntrada(d); });
               }}
             />
+            </div>
           )}
 
           {/* LIVE VIEW: CONTAGEM FÍSICA (INVENTÁRIO) */}
           {activeTab === 'estoque' && ['inventario', 'contagem'].includes(activeSubTab) && (
+            <div className="space-y-4">
+            <OperationalBanner
+              id="stock-inventory-heading"
+              eyebrow="CONFERÊNCIA"
+              title="Estoque real"
+              accent="confere com o sistema"
+              description="Conte fisicamente, salve como rascunho e aplique as diferenças somente ao confirmar."
+              metrics={[
+                { label: 'inventários', value: sessoesContagemEstoque.length },
+                { label: 'rascunhos', value: estoqueInsights.drafts, valueClassName: estoqueInsights.drafts > 0 ? 'text-amber-600 dark:text-amber-300' : undefined },
+                { label: 'ingredientes', value: estoqueInsumos.length },
+              ]}
+            />
             <EstoqueContagemTab
               contagens={sessoesContagemEstoque}
               isLoading={isLoading}
@@ -7751,76 +7749,43 @@ export function CaixaPanel({
                 fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders }).then(r => r.json()).then(d => { if (Array.isArray(d)) setSessoesContagemEstoque(d); });
               }}
             />
+            </div>
           )}
 
           {/* LIVE VIEW: DISTRIBUIDORES */}
           {activeTab === 'estoque' && activeSubTab === 'fornecedores' && (
-            <div className={clsx('space-y-3.5', 'text-left', 'animate-fade-in')}>
-              <section className="koma-toolbar">
-                <p className="text-[10px] font-medium text-koma-muted"><strong className="font-mono text-koma-foreground">{distribuidores.length}</strong> fornecedores cadastrados</p>
-                <div className="koma-toolbar__actions ml-auto">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDistFormId('');
-                    setDistFormNomeFantasia('');
-                    setDistFormRazaoSocial('');
-                    setDistFormCnpj('');
-                    setDistFormLeadTime(3);
-                    setShowNewDistModal(true);
-                  }}
-                  className="koma-btn-success"
-                >
-                  <Plus size={14} /> Novo fornecedor
-                </button>
-                </div>
-              </section>
-              <div className={clsx('overflow-x-auto', 'border', 'border-koma-border', 'rounded-2xl', 'bg-koma-panel')}>
-                <table className="koma-data-table min-w-[680px]">
-                  <thead>
-                    <tr className={clsx('bg-koma-panel', 'border-b', 'border-koma-border', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'font-bold')}>
-                      <th className="p-3.5">Nome Fantasia</th>
-                      <th className="p-3.5">Razão Social</th>
-                      <th className="p-3.5">CNPJ</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Lead Time</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className={clsx('divide-y', 'divide-koma-border')}>
-                    {distribuidores.length === 0 ? (
-                      <tr><td colSpan={5} className={clsx('p-8', 'text-center', 'text-koma-muted', 'italic')}>Nenhum fornecedor cadastrado. Clique em Novo Fornecedor ou importe uma NF-e.</td></tr>
-                    ) : distribuidores.map(dist => (
-                      <tr key={dist.id} className={clsx('hover:bg-koma-panel/20', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{dist.nome_fantasia || '—'} <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'font-mono')}>ID: {dist.id}</span></td>
-                        <td className={clsx('p-3.5', 'text-koma-subtle')}>{dist.razao_social || '—'}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-koma-subtle')}>{dist.cnpj}</td>
-                        <td className={clsx('p-3.5', 'text-koma-subtle', 'text-right', 'font-mono')}>{dist.lead_time_dias ?? '—'} dias</td>
-                        <td className={clsx('p-3.5', 'text-right', 'space-x-1.5', 'whitespace-nowrap')}>
-                          <button
-                            onClick={() => {
-                              setSelectedDist(dist);
-                              setDistFormNomeFantasia(dist.nome_fantasia || '');
-                              setDistFormRazaoSocial(dist.razao_social || '');
-                              setDistFormCnpj(dist.cnpj || '');
-                              setDistFormLeadTime(dist.lead_time_dias ?? 3);
-                              setShowEditDistModal(true);
-                            }}
-                            className={clsx('px-2', 'py-0.5', 'border', 'border-koma-border', 'hover:border-koma-border', 'bg-koma-input', 'hover:bg-koma-panel', 'text-emerald-400', 'hover:text-emerald-600 dark:text-emerald-300', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDistribuidor(dist.id)}
-                            className={clsx('px-2', 'py-0.5', 'border', 'border-red-950/40', 'hover:border-red-600/30', 'bg-red-950/20', 'hover:bg-red-900/25', 'text-red-400', 'hover:text-white', 'rounded-md', 'transition-all', 'cursor-pointer', 'font-bold')}
-                          >
-                            Excluir
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="space-y-4">
+              <OperationalBanner
+                id="stock-suppliers-heading"
+                eyebrow="COMPRAS"
+                title="Reposição"
+                accent="mais previsível"
+                description="Mantenha contatos e prazos de entrega organizados; fornecedores de NF-e entram automaticamente."
+                metrics={[
+                  { label: 'fornecedores', value: distribuidores.length },
+                  { label: 'com CNPJ', value: distribuidores.filter(item => Boolean(item.cnpj)).length },
+                  { label: 'prazo médio', value: distribuidores.length > 0 ? `${Math.round(distribuidores.reduce((sum, item) => sum + Number(item.lead_time_dias || 0), 0) / distribuidores.length)} dias` : '—' },
+                ]}
+              />
+              <EstoqueFornecedoresTab
+                fornecedores={distribuidores}
+                onCreate={() => {
+                  setDistFormNomeFantasia('');
+                  setDistFormRazaoSocial('');
+                  setDistFormCnpj('');
+                  setDistFormLeadTime(3);
+                  setShowNewDistModal(true);
+                }}
+                onEdit={fornecedor => {
+                  setSelectedDist(fornecedor);
+                  setDistFormNomeFantasia(fornecedor.nome_fantasia || '');
+                  setDistFormRazaoSocial(fornecedor.razao_social || '');
+                  setDistFormCnpj(fornecedor.cnpj || '');
+                  setDistFormLeadTime(fornecedor.lead_time_dias ?? 3);
+                  setShowEditDistModal(true);
+                }}
+                onDelete={fornecedor => void handleDeleteDistribuidor(fornecedor.id)}
+              />
             </div>
           )}
 
@@ -10094,7 +10059,7 @@ export function CaixaPanel({
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!insumoFormId.trim() || !insumoFormNome.trim() || !insumoFormUnidade.trim()) {
+                if (!insumoFormNome.trim() || !insumoFormUnidade.trim()) {
                   alert('Preencha os campos obrigatórios!');
                   return;
                 }
@@ -10102,20 +10067,7 @@ export function CaixaPanel({
               }}
               className="space-y-4"
             >
-              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
-                <div className="space-y-1">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>ID do Ingrediente (slug):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ex: carne-bovina"
-                    value={insumoFormId}
-                    onChange={(e) => setInsumoFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
-                  />
-                </div>
-
-                <div className="space-y-1">
+              <div className="space-y-1">
                   <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Nome do Ingrediente:</label>
                   <input
                     type="text"
@@ -10125,7 +10077,6 @@ export function CaixaPanel({
                     onChange={(e) => setInsumoFormNome(e.target.value)}
                     className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
-                </div>
               </div>
 
               <div className={clsx('grid', 'grid-cols-3', 'gap-4')}>
@@ -10224,16 +10175,6 @@ export function CaixaPanel({
               }}
               className="space-y-4"
             >
-              <div className="space-y-1">
-                <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block', 'font-mono')}>ID (Não editável):</label>
-                <input
-                  type="text"
-                  disabled
-                  value={selectedInsumo.id}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-input/40', 'border', 'border-koma-border/50', 'rounded-xl', 'text-koma-muted', 'font-mono', 'text-xs', 'opacity-60')}
-                />
-              </div>
-
               <div className="space-y-1">
                 <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Nome do Ingrediente:</label>
                 <input
@@ -10436,7 +10377,7 @@ export function CaixaPanel({
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!distFormId.trim() || !distFormNomeFantasia.trim()) {
+                if (!distFormNomeFantasia.trim()) {
                   alert('Preencha os campos obrigatórios!');
                   return;
                 }
@@ -10444,20 +10385,7 @@ export function CaixaPanel({
               }}
               className="space-y-4"
             >
-              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
-                <div className="space-y-1">
-                  <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>ID (slug):</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="ex: ambev"
-                    value={distFormId}
-                    onChange={(e) => setDistFormId(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                    className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]', 'font-mono', 'text-xs')}
-                  />
-                </div>
-
-                <div className="space-y-1">
+              <div className="space-y-1">
                   <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Nome Fantasia:</label>
                   <input
                     type="text"
@@ -10467,7 +10395,6 @@ export function CaixaPanel({
                     onChange={(e) => setDistFormNomeFantasia(e.target.value)}
                     className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'focus:outline-none', 'focus:border-[#10b981]')}
                   />
-                </div>
               </div>
 
               <div className="space-y-1">
@@ -10556,16 +10483,6 @@ export function CaixaPanel({
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className={clsx('text-[10px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block', 'font-mono')}>ID (Não editável):</label>
-                <input
-                  type="text"
-                  disabled
-                  value={selectedDist.id}
-                  className={clsx('w-full', 'px-3', 'py-2', 'bg-koma-panel/40', 'border', 'border-koma-border/50', 'rounded-xl', 'text-koma-muted', 'font-mono', 'text-xs', 'opacity-60')}
-                />
-              </div>
-
-              <div className="space-y-1">
                 <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Nome Fantasia:</label>
                 <input
                   type="text"
@@ -10627,6 +10544,35 @@ export function CaixaPanel({
             </form>
           </div>
         </div>
+      )}
+
+      {showFichaTecnicaModal && (
+        <FichaTecnicaModal
+          produtos={apiProdutos}
+          insumos={estoqueInsumos}
+          fichas={fichasTecnicas}
+          onClose={() => setShowFichaTecnicaModal(false)}
+          onSave={async (produtoId, itens) => {
+            try {
+              const response = await fetch(`${apiBaseUrl}/estoque/fichas-tecnicas/${produtoId}`, {
+                method: 'PUT',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ itens }),
+              });
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar a ficha técnica.');
+              setFichasTecnicas(current => {
+                const remaining = current.filter(item => item.produto_id !== produtoId);
+                return [...remaining, data].sort((left, right) => left.produto_nome.localeCompare(right.produto_nome, 'pt-BR'));
+              });
+              showToast('Ficha técnica salva. As próximas vendas já baixarão o estoque.');
+              return true;
+            } catch (error) {
+              showToast(error instanceof Error ? error.message : 'Erro ao salvar ficha técnica.', 'error');
+              return false;
+            }
+          }}
+        />
       )}
 
       {/* MODAL DE ENTRADA MANUAL DE ESTOQUE */}

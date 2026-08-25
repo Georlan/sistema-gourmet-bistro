@@ -4,14 +4,15 @@ import xml.etree.ElementTree as ET
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from datetime import datetime, timezone
 import uuid
 from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import (
     Usuario, Insumo, Distribuidor, NotaEntrada, ItemNotaEntrada, ActivityLog,
-    EntradaEstoque, ItemEntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, ItemContagemEstoque
+    EntradaEstoque, ItemEntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, ItemContagemEstoque,
+    Produto, ProdutoInsumo,
 )
 from ..schemas import (
     InsumoResponse, DistribuidorResponse, NotaEntradaResponse,
@@ -86,7 +87,7 @@ async def importar_xml(
 
     # Clean CNPJ to form a clean unique ID
     cnpj_limpo = re.sub(r'\D', '', cnpj)
-    dist_id = f"dist-{cnpj_limpo}"
+    dist_id = f"dist-{rest_id}-{cnpj_limpo}"
 
     distribuidor = db.query(Distribuidor).filter(
         Distribuidor.id == dist_id,
@@ -104,8 +105,6 @@ async def importar_xml(
             lead_time_dias=3
         )
         db.add(distribuidor)
-        db.commit()
-        db.refresh(distribuidor)
         distribuidor_criado = True
 
     # 2. Parse Nota Fiscal Info (<ide>, <total>)
@@ -162,7 +161,19 @@ async def importar_xml(
         valor_total=valor_total
     )
     db.add(nota)
-    db.commit()
+
+    entrada = EntradaEstoque(
+        id=f"xml-{chave_acesso}",
+        restaurante_id=rest_id,
+        distribuidor_id=dist_id,
+        numero_documento=numero_nota,
+        data_emissao=data_emissao,
+        observacao="Entrada importada por NF-e",
+        valor_total=valor_total,
+        tipo_entrada="XML",
+        usuario_id=current_user.id,
+    )
+    db.add(entrada)
 
     # 3. Parse Items (<det>)
     det_items = root.findall(".//ns:det", ns) or root.findall(".//det")
@@ -187,7 +198,7 @@ async def importar_xml(
         u_com = get_text(prod, "uCom") or "un"
 
         # Unique Insumo ID based on cleaned slug description
-        insumo_id = f"ins-{slugify(desc)}"
+        insumo_id = f"ins-{rest_id}-{slugify(desc)}"
 
         # Search existing Insumo
         insumo = db.query(Insumo).filter(
@@ -196,12 +207,11 @@ async def importar_xml(
         ).first()
 
         if not insumo:
-            # Create new Insumo
             insumo = Insumo(
                 id=insumo_id,
                 restaurante_id=rest_id,
                 nome=desc,
-                estoque_atual=qtd,
+                estoque_atual=0.0,
                 estoque_minimo=10.0,
                 estoque_maximo=qtd * 2 if qtd > 0 else 50.0,
                 unidade_medida=u_com.lower()[:10],
@@ -210,32 +220,55 @@ async def importar_xml(
             db.add(insumo)
             insumos_criados += 1
         else:
-            # Update existing Insumo with Weighted Average Cost
-            estoque_antigo = insumo.estoque_atual or 0.0
-            custo_antigo = insumo.preco_medio_custo or 0.0
-
-            total_qtd = estoque_antigo + qtd
-            if total_qtd > 0:
-                novo_custo = ((estoque_antigo * custo_antigo) + (qtd * preco_unit)) / total_qtd
-            else:
-                novo_custo = preco_unit
-
-            insumo.estoque_atual = total_qtd
-            insumo.preco_medio_custo = novo_custo
             insumos_atualizados += 1
 
-        db.commit()
+        estoque_antigo = float(insumo.estoque_atual or 0.0)
+        custo_antigo = float(insumo.preco_medio_custo or 0.0)
+        total_qtd = estoque_antigo + qtd
+        novo_custo = (
+            ((estoque_antigo * custo_antigo) + (qtd * preco_unit)) / total_qtd
+            if total_qtd > 0
+            else preco_unit
+        )
+        insumo.estoque_atual = total_qtd
+        insumo.preco_medio_custo = novo_custo
 
-        # Create ItemNotaEntrada
-        item_nota = ItemNotaEntrada(
+        db.add(ItemNotaEntrada(
             restaurante_id=rest_id,
             nota_id=chave_acesso,
             insumo_id=insumo_id,
             quantidade=qtd,
             preco_unitario=preco_unit
-        )
-        db.add(item_nota)
+        ))
+        db.add(ItemEntradaEstoque(
+            restaurante_id=rest_id,
+            entrada_id=entrada.id,
+            insumo_id=insumo_id,
+            quantidade=qtd,
+            unidade_medida=u_com.lower()[:10],
+            custo_unitario=preco_unit,
+            subtotal=qtd * preco_unit,
+        ))
+        db.add(MovimentacaoEstoque(
+            restaurante_id=rest_id,
+            insumo_id=insumo_id,
+            tipo="entrada",
+            quantidade=qtd,
+            saldo_anterior=estoque_antigo,
+            saldo_posterior=total_qtd,
+            custo_unitario=preco_unit,
+            motivo=f"Entrada por NF-e {numero_nota}",
+            observacao="Importação automática do XML",
+            origem="xml",
+            referencia_id=entrada.id,
+            usuario_id=current_user.id,
+        ))
+
+    try:
         db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "success": True,
@@ -278,7 +311,7 @@ def get_notas(
 
 # ─── SCHEMAS INTERNOS PARA INSUMOS E DISTRIBUIDORES ───────────────────────────
 class InsumoCreate(BaseModel):
-    id: str
+    id: Optional[str] = None
     nome: str
     estoque_minimo: float = 10.0
     estoque_maximo: float = 50.0
@@ -298,7 +331,7 @@ class InsumoAjuste(BaseModel):
     justificativa: str = ""
 
 class DistribuidorCreate(BaseModel):
-    id: str
+    id: Optional[str] = None
     nome_fantasia: str
     razao_social: Optional[str] = None
     cnpj: Optional[str] = None
@@ -311,6 +344,123 @@ class DistribuidorUpdate(BaseModel):
     lead_time_dias: Optional[int] = None
 
 
+class FichaTecnicaItemInput(BaseModel):
+    insumo_id: str = Field(min_length=1, max_length=255)
+    quantidade: float = Field(gt=0)
+
+
+class FichaTecnicaUpdate(BaseModel):
+    itens: list[FichaTecnicaItemInput] = Field(default_factory=list, max_length=200)
+
+
+class FichaTecnicaItemResponse(BaseModel):
+    insumo_id: str
+    quantidade: float
+    insumo: Optional[InsumoResponse] = None
+
+
+class FichaTecnicaProdutoResponse(BaseModel):
+    produto_id: str
+    produto_nome: str
+    produto_ativo: bool
+    itens: list[FichaTecnicaItemResponse]
+
+
+def _serialize_ficha(produto: Produto) -> FichaTecnicaProdutoResponse:
+    return FichaTecnicaProdutoResponse(
+        produto_id=produto.id,
+        produto_nome=produto.nome,
+        produto_ativo=produto.ativo is not False,
+        itens=[
+            FichaTecnicaItemResponse(
+                insumo_id=item.insumo_id,
+                quantidade=float(item.quantidade),
+                insumo=item.insumo,
+            )
+            for item in produto.ficha_tecnica
+        ],
+    )
+
+
+@router.get("/fichas-tecnicas", response_model=list[FichaTecnicaProdutoResponse])
+def get_fichas_tecnicas(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional),
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+    produtos = (
+        db.query(Produto)
+        .filter(Produto.restaurante_id == rest_id)
+        .options(joinedload(Produto.ficha_tecnica).joinedload(ProdutoInsumo.insumo))
+        .order_by(Produto.nome.asc())
+        .all()
+    )
+    return [_serialize_ficha(produto) for produto in produtos]
+
+
+@router.put(
+    "/fichas-tecnicas/{produto_id}",
+    response_model=FichaTecnicaProdutoResponse,
+)
+def update_ficha_tecnica(
+    produto_id: str,
+    data: FichaTecnicaUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_garcom_optional),
+):
+    check_caixa_permission(current_user)
+    rest_id = require_tenant_id()
+    produto = (
+        db.query(Produto)
+        .filter(Produto.restaurante_id == rest_id, Produto.id == produto_id)
+        .first()
+    )
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+    ids = [item.insumo_id.strip() for item in data.itens]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=400, detail="Não repita o mesmo ingrediente na ficha técnica.")
+
+    insumos = {
+        item.id: item
+        for item in db.query(Insumo).filter(
+            Insumo.restaurante_id == rest_id,
+            Insumo.id.in_(ids),
+        ).all()
+    } if ids else {}
+    ausentes = [insumo_id for insumo_id in ids if insumo_id not in insumos]
+    if ausentes:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Ingrediente não encontrado: {ausentes[0]}",
+        )
+
+    db.query(ProdutoInsumo).filter(
+        ProdutoInsumo.restaurante_id == rest_id,
+        ProdutoInsumo.produto_id == produto_id,
+    ).delete(synchronize_session=False)
+    for item in data.itens:
+        db.add(
+            ProdutoInsumo(
+                restaurante_id=rest_id,
+                produto_id=produto_id,
+                insumo_id=item.insumo_id.strip(),
+                quantidade=item.quantidade,
+            )
+        )
+    db.commit()
+
+    produto = (
+        db.query(Produto)
+        .filter(Produto.restaurante_id == rest_id, Produto.id == produto_id)
+        .options(joinedload(Produto.ficha_tecnica).joinedload(ProdutoInsumo.insumo))
+        .first()
+    )
+    return _serialize_ficha(produto)
+
+
 # ─── ROTAS CRUD DE INSUMOS ────────────────────────────────────────────────────
 @router.post("/insumos", response_model=InsumoResponse, status_code=status.HTTP_201_CREATED)
 def create_insumo(
@@ -320,13 +470,14 @@ def create_insumo(
 ):
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
-    
-    existente = db.query(Insumo).filter_by(id=data.id, restaurante_id=rest_id).first()
+
+    insumo_id = (data.id or "").strip() or f"ins-{rest_id}-{slugify(data.nome)}"
+    existente = db.query(Insumo).filter_by(id=insumo_id, restaurante_id=rest_id).first()
     if existente:
         raise HTTPException(status_code=400, detail="ID de insumo já existe.")
         
     insumo = Insumo(
-        id=data.id,
+        id=insumo_id,
         restaurante_id=rest_id,
         nome=data.nome,
         estoque_atual=0.0,
@@ -391,16 +542,32 @@ def ajustar_insumo(
         
     if data.tipo not in ["ENTRADA", "SAIDA"]:
         raise HTTPException(status_code=400, detail="Tipo de ajuste deve ser ENTRADA ou SAIDA.")
-        
-    old_qty = insumo.estoque_atual or 0.0
+    if data.quantidade <= 0:
+        raise HTTPException(status_code=400, detail="A quantidade deve ser maior que zero.")
+
+    old_qty = float(insumo.estoque_atual or 0.0)
     if data.tipo == "ENTRADA":
         insumo.estoque_atual = old_qty + data.quantidade
     else:
+        if data.quantidade > old_qty:
+            raise HTTPException(status_code=400, detail="Saldo de estoque insuficiente para realizar a saída.")
         insumo.estoque_atual = old_qty - data.quantidade
-        
-    db.commit()
-    db.refresh(insumo)
-    
+
+    movimento = MovimentacaoEstoque(
+        restaurante_id=rest_id,
+        insumo_id=insumo.id,
+        tipo="ajuste_positivo" if data.tipo == "ENTRADA" else "ajuste_negativo",
+        quantidade=data.quantidade,
+        saldo_anterior=old_qty,
+        saldo_posterior=float(insumo.estoque_atual),
+        custo_unitario=float(insumo.preco_medio_custo or 0),
+        motivo=data.justificativa.strip() or "Ajuste manual de estoque",
+        observacao="Ajuste realizado na lista de ingredientes",
+        origem="movimentacao_manual",
+        usuario_id=current_user.id,
+    )
+    db.add(movimento)
+
     details = f"Insumo {insumo.id} ({insumo.nome}) ajustado de {old_qty} {insumo.unidade_medida} para {insumo.estoque_atual} {insumo.unidade_medida}. Justificativa: {data.justificativa}"
     log = ActivityLog(
         restaurante_id=current_restaurante_id.get(),
@@ -410,6 +577,7 @@ def ajustar_insumo(
     )
     db.add(log)
     db.commit()
+    db.refresh(insumo)
     return insumo
 
 
@@ -422,13 +590,14 @@ def create_distribuidor(
 ):
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
-    
-    existente = db.query(Distribuidor).filter_by(id=data.id, restaurante_id=rest_id).first()
+
+    dist_id = (data.id or "").strip() or f"dist-{rest_id}-{slugify(data.nome_fantasia)}"
+    existente = db.query(Distribuidor).filter_by(id=dist_id, restaurante_id=rest_id).first()
     if existente:
         raise HTTPException(status_code=400, detail="ID de distribuidor já existe.")
         
     distribuidor = Distribuidor(
-        id=data.id,
+        id=dist_id,
         restaurante_id=rest_id,
         nome_fantasia=data.nome_fantasia,
         razao_social=data.razao_social,
