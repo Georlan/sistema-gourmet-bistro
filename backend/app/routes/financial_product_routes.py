@@ -4,10 +4,10 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db, require_tenant_id
-from ..models import Categoria, Item as ComandaItem, Produto, Usuario
+from ..models import Categoria, Item as ComandaItem, Produto, ProdutoInsumo, Usuario
 from ..security import require_permission
 from ..services.financeiro import money
 from ..services.financial_read import load_financial_snapshot
@@ -46,7 +46,9 @@ def get_relatorio_produtos_operacional(
         product_query = product_query.filter(Produto.nome.ilike(f"%{busca.strip()}%"))
     if categoria_id:
         product_query = product_query.filter(Produto.categoria_id == str(categoria_id))
-    products = product_query.all()
+    products = product_query.options(
+        joinedload(Produto.ficha_tecnica).joinedload(ProdutoInsumo.insumo)
+    ).all()
 
     categories = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
     category_map = {str(category.id): category.nome for category in categories}
@@ -94,6 +96,29 @@ def get_relatorio_produtos_operacional(
             if quantity
             else Decimal("0.00")
         )
+        recipe_items = list(product.ficha_tecnica or [])
+        recipe_has_cost = bool(recipe_items) and all(
+            item.insumo is not None
+            and Decimal(str(item.insumo.preco_medio_custo or 0)) > Decimal("0")
+            for item in recipe_items
+        )
+        unit_cost = None
+        consumed_cost = None
+        contribution_margin = None
+        contribution_margin_pct = None
+        if recipe_has_cost:
+            unit_cost = money(sum(
+                Decimal(str(item.quantidade or 0))
+                * Decimal(str(item.insumo.preco_medio_custo or 0))
+                for item in recipe_items
+            ))
+            consumed_cost = money(unit_cost * quantity)
+            contribution_margin = money(consumed_value - consumed_cost)
+            contribution_margin_pct = (
+                round(float(contribution_margin / consumed_value * Decimal("100")), 1)
+                if consumed_value > 0
+                else None
+            )
         result.append({
             "produto_id": str(product.id),
             "produto_nome": product.nome,
@@ -105,6 +130,13 @@ def get_relatorio_produtos_operacional(
             "quantidade_vendida": quantity,
             "faturamento_total": None,
             "ticket_medio_item": float(average_unit_value),
+            "ficha_tecnica_configurada": recipe_has_cost,
+            "custo_unitario_estimado": float(unit_cost) if unit_cost is not None else None,
+            "cmv_estimado": float(consumed_cost) if consumed_cost is not None else None,
+            "margem_contribuicao_estimada": (
+                float(contribution_margin) if contribution_margin is not None else None
+            ),
+            "margem_percentual_estimada": contribution_margin_pct,
         })
 
     if ordenacao == "menos_vendidos":

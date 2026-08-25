@@ -1,13 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { localCalendarDate } from '../../utils/dateTime';
 import {
   TrendingUp,
+  TrendingDown,
   Target,
   Calendar as CalendarIcon,
   Download,
   Eye,
-  Clock
+  Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -25,6 +26,8 @@ import { VendasDetalhesDrawer, VendaDetalheItem } from './VendasDetalhesDrawer';
 import { MoneyInput } from '../MoneyInput';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
+import { ReportActionBar } from './ReportActionBar';
+import { useSharedReportPeriod } from './useSharedReportPeriod';
 
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatMoney = (value: number | null | undefined) => money.format(Number(value) || 0);
@@ -57,19 +60,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   authHeaders,
   showToast,
 }) => {
-  const getDefaultDates = () => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - 30);
-    return {
-      inicio: localCalendarDate(start),
-      fim: localCalendarDate(end),
-    };
-  };
-
-  const defaults = getDefaultDates();
-  const [dataInicio, setDataInicio] = useState(defaults.inicio);
-  const [dataFim, setDataFim] = useState(defaults.fim);
+  const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
   const [isLoading, setIsLoading] = useState(false);
 
   // Modals & Drawers
@@ -128,8 +119,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   useReportRealtimeRefresh(fetchVisaoGeral);
 
   const handleApplyPeriod = (inicio: string, fim: string) => {
-    setDataInicio(inicio);
-    setDataFim(fim);
+    applyPeriod(inicio, fim);
   };
 
   const handleSaveMeta = async () => {
@@ -157,7 +147,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   const handleExportCsv = () => {
     if (!data) return;
     let csv = 'Métrica;Valor\n';
-    csv += `Vendas Líquidas (R$);${data.faturamento_total}\n`;
+    csv += `Recebimentos Líquidos (R$);${data.faturamento_total}\n`;
     csv += `Total de Pedidos;${data.total_pedidos}\n`;
     csv += `Ticket Médio (R$);${data.ticket_medio}\n`;
     csv += `Clientes Ativos;${data.clientes_ativos}\n`;
@@ -168,7 +158,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     csv += `Projeção Ritmo Atual (R$);${data.meta_projecao}\n`;
     csv += `Média Diária Necessária (R$);${data.meta_media_diaria_necessaria}\n`;
 
-    csv += '\nData;Pedidos por Dia;Faturamento (R$)\n';
+    csv += '\nData;Pedidos por Dia;Recebido (R$)\n';
     (data.vendas_por_dia || []).forEach((v: any) => {
       csv += `"${v.data}";${v.quantidade_pedidos};${v.total.toFixed(2)}\n`;
     });
@@ -198,6 +188,29 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       faturamento: h.faturamento || 0,
     }));
 
+  const quickRead = useMemo(() => {
+    const comparison = data?.comparativo_anterior || {};
+    const hasPrevious = Boolean(
+      comparison.tem_base_anterior
+      ?? (Number(comparison.faturamento_anterior || 0) > 0 || Number(comparison.pedidos_anteriores || 0) > 0)
+    );
+    const revenueDelta = Number(comparison.variacao_faturamento_pct || 0);
+    const ordersDelta = Number(comparison.variacao_pedidos_pct || 0);
+    const peak = [...(data?.horarios_pico || [])]
+      .filter((row: any) => Number(row.total_pedidos || 0) > 0)
+      .sort((a: any, b: any) => Number(b.total_pedidos || 0) - Number(a.total_pedidos || 0))[0];
+    const gross = Number(data?.vendas_brutas || 0);
+    const refunds = Number(data?.estornos || 0);
+    return {
+      hasPrevious,
+      revenueDelta,
+      ordersDelta,
+      peak,
+      refundRate: gross > 0 ? (refunds / gross) * 100 : 0,
+      refunds,
+    };
+  }, [data]);
+
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
       <OperationalBanner
@@ -214,12 +227,17 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         ]}
       />
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 text-[10px] text-koma-muted">
+      <ReportActionBar info={(
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className={clsx('h-2 w-2 rounded-full', isLoading ? 'animate-pulse bg-amber-500' : 'bg-emerald-500')} />
-          <span>{isLoading ? 'Atualizando indicadores…' : 'Dados financeiros consolidados por turno'}</span>
+          <span>{isLoading ? 'Atualizando indicadores…' : 'Pagamentos aprovados menos estornos'}</span>
+          {quickRead.hasPrevious && (
+            <span className={quickRead.revenueDelta < 0 ? 'font-bold text-rose-700 dark:text-rose-300' : 'font-bold text-emerald-700 dark:text-emerald-300'}>
+              Recebido {quickRead.revenueDelta >= 0 ? '+' : ''}{quickRead.revenueDelta.toLocaleString('pt-BR')}% vs. período anterior
+            </span>
+          )}
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+      )}>
           <button
             type="button"
             onClick={() => {
@@ -251,8 +269,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             <Download size={14} />
             Exportar
           </button>
-        </div>
-      </div>
+      </ReportActionBar>
 
       {hasError && !isLoading && (
         <div className="bg-koma-panel border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in">
@@ -270,6 +287,48 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             Tentar novamente
           </button>
         </div>
+      )}
+
+      {!hasError && data && (
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Leitura rápida para decisão">
+          <article className={clsx('rounded-2xl border p-4', quickRead.hasPrevious && quickRead.revenueDelta < 0 ? 'border-rose-500/30 bg-rose-500/10' : 'border-koma-border bg-koma-panel')}>
+            <div className="flex items-start gap-3">
+              {quickRead.revenueDelta < 0
+                ? <TrendingDown size={17} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-300" />
+                : <TrendingUp size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />}
+              <div>
+                <strong className="block text-xs text-koma-foreground">
+                  {quickRead.hasPrevious ? `Recebido ${quickRead.revenueDelta >= 0 ? 'subiu' : 'caiu'} ${Math.abs(quickRead.revenueDelta).toLocaleString('pt-BR')}%` : 'Primeiro período comparável'}
+                </strong>
+                <span className="mt-1 block text-[10px] text-koma-muted">
+                  {quickRead.hasPrevious ? `O volume de pedidos variou ${quickRead.ordersDelta >= 0 ? '+' : ''}${quickRead.ordersDelta.toLocaleString('pt-BR')}%.` : 'O próximo período mostrará a evolução dos recebimentos e pedidos.'}
+                </span>
+              </div>
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+            <div className="flex items-start gap-3">
+              <Clock size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+              <div>
+                <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : 'Sem horário de pico'}</strong>
+                <span className="mt-1 block text-[10px] text-koma-muted">
+                  {quickRead.peak ? `${quickRead.peak.total_pedidos} conta${quickRead.peak.total_pedidos === 1 ? '' : 's'} recebida${quickRead.peak.total_pedidos === 1 ? '' : 's'} nessa faixa; planeje a equipe para esse momento.` : 'Ainda não há vendas suficientes no período para orientar a escala.'}
+                </span>
+              </div>
+            </div>
+          </article>
+
+          <article className={clsx('rounded-2xl border p-4', quickRead.refunds > 0 ? 'border-rose-500/30 bg-rose-500/10' : 'border-koma-border bg-koma-panel')}>
+            <div className="flex items-start gap-3">
+              <ShieldCheck size={17} className={quickRead.refunds > 0 ? 'mt-0.5 shrink-0 text-rose-600 dark:text-rose-300' : 'mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300'} />
+              <div>
+                <strong className="block text-xs text-koma-foreground">{quickRead.refunds > 0 ? `${quickRead.refundRate.toFixed(1).replace('.', ',')}% devolvido` : 'Nenhum estorno no período'}</strong>
+                <span className="mt-1 block text-[10px] text-koma-muted">{quickRead.refunds > 0 ? `${formatMoney(quickRead.refunds)} em estornos pedem revisão.` : 'A receita líquida não sofreu redução por devoluções.'}</span>
+              </div>
+            </div>
+          </article>
+        </section>
       )}
 
       {/* Meta Mensal Block */}
@@ -388,7 +447,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
           <div className="flex justify-between items-center border-b border-koma-border pb-3">
             <div className="flex items-center gap-2">
               <TrendingUp size={16} className="text-emerald-700 dark:text-emerald-400" />
-              <span className="font-serif font-bold text-sm text-koma-foreground">Evolução Diária do Faturamento</span>
+                <span className="font-serif font-bold text-sm text-koma-foreground">Recebimentos líquidos por dia</span>
             </div>
             <span className="text-[10px] text-koma-subtle">Receita líquida por dia</span>
           </div>
@@ -407,7 +466,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   <XAxis dataKey="data" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={58} tickLine={false} axisLine={false} tickFormatter={(v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ stroke: '#059669', strokeWidth: 1, strokeDasharray: '3 3' }} />
-                  <Area type="monotone" dataKey="faturamento" name="Faturamento (R$)" stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
+                  <Area type="monotone" dataKey="faturamento" name="Recebido (R$)" stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -452,13 +511,13 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento dos Pedidos por Dia</span>
           </div>
 
-          <div className="overflow-x-auto max-h-56 border border-koma-border rounded-xl sm:rounded-2xl">
+          <div className="overflow-x-auto border border-koma-border rounded-xl sm:rounded-2xl">
             <table className="w-full text-left text-[10px]">
               <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-2.5 sm:p-3">Data</th>
                   <th className="p-2.5 sm:p-3 font-mono text-center">Qtd Pedidos</th>
-                  <th className="p-2.5 sm:p-3 font-mono text-right">Faturamento</th>
+                  <th className="p-2.5 sm:p-3 font-mono text-right">Recebido</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
@@ -486,13 +545,13 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento por Faixa Horária</span>
           </div>
 
-          <div className="overflow-x-auto max-h-56 border border-koma-border rounded-2xl">
+          <div className="overflow-x-auto border border-koma-border rounded-2xl">
             <table className="w-full text-left text-[10px]">
               <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
                 <tr>
                   <th className="p-3">Horário</th>
                   <th className="p-3 font-mono text-center">Total Pedidos</th>
-                  <th className="p-3 font-mono text-right">Faturamento</th>
+                  <th className="p-3 font-mono text-right">Recebido</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">

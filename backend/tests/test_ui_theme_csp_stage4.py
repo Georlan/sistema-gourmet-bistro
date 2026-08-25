@@ -141,6 +141,7 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     products = source("src/components/cardapio/CardapioProdutosTab.tsx")
     finance = source("src/components/relatorios/RelatorioFinanceiroTab.tsx")
     overview = source("src/components/relatorios/RelatoriosVisaoGeralTab.tsx")
+    report_actions = source("src/components/relatorios/ReportActionBar.tsx")
     closing = source("src/components/caixa/CaixaFechamentoTab.tsx")
 
     assert "grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4" in mesas
@@ -157,11 +158,12 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
     assert "sm:grid-cols-[minmax(8rem,0.8fr)_minmax(12rem,2fr)_repeat(3,minmax(7rem,0.8fr))]" in finance
     assert "PieChart" not in finance
     assert "BarChart" not in finance
-    assert "flex w-full items-center gap-2 sm:w-auto" in finance
+    assert "ReportActionBar" in finance
+    assert "flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap" in report_actions
 
     assert "Faturamento Total" not in overview
-    assert "Vendas Líquidas" in overview
-    assert "flex w-full flex-wrap items-center gap-2 sm:w-auto" in overview
+    assert "Recebimentos líquidos por dia" in overview
+    assert "ReportActionBar" in overview
     assert "Ver detalhamento em tabelas" in overview
 
     assert "overflow-x-auto overscroll-x-contain rounded-2xl border border-koma-border" in closing

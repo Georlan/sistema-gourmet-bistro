@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
+import { AlertTriangle, Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from '../relatorios/PeriodoCalendarioModal';
-import { localCalendarDate } from '../../utils/dateTime';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from '../relatorios/useReportRealtimeRefresh';
+import { ReportActionBar } from '../relatorios/ReportActionBar';
+import { useSharedReportPeriod } from '../relatorios/useSharedReportPeriod';
 
 const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const formatMoney = (value: number | null | undefined) => money.format(Number(value) || 0);
@@ -30,7 +31,8 @@ export interface GarcomPerformanceItem {
 }
 
 const CARGO_OPTIONS = [
-  { value: '', label: 'Comercial (padrão)' },
+  { value: 'atendimento', label: 'Atendimento' },
+  { value: '', label: 'Comercial (inclui caixa)' },
   { value: 'todos', label: 'Todos os cargos' },
   { value: 'garcom', label: 'Garçom' },
   { value: 'caixa', label: 'Caixa' },
@@ -71,21 +73,10 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   authHeaders,
   showToast,
 }) => {
-  const getDefaultDates = () => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - 30);
-    return {
-      inicio: localCalendarDate(start),
-      fim: localCalendarDate(end),
-    };
-  };
-
-  const defaults = getDefaultDates();
-  const [dataInicio, setDataInicio] = useState(defaults.inicio);
-  const [dataFim, setDataFim] = useState(defaults.fim);
+  const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
   const [isLoading, setIsLoading] = useState(false);
-  const [cargo, setCargo] = useState('');                   // '' = commercial default
+  const [cargo, setCargo] = useState('atendimento');
+  const [hasError, setHasError] = useState(false);
 
   const [taxaAtiva, setTaxaAtiva] = useState(true);
   const [taxaPadrao, setTaxaPadrao] = useState(10.0);
@@ -97,6 +88,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const fetchDesempenho = useCallback(async () => {
     const requestId = ++requestRef.current;
     setIsLoading(true);
+    setHasError(false);
     try {
       const params = new URLSearchParams({
         data_inicio: dataInicio,
@@ -115,6 +107,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       }
     } catch (err) {
       console.error('Erro ao carregar desempenho da equipe:', err);
+      if (requestRef.current === requestId) setHasError(true);
     } finally {
       if (requestRef.current === requestId) setIsLoading(false);
     }
@@ -134,7 +127,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const handleExportCsv = () => {
     if (!membros.length) return;
     const periodo = `${dataInicio} até ${dataFim}`;
-    let csv = `Funcionário;Cargo;Atendimentos;Valor Recebido (R$);Ticket Médio (R$);Serviço Proporcional (R$);Período\n`;
+    let csv = `Funcionário;Cargo;Atendimentos;Valor Atribuído (R$);Ticket Médio (R$);Serviço Proporcional (R$);Período\n`;
     membros.forEach((m) => {
       const label = ROLE_LABEL[m.role] || m.role;
       csv += `"${m.nome}";"${label}";${m.pedidos_atendidos};${m.faturamento.toFixed(2)};${m.ticket_medio.toFixed(2)};${m.comissao.toFixed(2)};"${periodo}"\n`;
@@ -152,11 +145,25 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   const cargoLabel = CARGO_OPTIONS.find(o => o.value === cargo)?.label ?? 'Todos os cargos';
 
-  const teamChartData = membros.slice(0, 8).map((m) => ({
-    name: m.nome.split(' ')[0],
+  const teamChartData = membros.filter((m) => m.pedidos_atendidos > 0).slice(0, 8).map((m) => ({
+    name: m.nome.length > 24 ? `${m.nome.slice(0, 22)}…` : m.nome,
     faturamento: m.faturamento,
     pedidos: m.pedidos_atendidos,
   }));
+  const identityIssues = useMemo(() => {
+    const counts = new Map<string, number>();
+    membros.forEach((member) => {
+      const key = (member.nome || '').trim().toLocaleLowerCase('pt-BR');
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    const duplicateNames = new Set([...counts.entries()].filter(([, count]) => count > 1).map(([name]) => name));
+    const affectedIds = new Set(
+      membros
+        .filter((member) => !member.email || duplicateNames.has((member.nome || '').trim().toLocaleLowerCase('pt-BR')))
+        .map((member) => member.id),
+    );
+    return { duplicateNames, affectedCount: affectedIds.size };
+  }, [membros]);
 
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
@@ -168,14 +175,12 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         description={`Atendimentos atribuídos de ${formatDate(dataInicio)} a ${formatDate(dataFim)} · ${cargoLabel}.`}
         metrics={[
           { label: totalAtendimentos === 1 ? 'atendimento' : 'atendimentos', value: totalAtendimentos },
-          { label: 'valor recebido', value: formatMoney(totalFaturamento) },
+          { label: 'valor atribuído', value: formatMoney(totalFaturamento) },
           { label: taxaAtiva ? `serviço proporcional (${taxaPadrao}%)` : 'taxa de serviço inativa', value: taxaAtiva ? formatMoney(totalComissao) : '—' },
         ]}
       />
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-between">
-        <span className="text-[10px] text-koma-muted">Compare participação e volume; valores sem atendimento permanecem visíveis na tabela.</span>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+      <ReportActionBar info={<span>O valor é atribuído a quem abriu a comanda; use os cargos para não misturar atendimento e caixa.</span>}>
           {/* Cargo Filter */}
           <div className="relative flex items-center gap-1.5 bg-koma-input border border-koma-border rounded-xl px-3 py-2">
             <Filter size={12} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
@@ -211,8 +216,14 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <Download size={14} />
             Exportar
           </button>
+      </ReportActionBar>
+
+      {identityIssues.affectedCount > 0 && (
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-3 text-[10px] leading-relaxed text-amber-900 dark:text-amber-200">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span><strong>Revise {identityIssues.affectedCount} {identityIssues.affectedCount === 1 ? 'cadastro' : 'cadastros'} da equipe.</strong> Nome repetido ou e-mail ausente pode dividir o histórico da mesma pessoa.</span>
         </div>
-      </div>
+      )}
 
       {/* Team Charts */}
       {teamChartData.length > 0 && (
@@ -220,7 +231,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             <div className="flex flex-col gap-3 border-b border-koma-border pb-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
               <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
-              <span className="font-serif font-bold text-sm text-koma-foreground">{chartMetric === 'faturamento' ? 'Valor recebido por atendente' : 'Atendimentos por pessoa'}</span>
+              <span className="font-serif font-bold text-sm text-koma-foreground">{chartMetric === 'faturamento' ? 'Valor atribuído por atendente' : 'Atendimentos por pessoa'}</span>
               </div>
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-koma-border bg-koma-input p-1">
                 <button type="button" onClick={() => setChartMetric('faturamento')} className={clsx('rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase transition-colors', chartMetric === 'faturamento' ? 'koma-btn-success' : 'text-koma-muted')}>Valor</button>
@@ -228,14 +239,14 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
               </div>
             </div>
 
-            <div className="h-64 w-full pt-1">
+            <div className="h-64 w-full pt-1 sm:h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: chartMetric === 'faturamento' ? 5 : -15, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={chartMetric === 'faturamento' ? 62 : 34} tickLine={false} axisLine={false} tickFormatter={chartMetric === 'faturamento' ? (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : undefined} />
+                <BarChart layout="vertical" data={teamChartData} margin={{ top: 4, right: 18, left: 8, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" horizontal={false} opacity={0.6} />
+                  <XAxis type="number" stroke="var(--koma-text-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={chartMetric === 'faturamento' ? (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : undefined} />
+                  <YAxis type="category" dataKey="name" stroke="var(--koma-text-muted)" fontSize={10} width={125} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey={chartMetric} name={chartMetric === 'faturamento' ? 'Valor recebido' : 'Atendimentos'} fill="#059669" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey={chartMetric} name={chartMetric === 'faturamento' ? 'Valor atribuído' : 'Atendimentos'} fill="#059669" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -253,6 +264,11 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           <div className="p-12 text-center text-koma-muted text-xs animate-pulse">
             Carregando desempenho da equipe...
           </div>
+        ) : hasError ? (
+          <div className="space-y-3 p-12 text-center text-xs text-koma-muted">
+            <p>Não foi possível carregar o desempenho da equipe.</p>
+            <button type="button" onClick={() => void fetchDesempenho()} className="koma-btn-success rounded-xl px-4 py-2 text-[10px] font-bold uppercase">Tentar novamente</button>
+          </div>
         ) : membros.length === 0 ? (
           <div className="p-12 text-center text-koma-muted text-xs font-medium">
             Nenhum funcionário encontrado no período para o filtro selecionado.
@@ -266,7 +282,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                   <th className="p-3.5">Funcionário</th>
                   <th className="p-3.5">Cargo</th>
                   <th className="p-3.5 text-center font-mono">Atendimentos</th>
-                  <th className="p-3.5 text-right font-mono">Valor recebido</th>
+                  <th className="p-3.5 text-right font-mono">Valor atribuído</th>
                   <th className="p-3.5 text-right font-mono">Ticket Médio</th>
                   {taxaAtiva && <th className="p-3.5 text-right font-mono">Serviço ({taxaPadrao}%)</th>}
                 </tr>
@@ -279,6 +295,9 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                       <div>
                         <span>{m.nome}</span>
                         {m.email && <span className="text-[9px] text-koma-muted block font-mono">{m.email}</span>}
+                        {(!m.email || identityIssues.duplicateNames.has((m.nome || '').trim().toLocaleLowerCase('pt-BR'))) && (
+                          <span className="mt-1 block text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Cadastro precisa de revisão</span>
+                        )}
                       </div>
                     </td>
                     <td className="p-3.5 text-koma-muted font-medium capitalize">
@@ -311,10 +330,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           onClose={() => setShowCalendarModal(false)}
           dataInicio={dataInicio}
           dataFim={dataFim}
-          onApply={(ini, fim) => {
-            setDataInicio(ini);
-            setDataFim(fim);
-          }}
+          onApply={applyPeriod}
         />
       )}
     </div>

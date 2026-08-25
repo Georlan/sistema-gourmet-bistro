@@ -3,9 +3,10 @@ import clsx from 'clsx';
 import { BarChart2, Calendar as CalendarIcon, Download, Info, Search } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
-import { localCalendarDate } from '../../utils/dateTime';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
+import { ReportActionBar } from './ReportActionBar';
+import { useSharedReportPeriod } from './useSharedReportPeriod';
 
 interface RelatoriosProdutosTabProps {
   apiBaseUrl: string;
@@ -23,6 +24,11 @@ export interface ProdutoRelatorioItem {
   valor_consumido: number;
   preco_medio_item: number;
   natureza_valor: 'consumo_operacional_nao_receita' | string;
+  ficha_tecnica_configurada: boolean;
+  custo_unitario_estimado: number | null;
+  cmv_estimado: number | null;
+  margem_contribuicao_estimada: number | null;
+  margem_percentual_estimada: number | null;
 }
 
 const CustomChartTooltip = ({ active, payload, label }: any) => {
@@ -45,16 +51,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   categorias,
   showToast,
 }) => {
-  const getDefaultDates = () => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(end.getDate() - 30);
-    return { inicio: localCalendarDate(start), fim: localCalendarDate(end) };
-  };
-
-  const defaults = getDefaultDates();
-  const [dataInicio, setDataInicio] = useState(defaults.inicio);
-  const [dataFim, setDataFim] = useState(defaults.fim);
+  const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
   const [ordenacao, setOrdenacao] = useState<'mais_vendidos' | 'menos_vendidos' | 'todos'>('mais_vendidos');
   const [busca, setBusca] = useState('');
   const [buscaAplicada, setBuscaAplicada] = useState('');
@@ -85,6 +82,11 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         valor_consumido: Number(row.valor_consumido ?? 0),
         preco_medio_item: Number(row.preco_medio_item ?? row.ticket_medio_item ?? 0),
         natureza_valor: row.natureza_valor || 'consumo_operacional_nao_receita',
+        ficha_tecnica_configurada: Boolean(row.ficha_tecnica_configurada),
+        custo_unitario_estimado: row.custo_unitario_estimado == null ? null : Number(row.custo_unitario_estimado),
+        cmv_estimado: row.cmv_estimado == null ? null : Number(row.cmv_estimado),
+        margem_contribuicao_estimada: row.margem_contribuicao_estimada == null ? null : Number(row.margem_contribuicao_estimada),
+        margem_percentual_estimada: row.margem_percentual_estimada == null ? null : Number(row.margem_percentual_estimada),
       }));
       if (requestRef.current === requestId) setProdutos(normalized);
     } catch (error) {
@@ -111,9 +113,9 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
 
   const handleExportCsv = () => {
     if (!produtos.length) return;
-    let csv = 'Ranking;Produto;Categoria;Quantidade Consumida;Valor de Consumo (R$);Preço Médio Item (R$)\n';
+    let csv = 'Ranking;Produto;Categoria;Quantidade Consumida;Valor de Consumo (R$);Preço Médio Item (R$);CMV Estimado (R$);Margem Estimada (R$);Margem Estimada (%)\n';
     produtos.forEach((p) => {
-      csv += `${p.ranking};"${p.produto_nome}";"${p.categoria_nome}";${p.quantidade_consumida};${p.valor_consumido.toFixed(2)};${p.preco_medio_item.toFixed(2)}\n`;
+      csv += `${p.ranking};"${p.produto_nome}";"${p.categoria_nome}";${p.quantidade_consumida};${p.valor_consumido.toFixed(2)};${p.preco_medio_item.toFixed(2)};${p.cmv_estimado?.toFixed(2) ?? ''};${p.margem_contribuicao_estimada?.toFixed(2) ?? ''};${p.margem_percentual_estimada?.toFixed(1) ?? ''}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -127,13 +129,21 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
     showToast('Relatório operacional exportado.');
   };
 
-  const chartData = produtos.slice(0, 7).map((p) => ({
-    name: p.produto_nome.length > 18 ? `${p.produto_nome.slice(0, 16)}...` : p.produto_nome,
+  const chartData = [...produtos]
+    .filter((p) => p.quantidade_consumida > 0)
+    .sort((a, b) => chartMetric === 'quantidade'
+      ? b.quantidade_consumida - a.quantidade_consumida
+      : b.valor_consumido - a.valor_consumido)
+    .slice(0, 7)
+    .map((p) => ({
+    name: p.produto_nome.length > 28 ? `${p.produto_nome.slice(0, 26)}…` : p.produto_nome,
     quantidade: p.quantidade_consumida,
     valor: p.valor_consumido,
   }));
   const totalUnidades = useMemo(() => produtos.reduce((sum, item) => sum + item.quantidade_consumida, 0), [produtos]);
   const totalConsumo = useMemo(() => produtos.reduce((sum, item) => sum + item.valor_consumido, 0), [produtos]);
+  const produtosComConsumo = useMemo(() => produtos.filter((item) => item.quantidade_consumida > 0).length, [produtos]);
+  const produtosComCusto = useMemo(() => produtos.filter((item) => item.quantidade_consumida > 0 && item.ficha_tecnica_configurada).length, [produtos]);
   const chartTitle = chartMetric === 'quantidade' ? 'Produtos mais consumidos' : 'Maior valor de consumo';
 
   return (
@@ -145,26 +155,26 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         accent="movimenta o cardápio"
         description="Consumo real das contas recebidas, separado do faturamento financeiro."
         metrics={[
-          { label: produtos.length === 1 ? 'produto no recorte' : 'produtos no recorte', value: produtos.length },
+          { label: produtosComConsumo === 1 ? 'produto vendido' : 'produtos vendidos', value: produtosComConsumo },
           { label: 'unidades consumidas', value: totalUnidades },
           { label: 'valor de consumo', value: totalConsumo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+          { label: 'custos mapeados', value: `${produtosComCusto}/${produtosComConsumo}` },
         ]}
       />
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-3 lg:flex-row lg:items-center lg:justify-between">
+      <ReportActionBar info={(
         <div className="flex min-w-0 items-start gap-2 text-[10px] leading-relaxed text-koma-muted">
           <Info size={14} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
-          <span><strong className="text-koma-foreground">Consumo não é faturamento.</strong> Pagamentos parciais não transformam o valor integral dos itens em receita.</span>
+          <span><strong className="text-koma-foreground">Consumo não é faturamento.</strong> CMV e margem aparecem somente quando a ficha técnica tem todos os custos cadastrados.</span>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap">
+      )}>
           <button type="button" onClick={() => setShowCalendarModal(true)} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-koma-foreground transition-all hover:bg-koma-card">
             <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" /> Período
           </button>
           <button type="button" onClick={handleExportCsv} disabled={!produtos.length} className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3.5 py-2 text-[10px] font-bold text-koma-muted transition-all hover:bg-koma-card hover:text-koma-foreground disabled:opacity-50">
             <Download size={14} /> Exportar
           </button>
-        </div>
-      </div>
+      </ReportActionBar>
 
       {hasError && !isLoading && (
         <div className="mx-auto my-6 max-w-md space-y-3 rounded-3xl border border-rose-900/50 bg-koma-panel p-8 text-center">
@@ -185,14 +195,14 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                   <button type="button" onClick={() => setChartMetric('valor')} className={clsx('rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase transition-colors', chartMetric === 'valor' ? 'koma-btn-success' : 'text-koma-muted hover:text-koma-foreground')}>Valor</button>
                 </div>
               </div>
-              <div className="h-64 w-full sm:h-72">
+              <div className="h-72 w-full sm:h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: chartMetric === 'valor' ? 12 : 0, bottom: 50 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                    <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={9} interval={0} angle={-35} textAnchor="end" height={55} />
-                    <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={chartMetric === 'valor' ? 54 : 28} tickLine={false} axisLine={false} tickFormatter={chartMetric === 'valor' ? (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : undefined} />
+                  <BarChart layout="vertical" data={chartData} margin={{ top: 4, right: 18, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" horizontal={false} opacity={0.6} />
+                    <XAxis type="number" stroke="var(--koma-text-muted)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={chartMetric === 'valor' ? (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : undefined} />
+                    <YAxis type="category" dataKey="name" stroke="var(--koma-text-muted)" fontSize={9} width={150} tickLine={false} axisLine={false} />
                     <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)', opacity: 0.3 }} />
-                    <Bar dataKey={chartMetric} name={chartMetric === 'valor' ? 'Valor de consumo' : 'Unidades consumidas'} fill="#059669" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey={chartMetric} name={chartMetric === 'valor' ? 'Valor de consumo' : 'Unidades consumidas'} fill="#059669" radius={[0, 6, 6, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -234,9 +244,9 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           <div className="p-12 text-center text-xs font-medium text-koma-muted">Nenhum produto encontrado para os filtros selecionados.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-left text-[10px]">
+            <table className="w-full min-w-[900px] text-left text-[10px]">
               <thead className="border-b border-koma-border bg-koma-raised text-[9px] font-extrabold uppercase tracking-wider text-koma-subtle">
-                <tr><th className="p-3 text-center">Posição</th><th className="p-3">Produto</th><th className="p-3">Categoria</th><th className="p-3 text-center">Qtd. consumida</th><th className="p-3 text-right">Valor de consumo</th><th className="p-3 text-right">Preço médio</th></tr>
+                <tr><th className="p-3 text-center">Posição</th><th className="p-3">Produto</th><th className="p-3">Categoria</th><th className="p-3 text-center">Qtd.</th><th className="p-3 text-right">Valor de consumo</th><th className="p-3 text-right">Preço médio</th><th className="p-3 text-right">CMV estimado</th><th className="p-3 text-right">Margem estimada</th></tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
                 {produtos.map((p) => (
@@ -247,6 +257,12 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
                     <td className="p-3 text-center font-mono text-xs font-bold text-koma-foreground">{p.quantidade_consumida}</td>
                     <td className="p-3 text-right font-mono font-extrabold text-emerald-700 dark:text-emerald-300">{p.valor_consumido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                     <td className="p-3 text-right font-mono font-medium text-koma-foreground">{p.preco_medio_item.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                    <td className="p-3 text-right font-mono font-medium text-koma-foreground" title={p.cmv_estimado == null ? 'Cadastre todos os custos da ficha técnica para calcular' : 'Custo dos ingredientes pelo custo médio atual'}>
+                      {p.cmv_estimado == null ? <span className="text-koma-muted">—</span> : p.cmv_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </td>
+                    <td className={clsx('p-3 text-right font-mono font-extrabold', p.margem_percentual_estimada != null && p.margem_percentual_estimada < 20 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300')} title={p.margem_contribuicao_estimada == null ? 'Cadastre todos os custos da ficha técnica para calcular' : 'Valor de consumo menos CMV estimado'}>
+                      {p.margem_contribuicao_estimada == null ? <span className="text-koma-muted">—</span> : <>{p.margem_contribuicao_estimada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} <span className="block text-[8px]">{p.margem_percentual_estimada?.toLocaleString('pt-BR')}%</span></>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -260,7 +276,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
           onClose={() => setShowCalendarModal(false)}
           dataInicio={dataInicio}
           dataFim={dataFim}
-          onApply={(ini, fim) => { setDataInicio(ini); setDataFim(fim); }}
+          onApply={applyPeriod}
         />
       )}
     </div>

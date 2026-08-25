@@ -197,6 +197,7 @@ def get_relatorio_visao_geral_financeiro(
         "dia_operacional_fim": snapshot.period.end_day.isoformat(),
         "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_turno",
         "comparativo_anterior": {
+            "tem_base_anterior": bool(previous.sales),
             "faturamento_anterior": _float(previous.totals.vendas_liquidas),
             "vendas_brutas_anteriores": _float(previous.totals.vendas_brutas),
             "estornos_anteriores": _float(previous.totals.estornos),
@@ -284,6 +285,11 @@ def get_dashboard_financeiro(
     net = snapshot.totals.vendas_liquidas
     gross = snapshot.totals.vendas_brutas
     refunds = snapshot.totals.estornos
+
+    period_days = (snapshot.period.end_day - snapshot.period.start_day).days + 1
+    prev_end = snapshot.period.start_day - datetime.timedelta(days=1)
+    prev_start = prev_end - datetime.timedelta(days=period_days - 1)
+    previous = _snapshot_or_400(db, rest_id, prev_start.isoformat(), prev_end.isoformat())
 
     op_today = current_operational_day(db, rest_id)
     today_snapshot = _snapshot_or_400(db, rest_id, op_today.isoformat(), op_today.isoformat())
@@ -390,6 +396,17 @@ def get_dashboard_financeiro(
         "dia_operacional_inicio": snapshot.period.start_day.isoformat(),
         "dia_operacional_fim": snapshot.period.end_day.isoformat(),
         "fonte_financeira": "pagamentos_aprovados_menos_estornos_por_turno",
+        "comparativo_anterior": {
+            "tem_base_anterior": bool(previous.sales),
+            "recebido_anterior": _float(previous.totals.vendas_liquidas),
+            "variacao_recebido_pct": _pct(net, previous.totals.vendas_liquidas),
+            "contas_anteriores": len(previous.sales),
+            "variacao_contas_pct": (
+                round((total_sales - len(previous.sales)) / len(previous.sales) * 100.0, 1)
+                if previous.sales
+                else 0.0
+            ),
+        },
     }
 
 
@@ -445,6 +462,9 @@ def get_equipe_desempenho_financeiro(
         member_role = (member.role or "garcom").lower().strip()
         if role_filter == "todos":
             pass
+        elif role_filter == "atendimento":
+            if member_role not in {"garcom", "atendente"}:
+                continue
         elif role_filter:
             if member_role != role_filter:
                 continue
