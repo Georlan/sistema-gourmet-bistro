@@ -146,11 +146,13 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
 
     assert "grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4" in mesas
     assert "pl-[4.25rem]" not in products
-    # O catálogo agora usa uma única lista responsiva: no mobile, categoria e
-    # preço acompanham o nome; no desktop, viram colunas alinhadas.
-    assert "text-koma-subtle lg:hidden" in products
-    assert "lg:grid-cols-[1.25rem_minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_9rem]" in products
-    assert "flex items-center justify-end gap-1" in products
+    # O catálogo expõe categorias em uma faixa rolável e produtos em cards
+    # operacionais que se adaptam da coluna única às grades largas.
+    assert 'aria-label="Categorias do cardápio"' in products
+    assert "overflow-x-auto" in products
+    assert "sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" in products
+    assert "Pausar venda" in products
+    assert "Voltar a vender" in products
 
     # Financeiro consolida os três meios em uma só leitura responsiva, sem
     # repetir o mesmo conjunto em pizza, barras e tabela.
