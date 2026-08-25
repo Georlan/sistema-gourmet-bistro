@@ -4358,7 +4358,7 @@ export function CaixaPanel({
                     );
                   })}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="cashier-display-controls">
                   <div className="cashier-font-control flex-1">
                     <span className="cashier-font-control__label">Texto</span>
                     <div className="cashier-font-control__options">
@@ -4386,7 +4386,8 @@ export function CaixaPanel({
                           setTheme(persistKomaTheme(nextKomaTheme(theme)));
                         }}
                         className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
-                        title="Alternar Tema"
+                        aria-label="Alternar tema"
+                        title="Alternar tema"
                       >
                         {theme === 'dark' ? <Moon size={12} /> : <Sun size={12} />}
                       </button>
@@ -4513,7 +4514,7 @@ export function CaixaPanel({
                 );
               })}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="cashier-display-controls">
               <div className="cashier-font-control flex-1">
                 <span className="cashier-font-control__label">Texto</span>
                 <div className="cashier-font-control__options">
@@ -4541,13 +4542,24 @@ export function CaixaPanel({
                       setTheme(persistKomaTheme(nextKomaTheme(theme)));
                     }}
                     className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
-                    title="Alternar Tema"
+                    aria-label="Alternar tema"
+                    title="Alternar tema"
                   >
                     {theme === 'dark' ? <Moon size={12} /> : <Sun size={12} />}
                   </button>
                 </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}
+              className="cashier-sidebar__compact-theme"
+              aria-label="Alternar tema"
+              title="Alternar tema"
+            >
+              {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
+            </button>
 
             <div className="cashier-operator">
               <span className="cashier-operator__avatar">{activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}</span>
@@ -5420,7 +5432,7 @@ export function CaixaPanel({
                               </div>
 
                               {pendingTableItems > 0 && (
-                                <div className={clsx('flex', 'items-center', 'gap-2', 'rounded-lg', 'border', 'border-amber-400/25', 'bg-amber-500/10', 'px-2.5', 'py-2', 'text-[11px]', 'font-semibold', 'text-amber-200')}>
+                                <div className={clsx('flex', 'items-center', 'gap-2', 'rounded-lg', 'border', 'border-koma-warning-border', 'bg-koma-warning-bg', 'px-2.5', 'py-2', 'text-[11px]', 'font-semibold', 'text-koma-warning-text')}>
                                   <Clock size={13} className="shrink-0" />
                                   <span>
                                     Esta mesa ainda tem {pendingTableItems} {pendingTableItems === 1 ? 'item em preparo' : 'itens em preparo'}.
@@ -5603,7 +5615,7 @@ export function CaixaPanel({
                   { label: 'destino', value: pdvMenuInsights.destination },
                   { label: 'itens', value: pdvMenuInsights.itemCount },
                   { label: 'total', value: pdvMenuInsights.total },
-                  { label: 'pausados', value: pdvMenuInsights.pausedCount, valueClassName: 'text-amber-600 dark:text-amber-300' },
+                  { label: pdvMenuInsights.pausedCount === 1 ? 'pausado' : 'pausados', value: pdvMenuInsights.pausedCount, valueClassName: 'text-amber-600 dark:text-amber-300' },
                 ] : [
                   { label: 'destino', value: pdvMenuInsights.destination },
                   { label: 'itens', value: pdvMenuInsights.itemCount },
@@ -7486,7 +7498,7 @@ export function CaixaPanel({
               metrics={[
                 { label: 'produtos', value: apiProdutos.length },
                 { label: 'disponíveis', value: apiProdutos.filter(item => item.ativo !== false).length },
-                { label: 'pausados', value: apiProdutos.filter(item => item.ativo === false).length, valueClassName: apiProdutos.some(item => item.ativo === false) ? 'text-amber-600 dark:text-amber-300' : undefined },
+                { label: apiProdutos.filter(item => item.ativo === false).length === 1 ? 'pausado' : 'pausados', value: apiProdutos.filter(item => item.ativo === false).length, valueClassName: apiProdutos.some(item => item.ativo === false) ? 'text-amber-600 dark:text-amber-300' : undefined },
                 { label: 'categorias', value: apiCategorias.length },
               ]}
             />
@@ -7614,10 +7626,10 @@ export function CaixaPanel({
             <div className="space-y-4">
               <OperationalBanner
                 id="stock-ingredients-heading"
-                eyebrow="ESTOQUE CONECTADO"
-                title="Reposição"
-                accent={estoqueInsights.low > 0 ? 'pede atenção' : 'em dia'}
-                description={estoqueInsights.linkedProducts > 0 ? 'Vendas com ficha técnica já baixam ingredientes automaticamente.' : 'Cadastre os ingredientes e monte fichas técnicas para ativar a baixa automática nas vendas.'}
+                eyebrow={estoqueInsumos.length === 0 ? 'PRIMEIROS PASSOS' : 'ESTOQUE CONECTADO'}
+                title={estoqueInsumos.length === 0 ? 'Estoque' : 'Reposição'}
+                accent={estoqueInsumos.length === 0 ? 'pronto para configurar' : estoqueInsights.low > 0 ? 'pede atenção' : 'em dia'}
+                description={estoqueInsumos.length === 0 ? 'Importe uma NF-e ou cadastre o primeiro ingrediente para começar o controle.' : estoqueInsights.linkedProducts > 0 ? 'Vendas com ficha técnica já baixam ingredientes automaticamente.' : 'Monte fichas técnicas para ativar a baixa automática nas vendas.'}
                 metrics={[
                   { label: 'ingredientes', value: estoqueInsumos.length },
                   { label: 'para repor', value: estoqueInsights.low, valueClassName: estoqueInsights.low > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300' },

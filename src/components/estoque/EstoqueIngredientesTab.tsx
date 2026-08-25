@@ -79,7 +79,7 @@ export function EstoqueIngredientesTab({
             ? 'Comece importando uma NF-e ou cadastrando manualmente. Depois, vincule os ingredientes aos produtos nas fichas técnicas.'
             : 'Ajuste a busca ou a situação selecionada.'}
           action={insumos.length === 0
-            ? { label: 'Novo ingrediente', onClick: onCreate, icon: Plus }
+            ? { label: 'Importar primeira NF-e', onClick: onImportXml, icon: FileUp }
             : { label: 'Limpar filtros', onClick: clearFilters, variant: 'secondary' }}
         />
       ) : (

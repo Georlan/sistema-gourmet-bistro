@@ -620,6 +620,21 @@ body {
   gap: 0.65rem;
 }
 
+.cashier-display-controls {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.cashier-display-controls .cashier-font-control {
+  width: 100%;
+  min-width: 0;
+}
+
+.cashier-sidebar__compact-theme {
+  display: none;
+}
+
 .cashier-font-control__label {
   color: var(--koma-text-muted);
   font-size: 0.68rem;
@@ -833,6 +848,23 @@ body {
 
 [data-collapsible="icon"] .cashier-sidebar__content {
   padding-inline: 0.3rem !important;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__compact-theme {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  place-items: center;
+  color: var(--koma-text-muted);
+  border: 1px solid var(--koma-border-default);
+  border-radius: 0.72rem;
+  background: var(--koma-surface-raised);
+  cursor: pointer;
+}
+
+[data-collapsible="icon"] .cashier-sidebar__compact-theme:hover {
+  color: var(--koma-text-primary);
+  border-color: var(--koma-border-strong);
 }
 
 [data-collapsible="icon"] .cashier-sidebar [data-sidebar="menu-button"] {
@@ -2832,6 +2864,7 @@ body {
 .font-large .text-\[8px\] { font-size: 10px !important; }
 .font-large .text-\[9px\] { font-size: 11px !important; }
 .font-large .text-\[10px\] { font-size: 12px !important; }
+.font-large .text-\[11px\] { font-size: 13px !important; }
 .font-large .text-xs { font-size: 14px !important; }
 .font-large .text-sm { font-size: 16px !important; }
 .font-large .text-base { font-size: 18px !important; }
@@ -2844,11 +2877,17 @@ body {
 .font-huge .text-\[8px\] { font-size: 11px !important; }
 .font-huge .text-\[9px\] { font-size: 12px !important; }
 .font-huge .text-\[10px\] { font-size: 14px !important; }
+.font-huge .text-\[11px\] { font-size: 15px !important; }
 .font-huge .text-xs { font-size: 16px !important; }
 .font-huge .text-sm { font-size: 18px !important; }
 .font-huge .text-base { font-size: 20px !important; }
 .font-huge .text-lg { font-size: 22px !important; }
 .font-huge .text-xl { font-size: 28px !important; }
+
+.font-large .orders-card__identity-subtitle { font-size: 0.69rem; }
+.font-large .orders-card__chip { font-size: 0.59rem; }
+.font-huge .orders-card__identity-subtitle { font-size: 0.74rem; }
+.font-huge .orders-card__chip { font-size: 0.64rem; }
 
 /* Cardápio Digital Whitelabel Utilities */
 .no-scrollbar::-webkit-scrollbar {

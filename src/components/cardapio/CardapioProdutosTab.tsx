@@ -168,7 +168,7 @@ export function CardapioProdutosTab({
             <p className="text-[10px] font-medium text-koma-muted">
               <strong className="font-mono text-koma-foreground">{filteredProducts.length}</strong> de {produtos.length} produtos
               {' · '}<span className="text-emerald-700 dark:text-emerald-300">{summary.available} disponíveis</span>
-              {summary.paused > 0 && <> · <span className="text-amber-700 dark:text-amber-300">{summary.paused} pausados</span></>}
+              {summary.paused > 0 && <> · <span className="text-amber-700 dark:text-amber-300">{summary.paused} {summary.paused === 1 ? 'pausado' : 'pausados'}</span></>}
             </p>
             {selectedCategory && selectedCategoryProducts.length > 0 && (
               <button
@@ -185,7 +185,7 @@ export function CardapioProdutosTab({
             )}
           </header>
 
-          <div className="hidden grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_6.75rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted lg:grid">
+          <div className="hidden grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_8rem] items-center gap-3 border-b border-koma-border bg-koma-raised/20 px-4 py-2 text-[9px] font-extrabold uppercase tracking-[0.08em] text-koma-muted lg:grid">
             <span>Produto</span><span>Categoria</span><span>Preço</span><span>Disponibilidade</span><span className="text-right">Ações</span>
           </div>
 
@@ -193,11 +193,15 @@ export function CardapioProdutosTab({
             const isAvailable = product.ativo !== false;
             const isPending = pendingProductId === product.id;
             const categoryName = categoryNameFor(product);
+            const normalizedProductName = product.nome.trim().replace(/^#/, '');
+            const productNameAlreadyShowsCode = normalizedProductName === product.id
+              || normalizedProductName.startsWith(`${product.id} `)
+              || normalizedProductName.startsWith(`${product.id}-`);
             return (
               <article
                 key={product.id}
                 className={clsx(
-                  'group grid gap-3 border-b border-koma-border px-3 py-3 transition-colors last:border-b-0 hover:bg-koma-raised/50 sm:px-4 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_6.75rem] lg:items-center',
+                  'group grid gap-3 border-b border-koma-border px-3 py-3 transition-colors last:border-b-0 hover:bg-koma-raised/50 sm:px-4 lg:grid-cols-[minmax(18rem,1fr)_minmax(8rem,0.32fr)_6rem_8rem_8rem] lg:items-center',
                   !isAvailable && 'bg-koma-canvas/35',
                 )}
               >
@@ -208,7 +212,7 @@ export function CardapioProdutosTab({
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <h2 className={clsx('truncate text-xs font-bold text-koma-foreground', !isAvailable && 'text-koma-muted')}>{product.nome}</h2>
-                      <span className="shrink-0 font-mono text-[9px] text-koma-muted">#{product.id}</span>
+                      {!productNameAlreadyShowsCode && <span className="shrink-0 font-mono text-[9px] text-koma-muted">#{product.id}</span>}
                     </div>
                     <p className="mt-0.5 truncate text-[10px] text-koma-muted">{product.descricao || 'Sem descrição'}</p>
                     <p className="mt-1 text-[9px] font-semibold text-koma-subtle lg:hidden">{categoryName} · {currency.format(Number(product.preco) || 0)}</p>
@@ -233,7 +237,7 @@ export function CardapioProdutosTab({
                   {isPending ? 'Salvando…' : isAvailable ? 'Disponível' : 'Pausado'}
                 </button>
 
-                <div className="flex items-center justify-end gap-0.5">
+                <div className="flex items-center justify-end gap-1">
                   <button type="button" onClick={() => onEditProduct(product)} className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[9px] font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground" title="Editar produto" aria-label={`Editar ${product.nome}`}><Edit3 size={13} /><span>Editar</span></button>
                   <button type="button" onClick={() => onDuplicateProduct(product)} className="rounded-lg p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-emerald-700 dark:hover:text-emerald-300" title="Duplicar produto" aria-label={`Duplicar ${product.nome}`}><Copy size={13} /></button>
                   <button type="button" onClick={() => void onRemoveProduct(product)} className="rounded-lg p-2 text-rose-600 transition-colors hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300" title="Remover do cardápio" aria-label={`Remover ${product.nome} do cardápio`}><Trash2 size={13} /></button>
