@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Award, Calendar as CalendarIcon, Download, ShoppingBag, DollarSign, Percent, Filter, BarChart2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from '../relatorios/PeriodoCalendarioModal';
 import { localCalendarDate } from '../../utils/dateTime';
+import { OperationalBanner } from '../shared/OperationalBanner';
+import { fetchReportJson, useReportRealtimeRefresh } from '../relatorios/useReportRealtimeRefresh';
+
+const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatMoney = (value: number | null | undefined) => money.format(Number(value) || 0);
+const formatDate = (value: string) => value.split('-').reverse().join('/');
 
 interface EquipeDesempenhoTabProps {
   apiBaseUrl: string;
@@ -51,7 +57,7 @@ const CustomChartTooltip = ({ active, payload, label }: any) => {
         <p className="text-[10px] font-bold text-koma-foreground">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-xs font-bold font-mono" style={{ color: entry.color }}>
-            {entry.name}: {entry.dataKey === 'faturamento' ? `R$ ${entry.value.toFixed(2)}` : `${entry.value} comandas`}
+            {entry.name}: {entry.dataKey === 'faturamento' ? formatMoney(entry.value) : `${entry.value} comandas`}
           </p>
         ))}
       </div>
@@ -85,8 +91,11 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const [taxaPadrao, setTaxaPadrao] = useState(10.0);
   const [membros, setMembros] = useState<GarcomPerformanceItem[]>([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [chartMetric, setChartMetric] = useState<'faturamento' | 'pedidos'>('faturamento');
+  const requestRef = useRef(0);
 
-  const fetchDesempenho = async () => {
+  const fetchDesempenho = useCallback(async () => {
+    const requestId = ++requestRef.current;
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
@@ -95,12 +104,11 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       });
       if (cargo) params.set('cargo', cargo);
 
-      const res = await fetch(
+      const json = await fetchReportJson<any>(
         `${apiBaseUrl}/relatorios/equipe/desempenho?${params.toString()}`,
-        { headers: authHeaders }
+        authHeaders,
       );
-      if (res.ok) {
-        const json = await res.json();
+      if (requestRef.current === requestId) {
         setTaxaAtiva(json.taxa_servico_ativa);
         setTaxaPadrao(json.taxa_servico_padrao);
         setMembros(json.membros || []);
@@ -108,13 +116,16 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
     } catch (err) {
       console.error('Erro ao carregar desempenho da equipe:', err);
     } finally {
-      setIsLoading(false);
+      if (requestRef.current === requestId) setIsLoading(false);
     }
-  };
+  }, [apiBaseUrl, authHeaders, cargo, dataFim, dataInicio]);
 
   useEffect(() => {
-    fetchDesempenho();
-  }, [dataInicio, dataFim, cargo]);
+    void fetchDesempenho();
+    return () => { requestRef.current += 1; };
+  }, [fetchDesempenho]);
+
+  useReportRealtimeRefresh(fetchDesempenho);
 
   const totalAtendimentos = membros.reduce((acc, m) => acc + m.pedidos_atendidos, 0);
   const totalFaturamento = membros.reduce((acc, m) => acc + m.faturamento, 0);
@@ -123,7 +134,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   const handleExportCsv = () => {
     if (!membros.length) return;
     const periodo = `${dataInicio} até ${dataFim}`;
-    let csv = `Funcionário;Cargo;Pedidos Atendidos;Faturamento (R$);Ticket Médio (R$);Comissão Proporcional (R$);Período\n`;
+    let csv = `Funcionário;Cargo;Atendimentos;Valor Recebido (R$);Ticket Médio (R$);Serviço Proporcional (R$);Período\n`;
     membros.forEach((m) => {
       const label = ROLE_LABEL[m.role] || m.role;
       csv += `"${m.nome}";"${label}";${m.pedidos_atendidos};${m.faturamento.toFixed(2)};${m.ticket_medio.toFixed(2)};${m.comissao.toFixed(2)};"${periodo}"\n`;
@@ -149,21 +160,22 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   return (
     <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
-      {/* Top Header Bar */}
-      <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'p-4.5', 'rounded-3xl', 'flex', 'flex-col', 'sm:flex-row', 'sm:items-center', 'justify-between', 'gap-4')}>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Award size={18} className="text-emerald-700 dark:text-emerald-400" />
-            <h3 className="font-serif font-bold text-base text-koma-foreground">Desempenho Comercial da Equipe</h3>
-          </div>
-          <p className="text-[10px] text-koma-subtle">
-            Período: <strong className="text-koma-secondary">{dataInicio}</strong> até <strong className="text-koma-secondary">{dataFim}</strong>
-            {' | '}Taxa de Serviço: <strong className="text-emerald-400">{taxaAtiva ? `${taxaPadrao}%` : 'Desativada'}</strong>
-            {' | '}Filtro: <strong className="text-sky-400">{cargoLabel}</strong>
-          </p>
-        </div>
+      <OperationalBanner
+        id="reports-team-heading"
+        eyebrow="EQUIPE"
+        title="Desempenho"
+        accent="que orienta"
+        description={`Atendimentos atribuídos de ${formatDate(dataInicio)} a ${formatDate(dataFim)} · ${cargoLabel}.`}
+        metrics={[
+          { label: totalAtendimentos === 1 ? 'atendimento' : 'atendimentos', value: totalAtendimentos },
+          { label: 'valor recebido', value: formatMoney(totalFaturamento) },
+          { label: taxaAtiva ? `serviço proporcional (${taxaPadrao}%)` : 'taxa de serviço inativa', value: taxaAtiva ? formatMoney(totalComissao) : '—' },
+        ]}
+      />
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+      <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-[10px] text-koma-muted">Compare participação e volume; valores sem atendimento permanecem visíveis na tabela.</span>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
           {/* Cargo Filter */}
           <div className="relative flex items-center gap-1.5 bg-koma-input border border-koma-border rounded-xl px-3 py-2">
             <Filter size={12} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
@@ -187,7 +199,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
           >
             <CalendarIcon size={14} className="text-emerald-700 dark:text-emerald-400" />
-            Alterar Período
+            Período
           </button>
 
           <button
@@ -197,94 +209,37 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
             className="px-3.5 py-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-secondary hover:text-koma-foreground rounded-xl text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
           >
             <Download size={14} />
-            Exportar CSV
+            Exportar
           </button>
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
-          <div className="flex justify-between items-center text-koma-muted">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Total Atendimentos</span>
-            <div className="p-1.5 bg-sky-500/15 text-sky-600 dark:text-sky-300 rounded-xl">
-              <ShoppingBag size={16} />
-            </div>
-          </div>
-          <strong className="text-2xl text-koma-foreground font-mono block font-bold">{totalAtendimentos}</strong>
-          <span className="text-[10px] text-koma-muted block font-medium">Comandas atendidas pela equipe</span>
-        </div>
-
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
-          <div className="flex justify-between items-center text-koma-muted">
-            <span className="text-[9px] font-bold uppercase tracking-wider">Faturamento Gerado</span>
-            <div className="p-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 rounded-xl">
-              <DollarSign size={16} />
-            </div>
-          </div>
-          <strong className="text-2xl text-emerald-700 dark:text-emerald-400 font-mono font-extrabold block">
-            R$ {totalFaturamento.toFixed(2)}
-          </strong>
-          <span className="text-[10px] text-koma-muted block font-medium">Vendas diretas da equipe</span>
-        </div>
-
-        {taxaAtiva && (
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-2 shadow-xs">
-            <div className="flex justify-between items-center text-koma-muted">
-              <span className="text-[9px] font-bold uppercase tracking-wider">Comissão Total Proporcional</span>
-              <div className="p-1.5 bg-purple-500/15 text-purple-600 dark:text-purple-300 rounded-xl">
-                <Percent size={16} />
-              </div>
-            </div>
-            <strong className="text-2xl text-purple-700 dark:text-purple-300 font-mono font-extrabold block">
-              R$ {totalComissao.toFixed(2)}
-            </strong>
-            <span className="text-[10px] text-koma-muted block font-medium">Calculada individualmente conforme vendas</span>
-          </div>
-        )}
-      </div>
-
       {/* Team Charts */}
       {teamChartData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-koma-border pb-3">
+          <div className="bg-koma-panel border border-koma-border p-4 sm:p-5 rounded-3xl space-y-4 shadow-xs">
+            <div className="flex flex-col gap-3 border-b border-koma-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
               <BarChart2 size={16} className="text-emerald-700 dark:text-emerald-400" />
-              <span className="font-serif font-bold text-sm text-koma-foreground">Faturamento Gerado por Atendente</span>
+              <span className="font-serif font-bold text-sm text-koma-foreground">{chartMetric === 'faturamento' ? 'Valor recebido por atendente' : 'Atendimentos por pessoa'}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-1 rounded-xl border border-koma-border bg-koma-input p-1">
+                <button type="button" onClick={() => setChartMetric('faturamento')} className={clsx('rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase transition-colors', chartMetric === 'faturamento' ? 'koma-btn-success' : 'text-koma-muted')}>Valor</button>
+                <button type="button" onClick={() => setChartMetric('pedidos')} className={clsx('rounded-lg px-3 py-1.5 text-[9px] font-bold uppercase transition-colors', chartMetric === 'pedidos' ? 'koma-btn-success' : 'text-koma-muted')}>Volume</button>
+              </div>
             </div>
 
-            <div className="h-60 w-full pt-1">
+            <div className="h-64 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
+                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: chartMetric === 'faturamento' ? 5 : -15, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
                   <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={chartMetric === 'faturamento' ? 62 : 34} tickLine={false} axisLine={false} tickFormatter={chartMetric === 'faturamento' ? (v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }) : undefined} />
                   <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="faturamento" name="Faturamento (R$)" fill="#059669" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey={chartMetric} name={chartMetric === 'faturamento' ? 'Valor recebido' : 'Atendimentos'} fill="#059669" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
-
-          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
-            <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-              <BarChart2 size={16} className="text-sky-600 dark:text-sky-400" />
-              <span className="font-serif font-bold text-sm text-koma-foreground">Volume de Atendimentos por Garçom</span>
-            </div>
-
-            <div className="h-60 w-full pt-1">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={teamChartData} margin={{ top: 10, right: 10, left: -15, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
-                  <XAxis dataKey="name" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'var(--koma-border-default)' }} />
-                  <Bar dataKey="pedidos" name="Atendimentos" fill="#0284c7" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Team Performance Table */}
@@ -310,10 +265,10 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                   <th className="p-3.5">#</th>
                   <th className="p-3.5">Funcionário</th>
                   <th className="p-3.5">Cargo</th>
-                  <th className="p-3.5 text-center font-mono">Pedidos Atendidos</th>
-                  <th className="p-3.5 text-right font-mono">Faturamento Individual</th>
+                  <th className="p-3.5 text-center font-mono">Atendimentos</th>
+                  <th className="p-3.5 text-right font-mono">Valor recebido</th>
                   <th className="p-3.5 text-right font-mono">Ticket Médio</th>
-                  {taxaAtiva && <th className="p-3.5 text-right font-mono">Comissão ({taxaPadrao}%)</th>}
+                  {taxaAtiva && <th className="p-3.5 text-right font-mono">Serviço ({taxaPadrao}%)</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-koma-border">
@@ -333,14 +288,14 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
                       {m.pedidos_atendidos}
                     </td>
                     <td className="p-3.5 text-right font-mono font-bold text-koma-foreground">
-                      R$ {m.faturamento.toFixed(2)}
+                      {formatMoney(m.faturamento)}
                     </td>
                     <td className="p-3.5 text-right font-mono text-koma-muted font-medium">
-                      R$ {m.ticket_medio.toFixed(2)}
+                      {formatMoney(m.ticket_medio)}
                     </td>
                     {taxaAtiva && (
-                      <td className="p-3.5 text-right font-mono font-extrabold text-purple-700 dark:text-purple-300">
-                        R$ {m.comissao.toFixed(2)}
+                      <td className="p-3.5 text-right font-mono font-extrabold text-emerald-700 dark:text-emerald-300">
+                        {formatMoney(m.comissao)}
                       </td>
                     )}
                   </tr>

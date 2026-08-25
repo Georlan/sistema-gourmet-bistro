@@ -363,7 +363,9 @@ def test_equipe_desempenho_periodo():
         headers=headers
     )
     assert resp.status_code == 200
-    membros = resp.json()["membros"]
+    payload = resp.json()
+    assert payload["fonte_financeira"] == "pagamentos_aprovados_alocados_por_turno"
+    membros = payload["membros"]
     garcom = next((m for m in membros if m["role"] == "garcom"), None)
     assert garcom is not None, "Garçom deve aparecer no resultado"
 

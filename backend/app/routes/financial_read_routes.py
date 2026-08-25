@@ -393,10 +393,96 @@ def get_dashboard_financeiro(
     }
 
 
+def get_equipe_desempenho_financeiro(
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    cargo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("relatorios:consultar")),
+):
+    """Atribui o valor recebido pela equipe a partir do mesmo ledger dos demais relatórios."""
+    rest_id = require_tenant_id()
+    snapshot = _snapshot_or_400(db, rest_id, data_inicio, data_fim)
+
+    command_ids = {allocation.command_id for allocation in snapshot.allocations}
+    commands = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == rest_id,
+            Comanda.id.in_(command_ids),
+        )
+        .all()
+        if command_ids
+        else []
+    )
+    command_owner = {
+        str(command.id): str(command.garcom_id)
+        for command in commands
+        if command.garcom_id
+    }
+
+    sales_by_member: dict[str, set[str]] = defaultdict(set)
+    gross_by_member: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
+    for allocation in snapshot.allocations:
+        member_id = command_owner.get(str(allocation.command_id))
+        if not member_id:
+            continue
+        sales_by_member[member_id].add(allocation.sale_key)
+        gross_by_member[member_id] += money(allocation.value)
+
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
+        .first()
+    )
+    service_active = config.taxa_servico_ativa if config else True
+    service_rate = money(config.taxa_servico_padrao or 10.0) if config else Decimal("10.00")
+
+    members = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
+    role_filter = (cargo or "").lower().strip()
+    result = []
+    for member in members:
+        member_role = (member.role or "garcom").lower().strip()
+        if role_filter == "todos":
+            pass
+        elif role_filter:
+            if member_role != role_filter:
+                continue
+        elif member_role not in legacy_reports.COMMERCIAL_ROLES:
+            continue
+
+        member_id = str(member.id)
+        sale_count = len(sales_by_member.get(member_id, set()))
+        gross = money(gross_by_member.get(member_id, Decimal("0.00")))
+        average_ticket = money(gross / sale_count) if sale_count else Decimal("0.00")
+        commission = money(gross * service_rate / Decimal("100")) if service_active else Decimal("0.00")
+
+        result.append({
+            "id": member_id,
+            "nome": member.nome,
+            "email": member.email,
+            "role": member_role,
+            "pedidos_atendidos": sale_count,
+            "faturamento": _float(gross),
+            "ticket_medio": _float(average_ticket),
+            "comissao": _float(commission),
+            "taxa_servico_usada": _float(service_rate) if service_active else 0.0,
+        })
+
+    result.sort(key=lambda row: (row["faturamento"], row["pedidos_atendidos"]), reverse=True)
+    return {
+        "taxa_servico_ativa": service_active,
+        "taxa_servico_padrao": _float(service_rate),
+        "fonte_financeira": "pagamentos_aprovados_alocados_por_turno",
+        "membros": result,
+    }
+
+
 # Substitui somente as leituras financeiras problemáticas. As demais rotas
-# legadas (produtos, equipe, metas etc.) continuam no mesmo router/API.
+# legadas (produtos, metas etc.) continuam no mesmo router/API.
 _remove_route(legacy_reports.router, "/relatorios/visao-geral")
 _remove_route(legacy_reports.router, "/relatorios/vendas-detalhes")
+_remove_route(legacy_reports.router, "/relatorios/equipe/desempenho")
 _remove_route(legacy_optimization.router, "/comandas/estatisticas/geral")
 
 legacy_reports.router.add_api_route(
@@ -410,6 +496,12 @@ legacy_reports.router.add_api_route(
     get_vendas_detalhes_financeiro,
     methods=["GET"],
     name="get_vendas_detalhes_financeiro",
+)
+legacy_reports.router.add_api_route(
+    "/equipe/desempenho",
+    get_equipe_desempenho_financeiro,
+    methods=["GET"],
+    name="get_equipe_desempenho_financeiro",
 )
 legacy_optimization.router.add_api_route(
     "/comandas/estatisticas/geral",

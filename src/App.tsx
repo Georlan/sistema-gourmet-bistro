@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KomaLogo } from './components/KomaLogo';
 import { LoginButton } from '../components/shadcnblocks/login-button';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag, Sun, Moon } from 'lucide-react';
@@ -179,6 +179,13 @@ export default function App() {
     }
     return headers;
   }, [portal]);
+
+  // Mantém a identidade do objeto estável. Isso preserva a memoização do painel
+  // e evita que efeitos de leitura sejam reexecutados por renders sem relação.
+  const managementAuthHeaders = useMemo(
+    () => getAuthHeaders(),
+    [getAuthHeaders, isAuthenticated, activeWaiterId],
+  );
 
   const printPairingStartedRef = useRef(false);
 
@@ -895,9 +902,11 @@ export default function App() {
           }
           if (eventName === "team_updated") {
             window.dispatchEvent(new Event('koma_team_updated'));
+            window.dispatchEvent(new Event('koma_reports_updated'));
           }
           if (eventName === "catalog_updated") {
             scheduleRealtimeRefresh({ catalog: true });
+            window.dispatchEvent(new Event('koma_reports_updated'));
           }
           if (eventName === "config_updated" || eventName === "CONFIG_UPDATE") {
             scheduleRealtimeRefresh({ config: true });
@@ -905,6 +914,7 @@ export default function App() {
           if (eventName === "cash_updated") {
             scheduleRealtimeRefresh({ summary: true });
             window.dispatchEvent(new Event('koma_cash_updated'));
+            window.dispatchEvent(new Event('koma_reports_updated'));
           }
           if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {
             const detailType = String(data.detail?.type || '');
@@ -938,6 +948,9 @@ export default function App() {
             }
             if (data.detail && data.detail.type === "pagamento_registrado" && data.detail.status === "pendente") {
               showToast(`Confirmar recebimento em dinheiro: R$ ${data.detail.valor.toFixed(2)} - Garçom ${data.detail.garcom_nome}`, 'info', 5000);
+            }
+            if (data.detail?.type === "pagamento_registrado") {
+              window.dispatchEvent(new Event('koma_reports_updated'));
             }
           } else if (eventName === "MESA_ATUALIZADA" || eventName === "MESA_UPDATED") {
             scheduleRealtimeRefresh({ orders: true });
@@ -2159,7 +2172,7 @@ export default function App() {
             orders={orders}
             onRefreshOrders={fetchOrdersFromAPI}
             apiBaseUrl={API_BASE_URL}
-            authHeaders={getAuthHeaders()}
+            authHeaders={managementAuthHeaders}
             activeWaiterNome={activeWaiterNome}
             salonTables={salonTables}
             onCreateMesa={handleCreateMesa}
@@ -2592,7 +2605,7 @@ export default function App() {
               orders={orders}
               onRefreshOrders={fetchOrdersFromAPI}
               apiBaseUrl={API_BASE_URL}
-              authHeaders={getAuthHeaders()}
+              authHeaders={managementAuthHeaders}
               activeWaiterNome={activeWaiterNome}
               salonTables={salonTables}
               onCreateMesa={handleCreateMesa}
