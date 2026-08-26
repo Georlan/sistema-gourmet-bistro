@@ -13,6 +13,7 @@ import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/what
 interface CreatedOrder {
   comanda_id: string;
   numero_pedido: string | number;
+  total?: number;
 }
 
 interface CardapioDigitalProps {
@@ -28,6 +29,22 @@ interface CardapioDigitalProps {
   onOrderSuccess: (order: CreatedOrder) => void;
   onSessionExpired: () => void;
 }
+
+interface PendingOrderSubmission {
+  key: string;
+  fingerprint: string;
+  createdAt: number;
+}
+
+const PENDING_ORDER_STORAGE_KEY = "koma_pending_order_submission";
+const PENDING_ORDER_TTL_MS = 15 * 60 * 1000;
+const ORDER_REQUEST_TIMEOUT_MS = 15_000;
+
+const createIdempotencyKey = () => (
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `ik-${Date.now()}-${Math.random().toString(36).substring(2, 12)}`
+);
 
 export default function CardapioDigital({
   activeBrand,
@@ -46,11 +63,7 @@ export default function CardapioDigital({
   const [errorMessage, setErrorMessage] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const isSubmittingRef = useRef(false);
-  const idempotencyKeyRef = useRef<string>(
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `ik-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-  );
+  const idempotencyKeyRef = useRef<string>(createIdempotencyKey());
 
   const formatPrice = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -69,6 +82,42 @@ export default function CardapioDigital({
     return acc + unitPrice * item.quantity;
   }, 0);
   const estimatedTotal = subtotal + deliveryFee;
+
+  const resolvePersistentIdempotencyKey = (fingerprint: string) => {
+    let key = idempotencyKeyRef.current;
+    try {
+      const raw = localStorage.getItem(PENDING_ORDER_STORAGE_KEY);
+      if (raw) {
+        const pending = JSON.parse(raw) as PendingOrderSubmission;
+        const isFresh = Number.isFinite(pending.createdAt)
+          && Date.now() - pending.createdAt <= PENDING_ORDER_TTL_MS;
+        if (pending.key && pending.fingerprint === fingerprint && isFresh) {
+          key = pending.key;
+        }
+      }
+
+      localStorage.setItem(PENDING_ORDER_STORAGE_KEY, JSON.stringify({
+        key,
+        fingerprint,
+        createdAt: Date.now(),
+      } satisfies PendingOrderSubmission));
+    } catch (error) {
+      console.warn("Não foi possível persistir a tentativa do pedido:", error);
+    }
+    idempotencyKeyRef.current = key;
+    return key;
+  };
+
+  const clearPendingSubmission = (key: string) => {
+    try {
+      const raw = localStorage.getItem(PENDING_ORDER_STORAGE_KEY);
+      if (!raw) return;
+      const pending = JSON.parse(raw) as PendingOrderSubmission;
+      if (pending.key === key) localStorage.removeItem(PENDING_ORDER_STORAGE_KEY);
+    } catch (error) {
+      console.warn("Não foi possível limpar a tentativa confirmada:", error);
+    }
+  };
 
   const handlePlaceOrder = async () => {
     if (isSubmittingRef.current) return;
@@ -126,19 +175,31 @@ export default function CardapioDigital({
       };
     });
 
+    const fingerprint = JSON.stringify({
+      restaurante_id: targetRestauranteId,
+      cliente_telefone: normalizedPhone,
+      tipo_pedido: deliveryMethod,
+      endereco: deliveryMethod === "delivery" ? normalizedAddress : "",
+      itens: cleanedItems,
+    });
+    const idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);
+
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage("");
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ORDER_REQUEST_TIMEOUT_MS);
+
     try {
-      // O backend tenant-aware é a única fonte de verdade. Ele grava no
-      // PostgreSQL do Supabase e notifica o caixa via WebSocket.
       const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Koma-Customer-Token": customerToken,
+          "X-Idempotency-Key": idempotencyKey,
         },
+        signal: controller.signal,
         body: JSON.stringify({
           restaurante_id: targetRestauranteId,
           itens: cleanedItems,
@@ -148,7 +209,7 @@ export default function CardapioDigital({
           taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
           forma_pagamento: "na_entrega",
           tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
-          idempotency_key: idempotencyKeyRef.current
+          idempotency_key: idempotencyKey
         })
       });
 
@@ -163,44 +224,52 @@ export default function CardapioDigital({
 
       const comandaId = String(data.comanda_id || data.id);
       const numeroPedido = Number(data.numero_pedido);
+      if (!comandaId || !Number.isFinite(numeroPedido)) {
+        throw new Error("O restaurante confirmou o pedido com uma resposta inválida. Tente consultar novamente.");
+      }
 
+      const authoritativeTotal = Number(data.total);
+      const orderTotal = Number.isFinite(authoritativeTotal) ? authoritativeTotal : estimatedTotal;
       const orderObj = {
-        id: String(comandaId),
+        id: comandaId,
         numero_pedido: String(numeroPedido),
         timestamp: Date.now(),
         restaurante_id: targetRestauranteId,
         cliente_nome: normalizedName,
         tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
-        total: estimatedTotal,
-        idempotency_key: idempotencyKeyRef.current
+        total: orderTotal,
+        idempotency_key: idempotencyKey
       };
       try {
         localStorage.setItem("koma_active_order", JSON.stringify(orderObj));
-      } catch (err) {
-        console.warn("Não foi possível salvar pedido ativo no localStorage:", err);
+      } catch (error) {
+        console.warn("Não foi possível salvar pedido ativo no localStorage:", error);
       }
 
+      clearPendingSubmission(idempotencyKey);
       setCreatedOrder({
-        comanda_id: String(comandaId),
-        numero_pedido: numeroPedido
+        comanda_id: comandaId,
+        numero_pedido: numeroPedido,
+        total: orderTotal,
       });
     } catch (error) {
       console.warn("Falha ao registrar pedido no backend:", error);
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente."
+        error instanceof DOMException && error.name === "AbortError"
+          ? "A confirmação demorou mais que o esperado. Toque em enviar novamente: o Kôma reutilizará a mesma tentativa sem duplicar o pedido."
+          : error instanceof Error
+            ? error.message
+            : "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente."
       );
     } finally {
+      window.clearTimeout(timeoutId);
       isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleFinish = () => {
-    if (createdOrder) {
-      onOrderSuccess(createdOrder);
-    }
+    if (createdOrder) onOrderSuccess(createdOrder);
   };
 
   return (
@@ -223,8 +292,9 @@ export default function CardapioDigital({
             </div>
             <button
               type="button"
-              onClick={onClose}
-              className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer"
+              disabled={isSubmitting}
+              onClick={() => !isSubmitting && onClose()}
+              className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-slate-500/10 text-text-app/50 transition cursor-pointer disabled:cursor-wait disabled:opacity-35"
               id="btn-close-checkout"
               aria-label="Fechar revisão do pedido"
             >
@@ -249,7 +319,7 @@ export default function CardapioDigital({
                 <div className="p-3 bg-slate-500/5 rounded-2xl border border-slate-500/10 text-[11px] text-text-app/70 text-left space-y-1">
                   <p><strong>Modalidade:</strong> {deliveryMethod === "delivery" ? `Entrega em ${address}` : "Retirada no Balcão"}</p>
                   <p><strong>Telefone:</strong> {customerPhone}</p>
-                  <p><strong>Total a pagar:</strong> R$ {estimatedTotal.toFixed(2)}</p>
+                  <p><strong>Total a pagar:</strong> {formatPrice(createdOrder.total ?? estimatedTotal)}</p>
                 </div>
               </div>
               <div className="w-full max-w-xs space-y-2 mt-4">
@@ -265,7 +335,7 @@ export default function CardapioDigital({
                     type="button"
                     onClick={() => {
                       const itensStr = cart.map(i => `${i.quantity}x ${i.product.name}`).join(', ');
-                      const msg = buildPedidoConfirmadoMsg(customerName, itensStr, estimatedTotal);
+                      const msg = buildPedidoConfirmadoMsg(customerName, itensStr, createdOrder.total ?? estimatedTotal);
                       openWhatsAppMessage(String(activeBrand.phone), msg);
                     }}
                     className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-koma-secondary text-[10px] font-bold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700"
@@ -370,11 +440,14 @@ export default function CardapioDigital({
               type="button"
               onClick={handlePlaceOrder}
               disabled={isSubmitting || cart.length === 0}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-xs font-black text-koma-foreground uppercase tracking-wider transition shadow-lg hover:opacity-95 disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-xs font-black text-koma-foreground uppercase tracking-wider transition shadow-lg hover:opacity-95 disabled:opacity-50 cursor-pointer disabled:cursor-wait"
             >
               <Send className="h-4 w-4" />
-              <span>{isSubmitting ? "Enviando..." : "Enviar Pedido"}</span>
+              <span>{isSubmitting ? "Confirmando com o restaurante..." : errorMessage ? "Tentar enviar novamente" : "Enviar Pedido"}</span>
             </button>
+            {isSubmitting && (
+              <p className="mt-2 text-center text-[10px] text-text-app/45">Não feche esta tela enquanto confirmamos o pedido.</p>
+            )}
           </div>
         )}
       </div>

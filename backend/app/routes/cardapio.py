@@ -2,10 +2,11 @@ import uuid
 import datetime
 import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
-from sqlalchemy import text
+from sqlalchemy import or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id, tenant_session_scope
-from ..models import Comanda, Lancamento, Item, Produto, Usuario
+from ..models import Comanda, Lancamento, Item, Produto, Restaurante, Usuario
 from ..schemas import CardapioPedidoCreate
 from ..websocket_manager import manager
 from .cardapio_digital import resolve_restaurant_id
@@ -23,6 +24,40 @@ router = APIRouter(
     tags=["Cardápio Digital Client"]
 )
 
+MAX_PUBLIC_ORDER_UNITS = 200
+ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
+
+
+def _order_total(comanda: Comanda) -> float:
+    return float(sum(float(item.preco_unit or 0) for item in comanda.itens) + float(comanda.delivery_taxa or 0))
+
+
+def _existing_order_response(comanda: Comanda) -> dict:
+    return {
+        "status": "success",
+        "comanda_id": comanda.id,
+        "numero_pedido": comanda.numero_pedido,
+        "delivery_status": comanda.delivery_status or "pendente",
+        "tipo": comanda.tipo,
+        "cliente_id": comanda.cliente_id,
+        "total": _order_total(comanda),
+        "mensagem": "Pedido já cadastrado com sucesso!",
+        "pagamento": {
+            "status": "pendente_no_atendimento",
+            "cobranca_online": False,
+        },
+    }
+
+
+def _load_existing_idempotent_order(db: Session, rest_id: int, key: str) -> Comanda | None:
+    if not key:
+        return None
+    return db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.idempotency_key == key,
+    ).first()
+
+
 @router.post("/pedidos", status_code=status.HTTP_201_CREATED)
 def criar_pedido_online(
     payload: CardapioPedidoCreate,
@@ -32,12 +67,12 @@ def criar_pedido_online(
         default=None,
         alias="X-Koma-Customer-Token",
     ),
+    request_idempotency_key: str | None = Header(
+        default=None,
+        alias="X-Idempotency-Key",
+    ),
 ):
-    """
-    Recebe um novo pedido do cardápio digital do cliente final.
-    Cria uma comanda de Delivery ou Retirada e seus respectivos itens,
-    notificando o caixa em tempo real para aceite.
-    """
+    """Cria um pedido público de forma tenant-aware, atômica e idempotente."""
     modalidade = payload.tipo_pedido.strip().lower()
     if modalidade not in {"delivery", "retirada"}:
         raise HTTPException(
@@ -52,20 +87,35 @@ def criar_pedido_online(
             detail="O endereço de entrega é obrigatório para pedidos de delivery."
         )
 
+    total_units = sum(item.quantidade for item in payload.itens)
+    if total_units > MAX_PUBLIC_ORDER_UNITS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Um pedido online pode conter no máximo {MAX_PUBLIC_ORDER_UNITS} unidades.",
+        )
+
+    payload_key = (payload.idempotency_key or "").strip()
+    header_key = (request_idempotency_key or "").strip()
+    if payload_key and header_key and payload_key != header_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A chave idempotente do pedido é inconsistente.",
+        )
+    idempotency_key = header_key or payload_key
+    if idempotency_key and (len(idempotency_key) < 8 or len(idempotency_key) > 128):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A chave idempotente deve possuir entre 8 e 128 caracteres.",
+        )
+
     tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
     endereco_comanda = None if modalidade == "retirada" else endereco_entrega
     taxa_entrega = 0.0 if modalidade == "retirada" else payload.taxa_entrega
 
-    # Resolve o tenant por uma função controlada e vincula a sessão antes de
-    # consultar qualquer tabela multi-tenant.
     rest_id = resolve_restaurant_id(str(payload.restaurante_id), None, db)
     token_context = current_restaurante_id.set(rest_id)
+    auto_delivery_status = "pendente"
 
-    # Definir status operacional do delivery.
-    auto_delivery_status = "pendente"  # Fica na gaveta de aceite do caixa
-
-    # Um telefone digitado serve para contato, mas só uma sessão OTP comprova
-    # que o pedido pertence à ficha de fidelidade daquele número.
     cliente = None
     if customer_token:
         _claims, cliente = authenticated_customer(
@@ -80,27 +130,25 @@ def criar_pedido_online(
         else normalizar_telefone_cliente(payload.cliente_telefone)
     )
     cliente_nome = cliente.nome if cliente is not None else payload.cliente_nome
-    idempotency_key = (payload.idempotency_key or "").strip()
 
     try:
-        # 1. Idempotency Key check: if idempotency_key is provided, return existing order
-        if idempotency_key:
-            existing_comanda = db.query(Comanda).filter(
-                Comanda.restaurante_id == rest_id,
-                Comanda.idempotency_key == idempotency_key
-            ).first()
-            if existing_comanda:
-                logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
-                return {
-                    "status": "success",
-                    "comanda_id": existing_comanda.id,
-                    "numero_pedido": existing_comanda.numero_pedido,
-                    "delivery_status": existing_comanda.delivery_status or "pendente",
-                    "tipo": existing_comanda.tipo,
-                    "mensagem": "Pedido já cadastrado com sucesso!"
-                }
+        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+        if restaurante is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Restaurante não encontrado.",
+            )
+        if (restaurante.status_override or "").strip().lower() == "forçado fechado":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="O restaurante está fechado para novos pedidos online no momento.",
+            )
 
-        # 2. Time-window fallback check (5 minutes, same tenant, phone, delivery type):
+        existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
+        if existing_comanda:
+            logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
+            return _existing_order_response(existing_comanda)
+
         cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
         recentes = []
         if cliente is not None:
@@ -111,38 +159,55 @@ def criar_pedido_online(
                 Comanda.criado_em >= cinco_minutos_atras,
             ).order_by(Comanda.criado_em.desc()).all()
 
-        payload_items_sig = sorted([f"{i.produto_id}:{i.observacao}" for i in payload.itens for _ in range(i.quantidade)])
+        payload_items_sig = sorted([
+            f"{item.produto_id}:{item.observacao}"
+            for item in payload.itens
+            for _ in range(item.quantidade)
+        ])
         for rec in recentes:
-            rec_items_sig = sorted([f"{i.produto_id}:{i.observacao}" for i in rec.itens])
+            rec_items_sig = sorted([f"{item.produto_id}:{item.observacao}" for item in rec.itens])
             if payload_items_sig == rec_items_sig:
                 logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
-                return {
-                    "status": "success",
-                    "comanda_id": rec.id,
-                    "numero_pedido": rec.numero_pedido,
-                    "delivery_status": rec.delivery_status or "pendente",
-                    "tipo": rec.tipo,
-                    "mensagem": "Pedido já cadastrado com sucesso!"
-                }
+                return _existing_order_response(rec)
 
-        # Usuário ativo obrigatório para satisfazer a FK sem criar uma
-        # identidade fictícia que poderia corromper a autoria do pedido.
+        # A prontidão operacional do restaurante tem precedência sobre a
+        # validação do carrinho: nunca inventamos um usuário para satisfazer FK.
+        # Considera `cargo` também por compatibilidade com registros legados.
         garcom = db.query(Usuario).filter(
             Usuario.restaurante_id == rest_id,
             Usuario.status == "ativo",
+            or_(
+                Usuario.role.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
+                Usuario.cargo.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
+            ),
         ).first()
         if not garcom:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    "Restaurante ainda não está pronto para receber "
-                    "pedidos online."
-                ),
+                detail="Restaurante ainda não está pronto para receber pedidos online.",
             )
         garcom_id = garcom.id
 
+        # Valida todo o carrinho antes da primeira escrita para manter o pedido
+        # atômico mesmo quando um produto foi desativado entre catálogo e checkout.
+        product_ids = {item.produto_id for item in payload.itens}
+        products = db.query(Produto).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.ativo.is_(True),
+            Produto.id.in_(product_ids),
+        ).all()
+        products_by_id = {str(product.id): product for product in products}
+        missing_product = next(
+            (product_id for product_id in product_ids if str(product_id) not in products_by_id),
+            None,
+        )
+        if missing_product is not None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Produto '{missing_product}' não encontrado ou inativo para este estabelecimento.",
+            )
+
         numero_pedido = gerar_novo_numero_pedido(db)
-        
         if cliente is not None:
             cliente = cadastrar_ou_atualizar_cliente(
                 db,
@@ -151,8 +216,7 @@ def criar_pedido_online(
                 nome=cliente.nome,
                 endereco=endereco_comanda,
             )
-        
-        # Criar a Comanda (comanda pai)
+
         comanda_id = f"c-{uuid.uuid4().hex[:8]}"
         nova_comanda = Comanda(
             id=comanda_id,
@@ -170,38 +234,25 @@ def criar_pedido_online(
             delivery_endereco=endereco_comanda,
             delivery_taxa=taxa_entrega,
             status_comanda=None,
-            idempotency_key=idempotency_key or None
+            idempotency_key=idempotency_key or None,
         )
         db.add(nova_comanda)
         db.flush()
-        
-        # Criar o lote de Lançamento
+
         lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
         novo_lancamento = Lancamento(
             id=lancamento_id,
             comanda_id=comanda_id,
             garcom_id=garcom_id,
             origem="cardapio",
-            timestamp=datetime.datetime.now(datetime.timezone.utc)
+            timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
         db.add(novo_lancamento)
         db.flush()
-        
-        # Criar os Itens do Pedido
+
         itens_criados = []
         for item_in in payload.itens:
-            produto = db.query(Produto).filter(
-                Produto.id == item_in.produto_id,
-                Produto.ativo == True,
-                Produto.restaurante_id == rest_id
-            ).first()
-            
-            if not produto:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Produto '{item_in.produto_id}' não encontrado ou inativo para este estabelecimento."
-                )
-                
+            produto = products_by_id[str(item_in.produto_id)]
             for _ in range(item_in.quantidade):
                 novo_item = Item(
                     id=f"i-{uuid.uuid4().hex[:8]}",
@@ -213,7 +264,7 @@ def criar_pedido_online(
                     observacao=item_in.observacao or "",
                     cliente_nome=item_in.cliente_nome or cliente_nome,
                     status="preparando",
-                    pago=False
+                    pago=False,
                 )
                 db.add(novo_item)
                 itens_criados.append(novo_item)
@@ -221,10 +272,28 @@ def criar_pedido_online(
         db.flush()
         consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id)
         db.commit()
-        
+        db.refresh(nova_comanda)
+
     except HTTPException:
         db.rollback()
         raise
+    except IntegrityError:
+        db.rollback()
+        concurrent_order = _load_existing_idempotent_order(db, rest_id, idempotency_key)
+        if concurrent_order is not None:
+            logger.info(
+                "Corrida idempotente resolvida para pedido público: %s",
+                idempotency_key,
+            )
+            return _existing_order_response(concurrent_order)
+        logger.exception(
+            "Conflito de integridade ao processar pedido público do restaurante %s.",
+            rest_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O pedido entrou em conflito com outra operação. Tente novamente.",
+        )
     except Exception:
         db.rollback()
         logger.exception(
@@ -237,20 +306,19 @@ def criar_pedido_online(
         )
     finally:
         current_restaurante_id.reset(token_context)
-        
-    # 7. Disparar notificação de novos pedidos via WebSocket para o Caixa do restaurante
+
     background_tasks.add_task(
         manager.broadcast,
         {"event": "tables_updated"},
-        rest_id
+        rest_id,
     )
     background_tasks.add_task(
         manager.broadcast,
         {
             "event": "new_delivery_order",
-            "message": f"Novo pedido online de {cliente_nome} recebido!"
+            "message": f"Novo pedido online de {cliente_nome} recebido!",
         },
-        rest_id
+        rest_id,
     )
     if cliente is not None:
         background_tasks.add_task(
@@ -265,17 +333,19 @@ def criar_pedido_online(
             rest_id,
             target_audience="internal",
         )
-    
+
+    total = _order_total(nova_comanda)
     return {
         "status": "success",
         "message": "Pedido enviado e integrado ao caixa com sucesso!",
         "comanda_id": comanda_id,
         "numero_pedido": numero_pedido,
         "cliente_id": cliente.id if cliente is not None else None,
+        "total": total,
         "pagamento": {
             "status": "pendente_no_atendimento",
-            "cobranca_online": False
-        }
+            "cobranca_online": False,
+        },
     }
 
 
@@ -293,8 +363,6 @@ def _resolve_public_order_tenant(db: Session, comanda_id: str, key: str) -> int 
             {"comanda_id": comanda_id, "key": key},
         ).scalar_one_or_none()
 
-    # SQLite de desenvolvimento/teste não possui SECURITY DEFINER. SQL textual
-    # faz o mesmo lookup mínimo sem depender do filtro ORM/tenant atual.
     return db.execute(
         text(
             """
@@ -313,7 +381,7 @@ def _resolve_public_order_tenant(db: Session, comanda_id: str, key: str) -> int 
 def consultar_status_pedido_publico(
     comanda_id: str,
     key: str = "",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Retorna o status atual de um pedido público em andamento para o cliente.
@@ -326,12 +394,10 @@ def consultar_status_pedido_publico(
     if rest_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado."
+            detail="Pedido não encontrado.",
         )
 
     with tenant_session_scope(db, int(rest_id)):
-        # O lookup mínimo acima apenas descobre o tenant. A leitura financeira
-        # continua passando pelo ORM + RLS e inclui restaurante_id explicitamente.
         comanda = db.query(Comanda).filter(
             Comanda.restaurante_id == int(rest_id),
             Comanda.id == comanda_id,
@@ -340,7 +406,7 @@ def consultar_status_pedido_publico(
         if not comanda:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido não encontrado."
+                detail="Pedido não encontrado.",
             )
 
         itens_payload = [
@@ -352,15 +418,13 @@ def consultar_status_pedido_publico(
             for item in comanda.itens
         ]
 
-        total_val = sum(i.preco_unit for i in comanda.itens) + (comanda.delivery_taxa or 0.0)
-
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
             "status": comanda.delivery_status or "pendente",
             "tipo": comanda.tipo,
-            "total": total_val,
+            "total": _order_total(comanda),
             "fechada": comanda.fechada,
             "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
-            "itens": itens_payload
+            "itens": itens_payload,
         }
