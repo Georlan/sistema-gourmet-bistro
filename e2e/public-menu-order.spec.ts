@@ -179,11 +179,13 @@ test('cliente conclui pedido sem etapas duplicadas em todos os tamanhos de tela'
   await expect(page.getByText('Pagamento direto ao restaurante', { exact: true })).toBeVisible();
   await expect(page.getByText('Pix', { exact: true })).toBeVisible();
   await expect(page.getByText(/R\$\s*48,00/).last()).toBeVisible();
+  await expect(page.getByText(/entra no painel do restaurante para aceite/i)).toBeVisible();
 
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
 
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pedido #4321', exact: true })).toBeVisible();
+  await expect(page.getByText(/aguardando o aceite do restaurante/i)).toBeVisible();
   await expect(page.getByText(/R\$\s*48,00/).last()).toBeVisible();
 
   expect(capturedOrders).toHaveLength(1);
