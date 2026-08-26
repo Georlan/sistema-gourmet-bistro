@@ -1,0 +1,576 @@
+:root[data-cardapio-tone="dark"] {
+  --menu-page: var(--color-brand-bg, #090a0f);
+  --menu-surface: color-mix(in srgb, var(--menu-page) 88%, #ffffff 12%);
+  --menu-surface-strong: color-mix(in srgb, var(--menu-page) 82%, #ffffff 18%);
+  --menu-surface-soft: color-mix(in srgb, var(--menu-page) 94%, #ffffff 6%);
+  --menu-text: #f5f8f6;
+  --menu-muted: #a4b0aa;
+  --menu-subtle: #78847e;
+  --menu-border: rgba(255, 255, 255, 0.11);
+  --menu-border-strong: rgba(255, 255, 255, 0.18);
+  --menu-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+}
+
+:root[data-cardapio-tone="light"] {
+  --menu-page: var(--color-brand-bg, #f3f6f4);
+  --menu-surface: color-mix(in srgb, var(--menu-page) 88%, #ffffff 12%);
+  --menu-surface-strong: #ffffff;
+  --menu-surface-soft: color-mix(in srgb, var(--menu-page) 94%, #0f1713 6%);
+  --menu-text: #15201b;
+  --menu-muted: #58665f;
+  --menu-subtle: #77837d;
+  --menu-border: rgba(21, 32, 27, 0.12);
+  --menu-border-strong: rgba(21, 32, 27, 0.2);
+  --menu-shadow: 0 18px 40px rgba(25, 40, 32, 0.08);
+}
+
+#app-root-container {
+  background: var(--menu-page) !important;
+  color: var(--menu-text) !important;
+}
+
+.cardapio-public-header {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  width: 100%;
+  border-bottom: 1px solid var(--menu-border);
+  background: color-mix(in srgb, var(--menu-page) 90%, transparent);
+  color: var(--menu-text);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.cardapio-public-header__shell {
+  width: min(100%, 1380px);
+  margin: 0 auto;
+  padding: 12px 20px;
+}
+
+.cardapio-public-header__topline {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.cardapio-public-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cardapio-public-brand__logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid var(--menu-border-strong);
+  border-radius: 13px;
+  background: var(--menu-surface-strong);
+  object-fit: cover;
+}
+
+.cardapio-public-brand__copy {
+  min-width: 0;
+}
+
+.cardapio-public-brand__copy strong,
+.cardapio-public-brand__copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardapio-public-brand__copy strong {
+  color: var(--menu-text);
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+}
+
+.cardapio-public-brand__copy small {
+  margin-top: 2px;
+  color: var(--menu-muted);
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.cardapio-public-header__context,
+.cardapio-public-actions,
+.cardapio-public-contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cardapio-public-context-chip,
+.cardapio-public-status,
+.cardapio-public-contact-link,
+.cardapio-public-social-link,
+.cardapio-public-icon-button,
+.cardapio-public-account-button {
+  border: 1px solid var(--menu-border);
+  background: var(--menu-surface-soft);
+  color: var(--menu-muted);
+}
+
+.cardapio-public-context-chip {
+  display: inline-flex;
+  max-width: 255px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 9px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.cardapio-public-context-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardapio-public-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cardapio-public-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #f3c64d;
+}
+
+.cardapio-public-status.is-open i { background: #20d69b; }
+.cardapio-public-status.is-closed i { background: #fb7185; }
+
+.cardapio-public-icon-button,
+.cardapio-public-social-link {
+  position: relative;
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.cardapio-public-icon-button:hover,
+.cardapio-public-social-link:hover,
+.cardapio-public-contact-link:hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 52%, var(--menu-border));
+  color: var(--color-brand-primary);
+  background: color-mix(in srgb, var(--color-brand-primary) 10%, var(--menu-surface));
+}
+
+.cardapio-public-icon-button.is-cart > span {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: grid;
+  min-width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 2px solid var(--menu-page);
+  border-radius: 999px;
+  padding: 0 3px;
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.cardapio-public-account-button {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-color: color-mix(in srgb, var(--color-brand-primary) 45%, var(--menu-border));
+  border-radius: 11px;
+  padding: 0 13px;
+  background: var(--color-brand-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.cardapio-public-header__searchrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cardapio-public-search {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: var(--menu-surface-soft);
+  color: var(--menu-muted);
+  transition: 160ms ease;
+}
+
+.cardapio-public-search:focus-within {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 58%, var(--menu-border));
+  background: var(--menu-surface);
+}
+
+.cardapio-public-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--menu-text);
+  font-size: 11px;
+}
+
+.cardapio-public-search input::placeholder { color: var(--menu-subtle); }
+.cardapio-public-search button {
+  border: 0;
+  background: transparent;
+  color: var(--menu-muted);
+  font-size: 9px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.cardapio-public-contact-link {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 11px;
+  padding: 0 11px;
+  font-size: 9px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.cardapio-public-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 80;
+  border: 1px solid rgba(32, 214, 155, 0.28);
+  border-radius: 12px;
+  padding: 10px 13px;
+  background: #0f241c;
+  color: #b9f5dc;
+  box-shadow: var(--menu-shadow);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+#main-content-layout {
+  width: min(100%, 1380px) !important;
+  max-width: 1380px !important;
+  padding-top: 18px !important;
+}
+
+#catalog-section { gap: 18px !important; }
+
+#brand-banner-hero {
+  height: clamp(190px, 24vw, 280px) !important;
+  overflow: hidden;
+  border: 1px solid var(--menu-border) !important;
+  border-radius: 20px !important;
+  background: var(--menu-surface) !important;
+  box-shadow: none !important;
+}
+
+#brand-banner-hero > img {
+  filter: saturate(0.94) contrast(1.02);
+}
+
+#brand-banner-hero > div:nth-of-type(1) {
+  background: linear-gradient(180deg, rgba(4, 10, 7, 0.12), rgba(4, 10, 7, 0.88)) !important;
+}
+
+#brand-banner-hero > div:last-child {
+  color: #fff !important;
+}
+
+#brand-banner-hero > div:last-child p { color: rgba(255,255,255,.72) !important; }
+#brand-banner-hero > div:last-child > div:last-child {
+  border-color: rgba(255,255,255,.16) !important;
+  background: rgba(8,18,13,.58) !important;
+  color: rgba(255,255,255,.86) !important;
+  backdrop-filter: blur(12px);
+}
+
+.cardapio-category-nav {
+  position: sticky;
+  top: 105px;
+  z-index: 34;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--menu-border);
+  border-radius: 15px;
+  padding: 7px;
+  background: color-mix(in srgb, var(--menu-page) 90%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.cardapio-category-scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+}
+
+.cardapio-category-chip {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--menu-muted);
+  font-size: 10px;
+  font-weight: 780;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.cardapio-category-chip:hover {
+  border-color: var(--menu-border);
+  background: var(--menu-surface-soft);
+  color: var(--menu-text);
+}
+
+.cardapio-category-chip.is-active {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 55%, transparent);
+  background: var(--color-brand-primary);
+  color: #fff;
+}
+
+#catalog-feed {
+  gap: 26px !important;
+}
+
+#catalog-feed > div > div:first-child {
+  border-color: var(--menu-border) !important;
+}
+
+#catalog-feed > div > div:first-child h2 {
+  color: var(--menu-text) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em !important;
+}
+
+#catalog-feed > div > div:first-child h2 span {
+  background: var(--color-brand-primary) !important;
+}
+
+#catalog-feed > div > div:first-child > span {
+  background: var(--menu-surface-soft) !important;
+  color: var(--menu-muted) !important;
+  border: 1px solid var(--menu-border);
+}
+
+.cardapio-product-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--menu-border);
+  border-radius: 16px;
+  background: var(--menu-surface);
+  color: var(--menu-text);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.cardapio-product-card.is-available { cursor: pointer; }
+.cardapio-product-card.is-available:hover {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 42%, var(--menu-border));
+  background: var(--menu-surface-strong);
+  transform: translateY(-1px);
+}
+.cardapio-product-card.is-unavailable { opacity: .62; }
+
+.cardapio-product-card__content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px;
+  gap: 12px;
+  min-height: 124px;
+  padding: 12px;
+}
+
+.cardapio-product-card__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.cardapio-product-card__heading {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.cardapio-product-card__heading h3 {
+  margin: 0;
+  color: var(--menu-text);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.28;
+}
+
+.cardapio-product-card__heading span {
+  flex: 0 0 auto;
+  border: 1px solid rgba(251,113,133,.22);
+  border-radius: 6px;
+  padding: 3px 5px;
+  background: rgba(251,113,133,.08);
+  color: #fb7185;
+  font-size: 7px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.cardapio-product-card__copy p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 7px 0 0;
+  color: var(--menu-muted);
+  font-size: 9.5px;
+  line-height: 1.48;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.cardapio-product-card__price {
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--color-brand-primary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.cardapio-product-card__media {
+  position: relative;
+  min-height: 100px;
+  overflow: visible;
+}
+
+.cardapio-product-card__media img {
+  width: 100%;
+  height: 100%;
+  min-height: 100px;
+  border: 1px solid var(--menu-border);
+  border-radius: 12px;
+  background: var(--menu-surface-soft);
+  object-fit: cover;
+}
+
+.cardapio-product-card__add {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 3px solid var(--menu-surface);
+  border-radius: 10px;
+  background: var(--color-brand-primary);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 150ms ease;
+}
+.cardapio-product-card__add:hover { transform: scale(1.05); }
+
+#desktop-shopping-cart-sidebar {
+  border-color: var(--menu-border) !important;
+  border-radius: 18px !important;
+  background: var(--menu-surface) !important;
+  color: var(--menu-text) !important;
+  box-shadow: none !important;
+}
+
+#desktop-shopping-cart-sidebar h2,
+#desktop-shopping-cart-sidebar h4,
+#desktop-shopping-cart-sidebar strong { color: var(--menu-text) !important; }
+#desktop-shopping-cart-sidebar p,
+#desktop-shopping-cart-sidebar span { color: var(--menu-muted); }
+
+#catalog-footer {
+  border-color: var(--menu-border) !important;
+  color: var(--menu-muted) !important;
+}
+#catalog-footer span,
+#catalog-footer p,
+#catalog-footer a { color: var(--menu-muted) !important; }
+#catalog-footer a:hover { color: var(--color-brand-primary) !important; }
+
+#active-order-banner {
+  border-color: color-mix(in srgb, var(--color-brand-primary) 38%, var(--menu-border)) !important;
+  background: var(--menu-surface) !important;
+  box-shadow: none !important;
+}
+
+@media (min-width: 1024px) {
+  .cardapio-product-card__content {
+    grid-template-columns: minmax(0, 1fr) 122px;
+    min-height: 138px;
+  }
+}
+
+@media (max-width: 900px) {
+  .cardapio-public-header__topline {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cardapio-public-header__context { display: none; }
+  .cardapio-public-contact-actions { display: none; }
+  .cardapio-category-nav { top: 104px; }
+}
+
+@media (max-width: 640px) {
+  .cardapio-public-header__shell { padding: 10px 12px; }
+  .cardapio-public-header__topline { gap: 9px; }
+  .cardapio-public-brand__logo { width: 39px; height: 39px; flex-basis: 39px; border-radius: 11px; }
+  .cardapio-public-brand__copy strong { font-size: 12px; }
+  .cardapio-public-brand__copy small { font-size: 8.5px; }
+  .cardapio-public-actions { gap: 5px; }
+  .cardapio-public-icon-button { width: 33px; height: 33px; }
+  .cardapio-public-account-button { width: 33px; height: 33px; padding: 0; }
+  .cardapio-public-account-button span { display: none; }
+  .cardapio-public-header__searchrow { margin-top: 8px; }
+  .cardapio-public-search { min-height: 37px; }
+  .cardapio-category-nav { top: 94px; border-right: 0; border-left: 0; border-radius: 0; margin-right: -12px; margin-left: -12px; width: calc(100% + 24px); padding-right: 12px; padding-left: 12px; }
+  #main-content-layout { padding: 12px !important; }
+  #brand-banner-hero { height: 176px !important; border-radius: 16px !important; }
+  #brand-banner-hero > div:last-child { padding: 16px !important; }
+  #catalog-feed { gap: 22px !important; }
+  .cardapio-product-card__content { grid-template-columns: minmax(0, 1fr) 94px; min-height: 112px; gap: 10px; padding: 10px; }
+  .cardapio-product-card__media img { min-height: 92px; }
+}
