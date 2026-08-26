@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -10,7 +10,6 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  Palette,
   Plus,
   RefreshCw,
   Save,
@@ -43,8 +42,6 @@ type RestaurantConfig = {
   endereco: string;
   google_maps_url: string;
   status_override: string;
-  cor_primaria: string;
-  cor_fundo: string;
   logo_url: string;
   banner_url: string;
   socials: SocialConfig;
@@ -60,14 +57,15 @@ interface CardapioDigitalSettingsPanelProps {
 
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const MAX_SIZE = 5 * 1024 * 1024;
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const KOMA_MENU_PRIMARY = '#00b894';
+const KOMA_MENU_BACKGROUND = '#090a0f';
 
 const tabs: Array<{ id: SettingsTab; label: string; description: string; icon: typeof Store }> = [
   { id: 'geral', label: 'Geral', description: 'Nome, slogan e apresentação', icon: Store },
   { id: 'funcionamento', label: 'Funcionamento', description: 'Status e horários', icon: Clock3 },
   { id: 'contato', label: 'Contato', description: 'WhatsApp, Instagram e endereço', icon: MessageCircle },
   { id: 'pagamentos', label: 'Pagamentos', description: 'Formas aceitas no atendimento', icon: CreditCard },
-  { id: 'aparencia', label: 'Aparência', description: 'Cores, logo e capa', icon: Palette },
+  { id: 'aparencia', label: 'Aparência', description: 'Logo e capa', icon: ImageIcon },
 ];
 
 const paymentOptions = [
@@ -163,8 +161,6 @@ function normalizeConfig(data: Record<string, any>): RestaurantConfig {
     endereco: String(data?.endereco || ''),
     google_maps_url: String(data?.google_maps_url || ''),
     status_override: String(data?.status_override || 'Automático'),
-    cor_primaria: String(data?.cor_primaria || '#00b894'),
-    cor_fundo: String(data?.cor_fundo || '#090a0f'),
     logo_url: String(data?.logo_url || ''),
     banner_url: String(data?.banner_url || ''),
     socials: normalizeSocials(data?.socials),
@@ -180,8 +176,6 @@ const emptyConfig: RestaurantConfig = {
   endereco: '',
   google_maps_url: '',
   status_override: 'Automático',
-  cor_primaria: '#00b894',
-  cor_fundo: '#090a0f',
   logo_url: '',
   banner_url: '',
   socials: {},
@@ -387,8 +381,8 @@ function AssetEditor({
 }
 
 function PhonePreview({ config }: { config: RestaurantConfig }) {
-  const primary = HEX_COLOR.test(config.cor_primaria) ? config.cor_primaria : '#00b894';
-  const background = HEX_COLOR.test(config.cor_fundo) ? config.cor_fundo : '#090a0f';
+  const primary = KOMA_MENU_PRIMARY;
+  const background = KOMA_MENU_BACKGROUND;
   const statusText = config.status_override === 'Forçado Fechado' ? 'FECHADO' : 'ABERTO';
   const firstHours = config.horarios_funcionamento[0];
 
@@ -503,11 +497,6 @@ export function CardapioDigitalSettingsPanel({
       setActiveTab('geral');
       return;
     }
-    if (!HEX_COLOR.test(config.cor_primaria) || !HEX_COLOR.test(config.cor_fundo)) {
-      setFeedback({ type: 'error', text: 'Use cores no formato hexadecimal, por exemplo #00b894.' });
-      setActiveTab('aparencia');
-      return;
-    }
 
     setIsSaving(true);
     try {
@@ -523,8 +512,8 @@ export function CardapioDigitalSettingsPanel({
           .filter((row) => row.days && row.hours),
         formas_pagamento_aceitas: config.formas_pagamento_aceitas,
         status_override: config.status_override,
-        cor_primaria: config.cor_primaria,
-        cor_fundo: config.cor_fundo,
+        cor_primaria: KOMA_MENU_PRIMARY,
+        cor_fundo: KOMA_MENU_BACKGROUND,
       };
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/config`, {
         method: 'PUT',
@@ -722,34 +711,15 @@ export function CardapioDigitalSettingsPanel({
           )}
 
           {activeTab === 'aparencia' && (
-            <>
-              <SettingsSection title="Cores do cardápio" description="Mantenha a identidade visual do restaurante sem precisar alterar o tema do sistema interno.">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {([
-                    ['cor_primaria', 'Cor de destaque'],
-                    ['cor_fundo', 'Cor de fundo'],
-                  ] as const).map(([key, label]) => {
-                    const value = config[key];
-                    const pickerValue = HEX_COLOR.test(value) ? value : key === 'cor_primaria' ? '#00b894' : '#090a0f';
-                    return (
-                      <label key={key}>
-                        <FieldLabel>{label}</FieldLabel>
-                        <div className="flex h-11 items-center gap-2 rounded-xl border border-koma-border bg-koma-input px-2.5">
-                          <input type="color" value={pickerValue} onChange={(event) => updateConfig(key, event.target.value)} className="h-7 w-9 cursor-pointer rounded border-0 bg-transparent p-0" />
-                          <input value={value} onChange={(event) => updateConfig(key, event.target.value)} maxLength={7} className="min-w-0 flex-1 bg-transparent font-mono text-xs font-bold text-koma-foreground outline-none" placeholder="#00b894" />
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </SettingsSection>
-              <SettingsSection title="Imagens da marca" description="Troque logo e capa quando quiser. O upload já salva a imagem no restaurante atual.">
-                <div className="space-y-3">
-                  <AssetEditor type="logo" label="Logotipo do restaurante" currentUrl={config.logo_url} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onChange={(url) => updateConfig('logo_url', url)} />
-                  <AssetEditor type="banner" label="Banner promocional / capa" currentUrl={config.banner_url} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onChange={(url) => updateConfig('banner_url', url)} />
-                </div>
-              </SettingsSection>
-            </>
+            <SettingsSection
+              title="Imagens da marca"
+              description="O visual e as cores seguem o padrão Kôma. Aqui você altera somente o logo e a capa do restaurante."
+            >
+              <div className="space-y-3">
+                <AssetEditor type="logo" label="Logotipo do restaurante" currentUrl={config.logo_url} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onChange={(url) => updateConfig('logo_url', url)} />
+                <AssetEditor type="banner" label="Banner promocional / capa" currentUrl={config.banner_url} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onChange={(url) => updateConfig('banner_url', url)} />
+              </div>
+            </SettingsSection>
           )}
 
           <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
