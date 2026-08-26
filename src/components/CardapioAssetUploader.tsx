@@ -60,12 +60,23 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
 
+  // O Caixa pode recriar o objeto de headers em rerenders que não mudam a sessão.
+  // Mantemos a identidade estável enquanto os valores forem os mesmos para que a
+  // central não refaça o GET de configuração por uma simples mudança visual.
+  const authHeadersSignature = JSON.stringify(
+    Object.entries(authHeaders).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const stableAuthHeaders = useMemo<Record<string, string>>(
+    () => Object.fromEntries(JSON.parse(authHeadersSignature) as Array<[string, string]>),
+    [authHeadersSignature],
+  );
+
   const publicMenuUrl = useMemo(() => {
     if (type !== 'banner') return null;
-    const authorization = authHeaders.Authorization || authHeaders.authorization;
+    const authorization = stableAuthHeaders.Authorization || stableAuthHeaders.authorization;
     const restauranteId = readRestaurantIdFromAuthorization(authorization);
     return restauranteId ? `/cardapio?restaurante_id=${restauranteId}` : null;
-  }, [authHeaders.Authorization, authHeaders.authorization, type]);
+  }, [stableAuthHeaders, type]);
 
   useEffect(() => {
     setHasImageError(false);
@@ -122,7 +133,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
       setFeedbackText('Enviando imagem…');
       const formData = new FormData();
       formData.append('file', file);
-      const headersToSend = { ...authHeaders };
+      const headersToSend = { ...stableAuthHeaders };
       delete headersToSend['Content-Type'];
 
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/${type}`, {
@@ -154,7 +165,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
       setIsConfirmingDelete(false);
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/${type}`, {
         method: 'DELETE',
-        headers: authHeaders,
+        headers: stableAuthHeaders,
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Falha ao remover a imagem.');
@@ -317,7 +328,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
       {settingsTarget && type === 'banner' && createPortal(
         <CardapioDigitalSettingsPanel
           apiBaseUrl={apiBaseUrl}
-          authHeaders={authHeaders}
+          authHeaders={stableAuthHeaders}
           publicMenuUrl={publicMenuUrl}
         />,
         settingsTarget,
