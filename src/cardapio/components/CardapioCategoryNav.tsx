@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
+import { toSafeCategoryDomId } from "../categoryDomId";
 
 interface CardapioCategoryNavProps {
   categories: string[];
@@ -14,63 +15,47 @@ interface CardapioCategoryNavProps {
 export default function CardapioCategoryNav({
   categories,
   activeCategory,
-  onSelectCategory
+  onSelectCategory,
 }: CardapioCategoryNavProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const getSlug = (name: string) =>
-    name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+  const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
 
   useEffect(() => {
-    if (containerRef.current) {
-      const sanitizedId = getSlug(activeCategory);
-      const activeBtn = containerRef.current.querySelector(
-        `#cat-btn-${sanitizedId}`
-      ) as HTMLElement;
-      if (activeBtn) {
-        const container = containerRef.current;
-        const containerWidth = container.clientWidth;
-        const btnOffsetLeft = activeBtn.offsetLeft;
-        const btnWidth = activeBtn.clientWidth;
+    const container = containerRef.current;
+    const activeBtn = buttonRefs.current.get(activeCategory);
+    if (!container || !activeBtn) return;
 
-        // Scroll the container horizontally to center the active button
-        container.scrollTo({
-          left: btnOffsetLeft - containerWidth / 2 + btnWidth / 2,
-          behavior: "smooth"
-        });
-      }
-    }
+    container.scrollTo({
+      left: activeBtn.offsetLeft - container.clientWidth / 2 + activeBtn.clientWidth / 2,
+      behavior: "smooth",
+    });
   }, [activeCategory]);
 
+  if (categories.length === 0) return null;
+
   return (
-    <div
-      className="sticky top-0 z-[35] w-full overflow-hidden border-b border-slate-200/10 bg-card-app/95 backdrop-blur-md py-3 px-4 shadow-xs"
-      id="category-nav-container"
-    >
-      <div 
-        ref={containerRef}
-        className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth" 
-        id="category-scroll"
-      >
+    <nav className="cardapio-category-nav" id="category-nav-container" aria-label="Categorias do cardápio">
+      <div ref={containerRef} className="cardapio-category-scroll no-scrollbar" id="category-scroll">
         {categories.map((category) => {
           const isActive = activeCategory === category;
-          const sanitizedId = getSlug(category);
           return (
             <button
               key={category}
+              ref={(node) => {
+                if (node) buttonRefs.current.set(category, node);
+                else buttonRefs.current.delete(category);
+              }}
+              type="button"
               onClick={() => onSelectCategory(category)}
-              id={`cat-btn-${sanitizedId}`}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold tracking-wide transition-all duration-200 cursor-pointer ${
-                isActive
-                  ? "bg-primary text-koma-foreground shadow-md shadow-primary/20 scale-[1.02]"
-                  : "bg-slate-500/10 text-text-app/80 hover:bg-slate-500/20"
-              }`}
+              id={`cat-btn-${toSafeCategoryDomId(category)}`}
+              className={`cardapio-category-chip ${isActive ? "is-active" : ""}`}
+              aria-current={isActive ? "true" : undefined}
             >
               {category}
             </button>
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }

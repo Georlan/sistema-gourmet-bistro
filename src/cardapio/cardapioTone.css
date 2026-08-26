@@ -1,0 +1,35 @@
+:root[data-cardapio-tone="dark"] {
+  --color-brand-text: #f5f8f6 !important;
+  --color-brand-card: color-mix(in srgb, var(--color-brand-bg, #090a0f) 88%, #ffffff 12%) !important;
+  --color-brand-secondary: color-mix(in srgb, var(--color-brand-bg, #090a0f) 82%, #ffffff 18%) !important;
+}
+
+:root[data-cardapio-tone="light"] {
+  --color-brand-text: #15201b !important;
+  --color-brand-card: #ffffff !important;
+  --color-brand-secondary: color-mix(in srgb, var(--color-brand-bg, #f3f6f4) 92%, #0f1713 8%) !important;
+}
+
+#store-info-drawer {
+  border-color: var(--menu-border, rgba(255,255,255,.1)) !important;
+  background: var(--menu-surface, var(--color-brand-card)) !important;
+  color: var(--menu-text, var(--color-brand-text)) !important;
+  box-shadow: none !important;
+}
+
+#store-info-drawer h2,
+#store-info-drawer h3,
+#store-info-drawer td,
+#store-info-drawer th {
+  color: var(--menu-text, var(--color-brand-text)) !important;
+}
+
+#store-info-drawer p,
+#store-info-drawer span {
+  color: var(--menu-muted, color-mix(in srgb, var(--color-brand-text) 62%, transparent)) !important;
+}
+
+#store-info-drawer [class*="bg-slate-500"] {
+  border-color: var(--menu-border, rgba(255,255,255,.1)) !important;
+  background: var(--menu-surface-soft, transparent) !important;
+}

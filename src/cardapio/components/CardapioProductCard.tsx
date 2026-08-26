@@ -4,9 +4,9 @@
  */
 
 import React from "react";
-import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
 import { Plus } from "lucide-react";
-
+import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
+import "../cardapioTone.css";
 
 interface CardapioProductCardProps {
   key?: React.Key;
@@ -18,72 +18,74 @@ interface CardapioProductCardProps {
 export default function CardapioProductCard({
   product,
   onSelectProduct,
-  onFastAdd
+  onFastAdd,
 }: CardapioProductCardProps) {
+  const available = product.isAvailable !== false;
   const formattedPrice = new Intl.NumberFormat("pt-BR", {
     style: "currency",
-    currency: "BRL"
+    currency: "BRL",
   }).format(product.price);
 
-  return (
-    <div
-      onClick={() => product.isAvailable && onSelectProduct(product)}
-      className={`group relative flex flex-row lg:flex-col gap-3 rounded-2xl border border-slate-500/10 bg-card-app p-3 hover:bg-slate-500/5 cursor-pointer transition-all shadow-2xs hover:shadow-md hover:border-slate-500/20 ${
-        !product.isAvailable ? "opacity-60 cursor-not-allowed" : ""
-      }`}
-      id={`product-card-${product.id}`}
-    >
-      {/* Product Image — Right on mobile/tablet, Top on desktop */}
-      <div className="relative shrink-0 h-20 w-20 lg:h-32 lg:w-full order-last lg:order-first">
-        <img
-          src={getProductImageUrl(product.image)}
-          alt={product.name}
-          className="h-full w-full rounded-xl object-cover shadow-xs transition group-hover:scale-[1.02] duration-300"
-          loading="lazy"
-          crossOrigin="anonymous"
-          referrerPolicy="no-referrer"
-          onError={(e) => {
-            const target = e.currentTarget;
-            target.onerror = null;
-            target.src = LOCAL_PRODUCT_PLACEHOLDER;
-          }}
-        />
-        {product.isAvailable && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onFastAdd(product);
-            }}
-            className="absolute -bottom-1.5 -right-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-koma-foreground shadow-md hover:scale-105 active:scale-95 transition duration-150 cursor-pointer"
-            id={`btn-fast-add-${product.id}`}
-            title="Adicionar rápido"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+  const openProduct = () => {
+    if (available) onSelectProduct(product);
+  };
 
-      {/* Product Details — Left on mobile/tablet, Below image on desktop */}
-      <div className="flex-1 min-w-0 flex flex-col justify-between lg:justify-start gap-1">
-        <div>
-          <div className="flex items-start gap-1.5 flex-wrap">
-            <h3 className="font-display text-sm font-bold text-text-app group-hover:text-primary transition leading-tight line-clamp-2">
-              {product.name}
-            </h3>
-            {!product.isAvailable && (
-              <span className="rounded bg-red-100/10 px-1.5 py-0.5 text-[8px] font-bold text-red-500 uppercase shrink-0 mt-0.5">
-                Esgotado
-              </span>
-            )}
+  return (
+    <article
+      className={`cardapio-product-card ${available ? "is-available" : "is-unavailable"}`}
+      id={`product-card-${product.id}`}
+      onClick={openProduct}
+      onKeyDown={(event) => {
+        if (!available || event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openProduct();
+        }
+      }}
+      role={available ? "button" : undefined}
+      tabIndex={available ? 0 : -1}
+      aria-label={`${product.name}, ${formattedPrice}${available ? ", ver detalhes" : ", indisponível"}`}
+    >
+      <div className="cardapio-product-card__content">
+        <div className="cardapio-product-card__copy">
+          <div className="cardapio-product-card__heading">
+            <h3>{product.name}</h3>
+            {!available && <span>Indisponível</span>}
           </div>
-          <p className="mt-1 text-[11px] text-text-app/55 line-clamp-2 leading-relaxed">
-            {product.description}
-          </p>
+          {product.description && <p>{product.description}</p>}
+          <strong className="cardapio-product-card__price">{formattedPrice}</strong>
         </div>
-        <span className="mt-2 block text-sm font-extrabold text-primary">
-          {formattedPrice}
-        </span>
+
+        <div className="cardapio-product-card__media">
+          <img
+            src={getProductImageUrl(product.image)}
+            alt={product.name}
+            loading="lazy"
+            decoding="async"
+            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
+            }}
+          />
+          {available && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onFastAdd(product);
+              }}
+              className="cardapio-product-card__add"
+              id={`btn-fast-add-${product.id}`}
+              title={`Adicionar ${product.name}`}
+              aria-label={`Adicionar ${product.name} à sacola`}
+            >
+              <Plus size={17} />
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
