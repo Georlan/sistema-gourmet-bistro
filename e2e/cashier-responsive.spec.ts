@@ -500,7 +500,9 @@ test('Cardápio mantém filtros e ações principais fáceis em qualquer largura
     request.method() === 'PUT'
     && new URL(request.url()).pathname === '/produtos/categorias/cat-pratos'
   ));
-  await page.getByLabel('Escolher impressão para Pratos').selectOption('NENHUM');
+  const printRouteGroup = page.getByRole('group', { name: 'Escolher impressão para Pratos' });
+  await expect(printRouteGroup.getByRole('button', { name: 'Imprimir na cozinha para Pratos' })).toHaveAttribute('aria-pressed', 'true');
+  await printRouteGroup.getByRole('button', { name: 'Não imprimir para Pratos' }).click();
   await routeRequest;
   await page.locator('article').filter({ has: page.getByRole('heading', { name: 'Pratos', exact: true }) }).getByRole('button', { name: 'Ver 1 produto', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Pratos 1/ })).toHaveAttribute('aria-pressed', 'true');

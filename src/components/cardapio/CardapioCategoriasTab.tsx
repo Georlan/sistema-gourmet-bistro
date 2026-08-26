@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import clsx from 'clsx';
 import {
   Ban,
+  Check,
   ChefHat,
   Edit3,
   GlassWater,
@@ -331,22 +332,47 @@ export function CardapioCategoriasTab({
                   </div>
 
                   <div className="mt-4 border-t border-slate-200 pt-3 dark:border-white/10">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500" htmlFor={`route-${category.id}`}>
-                      Impressão do pedido
-                    </label>
-                    <select
-                      id={`route-${category.id}`}
-                      value={destination}
-                      onChange={(event) => void handleRouteChange(category, event.target.value as PrintDestination)}
-                      disabled={pendingRouteCategoryId !== null}
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      Onde imprimir este grupo?
+                    </p>
+                    <div
+                      className="mt-2 grid grid-cols-3 gap-2"
+                      role="group"
                       aria-label={`Escolher impressão para ${category.nome}`}
-                      className="mt-2 h-11 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 text-sm font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-wait disabled:opacity-60 dark:border-white/15 dark:bg-black/20 dark:text-white"
+                      aria-busy={pending}
                     >
-                      <option value="COZINHA">Imprimir na cozinha</option>
-                      <option value="BAR">Imprimir no bar</option>
-                      <option value="NENHUM">Não imprimir</option>
-                    </select>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">
+                      {(['COZINHA', 'BAR', 'NENHUM'] as const).map((route) => {
+                        const routeMeta = destinationMeta[route];
+                        const RouteIcon = routeMeta.icon;
+                        const selected = destination === route;
+                        return (
+                          <button
+                            key={route}
+                            type="button"
+                            onClick={() => void handleRouteChange(category, route)}
+                            disabled={pendingRouteCategoryId !== null}
+                            aria-pressed={selected}
+                            aria-label={`${routeMeta.label} para ${category.nome}`}
+                            title={routeMeta.description}
+                            className={clsx(
+                              'relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center text-[11px] font-black leading-tight outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-55 dark:focus-visible:ring-offset-[#111713]',
+                              selected
+                                ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-600/20 dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-200'
+                                : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800 dark:border-white/15 dark:bg-black/20 dark:text-slate-300 dark:hover:border-emerald-500/45 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200',
+                            )}
+                          >
+                            {selected && (
+                              <span className="absolute right-1.5 top-1.5 grid h-4 w-4 place-items-center rounded-full bg-white/20" aria-hidden="true">
+                                <Check size={10} strokeWidth={3} />
+                              </span>
+                            )}
+                            <RouteIcon size={17} aria-hidden="true" />
+                            <span>{route === 'NENHUM' ? 'Não imprimir' : routeMeta.shortLabel}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 min-h-4 text-xs text-slate-500 dark:text-slate-500" aria-live="polite">
                       {pending ? 'Salvando alteração...' : meta.description}
                     </p>
                   </div>
