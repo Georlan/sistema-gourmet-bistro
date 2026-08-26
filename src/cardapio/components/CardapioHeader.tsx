@@ -14,7 +14,7 @@ import {
   Search,
   Share2,
   ShoppingBag,
-  User,
+  UserRound,
 } from "lucide-react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
 import "../cardapioPublic.css";
@@ -94,15 +94,15 @@ export default function CardapioHeader({
       setLinkCopied(true);
       window.setTimeout(() => setLinkCopied(false), 2200);
     } catch {
-      // O link continua disponível na barra de endereço; não bloqueie o cardápio.
+      // O endereço continua disponível na barra do navegador.
     }
   };
 
   const statusLabel = activeBrand.storeStatus === "open"
-    ? "Aberto agora"
+    ? "Aberto para pedidos"
     : activeBrand.storeStatus === "closed"
-      ? "Pedidos fechados"
-      : "Horário automático";
+      ? "Pedidos pausados"
+      : "Ver horários";
 
   return (
     <>
@@ -129,7 +129,7 @@ export default function CardapioHeader({
               />
               <span className="cardapio-public-brand__copy">
                 <strong>{activeBrand.name}</strong>
-                <small>{activeBrand.slogan || "Cardápio e pedidos online"}</small>
+                <small>{activeBrand.slogan || "Peça direto pelo cardápio"}</small>
               </span>
             </button>
 
@@ -140,20 +140,40 @@ export default function CardapioHeader({
                   <span>{activeBrand.address}</span>
                 </button>
               )}
-              <span className={`cardapio-public-status is-${activeBrand.storeStatus || "automatic"}`}>
+              <button type="button" onClick={onLogoClick} className={`cardapio-public-status is-${activeBrand.storeStatus || "automatic"}`}>
                 <i aria-hidden="true" />
                 {statusLabel}
-              </span>
+              </button>
             </div>
 
             <div className="cardapio-public-actions">
-              <button type="button" onClick={onLogoClick} className="cardapio-public-icon-button" title="Informações do restaurante" aria-label="Informações do restaurante">
+              <button
+                type="button"
+                onClick={onLogoClick}
+                className="cardapio-public-icon-button"
+                title="Informações do restaurante"
+                aria-label="Informações do restaurante"
+              >
                 <Info size={16} />
               </button>
-              <button type="button" onClick={handleShare} className="cardapio-public-icon-button" title="Compartilhar cardápio" aria-label="Compartilhar cardápio" id="btn-share-header">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="cardapio-public-icon-button"
+                title="Compartilhar cardápio"
+                aria-label="Compartilhar cardápio"
+                id="btn-share-header"
+              >
                 <Share2 size={16} />
               </button>
-              <button type="button" onClick={onCartToggle} className="cardapio-public-icon-button is-cart" title="Sua sacola" aria-label={`Sua sacola, ${cartCount} itens`} id="btn-cart-header">
+              <button
+                type="button"
+                onClick={onCartToggle}
+                className="cardapio-public-icon-button is-cart"
+                title="Sua sacola"
+                aria-label={`Sua sacola, ${cartCount} itens`}
+                id="btn-cart-header"
+              >
                 <ShoppingBag size={17} />
                 {cartCount > 0 && <span>{cartCount > 99 ? "99+" : cartCount}</span>}
               </button>
@@ -163,8 +183,8 @@ export default function CardapioHeader({
                 className="cardapio-public-account-button"
                 id={user ? "btn-user-profile" : "btn-login-trigger"}
               >
-                <User size={15} />
-                <span>{user ? user.name?.split(" ")[0] || "Conta" : "Entrar"}</span>
+                <UserRound size={15} />
+                <span>{user ? user.name?.split(" ")[0] || "Perfil" : "Identificar"}</span>
               </button>
             </div>
           </div>
@@ -174,7 +194,7 @@ export default function CardapioHeader({
               <Search size={17} aria-hidden="true" />
               <input
                 type="search"
-                placeholder="Buscar prato, bebida ou ingrediente..."
+                placeholder="O que você quer pedir?"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 id="input-search"

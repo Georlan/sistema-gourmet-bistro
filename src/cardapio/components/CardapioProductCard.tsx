@@ -53,7 +53,25 @@ export default function CardapioProductCard({
             {!available && <span>Indisponível</span>}
           </div>
           {product.description && <p>{product.description}</p>}
-          <strong className="cardapio-product-card__price">{formattedPrice}</strong>
+          <div className="cardapio-product-card__footer">
+            <strong className="cardapio-product-card__price">{formattedPrice}</strong>
+            {available && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onFastAdd(product);
+                }}
+                className="cardapio-product-card__add"
+                id={`btn-fast-add-${product.id}`}
+                title={`Adicionar ${product.name}`}
+                aria-label={`Adicionar ${product.name} à sacola`}
+              >
+                <Plus size={14} />
+                <span>Adicionar</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="cardapio-product-card__media">
@@ -69,21 +87,6 @@ export default function CardapioProductCard({
               event.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
             }}
           />
-          {available && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onFastAdd(product);
-              }}
-              className="cardapio-product-card__add"
-              id={`btn-fast-add-${product.id}`}
-              title={`Adicionar ${product.name}`}
-              aria-label={`Adicionar ${product.name} à sacola`}
-            >
-              <Plus size={17} />
-            </button>
-          )}
         </div>
       </div>
     </article>

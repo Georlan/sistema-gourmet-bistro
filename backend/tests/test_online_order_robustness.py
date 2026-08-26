@@ -208,7 +208,7 @@ def test_checkout_persiste_tentativa_e_reutiliza_chave_apos_timeout():
     assert "resolvePersistentIdempotencyKey" in source
     assert "AbortController" in source
     assert "X-Idempotency-Key" in source
-    assert "reutilizará a mesma tentativa sem duplicar o pedido" in source
+    assert "reutiliza a mesma tentativa sem duplicar o pedido" in source
 
 
 def test_configuracao_visual_usa_uploader_compacto():

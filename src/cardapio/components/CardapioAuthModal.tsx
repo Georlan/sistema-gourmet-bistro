@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { ArrowLeft, ArrowRight, KeyRound, Phone, RefreshCw, User, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, KeyRound, Phone, RefreshCw, ShieldCheck, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import {
   CustomerProfile,
@@ -36,7 +36,7 @@ export default function CardapioAuthModal({
   const cleanName = name.trim();
   const numericRestaurantId = Number(restaurantId);
 
-  const validateIdentity = () => {
+  const validatePhone = () => {
     if (!Number.isInteger(numericRestaurantId) || numericRestaurantId <= 0) {
       setErrorMessage("Não foi possível identificar o restaurante.");
       return false;
@@ -45,15 +45,11 @@ export default function CardapioAuthModal({
       setErrorMessage("Informe um celular válido com DDD.");
       return false;
     }
-    if (cleanName.length < 2) {
-      setErrorMessage("Informe um nome válido.");
-      return false;
-    }
     return true;
   };
 
   const requestCode = async (resend = false) => {
-    if (!validateIdentity()) return;
+    if (!validatePhone()) return;
     resend ? setIsResending(true) : setIsSubmitting(true);
     setErrorMessage("");
     try {
@@ -85,8 +81,13 @@ export default function CardapioAuthModal({
       await requestCode();
       return;
     }
+
     if (!/^\d{6}$/.test(code)) {
-      setErrorMessage("Digite o código de 6 números enviado pelo WhatsApp.");
+      setErrorMessage("Digite os 6 números do código enviado pelo WhatsApp.");
+      return;
+    }
+    if (cleanName.length < 2) {
+      setErrorMessage("Informe como devemos chamar você.");
       return;
     }
 
@@ -122,114 +123,140 @@ export default function CardapioAuthModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       id="auth-modal-overlay"
     >
       <div
-        className="relative w-full max-w-sm rounded-3xl bg-koma-panel border border-gray-800/80 p-6 shadow-2xl animate-scale-up"
+        className="relative w-full max-w-md rounded-t-[28px] border border-koma-border bg-koma-panel p-5 shadow-2xl sm:rounded-[28px] sm:p-6 animate-scale-up"
         id="auth-modal-card"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-3 right-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full hover:bg-gray-800 text-koma-subtle transition cursor-pointer"
+          className="absolute right-3 top-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-koma-subtle transition hover:bg-koma-raised hover:text-koma-foreground cursor-pointer"
           aria-label="Fechar identificação"
         >
           <X className="h-5 w-5" />
         </button>
 
-        <div className="text-center mt-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 mb-3">
-            {step === "identify" ? <Phone className="h-6 w-6" /> : <KeyRound className="h-6 w-6" />}
+        <div className="pr-10">
+          <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">
+            <span>Identificação</span>
+            <span className="text-koma-muted">{step === "identify" ? "1 de 2" : "2 de 2"}</span>
           </div>
-          <h2 className="font-display text-xl font-bold text-koma-foreground">
-            {step === "identify" ? "Identifique-se pelo celular" : "Confirme seu WhatsApp"}
+          <h2 className="mt-2 font-display text-xl font-black tracking-tight text-koma-foreground">
+            {step === "identify" ? "Continue com seu celular" : "Só falta confirmar"}
           </h2>
-          <p className="mt-1.5 text-xs text-koma-subtle max-w-xs mx-auto leading-relaxed">
+          <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-koma-muted">
             {step === "identify"
-              ? "Seu número conecta seus pedidos e perfil somente neste restaurante."
-              : `Enviamos um código de 6 números para ${formatBrazilianPhone(normalizedPhone)}.`}
+              ? "Usamos seu número para vincular o pedido e mostrar o acompanhamento neste restaurante."
+              : `Digite o código enviado para ${formatBrazilianPhone(normalizedPhone)} e informe seu nome.`}
           </p>
         </div>
 
+        <div className="mt-5 grid grid-cols-2 gap-2" aria-hidden="true">
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[9px] font-bold text-emerald-500">
+            {step === "verify" ? <Check size={12} /> : <Phone size={12} />}
+            Celular
+          </div>
+          <div className={step === "verify"
+            ? "flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[9px] font-bold text-emerald-500"
+            : "flex items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[9px] font-bold text-koma-muted"}
+          >
+            <KeyRound size={12} /> Código
+          </div>
+        </div>
+
         {errorMessage && (
-          <div className="mt-4 rounded-xl bg-rose-500/10 p-3 border border-rose-500/20 text-xs text-rose-400 font-medium text-center">
+          <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400" role="alert">
             {errorMessage}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4" id="auth-form-input">
           {step === "identify" ? (
+            <label className="block">
+              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
+              <span className="relative block">
+                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-koma-muted" />
+                <input
+                  type="tel"
+                  required
+                  autoFocus
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  placeholder="(00) 00000-0000"
+                  value={phone}
+                  onChange={(event) => {
+                    setPhone(formatBrazilianPhone(event.target.value));
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
+                />
+              </span>
+            </label>
+          ) : (
             <>
               <label className="block">
-                <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider block mb-1">Celular com DDD</span>
-                <span className="relative block">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-koma-muted pointer-events-none" />
-                  <input
-                    type="tel"
-                    required
-                    autoFocus
-                    inputMode="numeric"
-                    autoComplete="tel"
-                    placeholder="(00) 00000-0000"
-                    value={phone}
-                    onChange={(event) => setPhone(formatBrazilianPhone(event.target.value))}
-                    className="w-full rounded-xl border border-koma-border bg-koma-card py-3 pl-10 pr-4 text-xs text-koma-foreground placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
-                  />
-                </span>
+                <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Código de 6 números</span>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={code}
+                  onChange={(event) => {
+                    setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  className="h-12 w-full rounded-xl border border-koma-border bg-koma-card px-4 text-center font-mono text-xl tracking-[0.42em] text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
+                />
               </label>
 
               <label className="block">
-                <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider block mb-1">Como devemos chamar você?</span>
+                <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Como devemos chamar você?</span>
                 <span className="relative block">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-koma-muted pointer-events-none" />
+                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-koma-muted" />
                   <input
                     type="text"
                     required
                     maxLength={100}
                     autoComplete="name"
-                    placeholder="Nome completo"
+                    placeholder="Seu nome"
                     value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    className="w-full rounded-xl border border-koma-border bg-koma-card py-3 pl-10 pr-4 text-xs text-koma-foreground placeholder-gray-600 focus:border-emerald-500 outline-hidden transition"
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      if (errorMessage) setErrorMessage("");
+                    }}
+                    className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
                   />
                 </span>
               </label>
             </>
-          ) : (
-            <label className="block">
-              <span className="text-[10px] font-bold text-koma-muted uppercase tracking-wider block mb-1">Código de confirmação</span>
-              <input
-                type="text"
-                required
-                autoFocus
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="000000"
-                value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                className="w-full rounded-xl border border-koma-border bg-koma-card px-4 py-3 text-center font-mono text-xl tracking-[0.45em] text-koma-foreground placeholder-gray-700 focus:border-emerald-500 outline-hidden transition"
-              />
-            </label>
           )}
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 py-3.5 text-center text-xs font-bold text-white transition flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
           >
-            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Enviar código" : "Confirmar e entrar"}</span>
+            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Receber código" : "Confirmar e continuar"}</span>
             {!isSubmitting && <ArrowRight className="h-4 w-4" />}
           </button>
 
           {step === "verify" && (
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => { setStep("identify"); setErrorMessage(""); }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-koma-subtle hover:text-koma-foreground transition cursor-pointer"
+                onClick={() => {
+                  setStep("identify");
+                  setErrorMessage("");
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-koma-subtle transition hover:text-koma-foreground cursor-pointer"
               >
                 <ArrowLeft className="h-3.5 w-3.5" /> Alterar número
               </button>
@@ -237,7 +264,7 @@ export default function CardapioAuthModal({
                 type="button"
                 disabled={isResending}
                 onClick={() => void requestCode(true)}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-600 dark:text-emerald-300 disabled:opacity-50 transition cursor-pointer"
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 transition hover:text-emerald-500 disabled:opacity-50 cursor-pointer"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isResending ? "animate-spin" : ""}`} />
                 Reenviar código
@@ -246,9 +273,10 @@ export default function CardapioAuthModal({
           )}
         </form>
 
-        <p className="mt-4 text-[10px] text-koma-muted text-center leading-relaxed">
-          O código confirma que o número pertence a você e protege seu histórico e seus pontos.
-        </p>
+        <div className="mt-5 flex items-start gap-2 rounded-xl border border-koma-border bg-koma-card/70 p-3 text-[10px] leading-relaxed text-koma-muted">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+          <span>O código serve para proteger seu histórico de pedidos e evitar que outra pessoa use seu número.</span>
+        </div>
       </div>
     </div>
   );

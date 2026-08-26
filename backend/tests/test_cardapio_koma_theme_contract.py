@@ -11,7 +11,7 @@ def _source(relative_path: str) -> str:
 def test_appearance_only_exposes_logo_and_banner_editing():
     source = _source("src/components/cardapio/CardapioDigitalSettingsPanel.tsx")
 
-    assert "description: 'Logo e capa'" in source
+    assert "description: 'Logo e capa do restaurante'" in source
     assert "Cores do cardápio" not in source
     assert 'type="color"' not in source
     assert "Cor de destaque" not in source
