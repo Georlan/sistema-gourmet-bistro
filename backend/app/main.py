@@ -20,6 +20,7 @@ from .routes import (
     caixa,
     cardapio,
     cardapio_clientes,
+    cardapio_config_bridge,
     cardapio_digital,
     estoque,
     optimization,
@@ -45,6 +46,11 @@ install_sensitive_query_log_filter()
 # do NumeradorOperacional. Isso evita Conta #47 e Delivery #47 simultâneos.
 orders.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
 cardapio.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
+
+# Caixa, garçom e storefront público compartilham a mesma prioridade visual de
+# categorias. Mantemos a regra canônica no módulo de produtos para evitar que
+# os canais apresentem o mesmo catálogo em ordens diferentes.
+cardapio_digital._ordered_categories = products.ordered_categories
 
 
 if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
@@ -352,6 +358,9 @@ app.include_router(atendimento_printing.router)
 app.include_router(tables.router)
 app.include_router(orders.router)
 app.include_router(websocket.router)
+# O GET legado usado somente pela montagem oculta do Caixa é interceptado antes
+# do router monolítico e não consulta Restaurante novamente.
+app.include_router(cardapio_config_bridge.router)
 app.include_router(caixa.router)
 app.include_router(optimization.router)
 app.include_router(estoque.router)
