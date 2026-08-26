@@ -120,7 +120,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
     }
   };
 
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragging(false);
