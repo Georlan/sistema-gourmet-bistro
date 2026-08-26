@@ -18,6 +18,7 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_online_order_restaurant():
+    """Semeia o tenant em commits ordenados para respeitar FKs da suíte SQLite."""
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     token = current_restaurante_id.set(RESTAURANTE_ID)
@@ -34,6 +35,7 @@ def setup_online_order_restaurant():
             db.add(restaurante)
         else:
             restaurante.status_override = "Automático"
+        db.commit()
 
         categoria = db.query(Categoria).filter(
             Categoria.restaurante_id == RESTAURANTE_ID,
@@ -45,6 +47,7 @@ def setup_online_order_restaurant():
                 restaurante_id=RESTAURANTE_ID,
                 nome="Robustez",
             ))
+            db.commit()
 
         produto = db.query(Produto).filter(
             Produto.restaurante_id == RESTAURANTE_ID,
@@ -62,6 +65,7 @@ def setup_online_order_restaurant():
         else:
             produto.ativo = True
             produto.preco = 25.0
+        db.commit()
 
         usuario = db.query(Usuario).filter(
             Usuario.restaurante_id == RESTAURANTE_ID,
@@ -81,10 +85,6 @@ def setup_online_order_restaurant():
             usuario.role = "admin"
             usuario.cargo = "admin"
             usuario.status = "ativo"
-
-        db.query(Comanda).filter(
-            Comanda.restaurante_id == RESTAURANTE_ID,
-        ).delete(synchronize_session=False)
         db.commit()
         yield
     finally:
