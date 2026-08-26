@@ -6,6 +6,7 @@
 import React from "react";
 import { Plus } from "lucide-react";
 import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
+import "../cardapioTone.css";
 
 interface CardapioProductCardProps {
   key?: React.Key;
