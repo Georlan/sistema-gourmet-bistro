@@ -1,0 +1,11 @@
+:root[data-cardapio-tone="dark"] {
+  --color-brand-text: #f5f8f6 !important;
+  --color-brand-card: color-mix(in srgb, var(--color-brand-bg, #090a0f) 88%, #ffffff 12%) !important;
+  --color-brand-secondary: color-mix(in srgb, var(--color-brand-bg, #090a0f) 82%, #ffffff 18%) !important;
+}
+
+:root[data-cardapio-tone="light"] {
+  --color-brand-text: #15201b !important;
+  --color-brand-card: #ffffff !important;
+  --color-brand-secondary: color-mix(in srgb, var(--color-brand-bg, #f3f6f4) 92%, #0f1713 8%) !important;
+}
