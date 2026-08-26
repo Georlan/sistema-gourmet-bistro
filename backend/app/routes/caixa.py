@@ -254,6 +254,7 @@ def obter_funcionarios(
 @router.post("/funcionarios", response_model=UsuarioInviteResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_funcionario(
     user_in: UsuarioCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
@@ -302,6 +303,16 @@ def cadastrar_funcionario(
             detail="Telefone indisponível para cadastro.",
         )
     db.refresh(novo_usuario)
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "team_updated",
+            "detail": {"action": "created", "user_id": novo_usuario.id},
+        },
+        restaurante_id=rest_id,
+        target_audience="internal",
+    )
     
     return novo_usuario
 

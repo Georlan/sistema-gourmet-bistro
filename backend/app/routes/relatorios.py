@@ -423,22 +423,21 @@ def get_equipe_desempenho(
     }
 
 
-# Static permission matrix for each cargo slug (Bistro plan: no motoboy)
+# Papéis disponíveis no backoffice. Valores legados são normalizados antes de
+# chegar à interface para que a mesma função nunca apareça duas vezes.
 CARGO_PERMISSIONS: Dict[str, Dict[str, Any]] = {
     "admin": {"label": "Administrador", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": True},
     "gerente": {"label": "Gerente", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
-    "caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
-    "operador_caixa": {"label": "Operador Caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
+    "caixa": {"label": "Operador de caixa", "pedidos": True, "caixa": True, "relatorios": True, "equipe": True, "admin": False},
     "garcom": {"label": "Gar\u00e7om", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
-    "atendente": {"label": "Atendente", "pedidos": True, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
-    "cozinha": {"label": "Cozinha", "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False},
 }
+ROLE_ALIASES = {"operador_caixa": "caixa"}
 
 
 @router.get("/cargos-permissoes")
 def get_cargos_permissoes(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
+    current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
     """Returns cargo permission matrix with real employee counts per role for this tenant."""
     rest_id = require_tenant_id()
@@ -447,15 +446,12 @@ def get_cargos_permissoes(
     membros = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
     counts_by_role: Dict[str, int] = {}
     for m in membros:
-        role = (m.role or m.cargo or "garcom").lower().strip()
+        raw_role = (m.role or m.cargo or "garcom").lower().strip()
+        role = ROLE_ALIASES.get(raw_role, raw_role)
         counts_by_role[role] = counts_by_role.get(role, 0) + 1
 
-    # Build result: only include roles that exist in this tenant OR are in the static matrix
-    present_roles = set(counts_by_role.keys())
-    all_roles = set(CARGO_PERMISSIONS.keys()) | present_roles
-
     cargos = []
-    for role_key in ["admin", "gerente", "caixa", "operador_caixa", "garcom", "atendente", "cozinha"]:
+    for role_key in ["admin", "gerente", "caixa", "garcom"]:
         perm = CARGO_PERMISSIONS.get(role_key, {"label": role_key.capitalize(), "pedidos": False, "caixa": False, "relatorios": False, "equipe": False, "admin": False})
         total = counts_by_role.get(role_key, 0)
         if total > 0 or role_key in CARGO_PERMISSIONS:

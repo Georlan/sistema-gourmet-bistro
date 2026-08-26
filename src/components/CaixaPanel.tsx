@@ -8,10 +8,10 @@ import {
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
   Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronLeft, ChevronRight,
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
-  Send, Printer, Info, Smartphone,
+  Printer, Info, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
   SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult, Distribuidor, FichaTecnicaProduto, Insumo } from '../types';
+import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult, Distribuidor, FichaTecnicaProduto, Insumo, SystemUser } from '../types';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
 import MoneyInput from './MoneyInput';
 import { EstoqueHistoricoTab } from './estoque/EstoqueHistoricoTab';
@@ -32,6 +32,7 @@ import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
 import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
 import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
+import { EquipePessoasTab } from './equipe/EquipePessoasTab';
 import { normalizeOperationalTimestamp } from '../domain';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
@@ -257,17 +258,6 @@ interface SmartPosCardState {
   ctaLabel?: string;
   intentId?: string;
   canReconcile?: boolean;
-}
-
-interface SystemUser {
-  id: string;
-  nome: string;
-  telefone?: string;
-  cargo?: string;
-  usuario?: string;
-  role?: string;
-  status?: 'pendente_ativacao' | 'ativo' | 'inativo' | string;
-  created_at?: string;
 }
 
 interface LoyaltyCustomer {
@@ -1101,9 +1091,7 @@ export function CaixaPanel({
 
   // System waiters (users CRUD) list loaded from API
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
-  const [newUserNome, setNewUserNome] = useState('');
-  const [newUserTelefone, setNewUserTelefone] = useState('');
-  const [newUserRole, setNewUserRole] = useState('garcom');
+  const systemUsersRequestRef = useRef<Promise<void> | null>(null);
 
   // Modals state
   const [showAbrirModal, setShowAbrirModal] = useState(false);
@@ -2567,33 +2555,23 @@ export function CaixaPanel({
   };
 
   // Fetch registered users (team CRUD)
-  const fetchSystemUsers = async () => {
-    try {
-      const data = await API.getFuncionarios();
-      if (Array.isArray(data)) {
-        setSystemUsers(data);
-        return;
-      }
-    } catch (err) {
-      // API call fallback
-    }
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, { headers: authHeaders });
-      if (res.ok) {
+  const fetchSystemUsers = (): Promise<void> => {
+    if (systemUsersRequestRef.current) return systemUsersRequestRef.current;
+    const request = (async () => {
+      try {
+        const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, { headers: authHeaders });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (Array.isArray(data)) {
-          setSystemUsers(data);
-          return;
-        }
-      }
-      const resAuth = await fetch(`${apiBaseUrl}/auth/usuarios`, { headers: authHeaders });
-      if (resAuth.ok) {
-        const data = await resAuth.json();
         if (Array.isArray(data)) setSystemUsers(data);
+      } catch (error) {
+        console.error('Error fetching system users:', error);
       }
-    } catch (fallbackErr) {
-      console.error('Error fetching system users:', fallbackErr);
-    }
+    })();
+    systemUsersRequestRef.current = request;
+    void request.finally(() => {
+      if (systemUsersRequestRef.current === request) systemUsersRequestRef.current = null;
+    });
+    return request;
   };
 
   const fetchConfiguracoes = async () => {
@@ -2950,17 +2928,17 @@ export function CaixaPanel({
 
   useEffect(() => {
     fetchTurno();
-    fetchSystemUsers();
     fetchDeliveryOrders();
     fetchMotoboys();
     fetchConfiguracoes();
   }, []);
 
   useEffect(() => {
+    if (activeTab !== 'permissoes_cargos') return;
     const refreshTeam = () => void fetchSystemUsers();
     window.addEventListener('koma_team_updated', refreshTeam);
     return () => window.removeEventListener('koma_team_updated', refreshTeam);
-  }, [apiBaseUrl, authHeaders.Authorization]);
+  }, [activeTab, apiBaseUrl, authHeaders.Authorization]);
 
   // Contingência apenas quando o WebSocket estiver indisponível. Com a conexão
   // saudável, os eventos são a fonte de verdade e não há polling concorrente.
@@ -2978,7 +2956,7 @@ export function CaixaPanel({
   }, [isWsConnected, activeTab, onRefreshOrders]);
 
   useEffect(() => {
-    if (activeTab === 'permissoes_cargos' || activeSubTab === 'pessoas') {
+    if (activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) {
       fetchSystemUsers();
     }
   }, [activeTab, activeSubTab]);
@@ -3501,31 +3479,13 @@ export function CaixaPanel({
     openWhatsAppMessage(telefone, msg);
   };
 
-  const handleAddUserSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const telefoneClean = newUserTelefone.replace(/\D/g, '');
-    if (!newUserNome || !telefoneClean) {
-      alert("Por favor, preencha o nome e um telefone (WhatsApp) válido.");
-      return;
-    }
-    try {
-      const createdUser = await API.cadastrarFuncionario({
-        nome: newUserNome,
-        telefone: telefoneClean,
-        cargo: newUserRole
-      });
-      setNewUserNome('');
-      setNewUserTelefone('');
-      fetchSystemUsers();
-
-      if (createdUser && createdUser.token_convite) {
-        openWaInvite(telefoneClean, createdUser.nome, createdUser.token_convite);
-      } else {
-        alert("Convite cadastrado com sucesso!");
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(`Erro: ${err.message || 'Falha ao cadastrar convite'}`);
+  const handleAddUser = async (payload: { nome: string; telefone: string; cargo: string }) => {
+    const createdUser = await API.cadastrarFuncionario(payload);
+    await fetchSystemUsers();
+    if (createdUser?.token_convite) {
+      openWaInvite(payload.telefone, createdUser.nome, createdUser.token_convite);
+    } else {
+      showToast('Pessoa cadastrada com sucesso!');
     }
   };
 
@@ -3540,14 +3500,16 @@ export function CaixaPanel({
         if (data.token_convite) {
           openWaInvite(data.telefone || user.telefone || '', data.nome || user.nome, data.token_convite);
         } else {
-          alert(`Link de convite gerado para ${user.nome}!`);
+          showToast(`Link de convite gerado para ${user.nome}!`);
         }
       } else {
-        alert(`Não foi possível reenviar o convite no momento.`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Não foi possível reenviar o convite no momento.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert(`Erro de conexão.`);
+      showToast(err?.message || 'Erro de conexão.', 'error');
+      throw err;
     }
   };
 
@@ -3560,15 +3522,16 @@ export function CaixaPanel({
       });
       if (res.ok) {
         showToast("Funcionário removido/desativado com sucesso!");
-        fetchSystemUsers();
+        await fetchSystemUsers();
       } else {
         const errorData = await res.json().catch(() => ({}));
-        const msg = errorData.detail || "Erro ao deletar usuário.";
-        alert(msg);
+        throw new Error(errorData.detail || "Erro ao remover a pessoa.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Erro ao conectar com o servidor para deletar funcionário.");
+      const message = err?.message || 'Erro ao conectar com o servidor para remover a pessoa.';
+      showToast(message, 'error');
+      throw err;
     }
   };
 
@@ -4606,7 +4569,7 @@ export function CaixaPanel({
               {activeTab === 'estoque' && 'Estoque'}
               {activeTab === 'financeiro' && 'Caixa'}
               {activeTab === 'clientes' && 'Clientes'}
-              {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Permissões e Gestão de Equipe'}
+              {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Equipe'}
               {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
               {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
               {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Configurações do cardápio online'}
@@ -4764,7 +4727,7 @@ export function CaixaPanel({
 
           {(activeTab === 'permissoes_cargos') && [
             { id: 'pessoas', label: 'Pessoas' },
-            { id: 'cargos_permissoes', label: 'Cargos e Permissões' }
+            { id: 'cargos_permissoes', label: 'Funções e acessos' }
           ].map(sub => {
             const isSubActive = (
               (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) ||
@@ -6697,148 +6660,12 @@ export function CaixaPanel({
 
           {/* VIEW: EQUIPE — PESSOAS */}
           {activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab) && (
-            <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-6', 'max-w-6xl', 'text-left', 'animate-fade-in')}>
-
-              {/* CRUD table list */}
-              <div className={clsx('lg:col-span-2', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-2xl', 'sm:rounded-3xl', 'p-3.5', 'sm:p-5', 'space-y-4', 'shadow-xs')}>
-                <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-3')}>
-                  <div>
-                    <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>Equipe & Funcionários</span>
-                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">
-                      {systemUsers.length} {systemUsers.length === 1 ? 'membro cadastrado' : 'membros cadastrados'}
-                    </span>
-                  </div>
-                </div>
-
-                {systemUsers.length > 0 ? (
-                  <div className="overflow-x-auto scrollbar-thin border border-koma-border rounded-xl sm:rounded-2xl">
-                    <table className={clsx('w-full', 'min-w-[480px]', 'text-left', 'font-sans', 'text-xs')}>
-                      <thead>
-                        <tr className={clsx('bg-koma-raised', 'border-b', 'border-koma-border', 'text-koma-muted', 'font-extrabold', 'uppercase', 'text-[9px]', 'tracking-wider')}>
-                          <th className="p-2.5 sm:p-3.5">Nome</th>
-                          <th className="p-2.5 sm:p-3.5">WhatsApp</th>
-                          <th className="p-2.5 sm:p-3.5">Função</th>
-                          <th className="p-2.5 sm:p-3.5">Status</th>
-                          <th className={clsx('p-2.5', 'sm:p-3.5', 'text-right')}>Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-koma-border">
-                        {systemUsers.map(user => {
-                          const cargoRaw = user.cargo || user.role || 'garcom';
-                          const cargoLabel = cargoRaw === 'garcom' ? 'Garçom' : cargoRaw === 'caixa' ? 'Caixa' : cargoRaw === 'operador_caixa' ? 'Op. Caixa' : cargoRaw === 'gerente' ? 'Gerente' : cargoRaw === 'atendente' ? 'Atendente' : cargoRaw === 'cozinha' ? 'Cozinha' : cargoRaw === 'admin' ? 'Administrador' : cargoRaw;
-                          const statusVal = user.status || 'ativo';
-                          const isPendente = statusVal === 'pendente_ativacao';
-
-                          return (
-                            <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
-                              <td className={clsx('p-2.5', 'sm:p-3.5', 'text-koma-foreground', 'font-bold')}>{user.nome}</td>
-                              <td className={clsx('p-2.5', 'sm:p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>{formatarTelefoneTabela(user.telefone || user.usuario || '')}</td>
-                              <td className="p-2.5 sm:p-3.5">
-                                <span className={clsx('px-2.5', 'py-0.5', 'text-[8px]', 'font-extrabold', 'rounded-md', 'uppercase', 'tracking-wider', cargoRaw === 'admin' ? 'koma-badge-danger' : 'koma-badge-info')}>
-                                  {cargoLabel}
-                                </span>
-                              </td>
-                              <td className="p-2.5 sm:p-3.5">
-                                {statusVal === 'ativo' ? (
-                                  <span className="koma-badge-success px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
-                                    Ativo
-                                  </span>
-                                ) : (
-                                  <span className="koma-badge-warning px-2.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider">
-                                    Pendente
-                                  </span>
-                                )}
-                              </td>
-                              <td className={clsx('p-2.5', 'sm:p-3.5', 'text-right')}>
-                                <div className="flex items-center justify-end gap-2">
-                                  {isPendente && (
-                                    <button
-                                      onClick={() => handleResendInvite(user)}
-                                      className={clsx('px-2.5', 'py-1', 'text-[9px]', 'font-bold', 'koma-btn-secondary', 'rounded-lg', 'transition-all', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
-                                      title="Reenviar link de ativação via WhatsApp"
-                                    >
-                                      <Send size={11} />
-                                      Reenviar
-                                    </button>
-                                  )}
-                                  {cargoRaw !== 'admin' && (
-                                    <button
-                                      onClick={() => handleDeleteUser(user.id)}
-                                      className={clsx('p-1.5', 'text-rose-600 dark:text-rose-400', 'hover:text-rose-700 dark:hover:text-rose-300', 'cursor-pointer', 'transition-colors', 'rounded-lg', 'hover:bg-rose-500/10')}
-                                      title="Excluir funcionário"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <KomaEmptyState
-                    icon={<Users size={24} className="text-koma-muted" />}
-                    title="Nenhum funcionário cadastrado"
-                    description="Cadastre garçons, operadores de caixa ou gerentes no formulário ao lado para liberar acessos e monitorar atendimentos."
-                    variant="panel"
-                  />
-                )}
-              </div>
-
-              {/* Add form & Service fee settings */}
-              <div className="space-y-4">
-                <div className={clsx('bg-koma-panel', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'shadow-xs')}>
-                  <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'mb-4')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-koma-foreground', 'text-base', 'block')}>Cadastrar Membro</span>
-                    <span className="text-[10px] text-koma-muted font-medium block mt-0.5">O WhatsApp será aberto para você revisar e enviar o convite</span>
-                  </div>
-
-                  <form onSubmit={handleAddUserSubmit} className={clsx('space-y-3.5', 'text-left')}>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Nome Completo:</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ex: Pedro Henrique"
-                        value={newUserNome}
-                        onChange={(e) => setNewUserNome(e.target.value)}
-                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Telefone (WhatsApp):</label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="(81) 99999-9999"
-                        value={newUserTelefone}
-                        onChange={(e) => setNewUserTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'font-mono', 'text-xs', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className={clsx('text-[9px]', 'text-koma-muted', 'font-bold', 'uppercase', 'tracking-wider', 'block')}>Função / Cargo:</label>
-                      <select
-                        value={newUserRole}
-                        onChange={(e) => setNewUserRole(e.target.value)}
-                        className={clsx('w-full', 'px-3.5', 'py-2.5', 'bg-koma-input', 'border', 'border-koma-border', 'rounded-xl', 'text-koma-foreground', 'text-xs', 'font-medium', 'focus:outline-none', 'focus:border-emerald-500/60')}
-                      >
-                        <option value="garcom">Garçom</option>
-                        <option value="caixa">Operador Caixa</option>
-                        <option value="gerente">Gerente</option>
-                        <option value="motoboy">Motoboy</option>
-                      </select>
-                    </div>
-                    <button type="submit" className={clsx('w-full', 'py-3', 'koma-btn-success', 'font-bold', 'text-xs', 'uppercase', 'tracking-wider', 'rounded-xl', 'transition-all', 'cursor-pointer', 'shadow-xs', 'mt-2')}>
-                      Cadastrar e Preparar Convite
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
+            <EquipePessoasTab
+              users={systemUsers}
+              onCreate={handleAddUser}
+              onResendInvite={handleResendInvite}
+              onRemove={handleDeleteUser}
+            />
           )}
 
           {/* VIEW: EQUIPE — CARGOS E PERMISSÕES (dados reais da API) */}

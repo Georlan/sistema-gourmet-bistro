@@ -362,6 +362,7 @@ def get_usuarios(
 @router.delete("/usuarios/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_usuario(
     user_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
@@ -399,11 +400,13 @@ def delete_usuario(
                 detail="O restaurante deve manter pelo menos um administrador.",
             )
 
+    mutation_action = "deleted"
     try:
         db.delete(usuario)
         db.commit()
     except IntegrityError:
         db.rollback()
+        mutation_action = "deactivated"
         target = db.query(Usuario).filter(
             Usuario.id == user_id,
             Usuario.restaurante_id == current_user.restaurante_id,
@@ -411,6 +414,16 @@ def delete_usuario(
         if target:
             target.status = "inativo"
             db.commit()
+
+    background_tasks.add_task(
+        manager.broadcast,
+        {
+            "event": "team_updated",
+            "detail": {"action": mutation_action, "user_id": user_id},
+        },
+        restaurante_id=current_user.restaurante_id,
+        target_audience="internal",
+    )
     return
 
 

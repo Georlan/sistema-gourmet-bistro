@@ -74,6 +74,39 @@ const openShift = {
   pagamentos: [],
 };
 
+const teamMembers = [
+  {
+    id: 'admin-e2e',
+    restaurante_id: 99001,
+    nome: 'Administradora E2E',
+    usuario: 'admin@koma.test',
+    telefone: '85999990001',
+    role: 'admin',
+    cargo: 'admin',
+    status: 'ativo',
+  },
+  {
+    id: 'garcom-e2e',
+    restaurante_id: 99001,
+    nome: 'Garçom E2E',
+    usuario: 'garcom@koma.test',
+    telefone: '85999990002',
+    role: 'garcom',
+    cargo: 'garcom',
+    status: 'ativo',
+  },
+  {
+    id: 'convite-e2e',
+    restaurante_id: 99001,
+    nome: 'Convite E2E',
+    telefone: '85999990003',
+    role: 'caixa',
+    cargo: 'caixa',
+    status: 'pendente_ativacao',
+    token_convite: 'convite-e2e-token',
+  },
+];
+
 async function mockCashierBackend(page: Page) {
   await page.route(`${API_ORIGIN}/**`, async route => {
     const { pathname } = new URL(route.request().url());
@@ -169,12 +202,22 @@ async function mockCashierBackend(page: Page) {
       body = [{ ranking: 1, produto_id: '101', produto_nome: 'Risoto da casa', categoria_nome: 'Pratos', quantidade_consumida: 8, valor_consumido: 336, preco_medio_item: 42, natureza_valor: 'consumo_operacional_nao_receita', ficha_tecnica_configurada: true, custo_unitario_estimado: 3.6, cmv_estimado: 28.8, margem_contribuicao_estimada: 307.2, margem_percentual_estimada: 91.4 }];
     } else if (pathname === '/relatorios/equipe/desempenho') {
       body = { taxa_servico_ativa: true, taxa_servico_padrao: 10, membros: [{ id: 'garcom-e2e', nome: 'Atendente E2E', email: 'atendente@koma.test', role: 'garcom', pedidos_atendidos: 18, faturamento: 870, ticket_medio: 48.33, comissao: 87, taxa_servico_usada: 10 }] };
+    } else if (pathname === '/caixa/funcionarios') {
+      body = teamMembers;
+    } else if (pathname === '/relatorios/cargos-permissoes') {
+      body = {
+        cargos: [
+          { slug: 'admin', label: 'Administrador', total_funcionarios: 1, permissoes: { pedidos: true, caixa: true, relatorios: true, equipe: true, admin: true } },
+          { slug: 'gerente', label: 'Gerente', total_funcionarios: 0, permissoes: { pedidos: true, caixa: true, relatorios: true, equipe: true, admin: false } },
+          { slug: 'caixa', label: 'Operador de caixa', total_funcionarios: 1, permissoes: { pedidos: true, caixa: true, relatorios: true, equipe: true, admin: false } },
+          { slug: 'garcom', label: 'Garçom', total_funcionarios: 1, permissoes: { pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false } },
+        ],
+      };
     } else if (
       pathname === '/caixa/pagamentos/pendentes'
       || pathname === '/comandas/delivery/ativos'
       || pathname === '/comandas/motoboys/lista'
       || pathname === '/auth/smartpos/caixa/operacao'
-      || pathname === '/caixa/funcionarios'
       || pathname === '/auth/usuarios'
     ) {
       body = [];
@@ -209,6 +252,18 @@ async function seedReportSession(page: Page) {
     localStorage.setItem('token', 'playwright-e2e-token');
     sessionStorage.setItem('koma_active_tab', 'relatorios');
     sessionStorage.setItem('koma_active_subtab', 'visao_geral');
+  });
+}
+
+async function seedTeamSession(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+    localStorage.setItem('koma_caixa_id', 'caixa-e2e');
+    localStorage.setItem('koma_caixa_name', 'Caixa E2E');
+    localStorage.setItem('koma_caixa_role', 'caixa');
+    localStorage.setItem('token', 'playwright-e2e-token');
+    sessionStorage.setItem('koma_active_tab', 'permissoes_cargos');
+    sessionStorage.setItem('koma_active_subtab', 'pessoas');
   });
 }
 
@@ -539,6 +594,41 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   await expect(page.getByText('Desempenho por Funcionário', { exact: true })).toBeVisible();
   await expect(page.getByText('Valor atribuído', { exact: true })).toBeVisible();
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
+  await expectNoHorizontalOverflow(page);
+});
+
+test('Equipe concentra convites e acessos sem funções ou consultas duplicadas', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => requests.push(new URL(request.url()).pathname));
+  await mockCashierBackend(page);
+  await seedTeamSession(page);
+  await page.goto('/?view=caixa');
+
+  await expect(page.getByLabel('Buscar pessoa')).toBeVisible();
+  await expect(page.getByText('Administradora E2E', { exact: true })).toBeVisible();
+  await expect(page.getByText('Garçom E2E', { exact: true })).toBeVisible();
+  await expect(page.getByText('Convite E2E', { exact: true })).toBeVisible();
+  await expect(page.getByText('Acesso ativo', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Aguardando ativação', { exact: true })).toBeVisible();
+  expect(requests.filter(path => path === '/caixa/funcionarios')).toHaveLength(1);
+
+  await page.getByRole('button', { name: 'Convites 1', exact: true }).click();
+  await expect(page.getByText('Convite E2E', { exact: true })).toBeVisible();
+  await expect(page.getByText('Administradora E2E', { exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Convidar pessoa', exact: true }).click();
+  const inviteDialog = page.getByRole('dialog', { name: 'Convidar para a equipe' });
+  await expect(inviteDialog).toBeVisible();
+  await expect(inviteDialog.getByText('Operador de caixa', { exact: true })).toBeVisible();
+  await expect(inviteDialog.getByText('Entregador', { exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await inviteDialog.getByRole('button', { name: 'Fechar convite' }).click();
+
+  await page.getByRole('button', { name: 'Funções e acessos', exact: true }).click();
+  await expect(page.getByLabel('Funções e acessos')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Operador de caixa', exact: true })).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'Operador Caixa', exact: true })).toHaveCount(0);
+  expect(requests.filter(path => path === '/relatorios/cargos-permissoes')).toHaveLength(1);
   await expectNoHorizontalOverflow(page);
 });
 

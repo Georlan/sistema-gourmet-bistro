@@ -22,6 +22,7 @@ from app.models import (
 from app.security import get_password_hash
 from app.main import app
 from app.routes import auth as auth_route
+from app.routes import caixa as caixa_route
 
 DB_FILE = "./test_authorization.db"
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_FILE}"
@@ -500,6 +501,36 @@ def test_admin_creates_only_pending_invite_in_own_tenant():
         assert saved.senha_hash is None
 
 
+def test_team_creation_broadcasts_realtime_refresh(monkeypatch):
+    events = []
+
+    async def capture_broadcast(message, *args, **kwargs):
+        events.append((message, args, kwargs))
+
+    monkeypatch.setattr(caixa_route.manager, "broadcast", capture_broadcast)
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    response = client.post(
+        "/caixa/funcionarios",
+        headers=headers,
+        json={
+            "nome": "Equipe em tempo real",
+            "telefone": "81955554444",
+            "cargo": "garcom",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert len(events) == 1
+    message, _, kwargs = events[0]
+    assert message["event"] == "team_updated"
+    assert message["detail"]["action"] == "created"
+    assert message["detail"]["user_id"] == response.json()["id"]
+    assert kwargs["restaurante_id"] == 1
+    assert kwargs["target_audience"] == "internal"
+
+
 def test_admin_team_listing_is_scoped_to_authenticated_tenant():
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
@@ -610,6 +641,28 @@ def test_admin_cannot_delete_user_from_another_tenant():
             assert db.get(Usuario, "u-outro-tenant") is not None
     finally:
         current_restaurante_id.reset(tenant_token)
+
+
+def test_team_removal_broadcasts_realtime_refresh(monkeypatch):
+    events = []
+
+    async def capture_broadcast(message, *args, **kwargs):
+        events.append((message, args, kwargs))
+
+    monkeypatch.setattr(auth_route.manager, "broadcast", capture_broadcast)
+    client = TestClient(app)
+    headers = get_auth_headers(client, "admin", "123")
+
+    response = client.delete("/auth/usuarios/u-garcom", headers=headers)
+
+    assert response.status_code == 204, response.text
+    assert len(events) == 1
+    message, _, kwargs = events[0]
+    assert message["event"] == "team_updated"
+    assert message["detail"]["action"] in {"deleted", "deactivated"}
+    assert message["detail"]["user_id"] == "u-garcom"
+    assert kwargs["restaurante_id"] == 1
+    assert kwargs["target_audience"] == "internal"
 
 
 def test_configuracoes_requires_authentication_and_does_not_provision():

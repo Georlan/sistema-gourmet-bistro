@@ -456,7 +456,7 @@ def test_equipe_desempenho_tenant_isolation():
 
 
 # ---------------------------------------------------------------------------
-# Endpoint cargos-permissoes (dados reais da API — sem mock nem motoboy)
+# Endpoint cargos-permissoes (dados reais da API, sem papéis duplicados)
 # ---------------------------------------------------------------------------
 
 def test_cargos_permissoes_endpoint():
@@ -469,6 +469,7 @@ def test_cargos_permissoes_endpoint():
     assert "cargos" in data, "Resposta deve conter 'cargos'"
 
     cargos = {c["slug"]: c for c in data["cargos"]}
+    assert "operador_caixa" not in cargos
 
     # Cargos cadastrados no tenant 1 devem aparecer
     for slug in ("garcom", "caixa", "admin"):

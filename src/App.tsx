@@ -873,6 +873,10 @@ export default function App() {
         fetchTables();
         fetchOrdersFromAPI();
         fetchTurnoResumo();
+        // Reconcilia visões gerenciais após quedas silenciosas de conexão.
+        // Os listeners só consultam dados quando a respectiva tela está aberta.
+        window.dispatchEvent(new Event('koma_team_updated'));
+        window.dispatchEvent(new Event('koma_reports_updated'));
       };
 
       socket.onmessage = (event) => {
