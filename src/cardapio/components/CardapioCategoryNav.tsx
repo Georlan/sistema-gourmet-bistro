@@ -4,20 +4,13 @@
  */
 
 import React, { useEffect, useRef } from "react";
+import { toSafeCategoryDomId } from "../categoryDomId";
 
 interface CardapioCategoryNavProps {
   categories: string[];
   activeCategory: string;
   onSelectCategory: (category: string) => void;
 }
-
-const getSafeDomId = (name: string) =>
-  name
-    .toLocaleLowerCase("pt-BR")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 
 export default function CardapioCategoryNav({
   categories,
@@ -41,16 +34,8 @@ export default function CardapioCategoryNav({
   if (categories.length === 0) return null;
 
   return (
-    <nav
-      className="cardapio-category-nav"
-      id="category-nav-container"
-      aria-label="Categorias do cardápio"
-    >
-      <div
-        ref={containerRef}
-        className="cardapio-category-scroll no-scrollbar"
-        id="category-scroll"
-      >
+    <nav className="cardapio-category-nav" id="category-nav-container" aria-label="Categorias do cardápio">
+      <div ref={containerRef} className="cardapio-category-scroll no-scrollbar" id="category-scroll">
         {categories.map((category) => {
           const isActive = activeCategory === category;
           return (
@@ -62,7 +47,7 @@ export default function CardapioCategoryNav({
               }}
               type="button"
               onClick={() => onSelectCategory(category)}
-              id={`cat-btn-${getSafeDomId(category)}`}
+              id={`cat-btn-${toSafeCategoryDomId(category)}`}
               className={`cardapio-category-chip ${isActive ? "is-active" : ""}`}
               aria-current={isActive ? "true" : undefined}
             >
