@@ -109,10 +109,12 @@ def test_staff_invites_have_one_explicit_manual_delivery_path():
     caixa_source = _source("backend/app/routes/caixa.py")
     auth_source = _source("backend/app/routes/auth.py")
     frontend_source = _source("src/components/CaixaPanel.tsx")
+    team_ui_source = _source("src/components/equipe/EquipePessoasTab.tsx")
 
     assert "enviar_texto_whatsapp" not in caixa_source
     assert "enviar_texto_whatsapp" not in auth_source
     assert "[WHATSAPP SIMULADO]" not in caixa_source
     assert "sistema-gourmet-bistro.pages.dev/ativar" not in frontend_source
     assert "window.location.origin" in frontend_source
-    assert "Cadastrar e Preparar Convite" in frontend_source
+    assert "Você revisa a mensagem antes de enviar pelo WhatsApp." in team_ui_source
+    assert "Preparar convite" in team_ui_source
