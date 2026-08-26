@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   CheckCircle2,
@@ -55,6 +56,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [hasImageError, setHasImageError] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [saveActionsTarget, setSaveActionsTarget] = useState<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const publicMenuUrl = useMemo(() => {
     if (type !== 'banner') return null;
@@ -66,6 +68,15 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   useEffect(() => {
     setHasImageError(false);
   }, [currentUrl]);
+
+  useEffect(() => {
+    if (type !== 'banner') return;
+    const saveButton = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((button) => {
+      const labelText = button.textContent?.trim();
+      return labelText === 'Salvar configurações' || labelText === 'Salvando...';
+    });
+    setSaveActionsTarget(saveButton?.parentElement ?? null);
+  }, [type]);
 
   useEffect(() => {
     if (status !== 'success' && status !== 'error') return;
@@ -248,19 +259,6 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
               {currentUrl ? 'Trocar imagem' : 'Escolher imagem'}
             </button>
 
-            {publicMenuUrl && (
-              <a
-                href={publicMenuUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-koma-border bg-koma-panel px-2.5 py-1.5 text-[9px] font-bold text-koma-secondary transition hover:border-emerald-500/40 hover:bg-koma-raised hover:text-emerald-600 dark:hover:text-emerald-300"
-                title="Abrir o cardápio público deste restaurante"
-              >
-                <ExternalLink size={11} />
-                Ver cardápio
-              </a>
-            )}
-
             {currentUrl && !isConfirmingDelete && (
               <button
                 type="button"
@@ -307,6 +305,20 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
         accept="image/png,image/jpeg,image/jpg,image/webp"
         className="hidden"
       />
+
+      {publicMenuUrl && saveActionsTarget && createPortal(
+        <a
+          href={publicMenuUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="order-first mr-2 inline-flex items-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-koma-secondary transition-all hover:border-emerald-500/40 hover:bg-koma-raised hover:text-emerald-600 dark:hover:text-emerald-300"
+          title="Abrir o cardápio público deste restaurante"
+        >
+          <ExternalLink size={14} />
+          Ver cardápio
+        </a>,
+        saveActionsTarget,
+      )}
     </section>
   );
 };
