@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   CheckCircle2,
-  ExternalLink,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
@@ -11,7 +10,7 @@ import {
   Upload,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { OperationalBanner } from './shared/OperationalBanner';
+import { CardapioDigitalSettingsPanel } from './cardapio/CardapioDigitalSettingsPanel';
 
 interface CardapioAssetUploaderProps {
   label: string;
@@ -57,9 +56,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [hasImageError, setHasImageError] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [saveActionsTarget, setSaveActionsTarget] = useState<HTMLElement | null>(null);
-  const [heroTarget, setHeroTarget] = useState<HTMLElement | null>(null);
-  const [operationMode, setOperationMode] = useState('Automático');
+  const [settingsTarget, setSettingsTarget] = useState<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
 
@@ -70,77 +67,32 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
     return restauranteId ? `/cardapio?restaurante_id=${restauranteId}` : null;
   }, [authHeaders.Authorization, authHeaders.authorization, type]);
 
-  const operationStatusLabel = operationMode === 'Forçado Aberto'
-    ? 'Aberto'
-    : operationMode === 'Forçado Fechado'
-      ? 'Fechado'
-      : 'Automático';
-
   useEffect(() => {
     setHasImageError(false);
   }, [currentUrl]);
 
   useEffect(() => {
     if (type !== 'banner') return;
-    const saveButton = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((button) => {
-      const labelText = button.textContent?.trim();
-      return labelText === 'Salvar configurações' || labelText === 'Salvando...';
-    });
-    setSaveActionsTarget(saveButton?.parentElement ?? null);
-  }, [type]);
-
-  useEffect(() => {
-    if (type !== 'banner') return;
 
     const root = rootRef.current;
     const formPanel = root?.closest('[class~="lg:col-span-7"]') as HTMLElement | null;
-    const layout = formPanel?.parentElement as HTMLElement | null;
-    const hostParent = layout?.parentElement as HTMLElement | null;
-    if (!root || !formPanel || !layout || !hostParent) return;
+    const legacyLayout = formPanel?.parentElement as HTMLElement | null;
+    const hostParent = legacyLayout?.parentElement as HTMLElement | null;
+    if (!root || !formPanel || !legacyLayout || !hostParent) return;
 
-    const previousLayoutStyles = {
-      maxWidth: layout.style.maxWidth,
-      marginLeft: layout.style.marginLeft,
-      marginRight: layout.style.marginRight,
-      gap: layout.style.gap,
-      alignItems: layout.style.alignItems,
-    };
-    const previousFormStyles = {
-      borderRadius: formPanel.style.borderRadius,
-      boxShadow: formPanel.style.boxShadow,
-    };
+    hostParent.querySelector<HTMLElement>('[data-koma-cardapio-settings-host="true"]')?.remove();
+    const host = document.createElement('div');
+    host.dataset.komaCardapioSettingsHost = 'true';
+    host.style.width = '100%';
+    hostParent.insertBefore(host, legacyLayout);
 
-    hostParent.querySelector<HTMLElement>('[data-koma-cardapio-hero="true"]')?.remove();
-    const heroHost = document.createElement('div');
-    heroHost.dataset.komaCardapioHero = 'true';
-    heroHost.style.width = '100%';
-    heroHost.style.marginBottom = '1rem';
-    hostParent.insertBefore(heroHost, layout);
-    setHeroTarget(heroHost);
-
-    layout.style.maxWidth = 'none';
-    layout.style.marginLeft = '0';
-    layout.style.marginRight = '0';
-    layout.style.gap = '1rem';
-    layout.style.alignItems = 'start';
-    formPanel.style.borderRadius = '1rem';
-    formPanel.style.boxShadow = 'none';
-
-    const statusSelect = formPanel.querySelector('select') as HTMLSelectElement | null;
-    const syncOperationMode = () => setOperationMode(statusSelect?.value || 'Automático');
-    syncOperationMode();
-    statusSelect?.addEventListener('change', syncOperationMode);
+    const previousDisplay = legacyLayout.style.display;
+    legacyLayout.style.display = 'none';
+    setSettingsTarget(host);
 
     return () => {
-      statusSelect?.removeEventListener('change', syncOperationMode);
-      heroHost.remove();
-      layout.style.maxWidth = previousLayoutStyles.maxWidth;
-      layout.style.marginLeft = previousLayoutStyles.marginLeft;
-      layout.style.marginRight = previousLayoutStyles.marginRight;
-      layout.style.gap = previousLayoutStyles.gap;
-      layout.style.alignItems = previousLayoutStyles.alignItems;
-      formPanel.style.borderRadius = previousFormStyles.borderRadius;
-      formPanel.style.boxShadow = previousFormStyles.boxShadow;
+      legacyLayout.style.display = previousDisplay;
+      host.remove();
     };
   }, [type]);
 
@@ -154,7 +106,6 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   }, [status]);
 
   const handleFileUpload = async (file: File) => {
-    if (!file) return;
     if (!ACCEPTED_TYPES.includes(file.type.toLowerCase())) {
       setStatus('error');
       setFeedbackText('Use PNG, JPG ou WEBP.');
@@ -180,9 +131,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
         body: formData,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || 'Falha ao enviar imagem.');
-      }
+      if (!response.ok) throw new Error(data.detail || 'Falha ao enviar imagem.');
 
       const updatedUrl = type === 'logo' ? data.logo_url : data.banner_url;
       setStatus('success');
@@ -208,9 +157,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
         headers: authHeaders,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || 'Falha ao remover a imagem.');
-      }
+      if (!response.ok) throw new Error(data.detail || 'Falha ao remover a imagem.');
       setStatus('success');
       setFeedbackText('Imagem removida.');
       onSuccess(null);
@@ -271,10 +218,7 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
               src={currentUrl}
               alt={label}
               onError={() => setHasImageError(true)}
-              className={clsx(
-                'h-full w-full',
-                type === 'logo' ? 'object-contain p-2' : 'object-cover',
-              )}
+              className={clsx('h-full w-full', type === 'logo' ? 'object-contain p-2' : 'object-cover')}
             />
           ) : (
             <div className="flex flex-col items-center gap-1 text-koma-muted">
@@ -296,14 +240,12 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
               <p className="mt-0.5 text-[9px] leading-relaxed text-koma-muted">{helper}</p>
             </div>
             {feedbackText && (
-              <span
-                className={clsx(
-                  'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[9px] font-semibold',
-                  status === 'success' && 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
-                  status === 'error' && 'border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300',
-                  isBusy && 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-300',
-                )}
-              >
+              <span className={clsx(
+                'inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[9px] font-semibold',
+                status === 'success' && 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+                status === 'error' && 'border-rose-500/25 bg-rose-500/10 text-rose-600 dark:text-rose-300',
+                isBusy && 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-300',
+              )}>
                 {isBusy && <Loader2 size={10} className="animate-spin" />}
                 {status === 'success' && <CheckCircle2 size={10} />}
                 {status === 'error' && <AlertCircle size={10} />}
@@ -372,42 +314,13 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
         className="hidden"
       />
 
-      {heroTarget && createPortal(
-        <OperationalBanner
-          id="online-menu-config-heading"
-          eyebrow="VITRINE DIGITAL"
-          title="Cardápio online"
-          accent="pronto para receber pedidos"
-          description="Ajuste funcionamento, identidade e informações do restaurante acompanhando a prévia do cliente ao lado."
-          metrics={[
-            {
-              label: 'funcionamento',
-              value: operationStatusLabel,
-              valueClassName: operationMode === 'Forçado Fechado'
-                ? 'text-rose-600 dark:text-rose-300'
-                : operationMode === 'Forçado Aberto'
-                  ? 'text-emerald-700 dark:text-emerald-300'
-                  : undefined,
-            },
-            { label: 'prévia', value: 'ao vivo' },
-            { label: 'canal', value: 'online' },
-          ]}
+      {settingsTarget && type === 'banner' && createPortal(
+        <CardapioDigitalSettingsPanel
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          publicMenuUrl={publicMenuUrl}
         />,
-        heroTarget,
-      )}
-
-      {publicMenuUrl && saveActionsTarget && createPortal(
-        <a
-          href={publicMenuUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="order-first mr-2 inline-flex items-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-koma-secondary transition-all hover:border-emerald-500/40 hover:bg-koma-raised hover:text-emerald-600 dark:hover:text-emerald-300"
-          title="Abrir o cardápio público deste restaurante"
-        >
-          <ExternalLink size={14} />
-          Ver cardápio
-        </a>,
-        saveActionsTarget,
+        settingsTarget,
       )}
     </section>
   );
