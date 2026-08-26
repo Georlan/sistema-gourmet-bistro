@@ -2,7 +2,7 @@ import uuid
 import datetime
 import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id, tenant_session_scope
@@ -25,6 +25,7 @@ router = APIRouter(
 )
 
 MAX_PUBLIC_ORDER_UNITS = 200
+ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
 
 
 def _order_total(comanda: Comanda) -> float:
@@ -169,6 +170,26 @@ def criar_pedido_online(
                 logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
                 return _existing_order_response(rec)
 
+        # A prontidão operacional do restaurante tem precedência sobre a
+        # validação do carrinho: nunca inventamos um usuário para satisfazer FK.
+        # Considera `cargo` também por compatibilidade com registros legados.
+        garcom = db.query(Usuario).filter(
+            Usuario.restaurante_id == rest_id,
+            Usuario.status == "ativo",
+            or_(
+                Usuario.role.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
+                Usuario.cargo.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
+            ),
+        ).first()
+        if not garcom:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Restaurante ainda não está pronto para receber pedidos online.",
+            )
+        garcom_id = garcom.id
+
+        # Valida todo o carrinho antes da primeira escrita para manter o pedido
+        # atômico mesmo quando um produto foi desativado entre catálogo e checkout.
         product_ids = {item.produto_id for item in payload.itens}
         products = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
@@ -185,18 +206,6 @@ def criar_pedido_online(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Produto '{missing_product}' não encontrado ou inativo para este estabelecimento.",
             )
-
-        garcom = db.query(Usuario).filter(
-            Usuario.restaurante_id == rest_id,
-            Usuario.status == "ativo",
-            Usuario.role.in_(["admin", "gerente", "caixa", "garcom", "atendente"]),
-        ).first()
-        if not garcom:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Restaurante ainda não está pronto para receber pedidos online.",
-            )
-        garcom_id = garcom.id
 
         numero_pedido = gerar_novo_numero_pedido(db)
         if cliente is not None:
