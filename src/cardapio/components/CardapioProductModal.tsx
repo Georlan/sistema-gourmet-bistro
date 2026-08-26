@@ -3,10 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
-import { Product, ProductModifier, ProductOption, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
-import { X, Plus, Minus, Check, Share2, ChevronLeft, ChevronRight } from "lucide-react";
-
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
+  Share2,
+  ShoppingBag,
+  X,
+} from "lucide-react";
+import {
+  Product,
+  ProductModifier,
+  ProductOption,
+  getProductImageUrl,
+  LOCAL_PRODUCT_PLACEHOLDER,
+} from "../CardapioTypes";
 
 interface CardapioProductModalProps {
   product: Product;
@@ -15,353 +30,331 @@ interface CardapioProductModalProps {
     product: Product,
     quantity: number,
     selectedOptions: Record<string, ProductOption[]>,
-    notes: string
+    notes: string,
   ) => void;
 }
+
+const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+}).format(value);
 
 export default function CardapioProductModal({
   product,
   onClose,
-  onAddToCart
+  onAddToCart,
 }: CardapioProductModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, ProductOption[]>>({});
   const [notes, setNotes] = useState("");
-  const [totalPrice, setTotalPrice] = useState(product.price);
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
+  const [feedback, setFeedback] = useState("");
   const [showToast, setShowToast] = useState(false);
 
-  const galleryImages = (product.imagesGallery && product.imagesGallery.length > 0)
-    ? product.imagesGallery.slice(0, 3)
-    : [product.image];
-  const [currentImgIndex, setCurrentImgIndex] = useState(0);
+  const galleryImages = useMemo(
+    () => (product.imagesGallery && product.imagesGallery.length > 0
+      ? product.imagesGallery.slice(0, 4)
+      : [product.image]),
+    [product],
+  );
+
+  useEffect(() => {
+    const initial: Record<string, ProductOption[]> = {};
+    product.modifiers?.forEach((modifier) => {
+      initial[modifier.id] = [];
+    });
+    setSelectedOptions(initial);
+    setQuantity(1);
+    setNotes("");
+    setFeedback("");
+    setCurrentImgIndex(0);
+  }, [product]);
+
+  const unitPrice = useMemo(() => {
+    let value = product.price;
+    Object.values(selectedOptions).forEach((options) => {
+      options.forEach((option) => {
+        value += option.extraPrice;
+      });
+    });
+    return value;
+  }, [product.price, selectedOptions]);
+
+  const totalPrice = unitPrice * quantity;
 
   const handleShare = async () => {
     const shareData = {
       title: product.name,
-      text: `${product.name} - ${product.description || ""}`,
+      text: product.description ? `${product.name} — ${product.description}` : product.name,
       url: window.location.href,
     };
 
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch (err) {
-        console.warn("Compartilhamento nativo cancelado ou falhou:", err);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
       }
-    } else {
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 2500);
-      } catch (err) {
-        console.error("Falha ao copiar link:", err);
-      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setShowToast(true);
+      window.setTimeout(() => setShowToast(false), 2200);
+    } catch {
+      // O produto continua acessível pelo cardápio mesmo sem clipboard.
     }
   };
 
-  // Initialize selected options with defaults/required first options if applicable
-  useEffect(() => {
-    const initial: Record<string, ProductOption[]> = {};
-    product.modifiers?.forEach((modifier) => {
-      if (modifier.required && modifier.options.length > 0) {
-        // Pre-select first option for required modifiers
-        initial[modifier.id] = [modifier.options[0]];
-      } else {
-        initial[modifier.id] = [];
-      }
-    });
-    setSelectedOptions(initial);
-    setQuantity(1);
-    setNotes("");
-  }, [product]);
-
-  // Recalculate price whenever selected options or quantity changes
-  useEffect(() => {
-    let basePrice = product.price;
-
-    // Add prices of all selected options
-    Object.values(selectedOptions).forEach((optionsList) => {
-      (optionsList as ProductOption[]).forEach((opt) => {
-        basePrice += opt.extraPrice;
-      });
-    });
-
-    setTotalPrice(basePrice * quantity);
-  }, [selectedOptions, quantity, product]);
-
   const handleOptionSelect = (modifier: ProductModifier, option: ProductOption) => {
+    setFeedback("");
     const currentSelections = selectedOptions[modifier.id] || [];
 
     if (modifier.maxSelection === 1) {
-      // Radio button behavior: replace selection
-      setSelectedOptions({
-        ...selectedOptions,
-        [modifier.id]: [option]
-      });
-    } else {
-      // Checkbox behavior
-      const exists = currentSelections.some((s) => s.id === option.id);
-      let updated: ProductOption[];
-
-      if (exists) {
-        updated = currentSelections.filter((s) => s.id !== option.id);
-      } else {
-        if (currentSelections.length >= modifier.maxSelection) {
-          // Reached limit, ignore or swap first
-          updated = [...currentSelections.slice(1), option];
-        } else {
-          updated = [...currentSelections, option];
-        }
-      }
-
-      setSelectedOptions({
-        ...selectedOptions,
-        [modifier.id]: updated
-      });
-    }
-  };
-
-  const handleAdd = () => {
-    // Check if all required modifiers are satisfied
-    const unsatisfied = product.modifiers?.filter((modifier) => {
-      const selections = selectedOptions[modifier.id] || [];
-      return modifier.required && selections.length === 0;
-    });
-
-    if (unsatisfied && unsatisfied.length > 0) {
-      alert(`Por favor, preencha as opções obrigatórias: ${unsatisfied.map((m) => m.title).join(", ")}`);
+      setSelectedOptions((current) => ({ ...current, [modifier.id]: [option] }));
       return;
     }
 
-    onAddToCart(product, quantity, selectedOptions, notes);
+    const exists = currentSelections.some((selected) => selected.id === option.id);
+    if (exists) {
+      setSelectedOptions((current) => ({
+        ...current,
+        [modifier.id]: currentSelections.filter((selected) => selected.id !== option.id),
+      }));
+      return;
+    }
+
+    if (currentSelections.length >= modifier.maxSelection) {
+      setFeedback(`Você pode escolher até ${modifier.maxSelection} opção${modifier.maxSelection === 1 ? "" : "ões"} em ${modifier.title}.`);
+      return;
+    }
+
+    setSelectedOptions((current) => ({
+      ...current,
+      [modifier.id]: [...currentSelections, option],
+    }));
+  };
+
+  const handleAdd = () => {
+    const unsatisfied = product.modifiers?.filter((modifier) => {
+      const selections = selectedOptions[modifier.id] || [];
+      return modifier.required && selections.length === 0;
+    }) || [];
+
+    if (unsatisfied.length > 0) {
+      setFeedback(`Escolha ${unsatisfied.map((modifier) => modifier.title).join(", ")} antes de adicionar.`);
+      return;
+    }
+
+    onAddToCart(product, quantity, selectedOptions, notes.trim());
     onClose();
   };
 
-  const formattedTotalPrice = new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL"
-  }).format(totalPrice);
-
   return (
     <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       id="product-details-modal"
     >
-      {/* Modal Card wrapper */}
-      <div className="relative flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-card-app border border-slate-500/10 shadow-2xl sm:max-w-md sm:rounded-3xl overflow-hidden animate-slide-up">
-        
-        {/* Banner image carousel and close button */}
-        <div className="relative h-48 w-full shrink-0 select-none">
+      <div className="relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-[30px] border border-koma-border bg-koma-panel shadow-2xl sm:max-w-lg sm:rounded-[30px] animate-slide-up">
+        <div className="relative h-52 w-full shrink-0 overflow-hidden bg-koma-card sm:h-60">
           <img
             src={getProductImageUrl(galleryImages[currentImgIndex] || product.image)}
             alt={product.name}
-            className="h-full w-full object-cover transition-all duration-300"
+            className="h-full w-full object-cover transition duration-300"
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
-            onError={(e) => {
-              const target = e.currentTarget;
-              target.onerror = null;
-              target.src = LOCAL_PRODUCT_PLACEHOLDER;
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
             }}
           />
-          <div className="absolute inset-0 bg-linear-to-b from-black/40 via-transparent to-black/20" />
-          
-          {/* Carousel Arrows */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-black/25" />
+
+          <div className="absolute right-3 top-3 flex gap-2">
+            <button
+              type="button"
+              onClick={handleShare}
+              className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70"
+              title="Compartilhar produto"
+              aria-label="Compartilhar produto"
+              id="btn-share-product"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur transition hover:bg-black/70"
+              aria-label="Fechar detalhes do produto"
+              id="btn-close-modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
           {galleryImages.length > 1 && (
             <>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentImgIndex((prev) => (prev > 0 ? prev - 1 : galleryImages.length - 1));
-                }}
-                className="absolute left-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
-                title="Foto anterior"
+                onClick={() => setCurrentImgIndex((current) => current > 0 ? current - 1 : galleryImages.length - 1)}
+                className="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur"
+                aria-label="Foto anterior"
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentImgIndex((prev) => (prev < galleryImages.length - 1 ? prev + 1 : 0));
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
-                title="Próxima foto"
+                onClick={() => setCurrentImgIndex((current) => current < galleryImages.length - 1 ? current + 1 : 0)}
+                className="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-black/45 text-white backdrop-blur"
+                aria-label="Próxima foto"
               >
                 <ChevronRight className="h-5 w-5" />
               </button>
-
-              {/* Indicator Dots */}
-              <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/40 px-2.5 py-1 rounded-full backdrop-blur-xs">
-                {galleryImages.map((_, idx) => (
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full border border-white/10 bg-black/40 px-2.5 py-1.5 backdrop-blur">
+                {galleryImages.map((_, index) => (
                   <button
-                    key={idx}
+                    key={index}
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCurrentImgIndex(idx);
-                    }}
-                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                      idx === currentImgIndex ? "w-4 bg-primary" : "w-1.5 bg-white/60 hover:bg-white"
-                    }`}
+                    onClick={() => setCurrentImgIndex(index)}
+                    className={`h-1.5 rounded-full transition-all ${index === currentImgIndex ? "w-4 bg-emerald-400" : "w-1.5 bg-white/50"}`}
+                    aria-label={`Ver foto ${index + 1}`}
                   />
                 ))}
               </div>
             </>
           )}
-
-          <button
-            type="button"
-            onClick={handleShare}
-            className="absolute top-3 right-16 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
-            title="Compartilhar Produto"
-            aria-label="Compartilhar Produto"
-            id="btn-share-product"
-          >
-            <Share2 className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-koma-foreground hover:bg-black/80 transition cursor-pointer"
-            aria-label="Fechar modal de produto"
-            id="btn-close-modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
         {showToast && (
-          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white text-[11px] font-bold px-3 py-2 rounded-xl shadow-lg border border-emerald-400 animate-slide-up flex items-center gap-1.5 whitespace-nowrap">
-            <span>✓ Link do produto copiado!</span>
+          <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-xl border border-emerald-400/30 bg-[#0f241c] px-3 py-2 text-[10px] font-bold text-emerald-200 shadow-lg">
+            Link copiado
           </div>
         )}
 
-        {/* Modal content body */}
-        <div className="flex-1 overflow-y-auto p-5 no-scrollbar">
-          {/* Header titles */}
-          <div>
-            <h2 className="font-display text-xl font-bold text-text-app" id="modal-product-name">{product.name}</h2>
-            <p className="mt-1.5 text-xs text-text-app/60 leading-relaxed">{product.description}</p>
-            <span className="mt-3 block text-lg font-bold text-primary">
-              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(product.price)}
-            </span>
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 no-scrollbar">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="font-display text-xl font-black tracking-tight text-koma-foreground" id="modal-product-name">{product.name}</h2>
+              {product.description && (
+                <p className="mt-2 text-xs leading-relaxed text-koma-muted">{product.description}</p>
+              )}
+            </div>
+            <strong className="shrink-0 text-base font-black text-emerald-500">{formatPrice(product.price)}</strong>
           </div>
 
-          {/* Modifier Groups list */}
           {product.modifiers && product.modifiers.length > 0 && (
-            <div className="mt-6 flex flex-col gap-6">
+            <div className="mt-6 space-y-5 border-t border-koma-border pt-5">
               {product.modifiers.map((modifier) => {
                 const selections = selectedOptions[modifier.id] || [];
                 return (
-                  <div key={modifier.id} className="rounded-2xl border border-slate-500/10 bg-slate-500/5 p-4">
-                    <div className="flex items-center justify-between">
+                  <section key={modifier.id}>
+                    <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h4 className="text-sm font-bold text-text-app">{modifier.title}</h4>
-                        <p className="text-[10px] text-text-app/40">
-                          {modifier.maxSelection === 1 ? "Selecione 1 opção" : `Selecione até ${modifier.maxSelection} opções`}
+                        <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
+                        <p className="mt-0.5 text-[10px] text-koma-muted">
+                          {modifier.maxSelection === 1 ? "Escolha uma opção" : `Escolha até ${modifier.maxSelection} opções`}
                         </p>
                       </div>
-                      {modifier.required ? (
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold text-primary uppercase">
-                          Obrigatório
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-500/10 px-2 py-0.5 text-[9px] font-bold text-text-app/55 uppercase">
-                          Opcional
-                        </span>
-                      )}
+                      <span className={modifier.required
+                        ? "rounded-lg border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-[8px] font-black uppercase text-emerald-500"
+                        : "rounded-lg border border-koma-border bg-koma-card px-2 py-1 text-[8px] font-black uppercase text-koma-muted"}
+                      >
+                        {modifier.required ? "Obrigatório" : "Opcional"}
+                      </span>
                     </div>
 
-                    {/* Option items inside modifier */}
-                    <div className="mt-3 flex flex-col gap-1.5">
+                    <div className="mt-3 space-y-2">
                       {modifier.options.map((option) => {
-                        const isSelected = selections.some((s) => s.id === option.id);
+                        const selected = selections.some((item) => item.id === option.id);
                         return (
-                          <div
+                          <button
                             key={option.id}
+                            type="button"
                             onClick={() => handleOptionSelect(modifier, option)}
-                            className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition ${
-                              isSelected
-                                ? "border-primary bg-primary/5 text-primary"
-                                : "border-slate-500/10 bg-card-app text-text-app/80 hover:bg-slate-500/5"
+                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition ${
+                              selected
+                                ? "border-emerald-500/40 bg-emerald-500/[0.08]"
+                                : "border-koma-border bg-koma-card hover:border-emerald-500/25"
                             }`}
                           >
-                            <span className="text-xs font-semibold">{option.name}</span>
-                            <div className="flex items-center gap-2">
-                              {option.extraPrice > 0 && (
-                                <span className="text-xs font-bold text-text-app/40">
-                                  + R$ {option.extraPrice.toFixed(2)}
-                                </span>
-                              )}
-                              <div
-                                className={`flex h-5 w-5 items-center justify-center rounded-full border transition ${
-                                  isSelected
-                                    ? "bg-primary border-primary text-koma-foreground"
-                                    : "border-slate-500/15"
-                                  }`}
-                              >
-                                {isSelected && <Check className="h-3.5 w-3.5" />}
-                              </div>
-                            </div>
-                          </div>
+                            <span className="min-w-0 text-xs font-semibold text-koma-foreground">{option.name}</span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              {option.extraPrice > 0 && <span className="text-[10px] font-bold text-koma-muted">+ {formatPrice(option.extraPrice)}</span>}
+                              <span className={`grid h-5 w-5 place-items-center rounded-full border ${selected ? "border-emerald-500 bg-emerald-500 text-white" : "border-koma-border text-transparent"}`}>
+                                <Check className="h-3 w-3" />
+                              </span>
+                            </span>
+                          </button>
                         );
                       })}
                     </div>
-                  </div>
+                  </section>
                 );
               })}
             </div>
           )}
 
-          {/* Observations / Remarks text box */}
-          <div className="mt-6">
-            <label className="text-xs font-bold text-text-app" htmlFor="notes-textarea">Observações</label>
+          <label className="mt-6 block border-t border-koma-border pt-5">
+            <span className="text-xs font-black text-koma-foreground">Alguma observação?</span>
+            <span className="mt-0.5 block text-[10px] text-koma-muted">Opcional · até 200 caracteres</span>
             <textarea
               id="notes-textarea"
-              placeholder="Alguma restrição, ponto da carne ou observação especial? Escreva aqui..."
+              placeholder="Ex.: sem cebola, massa bem assada..."
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-3 text-xs text-text-app outline-hidden focus:border-primary transition min-h-[60px]"
+              onChange={(event) => setNotes(event.target.value)}
+              className="mt-2.5 min-h-[76px] w-full resize-none rounded-xl border border-koma-border bg-koma-card p-3 text-xs leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
               maxLength={200}
             />
-          </div>
+          </label>
+
+          {feedback && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-3 text-[10px] font-semibold leading-relaxed text-amber-500" role="alert">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{feedback}</span>
+            </div>
+          )}
         </div>
 
-        {/* Footer controls: Quantity selector and Add Button */}
-        <div className="sticky bottom-0 border-t border-slate-500/15 bg-card-app p-4 flex items-center justify-between gap-4 shadow-lg shrink-0">
-          {/* Quantity plus/minus */}
-          <div className="flex items-center gap-3 rounded-full border border-slate-500/15 p-1">
+        <div className="flex shrink-0 items-center gap-3 border-t border-koma-border bg-koma-panel p-4 sm:px-6">
+          <div className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-card p-1">
             <button
-              onClick={() => quantity > 1 && setQuantity(quantity - 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-500/10 hover:bg-slate-500/20 text-text-app/80 transition"
+              type="button"
+              onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+              className="grid h-9 w-9 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised disabled:opacity-40"
+              disabled={quantity <= 1}
               id="btn-qty-minus"
+              aria-label="Diminuir quantidade"
             >
               <Minus className="h-4 w-4" />
             </button>
-            <span className="w-6 text-center text-sm font-bold text-text-app">{quantity}</span>
+            <span className="w-8 text-center text-sm font-black text-koma-foreground">{quantity}</span>
             <button
-              onClick={() => setQuantity(quantity + 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-500/10 hover:bg-slate-500/20 text-text-app/80 transition"
+              type="button"
+              onClick={() => setQuantity((current) => current + 1)}
+              className="grid h-9 w-9 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised"
               id="btn-qty-plus"
+              aria-label="Aumentar quantidade"
             >
               <Plus className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Add to Cart button */}
           <button
+            type="button"
             onClick={handleAdd}
-            className="flex-1 rounded-xl bg-primary py-3 text-center text-sm font-bold text-koma-foreground shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition duration-150"
+            className="flex h-12 min-w-0 flex-1 items-center justify-between gap-3 rounded-xl bg-emerald-500 px-4 text-white transition hover:bg-emerald-600 active:scale-[0.99]"
             id="btn-add-to-cart-action"
           >
-            Adicionar • {formattedTotalPrice}
+            <span className="flex items-center gap-2 text-xs font-black uppercase tracking-wider">
+              <ShoppingBag className="h-4 w-4" /> Adicionar
+            </span>
+            <strong className="text-sm">{formatPrice(totalPrice)}</strong>
           </button>
         </div>
-
       </div>
     </div>
   );
