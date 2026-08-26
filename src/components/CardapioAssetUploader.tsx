@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  ExternalLink,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
@@ -24,6 +25,23 @@ type StatusType = 'idle' | 'uploading' | 'removing' | 'success' | 'error';
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const MAX_SIZE = 5 * 1024 * 1024;
 
+const readRestaurantIdFromAuthorization = (authorization?: string): number | null => {
+  const token = authorization?.replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+
+  try {
+    const payloadPart = token.split('.')[1];
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const payload = JSON.parse(window.atob(padded));
+    const restauranteId = Number(payload?.restaurante_id);
+    return Number.isInteger(restauranteId) && restauranteId > 0 ? restauranteId : null;
+  } catch {
+    return null;
+  }
+};
+
 export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   label,
   type,
@@ -38,6 +56,12 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
   const [hasImageError, setHasImageError] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const publicMenuUrl = useMemo(() => {
+    if (type !== 'banner') return null;
+    const authorization = authHeaders.Authorization || authHeaders.authorization;
+    const restauranteId = readRestaurantIdFromAuthorization(authorization);
+    return restauranteId ? `/cardapio?restaurante_id=${restauranteId}` : null;
+  }, [authHeaders.Authorization, authHeaders.authorization, type]);
 
   useEffect(() => {
     setHasImageError(false);
@@ -223,6 +247,19 @@ export const CardapioAssetUploader: React.FC<CardapioAssetUploaderProps> = ({
               {status === 'uploading' ? <Loader2 size={11} className="animate-spin" /> : currentUrl ? <RefreshCw size={11} /> : <Upload size={11} />}
               {currentUrl ? 'Trocar imagem' : 'Escolher imagem'}
             </button>
+
+            {publicMenuUrl && (
+              <a
+                href={publicMenuUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-koma-border bg-koma-panel px-2.5 py-1.5 text-[9px] font-bold text-koma-secondary transition hover:border-emerald-500/40 hover:bg-koma-raised hover:text-emerald-600 dark:hover:text-emerald-300"
+                title="Abrir o cardápio público deste restaurante"
+              >
+                <ExternalLink size={11} />
+                Ver cardápio
+              </a>
+            )}
 
             {currentUrl && !isConfirmingDelete && (
               <button
