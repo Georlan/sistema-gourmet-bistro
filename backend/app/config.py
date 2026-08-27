@@ -202,7 +202,7 @@ class Settings:
 
     KOMA_TEST_PREMIUM_RESTAURANTE_IDS: str = os.getenv(
         "KOMA_TEST_PREMIUM_RESTAURANTE_IDS",
-        "1",
+        "1,2",
     )
     SMARTPOS_INTENT_TTL_MINUTES: int = max(
         1,

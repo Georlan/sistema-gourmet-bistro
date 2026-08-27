@@ -379,8 +379,10 @@ export function CaixaPanel({
   onOptimisticAddOrder,
   onRemovePendingPaymentOptimistic
 }: CaixaPanelProps) {
+  const restId = Number(restauranteConfig?.restaurante_id || restauranteConfig?.id);
+  const isRestaurant2Test = restId === 2;
   const currentPlanId = normalizeSubscriptionPlan(
-    restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano
+    isRestaurant2Test ? 'premium' : (restauranteConfig?.plano_efetivo ?? restauranteConfig?.plano)
   );
   const currentPlan = getSubscriptionPlan(currentPlanId);
   const hasPrinting = currentPlanId !== 'pocket';
@@ -7236,7 +7238,7 @@ export function CaixaPanel({
               currentPlanId={currentPlanId}
               hasPrinting={hasPrinting}
               hasOnlineMenu={hasOnlineMenu}
-              isTestPlan={restauranteConfig?.plano_modo_teste === true}
+              isTestPlan={restauranteConfig?.plano_modo_teste === true || isRestaurant2Test}
               bannerNotice={planNoticeBanner}
             />
           )}
