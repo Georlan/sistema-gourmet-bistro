@@ -1,6 +1,7 @@
 import { expect, Page, test } from '@playwright/test';
 
 const API_ORIGIN = 'http://127.0.0.1:8000';
+const DESKTOP_BREAKPOINT = 1024;
 
 const now = new Date().toISOString();
 
@@ -159,7 +160,7 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
 
   await page.goto('/?view=caixa');
 
-  await expect(page.getByText('Pedidos por etapa', { exact: false })).toBeVisible();
+  await expect(page.locator('.orders-board')).toBeVisible();
 
   const pendingButton = page.getByRole('button', { name: /Aguardando aceite/i });
   await expect(pendingButton).toBeVisible();
@@ -174,7 +175,17 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
 
   await pendingCard.getByRole('button', { name: /Aceitar/i }).click();
 
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('Viewport não configurado.');
+  if (viewport.width < DESKTOP_BREAKPOINT) {
+    const digitalStageTab = page.getByRole('tab', { name: /Balcão/ });
+    await expect(digitalStageTab).toBeVisible();
+    await digitalStageTab.tap();
+    await expect(digitalStageTab).toHaveAttribute('aria-selected', 'true');
+  }
+
   const digitalColumn = page.locator('.orders-column--digital');
+  await expect(digitalColumn).toBeVisible();
   await expect(digitalColumn).toContainText('Ana Teste');
   await expect(digitalColumn).toContainText('Retirada');
   await expect(digitalColumn).toContainText('85999999999');
