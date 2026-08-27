@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, KeyRound, Phone, RefreshCw, ShieldCheck, User, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Coins, KeyRound, Phone, RefreshCw, Sparkles, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import {
   CustomerProfile,
@@ -87,7 +87,7 @@ export default function CardapioAuthModal({
       return;
     }
     if (cleanName.length < 2) {
-      setErrorMessage("Informe como devemos chamar você.");
+      setErrorMessage("Informe seu nome para personalizarmos seu atendimento.");
       return;
     }
 
@@ -123,89 +123,82 @@ export default function CardapioAuthModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       id="auth-modal-overlay"
     >
       <div
-        className="relative w-full max-w-md rounded-t-[28px] border border-koma-border bg-koma-panel p-5 shadow-2xl sm:rounded-[28px] sm:p-6 animate-scale-up"
+        className="relative w-full max-w-md rounded-t-[28px] border border-white/10 bg-[#0e1217] p-6 shadow-2xl sm:rounded-[28px] animate-scale-up"
         id="auth-modal-card"
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Fechar */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-koma-subtle transition hover:bg-koma-raised hover:text-koma-foreground cursor-pointer"
-          aria-label="Fechar identificação"
+          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-gray-400 transition hover:bg-white/10 hover:text-white cursor-pointer"
+          aria-label="Fechar"
         >
           <X className="h-5 w-5" />
         </button>
 
-        <div className="pr-10">
-          <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">
-            <span>Identificação opcional</span>
-            <span className="text-koma-muted">{step === "identify" ? "1 de 2" : "2 de 2"}</span>
+        {/* Header com Ícone e Benefícios */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-inner">
+            {step === "identify" ? <Coins className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
           </div>
-          <h2 className="mt-2 font-display text-xl font-black tracking-tight text-koma-foreground">
-            {step === "identify" ? "Salve seu histórico neste restaurante" : "Confirme seu celular"}
-          </h2>
-          <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-koma-muted">
-            {step === "identify"
-              ? "Use a identificação para acessar histórico, endereços e benefícios. Ela não é necessária para fazer um pedido."
-              : `Digite o código enviado para ${formatBrazilianPhone(normalizedPhone)} e informe seu nome.`}
-          </p>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+              {step === "identify" ? "Clube de Vantagens" : "Verificação Rápida"}
+            </span>
+            <h2 className="font-display text-lg font-black tracking-tight text-white">
+              {step === "identify" ? "Acesse seus Benefícios" : "Confirme seu WhatsApp"}
+            </h2>
+          </div>
         </div>
 
-        <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3 text-[10px] leading-relaxed text-koma-muted">
-          Se preferir, feche esta janela e continue o pedido como visitante usando apenas nome e celular na sacola.
-        </div>
+        <p className="mt-3 text-xs leading-relaxed text-gray-300">
+          {step === "identify"
+            ? "Ganhe cashback em cada pedido, resgate cupons exclusivos e acompanhe seu histórico."
+            : `Enviamos um código de 6 dígitos via WhatsApp para ${formatBrazilianPhone(normalizedPhone)}.`}
+        </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-2" aria-hidden="true">
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[9px] font-bold text-emerald-500">
-            {step === "verify" ? <Check size={12} /> : <Phone size={12} />}
-            Celular
-          </div>
-          <div className={step === "verify"
-            ? "flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[9px] font-bold text-emerald-500"
-            : "flex items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[9px] font-bold text-koma-muted"}
-          >
-            <KeyRound size={12} /> Código
-          </div>
+        {/* Indicador de Etapas */}
+        <div className="mt-4 flex items-center gap-2">
+          <div className="flex-1 h-1.5 rounded-full bg-emerald-500 transition-all duration-300" />
+          <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step === "verify" ? "bg-emerald-500" : "bg-white/10"}`} />
         </div>
 
         {errorMessage && (
-          <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400" role="alert">
+          <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400 animate-fade-in" role="alert">
             <p>{errorMessage}</p>
-            <button type="button" onClick={onClose} className="mt-2 text-[10px] font-black text-rose-200 underline underline-offset-2">
-              Continuar pedido sem identificar
-            </button>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4" id="auth-form-input">
           {step === "identify" ? (
             <label className="block">
-              <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
-              <span className="relative block">
-                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-koma-muted" />
+              <span className="mb-1.5 block text-xs font-bold text-gray-300">Seu WhatsApp (com DDD)</span>
+              <div className="relative">
+                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="tel"
                   autoFocus
                   inputMode="numeric"
                   autoComplete="tel"
-                  placeholder="(00) 00000-0000"
+                  placeholder="(11) 99999-9999"
                   value={phone}
                   onChange={(event) => {
                     setPhone(formatBrazilianPhone(event.target.value));
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                 />
-              </span>
+              </div>
             </label>
           ) : (
             <>
               <label className="block">
-                <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Código de 6 números</span>
+                <span className="mb-1.5 block text-xs font-bold text-gray-300">Código de 6 dígitos</span>
                 <input
                   type="text"
                   autoFocus
@@ -218,27 +211,27 @@ export default function CardapioAuthModal({
                     setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-12 w-full rounded-xl border border-koma-border bg-koma-card px-4 text-center font-mono text-xl tracking-[0.42em] text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                 />
               </label>
 
               <label className="block">
-                <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Como devemos chamar você?</span>
-                <span className="relative block">
-                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-koma-muted" />
+                <span className="mb-1.5 block text-xs font-bold text-gray-300">Como podemos te chamar?</span>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
                     maxLength={100}
                     autoComplete="name"
-                    placeholder="Seu nome"
+                    placeholder="Seu nome ou apelido"
                     value={name}
                     onChange={(event) => {
                       setName(event.target.value);
                       if (errorMessage) setErrorMessage("");
                     }}
-                    className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500"
+                    className="h-12 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
                   />
-                </span>
+                </div>
               </label>
             </>
           )}
@@ -246,41 +239,46 @@ export default function CardapioAuthModal({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
           >
-            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Receber código" : "Confirmar identificação"}</span>
+            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Acessar Benefícios" : "Confirmar e Entrar"}</span>
             {!isSubmitting && <ArrowRight className="h-4 w-4" />}
           </button>
 
-          {step === "verify" && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          {step === "verify" ? (
+            <div className="flex items-center justify-between pt-1 text-xs">
               <button
                 type="button"
                 onClick={() => {
                   setStep("identify");
                   setErrorMessage("");
                 }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-koma-subtle transition hover:text-koma-foreground cursor-pointer"
+                className="inline-flex items-center gap-1 font-semibold text-gray-400 hover:text-white transition cursor-pointer"
               >
-                <ArrowLeft className="h-3.5 w-3.5" /> Alterar número
+                <ArrowLeft className="h-3.5 w-3.5" /> Trocar número
               </button>
               <button
                 type="button"
                 disabled={isResending}
                 onClick={() => void requestCode(true)}
-                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 transition hover:text-emerald-500 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 disabled:opacity-50 transition cursor-pointer"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${isResending ? "animate-spin" : ""}`} />
                 Reenviar código
               </button>
             </div>
+          ) : (
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-xs font-semibold text-gray-400 hover:text-gray-200 transition underline underline-offset-4 cursor-pointer"
+              >
+                Continuar sem me identificar por enquanto
+              </button>
+            </div>
           )}
         </form>
-
-        <div className="mt-5 flex items-start gap-2 rounded-xl border border-koma-border bg-koma-card/70 p-3 text-[10px] leading-relaxed text-koma-muted">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-          <span>A identificação protege seu histórico e benefícios. O checkout como visitante continua disponível mesmo se esse serviço estiver indisponível.</span>
-        </div>
       </div>
     </div>
   );

@@ -359,16 +359,66 @@ export default function CardapioCartDrawer({
         </div>
 
         {cart.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center p-7 text-center">
-            <div className="grid h-16 w-16 place-items-center rounded-2xl border border-koma-border bg-koma-card text-koma-muted">
-              <ShoppingBag className="h-7 w-7" />
+          <div className="flex flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
+            <div className="mt-4 grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
+              <ShoppingBag className="h-8 w-8" />
             </div>
-            <h3 className="mt-4 text-sm font-black text-koma-foreground">Sua sacola está vazia</h3>
-            <p className="mt-1.5 max-w-[250px] text-xs leading-relaxed text-koma-muted">
-              Escolha um item no cardápio. Ele ficará guardado aqui enquanto você continua navegando.
+            <h3 className="mt-4 text-base font-black text-white">Sua sacola está vazia</h3>
+            <p className="mt-1 max-w-[280px] text-xs leading-relaxed text-gray-400">
+              Escolha suas delícias favoritas no cardápio para começar seu pedido.
             </p>
-            <button type="button" onClick={onClose} className="mt-5 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-5 py-2.5 text-xs font-black text-emerald-500">
-              Ver cardápio
+
+            {allProducts.length > 0 && (
+              <div className="mt-6 w-full text-left">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Mais Pedidos da Casa</span>
+                </div>
+                <div className="space-y-2.5">
+                  {allProducts.slice(0, 3).map((prod) => (
+                    <div
+                      key={prod.id}
+                      className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-white/10 bg-white/5 hover:border-emerald-500/30 transition"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={getProductImageUrl(prod.image)}
+                          alt={prod.name}
+                          className="w-11 h-11 rounded-lg object-cover bg-white/5 border border-white/10 shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
+                          }}
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-white truncate">{prod.name}</h4>
+                          <span className="text-xs font-extrabold text-emerald-400">{formatPrice(prod.price)}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onAddToCart) {
+                            onAddToCart(prod, 1);
+                          }
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold shrink-0 transition cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-6 w-full rounded-xl bg-white/10 hover:bg-white/15 py-3 text-xs font-bold text-white transition cursor-pointer"
+            >
+              Explorar todo o cardápio
             </button>
           </div>
         ) : (

@@ -102,11 +102,22 @@ export interface BrandConfig {
 
 export const LOCAL_PRODUCT_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300" fill="none">
-  <rect width="400" height="300" fill="#101512"/>
-  <circle cx="200" cy="145" r="54" stroke="#2B3831" stroke-width="3"/>
-  <circle cx="200" cy="145" r="37" stroke="#243029" stroke-width="2"/>
-  <path d="M138 88V202M126 88V126C126 136 132 142 138 142C144 142 150 136 150 126V88M264 88V202M264 88C249 101 248 126 264 139" stroke="#607068" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="200" cy="145" r="5" fill="#10B981"/>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1b2820"/>
+      <stop offset="100%" stop-color="#0d1410"/>
+    </radialGradient>
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bgGlow)"/>
+  <circle cx="200" cy="140" r="60" fill="#10B981" fill-opacity="0.06"/>
+  <path d="M155 160C155 135 175 115 200 115C225 115 245 135 245 160H155Z" fill="url(#iconGrad)" fill-opacity="0.25" stroke="#10B981" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M140 166H260C263 166 265 168 265 171C265 174 263 176 260 176H140C137 176 135 174 135 171C135 168 137 166 140 166Z" fill="#10B981" fill-opacity="0.4"/>
+  <circle cx="200" cy="106" r="6" fill="#10B981"/>
+  <path d="M175 190H225" stroke="#2B3E34" stroke-width="2" stroke-linecap="round"/>
 </svg>
 `);
 
