@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import datetime
+import json
 import re
 import unicodedata
 from typing import Any
@@ -95,7 +96,17 @@ def _parse_hours(value: Any) -> list[tuple[datetime.time, datetime.time]] | None
     return intervals or None
 
 
+def _decode_structured_schedule(schedule: Any) -> Any:
+    if not isinstance(schedule, str):
+        return schedule
+    try:
+        return json.loads(schedule)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return schedule
+
+
 def _schedule_entries(schedule: Any) -> list[tuple[Any, Any]]:
+    schedule = _decode_structured_schedule(schedule)
     if isinstance(schedule, dict):
         return list(schedule.items())
     if not isinstance(schedule, list):
