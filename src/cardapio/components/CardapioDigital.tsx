@@ -345,7 +345,7 @@ export default function CardapioDigital({
                 Pedido #{createdOrder.numero_pedido}
               </h3>
               <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">
-                Seu pedido entrou no sistema do restaurante. Você pode voltar ao cardápio e acompanhar as próximas etapas por lá.
+                Recebemos seu pedido e ele está aguardando o aceite do restaurante. Acompanhe aqui quando ele entrar em preparo.
               </p>
 
               <div className="mt-5 grid w-full max-w-md gap-2 text-left sm:grid-cols-2">
@@ -508,7 +508,7 @@ export default function CardapioDigital({
               <span>{isSubmitting ? "Enviando pedido…" : errorMessage ? "Tentar novamente" : "Fazer pedido"}</span>
             </button>
             <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">
-              Ao confirmar, o pedido entra imediatamente no painel do restaurante.
+              Ao confirmar, o pedido entra no painel do restaurante para aceite. A cozinha só começa depois que o restaurante aceitar.
             </p>
           </footer>
         )}
