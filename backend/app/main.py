@@ -344,6 +344,7 @@ app.add_middleware(
         "X-Tenant-ID",
         "X-Restaurante-ID",
         "X-Request-ID",
+        "X-Idempotency-Key",
     ],
     expose_headers=["X-Request-ID"],
 )
