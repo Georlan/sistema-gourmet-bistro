@@ -9,6 +9,10 @@ import re
 import unicodedata
 from typing import Any
 
+from sqlalchemy.orm import object_session
+from sqlalchemy.orm.exc import UnmappedInstanceError
+
+from ..models import CaixaTurno
 from ..timezone_utils import get_operational_now
 
 
@@ -160,14 +164,51 @@ def schedule_is_open(
     return False if parsed_any else None
 
 
+def _infer_open_cash_shift(restaurante: Any) -> bool:
+    """Detecta turno aberto quando o restaurante veio anexado a uma sessão ORM.
+
+    A rota pública já carrega o Restaurante pela sessão tenant-aware. Manter a
+    detecção aqui deixa a precedência da política centralizada e preserva
+    chamadas unitárias com objetos simples, que continuam assumindo caixa
+    fechado quando não há sessão disponível.
+    """
+
+    restaurante_id = getattr(restaurante, "id", None)
+    if not restaurante_id:
+        return False
+
+    try:
+        db = object_session(restaurante)
+    except UnmappedInstanceError:
+        return False
+    if db is None:
+        return False
+
+    return db.query(CaixaTurno.id).filter(
+        CaixaTurno.restaurante_id == restaurante_id,
+        CaixaTurno.status == "aberto",
+    ).first() is not None
+
+
 def evaluate_online_order_policy(
     restaurante: Any,
     configuracao: Any = None,
     *,
     modalidade: str | None = None,
     now: datetime.datetime | None = None,
+    cash_open: bool | None = None,
 ) -> OnlineOrderPolicy:
-    """Calcula se o servidor aceita um novo pedido e qual taxa deve aplicar."""
+    """Calcula se o servidor aceita um novo pedido e qual taxa deve aplicar.
+
+    Precedência operacional:
+    1. Forçado Fechado bloqueia sempre;
+    2. Forçado Aberto ignora apenas a agenda;
+    3. Caixa aberto ignora apenas a agenda;
+    4. sem override operacional, vale o horário cadastrado.
+
+    Restrições específicas, como delivery desativado, continuam valendo mesmo
+    com caixa aberto.
+    """
 
     override = _normalize_text(getattr(restaurante, "status_override", "automatico"))
     configured_delivery = (
@@ -191,7 +232,10 @@ def evaluate_online_order_policy(
         )
 
     forced_open = "forcado aberto" in override or override == "aberto"
-    if not forced_open:
+    cash_shift_open = _infer_open_cash_shift(restaurante) if cash_open is None else cash_open
+    operational_open = forced_open or cash_shift_open
+
+    if not operational_open:
         schedule_state = schedule_is_open(
             getattr(restaurante, "horarios_funcionamento", None),
             now=now,
@@ -217,10 +261,16 @@ def evaluate_online_order_policy(
             source="delivery_disabled",
         )
 
+    source = "automatic"
+    if forced_open:
+        source = "forced_open"
+    elif cash_shift_open:
+        source = "cash_open"
+
     return OnlineOrderPolicy(
         accepting_orders=True,
         delivery_enabled=delivery_enabled,
         pickup_enabled=pickup_enabled,
         delivery_fee=DEFAULT_DELIVERY_FEE,
-        source="forced_open" if forced_open else "automatic",
+        source=source,
     )
