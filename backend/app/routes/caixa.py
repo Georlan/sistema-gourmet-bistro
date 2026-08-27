@@ -1529,8 +1529,21 @@ def registrar_pagamento_comanda(
                 if i.status != 'cancelado':
                     i.pago = True
             # Close comanda
+            status_ant = comanda.delivery_status
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+            if comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
+                if comanda.delivery_status != "recusado":
+                    comanda.delivery_status = "finalizado"
+                    if status_ant != "finalizado":
+                        from .orders_core import _agendar_notificacao_whatsapp_status
+                        _agendar_notificacao_whatsapp_status(
+                            background_tasks,
+                            db,
+                            comanda,
+                            status_ant,
+                            "finalizado",
+                        )
             if comanda.mesa_id:
                 other_open = db.query(Comanda).filter(
                     Comanda.restaurante_id == rest_id,

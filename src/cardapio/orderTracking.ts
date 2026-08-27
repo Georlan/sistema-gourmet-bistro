@@ -324,14 +324,18 @@ export async function fetchOrderLiveStatus(
   }
 
   const data = await response.json();
+  const rawStatus = String(data.status || order.status || "pendente");
+  const isClosed = Boolean(data.fechada || data.fechado);
+  const finalStatus = isClosed && !isRejectedStatus(rawStatus) ? "finalizado" : rawStatus;
+
   const updated: StoredOrder = {
     ...order,
     id: String(data.id || order.id),
     numero_pedido: data.numero_pedido ?? order.numero_pedido,
-    status: String(data.status || order.status || "pendente"),
+    status: finalStatus,
     tipo: String(data.tipo || order.tipo || "Retirada"),
     total: Number(data.total ?? order.total ?? 0),
-    fechado: Boolean(data.fechada),
+    fechado: isClosed,
     created_at: data.criado_em || order.created_at,
     itens: Array.isArray(data.itens) ? data.itens : order.itens,
   };

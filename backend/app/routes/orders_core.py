@@ -1517,8 +1517,20 @@ def fechar_comanda(
             detail=f"Não é possível fechar uma comanda com saldo em aberto. Valor devido: R${subtotal:.2f} (ou R${total_com_taxa:.2f} com taxa). Valor pago: R${valor_pago:.2f}"
         )
 
+    status_anterior = comanda.delivery_status
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+    if comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
+        if comanda.delivery_status != "recusado":
+            comanda.delivery_status = "finalizado"
+            if status_anterior != "finalizado":
+                _agendar_notificacao_whatsapp_status(
+                    background_tasks,
+                    db,
+                    comanda,
+                    status_anterior,
+                    "finalizado",
+                )
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)

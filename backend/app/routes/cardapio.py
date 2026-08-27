@@ -478,10 +478,14 @@ def consultar_status_pedido_publico(
             for item in comanda.itens
         ]
 
+        status_retorno = comanda.delivery_status or "pendente"
+        if comanda.fechada and status_retorno != "recusado":
+            status_retorno = "finalizado"
+
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
-            "status": comanda.delivery_status or "pendente",
+            "status": status_retorno,
             "tipo": comanda.tipo,
             "total": _order_total(comanda),
             "fechada": comanda.fechada,
