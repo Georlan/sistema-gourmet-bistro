@@ -2,6 +2,9 @@ import os
 import secrets
 from urllib.parse import urlsplit
 
+OFFICIAL_PUBLIC_FRONTEND_ORIGIN = "https://sistema-gourmet-bistro.pages.dev"
+
+
 def normalize_cors_origin(raw: str) -> str:
     """
     Normaliza e valida uma origem CORS individual usando urlsplit.
@@ -146,8 +149,12 @@ class Settings:
     def get_cors_allowed_origins(self) -> list[str]:
         """
         Retorna a lista normalizada e estrita de origens permitidas para CORS.
-        Padrão seguro por ambiente: se ENVIRONMENT não for explicitamente 'development' ou 'test',
-        assume comportamento de produção ('production') sem localhost ou origens implícitas.
+
+        Em produção genérica não adicionamos localhost nem wildcards implícitos.
+        Quando o backend está rodando no Railway, porém, a origem HTTPS exata do
+        frontend público oficial do KÔMA é sempre autorizada. Isso mantém o
+        checkout first-party funcional mesmo se a variável CORS_ALLOWED_ORIGINS
+        for removida ou sobrescrita no ambiente de deploy.
         """
         raw_origins = [o.strip() for o in self.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
         
@@ -156,6 +163,16 @@ class Settings:
             clean_origin = normalize_cors_origin(origin_str)
             if clean_origin not in normalized:
                 normalized.append(clean_origin)
+
+        running_on_railway = bool(
+            os.getenv("RAILWAY_PROJECT_ID")
+            or os.getenv("RAILWAY_ENVIRONMENT_ID")
+            or os.getenv("RAILWAY_SERVICE_ID")
+        )
+        if running_on_railway:
+            official_origin = normalize_cors_origin(OFFICIAL_PUBLIC_FRONTEND_ORIGIN)
+            if official_origin not in normalized:
+                normalized.insert(0, official_origin)
                 
         env = os.getenv("ENVIRONMENT", "production").lower()
         if not normalized and env in ("development", "test"):
@@ -164,7 +181,7 @@ class Settings:
                 "http://127.0.0.1:5173",
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
-                "https://sistema-gourmet-bistro.pages.dev",
+                OFFICIAL_PUBLIC_FRONTEND_ORIGIN,
             ]
             for loc in local_defaults:
                 norm_loc = normalize_cors_origin(loc)

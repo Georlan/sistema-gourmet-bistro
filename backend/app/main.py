@@ -341,6 +341,7 @@ app.add_middleware(
         "Origin",
         "X-Requested-With",
         "X-Koma-Customer-Token",
+        "X-Idempotency-Key",
         "X-Tenant-ID",
         "X-Restaurante-ID",
         "X-Request-ID",
