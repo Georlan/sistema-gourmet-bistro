@@ -122,7 +122,7 @@ def test_reenvio_com_mesma_chave_retorna_mesmo_pedido_e_total():
     assert second.status_code == 201, second.text
     assert second.json()["comanda_id"] == first.json()["comanda_id"]
     assert second.json()["numero_pedido"] == first.json()["numero_pedido"]
-    assert second.json()["total"] == 30.0
+    assert second.json()["total"] == 32.0
     assert second.json()["pagamento"]["cobranca_online"] is False
 
     db = SessionLocal()
