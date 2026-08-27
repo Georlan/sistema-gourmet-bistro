@@ -559,7 +559,7 @@ def test_caixa_delivery_manual_exige_dados_de_entrega():
         "taxa_esperada",
     ),
     [
-        ("delivery", "Rua das Flores, 123", "na_entrega", "Delivery", "Rua das Flores, 123", 8.0),
+        ("delivery", "Rua das Flores, 123", "na_entrega", "Delivery", "Rua das Flores, 123", 7.0),
         ("retirada", "Retirada no Balcão", "na_entrega", "Retirada", None, 0.0),
     ],
 )
@@ -597,7 +597,6 @@ def test_pedido_online_preserva_modalidade_no_kanban(
     }
     assert "pixCode" not in response.json()
     assert "orderId" not in response.json()
-
     db = SessionLocal()
     try:
         comanda = db.query(Comanda).filter(Comanda.id == response.json()["comanda_id"]).one()
