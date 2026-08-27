@@ -26,7 +26,7 @@ export interface GrupoModificador {
 interface ComplementosTabProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  produtos: Array<{ id: string; nome: string; preco: number; categoria_id: string }>;
+  produtos: Array<{ id: string; nome: string; preco: number; categoria_id?: string }>;
   onShowNotification?: (msg: string, type?: 'success' | 'error') => void;
 }
 
