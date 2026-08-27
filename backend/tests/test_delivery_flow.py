@@ -72,7 +72,8 @@ def test_delivery_and_motoboy_flow(setup_db):
     assert mbs_res.status_code == 200
     assert len(mbs_res.json()) >= 1
     
-    # 4. Criar comanda de Delivery
+    # 4. Criar comanda de Delivery em estado legado "analise".
+    # A state machine deve tratá-lo como equivalente a "pendente".
     comanda_payload = {
         "mesa_id": None,
         "garcom_id": "u-del-01",
@@ -98,12 +99,28 @@ def test_delivery_and_motoboy_flow(setup_db):
     assert len(actives) >= 1
     assert any(a["id"] == comanda_id for a in actives)
     
-    # 6. Atualizar status para producao
+    # 6. Aceitar: analise/pendente -> producao
     status_res = client.put(f"/comandas/{comanda_id}/delivery/status?status_novo=producao", headers=headers)
     assert status_res.status_code == 200
     assert status_res.json()["delivery_status"] == "producao"
-    
-    # 7. Despachar com Motoboy
+
+    # A máquina não permite pular produção -> trânsito.
+    invalid_dispatch = client.post(
+        f"/comandas/{comanda_id}/delivery/despachar",
+        json={"motoboy_id": motoboy_id},
+        headers=headers,
+    )
+    assert invalid_dispatch.status_code == 409
+
+    # 7. Produção -> pronto antes do despacho.
+    ready_res = client.put(
+        f"/comandas/{comanda_id}/delivery/status?status_novo=pronto",
+        headers=headers,
+    )
+    assert ready_res.status_code == 200
+    assert ready_res.json()["delivery_status"] == "pronto"
+
+    # 8. Despachar com Motoboy: pronto -> transito
     dispatch_res = client.post(f"/comandas/{comanda_id}/delivery/despachar", json={"motoboy_id": motoboy_id}, headers=headers)
     assert dispatch_res.status_code == 200
     dispatch_data = dispatch_res.json()
