@@ -83,7 +83,7 @@ export default function CardapioAuthModal({
     }
 
     if (!/^\d{6}$/.test(code)) {
-      setErrorMessage("Digite os 6 números do código enviado pelo WhatsApp.");
+      setErrorMessage("Digite os 6 números do código recebido.");
       return;
     }
     if (cleanName.length < 2) {
@@ -142,20 +142,24 @@ export default function CardapioAuthModal({
 
         <div className="pr-10">
           <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">
-            <span>Identificação</span>
+            <span>Identificação opcional</span>
             <span className="text-koma-muted">{step === "identify" ? "1 de 2" : "2 de 2"}</span>
           </div>
           <h2 className="mt-2 font-display text-xl font-black tracking-tight text-koma-foreground">
-            {step === "identify" ? "Continue com seu celular" : "Só falta confirmar"}
+            {step === "identify" ? "Salve seu histórico neste restaurante" : "Confirme seu celular"}
           </h2>
           <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-koma-muted">
             {step === "identify"
-              ? "Usamos seu número para vincular o pedido e mostrar o acompanhamento neste restaurante."
+              ? "Use a identificação para acessar histórico, endereços e benefícios. Ela não é necessária para fazer um pedido."
               : `Digite o código enviado para ${formatBrazilianPhone(normalizedPhone)} e informe seu nome.`}
           </p>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-2" aria-hidden="true">
+        <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3 text-[10px] leading-relaxed text-koma-muted">
+          Se preferir, feche esta janela e continue o pedido como visitante usando apenas nome e celular na sacola.
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2" aria-hidden="true">
           <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[9px] font-bold text-emerald-500">
             {step === "verify" ? <Check size={12} /> : <Phone size={12} />}
             Celular
@@ -170,7 +174,10 @@ export default function CardapioAuthModal({
 
         {errorMessage && (
           <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400" role="alert">
-            {errorMessage}
+            <p>{errorMessage}</p>
+            <button type="button" onClick={onClose} className="mt-2 text-[10px] font-black text-rose-200 underline underline-offset-2">
+              Continuar pedido sem identificar
+            </button>
           </div>
         )}
 
@@ -182,7 +189,6 @@ export default function CardapioAuthModal({
                 <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-koma-muted" />
                 <input
                   type="tel"
-                  required
                   autoFocus
                   inputMode="numeric"
                   autoComplete="tel"
@@ -202,7 +208,6 @@ export default function CardapioAuthModal({
                 <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Código de 6 números</span>
                 <input
                   type="text"
-                  required
                   autoFocus
                   inputMode="numeric"
                   autoComplete="one-time-code"
@@ -223,7 +228,6 @@ export default function CardapioAuthModal({
                   <User className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-koma-muted" />
                   <input
                     type="text"
-                    required
                     maxLength={100}
                     autoComplete="name"
                     placeholder="Seu nome"
@@ -244,7 +248,7 @@ export default function CardapioAuthModal({
             disabled={isSubmitting}
             className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
           >
-            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Receber código" : "Confirmar e continuar"}</span>
+            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Receber código" : "Confirmar identificação"}</span>
             {!isSubmitting && <ArrowRight className="h-4 w-4" />}
           </button>
 
@@ -275,7 +279,7 @@ export default function CardapioAuthModal({
 
         <div className="mt-5 flex items-start gap-2 rounded-xl border border-koma-border bg-koma-card/70 p-3 text-[10px] leading-relaxed text-koma-muted">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-          <span>O código serve para proteger seu histórico de pedidos e evitar que outra pessoa use seu número.</span>
+          <span>A identificação protege seu histórico e benefícios. O checkout como visitante continua disponível mesmo se esse serviço estiver indisponível.</span>
         </div>
       </div>
     </div>
