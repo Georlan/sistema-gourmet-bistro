@@ -54,7 +54,7 @@ def test_gerar_link_motoboy_flow():
     cmd_id = f"cmd-mb-{uuid.uuid4().hex[:6]}"
     lanc_id = f"lanc-mb-{uuid.uuid4().hex[:6]}"
 
-    # 3. Criar uma comanda em trânsito para o motoboy 10
+    # 3. Criar uma comanda de entrega em trânsito para o motoboy 10
     with SessionLocal() as db:
         comanda = Comanda(
             id=cmd_id,
@@ -62,6 +62,7 @@ def test_gerar_link_motoboy_flow():
             garcom_id="u-admin-test",
             numero_pedido=999,
             identificador="Maria Cliente",
+            tipo="Entrega",
             delivery_telefone="81988887777",
             delivery_endereco="Rua Principal, 100",
             delivery_status="transito",

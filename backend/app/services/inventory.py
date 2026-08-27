@@ -4,11 +4,38 @@ from collections.abc import Iterable
 
 from sqlalchemy.orm import Session
 
-from ..models import Insumo, Item, MovimentacaoEstoque, Produto, ProdutoInsumo
+from ..models import Comanda, Insumo, Item, MovimentacaoEstoque, Produto, ProdutoInsumo
 
 
 SALE_ORIGIN = "venda_automatica"
 SALE_REVERSAL_ORIGIN = "cancelamento_venda"
+_PENDING_ACCEPTANCE_STATUSES = {"analise", "pendente"}
+_PENDING_ACCEPTANCE_TYPES = {"delivery", "entrega", "retirada"}
+
+
+def _aguarda_aceite_operacional(db: Session, item: Item) -> bool:
+    """Retorna True quando o item pertence a um pedido ainda não aceito.
+
+    A regra vale para qualquer origem que use a gaveta de aceite. Vendas diretas
+    do caixa nascem em ``producao`` e continuam baixando estoque imediatamente.
+    """
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == int(item.restaurante_id),
+            Comanda.id == item.comanda_id,
+        )
+        .first()
+    )
+    if comanda is None:
+        return False
+
+    status = (comanda.delivery_status or "").strip().casefold()
+    tipo = (comanda.tipo or "").strip().casefold()
+    return (
+        status in _PENDING_ACCEPTANCE_STATUSES
+        and tipo in _PENDING_ACCEPTANCE_TYPES
+    )
 
 
 def consumir_estoque_dos_itens(
@@ -16,8 +43,14 @@ def consumir_estoque_dos_itens(
     itens: Iterable[Item],
     *,
     usuario_id: str | None = None,
+    liberar_pendente: bool = False,
 ) -> None:
     """Baixa a ficha técnica de cada item uma única vez.
+
+    Pedidos que ainda aguardam aceite não consomem estoque. O primeiro aceite
+    chama esta função com ``liberar_pendente=True`` dentro da mesma transação da
+    mudança para produção. A checagem por movimentação torna retries seguros e
+    também impede dupla baixa de pedidos pendentes criados antes desta regra.
 
     A venda não é bloqueada por saldo insuficiente: restaurantes podem operar
     durante uma divergência física, enquanto o saldo negativo permanece visível
@@ -26,6 +59,9 @@ def consumir_estoque_dos_itens(
 
     for item in itens:
         restaurante_id = int(item.restaurante_id)
+        if not liberar_pendente and _aguarda_aceite_operacional(db, item):
+            continue
+
         receitas = (
             db.query(ProdutoInsumo)
             .filter(

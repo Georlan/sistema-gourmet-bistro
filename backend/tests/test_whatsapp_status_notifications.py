@@ -81,7 +81,12 @@ def _headers():
     return {"Authorization": f"Bearer {token}"}
 
 
-def _criar_comanda(tipo: str, status_inicial: str = "pendente") -> str:
+def _criar_comanda(
+    tipo: str,
+    status_inicial: str = "pendente",
+    *,
+    motoboy_id: int | None = None,
+) -> str:
     comanda_id = f"whatsapp-{uuid.uuid4().hex}"
     tenant_token = current_restaurante_id.set(RESTAURANTE_ID)
     try:
@@ -98,6 +103,7 @@ def _criar_comanda(tipo: str, status_inicial: str = "pendente") -> str:
                     delivery_telefone=TELEFONE,
                     delivery_endereco="Rua dos Testes, 10",
                     delivery_taxa=0,
+                    motoboy_id=motoboy_id,
                     fechada=False,
                     valor_pago=0,
                 )
@@ -109,21 +115,27 @@ def _criar_comanda(tipo: str, status_inicial: str = "pendente") -> str:
 
 
 @pytest.mark.parametrize(
-    ("tipo", "novo_status", "trecho_esperado"),
+    ("tipo", "status_inicial", "novo_status", "motoboy_id", "trecho_esperado"),
     [
         (
             "Retirada",
+            "producao",
             "pronto",
+            None,
             "🎉 Seu pedido está pronto! Pode retirar na loja.",
         ),
         (
             "Entrega",
+            "pronto",
             "transito",
+            MOTOBOY_ID,
             "🛵 Saiu para entrega!",
         ),
         (
             "Delivery",
+            "pendente",
             "recusado",
+            None,
             "❌ Não conseguimos atender seu pedido.",
         ),
     ],
@@ -131,7 +143,9 @@ def _criar_comanda(tipo: str, status_inicial: str = "pendente") -> str:
 def test_mudanca_status_enfileira_notificacao(
     monkeypatch,
     tipo,
+    status_inicial,
     novo_status,
+    motoboy_id,
     trecho_esperado,
 ):
     chamadas = []
@@ -140,7 +154,11 @@ def test_mudanca_status_enfileira_notificacao(
         "enviar_texto_whatsapp",
         lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
     )
-    comanda_id = _criar_comanda(tipo)
+    comanda_id = _criar_comanda(
+        tipo,
+        status_inicial,
+        motoboy_id=motoboy_id,
+    )
 
     response = client.put(
         f"/comandas/{comanda_id}/delivery/status?status_novo={novo_status}",
@@ -153,7 +171,6 @@ def test_mudanca_status_enfileira_notificacao(
     assert trecho_esperado in chamadas[0][1]
 
 
-
 def test_status_repetido_nao_duplica_notificacao(monkeypatch):
     chamadas = []
     monkeypatch.setattr(
@@ -161,7 +178,7 @@ def test_status_repetido_nao_duplica_notificacao(monkeypatch):
         "enviar_texto_whatsapp",
         lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
     )
-    comanda_id = _criar_comanda("Retirada")
+    comanda_id = _criar_comanda("Retirada", "producao")
 
     primeira = client.put(
         f"/comandas/{comanda_id}/delivery/status?status_novo=pronto",
@@ -184,7 +201,7 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
         "enviar_texto_whatsapp",
         lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
     )
-    comanda_id = _criar_comanda("Entrega")
+    comanda_id = _criar_comanda("Entrega", "pronto")
 
     response = client.post(
         f"/comandas/{comanda_id}/delivery/despachar",
@@ -202,7 +219,6 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
     assert len(chamadas) == 1
     assert chamadas[0][0] == TELEFONE
     assert "entrega" in chamadas[0][1].lower()
-
 
 
 def test_falha_evolution_nao_impede_transicao(monkeypatch):
@@ -224,7 +240,7 @@ def test_falha_evolution_nao_impede_transicao(monkeypatch):
         "Client",
         lambda *args, **kwargs: ClienteComFalha(),
     )
-    comanda_id = _criar_comanda("Retirada")
+    comanda_id = _criar_comanda("Retirada", "producao")
 
     response = client.put(
         f"/comandas/{comanda_id}/delivery/status?status_novo=pronto",
