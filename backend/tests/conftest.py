@@ -3,6 +3,7 @@ Global Pytest Configuration & Safety Circuit Breaker.
 Enforces strict test database isolation and prevents tests from running against Production.
 """
 import os
+import time
 
 import pytest
 
@@ -24,7 +25,16 @@ def pytest_configure(config):
     """
     Pytest hook executed at startup before any test collection/execution.
     Checks environment variables and blocks execution if PRODUCTION credentials are used.
+
+    Também fixa o relógio do processo em UTC. O runtime persiste timestamps
+    legados ``DateTime`` como UTC naive; deixar ``datetime.now()`` depender do
+    fuso da máquina torna fixtures temporais não determinísticas e pode mover
+    pagamentos entre dias operacionais diferentes.
     """
+    os.environ["TZ"] = "UTC"
+    if hasattr(time, "tzset"):
+        time.tzset()
+
     raw_db_url = os.environ.get("DATABASE_URL", "")
     raw_sup_url = os.environ.get("SUPABASE_URL", "")
 
