@@ -93,6 +93,21 @@ def _is_delivery_or_pickup(comanda: Comanda) -> bool:
     }
 
 
+def _normalize_legacy_progress_target(comanda: Comanda, target: str) -> str:
+    """Traduz a CTA antiga de produção para o próximo estado canônico.
+
+    O Caixa legado ainda envia ``transito`` ao clicar na ação visual que significa
+    "pedido pronto". A tradução acontece somente quando o pedido já está em
+    produção; assim a state machine continua proibindo saltos reais e o estado
+    persistido permanece ``pronto``. Em pedidos já prontos, ``transito`` continua
+    significando despacho de delivery e segue as regras normais.
+    """
+    current = normalize_order_status(comanda.delivery_status)
+    if current == "producao" and target == "transito":
+        return "pronto"
+    return target
+
+
 @router.put("/{comanda_id}/delivery/status", response_model=ComandaResponse)
 def atualizar_status_delivery(
     comanda_id: str,
@@ -121,6 +136,7 @@ def atualizar_status_delivery(
             detail="A comanda informada não é um pedido de delivery ou retirada.",
         )
 
+    target = _normalize_legacy_progress_target(comanda, target)
     transition = _transition_or_409(comanda, target)
     if not transition.changed:
         return comanda
