@@ -76,7 +76,9 @@ def allowed_order_targets(current_status: str | None, order_type: str | None) ->
     if current == "pendente":
         return {"producao", "recusado"}
     if current == "producao":
-        return {"pronto"}
+        # Depois do aceite o restaurante ainda precisa conseguir cancelar por
+        # indisponibilidade operacional; nesse caso o estoque já baixado é estornado.
+        return {"pronto", "recusado"}
     if current == "pronto":
         if kind == "retirada":
             return {"finalizado"}
