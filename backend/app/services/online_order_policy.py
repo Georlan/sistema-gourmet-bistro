@@ -170,11 +170,14 @@ def evaluate_online_order_policy(
     """Calcula se o servidor aceita um novo pedido e qual taxa deve aplicar."""
 
     override = _normalize_text(getattr(restaurante, "status_override", "automatico"))
-    delivery_enabled = bool(
+    configured_delivery = (
         getattr(configuracao, "delivery_ativo", True)
         if configuracao is not None
         else True
     )
+    # Bancos legados podem conter NULL antes do default atual. Somente False
+    # explícito representa uma decisão do restaurante de desligar o delivery.
+    delivery_enabled = configured_delivery is not False
     pickup_enabled = True
 
     if "forcado fechado" in override or override == "fechado":
