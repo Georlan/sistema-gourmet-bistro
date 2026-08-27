@@ -76,6 +76,40 @@ def enforce_test_database_isolation():
 
 
 @pytest.fixture(autouse=True)
+def isolate_fixed_report_window(request):
+    """Evita colisão entre seed relativo e a janela histórica fixa do relatório.
+
+    ``test_relatorios`` mantém uma venda-base em ``now - 15 dias`` para os
+    cenários móveis de 30 dias. Um teste específico, porém, valida 11/08/2026
+    com timestamps fixos. Quando a suíte roda perto de 27/08, a venda-base pode
+    cair na mesma janela e transformar um teste determinístico em flake.
+
+    O teste da janela fixa deve medir apenas a venda histórica que ele próprio
+    cria; removemos somente ``pay-1`` depois do setup daquele teste. Nenhuma
+    regra de relatório/runtime é alterada.
+    """
+    if request.node.name != "test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas":
+        yield
+        return
+
+    # Garante que o fixture local do módulo terminou de semear o banco antes de
+    # removermos a venda relativa usada pelos demais cenários do arquivo.
+    request.getfixturevalue("setup_database")
+    module = request.module
+    db = module.TestingSessionLocal()
+    try:
+        from app.models import Pagamento
+
+        db.query(Pagamento).filter(Pagamento.id == "pay-1").delete(
+            synchronize_session=False
+        )
+        db.commit()
+    finally:
+        db.close()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def isolate_stage3c_sqlite_metadata_seed(request):
     """Impede a seed global do runtime de contaminar bancos SQLite locais do 3C.
 
