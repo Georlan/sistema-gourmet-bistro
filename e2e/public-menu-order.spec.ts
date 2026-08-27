@@ -205,7 +205,7 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   await page.getByPlaceholder('Rua, número, complemento e bairro').fill('Rua das Flores, 123, Centro');
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
-  await expect(page.getByText('Rua das Flores, 123, Centro', { exact: true })).toBeVisible();
+  await expect(page.locator('#checkout-card').getByText('Rua das Flores, 123, Centro', { exact: true })).toBeVisible();
   await expect(page.getByText(/Taxa de entrega estimada/)).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
