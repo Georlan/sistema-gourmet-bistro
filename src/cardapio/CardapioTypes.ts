@@ -11,6 +11,22 @@ export interface ProductOption {
   extraPrice: number;
 }
 
+export interface ModifierOption {
+  id: string;
+  name: string;
+  extraPrice: number;
+  active?: boolean;
+}
+
+export interface ModifierGroup {
+  id: string;
+  name: string;
+  minSelection: number;
+  maxSelection: number;
+  type: 'obrigatorio' | 'opcional' | 'meio_a_meio';
+  options: ModifierOption[];
+}
+
 export interface ProductModifier {
   id: string;
   title: string;
@@ -28,7 +44,13 @@ export interface Product {
   imagesGallery?: string[];
   category: string;
   modifiers?: ProductModifier[];
+  modifierGroups?: ModifierGroup[];
   isAvailable?: boolean;
+}
+
+export interface BairroTaxa {
+  bairro: string;
+  taxa: number;
 }
 
 export interface SocialNetwork {
@@ -71,6 +93,11 @@ export interface BrandConfig {
   operatingHours?: OperatingHours[];
   googleMapsUrl?: string;
   storeStatus?: "open" | "closed" | "automatic";
+  pedidoMinimo?: number;
+  freteGratisValor?: number;
+  tipoTaxaEntrega?: string;
+  tabelaTaxasBairros?: BairroTaxa[];
+  taxaEntregaPadrao?: number;
 }
 
 export const LOCAL_PRODUCT_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`

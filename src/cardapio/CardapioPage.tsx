@@ -208,6 +208,23 @@ export default function CardapioPage() {
           : [getProductImageUrl(String(product.imagem_url || ""))],
         category: categoryMap[String(product.categoria_id)] || "Outros",
         modifiers: [],
+        modifierGroups: Array.isArray(product.grupos_modificadores)
+          ? product.grupos_modificadores.map((g: any) => ({
+              id: String(g.id),
+              name: String(g.nome || ""),
+              minSelection: Number(g.min_selecoes || 0),
+              maxSelection: Number(g.max_selecoes || 1),
+              type: g.tipo || "opcional",
+              options: Array.isArray(g.opcoes)
+                ? g.opcoes.map((o: any) => ({
+                    id: String(o.id || ""),
+                    name: String(o.nome || ""),
+                    extraPrice: Number(o.preco_adicional || 0),
+                    active: o.ativo !== false,
+                  }))
+                : [],
+            }))
+          : [],
         isAvailable: true,
       }));
 
@@ -283,6 +300,16 @@ export default function CardapioPage() {
         paymentMethods,
         operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
+        pedidoMinimo: Number(restaurant.pedido_minimo || 0),
+        freteGratisValor: Number(restaurant.frete_gratis_valor || 0),
+        tipoTaxaEntrega: String(restaurant.tipo_taxa_entrega || "fixa"),
+        tabelaTaxasBairros: Array.isArray(restaurant.tabela_taxas_bairros)
+          ? restaurant.tabela_taxas_bairros.map((b: any) => ({
+              bairro: String(b.bairro || ""),
+              taxa: Number(b.taxa || 0),
+            }))
+          : [],
+        taxaEntregaPadrao: Number(restaurant.taxa_entrega_padrao || 7),
         storeStatus: statusOverride.includes("fech")
           ? "closed"
           : statusOverride.includes("abert")
@@ -790,11 +817,15 @@ export default function CardapioPage() {
           cart={cart}
           restaurantId={activeBrand.id}
           restaurantAddress={activeBrand.address}
+          brandConfig={activeBrand}
+          allProducts={activeBrand.products}
+          onAddToCart={handleAddToCart}
           onClose={() => setIsCartOpen(false)}
           onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
           onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
           onPlaceOrder={(request) => {
             setCheckoutRequest(request);
+            setIsCartOpen(false);
             setIsCheckoutOpen(true);
           }}
           user={user}
@@ -831,6 +862,13 @@ export default function CardapioPage() {
           customerName={checkoutRequest.customerName}
           customerPhone={checkoutRequest.customerPhone}
           customerToken={customerToken}
+          paymentMethodDetail={checkoutRequest.paymentMethodDetail}
+          trocoPara={checkoutRequest.trocoPara}
+          bairro={checkoutRequest.bairro}
+          cupomCodigo={checkoutRequest.cupomCodigo}
+          descontoCupom={checkoutRequest.descontoCupom}
+          usarCashback={checkoutRequest.usarCashback}
+          descontoCashback={checkoutRequest.descontoCashback}
           onClose={() => {
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);

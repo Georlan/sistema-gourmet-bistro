@@ -58,9 +58,28 @@ export default function CardapioProductModal({
     [product],
   );
 
+  const allModifiers = useMemo(() => {
+    if (product.modifiers && product.modifiers.length > 0) return product.modifiers;
+    if (product.modifierGroups && product.modifierGroups.length > 0) {
+      return product.modifierGroups.map((g) => ({
+        id: g.id,
+        title: g.name,
+        required: g.type === "obrigatorio" || g.minSelection > 0,
+        maxSelection: g.maxSelection,
+        minSelection: g.minSelection,
+        options: g.options.map((o) => ({
+          id: o.id,
+          name: o.name,
+          extraPrice: o.extraPrice,
+        })),
+      }));
+    }
+    return [];
+  }, [product]);
+
   useEffect(() => {
     const initial: Record<string, ProductOption[]> = {};
-    product.modifiers?.forEach((modifier) => {
+    allModifiers.forEach((modifier) => {
       initial[modifier.id] = [];
     });
     setSelectedOptions(initial);
@@ -68,7 +87,7 @@ export default function CardapioProductModal({
     setNotes("");
     setFeedback("");
     setCurrentImgIndex(0);
-  }, [product]);
+  }, [allModifiers, product]);
 
   const unitPrice = useMemo(() => {
     let value = product.price;
@@ -107,7 +126,7 @@ export default function CardapioProductModal({
     }
   };
 
-  const handleOptionSelect = (modifier: ProductModifier, option: ProductOption) => {
+  const handleOptionSelect = (modifier: any, option: ProductOption) => {
     setFeedback("");
     const currentSelections = selectedOptions[modifier.id] || [];
 
@@ -137,13 +156,14 @@ export default function CardapioProductModal({
   };
 
   const handleAdd = () => {
-    const unsatisfied = product.modifiers?.filter((modifier) => {
+    const unsatisfied = allModifiers.filter((modifier) => {
       const selections = selectedOptions[modifier.id] || [];
-      return modifier.required && selections.length === 0;
-    }) || [];
+      const minReq = (modifier as any).minSelection || (modifier.required ? 1 : 0);
+      return selections.length < minReq;
+    });
 
     if (unsatisfied.length > 0) {
-      setFeedback(`Escolha ${unsatisfied.map((modifier) => modifier.title).join(", ")} antes de adicionar.`);
+      setFeedback(`Selecione as opções obrigatórias em ${unsatisfied.map((m) => m.title).join(", ")} antes de adicionar.`);
       return;
     }
 
@@ -246,9 +266,9 @@ export default function CardapioProductModal({
             <strong className="shrink-0 text-base font-black text-emerald-500">{formatPrice(product.price)}</strong>
           </div>
 
-          {product.modifiers && product.modifiers.length > 0 && (
+          {allModifiers.length > 0 && (
             <div className="mt-6 space-y-5 border-t border-koma-border pt-5">
-              {product.modifiers.map((modifier) => {
+              {allModifiers.map((modifier) => {
                 const selections = selectedOptions[modifier.id] || [];
                 return (
                   <section key={modifier.id}>

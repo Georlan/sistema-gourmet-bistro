@@ -37,6 +37,8 @@ import { normalizeOperationalTimestamp } from '../domain';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
+import ComplementosTab from './cardapio/ComplementosTab';
+import CuponsTab from './clientes/CuponsTab';
 import { CategoriaModal } from './cardapio/CategoriaModal';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { OperationalBanner } from './shared/OperationalBanner';
@@ -4631,6 +4633,7 @@ export function CaixaPanel({
 
           {activeTab === 'cardapio' && [
             { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
+            { id: 'complementos', label: 'Complementos' },
             { id: 'categorias', label: 'Preparo e impressão', count: apiCategorias.length }
           ].map(sub => (
             <button
@@ -4639,7 +4642,9 @@ export function CaixaPanel({
               className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}
             >
               {sub.label}
-              <span aria-hidden="true" className={clsx('ml-1.5', 'rounded-full', 'px-1.5', 'py-0.5', 'font-mono', 'text-[8px]', activeSubTab === sub.id ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-muted')}>{sub.count}</span>
+              {sub.count !== undefined && (
+                <span aria-hidden="true" className={clsx('ml-1.5', 'rounded-full', 'px-1.5', 'py-0.5', 'font-mono', 'text-[8px]', activeSubTab === sub.id ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-muted')}>{sub.count}</span>
+              )}
             </button>
           ))}
 
@@ -4690,11 +4695,13 @@ export function CaixaPanel({
 
           {activeTab === 'clientes' && [
             { id: 'clientes', label: 'Clientes' },
-            { id: 'fidelidade', label: 'Programa de Fidelidade' }
+            { id: 'fidelidade', label: 'Programa de Fidelidade' },
+            { id: 'cupons', label: 'Cupons & Promoções' }
           ].map(sub => {
             const isSubActive = (
               (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
               (sub.id === 'fidelidade' && ['fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
+              (sub.id === 'cupons' && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) ||
               activeSubTab === sub.id
             );
             return (
@@ -7503,6 +7510,29 @@ export function CaixaPanel({
                 setActiveSubTab('produtos');
               }}
             />
+            </div>
+          )}
+
+          {/* ABA COMPLEMENTOS */}
+          {activeTab === 'cardapio' && ['complementos', 'adicionais', 'modificadores'].includes(activeSubTab) && (
+            <div className="space-y-4">
+              <ComplementosTab
+                apiBaseUrl={apiBaseUrl}
+                authHeaders={authHeaders}
+                produtos={apiProdutos}
+                onShowNotification={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
+              />
+            </div>
+          )}
+
+          {/* ABA CUPONS */}
+          {activeTab === 'clientes' && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab) && (
+            <div className="space-y-4">
+              <CuponsTab
+                apiBaseUrl={apiBaseUrl}
+                authHeaders={authHeaders}
+                onShowNotification={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
+              />
             </div>
           )}
 

@@ -22,7 +22,9 @@ from .routes import (
     cardapio_clientes,
     cardapio_config_bridge,
     cardapio_digital,
+    cupons,
     estoque,
+    modificadores,
     optimization,
     orders,
     print_agents,
@@ -367,6 +369,9 @@ app.include_router(optimization.router)
 app.include_router(estoque.router)
 app.include_router(cardapio.router)
 app.include_router(cardapio_clientes.router)
+app.include_router(cupons.router)
+app.include_router(cupons.public_router)
+app.include_router(modificadores.router)
 app.include_router(print_agents.router)
 app.include_router(printing.router)
 app.include_router(cardapio_digital.router)

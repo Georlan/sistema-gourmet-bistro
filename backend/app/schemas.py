@@ -457,6 +457,11 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_transferir_item: bool
     perm_garcom_chamar: bool
     perm_garcom_ociosas: bool
+    pedido_minimo: Optional[float] = 0.0
+    frete_gratis_valor: Optional[float] = 0.0
+    tipo_taxa_entrega: Optional[str] = "fixa"
+    tabela_taxas_bairros: Optional[list] = []
+    tabela_taxas_km: Optional[list] = []
     plano: Optional[str] = "pocket"
     plano_efetivo: Optional[str] = "pocket"
     plano_modo_teste: bool = False
@@ -468,6 +473,11 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     nicho: Optional[str] = None
     mapa_mesas_ativo: Optional[bool] = None
     delivery_ativo: Optional[bool] = None
+    pedido_minimo: Optional[float] = None
+    frete_gratis_valor: Optional[float] = None
+    tipo_taxa_entrega: Optional[str] = None
+    tabela_taxas_bairros: Optional[list] = None
+    tabela_taxas_km: Optional[list] = None
     taxa_servico_ativa: Optional[bool] = None
     taxa_servico_padrao: Optional[float] = None
     meta_mensal: Optional[float] = None
@@ -744,6 +754,12 @@ class CardapioPublicRestaurantResponse(BaseModel):
     formas_pagamento_aceitas: Optional[Any] = None
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
+    pedido_minimo: Optional[float] = 0.0
+    frete_gratis_valor: Optional[float] = 0.0
+    tipo_taxa_entrega: Optional[str] = "fixa"
+    tabela_taxas_bairros: Optional[Any] = []
+    tabela_taxas_km: Optional[Any] = []
+    taxa_entrega_padrao: Optional[float] = 0.0
 
 
 class CardapioPublicCategoryResponse(BaseModel):
@@ -759,6 +775,7 @@ class CardapioPublicProductResponse(BaseModel):
     imagem_url: str = ""
     imagens_galeria: List[str] = Field(default_factory=list)
     categoria_id: str
+    grupos_modificadores: Optional[List[Any]] = Field(default_factory=list)
 
 
 class CardapioPublicResponse(BaseModel):
@@ -841,6 +858,7 @@ class CardapioItemPedido(BaseModel):
     quantidade: int = Field(gt=0, le=100)
     observacao: str = Field(default="", max_length=500)
     cliente_nome: Optional[str] = Field(default=None, max_length=100)
+    modificador_ids: Optional[List[str]] = Field(default_factory=list)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -852,6 +870,11 @@ class CardapioPedidoCreate(BaseModel):
     endereco_entrega: str = Field(default="", max_length=300)
     taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
     forma_pagamento: Literal["na_entrega"] = "na_entrega"
+    forma_pagamento_detalhe: Optional[str] = Field(default="dinheiro", max_length=50)
+    troco_para: Optional[float] = Field(default=None, ge=0)
+    bairro: Optional[str] = Field(default=None, max_length=100)
+    cupom_codigo: Optional[str] = Field(default=None, max_length=50)
+    usar_cashback: bool = Field(default=False)
     tipo_pedido: Literal["delivery", "retirada"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
@@ -877,3 +900,94 @@ class CardapioPedidoCreate(BaseModel):
         return value.strip()
 
     model_config = ConfigDict(extra="forbid")
+
+
+# ─── SCHEMAS DE CUPONS & CAMPANHAS ───────────────────────────────────────────
+class CupomCreate(BaseModel):
+    codigo: str = Field(min_length=3, max_length=50)
+    tipo_desconto: Literal["porcentagem", "fixo"] = "porcentagem"
+    valor_desconto: float = Field(gt=0)
+    valor_minimo_pedido: Optional[float] = Field(default=0.0, ge=0)
+    limite_usos: Optional[int] = Field(default=None, gt=0)
+    valido_ate: Optional[datetime] = None
+    apenas_primeira_compra: bool = False
+    ativo: bool = True
+    cliente_id: Optional[str] = None
+
+    @field_validator("codigo")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class CupomResponse(BaseModel):
+    id: str
+    codigo: str
+    tipo_desconto: str
+    valor_desconto: float
+    valor_minimo_pedido: float
+    limite_usos: Optional[int] = None
+    usos_atuais: int = 0
+    valido_ate: Optional[datetime] = None
+    apenas_primeira_compra: bool = False
+    ativo: bool = True
+    cliente_id: Optional[str] = None
+    criado_em: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CupomValidateRequest(BaseModel):
+    restaurante_id: int
+    codigo: str
+    subtotal: float
+    telefone: Optional[str] = None
+
+
+class CupomValidateResponse(BaseModel):
+    valido: bool
+    mensagem: str
+    codigo: Optional[str] = None
+    tipo_desconto: Optional[str] = None
+    valor_desconto: Optional[float] = None
+    desconto_calculado: Optional[float] = 0.0
+
+
+# ─── SCHEMAS DE GRUPOS DE MODIFICADORES & COMPLEMENTOS ─────────────────────────
+class OpcaoModificadorCreate(BaseModel):
+    id: Optional[str] = None
+    nome: str = Field(min_length=1, max_length=100)
+    preco_adicional: float = Field(default=0.0, ge=0)
+    ativo: bool = True
+
+
+class OpcaoModificadorResponse(BaseModel):
+    id: str
+    grupo_id: str
+    nome: str
+    preco_adicional: float
+    ativo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GrupoModificadorCreate(BaseModel):
+    nome: str = Field(min_length=1, max_length=100)
+    min_selecoes: int = Field(default=0, ge=0)
+    max_selecoes: int = Field(default=1, ge=1)
+    tipo: Literal["obrigatorio", "opcional", "meio_a_meio"] = "opcional"
+    opcoes: Optional[List[OpcaoModificadorCreate]] = Field(default_factory=list)
+    produto_ids: Optional[List[str]] = Field(default_factory=list)
+
+
+class GrupoModificadorResponse(BaseModel):
+    id: str
+    nome: str
+    min_selecoes: int
+    max_selecoes: int
+    tipo: str
+    opcoes: List[OpcaoModificadorResponse] = []
+    produto_ids: List[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+

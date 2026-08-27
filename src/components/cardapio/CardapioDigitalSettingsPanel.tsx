@@ -36,6 +36,12 @@ type SocialConfig = Record<string, unknown> & {
   instagram?: string;
 };
 
+type BairroTaxaRow = {
+  id: string;
+  bairro: string;
+  taxa: number;
+};
+
 type RestaurantConfig = {
   id?: number;
   nome: string;
@@ -49,6 +55,10 @@ type RestaurantConfig = {
   socials: SocialConfig;
   horarios_funcionamento: HourRow[];
   formas_pagamento_aceitas: string[];
+  pedido_minimo: number;
+  frete_gratis_valor: number;
+  tipo_taxa_entrega: 'fixa' | 'bairro' | 'distancia';
+  tabela_taxas_bairros: BairroTaxaRow[];
 };
 
 interface CardapioDigitalSettingsPanelProps {
@@ -170,6 +180,21 @@ function normalizePayments(value: unknown): string[] {
     : [];
 }
 
+function normalizeBairros(value: unknown): BairroTaxaRow[] {
+  const parsed = parseStructuredValue(value);
+  if (Array.isArray(parsed)) {
+    return parsed
+      .filter((item) => item && typeof item === 'object')
+      .map((item, idx) => ({
+        id: `bairro-${idx}-${Date.now()}`,
+        bairro: String((item as any).bairro || '').trim(),
+        taxa: Number((item as any).taxa) || 0,
+      }))
+      .filter((row) => row.bairro);
+  }
+  return [];
+}
+
 function normalizeConfig(data: Record<string, any>): RestaurantConfig {
   return {
     id: Number.isFinite(Number(data?.id)) ? Number(data.id) : undefined,
@@ -184,6 +209,10 @@ function normalizeConfig(data: Record<string, any>): RestaurantConfig {
     socials: normalizeSocials(data?.socials),
     horarios_funcionamento: normalizeHours(data?.horarios_funcionamento),
     formas_pagamento_aceitas: normalizePayments(data?.formas_pagamento_aceitas),
+    pedido_minimo: Number(data?.pedido_minimo) || 0,
+    frete_gratis_valor: Number(data?.frete_gratis_valor) || 0,
+    tipo_taxa_entrega: (data?.tipo_taxa_entrega as any) || 'fixa',
+    tabela_taxas_bairros: normalizeBairros(data?.tabela_taxas_bairros),
   };
 }
 
@@ -199,6 +228,10 @@ const emptyConfig: RestaurantConfig = {
   socials: {},
   horarios_funcionamento: [],
   formas_pagamento_aceitas: [],
+  pedido_minimo: 0,
+  frete_gratis_valor: 0,
+  tipo_taxa_entrega: 'fixa',
+  tabela_taxas_bairros: [],
 };
 
 function buildPersistedPayload(config: RestaurantConfig) {
@@ -214,6 +247,13 @@ function buildPersistedPayload(config: RestaurantConfig) {
       .filter((row) => row.days && row.hours),
     formas_pagamento_aceitas: config.formas_pagamento_aceitas,
     status_override: config.status_override,
+    pedido_minimo: config.pedido_minimo,
+    frete_gratis_valor: config.frete_gratis_valor,
+    tipo_taxa_entrega: config.tipo_taxa_entrega,
+    tabela_taxas_bairros: config.tabela_taxas_bairros.map(({ bairro, taxa }) => ({
+      bairro: bairro.trim(),
+      taxa: Number(taxa) || 0,
+    })).filter(b => b.bairro),
     cor_primaria: KOMA_MENU_PRIMARY,
     cor_fundo: KOMA_MENU_BACKGROUND,
   };
@@ -927,6 +967,100 @@ export function CardapioDigitalSettingsPanel({
                         </label>
                       );
                     })}
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  separated
+                  title="Taxas de entrega, bairros e pedido mínimo"
+                  description="Defina o valor mínimo para entrega, regras de frete grátis e taxas personalizadas por bairro."
+                >
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label>
+                        <FieldLabel>Pedido Mínimo para Delivery (R$)</FieldLabel>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={config.pedido_minimo || ''}
+                          onChange={(event) => updateConfig('pedido_minimo', parseFloat(event.target.value) || 0)}
+                          className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+                          placeholder="Ex.: 30.00"
+                        />
+                        <span className="mt-1 block text-[9px] text-koma-muted">Deixe 0 para não exigir valor mínimo.</span>
+                      </label>
+
+                      <label>
+                        <FieldLabel>Frete Grátis a partir de (R$)</FieldLabel>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={config.frete_gratis_valor || ''}
+                          onChange={(event) => updateConfig('frete_gratis_valor', parseFloat(event.target.value) || 0)}
+                          className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+                          placeholder="Ex.: 100.00"
+                        />
+                        <span className="mt-1 block text-[9px] text-koma-muted">Pedidos acima deste valor terão taxa zerada.</span>
+                      </label>
+                    </div>
+
+                    <div className="pt-3 border-t border-koma-border space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <FieldLabel>Tabela de Taxas por Bairro</FieldLabel>
+                          <span className="block text-[10px] text-koma-muted">O cliente seleciona o bairro no cardápio e a taxa é calculada automaticamente.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateConfig('tabela_taxas_bairros', [
+                            ...config.tabela_taxas_bairros,
+                            { id: `bairro-${Date.now()}`, bairro: '', taxa: 0 }
+                          ])}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded-xl text-xs font-bold"
+                        >
+                          <Plus size={13} /> Adicionar Bairro
+                        </button>
+                      </div>
+
+                      {config.tabela_taxas_bairros.map((row) => (
+                        <div key={row.id} className="grid gap-2 rounded-xl border border-koma-border bg-koma-card p-3 sm:grid-cols-[1fr_120px_auto] sm:items-end">
+                          <label>
+                            <FieldLabel>Nome do Bairro</FieldLabel>
+                            <input
+                              value={row.bairro}
+                              onChange={(event) => updateConfig('tabela_taxas_bairros', config.tabela_taxas_bairros.map((item) => item.id === row.id ? { ...item, bairro: event.target.value } : item))}
+                              className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500/60"
+                              placeholder="Ex: Centro, Boa Viagem"
+                            />
+                          </label>
+                          <label>
+                            <FieldLabel>Taxa (R$)</FieldLabel>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.taxa || ''}
+                              onChange={(event) => updateConfig('tabela_taxas_bairros', config.tabela_taxas_bairros.map((item) => item.id === row.id ? { ...item, taxa: parseFloat(event.target.value) || 0 } : item))}
+                              className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+                              placeholder="0.00"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => updateConfig('tabela_taxas_bairros', config.tabela_taxas_bairros.filter((item) => item.id !== row.id))}
+                            className="grid h-10 w-10 place-items-center rounded-lg border border-rose-500/20 text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-300"
+                            aria-label={`Remover bairro ${row.bairro}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+
+                      {config.tabela_taxas_bairros.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-koma-border p-4 text-center text-[10px] text-koma-muted">
+                          Nenhum bairro cadastrado. O valor padrão de entrega do restaurante será aplicado.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </SettingsSection>
               </>

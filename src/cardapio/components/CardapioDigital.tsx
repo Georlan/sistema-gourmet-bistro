@@ -38,6 +38,13 @@ interface CardapioDigitalProps {
   customerName: string;
   customerPhone: string;
   customerToken?: string | null;
+  paymentMethodDetail?: "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
+  trocoPara?: number;
+  bairro?: string;
+  cupomCodigo?: string;
+  descontoCupom?: number;
+  usarCashback?: boolean;
+  descontoCashback?: number;
   onClose: () => void;
   onOrderSuccess: (order: CreatedOrder) => void;
   onSessionExpired?: () => void;
@@ -73,6 +80,13 @@ export default function CardapioDigital({
   customerName,
   customerPhone,
   customerToken,
+  paymentMethodDetail = "pix",
+  trocoPara,
+  bairro,
+  cupomCodigo,
+  descontoCupom = 0,
+  usarCashback = false,
+  descontoCashback = 0,
   onClose,
   onOrderSuccess,
   onSessionExpired,
@@ -93,7 +107,7 @@ export default function CardapioDigital({
     return acc + unitPrice * item.quantity;
   }, 0), [cart]);
 
-  const estimatedTotal = subtotal + deliveryFee;
+  const estimatedTotal = Math.max(0, subtotal + deliveryFee - descontoCupom - descontoCashback);
   const paymentMethods = useMemo(
     () => (activeBrand.paymentMethods || []).filter((method) => method?.type),
     [activeBrand.paymentMethods],
@@ -221,6 +235,11 @@ export default function CardapioDigital({
           endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
           taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
           forma_pagamento: "na_entrega",
+          forma_pagamento_detalhe: paymentMethodDetail,
+          troco_para: trocoPara,
+          bairro: bairro,
+          cupom_codigo: cupomCodigo,
+          usar_cashback: usarCashback,
           tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
           idempotency_key: idempotencyKey,
         }),

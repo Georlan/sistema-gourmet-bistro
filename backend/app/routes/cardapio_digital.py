@@ -16,7 +16,16 @@ from ..database import (
     require_tenant_id,
     tenant_session_scope,
 )
-from ..models import Restaurante, Usuario, Categoria, Produto
+from ..models import (
+    Categoria,
+    ConfiguracaoRestaurante,
+    GrupoModificador,
+    OpcaoModificador,
+    Produto,
+    ProdutoGrupoModificador,
+    Restaurante,
+    Usuario,
+)
 from ..security import require_permission, get_current_garcom_optional
 from ..schemas import (
     CardapioPublicRestaurantResponse,
@@ -241,7 +250,10 @@ def _ordered_categories(categories: list[Categoria]) -> list[Categoria]:
     )
 
 
-def _public_restaurant_payload(restaurante: Restaurante) -> dict:
+def _public_restaurant_payload(
+    restaurante: Restaurante,
+    configuracao: Optional[ConfiguracaoRestaurante] = None,
+) -> dict:
     return {
         "id": restaurante.id,
         "nome": restaurante.nome,
@@ -258,6 +270,12 @@ def _public_restaurant_payload(restaurante: Restaurante) -> dict:
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
         "cor_primaria": restaurante.cor_primaria,
         "cor_fundo": restaurante.cor_fundo,
+        "pedido_minimo": float(configuracao.pedido_minimo or 0.0) if configuracao and configuracao.pedido_minimo is not None else 0.0,
+        "frete_gratis_valor": float(configuracao.frete_gratis_valor or 0.0) if configuracao and configuracao.frete_gratis_valor is not None else 0.0,
+        "tipo_taxa_entrega": configuracao.tipo_taxa_entrega if configuracao and configuracao.tipo_taxa_entrega else "fixa",
+        "tabela_taxas_bairros": configuracao.tabela_taxas_bairros if configuracao and configuracao.tabela_taxas_bairros else [],
+        "tabela_taxas_km": configuracao.tabela_taxas_km if configuracao and configuracao.tabela_taxas_km else [],
+        "taxa_entrega_padrao": float(restaurante.taxa_entrega_padrao or 0.0) if hasattr(restaurante, "taxa_entrega_padrao") and restaurante.taxa_entrega_padrao is not None else 0.0,
     }
 
 
@@ -274,6 +292,7 @@ def _public_product_payload(product: Produto) -> dict:
         "imagem_url": product.imagem or "",
         "imagens_galeria": product.imagens_galeria or [],
         "categoria_id": product.categoria_id,
+        "grupos_modificadores": [],
     }
 
 
@@ -300,7 +319,10 @@ def obter_config_cardapio_digital(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Restaurante não encontrado.",
             )
-        return _public_restaurant_payload(restaurante)
+        configuracao = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == rest_id
+        ).first()
+        return _public_restaurant_payload(restaurante, configuracao)
 
 
 @router.get("/categorias")
@@ -358,6 +380,10 @@ def obter_cardapio_publico(
                 detail="Restaurante não encontrado.",
             )
 
+        configuracao = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == rest_id
+        ).first()
+
         categorias = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id
         ).all()
@@ -366,15 +392,54 @@ def obter_cardapio_publico(
             Produto.ativo.is_(True),
         ).all()
 
+        # Carrega grupos de modificadores vinculados aos produtos
+        grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == rest_id).all()
+        opcoes = db.query(OpcaoModificador).filter(
+            OpcaoModificador.restaurante_id == rest_id,
+            OpcaoModificador.ativo == True,
+        ).all()
+        vinculos = db.query(ProdutoGrupoModificador).filter(ProdutoGrupoModificador.restaurante_id == rest_id).all()
+
+        opcoes_por_grupo = {}
+        for op in opcoes:
+            opcoes_por_grupo.setdefault(op.grupo_id, []).append({
+                "id": op.id,
+                "grupo_id": op.grupo_id,
+                "nome": op.nome,
+                "preco_adicional": float(op.preco_adicional or 0.0),
+                "ativo": op.ativo,
+            })
+
+        grupos_por_id = {
+            g.id: {
+                "id": g.id,
+                "nome": g.nome,
+                "min_selecoes": g.min_selecoes,
+                "max_selecoes": g.max_selecoes,
+                "tipo": g.tipo,
+                "opcoes": opcoes_por_grupo.get(g.id, []),
+            }
+            for g in grupos
+        }
+
+        grupos_por_produto = {}
+        for v in vinculos:
+            if v.grupo_id in grupos_por_id:
+                grupos_por_produto.setdefault(v.produto_id, []).append(grupos_por_id[v.grupo_id])
+
+        produtos_payload = []
+        for product in produtos:
+            prod_dict = _public_product_payload(product)
+            prod_dict["grupos_modificadores"] = grupos_por_produto.get(product.id, [])
+            produtos_payload.append(prod_dict)
+
         return {
-            "restaurante": _public_restaurant_payload(restaurante),
+            "restaurante": _public_restaurant_payload(restaurante, configuracao),
             "categorias": [
                 _public_category_payload(category)
                 for category in _ordered_categories(categorias)
             ],
-            "produtos": [
-                _public_product_payload(product) for product in produtos
-            ],
+            "produtos": produtos_payload,
         }
 
 

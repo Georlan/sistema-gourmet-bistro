@@ -9,13 +9,18 @@ from ..database import get_db, current_restaurante_id, tenant_session_scope
 from ..models import (
     Comanda,
     ConfiguracaoRestaurante,
+    Cupom,
+    HistoricoFidelidade,
     Item,
+    ItemModificador,
     Lancamento,
+    OpcaoModificador,
     Produto,
     Restaurante,
     Usuario,
 )
 from ..schemas import CardapioPedidoCreate
+from .cupons import _validar_regras_cupom
 from ..websocket_manager import manager
 from .cardapio_digital import resolve_restaurant_id
 from .orders import gerar_novo_numero_pedido
@@ -41,7 +46,11 @@ ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente
 
 
 def _order_total(comanda: Comanda) -> float:
-    return float(sum(float(item.preco_unit or 0) for item in comanda.itens) + float(comanda.delivery_taxa or 0))
+    itens_total = sum(float(item.preco_unit or 0) for item in comanda.itens if item.status != "cancelado")
+    taxa = float(comanda.delivery_taxa or 0)
+    desconto_cupom = float(getattr(comanda, "valor_desconto_cupom", 0) or 0)
+    desconto_cashback = float(getattr(comanda, "valor_desconto_cashback", 0) or 0)
+    return round(max(0.0, itens_total + taxa - desconto_cupom - desconto_cashback), 2)
 
 
 def _existing_order_response(comanda: Comanda) -> dict:
@@ -267,6 +276,80 @@ def criar_pedido_online(
                 detail=f"Produto '{missing_product}' não encontrado ou inativo para este estabelecimento.",
             )
 
+        # Prepara modificadores selecionados por item e calcula subtotal
+        itens_configurados = []
+        items_subtotal = 0.0
+        for item_in in payload.itens:
+            produto = products_by_id[str(item_in.produto_id)]
+            modificadores_selecionados = []
+            adicional_total = 0.0
+            if item_in.modificador_ids:
+                opcoes = db.query(OpcaoModificador).filter(
+                    OpcaoModificador.id.in_(item_in.modificador_ids),
+                    OpcaoModificador.restaurante_id == rest_id,
+                    OpcaoModificador.ativo == True,
+                ).all()
+                for op in opcoes:
+                    adicional_total += float(op.preco_adicional or 0.0)
+                    modificadores_selecionados.append(op)
+            preco_unitario = round(float(produto.preco) + adicional_total, 2)
+            items_subtotal += preco_unitario * item_in.quantidade
+            itens_configurados.append({
+                "item_in": item_in,
+                "produto": produto,
+                "preco_unitario": preco_unitario,
+                "modificadores": modificadores_selecionados,
+            })
+
+        # Validação de pedido mínimo para delivery
+        if modalidade == "delivery" and configuracao and configuracao.pedido_minimo and float(configuracao.pedido_minimo) > 0:
+            if items_subtotal < float(configuracao.pedido_minimo):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"O valor mínimo para entrega é de R$ {float(configuracao.pedido_minimo):.2f} (subtotal atual: R$ {items_subtotal:.2f}).",
+                )
+
+        # Cálculo da taxa de entrega
+        if modalidade == "retirada":
+            taxa_entrega = 0.0
+        else:
+            if configuracao and configuracao.frete_gratis_valor and float(configuracao.frete_gratis_valor) > 0 and items_subtotal >= float(configuracao.frete_gratis_valor):
+                taxa_entrega = 0.0
+            elif payload.bairro and configuracao and configuracao.tabela_taxas_bairros:
+                matched_fee = None
+                for b in configuracao.tabela_taxas_bairros:
+                    if isinstance(b, dict) and str(b.get("bairro", "")).strip().lower() == payload.bairro.strip().lower():
+                        matched_fee = float(b.get("taxa", 0.0))
+                        break
+                taxa_entrega = matched_fee if matched_fee is not None else policy.delivery_fee
+            else:
+                taxa_entrega = policy.delivery_fee
+
+        # Aplicação de cupom de desconto
+        cupom_id = None
+        valor_desconto_cupom = 0.0
+        if payload.cupom_codigo:
+            cupom = db.query(Cupom).filter(
+                Cupom.restaurante_id == rest_id,
+                Cupom.codigo == payload.cupom_codigo.strip().upper(),
+            ).first()
+            if cupom:
+                valido, _msg, desc = _validar_regras_cupom(cupom, items_subtotal, telefone_clean, db)
+                if valido:
+                    valor_desconto_cupom = desc
+                    cupom_id = cupom.id
+                    cupom.usos_atuais += 1
+
+        # Aplicação de cashback
+        valor_desconto_cashback = 0.0
+        if payload.usar_cashback and cliente is not None and cliente.saldo_cashback and float(cliente.saldo_cashback) > 0:
+            saldo_cb = float(cliente.saldo_cashback)
+            max_permitido = max(0.0, items_subtotal - valor_desconto_cupom)
+            desconto_cb = min(saldo_cb, max_permitido)
+            if desconto_cb > 0:
+                valor_desconto_cashback = round(desconto_cb, 2)
+                cliente.saldo_cashback = round(saldo_cb - desconto_cb, 2)
+
         numero_pedido = gerar_novo_numero_pedido(db)
         if cliente is not None:
             cliente = cadastrar_ou_atualizar_cliente(
@@ -293,11 +376,28 @@ def criar_pedido_online(
             delivery_telefone=telefone_clean,
             delivery_endereco=endereco_comanda,
             delivery_taxa=taxa_entrega,
+            cupom_id=cupom_id,
+            valor_desconto_cupom=valor_desconto_cupom,
+            valor_desconto_cashback=valor_desconto_cashback,
+            delivery_forma_pagamento=payload.forma_pagamento_detalhe,
+            delivery_troco_para=payload.troco_para,
+            delivery_bairro=payload.bairro,
             status_comanda=None,
             idempotency_key=idempotency_key or None,
         )
         db.add(nova_comanda)
         db.flush()
+
+        if valor_desconto_cashback > 0 and cliente is not None:
+            hist = HistoricoFidelidade(
+                restaurante_id=rest_id,
+                cliente_id=cliente.id,
+                _cliente_telefone=cliente.telefone,
+                tipo_movimentacao="RESGATE",
+                valor_delta=-valor_desconto_cashback,
+                comanda_id=comanda_id,
+            )
+            db.add(hist)
 
         lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
         novo_lancamento = Lancamento(
@@ -311,16 +411,19 @@ def criar_pedido_online(
         db.flush()
 
         itens_criados = []
-        for item_in in payload.itens:
-            produto = products_by_id[str(item_in.produto_id)]
+        for cfg in itens_configurados:
+            item_in = cfg["item_in"]
+            preco_unitario = cfg["preco_unitario"]
+            modificadores = cfg["modificadores"]
             for _ in range(item_in.quantidade):
+                item_id = f"i-{uuid.uuid4().hex[:8]}"
                 novo_item = Item(
-                    id=f"i-{uuid.uuid4().hex[:8]}",
+                    id=item_id,
                     restaurante_id=rest_id,
                     comanda_id=comanda_id,
                     lancamento_id=lancamento_id,
                     produto_id=item_in.produto_id,
-                    preco_unit=produto.preco,
+                    preco_unit=preco_unitario,
                     observacao=item_in.observacao or "",
                     cliente_nome=item_in.cliente_nome or cliente_nome,
                     status="preparando",
@@ -328,6 +431,14 @@ def criar_pedido_online(
                 )
                 db.add(novo_item)
                 itens_criados.append(novo_item)
+                for mod in modificadores:
+                    item_mod = ItemModificador(
+                        restaurante_id=rest_id,
+                        item_id=item_id,
+                        opcao_modificador_id=mod.id,
+                        preco_aplicado=mod.preco_adicional or 0.0,
+                    )
+                    db.add(item_mod)
 
         db.flush()
         consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id)

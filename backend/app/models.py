@@ -271,6 +271,29 @@ class ObservacaoPredefinida(Base):
     categoria = relationship("Categoria", back_populates="observacoes_predefinidas")
 
 
+class Cupom(Base):
+    __tablename__ = "cupons"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    codigo = Column(String, nullable=False, index=True)
+    tipo_desconto = Column(String, default="porcentagem")  # "porcentagem" | "fixo"
+    valor_desconto = Column(Numeric(14, 2, asdecimal=False), nullable=False)
+    valor_minimo_pedido = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    limite_usos = Column(Integer, nullable=True)
+    usos_atuais = Column(Integer, default=0)
+    valido_ate = Column(DateTime, nullable=True)
+    apenas_primeira_compra = Column(Boolean, default=False)
+    ativo = Column(Boolean, default=True)
+    cliente_id = Column(String, nullable=True)
+    criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'codigo', name='uq_cupons_restaurante_codigo'),
+        CheckConstraint("valor_desconto >= 0", name="ck_cupons_valor_desconto_nonnegative"),
+    )
+
+
 class Comanda(Base):
     __tablename__ = "comandas"
     __table_args__ = (
@@ -363,6 +386,12 @@ class Comanda(Base):
     _delivery_telefone = Column("delivery_telefone", String, nullable=True)
     _delivery_endereco = Column("delivery_endereco", String, nullable=True)
     motoboy_id = Column(Integer, ForeignKey("motoboys.id"), nullable=True)
+    cupom_id = Column(String, ForeignKey("cupons.id"), nullable=True)
+    valor_desconto_cupom = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    valor_desconto_cashback = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    delivery_forma_pagamento = Column(String, nullable=True)
+    delivery_troco_para = Column(Numeric(14, 2, asdecimal=False), nullable=True)
+    delivery_bairro = Column(String, nullable=True)
 
     # Cashier flow field
     status_comanda = Column(String, nullable=True)  # null (normal) | aguardando_pagamento (table requested bill)
@@ -654,6 +683,11 @@ class ConfiguracaoRestaurante(Base):
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
     delivery_ativo = Column(Boolean, default=True)
+    pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
+    tabela_taxas_bairros = Column(JSON, default=list)
+    tabela_taxas_km = Column(JSON, default=list)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)
