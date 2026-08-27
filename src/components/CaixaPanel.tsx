@@ -2342,12 +2342,13 @@ export function CaixaPanel({
       });
       if (res.ok) {
         fetchDeliveryOrders();
+        onRefreshOrders();
         showToast('Status do pedido atualizado!');
         const targetOrder = (deliveryOrders as any[]).find(o => String(o.id) === String(orderId));
         if (targetOrder && (targetOrder.telefone || targetOrder.delivery_telefone)) {
           const phone = targetOrder.telefone || targetOrder.delivery_telefone;
           const nome = targetOrder.cliente || targetOrder.identificador || 'Cliente';
-          const isDelivery = statusNovo === 'transito' || statusNovo === 'saiu_para_entrega' || targetOrder.modalidade === 'delivery';
+          const isDelivery = statusNovo === 'transito' || statusNovo === 'saiu_para_entrega';
           if (['pronto', 'transito', 'saiu_para_entrega'].includes(statusNovo)) {
             const msg = buildStatusUpdateMsg(nome, isDelivery);
             openWhatsAppMessage(phone, msg);
@@ -4029,7 +4030,9 @@ export function CaixaPanel({
   }, [tableOrdersReady, searchQuery, matchesSearchQuery]);
 
   const filteredDeliveryFinalization = useMemo(() => {
-    return deliveryOrders.filter(o => o.status === 'transito').filter(order => matchesSearchQuery(order, searchQuery));
+    return deliveryOrders
+      .filter(o => ['pronto', 'transito', 'saiu_para_entrega'].includes(o.status))
+      .filter(order => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
   const totalResultadosBusca = useMemo(() => {
@@ -5290,7 +5293,7 @@ export function CaixaPanel({
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isLoading) return;
-                                  handleUpdateDeliveryStatus(order.id, 'transito');
+                                  handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
                                 }}
                                 className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
                               >
@@ -9307,7 +9310,8 @@ export function CaixaPanel({
                   <button
                     type="button"
                     onClick={async () => {
-                      const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, 'transito');
+                      const isDelivery = selectedKanbanOrder.modalidade === 'delivery';
+                      const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, isDelivery ? 'transito' : 'pronto');
                       if (updated) setSelectedKanbanOrder(null);
                     }}
                     className="orders-detail-modal__primary-action"

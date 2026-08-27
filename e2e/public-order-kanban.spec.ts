@@ -195,4 +195,21 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   await expect(digitalColumn).toContainText(/EM PREPARO/i);
 
   expect(state.getAcceptCalls()).toBe(1);
+
+  // Clica em 'Pronto para retirada' na coluna 02
+  await digitalColumn.getByRole('button', { name: /Pronto para retirada/i }).click();
+
+  if (viewport.width < DESKTOP_BREAKPOINT) {
+    const closingStageTab = page.getByRole('tab', { name: /Concluir/ });
+    await expect(closingStageTab).toBeVisible();
+    await closingStageTab.tap();
+    await expect(closingStageTab).toHaveAttribute('aria-selected', 'true');
+  }
+
+  // Pedido agora reside na coluna 03 (FECHAMENTO) e NÃO desaparece
+  const closingColumn = page.locator('.orders-column--closing');
+  await expect(closingColumn).toBeVisible();
+  await expect(closingColumn).toContainText('Ana Teste');
+  await expect(closingColumn).toContainText(/PRONTO PARA RETIRADA/i);
+  await expect(closingColumn.getByRole('button', { name: /Receber e finalizar/i })).toBeVisible();
 });
