@@ -103,16 +103,18 @@ async function mockPublicMenuBackend(
       return;
     }
 
-    if (pathname === '/cardapio/pedidos/pedido-e2e/status') {
+    if (pathname.startsWith('/cardapio/pedidos/') && pathname.endsWith('/status')) {
+      const parts = pathname.split('/');
+      const orderId = parts[3];
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          id: 'pedido-e2e',
-          numero_pedido: 4321,
-          status: options.orderStatus ?? 'pendente',
-          tipo: 'Retirada',
-          total: 48,
+          id: orderId,
+          numero_pedido: orderId === 'pedido-e2e-2' ? 4322 : 4321,
+          status: orderId === 'pedido-e2e-2' ? 'producao' : (options.orderStatus ?? 'pendente'),
+          tipo: orderId === 'pedido-e2e-2' ? 'Delivery' : 'Retirada',
+          total: orderId === 'pedido-e2e-2' ? 60 : 48,
           fechada: Boolean(options.orderClosed),
           itens: [{ id: 'item-e2e', nome: 'Pizza Margherita', quantidade: 1 }],
         }),
@@ -254,3 +256,50 @@ test('pedido recusado continua visível em vez de desaparecer', async ({ page })
   await expect(page.getByRole('button', { name: 'Fazer novo pedido', exact: true })).toBeVisible();
   expect(capturedOrders).toHaveLength(0);
 });
+
+test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await page.addInitScript(() => {
+    localStorage.setItem('koma_active_orders', JSON.stringify([
+      {
+        id: 'pedido-e2e-1',
+        numero_pedido: 4321,
+        restaurante_id: 2,
+        tipo: 'Retirada',
+        total: 48,
+        timestamp: Date.now() - 5000,
+        idempotency_key: 'key-1',
+        status: 'pendente',
+      },
+      {
+        id: 'pedido-e2e-2',
+        numero_pedido: 4322,
+        restaurante_id: 2,
+        tipo: 'Delivery',
+        total: 60,
+        timestamp: Date.now(),
+        idempotency_key: 'key-2',
+        status: 'producao',
+      },
+    ]));
+  });
+  await mockPublicMenuBackend(page, capturedOrders);
+
+  await page.goto('/cardapio?restaurante_id=2');
+
+  // Banner com seletor de múltiplos pedidos
+  await expect(page.locator('#active-order-banner')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pedido #4322' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pedido #4321' })).toBeVisible();
+
+  // Alterna para o outro pedido
+  await page.getByRole('button', { name: 'Pedido #4321' }).click();
+  await expect(page.getByRole('heading', { name: 'Aguardando aceite' })).toBeVisible();
+
+  // Abre a gaveta de Meus Pedidos pelo header
+  await page.locator('#btn-my-orders-header').click();
+  await expect(page.locator('#orders-drawer-panel')).toBeVisible();
+  await expect(page.getByText('Meus Pedidos', { exact: true })).toBeVisible();
+  await expect(page.getByText('Em andamento (2)')).toBeVisible();
+});
+

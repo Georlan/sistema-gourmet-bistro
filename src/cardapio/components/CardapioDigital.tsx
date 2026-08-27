@@ -21,6 +21,7 @@ import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
+import { saveStoredOrder } from "../orderTracking";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -248,12 +249,20 @@ export default function CardapioDigital({
         timestamp: Date.now(),
         restaurante_id: targetRestauranteId,
         cliente_nome: normalizedName,
+        cliente_telefone: normalizedPhone,
         tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
         total: orderTotal,
         idempotency_key: idempotencyKey,
+        status: "pendente",
+        itens: cart.map((item) => ({
+          id: item.product.id,
+          nome: item.product.name,
+          quantidade: item.quantity,
+          observacao: item.notes,
+        })),
       };
       try {
-        localStorage.setItem("koma_active_order", JSON.stringify(orderObj));
+        saveStoredOrder(orderObj);
       } catch (error) {
         console.warn("Não foi possível salvar pedido ativo no localStorage:", error);
       }

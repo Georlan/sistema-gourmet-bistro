@@ -10,6 +10,7 @@ import {
   Info,
   Instagram,
   MapPin,
+  Package,
   Phone,
   Search,
   Share2,
@@ -28,6 +29,9 @@ interface CardapioHeaderProps {
   onLogoClick: () => void;
   onCartToggle: () => void;
   cartCount: number;
+  onOrdersClick?: () => void;
+  ordersCount?: number;
+  activeOrdersCount?: number;
 }
 
 const getSocialIcon = (platform: string) => {
@@ -62,6 +66,9 @@ export default function CardapioHeader({
   onLogoClick,
   onCartToggle,
   cartCount,
+  onOrdersClick,
+  ordersCount = 0,
+  activeOrdersCount = 0,
 }: CardapioHeaderProps) {
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -166,6 +173,19 @@ export default function CardapioHeader({
               >
                 <Share2 size={16} />
               </button>
+              {ordersCount > 0 && onOrdersClick && (
+                <button
+                  type="button"
+                  onClick={onOrdersClick}
+                  className="cardapio-public-icon-button is-orders relative"
+                  title="Meus Pedidos"
+                  aria-label={`Meus Pedidos${activeOrdersCount > 0 ? `, ${activeOrdersCount} em andamento` : ""}`}
+                  id="btn-my-orders-header"
+                >
+                  <Package size={17} />
+                  {activeOrdersCount > 0 && <span>{activeOrdersCount > 99 ? "99+" : activeOrdersCount}</span>}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onCartToggle}

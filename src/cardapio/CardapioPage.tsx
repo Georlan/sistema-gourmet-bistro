@@ -34,6 +34,7 @@ import CardapioAuthModal from "./components/CardapioAuthModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
+import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { smartSearchMatch } from "../domain";
 import {
@@ -43,11 +44,20 @@ import {
   mapCustomerProfile,
   saveCustomerSession,
 } from "./customerSession";
+import {
+  StoredOrder,
+  loadStoredOrders,
+  refreshAllStoredOrders,
+  removeStoredOrder,
+  clearAllStoredOrders,
+  isTerminalStatus,
+  isRejectedStatus,
+  orderStatusLabel,
+  orderStep,
+} from "./orderTracking";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
-const ACTIVE_ORDER_STORAGE_KEY = "koma_active_order";
-const ACTIVE_ORDER_TTL_MS = 12 * 60 * 60 * 1000;
 const ACTIVE_ORDER_REFRESH_MS = 20_000;
 // O CSP ainda permite https://viacep.com.br por compatibilidade com telas legadas;
 // o MVP do cardápio não executa lookup externo de CEP nem depende desse serviço.
@@ -56,17 +66,6 @@ interface PublicMenuPayload {
   restaurante: Record<string, any>;
   categorias: Array<Record<string, any>>;
   produtos: Array<Record<string, any>>;
-}
-
-interface ActiveOrder {
-  id: string;
-  numero_pedido: string | number;
-  status: string;
-  tipo: string;
-  total: number;
-  fechado?: boolean;
-  created_at?: string;
-  itens?: Array<{ id: string; nome: string; quantidade: number; observacao?: string }>;
 }
 
 function parseStructuredValue(value: unknown): unknown {
@@ -117,33 +116,6 @@ function getRestaurantIdentifier(): string | null {
   return null;
 }
 
-function normalizeStatus(value: string) {
-  return (value || "").trim().toLocaleLowerCase("pt-BR");
-}
-
-function isTerminalOrderStatus(status: string) {
-  const normalized = normalizeStatus(status);
-  return ["finalizado", "entregue", "recusado", "cancelado"].some((item) => normalized.includes(item));
-}
-
-function orderStatusLabel(status: string) {
-  const normalized = normalizeStatus(status);
-  if (normalized.includes("recus") || normalized.includes("cancel")) return "Pedido não aceito";
-  if (normalized.includes("final") || normalized.includes("entreg")) return "Concluído";
-  if (normalized.includes("trans") || normalized.includes("saiu")) return "Saiu para entrega";
-  if (normalized.includes("pronto")) return "Pronto";
-  if (normalized.includes("produ") || normalized.includes("prepar")) return "Em preparo";
-  return "Aguardando aceite";
-}
-
-function orderStep(status: string) {
-  const normalized = normalizeStatus(status);
-  if (normalized.includes("final") || normalized.includes("entreg")) return 4;
-  if (normalized.includes("trans") || normalized.includes("saiu") || normalized.includes("pronto")) return 3;
-  if (normalized.includes("produ") || normalized.includes("prepar")) return 2;
-  return 1;
-}
-
 export default function CardapioPage() {
   const [activeBrand, setActiveBrand] = useState<BrandConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -158,55 +130,38 @@ export default function CardapioPage() {
   const [checkoutRequest, setCheckoutRequest] = useState<CardapioCheckoutRequest | null>(null);
   const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+  const [isOrdersDrawerOpen, setIsOrdersDrawerOpen] = useState(false);
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
+  const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const isProgrammaticScroll = useRef(false);
 
-  const checkActiveOrder = useCallback(async (restaurantId: number) => {
+  const activeOrders = useMemo(
+    () => storedOrders.filter((order) => !isTerminalStatus(order.status)),
+    [storedOrders],
+  );
+
+  const activeOrder = useMemo(() => {
+    if (storedOrders.length === 0) return null;
+    if (selectedOrderId) {
+      const match = storedOrders.find((order) => order.id === selectedOrderId);
+      if (match) return match;
+    }
+    return activeOrders[0] || storedOrders[0] || null;
+  }, [storedOrders, selectedOrderId, activeOrders]);
+
+  const checkActiveOrders = useCallback(async (restaurantId: number) => {
     try {
-      const raw = localStorage.getItem(ACTIVE_ORDER_STORAGE_KEY);
-      if (!raw) {
-        setActiveOrder(null);
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      if (!parsed?.id || Number(parsed.restaurante_id) !== restaurantId) {
-        setActiveOrder(null);
-        return;
-      }
-      if (Date.now() - Number(parsed.timestamp || 0) > ACTIVE_ORDER_TTL_MS) {
-        localStorage.removeItem(ACTIVE_ORDER_STORAGE_KEY);
-        setActiveOrder(null);
-        return;
-      }
-
-      const key = String(parsed.idempotency_key || "");
-      const response = await fetch(
-        `${API_BASE_URL}/cardapio/pedidos/${encodeURIComponent(parsed.id)}/status?key=${encodeURIComponent(key)}`,
-        { cache: "no-store" },
-      );
-      if (response.status === 404) {
-        localStorage.removeItem(ACTIVE_ORDER_STORAGE_KEY);
-        setActiveOrder(null);
-        return;
-      }
-      if (!response.ok) return;
-
-      const data = await response.json();
-      setActiveOrder({
-        id: String(data.id || parsed.id),
-        numero_pedido: data.numero_pedido ?? parsed.numero_pedido,
-        status: String(data.status || "pendente"),
-        tipo: String(data.tipo || parsed.tipo || "Retirada"),
-        total: Number(data.total ?? parsed.total ?? 0),
-        fechado: Boolean(data.fechada),
-        created_at: data.criado_em,
-        itens: Array.isArray(data.itens) ? data.itens : [],
-      });
+      setIsRefreshingOrders(true);
+      const updated = await refreshAllStoredOrders(restaurantId, API_BASE_URL);
+      setStoredOrders(updated);
     } catch (error) {
-      console.warn("Erro ao consultar status do pedido ativo:", error);
+      console.warn("Erro ao consultar status dos pedidos:", error);
+    } finally {
+      setIsRefreshingOrders(false);
     }
   }, []);
 
@@ -337,7 +292,11 @@ export default function CardapioPage() {
 
       setActiveBrand(brand);
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
-      void checkActiveOrder(Number(brand.id));
+      const rid = Number(brand.id);
+      if (Number.isFinite(rid)) {
+        setStoredOrders(loadStoredOrders(rid));
+        void checkActiveOrders(rid);
+      }
     } catch (error) {
       console.error("Falha ao carregar cardápio público:", error);
       setActiveBrand(null);
@@ -349,7 +308,7 @@ export default function CardapioPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [checkActiveOrder]);
+  }, [checkActiveOrders]);
 
   useEffect(() => {
     void loadRestaurantData();
@@ -413,7 +372,7 @@ export default function CardapioPage() {
     let intervalId: ReturnType<typeof setInterval> | undefined;
     const refresh = () => {
       if (document.hidden) return;
-      if (activeOrder && !isTerminalOrderStatus(activeOrder.status)) void checkActiveOrder(restaurantId);
+      if (activeOrders.length > 0) void checkActiveOrders(restaurantId);
     };
     intervalId = setInterval(refresh, ACTIVE_ORDER_REFRESH_MS);
     const onVisibility = () => {
@@ -424,7 +383,7 @@ export default function CardapioPage() {
       if (intervalId) clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeBrand?.id, activeOrder?.id, activeOrder?.status, checkActiveOrder]);
+  }, [activeBrand?.id, activeOrders.length, checkActiveOrders]);
 
   useEffect(() => {
     if (!activeBrand?.id) return;
@@ -449,7 +408,7 @@ export default function CardapioPage() {
             refreshTimer = setTimeout(() => void loadRestaurantData(), 100);
           }
           if (["order_updated", "order_status_updated"].includes(eventName)) {
-            void checkActiveOrder(Number(activeBrand.id));
+            void checkActiveOrders(Number(activeBrand.id));
           }
         } catch {
           // Mensagem inválida do socket não interrompe o cardápio.
@@ -471,7 +430,7 @@ export default function CardapioPage() {
       if (refreshTimer) clearTimeout(refreshTimer);
       ws?.close();
     };
-  }, [activeBrand?.id, checkActiveOrder, loadRestaurantData]);
+  }, [activeBrand?.id, checkActiveOrders, loadRestaurantData]);
 
   const visibleCategories = useMemo(() => {
     if (!activeBrand) return [];
@@ -564,9 +523,19 @@ export default function CardapioPage() {
     setNotice("Sua identificação expirou. A sacola foi preservada e você pode continuar como visitante.");
   };
 
-  const clearTrackedOrder = () => {
-    localStorage.removeItem(ACTIVE_ORDER_STORAGE_KEY);
-    setActiveOrder(null);
+  const clearTrackedOrder = (orderId?: string) => {
+    const targetId = orderId || activeOrder?.id;
+    if (targetId) {
+      removeStoredOrder(targetId);
+      if (activeBrand?.id) {
+        setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
+      }
+    } else {
+      if (activeBrand?.id) {
+        clearAllStoredOrders(Number(activeBrand.id));
+        setStoredOrders([]);
+      }
+    }
   };
 
   if (isLoading) {
@@ -592,8 +561,8 @@ export default function CardapioPage() {
     );
   }
 
-  const terminal = activeOrder ? isTerminalOrderStatus(activeOrder.status) : false;
-  const rejected = activeOrder ? /recus|cancel/i.test(activeOrder.status) : false;
+  const terminal = activeOrder ? isTerminalStatus(activeOrder.status) : false;
+  const rejected = activeOrder ? isRejectedStatus(activeOrder.status) : false;
   const currentStep = activeOrder ? orderStep(activeOrder.status) : 1;
   const trackingSteps = activeOrder?.tipo?.toLocaleLowerCase("pt-BR").includes("delivery")
     ? ["Recebido", "Em preparo", "Saiu para entrega", "Concluído"]
@@ -610,6 +579,9 @@ export default function CardapioPage() {
         onLogoClick={() => setIsStoreInfoOpen(true)}
         onCartToggle={() => setIsCartOpen(true)}
         cartCount={cartCount}
+        onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+        ordersCount={storedOrders.length}
+        activeOrdersCount={activeOrders.length}
       />
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
@@ -621,16 +593,69 @@ export default function CardapioPage() {
 
         {activeOrder && (
           <section className={clsx(
-            "rounded-2xl border p-4 shadow-lg",
+            "rounded-2xl border p-4 shadow-lg transition-all",
             rejected ? "border-rose-500/30 bg-rose-500/[0.07]" : terminal ? "border-emerald-500/30 bg-emerald-500/[0.07]" : "border-emerald-500/25 bg-koma-card",
           )} id="active-order-banner">
+            {/* Multi-order switcher if more than 1 order exists */}
+            {storedOrders.length > 1 && (
+              <div className="mb-3 flex items-center justify-between border-b border-koma-border/60 pb-2.5">
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+                  {storedOrders.map((ord) => {
+                    const isSelected = ord.id === activeOrder.id;
+                    const isOrdActive = !isTerminalStatus(ord.status);
+                    return (
+                      <button
+                        key={ord.id}
+                        type="button"
+                        onClick={() => setSelectedOrderId(ord.id)}
+                        className={clsx(
+                          "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10px] font-bold transition",
+                          isSelected
+                            ? "bg-emerald-500 text-white shadow"
+                            : "border border-koma-border bg-koma-panel text-koma-secondary hover:text-white",
+                        )}
+                      >
+                        <span>Pedido #{ord.numero_pedido}</span>
+                        {isOrdActive && (
+                          <span className={clsx(
+                            "h-1.5 w-1.5 rounded-full",
+                            isSelected ? "bg-white" : "bg-emerald-400 animate-pulse",
+                          )} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOrdersDrawerOpen(true)}
+                  className="ml-2 shrink-0 text-[10px] font-bold text-emerald-400 hover:text-emerald-300"
+                >
+                  Ver todos ({storedOrders.length})
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-start gap-3">
                 <div className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-xl", rejected ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400")}>
                   {rejected ? <XCircle className="h-5 w-5" /> : terminal ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
                 </div>
                 <div>
-                  <span className={clsx("text-[9px] font-black uppercase tracking-[0.14em]", rejected ? "text-rose-400" : "text-emerald-400")}>Pedido #{activeOrder.numero_pedido}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={clsx("text-[9px] font-black uppercase tracking-[0.14em]", rejected ? "text-rose-400" : "text-emerald-400")}>
+                      Pedido #{activeOrder.numero_pedido}
+                    </span>
+                    {storedOrders.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsOrdersDrawerOpen(true)}
+                        className="text-[9px] text-koma-subtle underline hover:text-white"
+                      >
+                        {activeOrders.length > 1 ? `${activeOrders.length} em andamento` : "Meus pedidos"}
+                      </button>
+                    )}
+                  </div>
                   <h2 className="mt-1 text-base font-black text-koma-foreground">{orderStatusLabel(activeOrder.status)}</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
                     {rejected
@@ -648,10 +673,17 @@ export default function CardapioPage() {
               </div>
               <div className="flex gap-2 sm:shrink-0">
                 {!terminal && (
-                  <button type="button" onClick={() => void checkActiveOrder(Number(activeBrand.id))} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-[10px] font-bold text-koma-secondary"><RefreshCw className="h-3.5 w-3.5" /> Atualizar</button>
+                  <button
+                    type="button"
+                    onClick={() => void checkActiveOrders(Number(activeBrand.id))}
+                    disabled={isRefreshingOrders}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-[10px] font-bold text-koma-secondary transition hover:text-white disabled:opacity-50"
+                  >
+                    <RefreshCw className={clsx("h-3.5 w-3.5", isRefreshingOrders && "animate-spin text-emerald-400")} /> Atualizar
+                  </button>
                 )}
                 {terminal && (
-                  <button type="button" onClick={clearTrackedOrder} className="h-9 rounded-xl bg-emerald-500 px-3 text-[10px] font-black text-white">Fazer novo pedido</button>
+                  <button type="button" onClick={() => clearTrackedOrder(activeOrder.id)} className="h-9 rounded-xl bg-emerald-500 px-3 text-[10px] font-black text-white">Fazer novo pedido</button>
                 )}
               </div>
             </div>
@@ -808,13 +840,38 @@ export default function CardapioPage() {
             setIsCartOpen(false);
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
-            window.setTimeout(() => void checkActiveOrder(Number(activeBrand.id)), 50);
+            if (activeBrand?.id) {
+              const rid = Number(activeBrand.id);
+              setStoredOrders(loadStoredOrders(rid));
+              window.setTimeout(() => void checkActiveOrders(rid), 50);
+            }
           }}
           onSessionExpired={handleSessionExpired}
         />
       )}
 
       <CardapioStoreInfoDrawer brand={activeBrand} isOpen={isStoreInfoOpen} onClose={() => setIsStoreInfoOpen(false)} />
+
+      <CardapioOrdersDrawer
+        isOpen={isOrdersDrawerOpen}
+        onClose={() => setIsOrdersDrawerOpen(false)}
+        orders={storedOrders}
+        selectedOrderId={activeOrder?.id || null}
+        onSelectOrder={(id) => {
+          setSelectedOrderId(id);
+          setIsOrdersDrawerOpen(false);
+        }}
+        onRefresh={() => {
+          if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+        }}
+        onRemoveOrder={(id) => {
+          removeStoredOrder(id);
+          if (activeBrand?.id) {
+            setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
+          }
+        }}
+        isRefreshing={isRefreshingOrders}
+      />
     </div>
   );
 }

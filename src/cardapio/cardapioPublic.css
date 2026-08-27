@@ -194,7 +194,8 @@
   background: color-mix(in srgb, var(--color-brand-primary) 9%, var(--menu-surface));
 }
 
-.cardapio-public-icon-button.is-cart > span {
+.cardapio-public-icon-button.is-cart > span,
+.cardapio-public-icon-button.is-orders > span {
   position: absolute;
   top: -5px;
   right: -5px;
