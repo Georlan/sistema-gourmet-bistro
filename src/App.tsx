@@ -1237,8 +1237,8 @@ export default function App() {
       if (origins.includes('garcom')) return 'garcom';
       return 'desconhecida';
     })(),
-    clienteId: comanda.cliente_id || null,
-    clientePhone: comanda.delivery_telefone || null,
+    clienteId: comanda.cliente_id || comanda.cliente?.id || null,
+    clientePhone: comanda.cliente?.telefone || comanda.delivery_telefone || comanda.telefone || null,
     mesaId: comanda.mesa_id || 0,
     garcomId: comanda.garcom_id,
     garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',

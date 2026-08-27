@@ -10,7 +10,7 @@ import {
   MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
   Printer, Info, Smartphone,
   Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
-  SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell } from 'lucide-react';
+  SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell, User } from 'lucide-react';
 import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult, Distribuidor, FichaTecnicaProduto, Insumo, SystemUser } from '../types';
 import { EntradaManualModal } from './estoque/EntradaManualModal';
 import MoneyInput from './MoneyInput';
@@ -1101,6 +1101,95 @@ export function CaixaPanel({
   const [showAbrirModal, setShowAbrirModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+
+  const identifiedCustomer = useMemo(() => {
+    if (!selectedOrder) return null;
+
+    // 1. Direct phone on selectedOrder
+    const directPhone = (
+      selectedOrder.clientePhone
+      || (selectedOrder as any).delivery_telefone
+      || (selectedOrder as any).telefone
+      || (selectedOrder as any).cliente?.telefone
+      || ''
+    ).trim();
+
+    // 2. Direct client ID
+    const directClientId = selectedOrder.clienteId || (selectedOrder as any).cliente_id;
+    if (directClientId) {
+      const user = loyaltyUsers.find(u => String(u.id) === String(directClientId));
+      if (user) {
+        return {
+          id: user.id,
+          nome: user.cliente || user.nome || selectedOrder.identificador || 'Cliente',
+          telefone: user.telefone || directPhone || '',
+          saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
+          pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
+        };
+      }
+    }
+
+    if (directPhone) {
+      const cleanPhone = directPhone.replace(/\D/g, '');
+      const user = loyaltyUsers.find(u => (u.telefone || '').replace(/\D/g, '') === cleanPhone);
+      if (user) {
+        return {
+          id: user.id,
+          nome: user.cliente || user.nome || selectedOrder.identificador || 'Cliente',
+          telefone: user.telefone,
+          saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
+          pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
+        };
+      }
+      return {
+        id: null,
+        nome: selectedOrder.identificador || 'Cliente',
+        telefone: directPhone,
+        saldoCashback: 0,
+        pontos: 0,
+      };
+    }
+
+    // 3. Match by item.clienteNome or selectedOrder.identificador in loyaltyUsers
+    const nameToMatch = (selectedOrder.identificador || '').trim().toLowerCase();
+    if (nameToMatch && nameToMatch !== 'consumo geral') {
+      const user = loyaltyUsers.find(u =>
+        (u.cliente || '').trim().toLowerCase() === nameToMatch
+        || (u.nome || '').trim().toLowerCase() === nameToMatch
+      );
+      if (user && user.telefone) {
+        return {
+          id: user.id,
+          nome: user.cliente || user.nome,
+          telefone: user.telefone,
+          saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
+          pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
+        };
+      }
+    }
+
+    // 4. Check items for client name that matches a registered customer with phone
+    for (const item of (selectedOrder.itens || [])) {
+      const itName = (item.clienteNome || '').trim().toLowerCase();
+      if (itName && itName !== 'consumo geral') {
+        const user = loyaltyUsers.find(u =>
+          (u.cliente || '').trim().toLowerCase() === itName
+          || (u.nome || '').trim().toLowerCase() === itName
+        );
+        if (user && user.telefone) {
+          return {
+            id: user.id,
+            nome: user.cliente || user.nome,
+            telefone: user.telefone,
+            saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
+            pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
+          };
+        }
+      }
+    }
+
+    return null;
+  }, [selectedOrder, loyaltyUsers]);
 
   // Otimizações / Estoque / Desempenho States
   const [waitersPerformance, setWaitersPerformance] = useState<{ nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number }[]>([]);
@@ -3285,6 +3374,10 @@ export function CaixaPanel({
         }
       }
 
+      const effectiveClienteId = identifiedCustomer?.id || selectedOrder.clienteId || null;
+      const effectiveCpfOrPhone = (identifiedCustomer?.telefone || paymentCPF).replace(/\D/g, '') || null;
+      const effectiveClienteNome = identifiedCustomer?.nome || selectedOrder.identificador || null;
+
       if (isMesaPayment) {
         // A mesa é uma única conta monetária. O backend distribui esta baixa,
         // de forma atômica, entre todas as comandas abertas da mesa. A seleção
@@ -3298,9 +3391,9 @@ export function CaixaPanel({
             incluir_taxa_servico: taxaServicoAtiva && checkoutServiceTax,
             item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
             idempotency_key: effectiveIdempotencyKey,
-            cliente_id: selectedOrder.clienteId || null,
-            cpf_cliente: paymentCPF.replace(/\D/g, '') || null,
-            nome_cliente: selectedOrder.identificador || null,
+            cliente_id: effectiveClienteId,
+            cpf_cliente: effectiveCpfOrPhone,
+            nome_cliente: effectiveClienteNome,
           })
         });
         if (!res.ok) {
@@ -3344,9 +3437,9 @@ export function CaixaPanel({
               metodo: paymentMetodo,
               item_ids: data.itemIds,
               idempotency_key: `${effectiveIdempotencyKey}-${cid}`,
-              cliente_id: selectedOrder.clienteId || null,
-              cpf_cliente: paymentCPF.replace(/\D/g, '') || null,
-              nome_cliente: selectedOrder.identificador || null,
+              cliente_id: effectiveClienteId,
+              cpf_cliente: effectiveCpfOrPhone,
+              nome_cliente: effectiveClienteNome,
             })
           });
           if (!res.ok) {
@@ -3381,9 +3474,9 @@ export function CaixaPanel({
               metodo: paymentMetodo,
               item_ids: null,
               idempotency_key: `${effectiveIdempotencyKey}-${cid}`,
-              cliente_id: selectedOrder.clienteId || null,
-              cpf_cliente: paymentCPF.replace(/\D/g, '') || null,
-              nome_cliente: selectedOrder.identificador || null,
+              cliente_id: effectiveClienteId,
+              cpf_cliente: effectiveCpfOrPhone,
+              nome_cliente: effectiveClienteNome,
             })
           });
           if (!res.ok) {
@@ -8868,18 +8961,53 @@ export function CaixaPanel({
                       </div>
                     </div>
 
-                    <div className={clsx('space-y-1.5', 'font-sans')}>
-                      <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Celular do cliente (Opcional - Fidelidade):</label>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        autoComplete="tel"
-                        value={paymentCPF}
-                        onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
-                        placeholder="(00) 00000-0000"
-                        className={clsx('w-full', 'px-3', 'py-2', 'text-xs', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-koma-foreground')}
-                      />
-                    </div>
+                    {identifiedCustomer && identifiedCustomer.telefone ? (
+                      <div className={clsx(
+                        'p-2.5',
+                        'rounded-xl',
+                        'border',
+                        'border-emerald-500/25',
+                        'bg-emerald-500/10',
+                        'text-koma-foreground',
+                        'space-y-1'
+                      )}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-400">
+                            <Check size={11} className="stroke-[3]" />
+                            <span>Cliente Identificado</span>
+                          </div>
+                          {(Number(identifiedCustomer.saldoCashback || 0) > 0 || Number(identifiedCustomer.pontos || 0) > 0) && (
+                            <span className="text-[9px] font-bold text-emerald-300">
+                              Cashback: R$ {Number(identifiedCustomer.saldoCashback || 0).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-xs font-bold pt-0.5">
+                          <span className="text-white flex items-center gap-1.5 min-w-0">
+                            <User size={12} className="text-emerald-400 shrink-0" />
+                            <span className="truncate">{identifiedCustomer.nome}</span>
+                          </span>
+                          <span className="font-mono text-emerald-300 text-[11px] shrink-0 ml-2">
+                            {aplicarMascaraTelefoneInput(identifiedCustomer.telefone)}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={clsx('space-y-1.5', 'font-sans')}>
+                        <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>
+                          Celular do cliente (Opcional - Fidelidade):
+                        </label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          autoComplete="tel"
+                          value={paymentCPF}
+                          onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
+                          placeholder="(00) 00000-0000"
+                          className={clsx('w-full', 'px-3', 'py-2', 'text-xs', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-koma-foreground')}
+                        />
+                      </div>
+                    )}
 
                     {/* TROCO EM TEMPO REAL */}
                     {(() => {
