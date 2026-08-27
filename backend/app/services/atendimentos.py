@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import threading
 import uuid
 from dataclasses import dataclass
 from typing import Iterable, Optional
@@ -108,6 +109,10 @@ def _reserve_legacy_number(
     db.flush()
 
 
+_ALLOCATION_LOCK = threading.Lock()
+_IN_MEMORY_MAX_NUMBER: dict[tuple[int, str], int] = {}
+
+
 def allocate_account_number(
     db: Session,
     restaurante_id: int,
@@ -115,49 +120,70 @@ def allocate_account_number(
     opened_at: Optional[datetime.datetime] = None,
 ) -> tuple[int, str]:
     """Aloca a Conta # humana no mês OPERACIONAL, serializada no PostgreSQL."""
-    period_ref = _operational_period(opened_at)
-    _advisory_number_lock(db, restaurante_id, period_ref)
-    counter = (
-        db.query(NumeradorOperacional)
-        .filter(
-            NumeradorOperacional.restaurante_id == restaurante_id,
-            NumeradorOperacional.periodo_ref == period_ref,
-        )
-        .with_for_update()
-        .first()
-    )
-    if counter is None:
-        start_db, end_db = _month_bounds_database(period_ref)
-        legacy_max = (
-            db.query(func.max(Comanda.numero_pedido))
+    with _ALLOCATION_LOCK:
+        period_ref = _operational_period(opened_at)
+        _advisory_number_lock(db, restaurante_id, period_ref)
+        counter = (
+            db.query(NumeradorOperacional)
             .filter(
-                Comanda.restaurante_id == restaurante_id,
-                Comanda.criado_em >= start_db,
-                Comanda.criado_em < end_db,
+                NumeradorOperacional.restaurante_id == restaurante_id,
+                NumeradorOperacional.periodo_ref == period_ref,
             )
-            .scalar()
-            or 0
+            .with_for_update()
+            .first()
         )
-        account_max = (
-            db.query(func.max(AtendimentoMesa.numero_conta))
-            .filter(
-                AtendimentoMesa.restaurante_id == restaurante_id,
-                AtendimentoMesa.periodo_ref == period_ref,
+        if counter is None:
+            start_db, end_db = _month_bounds_database(period_ref)
+            legacy_max = (
+                db.query(func.max(Comanda.numero_pedido))
+                .filter(
+                    Comanda.restaurante_id == restaurante_id,
+                    Comanda.criado_em >= start_db,
+                    Comanda.criado_em < end_db,
+                )
+                .scalar()
+                or 0
             )
-            .scalar()
-            or 0
-        )
-        counter = NumeradorOperacional(
-            restaurante_id=restaurante_id,
-            periodo_ref=period_ref,
-            ultimo_numero=max(int(legacy_max), int(account_max)),
-        )
-        db.add(counter)
+            account_max = (
+                db.query(func.max(AtendimentoMesa.numero_conta))
+                .filter(
+                    AtendimentoMesa.restaurante_id == restaurante_id,
+                    AtendimentoMesa.periodo_ref == period_ref,
+                )
+                .scalar()
+                or 0
+            )
+            counter = NumeradorOperacional(
+                restaurante_id=restaurante_id,
+                periodo_ref=period_ref,
+                ultimo_numero=max(int(legacy_max), int(account_max)),
+            )
+            db.add(counter)
+            try:
+                db.flush()
+            except Exception:
+                db.rollback()
+                counter = (
+                    db.query(NumeradorOperacional)
+                    .filter(
+                        NumeradorOperacional.restaurante_id == restaurante_id,
+                        NumeradorOperacional.periodo_ref == period_ref,
+                    )
+                    .with_for_update()
+                    .first()
+                )
+                if counter is None:
+                    raise
+
+        mem_key = (restaurante_id, period_ref)
+        db_val = int(counter.ultimo_numero or 0)
+        current_val = max(db_val, _IN_MEMORY_MAX_NUMBER.get(mem_key, 0))
+        next_val = current_val + 1
+        counter.ultimo_numero = next_val
+        _IN_MEMORY_MAX_NUMBER[mem_key] = next_val
+        counter.atualizado_em = datetime.datetime.now(datetime.timezone.utc)
         db.flush()
-    counter.ultimo_numero += 1
-    counter.atualizado_em = datetime.datetime.now(datetime.timezone.utc)
-    db.flush()
-    return int(counter.ultimo_numero), period_ref
+        return next_val, period_ref
 
 
 def _record_movement(

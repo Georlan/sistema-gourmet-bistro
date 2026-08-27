@@ -6,7 +6,7 @@ from ..database import current_restaurante_id
 from .atendimentos import allocate_account_number
 
 
-def gerar_novo_numero_pedido_atomico(db: Session) -> int:
+def gerar_novo_numero_pedido_atomico(db: Session, restaurante_id: int | None = None) -> int:
     """Fonte única transitória para todos os números humanos de pedido/conta.
 
     O código legado ainda chama `gerar_novo_numero_pedido` em mais de um router
@@ -17,8 +17,8 @@ def gerar_novo_numero_pedido_atomico(db: Session) -> int:
     lock PostgreSQL, eliminando a corrida em que Delivery #47 e Conta #47
     poderiam nascer simultaneamente a partir de dois `MAX(numero_pedido)`.
     """
-    restaurante_id = current_restaurante_id.get()
-    if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
+    rid = restaurante_id if restaurante_id is not None else current_restaurante_id.get()
+    if not isinstance(rid, int) or isinstance(rid, bool) or rid <= 0:
         raise RuntimeError("Numeração operacional exige restaurante_id explícito no contexto")
-    numero, _periodo = allocate_account_number(db, restaurante_id)
+    numero, _periodo = allocate_account_number(db, rid)
     return numero

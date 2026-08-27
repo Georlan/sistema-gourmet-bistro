@@ -157,11 +157,17 @@ def _agendar_notificacao_whatsapp_status(
     )
 
 
-def gerar_novo_numero_pedido(db: Session) -> int:
+def gerar_novo_numero_pedido(db: Session, restaurante_id: Optional[int] = None) -> int:
     """
-    Gera o próximo número sequencial global de pedido.
+    Gera o próximo número sequencial global de pedido de forma atômica e segura.
     Reinicia no início de cada mês (começando de 1).
     """
+    tenant_id = restaurante_id or current_restaurante_id.get()
+    if tenant_id:
+        from ..services.atendimentos import allocate_account_number
+        numero, _ = allocate_account_number(db, tenant_id)
+        return numero
+
     now = datetime.datetime.now(datetime.timezone.utc)
     start_of_month = datetime.datetime(now.year, now.month, 1)
     
@@ -171,7 +177,7 @@ def gerar_novo_numero_pedido(db: Session) -> int:
         start_of_next_month = datetime.datetime(now.year, now.month + 1, 1)
         
     max_pedido = db.query(Comanda.numero_pedido).filter(
-        Comanda.restaurante_id == current_restaurante_id.get(),
+        Comanda.restaurante_id == tenant_id,
         Comanda.criado_em >= start_of_month,
         Comanda.criado_em < start_of_next_month
     ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
@@ -259,7 +265,15 @@ def enqueue_print_job_in_session(
             status="pending",
             idempotency_key=ikey
         )
-        db.add(job)
+        try:
+            with db.begin_nested():
+                db.add(job)
+                db.flush()
+        except Exception:
+            return db.query(PrintJob).filter(
+                PrintJob.restaurante_id == restaurante_id,
+                PrintJob.idempotency_key == ikey,
+            ).first()
         return job
     except Exception as e:
         logger.error(f"[PRINT JOB TX ERROR] Falha ao adicionar PrintJob na sessão: {e}")

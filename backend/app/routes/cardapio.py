@@ -350,7 +350,7 @@ def criar_pedido_online(
                 valor_desconto_cashback = round(desconto_cb, 2)
                 cliente.saldo_cashback = round(saldo_cb - desconto_cb, 2)
 
-        numero_pedido = gerar_novo_numero_pedido(db)
+        numero_pedido = gerar_novo_numero_pedido(db, restaurante_id=rest_id)
         if cliente is not None:
             cliente = cadastrar_ou_atualizar_cliente(
                 db,
@@ -509,6 +509,7 @@ def criar_pedido_online(
     return {
         "status": "success",
         "message": "Pedido enviado e integrado ao caixa com sucesso!",
+        "id": comanda_id,
         "comanda_id": comanda_id,
         "numero_pedido": numero_pedido,
         "cliente_id": cliente.id if cliente is not None else None,
