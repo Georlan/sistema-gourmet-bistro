@@ -202,9 +202,12 @@ export default function CardapioDigital({
     const timeoutId = window.setTimeout(() => controller.abort(), ORDER_REQUEST_TIMEOUT_MS);
 
     try {
+      // A chave idempotente já vai no payload. Não repetimos em header customizado
+      // porque isso adicionava X-Idempotency-Key ao preflight CORS e bloqueava o
+      // checkout público em produção. O backend continua aceitando/validando o
+      // header para outros clientes, mas o storefront usa o contrato mais simples.
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        "X-Idempotency-Key": idempotencyKey,
       };
       if (customerToken) headers["X-Koma-Customer-Token"] = customerToken;
 
