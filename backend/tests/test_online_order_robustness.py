@@ -207,7 +207,8 @@ def test_checkout_persiste_tentativa_e_reutiliza_chave_apos_timeout():
     assert "PENDING_ORDER_TTL_MS" in source
     assert "resolvePersistentIdempotencyKey" in source
     assert "AbortController" in source
-    assert "X-Idempotency-Key" in source
+    assert "idempotency_key: idempotencyKey" in source
+    assert '"X-Idempotency-Key": idempotencyKey' not in source
     assert "reutiliza a mesma tentativa sem duplicar o pedido" in source
 
 
