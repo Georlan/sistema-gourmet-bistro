@@ -31,12 +31,12 @@ def test_public_order_preflight_succeeds_from_official_pages_origin(monkeypatch)
         allow_headers=["Content-Type", "X-Koma-Customer-Token", "X-Request-ID"],
     )
 
-    @app.post("/api/cardapio/pedidos")
+    @app.post("/cardapio/pedidos")
     def create_public_order():
         return {"ok": True}
 
     response = TestClient(app).options(
-        "/api/cardapio/pedidos",
+        "/cardapio/pedidos",
         headers={
             "Origin": OFFICIAL_PUBLIC_FRONTEND_ORIGIN,
             "Access-Control-Request-Method": "POST",
@@ -60,7 +60,7 @@ def test_public_order_preflight_still_rejects_other_pages_projects(monkeypatch):
     )
 
     response = TestClient(app).options(
-        "/api/cardapio/pedidos",
+        "/cardapio/pedidos",
         headers={
             "Origin": "https://evil-hacker.pages.dev",
             "Access-Control-Request-Method": "POST",
