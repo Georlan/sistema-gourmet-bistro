@@ -220,6 +220,13 @@ def test_relatorios_full_suite():
 def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     db = TestingSessionLocal()
     try:
+        # Este caso testa datas históricas fixas (11/12 ago). O fixture geral
+        # também cria uma venda em "agora - 15 dias" para outros testes; perto
+        # da virada do dia essa venda móvel pode cair na mesma janela e tornar
+        # o resultado dependente do minuto em que o CI roda.
+        db.query(Pagamento).filter(Pagamento.id == "pay-1").delete(
+            synchronize_session=False
+        )
         paid_at_utc = datetime.datetime(2026, 8, 12, 2, 31, 17)
         opened_at_utc = datetime.datetime(2026, 8, 11, 21, 30)
         db.add(CaixaTurno(
