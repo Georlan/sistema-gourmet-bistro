@@ -250,17 +250,25 @@ jobs:
               )
               db.add(turno)
               db.flush()
-              comanda = Comanda(
-                  id="cmd-b1-upgrade",
-                  restaurante_id=rid,
-                  mesa_id=91,
-                  garcom_id=uid,
-                  tipo="Consumo no Local",
-                  numero_pedido=9901,
-                  valor_pago=0,
-                  fechada=False,
-              )
-              db.add(comanda)
+              comanda_id = "cmd-b1-upgrade"
+              db.execute(text("""
+                  INSERT INTO comandas (
+                      id, restaurante_id, mesa_id, garcom_id, tipo,
+                      numero_pedido, valor_pago, fechada, aberta_em
+                  ) VALUES (
+                      :id, :rid, :mesa_id, :garcom_id, :tipo,
+                      :numero_pedido, :valor_pago, :fechada, CURRENT_TIMESTAMP
+                  )
+              """), {
+                  "id": comanda_id,
+                  "rid": rid,
+                  "mesa_id": 91,
+                  "garcom_id": uid,
+                  "tipo": "Consumo no Local",
+                  "numero_pedido": 9901,
+                  "valor_pago": 0,
+                  "fechada": False,
+              })
               db.flush()
 
               # This fixture deliberately represents an old schema. Do not use
@@ -276,14 +284,14 @@ jobs:
               """), {
                   "id": lancamento_id,
                   "rid": rid,
-                  "comanda_id": comanda.id,
+                  "comanda_id": comanda_id,
                   "garcom_id": uid,
               })
               db.flush()
               db.add(Item(
                   id="item-b1-upgrade",
                   restaurante_id=rid,
-                  comanda_id=comanda.id,
+                  comanda_id=comanda_id,
                   lancamento_id=lancamento_id,
                   produto_id="prod-b1",
                   preco_unit=42,

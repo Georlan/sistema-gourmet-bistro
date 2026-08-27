@@ -166,13 +166,8 @@ jobs:
           test -n "$head_revision"
           echo "Alembic single head: $head_revision"
 
-      - name: Run critical regression suite
-        env:
-          KOMA_REGRESSION_LOG: /tmp/koma-regression.log
-        run: bash scripts/regression_check.sh
-
-      - name: Run full isolated backend suite
-        run: python -m pytest backend/tests -q -ra
+      - name: Run full backend regression suite (parallel)
+        run: python -m pytest backend/tests -n auto -q -ra
 
       - name: Run print agent suite
         run: python -m pytest print-agent -q -ra
