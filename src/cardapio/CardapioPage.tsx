@@ -3,21 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useState, useEffect, useRef } from "react";
-import { Product, BrandConfig, ProductOption, getProductImageUrl, getRestaurantAssetUrl, SocialNetwork, OperatingHours, PaymentMethodGroup } from "./CardapioTypes";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  ShoppingBag,
+  XCircle,
+} from "lucide-react";
+import clsx from "clsx";
+import {
+  BrandConfig,
+  OperatingHours,
+  PaymentMethodGroup,
+  Product,
+  ProductOption,
+  SocialNetwork,
+  getProductImageUrl,
+  getRestaurantAssetUrl,
+} from "./CardapioTypes";
 import CardapioHeader from "./components/CardapioHeader";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
-import CardapioCartDrawer, { CardapioCheckoutRequest, CartItem } from "./components/CardapioCartDrawer";
+import CardapioCartDrawer, {
+  CardapioCheckoutRequest,
+  CartItem,
+} from "./components/CardapioCartDrawer";
 import CardapioAuthModal from "./components/CardapioAuthModal";
-import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
-import { ShoppingBag, Eye, X, ArrowRight, Clock, RefreshCw } from "lucide-react";
+import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { smartSearchMatch } from "../domain";
-import clsx from "clsx";
 import {
   CustomerProfile,
   clearCustomerSession,
@@ -26,13 +44,27 @@ import {
   saveCustomerSession,
 } from "./customerSession";
 
-const getCategoryId = (name: string) =>
-  'sec-' + name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+const KOMA_PRIMARY = "#00b894";
+const KOMA_BACKGROUND = "#090a0f";
+const ACTIVE_ORDER_STORAGE_KEY = "koma_active_order";
+const ACTIVE_ORDER_TTL_MS = 12 * 60 * 60 * 1000;
+const ACTIVE_ORDER_REFRESH_MS = 20_000;
 
 interface PublicMenuPayload {
   restaurante: Record<string, any>;
   categorias: Array<Record<string, any>>;
   produtos: Array<Record<string, any>>;
+}
+
+interface ActiveOrder {
+  id: string;
+  numero_pedido: string | number;
+  status: string;
+  tipo: string;
+  total: number;
+  fechado?: boolean;
+  created_at?: string;
+  itens?: Array<{ id: string; nome: string; quantidade: number; observacao?: string }>;
 }
 
 function parseStructuredValue(value: unknown): unknown {
@@ -44,234 +76,143 @@ function parseStructuredValue(value: unknown): unknown {
   }
 }
 
+function categorySectionId(name: string) {
+  const slug = name
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `sec-${slug || "categoria"}`;
+}
+
 function getRestaurantIdentifier(): string | null {
-  // 1. Check query parameters first (high priority for testing)
   const params = new URLSearchParams(window.location.search);
   const restaurantId = params.get("restaurant_id") || params.get("restaurante_id");
   const slug = params.get("slug");
-  
   if (restaurantId) return restaurantId;
   if (slug) return slug;
 
-  // 2. Check subdomain in production
   const hostname = window.location.hostname.toLowerCase();
   const parts = hostname.split(".");
   const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro"];
-  const isPlatformHost = hostname.endsWith(".pages.dev") || 
-                         hostname.endsWith(".railway.app") || 
-                         hostname.endsWith(".up.railway.app") || 
-                         hostname.endsWith(".vercel.app") || 
-                         hostname.endsWith(".netlify.app") || 
-                         hostname.endsWith(".github.io");
+  const isPlatformHost = hostname.endsWith(".pages.dev")
+    || hostname.endsWith(".railway.app")
+    || hostname.endsWith(".up.railway.app")
+    || hostname.endsWith(".vercel.app")
+    || hostname.endsWith(".netlify.app")
+    || hostname.endsWith(".github.io");
 
-  if (parts.length > 2 && !ignoredSubdomains.includes(parts[0]) && !parts[0].startsWith("ais-dev") && !parts[0].startsWith("ais-pre") && !isPlatformHost) {
+  if (
+    parts.length > 2
+    && !ignoredSubdomains.includes(parts[0])
+    && !parts[0].startsWith("ais-dev")
+    && !parts[0].startsWith("ais-pre")
+    && !isPlatformHost
+  ) {
     return parts[0];
   }
-
-  // Return null if no tenant subdomain or param is present (NEVER fallback to restaurant_id=1)
   return null;
 }
 
+function normalizeStatus(value: string) {
+  return (value || "").trim().toLocaleLowerCase("pt-BR");
+}
+
+function isTerminalOrderStatus(status: string) {
+  const normalized = normalizeStatus(status);
+  return ["finalizado", "entregue", "recusado", "cancelado"].some((item) => normalized.includes(item));
+}
+
+function orderStatusLabel(status: string) {
+  const normalized = normalizeStatus(status);
+  if (normalized.includes("recus") || normalized.includes("cancel")) return "Pedido não aceito";
+  if (normalized.includes("final") || normalized.includes("entreg")) return "Concluído";
+  if (normalized.includes("trans") || normalized.includes("saiu")) return "Saiu para entrega";
+  if (normalized.includes("pronto")) return "Pronto";
+  if (normalized.includes("produ") || normalized.includes("prepar")) return "Em preparo";
+  return "Aguardando aceite";
+}
+
+function orderStep(status: string) {
+  const normalized = normalizeStatus(status);
+  if (normalized.includes("final") || normalized.includes("entreg")) return 4;
+  if (normalized.includes("trans") || normalized.includes("saiu") || normalized.includes("pronto")) return 3;
+  if (normalized.includes("produ") || normalized.includes("prepar")) return 2;
+  return 1;
+}
+
 export default function CardapioPage() {
-  // Brand/Client State
   const [activeBrand, setActiveBrand] = useState<BrandConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-
-  // Programmatic scroll flag to prevent ScrollSpy fighting during clicks
-  const isProgrammaticScroll = useRef(false);
-
-  // Search and Category State
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("Destaques");
-
-  // Cart State
+  const [activeCategory, setActiveCategory] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-
-  // Modals / Overlays Toggles
-  const [isCartOpen, setIsCartOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth >= 1024; // Inicia aberto em telas grandes (lg)
-    }
-    return false;
-  });
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutRequest, setCheckoutRequest] = useState<CardapioCheckoutRequest | null>(null);
-  const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false); // Left Sidebar Information State
+  const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [activeOrder, setActiveOrder] = useState<{
-    id: string;
-    numero_pedido: string | number;
-    status: string;
-    tipo: string;
-    total: number;
-    created_at?: string;
-    itens?: Array<{ id: string; nome: string; quantidade: number; observacao?: string }>;
-  } | null>(null);
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+  const [user, setUser] = useState<CustomerProfile | null>(null);
+  const [customerToken, setCustomerToken] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const isProgrammaticScroll = useRef(false);
 
   const checkActiveOrder = useCallback(async (restaurantId: number) => {
     try {
-      const raw = localStorage.getItem("koma_active_order");
+      const raw = localStorage.getItem(ACTIVE_ORDER_STORAGE_KEY);
       if (!raw) {
         setActiveOrder(null);
         return;
       }
       const parsed = JSON.parse(raw);
       if (!parsed?.id || Number(parsed.restaurante_id) !== restaurantId) {
+        setActiveOrder(null);
         return;
       }
-      // Check timeout (6 hours = 21600000 ms)
-      if (Date.now() - (parsed.timestamp || 0) > 21600000) {
-        localStorage.removeItem("koma_active_order");
+      if (Date.now() - Number(parsed.timestamp || 0) > ACTIVE_ORDER_TTL_MS) {
+        localStorage.removeItem(ACTIVE_ORDER_STORAGE_KEY);
         setActiveOrder(null);
         return;
       }
 
-      // Ownership proof: send idempotency_key as ?key= query param
-      const ownershipKey = parsed.idempotency_key || "";
-      const res = await fetch(`${API_BASE_URL}/cardapio/pedidos/${parsed.id}/status?key=${encodeURIComponent(ownershipKey)}`);
-      if (res.status === 404) {
-        localStorage.removeItem("koma_active_order");
+      const key = String(parsed.idempotency_key || "");
+      const response = await fetch(
+        `${API_BASE_URL}/cardapio/pedidos/${encodeURIComponent(parsed.id)}/status?key=${encodeURIComponent(key)}`,
+        { cache: "no-store" },
+      );
+      if (response.status === 404) {
+        localStorage.removeItem(ACTIVE_ORDER_STORAGE_KEY);
         setActiveOrder(null);
         return;
       }
-      if (!res.ok) return;
+      if (!response.ok) return;
 
-      const data = await res.json();
-      const statusLower = (data.status || "").toLowerCase();
-      if (["entregue", "finalizado", "cancelado"].includes(statusLower) || data.fechada) {
-        localStorage.removeItem("koma_active_order");
-        setActiveOrder(null);
-      } else {
-        setActiveOrder({
-          id: data.id,
-          numero_pedido: data.numero_pedido,
-          status: data.status,
-          tipo: data.tipo,
-          total: data.total,
-          created_at: data.criado_em,
-          itens: data.itens
-        });
-      }
-    } catch (e) {
-      console.warn("Erro ao consultar status do pedido ativo:", e);
+      const data = await response.json();
+      setActiveOrder({
+        id: String(data.id || parsed.id),
+        numero_pedido: data.numero_pedido ?? parsed.numero_pedido,
+        status: String(data.status || "pendente"),
+        tipo: String(data.tipo || parsed.tipo || "Retirada"),
+        total: Number(data.total ?? parsed.total ?? 0),
+        fechado: Boolean(data.fechada),
+        created_at: data.criado_em,
+        itens: Array.isArray(data.itens) ? data.itens : [],
+      });
+    } catch (error) {
+      console.warn("Erro ao consultar status do pedido ativo:", error);
     }
   }, []);
 
-  // Quick Sidebar Checkout States
-  const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("delivery");
-  const [address, setAddress] = useState("");
-
-  // Customer contact profile saved on this device
-  const [user, setUser] = useState<CustomerProfile | null>(null);
-  const [customerToken, setCustomerToken] = useState<string | null>(null);
-  const [sidebarError, setSidebarError] = useState("");
-
-  // CEP & Complete Address States
-  const [cep, setCep] = useState("");
-  const [logradouro, setLogradouro] = useState("");
-  const [numero, setNumero] = useState("");
-  const [bairro, setBairro] = useState("");
-  const [cidade, setCidade] = useState("");
-  const [estado, setEstado] = useState("");
-  const [cepLoading, setCepLoading] = useState(false);
-  const [cepError, setCepError] = useState("");
-  const numeroInputRef = useRef<HTMLInputElement>(null);
-
-  const formatCEP = (value: string) => {
-    const numbers = value.replace(/\D/g, "");
-    const truncated = numbers.slice(0, 8);
-    if (truncated.length <= 5) {
-      return truncated;
-    }
-    return `${truncated.slice(0, 5)}-${truncated.slice(5)}`;
-  };
-
-  const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCEP(e.target.value);
-    setCep(formatted);
-    
-    const rawNumbers = formatted.replace(/\D/g, "");
-    if (rawNumbers.length === 8) {
-      setCepLoading(true);
-      setCepError("");
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${rawNumbers}/json/`);
-        const data = await response.json();
-        if (data.erro) {
-          setCepError("CEP inválido.");
-        } else {
-          setLogradouro(data.logradouro || "");
-          setBairro(data.bairro || "");
-          setCidade(data.localidade || "");
-          setEstado(data.uf || "");
-          
-          setTimeout(() => {
-            numeroInputRef.current?.focus();
-          }, 100);
-        }
-      } catch (err) {
-        console.warn("Erro ao buscar CEP:", err);
-        setCepError("Erro de conexão.");
-      } finally {
-        setCepLoading(false);
-      }
-    }
-  };
-
-  // Sync address fields when user changes
-  useEffect(() => {
-    if (user) {
-      setAddress(user.address || "");
-      if (user.address && !logradouro) {
-        setLogradouro(user.address);
-      }
-    } else {
-      setAddress("");
-      setCep("");
-      setLogradouro("");
-      setNumero("");
-      setBairro("");
-      setCidade("");
-      setEstado("");
-    }
-  }, [user]);
-
-  // Compile individual fields into address string
-  useEffect(() => {
-    if (deliveryMethod === "delivery") {
-      const parts = [];
-      if (logradouro) parts.push(logradouro);
-      if (numero) parts.push(`nº ${numero}`);
-      if (bairro) parts.push(bairro);
-      if (cidade && estado) {
-        parts.push(`${cidade} - ${estado}`);
-      } else if (cidade) {
-        parts.push(cidade);
-      }
-      if (cep) parts.push(`CEP: ${cep}`);
-      
-      if (parts.length > 0) {
-        setAddress(parts.join(", "));
-      }
-    }
-  }, [cep, logradouro, numero, bairro, cidade, estado, deliveryMethod]);
-
-  // O navegador público usa apenas a API tenant-aware. As tabelas
-  // multi-tenant não são consultadas diretamente pelo cliente.
   const loadRestaurantData = useCallback(async () => {
     setIsLoading(true);
     setErrorMsg("");
     const identifier = getRestaurantIdentifier();
-
     if (!identifier) {
-      const landingUrl = (import.meta as any).env?.VITE_LANDING_PAGE_URL;
-      if (landingUrl && typeof landingUrl === "string" && landingUrl.trim() !== "") {
-        window.location.href = landingUrl;
-        return;
-      }
       setErrorMsg("Cardápio não encontrado ou ainda não publicado.");
       setIsLoading(false);
       return;
@@ -279,206 +220,111 @@ export default function CardapioPage() {
 
     try {
       const query = new URLSearchParams(
-        /^\d+$/.test(identifier)
-          ? { restaurante_id: identifier }
-          : { slug: identifier }
+        /^\d+$/.test(identifier) ? { restaurante_id: identifier } : { slug: identifier },
       );
       const response = await fetch(
         `${API_BASE_URL}/api/cardapio-digital/public?${query.toString()}`,
-        { cache: "no-store" }
+        { cache: "no-store" },
       );
-      if (response.status === 404) {
-        throw new Error("CARDAPIO_NOT_FOUND");
-      }
-      if (!response.ok) {
-        throw new Error(`CARDAPIO_HTTP_${response.status}`);
-      }
+      if (response.status === 404) throw new Error("CARDAPIO_NOT_FOUND");
+      if (!response.ok) throw new Error(`CARDAPIO_HTTP_${response.status}`);
 
       const payload = await response.json() as PublicMenuPayload;
-      if (
-        !payload?.restaurante
-        || !Array.isArray(payload.categorias)
-        || !Array.isArray(payload.produtos)
-      ) {
+      if (!payload?.restaurante || !Array.isArray(payload.categorias) || !Array.isArray(payload.produtos)) {
         throw new Error("CARDAPIO_INVALID_RESPONSE");
       }
 
       const restaurant = payload.restaurante;
-      const categoriesData = payload.categorias;
-      const productsData = payload.produtos;
-
-      // Category Map
       const categoryMap: Record<string, string> = {};
-      categoriesData.forEach((category) => {
+      payload.categorias.forEach((category) => {
         categoryMap[String(category.id)] = String(category.nome || "");
       });
 
-      // Map products
-      const mappedProducts: Product[] = productsData.map((product) => {
-        return {
-          id: String(product.id),
-          name: String(product.nome || ""),
-          description: String(product.descricao || ""),
-          price: Number(product.preco || 0),
-          image: getProductImageUrl(String(product.imagem_url || "")),
-          imagesGallery: Array.isArray(product.imagens_galeria) && product.imagens_galeria.length > 0
-            ? product.imagens_galeria.map((imgUrl: string) => getProductImageUrl(imgUrl))
-            : [getProductImageUrl(String(product.imagem_url || ""))],
-          category: categoryMap[String(product.categoria_id)] || "Destaques",
-          modifiers: [],
-          isAvailable: true,
-        };
-      });
+      const products: Product[] = payload.produtos.map((product) => ({
+        id: String(product.id),
+        name: String(product.nome || ""),
+        description: String(product.descricao || ""),
+        price: Number(product.preco || 0),
+        image: getProductImageUrl(String(product.imagem_url || "")),
+        imagesGallery: Array.isArray(product.imagens_galeria) && product.imagens_galeria.length > 0
+          ? product.imagens_galeria.map((url: string) => getProductImageUrl(url))
+          : [getProductImageUrl(String(product.imagem_url || ""))],
+        category: categoryMap[String(product.categoria_id)] || "Outros",
+        modifiers: [],
+        isAvailable: true,
+      }));
 
-      // Build theme options
-      const primaryColor = restaurant.cor_primaria || restaurant.primary_color || "#00b894";
-      const backgroundColor = restaurant.cor_fundo || restaurant.background_color || "#090a0f";
-      const isDarkBg = backgroundColor.startsWith("#09") || backgroundColor === "#121420" || backgroundColor === "#000000" || backgroundColor.startsWith("#1");
-      const cardColor = isDarkBg ? "#121420" : "#ffffff";
-      const textColor = isDarkBg ? "#ffffff" : "#1e293b";
-
-      const categoryNames = categoriesData
-        .map((category) => String(category.nome || ""))
-        .filter(Boolean);
-
-      // Map social networks dynamically from JSON object or Array
-      let mappedSocials: SocialNetwork[] = [];
+      let socials: SocialNetwork[] = [];
       let whatsappNumber = "";
-      const socials = parseStructuredValue(restaurant.socials);
-      if (socials && typeof socials === "object" && !Array.isArray(socials)) {
-        const socialRecord = socials as Record<string, unknown>;
-        if (socialRecord.whatsapp) {
-          whatsappNumber = String(socialRecord.whatsapp).replace(/\D/g, "");
-        }
-        Object.entries(socialRecord).forEach(([platform, value]) => {
-          if (value) {
-            let url = String(value);
-            if (platform === "instagram" && !url.startsWith("http")) {
-              url = `https://instagram.com/${url.replace("@", "")}`;
-            } else if (platform === "whatsapp") {
-              url = `https://wa.me/${url.replace(/\D/g, "")}`;
+      const socialsConfig = parseStructuredValue(restaurant.socials);
+      if (socialsConfig && typeof socialsConfig === "object" && !Array.isArray(socialsConfig)) {
+        socials = Object.entries(socialsConfig as Record<string, unknown>)
+          .filter(([, value]) => Boolean(value))
+          .map(([platform, value]) => {
+            let url = String(value || "");
+            if (platform === "instagram" && !url.startsWith("http")) url = `https://instagram.com/${url.replace("@", "")}`;
+            if (platform === "whatsapp") {
+              whatsappNumber = url.replace(/\D/g, "");
+              url = `https://wa.me/${whatsappNumber}`;
             }
-            mappedSocials.push({
+            return {
               platform: platform === "instagram" ? "Instagram" : platform === "whatsapp" ? "WhatsApp" : platform,
               url,
-              active: true
-            });
-          }
-        });
-      } else if (Array.isArray(socials)) {
-        mappedSocials = socials
-          .filter((item) => item && typeof item === "object")
-          .map((item: Record<string, unknown>) => ({
-            platform: String(item.platform || ""),
-            url: String(item.url || ""),
-            active: item.active !== false,
-          }))
-          .filter((item) => item.platform && item.url);
-        const whatsapp = mappedSocials.find(
-          (item) => item.platform.toLowerCase() === "whatsapp"
-        );
-        if (whatsapp) {
-          whatsappNumber = whatsapp.url.replace(/\D/g, "");
-        }
-      }
-
-      // Map operating hours dynamically from JSON object or Array
-      let mappedHours: OperatingHours[] = [];
-      const operatingHours = parseStructuredValue(
-        restaurant.horarios_funcionamento
-      );
-      if (operatingHours && typeof operatingHours === "object") {
-        if (!Array.isArray(operatingHours)) {
-          mappedHours = Object.entries(operatingHours).map(([key, value]) => {
-            let days = key;
-            if (key === "segunda_a_sexta") days = "Segunda a Sexta";
-            else if (key === "segunda_a_quinta") days = "Segunda a Quinta";
-            else if (key === "sexta_e_sabado") days = "Sexta e Sábado";
-            else if (key === "sabado") days = "Sábado";
-            else if (key === "domingo") days = "Domingo";
-            else if (key === "domingo_e_feriados") days = "Domingos e Feriados";
-            
-            return { days, hours: String(value) };
+              active: true,
+            };
           });
-        } else {
-          mappedHours = operatingHours
-            .filter((item) => item && typeof item === "object")
-            .map((item: Record<string, unknown>) => ({
-              days: String(item.days || ""),
-              hours: String(item.hours || ""),
-            }))
-            .filter((item) => item.days && item.hours);
-        }
       }
 
-      // Map accepted payment methods dynamically from JSON array
-      let mappedPayments: PaymentMethodGroup[] = [];
-      const acceptedPayments = parseStructuredValue(
-        restaurant.formas_pagamento_aceitas
-      );
-      if (Array.isArray(acceptedPayments)) {
-        const paymentNames = acceptedPayments
-          .filter((item) => typeof item === "string")
-          .map((item) => item.toLocaleLowerCase("pt-BR"));
-        const configuredGroups = acceptedPayments
+      let operatingHours: OperatingHours[] = [];
+      const hoursConfig = parseStructuredValue(restaurant.horarios_funcionamento);
+      if (Array.isArray(hoursConfig)) {
+        operatingHours = hoursConfig
           .filter((item) => item && typeof item === "object")
-          .map((item: Record<string, unknown>) => ({
-            type: String(item.type || ""),
-            accepted: Array.isArray(item.accepted)
-              ? item.accepted.map(String)
-              : [],
-          }))
-          .filter((item) => item.type);
-        mappedPayments.push(...configuredGroups);
-
-        if (paymentNames.some((name) => name.includes("crédito") || name === "credito")) {
-          mappedPayments.push({ type: "Cartão de Crédito", accepted: ["Visa", "Mastercard", "Elo"] });
-        }
-        if (paymentNames.some((name) => name.includes("débito") || name === "debito")) {
-          mappedPayments.push({ type: "Cartão de Débito", accepted: ["Visa Electron", "Maestro"] });
-        }
-        if (paymentNames.includes("pix")) {
-          mappedPayments.push({ type: "Pix", accepted: ["Pagamento na entrega"] });
-        }
-        if (paymentNames.includes("dinheiro")) {
-          mappedPayments.push({ type: "Dinheiro", accepted: ["Cédulas e Moedas na entrega"] });
-        }
+          .map((item: Record<string, unknown>) => ({ days: String(item.days || ""), hours: String(item.hours || "") }))
+          .filter((item) => item.days && item.hours);
+      } else if (hoursConfig && typeof hoursConfig === "object") {
+        operatingHours = Object.entries(hoursConfig as Record<string, unknown>)
+          .map(([days, hours]) => ({ days, hours: String(hours || "") }))
+          .filter((item) => item.days && item.hours);
       }
 
-      const logoUrl = getRestaurantAssetUrl(
-        restaurant.logo_url || "",
-        true
-      );
-      const bannerUrl = getRestaurantAssetUrl(
-        restaurant.banner_url || "",
-        false
-      );
-      const statusOverride = String(
-        restaurant.status_override || "Automático"
-      ).toLocaleLowerCase("pt-BR");
+      const paymentMethods: PaymentMethodGroup[] = [];
+      const paymentConfig = parseStructuredValue(restaurant.formas_pagamento_aceitas);
+      if (Array.isArray(paymentConfig)) {
+        const names = paymentConfig.filter((item): item is string => typeof item === "string");
+        names.forEach((name) => {
+          const normalized = name.toLocaleLowerCase("pt-BR");
+          if (normalized.includes("crédito") || normalized === "credito") paymentMethods.push({ type: "Crédito", accepted: [] });
+          else if (normalized.includes("débito") || normalized === "debito") paymentMethods.push({ type: "Débito", accepted: [] });
+          else if (normalized.includes("pix")) paymentMethods.push({ type: "Pix", accepted: [] });
+          else if (normalized.includes("dinheiro")) paymentMethods.push({ type: "Dinheiro", accepted: [] });
+          else paymentMethods.push({ type: name, accepted: [] });
+        });
+      }
 
-      const newBrand: BrandConfig = {
+      const statusOverride = String(restaurant.status_override || "Automático").toLocaleLowerCase("pt-BR");
+      const brand: BrandConfig = {
         id: String(restaurant.id),
         name: String(restaurant.nome || "Restaurante"),
         slogan: String(restaurant.subtitulo || ""),
-        logo: logoUrl,
-        bannerImage: bannerUrl,
+        logo: getRestaurantAssetUrl(restaurant.logo_url || "", true),
+        bannerImage: getRestaurantAssetUrl(restaurant.banner_url || "", false),
         phone: whatsappNumber,
         address: String(restaurant.endereco || ""),
         colors: {
-          primary: primaryColor,
-          background: backgroundColor,
-          secondary: isDarkBg ? "#121420" : "#f1f5f9",
-          text: textColor,
-          card: cardColor,
-          accent: primaryColor
+          primary: KOMA_PRIMARY,
+          background: KOMA_BACKGROUND,
+          secondary: "#121420",
+          text: "#ffffff",
+          card: "#121420",
+          accent: KOMA_PRIMARY,
         },
-        categories: categoryNames,
-        products: mappedProducts,
-        socials: mappedSocials,
+        categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
+        products,
+        socials,
         about: String(restaurant.sobre_nos || ""),
-        paymentMethods: mappedPayments,
-        operatingHours: mappedHours,
+        paymentMethods,
+        operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         storeStatus: statusOverride.includes("fech")
           ? "closed"
@@ -487,37 +333,30 @@ export default function CardapioPage() {
             : "automatic",
       };
 
-      setActiveBrand(newBrand);
-      checkActiveOrder(Number(newBrand.id));
-    } catch (err) {
-      console.error("Falha ao carregar cardápio público:", err);
+      setActiveBrand(brand);
+      setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
+      void checkActiveOrder(Number(brand.id));
+    } catch (error) {
+      console.error("Falha ao carregar cardápio público:", error);
       setActiveBrand(null);
       setErrorMsg(
-        err instanceof Error && err.message === "CARDAPIO_NOT_FOUND"
+        error instanceof Error && error.message === "CARDAPIO_NOT_FOUND"
           ? "Cardápio não encontrado ou ainda não publicado."
-          : "O cardápio está temporariamente indisponível. Tente novamente."
+          : "O cardápio está temporariamente indisponível. Tente novamente.",
       );
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [checkActiveOrder]);
 
   useEffect(() => {
-    loadRestaurantData();
+    void loadRestaurantData();
   }, [loadRestaurantData]);
 
-  // A sessão é isolada por restaurante e revalidada no backend. Nunca reaproveite
-  // um perfil global, pois o mesmo aparelho pode acessar vários cardápios.
   useEffect(() => {
     if (!activeBrand?.id) return;
     let cancelled = false;
     const session = loadCustomerSession(activeBrand.id);
-
-    // Remove as chaves antigas, que não eram separadas por tenant nem provavam
-    // que o telefone pertencia à pessoa.
-    localStorage.removeItem("koma_cliente_perfil");
-    localStorage.removeItem("whitelabel_menu_current_user");
-
     if (!session) {
       setUser(null);
       setCustomerToken(null);
@@ -543,7 +382,7 @@ export default function CardapioPage() {
         saveCustomerSession(activeBrand.id, { token: session.token, profile });
       }
     }).catch(() => {
-      // Em uma queda breve de rede, preserve a sessão e o carrinho locais.
+      // Sessão local continua útil em quedas breves de rede.
     });
 
     return () => {
@@ -551,1005 +390,403 @@ export default function CardapioPage() {
     };
   }, [activeBrand?.id]);
 
-  // Update categories active state when active brand changes
   useEffect(() => {
     if (!activeBrand) return;
-    setActiveCategory(activeBrand.categories[0] || "Destaques");
-    
-    // Sync brand colors with root element CSS variables
     const root = document.documentElement;
-    root.style.setProperty("--color-brand-primary", activeBrand.colors.primary);
-    root.style.setProperty("--color-brand-bg", activeBrand.colors.background);
-    root.style.setProperty("--color-brand-text", activeBrand.colors.text || "#1c1917");
-    root.style.setProperty("--color-brand-secondary", activeBrand.colors.secondary || "#1f2937");
-    root.style.setProperty("--color-brand-card", activeBrand.colors.card || "#ffffff");
-    root.style.setProperty("--color-brand-accent", activeBrand.colors.accent || "#ef4444");
-    
-    // Update body background color to match the selected brand
-    document.body.style.backgroundColor = activeBrand.colors.background;
-    document.body.style.color = activeBrand.colors.text || "#1c1917";
+    root.style.setProperty("--color-brand-primary", KOMA_PRIMARY);
+    root.style.setProperty("--color-brand-bg", KOMA_BACKGROUND);
+    root.style.setProperty("--color-brand-text", "#ffffff");
+    root.style.setProperty("--color-brand-secondary", "#121420");
+    root.style.setProperty("--color-brand-card", "#121420");
+    root.style.setProperty("--color-brand-accent", KOMA_PRIMARY);
+    document.body.style.backgroundColor = KOMA_BACKGROUND;
+    document.body.style.color = "#ffffff";
   }, [activeBrand]);
 
-  // Connect to WebSocket to listen for reactive whitelabel changes
   useEffect(() => {
-    if (!activeBrand) return;
+    if (!activeBrand?.id) return;
+    const restaurantId = Number(activeBrand.id);
+    if (!Number.isFinite(restaurantId)) return;
 
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const refresh = () => {
+      if (document.hidden) return;
+      if (activeOrder && !isTerminalOrderStatus(activeOrder.status)) void checkActiveOrder(restaurantId);
+    };
+    intervalId = setInterval(refresh, ACTIVE_ORDER_REFRESH_MS);
+    const onVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeBrand?.id, activeOrder?.id, activeOrder?.status, checkActiveOrder]);
+
+  useEffect(() => {
+    if (!activeBrand?.id) return;
     const wsUrl = `${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}`;
-
     let ws: WebSocket | null = null;
-    let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
-    let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
-    let currentDelay = 2000;
+    let delay = 2000;
 
-    const connectWS = () => {
+    const connect = () => {
       if (stopped || document.hidden) return;
-      if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
-
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-        reconnectTimeout = undefined;
-      }
-
       const socket = new WebSocket(wsUrl);
       ws = socket;
-
-      socket.onopen = () => {
-        if (stopped || ws !== socket) return;
-        currentDelay = 2000;
-      };
-
+      socket.onopen = () => { delay = 2000; };
       socket.onmessage = (event) => {
-        if (stopped || ws !== socket) return;
         try {
           const data = JSON.parse(event.data);
-          
           const eventName = data.event || data.type;
-          if (
-            eventName === "catalog_updated"
-            || eventName === "config_updated"
-            || eventName === "store_status_changed"
-          ) {
-            if (refreshTimeout) clearTimeout(refreshTimeout);
-            refreshTimeout = setTimeout(() => void loadRestaurantData(), 90);
+          if (["catalog_updated", "config_updated", "store_status_changed"].includes(eventName)) {
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => void loadRestaurantData(), 100);
           }
-        } catch (err) {
-          console.error("Erro ao processar mensagem do WebSocket:", err);
+          if (["order_updated", "order_status_updated"].includes(eventName)) {
+            void checkActiveOrder(Number(activeBrand.id));
+          }
+        } catch {
+          // Mensagem inválida do socket não interrompe o cardápio.
         }
       };
-
-      socket.onerror = (err) => {
-        console.warn("Erro na conexão do WebSocket:", err);
-      };
-
       socket.onclose = () => {
         if (stopped || ws !== socket) return;
         ws = null;
-        if (!document.hidden) {
-          if (reconnectTimeout) clearTimeout(reconnectTimeout);
-          reconnectTimeout = setTimeout(connectWS, currentDelay);
-          currentDelay = Math.min(currentDelay * 1.5, 30000);
-        }
+        reconnectTimer = setTimeout(connect, delay);
+        delay = Math.min(delay * 1.5, 30000);
       };
+      socket.onerror = () => socket.close();
     };
 
-    const handleVisibilityChange = () => {
-      if (document.hidden || stopped) return;
-      if (!ws || ws.readyState === WebSocket.CLOSED) {
-        currentDelay = 2000;
-        connectWS();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    connectWS();
-
+    connect();
     return () => {
       stopped = true;
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (refreshTimeout) clearTimeout(refreshTimeout);
-      if (ws) {
-        ws.onopen = null;
-        ws.onmessage = null;
-        ws.onclose = null;
-        ws.onerror = null;
-        ws.close();
-      }
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      ws?.close();
     };
-  }, [activeBrand?.id, loadRestaurantData]);
+  }, [activeBrand?.id, checkActiveOrder, loadRestaurantData]);
 
-  const handleLoginSuccess = (profile: CustomerProfile, token: string) => {
-    setUser(profile);
-    setCustomerToken(token);
-    if (activeBrand?.id) {
-      saveCustomerSession(activeBrand.id, { token, profile });
-    }
-  };
+  const visibleCategories = useMemo(() => {
+    if (!activeBrand) return [];
+    return activeBrand.categories.filter((category) => (
+      activeBrand.products
+        .filter((product) => product.category === category)
+        .some((product) => smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery))
+    ));
+  }, [activeBrand, searchQuery]);
 
-  const handleProfileUpdate = (profile: CustomerProfile) => {
-    setUser(profile);
-    if (activeBrand?.id && customerToken) {
-      saveCustomerSession(activeBrand.id, { token: customerToken, profile });
-    }
-  };
+  useEffect(() => {
+    if (!activeBrand) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (isProgrammaticScroll.current) return;
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        const category = activeBrand.categories.find((item) => categorySectionId(item) === entry.target.id);
+        if (category) setActiveCategory(category);
+      });
+    }, { rootMargin: "-100px 0px -62% 0px", threshold: 0 });
 
-  const handleLogout = () => {
-    setUser(null);
-    setCustomerToken(null);
-    if (activeBrand?.id) clearCustomerSession(activeBrand.id);
-    setIsAuthOpen(false);
-  };
+    visibleCategories.forEach((category) => {
+      const element = document.getElementById(categorySectionId(category));
+      if (element) observer.observe(element);
+    });
+    return () => observer.disconnect();
+  }, [activeBrand, visibleCategories]);
 
-  const handleCustomerSessionExpired = () => {
-    handleLogout();
-    setIsCheckoutOpen(false);
-    setCheckoutRequest(null);
-    setSidebarError("Sua sessão expirou. Confirme o celular; sua sacola foi preservada.");
-    setIsAuthOpen(true);
-  };
+  const orderingEnabled = activeBrand?.storeStatus !== "closed";
+  const orderingMessage = "O restaurante pausou novos pedidos por enquanto.";
 
   const handleAddToCart = (
     product: Product,
     quantity: number,
     selectedOptions: Record<string, ProductOption[]>,
-    notes: string
+    notes: string,
   ) => {
-    // Generate a unique key for the cart item based on product ID and selected options
+    if (!orderingEnabled) {
+      setNotice(`${orderingMessage} Você ainda pode consultar os produtos.`);
+      return;
+    }
+
     const optionIds = Object.values(selectedOptions)
-      .flatMap((list) => list.map((o) => o.id))
+      .flatMap((list) => list.map((option) => option.id))
       .sort()
       .join("-");
-    const cartItemId = `${product.id}-${optionIds}-${notes.slice(0, 10)}`;
-
-    const existingIndex = cart.findIndex((item) => item.id === cartItemId);
-
-    if (existingIndex > -1) {
-      const updated = [...cart];
-      updated[existingIndex].quantity += quantity;
-      setCart(updated);
-    } else {
-      const newItem: CartItem = {
-        id: cartItemId,
-        product,
-        quantity,
-        selectedOptions,
-        notes
-      };
-      setCart([...cart, newItem]);
-    }
+    const itemId = `${product.id}-${optionIds}-${notes.trim()}`;
+    setCart((current) => {
+      const existing = current.find((item) => item.id === itemId);
+      if (existing) {
+        return current.map((item) => item.id === itemId ? { ...item, quantity: item.quantity + quantity } : item);
+      }
+      return [...current, { id: itemId, product, quantity, selectedOptions, notes }];
+    });
+    setNotice(`${product.name} foi adicionado à sacola.`);
+    if (window.innerWidth >= 1024) setIsCartOpen(true);
   };
 
   const handleFastAdd = (product: Product) => {
-    // If product has modifiers, open the detailed configuration modal
-    if (product.modifiers && product.modifiers.length > 0) {
-      setSelectedProduct(product);
-    } else {
-      // Direct instant add to cart
-      handleAddToCart(product, 1, {}, "");
-    }
+    if (product.modifiers?.length) setSelectedProduct(product);
+    else handleAddToCart(product, 1, {}, "");
   };
 
-  const handleFastAddById = (productId: string) => {
-    if (!activeBrand) return;
-    const item = activeBrand.products.find((i) => i.id === productId);
-    if (item && item.isAvailable !== false) {
-      handleFastAdd(item);
-    }
-  };
-
-  const handleUpdateQty = (itemId: string, newQty: number) => {
-    if (newQty <= 0) {
-      handleRemoveItem(itemId);
-      return;
-    }
-    const updated = cart.map((item) => {
-      if (item.id === itemId) {
-        return { ...item, quantity: newQty };
-      }
-      return item;
-    });
-    setCart(updated);
-  };
-
-  const handleRemoveItem = (itemId: string) => {
-    const filtered = cart.filter((item) => item.id !== itemId);
-    setCart(filtered);
-  };
-
-  const handleCheckoutSuccess = () => {
-    setCart([]); // Clear cart
-    setIsCartOpen(false);
-    setIsCheckoutOpen(false);
-    setCheckoutRequest(null);
-  };
-
-  const handlePlaceOrder = (orderPayload: CardapioCheckoutRequest) => {
-    setCheckoutRequest(orderPayload);
-    setIsCheckoutOpen(true);
-  };
-
-  // Calculate categories that actually contain products matching the search query
-  const visibleCategories = activeBrand
-    ? activeBrand.categories.filter((cat) => {
-        const sectionProducts = cat === "Destaques"
-          ? activeBrand.products.slice(0, 3)
-          : activeBrand.products.filter(item => item.category === cat);
-        
-        const filtered = sectionProducts.filter(item =>
-          smartSearchMatch(`${item.name} ${item.description || ''}`, searchQuery)
-        );
-
-        return filtered.length > 0;
-      })
-    : [];
-
-  // ScrollSpy with IntersectionObserver + Bottom of page check
-  useEffect(() => {
-    if (!activeBrand) return;
-    const handleScroll = () => {
-      if (isProgrammaticScroll.current) return;
-      if (window.innerHeight + window.pageYOffset >= document.documentElement.scrollHeight - 35) {
-        if (visibleCategories.length > 0) {
-          const lastCat = visibleCategories[visibleCategories.length - 1];
-          setActiveCategory(lastCat);
-        }
-      }
-    };
-
-    const observerOptions = {
-      root: null,
-      rootMargin: "-80px 0px -60% 0px",
-      threshold: 0
-    };
-
-    const handleIntersection = (entries: IntersectionObserverEntry[]) => {
-      if (isProgrammaticScroll.current) return;
-      if (window.innerHeight + window.pageYOffset >= document.documentElement.scrollHeight - 35) {
-        return;
-      }
-
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const categoryId = entry.target.id;
-          const foundCategory = activeBrand.categories.find(
-            (cat) => getCategoryId(cat) === categoryId
-          );
-          if (foundCategory) {
-            setActiveCategory(foundCategory);
-          }
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(handleIntersection, observerOptions);
-
-    activeBrand.categories.forEach((cat) => {
-      const element = document.getElementById(getCategoryId(cat));
-      if (element) {
-        observer.observe(element);
-      }
-    });
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("scroll", handleScroll);
-    };
-  }, [activeBrand, searchQuery, visibleCategories]);
-
-  // Calculate dynamic style properties for whitelabel branding
-  const styleVariables = activeBrand ? {
-    "--color-brand-primary": activeBrand.colors.primary,
-    "--color-brand-bg": activeBrand.colors.background,
-    "--color-brand-text": activeBrand.colors.text || "#1c1917",
-    "--color-brand-secondary": activeBrand.colors.secondary || "#1f2937",
-    "--color-brand-card": activeBrand.colors.card || "#ffffff",
-    "--color-brand-accent": activeBrand.colors.accent || "#ef4444",
-  } as React.CSSProperties : {} as React.CSSProperties;
-
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const cartTotal = cart.reduce((acc, item) => {
-    let price = item.product.price;
-    Object.values(item.selectedOptions).forEach((opts) => {
-      (opts as ProductOption[]).forEach((o) => {
-        price += o.extraPrice;
-      });
-    });
-    return acc + price * item.quantity;
+  const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const cartTotal = cart.reduce((total, item) => {
+    let unit = item.product.price;
+    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unit += option.extraPrice; }));
+    return total + unit * item.quantity;
   }, 0);
 
-  const handleQuickSidebarCheckout = () => {
-    setSidebarError("");
+  const handleLoginSuccess = (profile: CustomerProfile, token: string) => {
+    setUser(profile);
+    setCustomerToken(token);
+    if (activeBrand?.id) saveCustomerSession(activeBrand.id, { token, profile });
+  };
 
-    if (!user || !customerToken) {
-      setSidebarError("Confirme seu celular para fazer o pedido.");
-      setIsAuthOpen(true);
-      return;
-    }
+  const handleLogout = () => {
+    if (activeBrand?.id) clearCustomerSession(activeBrand.id);
+    setUser(null);
+    setCustomerToken(null);
+    setIsProfileOpen(false);
+  };
 
-    if (deliveryMethod === "delivery" && !address.trim()) {
-      setSidebarError("Preencha o seu endereço de entrega no painel direito.");
-      return;
-    }
+  const handleSessionExpired = () => {
+    if (activeBrand?.id) clearCustomerSession(activeBrand.id);
+    setUser(null);
+    setCustomerToken(null);
+    setIsCheckoutOpen(false);
+    setCheckoutRequest(null);
+    setNotice("Sua identificação expirou. A sacola foi preservada e você pode continuar como visitante.");
+  };
 
-    if (cart.length === 0) {
-      setSidebarError("Sua sacola está vazia.");
-      return;
-    }
-
-    const deliveryFee = deliveryMethod === "delivery" ? 7.00 : 0;
-
-    const orderPayload: CardapioCheckoutRequest = {
-      deliveryFee,
-      deliveryMethod,
-      address: deliveryMethod === "delivery" ? address : "Retirada no Balcão",
-      customerName: user.name,
-      customerPhone: user.phone || ""
-    };
-
-    handlePlaceOrder(orderPayload);
+  const clearTrackedOrder = () => {
+    localStorage.removeItem(ACTIVE_ORDER_STORAGE_KEY);
+    setActiveOrder(null);
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 font-sans">
-        <div className="flex flex-col items-center space-y-4 max-w-sm text-center animate-pulse">
-          <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 border-t-emerald-500 animate-spin" />
-          <h2 className="font-display font-extrabold text-sm uppercase tracking-wider text-koma-secondary">
-            Carregando Cardápio Digital
-          </h2>
-          <p className="text-xs text-koma-muted leading-relaxed">
-            Carregando os produtos e a identidade do restaurante...
-          </p>
-        </div>
+      <div className="flex min-h-screen flex-col items-center justify-center bg-koma-page p-6 text-koma-foreground">
+        <div className="h-11 w-11 animate-spin rounded-full border-4 border-emerald-500/20 border-t-emerald-500" />
+        <h2 className="mt-4 text-sm font-black">Carregando cardápio</h2>
+        <p className="mt-1 text-xs text-koma-muted">Produtos e informações do restaurante em um único carregamento.</p>
       </div>
     );
   }
 
   if (errorMsg || !activeBrand) {
     return (
-      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 font-sans">
-        <div className="flex flex-col items-center space-y-6 max-w-md text-center p-8 rounded-3xl border border-red-500/10 bg-red-500/[0.02]">
-          <div className="w-14 h-14 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/20">
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div className="space-y-2">
-            <h2 className="font-display font-black text-lg text-red-500 uppercase tracking-wide">
-              Estabelecimento Não Encontrado
-            </h2>
-            <p className="text-xs text-koma-subtle leading-relaxed">
-              {errorMsg || "Não foi possível carregar os dados deste estabelecimento no momento."}
-            </p>
-          </div>
-          <button
-            onClick={() => loadRestaurantData()}
-            className="px-5 py-2.5 bg-emerald-500 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl hover:opacity-90 active:scale-95 transition cursor-pointer"
-          >
-            Tentar Novamente
-          </button>
+      <div className="flex min-h-screen items-center justify-center bg-koma-page p-6 text-koma-foreground">
+        <div className="max-w-md rounded-3xl border border-rose-500/20 bg-koma-panel p-8 text-center">
+          <XCircle className="mx-auto h-10 w-10 text-rose-400" />
+          <h2 className="mt-4 text-lg font-black">Não conseguimos abrir este cardápio</h2>
+          <p className="mt-2 text-xs leading-relaxed text-koma-muted">{errorMsg}</p>
+          <button type="button" onClick={() => void loadRestaurantData()} className="mt-5 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-white">Tentar novamente</button>
         </div>
       </div>
     );
   }
 
+  const terminal = activeOrder ? isTerminalOrderStatus(activeOrder.status) : false;
+  const rejected = activeOrder ? /recus|cancel/i.test(activeOrder.status) : false;
+  const currentStep = activeOrder ? orderStep(activeOrder.status) : 1;
+  const trackingSteps = activeOrder?.tipo?.toLocaleLowerCase("pt-BR").includes("delivery")
+    ? ["Recebido", "Em preparo", "Saiu para entrega", "Concluído"]
+    : ["Recebido", "Em preparo", "Pronto", "Concluído"];
+
   return (
-    <div
-      style={{ ...styleVariables, overflowX: 'clip' } as React.CSSProperties}
-      className="min-h-screen bg-bg-app text-text-app flex flex-col font-sans selection:bg-primary/20 selection:text-primary transition-all duration-300"
-      id="app-root-container"
-    >
-      {/* 1. TOP HEADER NAVIGATION BAR */}
+    <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
       <CardapioHeader
         activeBrand={activeBrand}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         user={user}
-        onAuthClick={() => {
-          if (user) {
-            setIsProfileOpen(true);
-          } else {
-            setIsAuthOpen(true);
-          }
-        }}
-        onLogoClick={() => setIsStoreInfoOpen(true)} // Open Left Info Drawer
-        onCartToggle={() => setIsCartOpen(!isCartOpen)}
+        onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
+        onLogoClick={() => setIsStoreInfoOpen(true)}
+        onCartToggle={() => setIsCartOpen(true)}
         cartCount={cartCount}
       />
 
-      {/* 2. MAIN WEBSITE BODY CONTAINER */}
-      <div className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col lg:flex-row gap-6 lg:gap-8 min-w-0" id="main-content-layout">
-        
-        {/* LEFT COLUMN: Main Restaurant Catalog */}
-        <main className="flex-1 min-w-0 flex flex-col gap-6" id="catalog-section">
-          
-          {/* ACTIVE ORDER BANNER (PARTE 3 - STATUS EM TEMPO REAL) */}
-          {activeOrder && (() => {
-            const getStatusStepIndex = (statusStr: string) => {
-              const s = (statusStr || "").toLowerCase();
-              if (s.includes("finaliz") || s.includes("entreg")) return 4;
-              if (s.includes("transito") || s.includes("pronto") || s.includes("saiu")) return 3;
-              if (s.includes("produc") || s.includes("prepar") || s.includes("cozinha")) return 2;
-              return 1;
-            };
-            const currentStep = getStatusStepIndex(activeOrder.status);
-            const steps = [
-              { label: "Recebido", step: 1 },
-              { label: "Em Preparo", step: 2 },
-              { label: activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Em Trânsito" : "Pronto", step: 3 },
-              { label: "Entregue", step: 4 },
-            ];
-
-            return (
-              <div className="w-full bg-koma-card border border-emerald-500/30 rounded-2xl p-4 shadow-xl flex flex-col gap-3 animate-fade-in" id="active-order-banner">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-xl shrink-0">
-                      <Clock className="w-5 h-5 animate-pulse" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
-                          Pedido em Andamento (#{activeOrder.numero_pedido})
-                        </span>
-                        <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30">
-                          {activeOrder.status}
-                        </span>
-                      </div>
-                      <p className="text-xs text-koma-secondary mt-0.5 font-medium">
-                        Modalidade: {activeOrder.tipo === "delivery" || activeOrder.tipo === "Delivery" ? "Delivery" : "Retirada/Balcão"} • Total: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => checkActiveOrder(Number(activeBrand.id))}
-                      className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-bold rounded-xl transition border border-emerald-500/30 flex items-center gap-1.5 cursor-pointer"
-                      id="btn-refresh-active-order"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Atualizar</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        localStorage.removeItem("koma_active_order");
-                        setActiveOrder(null);
-                      }}
-                      className="px-3 py-1.5 bg-slate-500/10 hover:bg-slate-500/20 text-koma-subtle hover:text-koma-foreground text-xs font-bold rounded-xl transition cursor-pointer"
-                      id="btn-new-order-clear"
-                    >
-                      Fazer Novo Pedido
-                    </button>
-                  </div>
-                </div>
-
-                {/* 4-Step Progress Bar Timeline */}
-                <div className="pt-2 border-t border-koma-border grid grid-cols-4 gap-1.5 text-center">
-                  {steps.map((st) => {
-                    const isPassed = currentStep >= st.step;
-                    const isCurrent = currentStep === st.step;
-                    return (
-                      <div key={st.step} className="flex flex-col items-center gap-1">
-                        <div
-                          className={clsx(
-                            "w-full h-1.5 rounded-full transition-all duration-500",
-                            isPassed ? "bg-emerald-500 shadow-xs shadow-emerald-500/50" : "bg-koma-raised"
-                          )}
-                        />
-                        <span
-                          className={clsx(
-                            "text-[10px] font-bold tracking-tight block",
-                            isCurrent
-                              ? "text-emerald-400 animate-pulse"
-                              : isPassed
-                              ? "text-koma-secondary"
-                              : "text-gray-600"
-                          )}
-                        >
-                          {st.label}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Active Brand Hero Banner (Elegant full-width banner) */}
-          <div className="h-44 sm:h-56 w-full overflow-hidden relative rounded-2xl shadow-xs group" id="brand-banner-hero">
-            <img 
-              src={activeBrand.bannerImage} 
-              alt={activeBrand.name} 
-              className="w-full h-full object-cover transition duration-500 group-hover:scale-[1.01]" 
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent flex items-end p-6" />
-            
-            {/* Overlay Info on Banner */}
-            <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 text-koma-foreground flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-10">
-              <div className="flex items-center gap-4">
-                <img 
-                  src={activeBrand.logo} 
-                  alt={activeBrand.name} 
-                  className="w-16 h-16 rounded-xl object-cover border-2 border-white/80 shadow-md hidden sm:block" 
-                />
-                <div>
-                  <h1 className="font-display font-black text-xl sm:text-2xl tracking-tight leading-tight">{activeBrand.name}</h1>
-                  <p className="text-xs text-koma-secondary/90 font-medium leading-normal mt-0.5">{activeBrand.slogan}</p>
-                </div>
-              </div>
-              <div className="text-[11px] font-semibold bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/15 self-start sm:self-auto flex items-center gap-1.5">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    activeBrand.storeStatus === "open"
-                      ? "bg-emerald-400 animate-pulse"
-                      : activeBrand.storeStatus === "closed"
-                        ? "bg-red-400"
-                        : "bg-amber-300"
-                  }`}
-                />
-                <span>
-                  {activeBrand.storeStatus === "open"
-                    ? "Estabelecimento Aberto"
-                    : activeBrand.storeStatus === "closed"
-                      ? "Estabelecimento Fechado"
-                      : "Consulte os horários"}
-                </span>
-              </div>
-            </div>
+      <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
+        {notice && (
+          <div className="fixed bottom-5 left-1/2 z-[70] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-emerald-500/25 bg-[#102019] px-4 py-3 text-center text-[10px] font-bold text-emerald-200 shadow-2xl" role="status" onClick={() => setNotice("")}>
+            {notice}
           </div>
-
-          {/* Sticky horizontal Categories navigation bar (Dynamic visibility matching the search matches) */}
-          <CardapioCategoryNav
-            categories={visibleCategories}
-            activeCategory={activeCategory}
-            onSelectCategory={(category) => {
-              setActiveCategory(category);
-              isProgrammaticScroll.current = true;
-              const element = document.getElementById(getCategoryId(category));
-              if (element) {
-                const yOffset = -80; // altura aproximada da barra fixa do topo
-                const scrollY = window.scrollY !== undefined ? window.scrollY : (window.pageYOffset !== undefined ? window.pageYOffset : (document.documentElement.scrollTop || 0));
-                const y = element.getBoundingClientRect().top + scrollY + yOffset;
-                
-                try {
-                  window.scrollTo({ top: y, behavior: 'smooth' });
-                } catch (err) {
-                  element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-
-                // Clear programmatic block after transition time
-                setTimeout(() => {
-                  isProgrammaticScroll.current = false;
-                }, 1000);
-              } else {
-                isProgrammaticScroll.current = false;
-              }
-            }}
-          />
-
-          {/* Food Items Catalog Feed (Renders as Continuous Scroll categorized list) */}
-          <div className="flex flex-col gap-10" id="catalog-feed">
-            {visibleCategories.length === 0 ? (
-              <div className="p-12 text-center bg-card-app rounded-2xl border border-slate-500/10 shadow-xs animate-fade-in">
-                <p className="text-text-app/50 text-xs font-medium">
-                  {activeBrand.products.length === 0
-                    ? "Este restaurante ainda não publicou itens no cardápio."
-                    : "Nenhum item encontrado para a sua busca."}
-                </p>
-              </div>
-            ) : (
-              visibleCategories.map((cat) => {
-                const sectionProducts = cat === "Destaques"
-                  ? activeBrand.products.slice(0, 3)
-                  : activeBrand.products.filter(item => item.category === cat);
-                
-                const filteredCatProducts = sectionProducts.filter(item =>
-                  smartSearchMatch(`${item.name} ${item.description || ''}`, searchQuery)
-                );
-
-                return (
-                  <div 
-                    key={cat} 
-                    id={getCategoryId(cat)}
-                    className="flex flex-col gap-4 scroll-mt-24 transition-all duration-300"
-                  >
-                    {/* Section Header with clear category title and count */}
-                    <div className="flex items-center justify-between border-b border-slate-500/10 pb-2.5">
-                      <h2 className="text-sm font-extrabold text-text-app tracking-tight uppercase flex items-center gap-2">
-                        <span className="w-1.5 h-4 bg-primary rounded-full text-primary"></span>
-                        {cat}
-                      </h2>
-                      <span className="text-[10px] font-bold text-text-app/50 uppercase bg-slate-500/10 px-2.5 py-1 rounded-full">
-                        {filteredCatProducts.length} {filteredCatProducts.length === 1 ? 'item' : 'itens'}
-                      </span>
-                    </div>
-
-                    {/* Products Grid for this category */}
-                    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${
-                      isCartOpen ? "lg:grid-cols-2" : "lg:grid-cols-3"
-                    }`}>
-                      {filteredCatProducts.map((item) => (
-                        <CardapioProductCard
-                          key={item.id}
-                          product={item}
-                          onSelectProduct={setSelectedProduct}
-                          onFastAdd={handleFastAdd}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Minimalist Copyright Footer with Socials */}
-          <footer className="mt-8 pt-8 pb-4 border-t border-slate-500/10 text-center flex flex-col items-center gap-4 shrink-0" id="catalog-footer">
-            <div className="flex items-center gap-2">
-              <img src={activeBrand.logo} alt={activeBrand.name} className="h-7 w-7 rounded-lg object-cover border border-slate-500/10 shadow-3xs" />
-              <span className="font-display font-extrabold text-xs text-text-app/80 uppercase tracking-wider">{activeBrand.name}</span>
-            </div>
-            
-            {/* Social Networks on Footer */}
-            {activeBrand.socials && activeBrand.socials.some(s => s.active) && (
-              <div className="flex items-center justify-center gap-4" id="footer-socials">
-                {activeBrand.socials
-                  .filter((s) => s.active)
-                  .map((s, idx) => (
-                    <a
-                      key={idx}
-                      href={s.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-bold text-text-app/40 hover:text-primary hover:underline transition uppercase tracking-widest"
-                    >
-                      {s.platform}
-                    </a>
-                  ))}
-              </div>
-            )}
-
-            <p className="text-[10px] text-text-app/45 font-medium">
-              © {new Date().getFullYear()} {activeBrand.name}. Todos os direitos reservados.
-            </p>
-          </footer>
-
-        </main>
-
-        {/* RIGHT COLUMN: Collapsible Sidebar Shopping Cart on desktop (shown when isCartOpen = true) */}
-        {isCartOpen && (
-          <aside
-            className="hidden lg:flex flex-col w-96 bg-card-app rounded-2xl border border-slate-500/10 p-6 shrink-0 h-[calc(100vh-140px)] sticky top-28 shadow-xs justify-between animate-slide-left"
-            id="desktop-shopping-cart-sidebar"
-          >
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* Sidebar Header with Close Button */}
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-500/10 shrink-0">
-                <h2 className="font-display text-sm font-extrabold text-text-app flex items-center gap-2 uppercase tracking-wide">
-                  <ShoppingBag className="w-4.5 h-4.5 text-primary" />
-                  Sua Sacola
-                  {cartCount > 0 && (
-                    <span className="ml-1 inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-[9px] font-black text-koma-foreground">
-                      {cartCount}
-                    </span>
-                  )}
-                </h2>
-                <button
-                  onClick={() => setIsCartOpen(false)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-slate-500/15 text-text-app/40 hover:text-text-app transition cursor-pointer"
-                  title="Fechar sacola"
-                  id="btn-close-desktop-sidebar"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {cart.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                  <div className="w-14 h-14 rounded-full bg-slate-500/10 flex items-center justify-center text-text-app/30 mb-3 border border-slate-500/10">
-                    <ShoppingBag className="w-6 h-6" />
-                  </div>
-                  <p className="text-xs font-bold text-text-app/60">Sua sacola está vazia</p>
-                  <p className="text-[10px] text-text-app/40 max-w-[200px] mt-1.5 leading-normal">
-                    Selecione itens no cardápio para adicionar ao seu pedido e finalizar por aqui!
-                  </p>
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col min-h-0 justify-between">
-                  {/* Scrollable list of cart items */}
-                  <div className="max-h-44 overflow-y-auto pr-1 no-scrollbar space-y-3 pb-4 border-b border-slate-800 shrink-0">
-                    {cart.map((item) => {
-                      let itemPrice = item.product.price;
-                      const optionNames: string[] = [];
-                      Object.values(item.selectedOptions).forEach((opts) => {
-                        (opts as ProductOption[]).forEach((o) => {
-                          itemPrice += o.extraPrice;
-                          optionNames.push(o.name);
-                        });
-                      });
-
-                      return (
-                        <div key={item.id} className="flex items-start gap-2.5 p-2 rounded-xl border border-slate-500/10 bg-slate-500/5 hover:bg-slate-500/10 transition">
-                          <img src={getProductImageUrl(item.product.image)} alt={item.product.name} className="w-10 h-10 rounded-lg object-cover shrink-0 shadow-xs" />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-xs font-bold text-text-app truncate leading-tight">{item.product.name}</h4>
-                            {optionNames.length > 0 && (
-                              <p className="text-[9px] text-text-app/40 truncate leading-none mt-0.5">{optionNames.join(", ")}</p>
-                            )}
-                            <span className="text-[10px] font-bold text-text-app/80 block mt-1">
-                              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(itemPrice * item.quantity)}
-                            </span>
-                          </div>
-                          
-                          {/* Quantity controls */}
-                          <div className="flex items-center gap-1 rounded-full border border-slate-500/15 bg-card-app p-0.5 shrink-0 shadow-xs">
-                            <button
-                              onClick={() => handleUpdateQty(item.id, item.quantity - 1)}
-                              className="w-4.5 h-4.5 rounded-full bg-slate-500/15 flex items-center justify-center text-text-app/70 text-[10px] font-bold hover:bg-slate-500/25 transition cursor-pointer"
-                            >
-                              -
-                            </button>
-                            <span className="text-[10px] font-bold w-4 text-center text-text-app">{item.quantity}</span>
-                            <button
-                              onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
-                              className="w-4.5 h-4.5 rounded-full bg-slate-500/15 flex items-center justify-center text-text-app/70 text-[10px] font-bold hover:bg-slate-500/25 transition cursor-pointer"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Quick checkout fields (Middle) */}
-                  <div className="flex-1 overflow-y-auto py-3 space-y-3 min-h-0 no-scrollbar">
-                    {/* Delivery vs Pickup switch */}
-                    <div className="grid grid-cols-2 gap-1 bg-slate-500/5 p-1 rounded-xl border border-slate-500/10">
-                      <button
-                        onClick={() => setDeliveryMethod("delivery")}
-                        className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
-                          deliveryMethod === "delivery" ? "bg-primary text-koma-foreground shadow-xs" : "text-text-app/50"
-                        }`}
-                      >
-                        Delivery (Entrega)
-                      </button>
-                      <button
-                        onClick={() => setDeliveryMethod("pickup")}
-                        className={`py-1.5 text-[10px] font-bold rounded-lg transition cursor-pointer ${
-                          deliveryMethod === "pickup" ? "bg-primary text-koma-foreground shadow-xs" : "text-text-app/50"
-                        }`}
-                      >
-                        Retirada Balcão
-                      </button>
-                    </div>
-
-                    {deliveryMethod === "delivery" && (
-                      <div className="space-y-2 border-t border-slate-500/5 pt-2">
-                        <div className="flex gap-2">
-                          <div className="flex-1 space-y-1">
-                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">CEP</label>
-                            <div className="relative">
-                              <input
-                                type="text"
-                                placeholder="00000-000"
-                                value={cep}
-                                onChange={handleCEPChange}
-                                className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 pr-8 text-xs text-text-app focus:border-primary outline-hidden transition"
-                              />
-                              {cepLoading && (
-                                <span className="absolute right-2.5 top-2.5 flex h-3 w-3">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {cepError && (
-                            <div className="self-end pb-2 text-[9px] font-bold text-red-500">
-                              {cepError}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="col-span-2 space-y-1">
-                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Rua / Logradouro</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: Rua Augusta"
-                              value={logradouro}
-                              onChange={(e) => setLogradouro(e.target.value)}
-                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Número</label>
-                            <input
-                              ref={numeroInputRef}
-                              type="text"
-                              placeholder="Nº"
-                              value={numero}
-                              onChange={(e) => setNumero(e.target.value)}
-                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Bairro</label>
-                          <input
-                            type="text"
-                            placeholder="Ex: Centro"
-                            value={bairro}
-                            onChange={(e) => setBairro(e.target.value)}
-                            className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="col-span-2 space-y-1">
-                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">Cidade</label>
-                            <input
-                              type="text"
-                              placeholder="Ex: São Paulo"
-                              value={cidade}
-                              onChange={(e) => setCidade(e.target.value)}
-                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-extrabold text-text-app/40 uppercase tracking-wider block">UF</label>
-                            <input
-                              type="text"
-                              placeholder="SP"
-                              maxLength={2}
-                              value={estado}
-                              onChange={(e) => setEstado(e.target.value.toUpperCase())}
-                              className="w-full rounded-xl border border-slate-500/10 bg-slate-500/5 p-2 text-xs text-text-app focus:border-primary outline-hidden transition"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="rounded-xl border border-blue-500/15 bg-blue-500/5 p-2.5">
-                      <p className="text-[9px] font-extrabold text-text-app/60 uppercase tracking-wider">Pagamento no atendimento</p>
-                      <p className="mt-1 text-[10px] text-text-app/45 leading-relaxed">
-                        O restaurante confirmará as formas de pagamento disponíveis ao aceitar o pedido.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pricing Breakdown & Action Button (Bottom - Fixed at Footer) */}
-                  <div className="pt-3 border-t border-slate-500/15 bg-card-app shrink-0 space-y-3">
-                    {/* Pricing Breakdown */}
-                    <div className="space-y-1 text-xs pt-1">
-                      <div className="flex justify-between text-text-app/50 text-[11px]">
-                        <span>Subtotal</span>
-                        <span>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
-                      </div>
-                      {deliveryMethod === "delivery" && (
-                        <div className="flex justify-between text-text-app/50 text-[11px]">
-                          <span>Taxa de Entrega</span>
-                          <span>R$ 7,00</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between font-extrabold text-text-app pt-1.5 border-t border-slate-500/15 text-xs">
-                        <span>VALOR TOTAL</span>
-                        <span className="text-primary text-sm font-black">
-                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                            cartTotal + (deliveryMethod === "delivery" ? 7 : 0)
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Validation notice / Error notification */}
-                    {sidebarError && (
-                      <div className="p-2 bg-red-500/10 border border-red-500/25 text-red-400 rounded-xl text-[10px] font-bold text-center animate-pulse">
-                        {sidebarError}
-                      </div>
-                    )}
-
-                    {/* Checkout button */}
-                    <button
-                      onClick={handleQuickSidebarCheckout}
-                      className="w-full py-2.5 bg-primary text-koma-foreground text-xs font-black rounded-xl shadow-xs hover:opacity-95 transition uppercase tracking-wider cursor-pointer"
-                    >
-                      Confirmar e Enviar Pedido
-                    </button>
-                    <p className="text-[9px] text-center text-text-app/40 leading-normal">Seu pedido será enviado instantaneamente ao painel da cozinha!</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </aside>
         )}
 
-      {/* 3. MOBILE STICKY BOTTOM BAR (iFood-style — only shows on mobile when cart has items) */}
-      {cartCount > 0 && (
-        <div className="lg:hidden fixed bottom-0 left-0 w-full z-30 px-4 pb-5 pt-2">
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className="w-full flex items-center justify-between gap-3 rounded-2xl bg-primary text-koma-foreground px-5 h-14 shadow-xl hover:opacity-95 active:scale-[0.99] transition cursor-pointer"
-            id="floating-cart-trigger"
-          >
-            {/* Left: item count badge + label */}
-            <div className="flex items-center gap-3">
-              <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/20 text-xs font-black shrink-0">
-                {cartCount}
+        {activeOrder && (
+          <section className={clsx(
+            "rounded-2xl border p-4 shadow-lg",
+            rejected ? "border-rose-500/30 bg-rose-500/[0.07]" : terminal ? "border-emerald-500/30 bg-emerald-500/[0.07]" : "border-emerald-500/25 bg-koma-card",
+          )} id="active-order-banner">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-xl", rejected ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400")}>
+                  {rejected ? <XCircle className="h-5 w-5" /> : terminal ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
+                </div>
+                <div>
+                  <span className={clsx("text-[9px] font-black uppercase tracking-[0.14em]", rejected ? "text-rose-400" : "text-emerald-400")}>Pedido #{activeOrder.numero_pedido}</span>
+                  <h2 className="mt-1 text-base font-black text-koma-foreground">{orderStatusLabel(activeOrder.status)}</h2>
+                  <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+                    {rejected
+                      ? "O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser."
+                      : terminal
+                        ? "Este pedido foi concluído. O resumo continua aqui até você iniciar outro acompanhamento."
+                        : currentStep === 1
+                          ? "O pedido está no painel do restaurante aguardando aceite."
+                          : "O restaurante já atualizou o andamento do seu pedido."}
+                  </p>
+                  <p className="mt-1 text-[10px] text-koma-subtle">
+                    {activeOrder.tipo?.toLocaleLowerCase("pt-BR").includes("delivery") ? "Delivery" : "Retirada"} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-[11px] font-black uppercase tracking-wide">Ver Sacola</span>
-                <span className="text-[10px] font-medium text-koma-foreground/80">{cartCount} {cartCount === 1 ? 'item' : 'itens'}</span>
+              <div className="flex gap-2 sm:shrink-0">
+                {!terminal && (
+                  <button type="button" onClick={() => void checkActiveOrder(Number(activeBrand.id))} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-[10px] font-bold text-koma-secondary"><RefreshCw className="h-3.5 w-3.5" /> Atualizar</button>
+                )}
+                {terminal && (
+                  <button type="button" onClick={clearTrackedOrder} className="h-9 rounded-xl bg-emerald-500 px-3 text-[10px] font-black text-white">Fazer novo pedido</button>
+                )}
               </div>
             </div>
-            {/* Right: total + arrow */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-black">
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}
-              </span>
-              <ArrowRight className="h-4 w-4 text-koma-foreground/80" />
+
+            {!rejected && (
+              <div className="mt-4 grid grid-cols-4 gap-1.5 border-t border-koma-border pt-3">
+                {trackingSteps.map((label, index) => {
+                  const step = index + 1;
+                  const passed = currentStep >= step;
+                  return (
+                    <div key={label} className="text-center">
+                      <div className={clsx("h-1.5 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
+                      <span className={clsx("mt-1 block text-[9px] font-bold", passed ? "text-koma-secondary" : "text-koma-subtle")}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="relative h-48 overflow-hidden rounded-3xl border border-koma-border sm:h-60" id="brand-banner-hero">
+          <img src={activeBrand.bannerImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-emerald-950/30" />
+          <div className="relative flex h-full items-end justify-between gap-4 p-5 sm:p-7">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+              <img src={activeBrand.logo} alt={activeBrand.name} className="h-14 w-14 shrink-0 rounded-2xl border border-white/20 object-cover sm:h-16 sm:w-16" />
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-black text-white sm:text-2xl">{activeBrand.name}</h1>
+                {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/70">{activeBrand.slogan}</p>}
+              </div>
             </div>
+            <button type="button" onClick={() => setIsStoreInfoOpen(true)} className={clsx("shrink-0 rounded-full border px-3 py-2 text-[10px] font-black backdrop-blur", activeBrand.storeStatus === "closed" ? "border-rose-400/30 bg-rose-500/15 text-rose-200" : activeBrand.storeStatus === "open" ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200" : "border-amber-400/30 bg-amber-500/15 text-amber-100")}>
+              {activeBrand.storeStatus === "closed" ? "Pedidos pausados" : activeBrand.storeStatus === "open" ? "Aberto para pedidos" : "Ver horários"}
+            </button>
+          </div>
+        </section>
+
+        {activeBrand.storeStatus === "closed" && (
+          <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
+            <strong>Pedidos pausados.</strong> O cardápio continua disponível para consulta, mas novos pedidos não podem ser enviados agora.
+          </div>
+        )}
+
+        <CardapioCategoryNav
+          categories={visibleCategories}
+          activeCategory={activeCategory}
+          onSelectCategory={(category) => {
+            setActiveCategory(category);
+            isProgrammaticScroll.current = true;
+            const element = document.getElementById(categorySectionId(category));
+            element?.scrollIntoView({ behavior: "smooth", block: "start" });
+            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
+          }}
+        />
+
+        <div className="flex flex-col gap-9" id="catalog-feed">
+          {visibleCategories.length === 0 ? (
+            <div className="rounded-2xl border border-koma-border bg-koma-card p-10 text-center text-xs text-koma-muted">
+              {activeBrand.products.length === 0 ? "Este restaurante ainda não publicou produtos." : "Nenhum item encontrado para sua busca."}
+            </div>
+          ) : visibleCategories.map((category) => {
+            const products = activeBrand.products.filter((product) => (
+              product.category === category
+              && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
+            ));
+            return (
+              <section key={category} id={categorySectionId(category)} className="scroll-mt-28">
+                <div className="mb-3 flex items-center justify-between border-b border-koma-border pb-2.5">
+                  <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-tight text-koma-foreground"><span className="h-4 w-1.5 rounded-full bg-emerald-500" />{category}</h2>
+                  <span className="rounded-full bg-koma-raised px-2.5 py-1 text-[9px] font-bold text-koma-muted">{products.length} {products.length === 1 ? "item" : "itens"}</span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {products.map((product) => (
+                    <CardapioProductCard key={product.id} product={product} onSelectProduct={setSelectedProduct} onFastAdd={handleFastAdd} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        <footer className="mt-4 border-t border-koma-border py-7 text-center">
+          <div className="flex items-center justify-center gap-2"><img src={activeBrand.logo} alt="" className="h-7 w-7 rounded-lg object-cover" /><strong className="text-xs text-koma-secondary">{activeBrand.name}</strong></div>
+          <p className="mt-2 text-[9px] text-koma-subtle">Cardápio digital KÔMA · preços e disponibilidade atualizados pelo restaurante.</p>
+        </footer>
+      </main>
+
+      {cartCount > 0 && !isCartOpen && (
+        <div className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0">
+          <button type="button" onClick={() => setIsCartOpen(true)} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl" id="floating-cart-trigger">
+            <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
+            <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
           </button>
         </div>
       )}
 
-      </div>{/* end: #main-content-layout */}
-
-      {/* MODALS AND DRAWERS (FULLY RESPONSIVE) */}
-
-      {/* Product Details Modal */}
       {selectedProduct && (
-        <CardapioProductModal
-          product={selectedProduct}
-          onClose={() => setSelectedProduct(null)}
-          onAddToCart={handleAddToCart}
-        />
+        <CardapioProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onAddToCart={handleAddToCart} />
       )}
 
-      {/* Mobile Cart Drawer (Slide up — only visible on mobile/tablet, desktop uses the sidebar) */}
-      {isCartOpen && window.innerWidth < 1024 && (
+      {isCartOpen && (
         <CardapioCartDrawer
           cart={cart}
+          restaurantId={activeBrand.id}
+          restaurantAddress={activeBrand.address}
           onClose={() => setIsCartOpen(false)}
-          onUpdateQty={handleUpdateQty}
-          onRemoveItem={handleRemoveItem}
-          onPlaceOrder={handlePlaceOrder}
+          onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
+          onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
+          onPlaceOrder={(request) => {
+            setCheckoutRequest(request);
+            setIsCheckoutOpen(true);
+          }}
           user={user}
           onAuthClick={() => setIsAuthOpen(true)}
+          orderingEnabled={orderingEnabled}
+          orderingMessage={orderingMessage}
         />
       )}
 
-      {/* User Login/Register Modal */}
-      {isAuthOpen && activeBrand?.id && (
-        <CardapioAuthModal
-          restaurantId={activeBrand.id}
-          onClose={() => setIsAuthOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
+      {isAuthOpen && (
+        <CardapioAuthModal restaurantId={activeBrand.id} onClose={() => setIsAuthOpen(false)} onLoginSuccess={handleLoginSuccess} />
       )}
 
-      {/* Customer contact profile */}
       {isProfileOpen && (
         <CardapioUserProfileModal
           onClose={() => setIsProfileOpen(false)}
           user={user}
           customerToken={customerToken}
-          onProfileUpdate={handleProfileUpdate}
+          onProfileUpdate={(profile) => {
+            setUser(profile);
+            if (customerToken) saveCustomerSession(activeBrand.id, { token: customerToken, profile });
+          }}
           onLogout={handleLogout}
         />
       )}
 
-      {/* DIGITAL ORDER REVIEW */}
       {isCheckoutOpen && checkoutRequest && (
         <CardapioDigital
           activeBrand={activeBrand}
@@ -1559,23 +796,23 @@ export default function CardapioPage() {
           address={checkoutRequest.address}
           customerName={checkoutRequest.customerName}
           customerPhone={checkoutRequest.customerPhone}
-          customerToken={customerToken || ""}
+          customerToken={customerToken}
           onClose={() => {
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
           }}
-          onOrderSuccess={handleCheckoutSuccess}
-          onSessionExpired={handleCustomerSessionExpired}
+          onOrderSuccess={() => {
+            setCart([]);
+            setIsCartOpen(false);
+            setIsCheckoutOpen(false);
+            setCheckoutRequest(null);
+            window.setTimeout(() => void checkActiveOrder(Number(activeBrand.id)), 50);
+          }}
+          onSessionExpired={handleSessionExpired}
         />
       )}
 
-      {/* STORE INFO DRAWER (LEFT SLIDE OUT) */}
-      <CardapioStoreInfoDrawer
-        brand={activeBrand}
-        isOpen={isStoreInfoOpen}
-        onClose={() => setIsStoreInfoOpen(false)}
-      />
-
+      <CardapioStoreInfoDrawer brand={activeBrand} isOpen={isStoreInfoOpen} onClose={() => setIsStoreInfoOpen(false)} />
     </div>
   );
 }
