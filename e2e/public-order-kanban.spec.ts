@@ -89,14 +89,14 @@ async function mockCashierWithOnlineOrder(page: Page) {
     const { pathname } = url;
     let body: unknown = {};
 
-    if (pathname === '/comandas/delivery/ativos') {
+    if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       body = [{ ...onlineOrder, delivery_status: deliveryStatus }];
     } else if (pathname === '/comandas/c-online-e2e/delivery/status' && request.method() === 'PUT') {
       const next = url.searchParams.get('status_novo') || deliveryStatus;
       if (next === 'producao') acceptCalls += 1;
       deliveryStatus = next;
       body = { ...onlineOrder, delivery_status: deliveryStatus };
-    } else if (pathname === '/mesas/' || pathname === '/comandas/detalhes/todos') {
+    } else if (pathname === '/mesas/') {
       body = [];
     } else if (pathname === '/produtos/catalogo') {
       body = {
@@ -211,5 +211,13 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   await expect(closingColumn).toBeVisible();
   await expect(closingColumn).toContainText('Ana Teste');
   await expect(closingColumn).toContainText(/PRONTO PARA RETIRADA/i);
-  await expect(closingColumn.getByRole('button', { name: /Receber e finalizar/i })).toBeVisible();
+  const checkoutButton = closingColumn.getByRole('button', { name: /Receber e finalizar/i });
+  await expect(checkoutButton).toBeVisible();
+
+  // Ao abrir o checkout, o item não fica travado em 'em preparo' e permite baixa
+  await checkoutButton.click();
+  await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
+  await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Em preparo · avance na cozinha/i)).not.toBeVisible();
+  await expect(page.getByRole('button', { name: /(Receber itens selecionados|Lançar pagamento)/i })).toBeEnabled();
 });

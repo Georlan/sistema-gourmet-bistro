@@ -3557,9 +3557,14 @@ export function CaixaPanel({
     }
   };
 
-  const isItemReadyForCheckout = (item: OrderItem) => (
-    item.status === 'pronto' || item.status === 'entregue'
-  );
+  const isItemReadyForCheckout = (item: OrderItem, order?: Order | null) => {
+    if (item.status === 'pronto' || item.status === 'entregue') return true;
+    const currentOrder = order || selectedOrder;
+    if (currentOrder && !isTableCheckoutOrder(currentOrder) && ['pronto', 'transito', 'saiu_para_entrega'].includes(String(currentOrder.deliveryStatus || currentOrder.status || ''))) {
+      return (item.status as string) !== 'cancelado';
+    }
+    return false;
+  };
 
   // Checkout calculations helper
   const getCheckoutTotals = (
@@ -5551,20 +5556,31 @@ export function CaixaPanel({
                                   }
                                   const fullOrder = orders.find(o => o.id === order.id);
                                   if (fullOrder) {
-                                    setSelectedOrder({
+                                    const mappedOrder: Order = {
                                       ...fullOrder,
+                                      deliveryStatus: (order.status === 'analise' ? 'pendente' : order.status) as Order['deliveryStatus'],
                                       itens: fullOrder.itens.map((item: any) => ({
-                                        id: item.id, produtoId: item.produto_id || item.produtoId,
-                                        nome: item.nome || `Item ${item.produtoId}`, preco: item.preco_unit || item.preco,
-                                        observacao: item.observacao || '', clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                                        status: item.status, pago: item.pago
+                                        id: item.id,
+                                        produtoId: item.produto_id || item.produtoId,
+                                        nome: item.nome || `Item ${item.produtoId}`,
+                                        preco: item.preco_unit || item.preco,
+                                        observacao: item.observacao || '',
+                                        clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+                                        status: (item.status === 'preparando' && ['pronto', 'transito', 'saiu_para_entrega'].includes(order.status)) ? 'pronto' : item.status,
+                                        pago: item.pago
                                       }))
-                                    });
+                                    };
+                                    const activeUnpaidItemIds = mappedOrder.itens
+                                      .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
+                                      .map((item: any) => item.id);
+                                    setSelectedOrder(mappedOrder);
                                     setShowCheckoutModal(true);
                                     setCheckoutServiceTax(false);
                                     setSplitPeople('1');
-                                    setSelectedItemIds([]);
-                                    const sub = fullOrder.itens.filter((item: any) => !item.pago).reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+                                    setSelectedItemIds(activeUnpaidItemIds);
+                                    const sub = mappedOrder.itens
+                                      .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
+                                      .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
                                     setPaymentValor(sub);
                                   } else {
                                     handleFinalizarPedido(order.id);

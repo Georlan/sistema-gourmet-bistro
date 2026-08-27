@@ -81,12 +81,12 @@ def allowed_order_targets(current_status: str | None, order_type: str | None) ->
         return {"pronto", "recusado"}
     if current == "pronto":
         if kind == "retirada":
-            return {"finalizado"}
+            return {"finalizado", "recusado"}
         if kind == "delivery":
-            return {"transito"}
-        return {"transito", "finalizado"}
+            return {"transito", "recusado"}
+        return {"transito", "finalizado", "recusado"}
     if current == "transito":
-        return {"finalizado"} if kind != "retirada" else set()
+        return {"finalizado", "recusado"} if kind != "retirada" else {"recusado"}
     return set()
 
 

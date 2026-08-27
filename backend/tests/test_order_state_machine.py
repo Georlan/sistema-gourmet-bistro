@@ -19,12 +19,12 @@ def test_status_legado_analise_equivale_a_pendente():
 
 def test_delivery_segue_fluxo_pronto_transito_finalizado():
     assert allowed_order_targets("producao", "Delivery") == {"pronto", "recusado"}
-    assert allowed_order_targets("pronto", "Delivery") == {"transito"}
-    assert allowed_order_targets("transito", "Delivery") == {"finalizado"}
+    assert allowed_order_targets("pronto", "Delivery") == {"transito", "recusado"}
+    assert allowed_order_targets("transito", "Delivery") == {"finalizado", "recusado"}
 
 
 def test_retirada_finaliza_diretamente_de_pronto():
-    assert allowed_order_targets("pronto", "Retirada") == {"finalizado"}
+    assert allowed_order_targets("pronto", "Retirada") == {"finalizado", "recusado"}
     transition = validate_order_transition("pronto", "finalizado", "Retirada")
     assert transition.terminal is True
 
@@ -41,6 +41,16 @@ def test_cancelamento_em_producao_continua_permitido():
 
     assert transition.changed is True
     assert transition.terminal is True
+
+
+def test_cancelamento_em_pronto_e_transito_permitido():
+    transition_pronto = validate_order_transition("pronto", "recusado", "Retirada")
+    assert transition_pronto.changed is True
+    assert transition_pronto.terminal is True
+
+    transition_transito = validate_order_transition("transito", "recusado", "Delivery")
+    assert transition_transito.changed is True
+    assert transition_transito.terminal is True
 
 
 @pytest.mark.parametrize(

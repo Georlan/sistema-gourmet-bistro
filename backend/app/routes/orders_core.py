@@ -2120,6 +2120,10 @@ def atualizar_status_delivery(
     if status_normalizado == "producao" and status_anterior != "producao":
         require_open_cash_shift(db, rid)
     comanda.delivery_status = status_normalizado
+    if status_normalizado in {"pronto", "transito", "finalizado"}:
+        for item in comanda.itens:
+            if item.status == "preparando":
+                item.status = "pronto"
     if status_normalizado == "producao" and status_anterior != "producao":
         enqueue_initial_production_for_order(db, comanda)
 

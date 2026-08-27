@@ -163,6 +163,11 @@ def atualizar_status_delivery(
 
     comanda.delivery_status = target
 
+    if target in {"pronto", "transito", "finalizado"}:
+        for item in comanda.itens:
+            if item.status == "preparando":
+                item.status = "pronto"
+
     if transition.first_accept:
         enqueue_initial_production_for_order(db, comanda)
 
