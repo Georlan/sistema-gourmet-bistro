@@ -1,12 +1,20 @@
 import uuid
 import datetime
 import logging
-from fastapi import APIRouter, Depends, Header, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id, tenant_session_scope
-from ..models import Comanda, Lancamento, Item, Produto, Restaurante, Usuario
+from ..models import (
+    Comanda,
+    ConfiguracaoRestaurante,
+    Item,
+    Lancamento,
+    Produto,
+    Restaurante,
+    Usuario,
+)
 from ..schemas import CardapioPedidoCreate
 from ..websocket_manager import manager
 from .cardapio_digital import resolve_restaurant_id
@@ -16,7 +24,8 @@ from ..services.clientes import (
     normalizar_telefone_cliente,
 )
 from ..services.inventory import consumir_estoque_dos_itens
-from .cardapio_clientes import authenticated_customer
+from ..services.online_order_policy import evaluate_online_order_policy
+from .cardapio_clientes import authenticated_customer, _client_ip, _consume_rate_limit
 
 logger = logging.getLogger("koma.cardapio")
 router = APIRouter(
@@ -25,6 +34,9 @@ router = APIRouter(
 )
 
 MAX_PUBLIC_ORDER_UNITS = 200
+PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
+MAX_PUBLIC_ORDERS_PER_PHONE = 8
+MAX_PUBLIC_ORDERS_PER_IP = 120
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
 
 
@@ -58,9 +70,39 @@ def _load_existing_idempotent_order(db: Session, rest_id: int, key: str) -> Coma
     ).first()
 
 
+def _enforce_public_order_rate_limits(
+    db: Session,
+    *,
+    request: Request,
+    restaurante_id: int,
+    telefone: str,
+) -> None:
+    """Persiste limites antes da transação do pedido para resistir a payloads inválidos."""
+    _consume_rate_limit(
+        db,
+        restaurante_id=restaurante_id,
+        scope="public_order_phone",
+        raw_key=telefone,
+        max_requests=MAX_PUBLIC_ORDERS_PER_PHONE,
+        window_seconds=PUBLIC_ORDER_RATE_WINDOW_SECONDS,
+    )
+    db.commit()
+
+    _consume_rate_limit(
+        db,
+        restaurante_id=restaurante_id,
+        scope="public_order_ip",
+        raw_key=_client_ip(request),
+        max_requests=MAX_PUBLIC_ORDERS_PER_IP,
+        window_seconds=PUBLIC_ORDER_RATE_WINDOW_SECONDS,
+    )
+    db.commit()
+
+
 @router.post("/pedidos", status_code=status.HTTP_201_CREATED)
 def criar_pedido_online(
     payload: CardapioPedidoCreate,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     customer_token: str | None = Header(
@@ -110,26 +152,13 @@ def criar_pedido_online(
 
     tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
     endereco_comanda = None if modalidade == "retirada" else endereco_entrega
-    taxa_entrega = 0.0 if modalidade == "retirada" else payload.taxa_entrega
 
     rest_id = resolve_restaurant_id(str(payload.restaurante_id), None, db)
     token_context = current_restaurante_id.set(rest_id)
     auto_delivery_status = "pendente"
-
     cliente = None
-    if customer_token:
-        _claims, cliente = authenticated_customer(
-            db,
-            raw_token=customer_token,
-            expected_restaurante_id=rest_id,
-        )
-
-    telefone_clean = (
-        cliente.telefone
-        if cliente is not None
-        else normalizar_telefone_cliente(payload.cliente_telefone)
-    )
-    cliente_nome = cliente.nome if cliente is not None else payload.cliente_nome
+    cliente_nome = payload.cliente_nome
+    telefone_clean = normalizar_telefone_cliente(payload.cliente_telefone)
 
     try:
         restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
@@ -138,16 +167,47 @@ def criar_pedido_online(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Restaurante não encontrado.",
             )
-        if (restaurante.status_override or "").strip().lower() == "forçado fechado":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O restaurante está fechado para novos pedidos online no momento.",
-            )
 
+        # A mesma chave representa a mesma operação. O replay deve continuar
+        # estável mesmo se o restaurante pausar pedidos depois da primeira resposta.
         existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
         if existing_comanda:
             logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
             return _existing_order_response(existing_comanda)
+
+        if customer_token:
+            _claims, cliente = authenticated_customer(
+                db,
+                raw_token=customer_token,
+                expected_restaurante_id=rest_id,
+            )
+            telefone_clean = cliente.telefone
+            cliente_nome = cliente.nome
+
+        configuracao = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == rest_id,
+        ).first()
+        policy = evaluate_online_order_policy(
+            restaurante,
+            configuracao,
+            modalidade=modalidade,
+        )
+        if not policy.accepting_orders:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=policy.reason or "O restaurante não está aceitando pedidos online no momento.",
+            )
+
+        # A taxa nunca é confiada ao navegador. O campo legado do payload é
+        # aceito por compatibilidade, mas o valor persistido é definido no servidor.
+        taxa_entrega = 0.0 if modalidade == "retirada" else policy.delivery_fee
+
+        _enforce_public_order_rate_limits(
+            db,
+            request=request,
+            restaurante_id=rest_id,
+            telefone=telefone_clean,
+        )
 
         cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
         recentes = []
