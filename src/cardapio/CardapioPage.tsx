@@ -49,6 +49,8 @@ const KOMA_BACKGROUND = "#090a0f";
 const ACTIVE_ORDER_STORAGE_KEY = "koma_active_order";
 const ACTIVE_ORDER_TTL_MS = 12 * 60 * 60 * 1000;
 const ACTIVE_ORDER_REFRESH_MS = 20_000;
+// O CSP ainda permite https://viacep.com.br por compatibilidade com telas legadas;
+// o MVP do cardápio não executa lookup externo de CEP nem depende desse serviço.
 
 interface PublicMenuPayload {
   restaurante: Record<string, any>;
