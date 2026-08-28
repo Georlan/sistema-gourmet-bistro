@@ -81,21 +81,25 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
           color: 0x20272b,
           metalness: 0.64,
           roughness: 0.3,
+          side: THREE.DoubleSide,
         });
         const bezelMaterial = new THREE.MeshStandardMaterial({
           color: 0x080d0e,
           metalness: 0.28,
           roughness: 0.42,
+          side: THREE.DoubleSide,
         });
         const screenMaterial = new THREE.MeshStandardMaterial({
           color: 0x101719,
           metalness: 0.12,
           roughness: 0.48,
+          side: THREE.DoubleSide,
         });
         const cameraMaterial = new THREE.MeshStandardMaterial({
           color: 0x010303,
           metalness: 0.5,
           roughness: 0.2,
+          side: THREE.DoubleSide,
         });
         const buttonMaterial = new THREE.MeshStandardMaterial({
           color: 0x00b894,
@@ -103,6 +107,7 @@ export function TabletFrame({ view = 'mesas', className = '', style }: TabletFra
           emissiveIntensity: 0.65,
           metalness: 0.35,
           roughness: 0.26,
+          side: THREE.DoubleSide,
         });
 
         const object = await new OBJLoader().loadAsync(tabletModelUrl);
