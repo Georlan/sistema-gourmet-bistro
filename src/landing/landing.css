@@ -1338,6 +1338,23 @@
   will-change: transform;
 }
 
+.koma-tablet-obj .koma-tablet-3d-stage::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 3.5% 3%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: clamp(20px, 2.8vw, 36px);
+  background: linear-gradient(145deg, #465256 0%, #20292c 34%, #101719 72%, #303b3d 100%);
+  box-shadow:
+    0 44px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(0, 210, 169, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -8px 20px rgba(0, 0, 0, 0.42);
+  transform: rotate(0.8deg);
+  pointer-events: none;
+}
+
 .koma-tablet-3d-glare {
   position: absolute;
   left: 16.6%;
