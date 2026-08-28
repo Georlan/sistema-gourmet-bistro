@@ -20,7 +20,6 @@ import { SuperAdminGate } from './super-admin/SuperAdminGate';
 import { CaixaAtivarPage } from './components/CaixaAtivarPage';
 import { MotoboyPwaPage } from './components/MotoboyPwaPage';
 import { KitchenPanel } from './components/KitchenPanel';
-import LandingPage from './landing/LandingPage';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
@@ -98,13 +97,6 @@ export default function App() {
                        window.location.search.includes('view=entregador');
   if (isEntregador) {
     return <MotoboyPwaPage />;
-  }
-
-  // Detect KÔMA Landing Page (/landing or ?view=landing)
-  const isLanding = window.location.pathname.startsWith('/landing') ||
-                    window.location.search.includes('view=landing');
-  if (isLanding) {
-    return <LandingPage />;
   }
 
   // Detect if access is client cardapio (online menu)

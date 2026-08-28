@@ -4,7 +4,7 @@
 export const KOMA_LANDING_CONFIG = {
   // Número do WhatsApp oficial (formatado para wa.me/55...)
   whatsappNumber: '5588999616937',
-  whatsappMessage: encodeURIComponent('Olá! Vim pela página oficial do KÔMA e quero saber como iniciar o cadastro do meu restaurante.'),
+  whatsappMessage: encodeURIComponent('Olá! Vim pela página oficial do KÔMA e quero ver uma demonstração para o meu restaurante.'),
 
   // Links de CTA
   signupAnchor: '#cadastro',
@@ -22,18 +22,16 @@ export const KOMA_LANDING_CONFIG = {
     estabelecimento: string;
     whatsapp: string;
     tipoOperacao: string;
-    tamanhoOperacao: string;
   }) {
     const message = [
-      'Olá! Quero iniciar o cadastro do meu restaurante no KÔMA.',
+      'Olá! Quero ver uma demonstração do KÔMA para o meu restaurante.',
       '',
       `Responsável: ${lead.responsavel.trim()}`,
       `Estabelecimento: ${lead.estabelecimento.trim()}`,
       `WhatsApp: ${lead.whatsapp.trim()}`,
-      `Tipo de operação: ${lead.tipoOperacao}`,
-      `Tamanho da operação: ${lead.tamanhoOperacao}`,
+      `Tipo de operação: ${lead.tipoOperacao || 'Prefiro explicar na conversa'}`,
       '',
-      'Quero saber quais são os próximos passos para começar.',
+      'Quero entender como o sistema se encaixa na minha rotina.',
     ].join('\n');
 
     return `https://wa.me/${this.whatsappNumber}?text=${encodeURIComponent(message)}`;

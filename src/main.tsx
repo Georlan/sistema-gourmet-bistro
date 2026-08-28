@@ -20,13 +20,19 @@ if (sentryDsn) {
 }
 
 const isSmartPosRoute = window.location.pathname.startsWith("/smartpos");
-const RootApp = React.lazy(isSmartPosRoute
-  ? () => import("./smartpos/SmartPosPage")
-  : () => import("./App"));
+const isLandingRoute = window.location.pathname.startsWith("/landing")
+  || new URLSearchParams(window.location.search).get("view") === "landing";
+const RootApp = React.lazy(
+  isSmartPosRoute
+    ? () => import("./smartpos/SmartPosPage")
+    : isLandingRoute
+      ? () => import("./landing/LandingPage")
+      : () => import("./App")
+);
 
 const RouteLoading = () => (
-  <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
-    <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando Kôma…</p>
+  <main className="flex min-h-dvh items-center justify-center bg-[#07110e] px-6 text-white">
+    <p className="font-sans text-xs font-semibold tracking-[0.12em] text-[#00c99a]">Carregando Kôma…</p>
   </main>
 );
 
