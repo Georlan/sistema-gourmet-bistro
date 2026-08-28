@@ -1,29 +1,26 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion } from 'motion/react';
-import { LeadCaptureModal } from '../components/LeadCaptureModal';
 
 const FRAGMENTED_STEPS = [
-  { num: '01', title: 'ANOTA NO PAPEL', text: 'Itens e observações ficam na comanda.' },
-  { num: '02', title: 'LEVA À COZINHA', text: 'O pedido depende de um repasse.' },
-  { num: '03', title: 'PERGUNTA O STATUS', text: 'O garçom precisa conferir pessoalmente.' },
-  { num: '04', title: 'SOMA NO CAIXA', text: 'O consumo é conferido novamente.' },
+  { num: '01', title: 'ANOTA O PEDIDO', text: 'Itens e observações ficam separados do restante da operação.' },
+  { num: '02', title: 'REPASSA À COZINHA', text: 'A produção depende de alguém levar ou repetir a informação.' },
+  { num: '03', title: 'CONFERE O STATUS', text: 'O salão precisa parar para perguntar se o pedido está pronto.' },
+  { num: '04', title: 'REFAZ A CONTA', text: 'No caixa, o consumo precisa ser reunido e conferido novamente.' },
 ];
 
 const KOMA_STEPS = [
-  { num: '01', title: 'REGISTRA UMA VEZ', text: 'Retirada, delivery, garçom ou cardápio digital.' },
-  { num: '02', title: 'TODOS ACOMPANHAM', text: 'Salão, cozinha e caixa veem o mesmo status.' },
-  { num: '03', title: 'FECHA COM HISTÓRICO', text: 'Tudo permanece ligado ao pedido.' },
+  { num: '01', title: 'REGISTRA UMA VEZ', text: 'O pedido entra pelo salão, balcão, delivery ou cardápio digital.' },
+  { num: '02', title: 'A OPERAÇÃO ACOMPANHA', text: 'Salão, cozinha e caixa enxergam o mesmo pedido e o mesmo status.' },
+  { num: '03', title: 'FECHA COM HISTÓRICO', text: 'Itens, alterações e pagamento continuam ligados até o fechamento.' },
 ];
 
 const OUTCOMES = [
-  { value: '1', label: 'ÚNICO REGISTRO', text: 'O pedido não precisa ser digitado de novo.' },
-  { value: '3', label: 'ÁREAS CONECTADAS', text: 'Salão, cozinha e caixa acompanham juntos.' },
-  { value: '0', label: 'PEDIDOS REPETIDOS', text: 'A informação segue até o pagamento.' },
+  { value: '01', label: 'UMA ÚNICA ENTRADA', text: 'O pedido não precisa ser digitado novamente.' },
+  { value: '→', label: 'STATUS COMPARTILHADO', text: 'A equipe acompanha a mesma informação enquanto ela acontece.' },
+  { value: '✓', label: 'HISTÓRICO COMPLETO', text: 'O consumo continua ligado ao pedido até o pagamento.' },
 ];
 
 export function ValueStrip() {
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
-
   return (
     <section className="koma-value-strip" aria-labelledby="value-title">
       <motion.header
@@ -33,14 +30,14 @@ export function ValueStrip() {
         viewport={{ once: true, amount: 0.55 }}
         transition={{ duration: 0.55 }}
       >
-        <p className="koma-value-intro">01 / MENOS RETRABALHO</p>
-        <h2 id="value-title">UM PEDIDO.<br /><span>75% MENOS ETAPAS.</span></h2>
+        <p className="koma-value-intro">01 / ANTES E DEPOIS</p>
+        <h2 id="value-title">O MESMO PEDIDO.<br /><span>OUTRA OPERAÇÃO.</span></h2>
         <p>
-          Neste fluxo, quatro ações manuais viram um registro acompanhado por salão, cozinha e caixa.
+          Compare o custo dos repasses manuais com um fluxo em que todos acompanham a mesma informação.
         </p>
       </motion.header>
 
-      <div className="koma-value-comparison" aria-label="Comparação entre uma operação fragmentada e uma operação com Kôma">
+      <div className="koma-value-comparison" aria-label="Comparação entre operar sem Kôma e operar com Kôma">
         <motion.article
           className="koma-value-lane koma-value-lane--fragmented"
           initial={{ opacity: 0, x: -28 }}
@@ -50,10 +47,9 @@ export function ValueStrip() {
         >
           <div className="koma-value-lane-head">
             <div>
-              <small>SEM SISTEMA</small>
-              <strong>MESA 04</strong>
+              <strong>SEM KÔMA</strong>
             </div>
-            <span>4 AÇÕES MANUAIS</span>
+            <span>4 REPASSES</span>
           </div>
 
           <div className="koma-value-route">
@@ -68,7 +64,7 @@ export function ValueStrip() {
 
           <div className="koma-value-lane-foot">
             <small>RESULTADO</small>
-            <strong>SEM UM REGISTRO ÚNICO, O PEDIDO EXIGE REPASSE E CONFERÊNCIA MANUAL.</strong>
+            <strong>MAIS REPASSE. MAIS CHANCE DE ERRO. MENOS VISÃO DA OPERAÇÃO.</strong>
           </div>
         </motion.article>
 
@@ -83,10 +79,9 @@ export function ValueStrip() {
         >
           <div className="koma-value-lane-head">
             <div>
-              <small>COM KÔMA</small>
-              <strong>PEDIDO REGISTRADO</strong>
+              <strong>COM KÔMA</strong>
             </div>
-            <span>1 REGISTRO</span>
+            <span>1 FLUXO</span>
           </div>
 
           <div className="koma-value-route">
@@ -101,7 +96,7 @@ export function ValueStrip() {
 
           <div className="koma-value-lane-foot">
             <small>RESULTADO</small>
-            <strong>UM REGISTRO MANTÉM O RESTAURANTE SINCRONIZADO.</strong>
+            <strong>MENOS RETRABALHO. RESPOSTA MAIS RÁPIDA. CONTROLE DO INÍCIO AO FIM.</strong>
           </div>
         </motion.article>
       </div>
@@ -114,14 +109,12 @@ export function ValueStrip() {
           </article>
         ))}
         <div className="koma-value-action">
-          <p>Veja como esse fluxo se encaixa na rotina do seu restaurante.</p>
-          <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-            QUERO COMEÇAR COM O KÔMA
-          </button>
+          <p>Veja cada área recebendo o mesmo pedido, sem depender de novos repasses.</p>
+          <a className="koma-btn koma-btn--primary" href="#como-funciona">
+            VER O FLUXO COMPLETO
+          </a>
         </div>
       </div>
-
-      <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
 import { ValueStrip } from './sections/ValueStrip';
 import { SocialProof } from './sections/SocialProof';
+import { Management } from './sections/Management';
 import { HowItWorks } from './sections/HowItWorks';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
@@ -98,6 +99,7 @@ export default function LandingPage() {
         <AngleDivider variant="dark-light" />
         <ValueStrip />
         <SocialProof />
+        <Management />
         <AngleDivider variant="light-dark" />
         <HowItWorks />
         <AngleDivider variant="dark-light" />

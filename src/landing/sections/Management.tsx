@@ -3,24 +3,24 @@ import React from 'react';
 const GROUPS = [
   {
     num: '01',
-    eyebrow: 'OPERAÇÃO',
-    title: 'O DIA SOB CONTROLE.',
-    text: 'Pedidos, mesas, balcão, cardápio e disponibilidade em uma visão operacional.',
-    features: ['Mesas e comandas', 'Balcão e retirada', 'Produtos e categorias'],
+    eyebrow: 'VENDER',
+    title: 'VENDA POR ONDE O CLIENTE CHEGAR.',
+    text: 'Salão, balcão, retirada, delivery e cardápio digital alimentam a mesma operação.',
+    features: ['PDV, mesas e comandas', 'Retirada e delivery', 'Cardápio digital e QR Code'],
   },
   {
     num: '02',
-    eyebrow: 'GESTÃO',
-    title: 'DECISÃO COM CONTEXTO.',
-    text: 'Caixa, estoque, relatórios e equipe organizados para quem precisa decidir.',
-    features: ['Turnos e movimentações', 'Estoque e fornecedores', 'Relatórios e desempenho'],
+    eyebrow: 'OPERAR',
+    title: 'TODO MUNDO NO MESMO FLUXO.',
+    text: 'O pedido segue do atendimento à produção sem depender de novos repasses manuais.',
+    features: ['Salão atualizado ao vivo', 'KDS e impressão automática', 'Status compartilhado pela equipe'],
   },
   {
     num: '03',
-    eyebrow: 'RELACIONAMENTO',
-    title: 'CLIENTE NÃO É SÓ UM PEDIDO.',
-    text: 'Histórico, cupons e fidelidade ajudam a construir recorrência sem separar a operação.',
-    features: ['Base de clientes', 'Cupons', 'Programa de fidelidade'],
+    eyebrow: 'CONTROLAR',
+    title: 'DECIDA COM O HISTÓRICO NA MÃO.',
+    text: 'Caixa, estoque, relatórios, equipe e relacionamento ficam ligados ao que realmente aconteceu.',
+    features: ['Caixa e financeiro', 'Estoque e relatórios', 'CRM, fidelidade e cupons'],
   },
 ];
 
@@ -28,9 +28,9 @@ export function Management() {
   return (
     <section className="koma-management-section" id="gestao" aria-labelledby="management-title">
       <div className="koma-section-heading koma-section-heading--light">
-        <span>05 / ALÉM DO PEDIDO</span>
-        <h2 id="management-title">GESTÃO QUE<br />NÃO ATRAPALHA.</h2>
-        <p>O essencial aparece primeiro. O detalhe continua disponível quando você precisa.</p>
+        <span>03 / TRÊS PILARES</span>
+        <h2 id="management-title">VENDER. OPERAR.<br />CONTROLAR.</h2>
+        <p>Três objetivos simples organizam tudo o que o Kôma entrega para o restaurante.</p>
       </div>
 
       <div className="koma-management-grid">

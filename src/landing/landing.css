@@ -19,6 +19,7 @@
   --koma-graphite: #1a1a1a;
   --koma-gray: #888888;
   --koma-display: 'Montserrat', sans-serif;
+  --koma-comparison-display: 'Bebas Neue', 'Montserrat', sans-serif;
   --koma-body: 'Inter', sans-serif;
   --koma-accent: 'Space Grotesk', sans-serif;
 
@@ -3462,6 +3463,19 @@
     #171918;
 }
 
+.koma-value-lane--fragmented::after {
+  content: '//';
+  position: absolute;
+  right: -0.08em;
+  bottom: -0.26em;
+  color: rgba(235, 112, 121, 0.035);
+  font-family: var(--koma-comparison-display);
+  font-size: clamp(15rem, 25vw, 26rem);
+  line-height: 1;
+  letter-spacing: -0.1em;
+  pointer-events: none;
+}
+
 .koma-value-lane--koma {
   background:
     radial-gradient(circle at 86% 14%, rgba(0, 184, 148, 0.18), transparent 31%),
@@ -3489,8 +3503,41 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 1.25rem;
+  min-height: clamp(7.5rem, 10vw, 9.5rem);
+  padding: 1.25rem 0 1.4rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  isolation: isolate;
+}
+
+.koma-value-lane-head::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(3rem, 6vw, 5.5rem);
+  height: 4px;
+  background: #df737c;
+  transform: skewX(-28deg);
+  transform-origin: left center;
+}
+
+.koma-value-lane--koma .koma-value-lane-head::before {
+  width: clamp(5rem, 10vw, 9rem);
+  background: var(--koma-green);
+  box-shadow: 0 0 24px rgba(0, 184, 148, 0.3);
+}
+
+.koma-value-lane-head::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 5.75rem;
+  width: 7rem;
+  height: 100%;
+  opacity: 0.22;
+  background: repeating-linear-gradient(-58deg, transparent 0 13px, rgba(255, 255, 255, 0.08) 13px 14px);
+  clip-path: polygon(38% 0, 100% 0, 62% 100%, 0 100%);
 }
 .koma-value-lane-head div { display: flex; flex-direction: column; align-items: flex-start; gap: 0.75rem; }
 .koma-value-lane-head small,
@@ -3518,7 +3565,26 @@
   color: #031b16;
   box-shadow: 0 0 22px rgba(0, 184, 148, 0.14);
 }
-.koma-value-lane-head strong { font-family: var(--koma-display); font-size: clamp(2.4rem, 4vw, 4.2rem); line-height: 0.9; }
+.koma-value-lane-head strong {
+  position: relative;
+  font-family: var(--koma-comparison-display);
+  font-size: clamp(4.5rem, 6.5vw, 7rem);
+  font-weight: 400;
+  line-height: 0.78;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  text-wrap: nowrap;
+}
+
+.koma-value-lane--fragmented .koma-value-lane-head strong {
+  color: #fff7f6;
+  text-shadow: 3px 3px 0 rgba(133, 49, 58, 0.42);
+}
+
+.koma-value-lane--koma .koma-value-lane-head strong {
+  color: var(--koma-white);
+  text-shadow: 3px 3px 0 rgba(0, 184, 148, 0.26);
+}
 .koma-value-lane-head > span {
   padding: 0.65rem 0.8rem;
   color: rgba(255, 255, 255, 0.68);
@@ -5540,5 +5606,395 @@
 
   .koma-faq-heading h2 {
     font-size: clamp(2.75rem, 12vw, 4rem);
+  }
+}
+
+/* Trust block: verifiable product evidence without invented social proof. */
+.koma-trust-section {
+  padding: clamp(4.5rem, 7.5vw, 7.5rem) var(--koma-section-x);
+}
+
+.koma-trust-shell {
+  width: min(100%, 1480px);
+  margin-inline: auto;
+}
+
+.koma-trust-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(19rem, 0.65fr);
+  gap: clamp(2rem, 7vw, 8rem);
+  align-items: end;
+  margin-bottom: clamp(2.5rem, 4.5vw, 4.25rem);
+}
+
+.koma-trust-heading > div:first-child > span {
+  display: block;
+  margin-bottom: clamp(1.4rem, 2.5vw, 2.4rem);
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+
+.koma-trust-heading h2 {
+  margin: 0;
+  color: var(--koma-black);
+  font-family: var(--koma-display);
+  font-size: clamp(3.2rem, 6.6vw, 6.9rem);
+  font-weight: 900;
+  line-height: 0.84;
+  letter-spacing: -0.055em;
+}
+
+.koma-trust-heading h2 strong {
+  color: var(--koma-green-dark);
+  font-weight: inherit;
+}
+
+.koma-trust-intro {
+  padding-bottom: 0.35rem;
+}
+
+.koma-trust-intro p {
+  max-width: 40rem;
+  margin: 0 0 1.8rem;
+  color: var(--koma-muted-light);
+  font-size: clamp(1rem, 1.25vw, 1.18rem);
+  line-height: 1.65;
+}
+
+.koma-trust-intro a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--koma-black);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+}
+
+.koma-trust-intro a svg {
+  width: 18px;
+  height: 18px;
+  color: var(--koma-green-dark);
+  transition: transform 180ms ease;
+}
+
+.koma-trust-intro a:hover svg {
+  transform: translate(3px, 3px);
+}
+
+.koma-trust-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(30rem, 1.18fr);
+  border: 1px solid var(--koma-line-light);
+  box-shadow: 0 30px 80px rgba(10, 10, 10, 0.08);
+}
+
+.koma-trust-stats {
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  background: #f2f3ef;
+}
+
+.koma-trust-stats article {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.4rem minmax(7rem, 0.46fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 0.2rem clamp(1rem, 2vw, 2.25rem);
+  align-items: center;
+  min-height: 180px;
+  padding: clamp(1.4rem, 2.5vw, 2.5rem);
+  border-bottom: 1px solid var(--koma-line-light);
+}
+
+.koma-trust-stats article:last-child {
+  border-bottom: 0;
+}
+
+.koma-trust-stats article > span {
+  grid-row: 1 / -1;
+  align-self: start;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.67rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.koma-trust-stats article > strong {
+  grid-row: 1 / -1;
+  color: var(--koma-black);
+  font-family: var(--koma-display);
+  font-size: clamp(2.7rem, 4.5vw, 5rem);
+  line-height: 0.86;
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+}
+
+.koma-trust-stats h3 {
+  align-self: end;
+  margin: 0;
+  color: var(--koma-black);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.koma-trust-stats p {
+  align-self: start;
+  max-width: 34ch;
+  margin: 0.45rem 0 0;
+  color: var(--koma-muted-light);
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.koma-trust-product-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(1.6rem, 3.5vw, 3.5rem);
+  color: var(--koma-white);
+  background:
+    linear-gradient(rgba(0, 184, 148, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 184, 148, 0.065) 1px, transparent 1px),
+    radial-gradient(circle at 100% 0, rgba(0, 184, 148, 0.16), transparent 45%),
+    #0c0f0e;
+  background-size: 56px 56px, 56px 56px, auto, auto;
+}
+
+.koma-trust-product-head,
+.koma-trust-product-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: var(--koma-accent);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+.koma-trust-product-head {
+  padding-bottom: 1.35rem;
+  border-bottom: 1px solid var(--koma-line-dark);
+}
+
+.koma-trust-product-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--koma-green);
+}
+
+.koma-trust-product-head i {
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 16px currentColor;
+}
+
+.koma-trust-product-head small {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: inherit;
+}
+
+.koma-trust-product-copy {
+  padding: clamp(2.5rem, 5vw, 5rem) 0 clamp(2rem, 3.5vw, 3.25rem);
+}
+
+.koma-trust-product-copy p {
+  margin: 0 0 0.8rem;
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.koma-trust-product-copy h3 {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(2.8rem, 4.8vw, 5.4rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.045em;
+}
+
+.koma-trust-product-card ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: auto 0 2.25rem;
+  padding: 0;
+  border-top: 1px solid var(--koma-line-dark);
+  list-style: none;
+}
+
+.koma-trust-product-card li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 58px;
+  padding: 0.75rem 0;
+  color: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid var(--koma-line-dark);
+  font-size: 0.82rem;
+}
+
+.koma-trust-product-card li:nth-child(odd) {
+  padding-right: 1rem;
+  border-right: 1px solid var(--koma-line-dark);
+}
+
+.koma-trust-product-card li:nth-child(even) {
+  padding-left: 1rem;
+}
+
+.koma-trust-product-card li svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--koma-green);
+  stroke-width: 2.5;
+}
+
+.koma-trust-product-foot {
+  padding-top: 1.35rem;
+  color: rgba(255, 255, 255, 0.52);
+  border-top: 1px solid var(--koma-line-dark);
+}
+
+.koma-trust-product-foot b {
+  color: var(--koma-green);
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  .koma-trust-heading {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .koma-trust-ledger {
+    grid-template-columns: 1fr;
+  }
+
+  .koma-trust-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
+  .koma-trust-stats article {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    align-content: start;
+    min-height: 260px;
+    border-right: 1px solid var(--koma-line-light);
+    border-bottom: 0;
+  }
+
+  .koma-trust-stats article:last-child {
+    border-right: 0;
+  }
+
+  .koma-trust-stats article > span,
+  .koma-trust-stats article > strong {
+    grid-row: auto;
+  }
+
+  .koma-trust-stats article > strong {
+    margin: auto 0 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .koma-trust-section {
+    padding-block: 3.75rem;
+  }
+
+  .koma-trust-heading {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .koma-trust-heading h2 {
+    font-size: clamp(3rem, 14vw, 4.5rem);
+  }
+
+  .koma-trust-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .koma-trust-stats article {
+    grid-template-columns: 2.2rem minmax(6.5rem, 0.42fr) minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-height: 154px;
+    border-right: 0;
+    border-bottom: 1px solid var(--koma-line-light);
+  }
+
+  .koma-trust-stats article > span,
+  .koma-trust-stats article > strong {
+    grid-row: 1 / -1;
+  }
+
+  .koma-trust-stats article > strong {
+    margin: 0;
+    font-size: clamp(2.8rem, 12vw, 4rem);
+  }
+
+  .koma-trust-product-card {
+    padding: 1.35rem;
+  }
+
+  .koma-trust-product-head small,
+  .koma-trust-product-foot b {
+    display: none;
+  }
+
+  .koma-trust-product-copy h3 {
+    font-size: clamp(2.7rem, 12vw, 4rem);
+  }
+
+  .koma-trust-product-card ul {
+    grid-template-columns: 1fr;
+  }
+
+  .koma-trust-product-card li:nth-child(odd),
+  .koma-trust-product-card li:nth-child(even) {
+    padding-inline: 0;
+    border-right: 0;
+  }
+
+  .koma-trust-product-foot {
+    line-height: 1.5;
+  }
+
+  .koma-value-lane-head strong {
+    font-size: clamp(3.9rem, 14vw, 5.25rem);
+  }
+}
+
+@media (max-width: 430px) {
+  .koma-value-lane-head {
+    min-height: 6.8rem;
+  }
+
+  .koma-value-lane-head strong {
+    font-size: clamp(3.35rem, 16vw, 4.25rem);
+  }
+
+  .koma-value-lane-head::after {
+    right: 4.5rem;
+    width: 4rem;
   }
 }
