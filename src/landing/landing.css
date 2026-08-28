@@ -6175,3 +6175,308 @@
 
   .koma-capability-card--third { grid-column: span 1; min-height: 0; }
 }
+
+/* Simple commercial benefits */
+.koma-benefits-section {
+  padding: clamp(4.5rem, 7vw, 7rem) var(--koma-section-x);
+  color: var(--koma-white);
+  background:
+    radial-gradient(circle at 88% 0%, rgba(0, 184, 148, 0.1), transparent 28rem),
+    #080a09;
+}
+
+.koma-benefits-heading,
+.koma-benefits-grid {
+  width: min(100%, 1480px);
+  margin-inline: auto;
+}
+
+.koma-benefits-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.65fr);
+  gap: clamp(3rem, 8vw, 9rem);
+  align-items: end;
+  margin-bottom: clamp(2.5rem, 4vw, 4rem);
+}
+
+.koma-benefits-heading span,
+.koma-implementation-copy > span {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.koma-benefits-heading h2,
+.koma-implementation-copy h2 {
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(3.25rem, 5.5vw, 6rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.052em;
+  text-transform: uppercase;
+}
+
+.koma-benefits-heading > div:last-child > p {
+  max-width: 35ch;
+  margin: 0 0 1.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: clamp(1rem, 1.25vw, 1.15rem);
+  line-height: 1.6;
+}
+
+.koma-benefits-heading > div:last-child > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.67rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+}
+
+.koma-benefits-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.koma-benefit-card {
+  min-width: 0;
+  min-height: 440px;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1.5rem, 2.6vw, 2.6rem);
+}
+
+.koma-benefit-card--dark { background: #111412; }
+.koma-benefit-card--light { color: var(--koma-black); background: var(--koma-offwhite); }
+.koma-benefit-card--green {
+  color: var(--koma-black);
+  background:
+    linear-gradient(rgba(10, 10, 10, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.05) 1px, transparent 1px),
+    var(--koma-green);
+  background-size: 64px 64px;
+}
+
+.koma-benefit-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--koma-accent);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.koma-benefit-card--dark .koma-benefit-card-top { color: var(--koma-green); }
+.koma-benefit-card h3 {
+  max-width: 13ch;
+  margin: clamp(3rem, 5vw, 5rem) 0 1.25rem;
+  font-family: var(--koma-display);
+  font-size: clamp(2.15rem, 3vw, 3.4rem);
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+}
+.koma-benefit-card > p { max-width: 37ch; margin: 0; color: rgba(255, 255, 255, 0.62); line-height: 1.6; }
+.koma-benefit-card--light > p,
+.koma-benefit-card--green > p { color: rgba(10, 10, 10, 0.67); }
+.koma-benefit-card ul { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 1.5rem 0; padding: 0; list-style: none; }
+.koma-benefit-card li { padding: 0.45rem 0.58rem; border: 1px solid rgba(255, 255, 255, 0.18); font-family: var(--koma-accent); font-size: 0.54rem; font-weight: 900; letter-spacing: 0.06em; }
+.koma-benefit-card--light li,
+.koma-benefit-card--green li { border-color: rgba(10, 10, 10, 0.22); }
+.koma-benefit-card > strong { margin-top: auto; padding-top: 1.1rem; color: var(--koma-green); border-top: 1px solid rgba(255, 255, 255, 0.15); font-family: var(--koma-accent); font-size: 0.66rem; line-height: 1.45; letter-spacing: 0.07em; }
+.koma-benefit-card--light > strong,
+.koma-benefit-card--green > strong { color: var(--koma-black); border-top-color: rgba(10, 10, 10, 0.22); }
+
+/* Guided implementation and device compatibility */
+.koma-implementation-section {
+  padding: clamp(4.5rem, 7vw, 7rem) var(--koma-section-x);
+  color: var(--koma-black);
+  background: var(--koma-offwhite);
+}
+
+.koma-implementation-main,
+.koma-compatibility-strip {
+  width: min(100%, 1480px);
+  margin-inline: auto;
+}
+
+.koma-implementation-main {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(22rem, 0.75fr);
+  gap: clamp(4rem, 10vw, 11rem);
+  align-items: start;
+}
+
+.koma-implementation-copy h2 { max-width: 12ch; }
+.koma-implementation-copy > p {
+  max-width: 42ch;
+  margin: 1.75rem 0 2rem;
+  color: var(--koma-muted-light);
+  font-size: clamp(1rem, 1.25vw, 1.16rem);
+  line-height: 1.62;
+}
+.koma-implementation-copy .koma-btn { width: fit-content; }
+
+.koma-implementation-steps { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--koma-line-light); }
+.koma-implementation-steps li {
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: 1.25rem;
+  padding: clamp(1.4rem, 2.6vw, 2.25rem) 0;
+  border-bottom: 1px solid var(--koma-line-light);
+}
+.koma-implementation-steps li > span { color: var(--koma-green-dark); font-family: var(--koma-accent); font-size: 0.68rem; font-weight: 900; letter-spacing: 0.1em; }
+.koma-implementation-steps h3 { margin: 0 0 0.55rem; font-family: var(--koma-display); font-size: clamp(1.35rem, 1.9vw, 1.8rem); letter-spacing: -0.03em; }
+.koma-implementation-steps p { max-width: 40ch; margin: 0; color: var(--koma-muted-light); line-height: 1.55; }
+
+.koma-compatibility-strip {
+  display: grid;
+  grid-template-columns: auto minmax(16rem, 0.75fr) minmax(20rem, 1fr);
+  gap: clamp(1.5rem, 4vw, 4rem);
+  align-items: center;
+  margin-top: clamp(3rem, 5vw, 5rem);
+  padding: clamp(1.5rem, 2.6vw, 2.4rem);
+  color: var(--koma-white);
+  background: var(--koma-black);
+}
+.koma-compatibility-strip > div { display: flex; gap: 0.8rem; color: var(--koma-green); }
+.koma-compatibility-strip > div svg { width: 1.6rem; height: 1.6rem; }
+.koma-compatibility-strip > strong { font-family: var(--koma-display); font-size: clamp(1.3rem, 2vw, 1.9rem); line-height: 1.05; }
+.koma-compatibility-strip > p { margin: 0; color: var(--koma-muted-dark); font-size: 0.88rem; line-height: 1.55; }
+
+@media (max-width: 900px) {
+  .koma-benefits-heading,
+  .koma-implementation-main { grid-template-columns: 1fr; gap: 2.5rem; }
+  .koma-benefits-grid { grid-template-columns: 1fr; }
+  .koma-benefit-card { min-height: 0; }
+  .koma-benefit-card h3 { margin-top: 3rem; }
+  .koma-compatibility-strip { grid-template-columns: auto 1fr; }
+  .koma-compatibility-strip > p { grid-column: 2; }
+}
+
+@media (max-width: 600px) {
+  .koma-benefits-section,
+  .koma-implementation-section { padding: 4rem var(--koma-section-x); }
+  .koma-benefits-heading h2,
+  .koma-implementation-copy h2 { font-size: clamp(2.8rem, 12vw, 4rem); }
+  .koma-benefit-card { padding: 1.35rem; }
+  .koma-benefit-card h3 { max-width: 100%; margin-top: 2.6rem; font-size: clamp(2.1rem, 10vw, 3rem); }
+  .koma-implementation-copy .koma-btn { width: 100%; }
+  .koma-implementation-steps li { grid-template-columns: 2rem 1fr; gap: 0.75rem; }
+  .koma-compatibility-strip { grid-template-columns: 1fr; gap: 1rem; }
+  .koma-compatibility-strip > p { grid-column: 1; }
+}
+
+/* Plans that can be understood without comparing a spreadsheet. */
+.koma-plans-section--simple { padding-top: clamp(4.5rem, 7vw, 7rem); }
+.koma-plans-simple-heading {
+  width: min(100%, 1480px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.65fr);
+  gap: clamp(3rem, 8vw, 9rem);
+  align-items: end;
+  margin: 0 auto clamp(2.5rem, 4vw, 4rem);
+}
+.koma-plans-simple-heading > div:first-child > span {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.koma-plans-simple-heading h2 {
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(3.25rem, 5.5vw, 6rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.052em;
+}
+.koma-plans-simple-heading > div:last-child > p {
+  max-width: 34ch;
+  margin: 0 0 0.75rem;
+  color: var(--koma-muted-light);
+  font-size: clamp(1rem, 1.25vw, 1.15rem);
+  line-height: 1.6;
+}
+.koma-plans-simple-heading > div:last-child > p strong { color: var(--koma-black); font-family: var(--koma-accent); font-size: 0.8em; letter-spacing: 0.04em; }
+.koma-plans-simple-heading > div:last-child > small { display: block; max-width: 46ch; color: #707670; line-height: 1.5; }
+
+.koma-plans-grid--simple { gap: 1px; background: var(--koma-line-light); border: 1px solid var(--koma-line-light); }
+.koma-plan-card--simple {
+  min-height: 620px;
+  border: 0;
+}
+.koma-plan-card--simple.koma-plan-card--featured {
+  transform: none;
+  box-shadow: inset 0 5px 0 var(--koma-green);
+}
+.koma-plan-card--simple .koma-plan-card-heading small { padding: 0.45rem 0.55rem; border: 1px solid currentColor; }
+.koma-plan-card--simple .koma-plan-card-heading h3 { font-size: clamp(2.8rem, 4vw, 4.2rem); }
+.koma-plan-fit {
+  min-height: 7.2rem;
+  max-width: 38ch;
+  margin: 1.5rem 0 0;
+  color: var(--koma-muted-light);
+  line-height: 1.55;
+}
+.koma-plan-card--featured .koma-plan-fit { color: var(--koma-muted-dark); }
+.koma-plan-fit b {
+  display: block;
+  margin-bottom: 0.55rem;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+}
+.koma-plan-card--featured .koma-plan-fit b { color: var(--koma-green); }
+.koma-plan-card--simple .koma-plan-price { padding: 1.25rem 0; }
+.koma-plan-card--simple .koma-plan-price strong { font-size: clamp(4.1rem, 6vw, 6rem); }
+.koma-plan-card--simple .koma-plan-billing-note { min-height: 2.4rem; line-height: 1.45; }
+.koma-plan-card--simple ul { margin: 1.15rem 0; }
+.koma-plan-card--simple li {
+  display: grid;
+  grid-template-columns: 1rem 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.55rem 0;
+}
+.koma-plan-card--simple li::before { display: none; }
+.koma-plan-card--simple li svg { margin-top: 0.1rem; color: var(--koma-green-dark); }
+.koma-plan-card--featured li svg { color: var(--koma-green); }
+.koma-plan-extra {
+  margin: 0 0 1.5rem;
+  color: #6a706b;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.koma-plan-card--featured .koma-plan-extra { color: rgba(255, 255, 255, 0.5); }
+
+@media (max-width: 900px) {
+  .koma-plans-simple-heading { grid-template-columns: 1fr; gap: 2rem; }
+  .koma-plans-grid--simple { grid-template-columns: 1fr; }
+  .koma-plan-card--simple { min-height: 0; }
+  .koma-plan-fit { min-height: 0; }
+}
+
+@media (max-width: 600px) {
+  .koma-plans-simple-heading h2 { font-size: clamp(2.8rem, 12vw, 4rem); }
+  .koma-plan-card--simple .koma-plan-card-heading { gap: 0.65rem; }
+  .koma-plan-card--simple .koma-plan-card-heading h3 { font-size: clamp(2.7rem, 13vw, 3.8rem); }
+  .koma-plan-card--simple .koma-plan-card-heading small { font-size: 0.52rem; }
+  .koma-plan-card--simple .koma-plan-price strong { font-size: clamp(3.8rem, 18vw, 5rem); }
+}

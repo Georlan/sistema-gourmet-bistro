@@ -7,6 +7,7 @@ import { SocialProof } from './sections/SocialProof';
 import { Management } from './sections/Management';
 import { HowItWorks } from './sections/HowItWorks';
 import { Capabilities } from './sections/Capabilities';
+import { Implementation } from './sections/Implementation';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
@@ -105,6 +106,7 @@ export default function LandingPage() {
         <HowItWorks />
         <Capabilities />
         <AngleDivider variant="dark-light" />
+        <Implementation />
         <FAQ />
         <Plans />
         <AngleDivider variant="light-green" />

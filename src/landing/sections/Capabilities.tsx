@@ -1,132 +1,69 @@
 import React from 'react';
-import {
-  ArrowDownRight,
-  Boxes,
-  ChartNoAxesCombined,
-  Printer,
-  ShieldCheck,
-  Truck,
-  UsersRound,
-} from 'lucide-react';
+import { ArrowDownRight, Clock3, RotateCcw, WalletCards } from 'lucide-react';
 
-const CAPABILITIES = [
+const BENEFITS = [
   {
     num: '01',
-    label: 'ESTOQUE',
-    title: 'SAIBA O QUE SAI E O QUE PRECISA REPOR.',
-    description: 'Insumos e movimentações acompanham a rotina para a compra deixar de ser um palpite.',
-    features: ['Fichas e insumos', 'Entradas e perdas', 'Contagem e fornecedores'],
-    result: 'ESTOQUE LIGADO AO QUE FOI VENDIDO.',
-    signal: 'MOVIMENTAÇÃO',
-    value: 'ATUALIZADA',
-    icon: Boxes,
+    eyebrow: 'MAIS CONTROLE',
+    title: 'SAIBA ONDE O DINHEIRO VAI.',
+    description: 'Caixa, estoque e relatórios mostram o que vendeu, o que saiu e o que precisa de atenção.',
+    items: ['CAIXA E FINANCEIRO', 'ESTOQUE E COMPRAS', 'RELATÓRIOS'],
+    result: 'DECIDA COM NÚMEROS, NÃO COM ACHISMO.',
+    icon: WalletCards,
     tone: 'dark',
   },
   {
     num: '02',
-    label: 'FINANCEIRO',
-    title: 'FECHE O CAIXA COM CONTEXTO.',
-    description: 'Vendas, movimentações e fechamentos ficam organizados para você entender o resultado do turno.',
-    features: ['Abertura e fechamento', 'Entradas e saídas', 'Relatórios financeiros'],
-    result: 'MENOS CONFERÊNCIA SOLTA. MAIS VISÃO DO CAIXA.',
-    signal: 'TURNO',
-    value: 'CONCILIADO',
-    icon: ChartNoAxesCombined,
-    tone: 'green',
+    eyebrow: 'MAIS RETORNO',
+    title: 'DÊ MOTIVOS PARA O CLIENTE VOLTAR.',
+    description: 'Histórico, fidelidade e cupons ajudam você a reconhecer quem compra e criar novas visitas.',
+    items: ['HISTÓRICO DO CLIENTE', 'FIDELIDADE', 'CUPONS'],
+    result: 'A VENDA TERMINA. O RELACIONAMENTO CONTINUA.',
+    icon: RotateCcw,
+    tone: 'light',
   },
   {
     num: '03',
-    label: 'CLIENTES',
-    title: 'FAÇA O CLIENTE TER MOTIVO PARA VOLTAR.',
-    description: 'Histórico, fidelidade e cupons ajudam a reconhecer quem compra e criar novas visitas.',
-    features: ['CRM e histórico', 'Fidelidade', 'Cupons'],
-    result: 'RELACIONAMENTO DEPOIS DO PAGAMENTO.',
-    signal: 'CLIENTE',
-    value: 'RECONHECIDO',
-    icon: UsersRound,
-    tone: 'light',
-  },
-  {
-    num: '04',
-    label: 'DELIVERY',
-    title: 'ACOMPANHE ATÉ A ENTREGA.',
-    description: 'Retirada, entrega e motoboy continuam ligados ao pedido desde a produção até a saída.',
-    features: ['Retirada e delivery', 'Gestão de motoboy', 'Status do pedido'],
-    result: 'A ENTREGA NÃO SOME DEPOIS DA COZINHA.',
-    signal: 'ENTREGA',
-    value: 'EM ROTA',
-    icon: Truck,
-    tone: 'light',
-  },
-  {
-    num: '05',
-    label: 'EQUIPE',
-    title: 'CADA PESSOA VÊ O QUE PRECISA.',
-    description: 'Acessos e responsabilidades deixam a rotina mais segura sem complicar o trabalho da equipe.',
-    features: ['Cargos e acessos', 'Permissões', 'Histórico de ações'],
-    result: 'MAIS AUTONOMIA, COM CONTROLE.',
-    signal: 'ACESSO',
-    value: 'PROTEGIDO',
-    icon: ShieldCheck,
-    tone: 'dark',
-  },
-  {
-    num: '06',
-    label: 'AUTOMAÇÃO',
-    title: 'A OPERAÇÃO AVISA E IMPRIME SOZINHA.',
-    description: 'KDS, impressão e mensagens transacionais reduzem tarefas repetidas nos momentos de maior movimento.',
-    features: ['KDS', 'Impressão automática', 'WhatsApp transacional'],
-    result: 'A PRÓXIMA AÇÃO CHEGA A QUEM PRECISA.',
-    signal: 'ROTINA',
-    value: 'AUTOMATIZADA',
-    icon: Printer,
+    eyebrow: 'MAIS TEMPO',
+    title: 'DEIXE O SISTEMA FAZER O REPETITIVO.',
+    description: 'Delivery, impressão, permissões e avisos mantêm a operação andando com menos cobrança manual.',
+    items: ['DELIVERY E MOTOBOY', 'EQUIPE E PERMISSÕES', 'IMPRESSÃO E AVISOS'],
+    result: 'MENOS CORRERIA. MAIS TEMPO PARA ATENDER.',
+    icon: Clock3,
     tone: 'green',
   },
 ] as const;
 
 export function Capabilities() {
   return (
-    <section className="koma-capabilities-section" id="recursos" aria-labelledby="capabilities-title">
-      <div className="koma-capabilities-heading">
+    <section className="koma-benefits-section" id="recursos" aria-labelledby="benefits-title">
+      <div className="koma-benefits-heading">
         <div>
-          <span>05 / ALÉM DO PDV</span>
-          <h2 id="capabilities-title">O QUE JÁ EXISTE. E QUASE NINGUÉM VÊ.</h2>
+          <span>05 / MAIS RESULTADO</span>
+          <h2 id="benefits-title">MENOS CORRERIA.<br />MAIS CONTROLE.</h2>
         </div>
-        <div className="koma-capabilities-intro">
-          <p>O essencial aparece primeiro. Quando a operação cresce, estoque, financeiro, clientes, entrega e equipe continuam no mesmo sistema.</p>
-          <a className="koma-capabilities-cta koma-btn koma-btn--outline" href="#planos">
-            VER EM QUAL PLANO ENTRA <ArrowDownRight size={17} aria-hidden="true" />
-          </a>
-          <small>Sem prometer o que ainda não está pronto.</small>
+        <div>
+          <p>O Kôma não termina no pedido. Ele ajuda você a cuidar do dinheiro, trazer clientes de volta e ganhar tempo na rotina.</p>
+          <a href="#implantacao">VEJA COMO É COMEÇAR <ArrowDownRight size={17} aria-hidden="true" /></a>
         </div>
       </div>
 
-      <div className="koma-capabilities-grid">
-        {CAPABILITIES.map((capability) => {
-          const Icon = capability.icon;
+      <div className="koma-benefits-grid">
+        {BENEFITS.map((benefit) => {
+          const Icon = benefit.icon;
 
           return (
-            <article className={`koma-capability-card koma-capability-card--third koma-capability-card--${capability.tone}`} key={capability.num}>
-              <div className="koma-capability-card-top">
-                <span>{capability.num} / {capability.label}</span>
-                <div aria-hidden="true"><Icon size={21} strokeWidth={1.7} /></div>
+            <article className={`koma-benefit-card koma-benefit-card--${benefit.tone}`} key={benefit.num}>
+              <div className="koma-benefit-card-top">
+                <span>{benefit.num} / {benefit.eyebrow}</span>
+                <Icon size={23} strokeWidth={1.7} aria-hidden="true" />
               </div>
-
-              <div className="koma-capability-preview koma-capability-preview--signal" aria-hidden="true">
-                <span><small>STATUS DA OPERAÇÃO</small><i /></span>
-                <div><b>{capability.signal}</b><strong>{capability.value}</strong></div>
-              </div>
-
-              <div className="koma-capability-card-copy">
-                <small>{capability.label}</small>
-                <h3>{capability.title}</h3>
-                <p>{capability.description}</p>
-              </div>
-
+              <h3>{benefit.title}</h3>
+              <p>{benefit.description}</p>
               <ul>
-                {capability.features.map((feature) => <li key={feature}>{feature}</li>)}
+                {benefit.items.map((item) => <li key={item}>{item}</li>)}
               </ul>
-              <strong className="koma-capability-result">{capability.result}</strong>
+              <strong>{benefit.result}</strong>
             </article>
           );
         })}

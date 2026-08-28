@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import NumberFlow from '@number-flow/react';
-import { Check, MessageCircle, Wrench } from 'lucide-react';
+import { Check } from 'lucide-react';
 import {
   ANNUAL_DISCOUNT_RATE,
   SUBSCRIPTION_PLANS,
@@ -9,49 +9,50 @@ import {
 } from '../../config/subscriptionPlans';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
-const LANDING_PLAN_FEATURES: Record<string, string[]> = {
-  pocket: [
-    'Mesas, comandas e balcão',
-    'Gestão de cardápio e caixa',
-    'Relatórios operacionais básicos',
-  ],
-  pro: [
-    'Tudo do Pocket',
-    'KDS e impressão automática',
-    'Equipe, cargos e permissões',
-    'Relatórios financeiros completos',
-    'Pedidos de retirada e delivery',
-  ],
-  premium: [
-    'Tudo do Pro',
-    'Cardápio online e QR Code inclusos',
-    'Aceite de pedidos digitais no PDV',
-    'Suporte prioritário',
-  ],
+const PLAN_PRESENTATION: Record<string, {
+  stage: string;
+  action: string;
+  fit: string;
+  features: string[];
+  note: string;
+}> = {
+  pocket: {
+    stage: 'PARA COMEÇAR',
+    action: 'ORGANIZAR',
+    fit: 'Operação pequena que precisa colocar salão e caixa em ordem.',
+    features: ['Mesas, comandas e balcão', 'Cardápio, caixa e fechamento', 'Relatórios essenciais'],
+    note: 'Cardápio online opcional por R$ 49/mês.',
+  },
+  pro: {
+    stage: 'MELHOR ESCOLHA',
+    action: 'CONECTAR',
+    fit: 'Restaurante que quer salão, cozinha, delivery e gestão trabalhando juntos.',
+    features: ['Tudo do Pocket', 'KDS e impressão automática', 'Estoque, financeiro e equipe', 'Retirada e delivery'],
+    note: 'Cardápio online opcional por R$ 49/mês.',
+  },
+  premium: {
+    stage: 'PARA VENDER ONLINE',
+    action: 'EXPANDIR',
+    fit: 'Operação que quer receber pedidos digitais no mesmo fluxo do restaurante.',
+    features: ['Tudo do Pro', 'Cardápio online e QR Code inclusos', 'Pedidos digitais no PDV', 'Suporte prioritário'],
+    note: 'Cardápio online já incluído.',
+  },
 };
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
 
   return (
-    <section className="koma-plans-section" id="planos" aria-labelledby="plans-title">
-      <div className="koma-section-heading koma-section-heading--light">
-        <span>07 / PLANOS</span>
-        <h2 id="plans-title">ESCOLHA COM<br />CLAREZA.</h2>
-        <p>Comece com o que sua operação precisa hoje e evolua sem trocar de sistema.</p>
-      </div>
-
-      <div className="koma-plans-risk" aria-label="Como reduzimos o risco da contratação">
+    <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
+      <div className="koma-plans-simple-heading">
         <div>
-          <span>ANTES DE CONTRATAR</span>
-          <strong>ENTENDA O ENCAIXE NA SUA OPERAÇÃO.</strong>
-          <p>Mostramos o fluxo, conferimos seus equipamentos e planejamos a implantação com você.</p>
+          <span>08 / PLANOS</span>
+          <h2 id="plans-title">COMECE CERTO.<br />CRESÇA SEM TROCAR.</h2>
         </div>
-        <ul>
-          <li><MessageCircle aria-hidden="true" /><span><b>CONVERSA INICIAL</b> sem custo</span></li>
-          <li><Wrench aria-hidden="true" /><span><b>COMPATIBILIDADE</b> verificada antes</span></li>
-          <li><Check aria-hidden="true" /><span><b>IMPLANTAÇÃO</b> acompanhada</span></li>
-        </ul>
+        <div>
+          <p><strong>POCKET</strong> organiza. <strong>PRO</strong> conecta. <strong>PREMIUM</strong> inclui o cardápio online.</p>
+          <small>Escolha pelo momento da sua operação — não por uma lista interminável de recursos.</small>
+        </div>
       </div>
 
       <div className="koma-plans-billing" aria-label="Período de cobrança dos planos">
@@ -70,28 +71,30 @@ export function Plans() {
             aria-pressed={isYearly}
             onClick={() => setIsYearly(true)}
           >
-            Anual
-            <span>{ANNUAL_DISCOUNT_RATE * 100}% OFF</span>
+            Anual <span>{ANNUAL_DISCOUNT_RATE * 100}% OFF</span>
           </button>
         </div>
-        <p>{isYearly ? '10% de desconto no pagamento anual' : 'Pagamento mês a mês'}</p>
+        <p>{isYearly ? 'Economize 10% no plano anual' : 'Pague mês a mês'}</p>
       </div>
 
-      <div className="koma-plans-grid">
+      <div className="koma-plans-grid koma-plans-grid--simple">
         {SUBSCRIPTION_PLANS.map((plan) => {
           const pricing = getSubscriptionPricing(plan.price);
           const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
+          const presentation = PLAN_PRESENTATION[plan.id];
 
           return (
-            <article className={`koma-plan-card ${plan.recommended ? 'koma-plan-card--featured' : ''}`} key={plan.id}>
+            <article className={`koma-plan-card koma-plan-card--simple ${plan.recommended ? 'koma-plan-card--featured' : ''}`} key={plan.id}>
               <div className="koma-plan-card-heading">
                 <div>
-                  <span>{plan.recommended ? 'MAIS ESCOLHIDO' : 'PLANO KÔMA'}</span>
+                  <span>{presentation.stage}</span>
                   <h3>{plan.name.replace('Kôma ', '')}</h3>
                 </div>
-                <small>{isYearly ? 'ANUAL' : 'MENSAL'}</small>
+                <small>{presentation.action}</small>
               </div>
-              <p className="koma-plan-tagline">{plan.tagline}</p>
+
+              <p className="koma-plan-fit"><b>PARA QUEM É</b>{presentation.fit}</p>
+
               <div className="koma-plan-price">
                 <span>R$</span>
                 <strong>
@@ -109,20 +112,25 @@ export function Plans() {
               </div>
               <p className="koma-plan-billing-note">
                 {isYearly
-                  ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
-                  : 'Cobrança mensal'}
+                  ? `${formatCurrency(pricing.annualTotal)} por ano · Implantação: ${formatCurrency(plan.implementationFee)}`
+                  : `Implantação: ${formatCurrency(plan.implementationFee)}`}
               </p>
+
               <ul>
-                {LANDING_PLAN_FEATURES[plan.id].map((feature) => <li key={feature}>{feature}</li>)}
+                {presentation.features.map((feature) => (
+                  <li key={feature}><Check size={16} aria-hidden="true" />{feature}</li>
+                ))}
               </ul>
+              <p className="koma-plan-extra">{presentation.note}</p>
+
               <a href={KOMA_LANDING_CONFIG.signupAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
-                Conversar sobre o {plan.name}
+                ESCOLHER {plan.name.replace('Kôma ', '').toUpperCase()}
               </a>
             </article>
           );
         })}
       </div>
-      <p className="koma-plans-note">Valores, taxas de implantação e disponibilidade de recursos são confirmados na proposta comercial.</p>
+      <p className="koma-plans-note">Valores mensais públicos. Condições e compatibilidade são confirmadas antes da contratação.</p>
     </section>
   );
 }

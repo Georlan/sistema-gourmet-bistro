@@ -15,7 +15,7 @@ export function FinalCTA() {
         id="cadastro"
         aria-label="Começar cadastro no Kôma"
       >
-        <span className="koma-cta-kicker">08 / PRÓXIMO PASSO</span>
+        <span className="koma-cta-kicker">09 / PRÓXIMO PASSO</span>
         <div className="koma-cta-brand-signature">
           <img
             src={KOMA_WORDMARK_ON_LIGHT_SRC}
