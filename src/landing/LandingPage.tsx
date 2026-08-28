@@ -1,50 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import './landing.css';
-import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
-import { KOMA_SLOGAN } from '../brand/komaBrand';
-import { LeadCaptureModal } from './components/LeadCaptureModal';
-import { WhatsAppIcon } from './components/WhatsAppIcon';
-import { KOMA_LANDING_CONFIG } from './config/landingConfig';
 import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
+import { ValueStrip } from './sections/ValueStrip';
+import { SocialProof } from './sections/SocialProof';
 import { HowItWorks } from './sections/HowItWorks';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
+import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
+import { KOMA_SLOGAN } from '../brand/komaBrand';
+
+type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
+
+function AngleDivider({ variant }: { variant: DividerVariant }) {
+  return <div className={`koma-angle-divider koma-angle-divider--${variant}`} aria-hidden="true" />;
+}
 
 export default function LandingPage() {
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
-  const [mobileConversionVisible, setMobileConversionVisible] = useState(false);
-
   useEffect(() => {
-    document.title = 'KÔMA | Gestão completa para restaurantes';
+    document.title = 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha';
 
     const setMeta = (nameOrProp: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';
-      let element = document.querySelector(`meta[${attr}="${nameOrProp}"]`);
-      if (!element) {
-        element = document.createElement('meta');
-        element.setAttribute(attr, nameOrProp);
-        document.head.appendChild(element);
+      let el = document.querySelector(`meta[${attr}="${nameOrProp}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, nameOrProp);
+        document.head.appendChild(el);
       }
-      element.setAttribute('content', content);
+      el.setAttribute('content', content);
     };
 
-    const title = 'KÔMA | Gestão completa para restaurantes';
-    const description = 'Pedidos, salão, cozinha, impressão, caixa e cardápio digital conectados em um único sistema para restaurantes.';
-
-    setMeta('description', description);
+    setMeta('description', 'Sistema para restaurantes com PDV, gestão de mesas, comandas, KDS, caixa, cardápio digital e impressão automática. Conheça o Kôma.');
     setMeta('robots', 'index, follow, max-image-preview:large');
-    setMeta('theme-color', '#07110e');
-    setMeta('og:title', title, true);
-    setMeta('og:description', description, true);
+    setMeta('theme-color', '#0a0a0a');
+    setMeta('og:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha', true);
+    setMeta('og:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.', true);
     setMeta('og:type', 'website', true);
     setMeta('og:url', 'https://sistema-gourmet-bistro.pages.dev/landing', true);
     setMeta('og:locale', 'pt_BR', true);
     setMeta('og:site_name', 'KÔMA', true);
     setMeta('twitter:card', 'summary_large_image');
-    setMeta('twitter:title', title);
-    setMeta('twitter:description', description);
+    setMeta('twitter:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha');
+    setMeta('twitter:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.');
 
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) {
@@ -58,6 +57,7 @@ export default function LandingPage() {
     structuredData.type = 'application/ld+json';
     structuredData.id = 'koma-software-schema';
     const planPrices = SUBSCRIPTION_PLANS.map((plan) => plan.price);
+
     structuredData.text = JSON.stringify({
       '@context': 'https://schema.org',
       '@type': 'SoftwareApplication',
@@ -66,7 +66,7 @@ export default function LandingPage() {
       operatingSystem: 'Web',
       url: 'https://sistema-gourmet-bistro.pages.dev/landing',
       inLanguage: 'pt-BR',
-      description,
+      description: 'Sistema de gestão para restaurantes com PDV, gestão de mesas, KDS, caixa e cardápio digital.',
       slogan: KOMA_SLOGAN,
       featureList: [
         'PDV e frente de caixa',
@@ -86,43 +86,26 @@ export default function LandingPage() {
     document.head.appendChild(structuredData);
 
     window.scrollTo(0, 0);
+
     return () => structuredData.remove();
   }, []);
 
-  useEffect(() => {
-    const updateMobileConversion = () => {
-      setMobileConversionVisible(window.scrollY > Math.min(window.innerHeight * 0.7, 560));
-    };
-    updateMobileConversion();
-    window.addEventListener('scroll', updateMobileConversion, { passive: true });
-    window.addEventListener('resize', updateMobileConversion);
-    return () => {
-      window.removeEventListener('scroll', updateMobileConversion);
-      window.removeEventListener('resize', updateMobileConversion);
-    };
-  }, []);
-
-  const openLeadModal = () => setLeadModalOpen(true);
-
   return (
     <div className="koma-landing">
-      <Header onOpenLead={openLeadModal} />
+      <Header />
       <main>
-        <Hero onOpenLead={openLeadModal} />
+        <Hero />
+        <AngleDivider variant="dark-light" />
+        <ValueStrip />
+        <SocialProof />
+        <AngleDivider variant="light-dark" />
         <HowItWorks />
+        <AngleDivider variant="dark-light" />
         <FAQ />
-        <Plans onOpenLead={openLeadModal} />
-        <FinalCTA onOpenLead={openLeadModal} />
+        <Plans />
+        <AngleDivider variant="light-green" />
+        <FinalCTA />
       </main>
-
-      <div className={`koma-mobile-conversion ${mobileConversionVisible ? 'is-visible' : ''}`} aria-label="Ações rápidas">
-        <a href={KOMA_LANDING_CONFIG.whatsappUrl} target="_blank" rel="noopener noreferrer" aria-label="Falar no WhatsApp">
-          <WhatsAppIcon />
-        </a>
-        <button type="button" onClick={openLeadModal}>Agendar demonstração</button>
-      </div>
-
-      <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
     </div>
   );
 }

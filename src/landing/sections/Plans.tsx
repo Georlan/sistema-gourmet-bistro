@@ -1,67 +1,128 @@
 import React, { useState } from 'react';
+import NumberFlow from '@number-flow/react';
+import { Check, MessageCircle, Wrench } from 'lucide-react';
 import {
   ANNUAL_DISCOUNT_RATE,
   SUBSCRIPTION_PLANS,
   formatCurrency,
   getSubscriptionPricing,
 } from '../../config/subscriptionPlans';
+import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 
-const PLAN_FEATURES: Record<string, string[]> = {
-  pocket: ['Mesas, comandas e balcão', 'Cardápio e frente de caixa', 'Relatórios essenciais'],
-  pro: ['Tudo do Pocket', 'KDS e impressão automática', 'Equipe e permissões', 'Relatórios completos', 'Retirada e delivery'],
-  premium: ['Tudo do Pro', 'Cardápio digital e QR Code', 'Pedidos digitais no PDV', 'Suporte prioritário'],
+const LANDING_PLAN_FEATURES: Record<string, string[]> = {
+  pocket: [
+    'Mesas, comandas e balcão',
+    'Gestão de cardápio e caixa',
+    'Relatórios operacionais básicos',
+  ],
+  pro: [
+    'Tudo do Pocket',
+    'KDS e impressão automática',
+    'Equipe, cargos e permissões',
+    'Relatórios financeiros completos',
+    'Pedidos de retirada e delivery',
+  ],
+  premium: [
+    'Tudo do Pro',
+    'Cardápio online e QR Code inclusos',
+    'Aceite de pedidos digitais no PDV',
+    'Suporte prioritário',
+  ],
 };
 
-function displayPrice(value: number) {
-  return new Intl.NumberFormat('pt-BR', {
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-export function Plans({ onOpenLead }: { onOpenLead: () => void }) {
+export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
 
   return (
     <section className="koma-plans-section" id="planos" aria-labelledby="plans-title">
-      <div className="koma-container">
-        <header className="koma-plans-heading">
-          <div>
-            <p className="koma-eyebrow"><span />Planos para cada momento</p>
-            <h2 id="plans-title">Comece com o que precisa.<br /><em>Evolua sem trocar de sistema.</em></h2>
-          </div>
-          <div className="koma-billing-toggle" role="group" aria-label="Período de cobrança">
-            <button type="button" className={!isYearly ? 'is-active' : ''} aria-pressed={!isYearly} onClick={() => setIsYearly(false)}>Mensal</button>
-            <button type="button" className={isYearly ? 'is-active' : ''} aria-pressed={isYearly} onClick={() => setIsYearly(true)}>Anual <span>{ANNUAL_DISCOUNT_RATE * 100}% off</span></button>
-          </div>
-        </header>
-
-        <div className="koma-plans-grid">
-          {SUBSCRIPTION_PLANS.map((plan) => {
-            const pricing = getSubscriptionPricing(plan.price);
-            const price = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
-            return (
-              <article className={`koma-plan-card ${plan.recommended ? 'is-featured' : ''}`} key={plan.id}>
-                <header>
-                  <span>{plan.recommended ? 'Mais escolhido' : 'Plano Kôma'}</span>
-                  <h3>{plan.name.replace('Kôma ', '')}</h3>
-                  <p>{plan.tagline}</p>
-                </header>
-                <div className="koma-plan-price"><small>R$</small><strong>{displayPrice(price)}</strong><span>/mês</span></div>
-                <p className="koma-plan-billing">
-                  {isYearly ? `${formatCurrency(pricing.annualTotal)} cobrados por ano` : 'Cobrança mensal'}
-                </p>
-                <ul>{PLAN_FEATURES[plan.id].map((feature) => <li key={feature}><i aria-hidden="true">✓</i>{feature}</li>)}</ul>
-                <button type="button" className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline'}`} onClick={onOpenLead}>
-                  Conversar sobre o {plan.name.replace('Kôma ', '')}
-                </button>
-                <small className="koma-plan-setup">Implantação: {formatCurrency(plan.implementationFee)}</small>
-              </article>
-            );
-          })}
-        </div>
-        <p className="koma-plans-note">Os recursos e a compatibilidade dos equipamentos são confirmados antes da contratação.</p>
+      <div className="koma-section-heading koma-section-heading--light">
+        <span>05 / PLANOS</span>
+        <h2 id="plans-title">ESCOLHA COM<br />CLAREZA.</h2>
+        <p>Comece com o que sua operação precisa hoje e evolua sem trocar de sistema.</p>
       </div>
+
+      <div className="koma-plans-risk" aria-label="Como reduzimos o risco da contratação">
+        <div>
+          <span>ANTES DE CONTRATAR</span>
+          <strong>ENTENDA O ENCAIXE NA SUA OPERAÇÃO.</strong>
+          <p>Mostramos o fluxo, conferimos seus equipamentos e planejamos a implantação com você.</p>
+        </div>
+        <ul>
+          <li><MessageCircle aria-hidden="true" /><span><b>CONVERSA INICIAL</b> sem custo</span></li>
+          <li><Wrench aria-hidden="true" /><span><b>COMPATIBILIDADE</b> verificada antes</span></li>
+          <li><Check aria-hidden="true" /><span><b>IMPLANTAÇÃO</b> acompanhada</span></li>
+        </ul>
+      </div>
+
+      <div className="koma-plans-billing" aria-label="Período de cobrança dos planos">
+        <div className="koma-plans-billing-switch" role="group" aria-label="Escolha entre cobrança mensal ou anual">
+          <button
+            type="button"
+            className={!isYearly ? 'is-active' : ''}
+            aria-pressed={!isYearly}
+            onClick={() => setIsYearly(false)}
+          >
+            Mensal
+          </button>
+          <button
+            type="button"
+            className={isYearly ? 'is-active' : ''}
+            aria-pressed={isYearly}
+            onClick={() => setIsYearly(true)}
+          >
+            Anual
+            <span>{ANNUAL_DISCOUNT_RATE * 100}% OFF</span>
+          </button>
+        </div>
+        <p>{isYearly ? '10% de desconto no pagamento anual' : 'Pagamento mês a mês'}</p>
+      </div>
+
+      <div className="koma-plans-grid">
+        {SUBSCRIPTION_PLANS.map((plan) => {
+          const pricing = getSubscriptionPricing(plan.price);
+          const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
+
+          return (
+            <article className={`koma-plan-card ${plan.recommended ? 'koma-plan-card--featured' : ''}`} key={plan.id}>
+              <div className="koma-plan-card-heading">
+                <div>
+                  <span>{plan.recommended ? 'MAIS ESCOLHIDO' : 'PLANO KÔMA'}</span>
+                  <h3>{plan.name.replace('Kôma ', '')}</h3>
+                </div>
+                <small>{isYearly ? 'ANUAL' : 'MENSAL'}</small>
+              </div>
+              <p className="koma-plan-tagline">{plan.tagline}</p>
+              <div className="koma-plan-price">
+                <span>R$</span>
+                <strong>
+                  <NumberFlow
+                    value={displayPrice}
+                    locales="pt-BR"
+                    format={{
+                      minimumFractionDigits: isYearly ? 2 : 0,
+                      maximumFractionDigits: 2,
+                    }}
+                    willChange
+                  />
+                </strong>
+                <small>/mês</small>
+              </div>
+              <p className="koma-plan-billing-note">
+                {isYearly
+                  ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
+                  : 'Cobrança mensal'}
+              </p>
+              <ul>
+                {LANDING_PLAN_FEATURES[plan.id].map((feature) => <li key={feature}>{feature}</li>)}
+              </ul>
+              <a href={KOMA_LANDING_CONFIG.signupAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
+                Conversar sobre o {plan.name}
+              </a>
+            </article>
+          );
+        })}
+      </div>
+      <p className="koma-plans-note">Valores, taxas de implantação e disponibilidade de recursos são confirmados na proposta comercial.</p>
     </section>
   );
 }

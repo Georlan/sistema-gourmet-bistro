@@ -12,6 +12,7 @@ interface LeadFormData {
   estabelecimento: string;
   whatsapp: string;
   tipoOperacao: string;
+  tamanhoOperacao: string;
 }
 
 const INITIAL_FORM: LeadFormData = {
@@ -19,6 +20,7 @@ const INITIAL_FORM: LeadFormData = {
   estabelecimento: '',
   whatsapp: '',
   tipoOperacao: '',
+  tamanhoOperacao: '',
 };
 
 function formatPhone(value: string) {
@@ -85,8 +87,8 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
       >
         <div className="koma-lead-dialog-head">
           <div>
-            <span>DEMONSTRAÇÃO PERSONALIZADA</span>
-            <h2 id={titleId}>VEJA O KÔMA NA SUA ROTINA.</h2>
+            <span>CADASTRO INICIAL</span>
+            <h2 id={titleId}>COMECE COM O KÔMA.</h2>
           </div>
           <button type="button" className="koma-lead-close" onClick={onClose} aria-label="Fechar">
             ×
@@ -94,7 +96,7 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
         </div>
 
         <p className="koma-lead-intro">
-          Conte o essencial. O WhatsApp abrirá com a mensagem pronta para você revisar antes de enviar.
+          Conte o essencial sobre seu restaurante. O WhatsApp abrirá com seu cadastro pronto para revisar e enviar.
         </p>
 
         <form className="koma-lead-form" onSubmit={handleSubmit}>
@@ -139,25 +141,43 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
             />
           </label>
 
-          <label>
-            <span>TIPO DE OPERAÇÃO <small>(OPCIONAL)</small></span>
-            <select
-              value={form.tipoOperacao}
-              onChange={(event) => updateField('tipoOperacao', event.target.value)}
-            >
-              <option value="">Prefiro explicar na conversa</option>
-              <option>Restaurante</option>
-              <option>Bar</option>
-              <option>Hamburgueria ou lanchonete</option>
-              <option>Cafeteria</option>
-              <option>Delivery ou retirada</option>
-              <option>Outro</option>
-            </select>
-          </label>
+          <div className="koma-lead-form-row">
+            <label>
+              <span>TIPO DE OPERAÇÃO</span>
+              <select
+                value={form.tipoOperacao}
+                onChange={(event) => updateField('tipoOperacao', event.target.value)}
+                required
+              >
+                <option value="" disabled>Selecione</option>
+                <option>Restaurante</option>
+                <option>Bar</option>
+                <option>Hamburgueria ou lanchonete</option>
+                <option>Cafeteria</option>
+                <option>Delivery ou retirada</option>
+                <option>Outro</option>
+              </select>
+            </label>
+
+            <label>
+              <span>TAMANHO DA OPERAÇÃO</span>
+              <select
+                value={form.tamanhoOperacao}
+                onChange={(event) => updateField('tamanhoOperacao', event.target.value)}
+                required
+              >
+                <option value="" disabled>Selecione</option>
+                <option>Balcão, retirada ou delivery</option>
+                <option>Até 10 mesas</option>
+                <option>De 11 a 30 mesas</option>
+                <option>Mais de 30 mesas</option>
+              </select>
+            </label>
+          </div>
 
           <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit">
             <WhatsAppIcon />
-            CONTINUAR PELO WHATSAPP
+            ENVIAR CADASTRO PELO WHATSAPP
           </button>
           <small>Você revisa a mensagem antes de enviar. Nenhum dado é enviado automaticamente.</small>
         </form>
