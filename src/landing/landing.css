@@ -6646,3 +6646,49 @@
   .koma-final-next { min-height: 440px; padding: 1.5rem; }
   .koma-lead-submit-options { grid-template-columns: 1fr; }
 }
+
+/* Keep accented letters clear when the trust headline wraps. */
+.koma-trust-heading h2 {
+  line-height: 0.92;
+}
+
+/* Give every management pillar its own hover state. */
+@media (hover: hover) {
+  .koma-management-card--vender:hover {
+    color: var(--koma-white);
+    background: var(--koma-black);
+  }
+  .koma-management-card--vender:hover > p { color: rgba(255, 255, 255, 0.65); }
+  .koma-management-card--vender:hover li { border-color: rgba(255, 255, 255, 0.24); }
+
+  .koma-management-card--operar:hover {
+    color: var(--koma-black);
+    background: var(--koma-green);
+  }
+  .koma-management-card--operar:hover::before {
+    background-image:
+      linear-gradient(rgba(10, 10, 10, 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(10, 10, 10, 0.055) 1px, transparent 1px);
+  }
+  .koma-management-card--operar:hover > p { color: rgba(10, 10, 10, 0.68); }
+  .koma-management-card--operar:hover .koma-management-card-top span { color: rgba(10, 10, 10, 0.72); }
+  .koma-management-card--operar:hover li { border-color: rgba(10, 10, 10, 0.28); }
+
+  .koma-management-card--controlar:hover {
+    color: var(--koma-white);
+    background: #111412;
+  }
+  .koma-management-card--controlar:hover::before {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  }
+  .koma-management-card--controlar:hover > p { color: rgba(255, 255, 255, 0.65); }
+  .koma-management-card--controlar:hover .koma-management-card-top span { color: var(--koma-green); }
+  .koma-management-card--controlar:hover li { border-color: rgba(255, 255, 255, 0.24); }
+}
+
+/* Keep the two-line tour title compact without colliding accents. */
+.koma-scroll-flow .koma-section-heading h2 {
+  line-height: 0.95;
+}
