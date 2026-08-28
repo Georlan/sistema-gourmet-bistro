@@ -1,8 +1,12 @@
 import React from 'react';
 import clsx from 'clsx';
-import logoOnDark from '../assets/logo-koma-on-dark.png';
-import logoOnLight from '../assets/logo-koma-on-light.png';
-import { KOMA_SLOGAN, KOMA_WORDMARK_SRC } from '../brand/komaBrand';
+import {
+  KOMA_SLOGAN,
+  KOMA_SYMBOL_ON_DARK_SRC,
+  KOMA_SYMBOL_ON_LIGHT_SRC,
+  KOMA_WORDMARK_ON_DARK_SRC,
+  KOMA_WORDMARK_ON_LIGHT_SRC,
+} from '../brand/komaBrand';
 
 export interface KomaLogoProps {
   className?: string;
@@ -185,7 +189,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
     if (variant === 'dark') {
       return (
         <img
-          src={logoOnDark}
+          src={KOMA_SYMBOL_ON_DARK_SRC}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0', imageClassName)}
         />
@@ -195,7 +199,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
     if (variant === 'light') {
       return (
         <img
-          src={logoOnLight}
+          src={KOMA_SYMBOL_ON_LIGHT_SRC}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0', imageClassName)}
         />
@@ -205,14 +209,43 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
     return (
       <>
         <img
-          src={logoOnLight}
+          src={KOMA_SYMBOL_ON_LIGHT_SRC}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0 dark:hidden', imageClassName)}
         />
         <img
-          src={logoOnDark}
+          src={KOMA_SYMBOL_ON_DARK_SRC}
           alt={alt}
           className={clsx(sizeClass, 'object-contain shrink-0 hidden dark:block', imageClassName)}
+        />
+      </>
+    );
+  };
+
+  const renderWordmark = () => {
+    const imageClass = clsx(wordmarkSizeClass, 'h-auto object-contain shrink-0', imageClassName);
+
+    if (variant === 'dark') {
+      return <img src={KOMA_WORDMARK_ON_DARK_SRC} alt={alt} draggable={false} className={imageClass} />;
+    }
+
+    if (variant === 'light') {
+      return <img src={KOMA_WORDMARK_ON_LIGHT_SRC} alt={alt} draggable={false} className={imageClass} />;
+    }
+
+    return (
+      <>
+        <img
+          src={KOMA_WORDMARK_ON_LIGHT_SRC}
+          alt={alt}
+          draggable={false}
+          className={clsx(imageClass, 'dark:hidden')}
+        />
+        <img
+          src={KOMA_WORDMARK_ON_DARK_SRC}
+          alt={alt}
+          draggable={false}
+          className={clsx(imageClass, 'hidden dark:block')}
         />
       </>
     );
@@ -226,12 +259,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
           data-koma-logo="context-wordmark"
           className={clsx('inline-flex items-center justify-center', className)}
         >
-          <img
-            src={KOMA_WORDMARK_SRC}
-            alt={alt}
-            draggable={false}
-            className={clsx(wordmarkSizeClass, 'h-auto object-contain shrink-0', imageClassName)}
-          />
+          {renderWordmark()}
         </span>
       );
     }
@@ -252,12 +280,7 @@ export const KomaLogo: React.FC<KomaLogoProps> = ({
       data-koma-logo="wordmark"
       className={clsx('inline-flex flex-col items-start justify-center', className)}
     >
-      <img
-        src={KOMA_WORDMARK_SRC}
-        alt={alt}
-        draggable={false}
-        className={clsx(wordmarkSizeClass, 'object-contain shrink-0', imageClassName)}
-      />
+      {renderWordmark()}
       {withSlogan && (
         <span className="mt-0.5 text-[9px] font-sans font-semibold leading-tight tracking-wide text-koma-accent">
           {KOMA_SLOGAN}

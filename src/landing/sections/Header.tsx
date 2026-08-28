@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { KOMA_WORDMARK_SRC } from '../../brand/komaBrand';
+import { KOMA_WORDMARK_ON_DARK_SRC } from '../../brand/komaBrand';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 
@@ -33,7 +33,7 @@ export function Header() {
         role="banner"
       >
         <a href="/landing" className="koma-header-logo" aria-label="Kôma, início">
-          <img src={KOMA_WORDMARK_SRC} alt="Kôma" />
+          <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="Kôma" />
         </a>
 
         <nav className="koma-header-nav" aria-label="Navegação principal">

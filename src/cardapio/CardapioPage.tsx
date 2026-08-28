@@ -737,7 +737,7 @@ export default function CardapioPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-emerald-950/30" />
           <div className="relative flex h-full items-end justify-between gap-4 p-5 sm:p-7">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-              <img src={activeBrand.logo} alt={activeBrand.name} className="h-14 w-14 shrink-0 rounded-2xl border border-white/20 object-cover sm:h-16 sm:w-16" />
+              <img src={activeBrand.logo} alt={activeBrand.name} className="h-14 w-14 shrink-0 rounded-2xl border border-white/20 bg-white object-contain p-1 sm:h-16 sm:w-16" />
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-black text-white sm:text-2xl">{activeBrand.name}</h1>
                 {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/70">{activeBrand.slogan}</p>}
@@ -794,7 +794,7 @@ export default function CardapioPage() {
         </div>
 
         <footer className="mt-4 border-t border-koma-border py-7 text-center">
-          <div className="flex items-center justify-center gap-2"><img src={activeBrand.logo} alt="" className="h-7 w-7 rounded-lg object-cover" /><strong className="text-xs text-koma-secondary">{activeBrand.name}</strong></div>
+          <div className="flex items-center justify-center gap-2"><img src={activeBrand.logo} alt="" className="h-7 w-7 rounded-lg bg-white object-contain p-0.5" /><strong className="text-xs text-koma-secondary">{activeBrand.name}</strong></div>
           <p className="mt-2 text-[9px] text-koma-subtle">Cardápio digital KÔMA · preços e disponibilidade atualizados pelo restaurante.</p>
         </footer>
       </main>

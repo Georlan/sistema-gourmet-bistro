@@ -20,13 +20,19 @@ Arquivos com situação `PENDENTE` podem permanecer apenas para avaliação inte
 
 | Ativo | SHA-256 | Uso | Situação | Evidência necessária |
 |---|---|---|---|---|
-| `public/logo-koma.png` | `f85e318b22d24e5e07d0db896a261aa7b5c4cef4ab237cbdcb077970c4d0aeeb` | favicon público | PENDENTE | arquivo-fonte, autoria e cessão/licença |
-| `src/assets/logo-koma-on-dark.png` | `cc1b6844e3a1a0142e0b1c984fb2feff9c20b861c918960a3e642ad1a5f520d5` | interface em fundo escuro | PENDENTE | arquivo-fonte, autoria e cessão/licença |
-| `src/assets/logo-koma-on-light.png` | `f52235eb9d331c34f523f87b3a88dfa6bee2a60148a1be2030fb751ffe21bd0f` | interface em fundo claro | PENDENTE | arquivo-fonte, autoria e cessão/licença |
-| `src/assets/logo-koma-on-green.png` | `27061b1213652575b36a3c37badc11048b8e0a8a82fbbf10a4e48965aad12b16` | landing page | PENDENTE | arquivo-fonte, autoria e cessão/licença |
+| `public/logo-koma.png` | `f52235eb9d331c34f523f87b3a88dfa6bee2a60148a1be2030fb751ffe21bd0f` | fallback do favicon público | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `public/koma-logo-on-light.svg` | `ca3a2350efae385a2dbd9111c0e174823cdc42677f8604f1e1b67cad5ae5d4f3` | favicon em tema claro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `public/koma-logo-on-dark.svg` | `5c0accd0d6cb283e1114e08546ed462f8f4073e37f4bcff1e78b1e714766671d` | favicon em tema escuro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/logo-koma-on-dark.png` | `cc1b6844e3a1a0142e0b1c984fb2feff9c20b861c918960a3e642ad1a5f520d5` | interface em fundo escuro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/logo-koma-on-light.png` | `f52235eb9d331c34f523f87b3a88dfa6bee2a60148a1be2030fb751ffe21bd0f` | interface em fundo claro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/logo-koma-on-green.png` | `f52235eb9d331c34f523f87b3a88dfa6bee2a60148a1be2030fb751ffe21bd0f` | compatibilidade da landing page | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/brand/koma-symbol-on-light.svg` | `ca3a2350efae385a2dbd9111c0e174823cdc42677f8604f1e1b67cad5ae5d4f3` | símbolo em fundo claro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/brand/koma-symbol-on-dark.svg` | `5c0accd0d6cb283e1114e08546ed462f8f4073e37f4bcff1e78b1e714766671d` | símbolo em fundo escuro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/brand/koma-wordmark-on-light.svg` | `944b0aae406a339bdab76c5cb2683a562bb0e99ec69bb91b9ac679a18fd92bc5` | assinatura em fundo claro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
+| `src/assets/brand/koma-wordmark-on-dark.svg` | `51d7b388e3bcbb03cb94f677e7451dfaeeeeb5da9551774e3c11213143457d0b` | assinatura em fundo escuro | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
 | `src/assets/koma-phone-shell-3d.png` | `0d6a1136cf1828e5e255932abf48cfd9b08e0d4dfc215f226dd906a027e26652` | mockup da landing page | PENDENTE | origem do mockup/modelo 3D e licença comercial |
 | `src/assets/koma-tablet-shell-3d.png` | `a7c31552ed4a0554bc474ec821a235d997b10677b79a2b9ef1b212dcd8cc7560` | mockup da landing page | PENDENTE | origem do mockup/modelo 3D e licença comercial |
-| `src/brand/komaBrand.ts` (`KOMA_WORDMARK_SRC`, WebP 240×80) | `10eece546c559bd52e51d752a901dc8ec4f231df4ad83bc011360f073ef8687e` | wordmark incorporado como data URL | PENDENTE | arquivo-fonte, autoria e cessão/licença; o hash é do WebP decodificado |
+| `komalogo.png` | `fe38c389b5cfcea3a6322b626f431cd1f32dab6bde484f68338f959f1cc50883` | referência raster da assinatura oficial | INFORMADO COMO OFICIAL | pacote `komalogos.zip` fornecido em 28/08/2026; arquivar evidência de autoria e cessão/licença |
 
 ## Ativos externos e enviados por clientes
 

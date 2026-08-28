@@ -76,11 +76,15 @@ def test_koma_logo_uses_explicit_background_variants_and_semantic_text_color():
     logo = source("src/components/KomaLogo.tsx")
     html = source("index.html")
 
-    assert "logo-koma-on-dark.png" in logo
-    assert "logo-koma-on-light.png" in logo
+    assert "KOMA_SYMBOL_ON_DARK_SRC" in logo
+    assert "KOMA_SYMBOL_ON_LIGHT_SRC" in logo
+    assert "KOMA_WORDMARK_ON_DARK_SRC" in logo
+    assert "KOMA_WORDMARK_ON_LIGHT_SRC" in logo
     assert "../assets/logo.png" not in logo
     assert "../assets/logo-light.png" not in logo
     assert "text-koma-accent" in logo
+    assert 'href="/koma-logo-on-light.svg"' in html
+    assert 'href="/koma-logo-on-dark.svg"' in html
     assert 'href="/logo-koma.png"' in html
 
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { KOMA_WORDMARK_SRC } from '../brand/komaBrand';
+import { KOMA_SYMBOL_ON_LIGHT_SRC } from '../brand/komaBrand';
 
 export interface ProductOption {
   id: string;
@@ -121,7 +121,7 @@ export const LOCAL_PRODUCT_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIC
 </svg>
 `);
 
-export const LOCAL_LOGO_PLACEHOLDER = KOMA_WORDMARK_SRC;
+export const LOCAL_LOGO_PLACEHOLDER = KOMA_SYMBOL_ON_LIGHT_SRC;
 
 export const LOCAL_BANNER_PLACEHOLDER = "data:image/svg+xml;utf8," + encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" fill="none">

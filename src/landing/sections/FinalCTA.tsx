@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { KOMA_SLOGAN } from '../../brand/komaBrand';
+import { KOMA_SLOGAN, KOMA_WORDMARK_ON_LIGHT_SRC } from '../../brand/komaBrand';
 import { KomaLogo } from '../../components/KomaLogo';
-import logoOnGreen from '../../assets/logo-koma-on-green.png';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
@@ -19,7 +18,7 @@ export function FinalCTA() {
         <span className="koma-cta-kicker">06 / PRÓXIMO PASSO</span>
         <div className="koma-cta-brand-signature">
           <img
-            src={logoOnGreen}
+            src={KOMA_WORDMARK_ON_LIGHT_SRC}
             alt=""
             aria-hidden="true"
             style={{ width: 'clamp(150px, 14vw, 220px)', height: 'auto', objectFit: 'contain' }}
