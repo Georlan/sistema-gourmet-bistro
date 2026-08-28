@@ -27,7 +27,7 @@ export function FAQ() {
   return (
     <section className="koma-faq-section" id="duvidas" aria-labelledby="faq-title">
       <div className="koma-faq-heading">
-        <span>04 / DÚVIDAS ANTES DE COMEÇAR</span>
+        <span>06 / DÚVIDAS ANTES DE COMEÇAR</span>
         <h2 id="faq-title">SEM LETRAS<br />MIÚDAS.</h2>
         <p>As respostas que você precisa para avaliar o Kôma sem comprar no escuro.</p>
       </div>

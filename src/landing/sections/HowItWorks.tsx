@@ -9,6 +9,7 @@ const PRODUCT_TOUR = [
     id: 'pedidos',
     num: '01',
     label: 'PEDIDOS',
+    short: 'Atendimento e status',
     title: 'VEJA CADA PEDIDO AVANÇAR.',
     description: 'Mesas, balcão e delivery aparecem organizados por etapa. A equipe sabe o que entrou, o que está em preparo e o que já pode ser concluído.',
     points: ['SALÃO, BALCÃO E DELIVERY', 'ETAPAS E STATUS', 'HISTÓRICO DO PEDIDO'],
@@ -20,6 +21,7 @@ const PRODUCT_TOUR = [
     id: 'salao',
     num: '02',
     label: 'COZINHA',
+    short: 'Produção e prioridade',
     title: 'A PRODUÇÃO RECEBE O QUE PRECISA.',
     description: 'Itens, quantidades, observações e tempo chegam à cozinha no mesmo pedido lançado pelo atendimento.',
     points: ['FILA DE PRODUÇÃO', 'TEMPO E OBSERVAÇÕES', 'KDS E IMPRESSÃO'],
@@ -31,6 +33,7 @@ const PRODUCT_TOUR = [
     id: 'cardapio',
     num: '03',
     label: 'CARDÁPIO',
+    short: 'Pedido no celular',
     title: 'O CLIENTE PEDE PELO PRÓPRIO CELULAR.',
     description: 'O QR Code abre um cardápio conectado à mesma base do caixa. Preço, disponibilidade, adicionais e observações seguem para o pedido sem cadastro repetido.',
     points: ['QR CODE', 'CARDÁPIO CENTRALIZADO', 'PEDIDO CONECTADO'],
@@ -56,6 +59,16 @@ export function HowItWorks() {
         <h2 id="how-title">UM TOUR.<br />TRÊS TELAS.</h2>
         <p>Veja como o mesmo pedido aparece para quem atende, produz e compra.</p>
       </div>
+
+      <nav className="koma-tour-rail" aria-label="Etapas do tour do produto">
+        {PRODUCT_TOUR.map((screen) => (
+          <a href={`#${screen.id}`} key={screen.id}>
+            <span>{screen.num}</span>
+            <strong>{screen.label}</strong>
+            <small>{screen.short}</small>
+          </a>
+        ))}
+      </nav>
 
       <div className="koma-scroll-modules">
         {PRODUCT_TOUR.map((screen, index) => (

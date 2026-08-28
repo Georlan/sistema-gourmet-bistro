@@ -6,9 +6,9 @@ const ENTRY_PRICE = Math.min(...SUBSCRIPTION_PLANS.map((plan) => plan.price));
 
 const PRODUCT_PROOFS = [
   {
-    value: '16',
-    label: 'CAPACIDADES DISPONÍVEIS',
-    detail: 'Funcionalidades que já podem ser demonstradas, do pedido ao relacionamento.',
+    value: '1',
+    label: 'FLUXO DO PEDIDO AO CAIXA',
+    detail: 'Salão, cozinha e fechamento acompanham a mesma operação.',
   },
   {
     value: `R$ ${ENTRY_PRICE}`,

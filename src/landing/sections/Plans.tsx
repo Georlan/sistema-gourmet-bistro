@@ -36,7 +36,7 @@ export function Plans() {
   return (
     <section className="koma-plans-section" id="planos" aria-labelledby="plans-title">
       <div className="koma-section-heading koma-section-heading--light">
-        <span>05 / PLANOS</span>
+        <span>07 / PLANOS</span>
         <h2 id="plans-title">ESCOLHA COM<br />CLAREZA.</h2>
         <p>Comece com o que sua operação precisa hoje e evolua sem trocar de sistema.</p>
       </div>

@@ -4903,7 +4903,7 @@
 .koma-management-card-top { display: flex; justify-content: space-between; font-family: var(--koma-accent); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; }
 .koma-management-card-top span { color: var(--koma-green-dark); }
 .koma-management-card:hover .koma-management-card-top span { color: var(--koma-green); }
-.koma-management-card h3 { max-width: 11ch; margin: 5rem 0 1.25rem; font-family: var(--koma-display); font-size: clamp(2rem, 3.5vw, 3.7rem); line-height: 0.9; letter-spacing: -0.045em; }
+.koma-management-card h3 { max-width: 12ch; margin: 4rem 0 1.25rem; font-family: var(--koma-display); font-size: clamp(2.15rem, 3vw, 3.25rem); font-weight: 800; line-height: 0.96; letter-spacing: -0.04em; text-wrap: balance; }
 .koma-management-card > p { max-width: 34ch; margin: 0; color: var(--koma-muted-light); line-height: 1.6; }
 .koma-management-card:hover > p { color: rgba(255,255,255,0.65); }
 .koma-management-card ul { list-style: none; padding: 0; margin: auto 0 0; }
@@ -5703,9 +5703,9 @@
 .koma-trust-stats article {
   position: relative;
   display: grid;
-  grid-template-columns: 2.4rem minmax(7rem, 0.46fr) minmax(0, 1fr);
+  grid-template-columns: 2rem minmax(9.5rem, auto) minmax(8.75rem, 1fr);
   grid-template-rows: auto auto;
-  gap: 0.2rem clamp(1rem, 2vw, 2.25rem);
+  gap: 0.2rem clamp(0.85rem, 1.25vw, 1.35rem);
   align-items: center;
   min-height: 180px;
   padding: clamp(1.4rem, 2.5vw, 2.5rem);
@@ -5730,7 +5730,7 @@
   grid-row: 1 / -1;
   color: var(--koma-black);
   font-family: var(--koma-display);
-  font-size: clamp(2.7rem, 4.5vw, 5rem);
+  font-size: clamp(2.7rem, 3.65vw, 4.35rem);
   line-height: 0.86;
   letter-spacing: -0.045em;
   white-space: nowrap;
@@ -5935,8 +5935,9 @@
   }
 
   .koma-trust-stats article {
-    grid-template-columns: 2.2rem minmax(6.5rem, 0.42fr) minmax(0, 1fr);
+    grid-template-columns: 1.8rem minmax(7.7rem, auto) minmax(0, 1fr);
     grid-template-rows: auto auto;
+    gap: 0.2rem 0.7rem;
     min-height: 154px;
     border-right: 0;
     border-bottom: 1px solid var(--koma-line-light);
@@ -5949,7 +5950,7 @@
 
   .koma-trust-stats article > strong {
     margin: 0;
-    font-size: clamp(2.8rem, 12vw, 4rem);
+    font-size: clamp(2.4rem, 10vw, 3.2rem);
   }
 
   .koma-trust-product-card {
@@ -5997,4 +5998,180 @@
     right: 4.5rem;
     width: 4rem;
   }
+}
+
+/* Three-pillar progression: selling becomes operation, then control. */
+.koma-management-grid {
+  gap: 1px;
+  background: var(--koma-line-light);
+  border: 1px solid var(--koma-line-light);
+}
+
+.koma-management-card {
+  position: relative;
+  min-width: 0;
+  min-height: 510px;
+  padding: clamp(1.5rem, 2.7vw, 2.8rem);
+  border-right: 0;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.koma-management-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(rgba(10, 10, 10, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.koma-management-card:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  right: -1.4rem;
+  width: 2.8rem;
+  height: 2.8rem;
+  display: grid;
+  place-items: center;
+  color: var(--koma-black);
+  background: var(--koma-white);
+  border: 1px solid rgba(10, 10, 10, 0.16);
+  border-radius: 50%;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+  font-family: var(--koma-accent);
+  font-size: 1.05rem;
+  transform: translateY(-50%);
+}
+
+.koma-management-card--vender { background: #f4f5f3; }
+.koma-management-card--operar { color: var(--koma-white); background: #111412; }
+.koma-management-card--controlar { color: var(--koma-black); background: var(--koma-green); }
+.koma-management-card--operar::before { background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); }
+
+.koma-management-card-top { align-items: center; }
+.koma-management-card-top i {
+  width: 2.65rem;
+  height: 2.65rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: 0.65;
+}
+
+.koma-management-card--operar .koma-management-card-top span { color: var(--koma-green); }
+.koma-management-card--controlar .koma-management-card-top span { color: rgba(10, 10, 10, 0.7); }
+.koma-management-card h3 { margin-top: clamp(2.75rem, 5vw, 4.5rem); }
+.koma-management-card--operar > p { color: rgba(255, 255, 255, 0.62); }
+.koma-management-card--controlar > p { color: rgba(10, 10, 10, 0.68); }
+.koma-management-card--operar li { border-color: rgba(255, 255, 255, 0.24); }
+.koma-management-card--controlar li { border-color: rgba(10, 10, 10, 0.28); }
+
+@media (hover: hover) {
+  .koma-management-card:hover { transform: translateY(-4px); box-shadow: 0 22px 55px rgba(0, 0, 0, 0.14); }
+  .koma-management-card--operar:hover { background: #111412; }
+  .koma-management-card--controlar:hover { color: var(--koma-black); background: var(--koma-green); }
+  .koma-management-card--controlar:hover > p { color: rgba(10, 10, 10, 0.68); }
+  .koma-management-card--controlar:hover .koma-management-card-top span { color: rgba(10, 10, 10, 0.7); }
+}
+
+/* Tour orientation rail */
+.koma-tour-rail {
+  width: min(100%, 1480px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 auto;
+  border: 1px solid var(--koma-line-dark);
+}
+
+.koma-tour-rail a {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  grid-template-rows: auto auto;
+  gap: 0.25rem 0.75rem;
+  padding: 1.35rem clamp(1rem, 2vw, 1.7rem);
+  color: var(--koma-white);
+  border-right: 1px solid var(--koma-line-dark);
+  text-decoration: none;
+  transition: background-color 180ms ease;
+}
+
+.koma-tour-rail a:last-child { border-right: 0; }
+.koma-tour-rail a:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  top: 50%;
+  right: -0.55rem;
+  z-index: 2;
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  transform: translateY(-50%);
+}
+.koma-tour-rail span {
+  grid-row: 1 / -1;
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+.koma-tour-rail strong { font-family: var(--koma-display); font-size: 1.05rem; letter-spacing: -0.02em; }
+.koma-tour-rail small { color: var(--koma-muted-dark); font-size: 0.72rem; }
+.koma-tour-rail + .koma-scroll-modules { border-top: 0; }
+@media (hover: hover) { .koma-tour-rail a:hover { background: rgba(0, 184, 148, 0.09); } }
+
+/* Capability cards: breadth shown as business outcomes, not a feature dump. */
+.koma-capability-card--third { grid-column: span 4; min-height: clamp(470px, 36vw, 560px); }
+.koma-capability-preview--signal { display: grid; gap: 0.8rem; }
+.koma-capability-preview--signal span small { opacity: 0.65; }
+.koma-capability-preview--signal span i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--koma-green);
+  box-shadow: 0 0 16px rgba(0, 184, 148, 0.75);
+}
+.koma-capability-preview--signal div {
+  padding-top: 0.75rem;
+  border-top: 1px solid currentColor;
+}
+.koma-capability-preview--signal b { opacity: 0.58; }
+.koma-capability-preview--signal strong { font-size: 0.75rem; }
+.koma-capability-card--green .koma-capability-preview--signal span i,
+.koma-capability-card--light .koma-capability-preview--signal span i { background: var(--koma-black); box-shadow: none; }
+.koma-capability-card--third h3 { font-size: clamp(2.1rem, 3vw, 3.45rem); }
+
+@media (max-width: 1080px) {
+  .koma-management-card { min-height: 500px; }
+  .koma-management-card:not(:last-child)::after { display: none; }
+  .koma-tour-rail a { grid-template-columns: 1.75rem 1fr; }
+  .koma-capability-card--third { grid-column: span 6; }
+}
+
+@media (max-width: 768px) {
+  .koma-management-grid { grid-template-columns: 1fr; }
+  .koma-management-card { min-height: 0; padding: 1.5rem; border-bottom: 1px solid var(--koma-line-light); }
+  .koma-management-card:last-child { border-bottom: 0; }
+  .koma-management-card h3 { margin-top: 2.75rem; }
+
+  .koma-tour-rail {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .koma-tour-rail::-webkit-scrollbar { display: none; }
+  .koma-tour-rail a { flex: 0 0 min(78vw, 18rem); scroll-snap-align: start; }
+  .koma-tour-rail a:not(:last-child)::after { display: none; }
+
+  .koma-capability-card--third { grid-column: span 1; min-height: 0; }
 }
