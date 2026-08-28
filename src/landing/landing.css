@@ -1338,23 +1338,6 @@
   will-change: transform;
 }
 
-.koma-tablet-obj .koma-tablet-3d-stage::before {
-  content: '';
-  position: absolute;
-  z-index: 0;
-  inset: 3.5% 3%;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: clamp(20px, 2.8vw, 36px);
-  background: linear-gradient(145deg, #465256 0%, #20292c 34%, #101719 72%, #303b3d 100%);
-  box-shadow:
-    0 44px 60px rgba(0, 0, 0, 0.5),
-    0 0 0 2px rgba(0, 210, 169, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 -8px 20px rgba(0, 0, 0, 0.42);
-  transform: rotate(0.8deg);
-  pointer-events: none;
-}
-
 .koma-tablet-3d-glare {
   position: absolute;
   left: 16.6%;
@@ -1403,57 +1386,6 @@
   opacity: var(--tablet-shell-light-opacity);
   transform: translateZ(2px);
   transition: opacity 180ms ease;
-}
-
-.koma-tablet-obj-canvas,
-.koma-tablet-obj-fallback {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  pointer-events: none;
-  user-select: none;
-}
-
-.koma-tablet-obj-canvas {
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 240ms ease;
-}
-
-.koma-tablet-obj-canvas.is-ready { opacity: 1; }
-
-.koma-tablet-obj-fallback {
-  z-index: 1;
-  opacity: 1;
-  filter: drop-shadow(0 42px 42px rgba(0, 0, 0, 0.34));
-  transition: opacity 240ms ease;
-}
-
-.koma-tablet-obj-fallback.is-hidden { opacity: 0; }
-
-.koma-tablet-obj-screen {
-  position: absolute;
-  z-index: 2;
-  left: 11%;
-  top: 9%;
-  width: 78%;
-  height: 82%;
-  overflow: hidden;
-  border: 2px solid rgba(0, 0, 0, 0.92);
-  border-radius: 2.5%;
-  background: #090a0f;
-  box-shadow:
-    0 0 0 10px rgba(31, 39, 42, 0.96),
-    0 0 0 11px rgba(255, 255, 255, 0.16),
-    0 22px 46px rgba(0, 0, 0, 0.34),
-    inset 0 0 18px rgba(0, 0, 0, 0.84);
-  transform: translateZ(1px);
-}
-
-.koma-tablet-obj-screen .koma-real-app-viewport {
-  transform-origin: top left;
 }
 
 /* --- Section 2: Product Showcase (EDITORIAL WHITE BACKGROUND) --- */

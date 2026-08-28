@@ -11,10 +11,6 @@ export default defineConfig(() => {
     || ""
   ).slice(0, 12);
   return {
-    assetsInclude: ['**/*.obj'],
-    build: {
-      assetsInlineLimit: (filePath) => filePath.endsWith('.obj') ? false : undefined,
-    },
     define: {
       "import.meta.env.VITE_BUILD_SHA": JSON.stringify(buildSha || "não informado"),
     },
