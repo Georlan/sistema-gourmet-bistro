@@ -6692,3 +6692,12 @@
 .koma-scroll-flow .koma-section-heading h2 {
   line-height: 0.95;
 }
+
+/* Final section: protect accented letters and use a fully black wordmark on green. */
+.koma-final-conversion-copy h2 {
+  line-height: 0.95;
+}
+
+.koma-final-next > img {
+  filter: brightness(0) saturate(100%);
+}
