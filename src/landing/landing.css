@@ -1878,22 +1878,34 @@
 
 .koma-cta-brand-signature {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: clamp(1rem, 2vw, 1.75rem);
+  justify-content: center;
+  gap: clamp(0.65rem, 1.2vw, 0.9rem);
   margin-bottom: clamp(2rem, 4vw, 3.5rem);
   color: var(--koma-black);
-  font-family: var(--koma-accent);
-  font-size: clamp(0.85rem, 1.25vw, 1.15rem);
-  letter-spacing: 0.04em;
+  text-align: center;
 }
 
-.koma-cta-brand-signature img {
-  width: clamp(58px, 6vw, 86px);
-  height: clamp(58px, 6vw, 86px);
+.koma-cta-wordmark {
+  width: clamp(170px, 15vw, 230px);
+  height: auto;
   object-fit: contain;
+  filter: brightness(0) saturate(100%);
 }
 
-.koma-cta-brand-signature strong { font-weight: 900; }
+.koma-cta-slogan {
+  display: block;
+  font-family: var(--koma-body);
+  font-size: clamp(0.86rem, 1.05vw, 1rem);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.koma-cta-slogan strong {
+  font-weight: 800;
+}
 
 .koma-cta-title {
   font-family: var(--koma-display);
@@ -5082,6 +5094,12 @@
 
 .koma-cta-brand-signature {
   margin-bottom: clamp(1.25rem, 2vw, 2rem);
+}
+
+@media (max-width: 768px) {
+  .koma-cta-wordmark {
+    width: clamp(155px, 48vw, 190px);
+  }
 }
 
 .koma-cta-title {

@@ -19,11 +19,11 @@ export function FinalCTA() {
         <div className="koma-cta-brand-signature">
           <img
             src={KOMA_WORDMARK_ON_LIGHT_SRC}
+            className="koma-cta-wordmark"
             alt=""
             aria-hidden="true"
-            style={{ width: 'clamp(150px, 14vw, 220px)', height: 'auto', objectFit: 'contain' }}
           />
-          <span>Se você está com fome, <strong>Kôma</strong></span>
+          <span className="koma-cta-slogan">Se você está com fome, <strong>Kôma</strong></span>
         </div>
         <h2 className="koma-cta-title">
           VEJA O KÔMA<br /><em>EM AÇÃO.</em>
