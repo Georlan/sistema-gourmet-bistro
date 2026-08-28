@@ -109,7 +109,7 @@ export default function LandingPage() {
         <Implementation />
         <FAQ />
         <Plans />
-        <AngleDivider variant="light-green" />
+        <AngleDivider variant="light-dark" />
         <FinalCTA />
       </main>
     </div>

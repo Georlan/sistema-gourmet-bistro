@@ -6480,3 +6480,169 @@
   .koma-plan-card--simple .koma-plan-card-heading small { font-size: 0.52rem; }
   .koma-plan-card--simple .koma-plan-price strong { font-size: clamp(3.8rem, 18vw, 5rem); }
 }
+
+/* Annual pricing: show the concrete saving, not only a percentage. */
+.koma-plan-savings {
+  width: fit-content;
+  margin: 0.2rem 0 0;
+  padding: 0.45rem 0.6rem;
+  color: var(--koma-green-dark);
+  background: rgba(0, 184, 148, 0.09);
+  border: 1px solid rgba(0, 145, 116, 0.22);
+  font-family: var(--koma-accent);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.koma-plan-card--featured .koma-plan-savings { color: var(--koma-green); background: rgba(0, 184, 148, 0.1); border-color: rgba(0, 184, 148, 0.28); }
+.koma-plan-savings.is-active { color: var(--koma-black); background: var(--koma-green); border-color: var(--koma-green); }
+.koma-plan-card--featured .koma-plan-savings.is-active { color: var(--koma-black); }
+
+/* FAQ: quick assurances first, details only when requested. */
+.koma-faq-section--sales { padding-top: clamp(4.5rem, 7vw, 7rem); }
+.koma-faq-sales-heading,
+.koma-faq-assurances {
+  width: min(100%, 1480px);
+  margin-inline: auto;
+}
+.koma-faq-sales-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.58fr);
+  gap: clamp(3rem, 8vw, 9rem);
+  align-items: end;
+  margin-bottom: clamp(2.5rem, 4vw, 4rem);
+}
+.koma-faq-sales-heading span {
+  display: block;
+  margin-bottom: 1rem;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.koma-faq-sales-heading h2 {
+  max-width: 12ch;
+  margin: 0;
+  font-family: var(--koma-display);
+  font-size: clamp(3.25rem, 5.5vw, 6rem);
+  font-weight: 900;
+  line-height: 0.88;
+  letter-spacing: -0.052em;
+}
+.koma-faq-sales-heading > p { max-width: 34ch; margin: 0; color: var(--koma-muted-light); font-size: clamp(1rem, 1.25vw, 1.15rem); line-height: 1.6; }
+.koma-faq-assurances {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: clamp(2.5rem, 4vw, 4rem);
+  border: 1px solid var(--koma-line-light);
+}
+.koma-faq-assurances article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: 1rem;
+  align-items: start;
+  padding: clamp(1.25rem, 2vw, 1.8rem);
+  border-right: 1px solid var(--koma-line-light);
+}
+.koma-faq-assurances article:last-child { border-right: 0; }
+.koma-faq-assurances svg { color: var(--koma-green-dark); }
+.koma-faq-assurances strong { display: block; margin-bottom: 0.4rem; font-family: var(--koma-accent); font-size: 0.68rem; letter-spacing: 0.07em; }
+.koma-faq-assurances span { display: block; color: var(--koma-muted-light); font-size: 0.82rem; line-height: 1.45; }
+.koma-faq-section--sales .koma-faq-list summary { min-height: 82px; }
+.koma-faq-section--sales .koma-faq-list summary strong { font-size: clamp(1.2rem, 1.7vw, 1.75rem); }
+
+/* Final conversion: clear process and a channel choice. */
+.koma-final-conversion {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(22rem, 0.72fr);
+  min-height: 680px;
+  color: var(--koma-white);
+  background: var(--koma-black);
+}
+.koma-final-conversion-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(4rem, 8vw, 8rem) var(--koma-section-x);
+}
+.koma-final-conversion-copy > span,
+.koma-final-next > div > span {
+  color: var(--koma-green);
+  font-family: var(--koma-accent);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.koma-final-conversion-copy h2 {
+  max-width: 10ch;
+  margin: 1.25rem 0 1.5rem;
+  font-family: var(--koma-display);
+  font-size: clamp(3.5rem, 6.8vw, 7.4rem);
+  font-weight: 900;
+  line-height: 0.86;
+  letter-spacing: -0.055em;
+}
+.koma-final-conversion-copy > p { max-width: 43ch; margin: 0 0 2rem; color: var(--koma-muted-dark); font-size: clamp(1rem, 1.3vw, 1.18rem); line-height: 1.6; }
+.koma-final-conversion-actions { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: center; }
+.koma-final-conversion-actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 52px;
+  padding: 0.85rem 1rem;
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--koma-line-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-decoration: none;
+}
+.koma-final-conversion-copy > small { margin-top: 1rem; color: rgba(255, 255, 255, 0.42); }
+.koma-final-next {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(2rem, 4vw, 4rem);
+  color: var(--koma-black);
+  background:
+    linear-gradient(rgba(10, 10, 10, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.055) 1px, transparent 1px),
+    var(--koma-green);
+  background-size: 64px 64px;
+}
+.koma-final-next > img { width: clamp(145px, 14vw, 210px); height: auto; }
+.koma-final-next > div > span { display: inline-flex; align-items: center; gap: 0.55rem; color: rgba(10, 10, 10, 0.68); }
+.koma-final-next ol { margin: 1.5rem 0 0; padding: 0; list-style: none; border-top: 1px solid rgba(10, 10, 10, 0.25); }
+.koma-final-next li { display: grid; grid-template-columns: 2rem 1fr 1.2rem; gap: 0.85rem; align-items: center; padding: 1.25rem 0; border-bottom: 1px solid rgba(10, 10, 10, 0.25); }
+.koma-final-next li b { font-family: var(--koma-accent); font-size: 0.65rem; }
+.koma-final-next li p { margin: 0; font-weight: 650; line-height: 1.45; }
+.koma-final-next > strong { font-family: var(--koma-display); font-size: clamp(1.6rem, 2.6vw, 2.8rem); line-height: 0.95; letter-spacing: -0.03em; }
+
+.koma-lead-submit-options { display: grid; grid-template-columns: 1fr 1.15fr; gap: 0.75rem; }
+.koma-lead-submit-options .koma-lead-submit { width: 100%; min-width: 0; margin-top: 0; padding-inline: 0.8rem; }
+.koma-lead-form > small.is-error { color: #ff9898; }
+
+@media (max-width: 900px) {
+  .koma-faq-sales-heading { grid-template-columns: 1fr; gap: 1.5rem; }
+  .koma-faq-assurances { grid-template-columns: 1fr; }
+  .koma-faq-assurances article { border-right: 0; border-bottom: 1px solid var(--koma-line-light); }
+  .koma-faq-assurances article:last-child { border-bottom: 0; }
+  .koma-final-conversion { grid-template-columns: 1fr; }
+  .koma-final-next { min-height: 500px; }
+}
+
+@media (max-width: 600px) {
+  .koma-faq-sales-heading h2 { font-size: clamp(2.8rem, 12vw, 4rem); }
+  .koma-faq-section--sales .koma-faq-list summary { grid-template-columns: 1.8rem 1fr 1.25rem; gap: 0.55rem; }
+  .koma-faq-section--sales .koma-faq-list details > p { margin-left: 2.35rem; }
+  .koma-final-conversion-copy { padding: 4rem var(--koma-section-x); }
+  .koma-final-conversion-copy h2 { max-width: 100%; font-size: clamp(3rem, 13vw, 4.4rem); }
+  .koma-final-conversion-actions { align-items: stretch; flex-direction: column; }
+  .koma-final-conversion-actions .koma-btn,
+  .koma-final-conversion-actions > a { width: 100%; justify-content: center; }
+  .koma-final-next { min-height: 440px; padding: 1.5rem; }
+  .koma-lead-submit-options { grid-template-columns: 1fr; }
+}

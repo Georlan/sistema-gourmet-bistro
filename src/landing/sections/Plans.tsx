@@ -81,6 +81,7 @@ export function Plans() {
         {SUBSCRIPTION_PLANS.map((plan) => {
           const pricing = getSubscriptionPricing(plan.price);
           const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
+          const annualSavings = (pricing.monthly * 12) - pricing.annualTotal;
           const presentation = PLAN_PRESENTATION[plan.id];
 
           return (
@@ -114,6 +115,9 @@ export function Plans() {
                 {isYearly
                   ? `${formatCurrency(pricing.annualTotal)} por ano · Implantação: ${formatCurrency(plan.implementationFee)}`
                   : `Implantação: ${formatCurrency(plan.implementationFee)}`}
+              </p>
+              <p className={`koma-plan-savings ${isYearly ? 'is-active' : ''}`}>
+                ECONOMIZE {formatCurrency(annualSavings)} POR ANO
               </p>
 
               <ul>

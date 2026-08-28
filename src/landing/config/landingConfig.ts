@@ -17,14 +17,14 @@ export const KOMA_LANDING_CONFIG = {
     return `https://wa.me/${this.whatsappNumber}?text=${this.whatsappMessage}`;
   },
 
-  getLeadWhatsappUrl(lead: {
+  getLeadMessage(lead: {
     responsavel: string;
     estabelecimento: string;
     whatsapp: string;
     tipoOperacao: string;
     tamanhoOperacao: string;
   }) {
-    const message = [
+    return [
       'Olá! Quero iniciar o cadastro do meu restaurante no KÔMA.',
       '',
       `Responsável: ${lead.responsavel.trim()}`,
@@ -35,7 +35,15 @@ export const KOMA_LANDING_CONFIG = {
       '',
       'Quero saber quais são os próximos passos para começar.',
     ].join('\n');
+  },
 
-    return `https://wa.me/${this.whatsappNumber}?text=${encodeURIComponent(message)}`;
+  getLeadWhatsappUrl(lead: {
+    responsavel: string;
+    estabelecimento: string;
+    whatsapp: string;
+    tipoOperacao: string;
+    tamanhoOperacao: string;
+  }) {
+    return `https://wa.me/${this.whatsappNumber}?text=${encodeURIComponent(this.getLeadMessage(lead))}`;
   }
 };

@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from './WhatsAppIcon';
 
@@ -35,12 +36,15 @@ function formatPhone(value: string) {
 
 export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
   const [form, setForm] = useState<LeadFormData>(INITIAL_FORM);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const titleId = useId();
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (!open) return;
 
+    setCopyStatus('idle');
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => firstInputRef.current?.focus(), 60);
@@ -60,7 +64,19 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
   if (!open) return null;
 
   const updateField = (field: keyof LeadFormData, value: string) => {
+    setCopyStatus('idle');
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleCopy = async () => {
+    if (!formRef.current?.reportValidity()) return;
+
+    try {
+      await navigator.clipboard.writeText(KOMA_LANDING_CONFIG.getLeadMessage(form));
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('error');
+    }
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -96,10 +112,10 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
         </div>
 
         <p className="koma-lead-intro">
-          Conte o essencial sobre seu restaurante. O WhatsApp abrirá com seu cadastro pronto para revisar e enviar.
+          Conte o essencial sobre seu restaurante. Ao final, você pode copiar o cadastro ou continuar pelo WhatsApp.
         </p>
 
-        <form className="koma-lead-form" onSubmit={handleSubmit}>
+        <form ref={formRef} className="koma-lead-form" onSubmit={handleSubmit}>
           <label>
             <span>SEU NOME</span>
             <input
@@ -175,11 +191,21 @@ export function LeadCaptureModal({ open, onClose }: LeadCaptureModalProps) {
             </label>
           </div>
 
-          <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit">
-            <WhatsAppIcon />
-            ENVIAR CADASTRO PELO WHATSAPP
-          </button>
-          <small>Você revisa a mensagem antes de enviar. Nenhum dado é enviado automaticamente.</small>
+          <div className="koma-lead-submit-options">
+            <button type="button" className="koma-btn koma-btn--outline koma-lead-submit" onClick={handleCopy}>
+              {copyStatus === 'copied' ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+              {copyStatus === 'copied' ? 'CADASTRO COPIADO' : 'COPIAR CADASTRO'}
+            </button>
+            <button type="submit" className="koma-btn koma-btn--primary koma-lead-submit">
+              <WhatsAppIcon />
+              CONTINUAR NO WHATSAPP
+            </button>
+          </div>
+          <small className={copyStatus === 'error' ? 'is-error' : ''}>
+            {copyStatus === 'error'
+              ? 'Não foi possível copiar. Você ainda pode continuar pelo WhatsApp.'
+              : 'Nenhum dado é enviado automaticamente. Você escolhe o próximo passo.'}
+          </small>
         </form>
       </section>
     </div>

@@ -1,35 +1,56 @@
 import React from 'react';
+import { LifeBuoy, MonitorSmartphone, Wrench } from 'lucide-react';
+
+const ASSURANCES = [
+  { icon: MonitorSmartphone, title: 'USE O QUE JÁ TEM', text: 'Celular, tablet ou computador.' },
+  { icon: Wrench, title: 'CONFIRA ANTES', text: 'Equipamentos avaliados antes da contratação.' },
+  { icon: LifeBuoy, title: 'COMECE ACOMPANHADO', text: 'Configuração e orientação para a equipe.' },
+] as const;
 
 const QUESTIONS = [
   {
-    question: 'PRECISO TROCAR MINHA IMPRESSORA?',
-    answer: 'Não necessariamente. Antes da contratação, conferimos o modelo, a conexão e o fluxo de impressão que você usa. Se algum equipamento não for compatível, você recebe essa informação antes da implantação.',
-  },
-  {
-    question: 'FUNCIONA SEM INTERNET NO SALÃO?',
-    answer: 'A conexão com a internet é necessária para manter caixa, salão e cozinha sincronizados. Na implantação, avaliamos o Wi-Fi do estabelecimento e orientamos uma contingência adequada para a sua operação.',
+    question: 'PRECISO TROCAR MEUS EQUIPAMENTOS?',
+    answer: 'Não necessariamente. Conferimos computador, tablet, conexão e impressão antes da contratação. Se algo não for compatível, você fica sabendo antes de começar.',
   },
   {
     question: 'QUANTO TEMPO LEVA PARA COMEÇAR?',
-    answer: 'Depende do tamanho do cardápio, da equipe e dos equipamentos. Primeiro entendemos sua rotina; depois combinamos cadastro, configuração e treinamento sem interromper o atendimento.',
+    answer: 'Depende do cardápio, da equipe e dos equipamentos. Primeiro entendemos sua rotina; depois combinamos cadastro, configuração e orientação sem interromper o atendimento.',
+  },
+  {
+    question: 'PRECISA DE INTERNET?',
+    answer: 'Sim. A conexão mantém caixa, salão e cozinha sincronizados. Durante a implantação, avaliamos o Wi-Fi e orientamos a melhor forma de reduzir riscos na operação.',
   },
   {
     question: 'COMO FUNCIONA O SUPORTE?',
-    answer: 'O contato começa pelo WhatsApp e a implantação é acompanhada. Dúvidas operacionais e ajustes são orientados de acordo com o plano e com a etapa de implantação do restaurante.',
+    answer: 'A implantação é acompanhada e as dúvidas operacionais são orientadas conforme o plano contratado e a etapa do restaurante.',
   },
   {
-    question: 'O KÔMA FUNCIONA EM CELULAR, TABLET E COMPUTADOR?',
-    answer: 'Sim. As telas são responsivas e cada perfil usa a interface adequada à função. A compatibilidade com maquininhas e periféricos específicos é confirmada antes da contratação.',
+    question: 'FUNCIONA EM CELULAR, TABLET E COMPUTADOR?',
+    answer: 'Sim. O Kôma funciona pelo navegador e adapta as telas para cada função. Periféricos específicos são confirmados antes da contratação.',
   },
 ];
 
 export function FAQ() {
   return (
-    <section className="koma-faq-section" id="duvidas" aria-labelledby="faq-title">
-      <div className="koma-faq-heading">
-        <span>07 / DÚVIDAS ANTES DE COMEÇAR</span>
-        <h2 id="faq-title">SEM LETRAS<br />MIÚDAS.</h2>
-        <p>As respostas que você precisa para avaliar o Kôma sem comprar no escuro.</p>
+    <section className="koma-faq-section koma-faq-section--sales" id="duvidas" aria-labelledby="faq-title">
+      <div className="koma-faq-sales-heading">
+        <div>
+          <span>07 / ANTES DE DECIDIR</span>
+          <h2 id="faq-title">O QUE VOCÊ PRECISA SABER.</h2>
+        </div>
+        <p>Sem resposta escondida. Você entende o encaixe, os equipamentos e a implantação antes de contratar.</p>
+      </div>
+
+      <div className="koma-faq-assurances" aria-label="Garantias antes de contratar">
+        {ASSURANCES.map((item) => {
+          const Icon = item.icon;
+          return (
+            <article key={item.title}>
+              <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
+              <div><strong>{item.title}</strong><span>{item.text}</span></div>
+            </article>
+          );
+        })}
       </div>
 
       <div className="koma-faq-list">
