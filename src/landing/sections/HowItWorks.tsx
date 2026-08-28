@@ -58,6 +58,7 @@ export function HowItWorks() {
         {PILLARS.map((pillar, index) => (
           <motion.article
             key={pillar.id}
+            id={pillar.id}
             className={`koma-scroll-module koma-scroll-module--${pillar.device}`}
             initial={{ opacity: 0.42, y: 34 }}
             whileInView={{ opacity: 1, y: 0 }}

@@ -17,7 +17,7 @@ const HERO_STRIP_ITEMS = [
     num: '02',
     name: 'MESAS ATUALIZADAS AO VIVO',
     detail: 'Status e consumo visíveis para todo o salão.',
-    href: '#gestao',
+    href: '#salao',
   },
   {
     num: '03',
@@ -29,13 +29,13 @@ const HERO_STRIP_ITEMS = [
     num: '04',
     name: 'CLIENTE PEDE PELO CELULAR',
     detail: 'Cardápio digital conectado à operação.',
-    href: '#cardapio-digital',
+    href: '#cardapio',
   },
   {
     num: '05',
     name: 'COMANDA SAI AUTOMATICAMENTE',
     detail: 'A impressão acompanha o pedido certo.',
-    href: '#impressao',
+    href: '#salao',
   },
 ];
 
@@ -47,9 +47,9 @@ const HERO_LIVE_STEPS = [
 ];
 
 const HERO_BENEFITS = [
-  'MENOS PEDIDOS ERRADOS',
+  'PEDIDOS SEM RETRABALHO',
   'SALÃO E COZINHA SINCRONIZADOS',
-  'CAIXA E IMPRESSÃO SOB CONTROLE',
+  'CAIXA FECHADO COM MAIS CONTROLE',
 ];
 
 export function Hero() {
@@ -84,7 +84,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
           >
-            SISTEMA DE GESTÃO PARA RESTAURANTES, BARES E LANCHONETES
+            SISTEMA DE GESTÃO PARA RESTAURANTES
           </motion.p>
 
           <h1 className="koma-hero-headline" aria-label="Menos erro na operação. Mais controle do restaurante.">
@@ -109,7 +109,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Pedidos, mesas, cozinha, cardápio e caixa conectados para sua equipe trabalhar mais rápido e você enxergar a operação inteira.
+            Pedidos, mesas, cozinha e caixa no mesmo fluxo. Sua equipe trabalha mais rápido e você acompanha a operação enquanto ela acontece.
           </motion.p>
 
           <motion.ul
@@ -130,7 +130,7 @@ export function Hero() {
             transition={{ duration: 0.7, delay: 0.55 }}
           >
             <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-              Começar agora
+              Ver o Kôma em ação
             </button>
             <a
               href={KOMA_LANDING_CONFIG.whatsappUrl}
@@ -149,7 +149,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.66 }}
           >
-            Conte como seu restaurante funciona. A conversa inicial é sem custo.
+            Demonstração guiada, sem compromisso.
           </motion.p>
 
           <motion.div

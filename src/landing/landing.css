@@ -1388,6 +1388,53 @@
   transition: opacity 180ms ease;
 }
 
+.koma-tablet-obj-canvas,
+.koma-tablet-obj-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.koma-tablet-obj-canvas {
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.koma-tablet-obj-canvas.is-ready { opacity: 1; }
+
+.koma-tablet-obj-fallback {
+  z-index: 1;
+  opacity: 1;
+  filter: drop-shadow(0 42px 42px rgba(0, 0, 0, 0.34));
+  transition: opacity 240ms ease;
+}
+
+.koma-tablet-obj-fallback.is-hidden { opacity: 0; }
+
+.koma-tablet-obj-screen {
+  position: absolute;
+  z-index: 2;
+  left: 9%;
+  top: 6.5%;
+  width: 82%;
+  height: 87%;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.88);
+  border-radius: 2.5%;
+  background: #090a0f;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.84);
+  transform: translateZ(1px);
+}
+
+.koma-tablet-obj-screen .koma-real-app-viewport {
+  transform-origin: top left;
+}
+
 /* --- Section 2: Product Showcase (EDITORIAL WHITE BACKGROUND) --- */
 .koma-section-white {
   background-color: var(--koma-white);

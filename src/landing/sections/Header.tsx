@@ -53,7 +53,7 @@ export function Header() {
             Falar no WhatsApp
           </a>
           <a href={KOMA_LANDING_CONFIG.signupAnchor} className="koma-btn koma-btn--primary koma-btn--sm">
-            Começar agora
+            Ver o Kôma em ação
           </a>
         </div>
 
@@ -82,7 +82,7 @@ export function Header() {
             className="koma-btn koma-btn--primary"
             onClick={() => setMenuOpen(false)}
           >
-            Começar agora
+            Ver o Kôma em ação
           </a>
           <a
             href={KOMA_LANDING_CONFIG.whatsappUrl}
