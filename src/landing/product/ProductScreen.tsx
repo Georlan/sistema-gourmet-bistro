@@ -2,6 +2,7 @@ import React from 'react';
 import { MesasView } from '../../components/mesas/MesasView';
 import { KitchenPanel } from '../../components/KitchenPanel';
 import { CardapioDemoView } from './CardapioDemoView';
+import { OrdersStageDemoView } from './OrdersStageDemoView';
 import { getMarketingDemoData } from './MarketingDemoProvider';
 
 interface ProductScreenProps {
@@ -14,6 +15,8 @@ export function ProductScreen({ view = 'mesas', scaleLogicalWidth = 1280 }: Prod
 
   const renderRealComponent = () => {
     switch (view) {
+      case 'pdv':
+        return <OrdersStageDemoView />;
       case 'kds':
         return (
           <KitchenPanel

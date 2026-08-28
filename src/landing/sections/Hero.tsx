@@ -2,9 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { KomaLogo } from '../../components/KomaLogo';
 import { TabletFrame } from '../product/TabletFrame';
-import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
-import { WhatsAppIcon } from '../components/WhatsAppIcon';
 
 const HERO_STRIP_ITEMS = [
   {
@@ -40,16 +38,16 @@ const HERO_STRIP_ITEMS = [
 ];
 
 const HERO_LIVE_STEPS = [
-  { view: 'mesas' as const, label: 'PEDIDO RECEBIDO', detail: 'Mesa 04 entrou na operação' },
+  { view: 'pdv' as const, label: 'PEDIDOS ORGANIZADOS', detail: 'Cada etapa fica visível' },
   { view: 'kds' as const, label: 'COZINHA ATUALIZADA', detail: 'Produção recebeu os itens' },
   { view: 'mesas' as const, label: 'MESA SINCRONIZADA', detail: 'Salão acompanha o status' },
   { view: 'cardapio' as const, label: 'CARDÁPIO CONECTADO', detail: 'Disponibilidade em um só lugar' },
 ];
 
 const HERO_BENEFITS = [
-  'PEDIDOS SEM RETRABALHO',
-  'SALÃO E COZINHA SINCRONIZADOS',
-  'CAIXA FECHADO COM MAIS CONTROLE',
+  'PEDIDO ENTRA UMA VEZ',
+  'OPERAÇÃO ATUALIZADA AO VIVO',
+  'CAIXA COM HISTÓRICO COMPLETO',
 ];
 
 export function Hero() {
@@ -84,13 +82,13 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
           >
-            SISTEMA DE GESTÃO PARA RESTAURANTES
+            SISTEMA COMPLETO PARA VENDER, OPERAR E CONTROLAR
           </motion.p>
 
-          <h1 className="koma-hero-headline" aria-label="Menos erro na operação. Mais controle do restaurante.">
-            <span className="koma-hero-line koma-hero-line--sm">MENOS</span>
+          <h1 className="koma-hero-headline" aria-label="Venda mais. Controle toda a operação do restaurante.">
+            <span className="koma-hero-line koma-hero-line--sm">VENDA</span>
             <span className="koma-hero-title-axis">
-              <span className="koma-hero-line koma-hero-line--xl">ERRO.</span>
+              <span className="koma-hero-line koma-hero-line--xl">MAIS.</span>
               <span className="koma-hero-bar-wrap" aria-hidden="true">
                 <motion.span
                   className="koma-hero-bar"
@@ -100,7 +98,7 @@ export function Hero() {
                 />
               </span>
             </span>
-            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent koma-hero-line--benefit">MAIS CONTROLE.</span>
+            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent koma-hero-line--benefit">CONTROLE TUDO.</span>
           </h1>
 
           <motion.p
@@ -109,7 +107,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Pedidos, mesas, cozinha e caixa no mesmo fluxo. Sua equipe trabalha mais rápido e você acompanha a operação enquanto ela acontece.
+            Pedidos, salão, cozinha, delivery e caixa trabalhando juntos — do primeiro pedido ao fechamento.
           </motion.p>
 
           <motion.ul
@@ -132,15 +130,10 @@ export function Hero() {
             <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
               Ver o Kôma em ação
             </button>
-            <a
-              href={KOMA_LANDING_CONFIG.whatsappUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="koma-hero-whatsapp-link"
-            >
-              <WhatsAppIcon />
-              Falar direto no WhatsApp
-            </a>
+            <div className="koma-hero-entry-price" aria-label="Planos a partir de noventa e nove reais por mês">
+              <span>PLANOS A PARTIR DE</span>
+              <strong><small>R$</small> 99 <em>/mês</em></strong>
+            </div>
           </motion.div>
 
           <motion.p
@@ -149,7 +142,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.66 }}
           >
-            Demonstração guiada, sem compromisso.
+            Demonstração guiada, sem compromisso. Você escolhe como continuar.
           </motion.p>
 
           <motion.div
