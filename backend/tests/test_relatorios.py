@@ -220,15 +220,18 @@ def test_relatorios_full_suite():
 def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     db = TestingSessionLocal()
     try:
-        # Este caso testa datas históricas fixas (11/12 ago). O fixture geral
-        # também cria uma venda em "agora - 15 dias" para outros testes; perto
-        # da virada do dia essa venda móvel pode cair na mesma janela e tornar
-        # o resultado dependente do minuto em que o CI roda.
-        db.query(Pagamento).filter(Pagamento.id == "pay-1").delete(
-            synchronize_session=False
+        # Usa datas futuras para não colidir com a venda relativa criada pela
+        # fixture ("15 dias atrás") quando o calendário avança.
+        local_sale_day = datetime.date.today() + datetime.timedelta(days=45)
+        next_local_day = local_sale_day + datetime.timedelta(days=1)
+        paid_at_utc = datetime.datetime.combine(
+            next_local_day,
+            datetime.time(2, 31, 17),
         )
-        paid_at_utc = datetime.datetime(2026, 8, 12, 2, 31, 17)
-        opened_at_utc = datetime.datetime(2026, 8, 11, 21, 30)
+        opened_at_utc = datetime.datetime.combine(
+            local_sale_day,
+            datetime.time(21, 30),
+        )
         db.add(CaixaTurno(
             id=3, restaurante_id=1, aberto_por_id="u-admin",
             aberto_em=opened_at_utc,
@@ -242,8 +245,9 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
         ))
         db.add(Comanda(
             id="cmd-empty", restaurante_id=1, garcom_id="u-garcom",
-            fechada=True, fechado_em=datetime.datetime(2026, 8, 12, 17, 42),
-            criado_em=datetime.datetime(2026, 8, 12, 17, 40),
+            fechada=True,
+            fechado_em=datetime.datetime.combine(next_local_day, datetime.time(17, 42)),
+            criado_em=datetime.datetime.combine(next_local_day, datetime.time(17, 40)),
             numero_pedido=31, valor_pago=0.0,
         ))
         db.flush()
@@ -268,7 +272,9 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
     day11 = client.get(
-        "/relatorios/visao-geral?data_inicio=2026-08-11&data_fim=2026-08-11",
+        "/relatorios/visao-geral"
+        f"?data_inicio={local_sale_day.isoformat()}"
+        f"&data_fim={local_sale_day.isoformat()}",
         headers=headers,
     )
     assert day11.status_code == 200
@@ -277,7 +283,7 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     assert data["faturamento_total"] == 100.0
     assert data["ticket_medio"] == 100.0
     assert data["vendas_por_dia"] == [{
-        "data": "2026-08-11",
+        "data": local_sale_day.isoformat(),
         "bruto": 100.0,
         "estornos": 0.0,
         "total": 100.0,
@@ -292,7 +298,9 @@ def test_visao_geral_uses_local_payment_day_and_ignores_empty_comandas():
     }
 
     day12 = client.get(
-        "/relatorios/visao-geral?data_inicio=2026-08-12&data_fim=2026-08-12",
+        "/relatorios/visao-geral"
+        f"?data_inicio={next_local_day.isoformat()}"
+        f"&data_fim={next_local_day.isoformat()}",
         headers=headers,
     )
     assert day12.status_code == 200

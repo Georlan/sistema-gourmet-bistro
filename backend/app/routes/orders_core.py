@@ -146,7 +146,6 @@ def _agendar_notificacao_whatsapp_status(
 
     agendar_notificacao_status_task(
         background_tasks=background_tasks,
-        db=db,
         comanda_id=comanda.id,
         novo_status=key_status,
         telefone_cliente=telefone,

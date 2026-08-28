@@ -213,11 +213,20 @@ class Settings:
     KOMA_WHATSAPP_AUTOMATION_ENABLED: bool = (
         os.getenv("KOMA_WHATSAPP_AUTOMATION_ENABLED", "false").lower() == "true"
     )
+    KOMA_WHATSAPP_PROVIDER: str = os.getenv(
+        "KOMA_WHATSAPP_PROVIDER",
+        "evolution",
+    ).strip().lower()
 
     # Evolution API (WhatsApp) - Opcional / Reservado para futuro
     EVOLUTION_API_URL: str = os.getenv("EVOLUTION_API_URL", "")
     EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
     EVOLUTION_INSTANCE_NAME: str = os.getenv("EVOLUTION_INSTANCE_NAME", "")
+    EVOLUTION_API_ORIGIN: str = os.getenv("EVOLUTION_API_ORIGIN", "")
+    EVOLUTION_REQUEST_TIMEOUT_SECONDS: float = max(
+        1.0,
+        min(float(os.getenv("EVOLUTION_REQUEST_TIMEOUT_SECONDS", "10")), 30.0),
+    )
 
     # Meta Cloud API (WhatsApp Oficial) - Opcional / Reservado para futuro
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "")
@@ -242,6 +251,11 @@ class Settings:
         import logging
         logging.getLogger("koma.config").warning(
             "[META CLOUD API WARNING CRÍTICO] META_ACCESS_TOKEN está preenchido mas META_PHONE_NUMBER_ID está vazio! O envio de WhatsApp irá falhar."
+        )
+
+    if KOMA_WHATSAPP_PROVIDER not in {"evolution", "meta"}:
+        raise RuntimeError(
+            "KOMA_WHATSAPP_PROVIDER deve ser 'evolution' ou 'meta'."
         )
 
 settings = Settings()

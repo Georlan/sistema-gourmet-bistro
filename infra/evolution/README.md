@@ -9,14 +9,15 @@ não utiliza.
 Requisitos: Docker Engine com o plugin Docker Compose.
 
 ```bash
+python3 scripts/evolution_bootstrap.py configure-local
 cd infra/evolution
-cp .env.example .env
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose config --quiet
 ```
 
-Use o primeiro valor em `POSTGRES_PASSWORD`, inclusive dentro de
-`DATABASE_CONNECTION_URI`, e o segundo em `AUTHENTICATION_API_KEY`. Depois:
+O gerador cria `infra/evolution/.env` com senha e chave independentes, sem
+imprimi-las, e limita o arquivo ao usuário atual (`0600`). A URI local continua
+apontando para `evolution-postgres:5432/evolution`; não use `localhost` nela,
+pois a conexão acontece entre contêineres. Depois:
 
 ```bash
 docker compose up -d
@@ -29,6 +30,9 @@ No terminal raiz do Kôma, exporte a mesma URL, chave e o nome da instância:
 export EVOLUTION_API_URL=http://localhost:8080
 export EVOLUTION_API_KEY='CHAVE_GERADA'
 export EVOLUTION_INSTANCE_NAME=koma-piloto
+export EVOLUTION_API_ORIGIN=http://localhost:5173
+export KOMA_WHATSAPP_PROVIDER=evolution
+export KOMA_WHATSAPP_AUTOMATION_ENABLED=true
 python3 scripts/evolution_bootstrap.py provision
 ```
 
@@ -44,6 +48,12 @@ O estado esperado é `open`. Para um envio explícito de teste:
 
 ```bash
 python3 scripts/evolution_bootstrap.py send-test --phone 5588999999999
+```
+
+Para apenas validar o Compose sem criar um `.env` real nem iniciar serviços:
+
+```bash
+EVOLUTION_ENV_FILE=.env.example docker compose config --quiet
 ```
 
 ## Implantação no Railway
@@ -101,6 +111,10 @@ Por fim, no serviço do backend Kôma, configure:
 EVOLUTION_API_URL=http://evolution-api.railway.internal:8080
 EVOLUTION_API_KEY=CHAVE_ALEATORIA_DE_48_BYTES
 EVOLUTION_INSTANCE_NAME=koma-piloto
+EVOLUTION_API_ORIGIN=https://sistema-gourmet-bistro.pages.dev
+EVOLUTION_REQUEST_TIMEOUT_SECONDS=10
+KOMA_WHATSAPP_PROVIDER=evolution
+KOMA_WHATSAPP_AUTOMATION_ENABLED=true
 ```
 
 As duas ocorrências da chave precisam ter exatamente o mesmo valor. Redeploy o

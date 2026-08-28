@@ -1,12 +1,8 @@
-# INSTRUÇÕES PARA CRIAÇÃO DE TEMPLATE NA META:
-# 1. Vá em Meta Developers > Kôma > WhatsApp > Message Templates
-# 2. Crie template "koma_otp" com categoria AUTHENTICATION
-# 3. Corpo: "Seu código de acesso {{1}} é: {{2}}. Válido por 10 minutos."
-# 4. Aguarde aprovação (pode levar horas)
-# 5. Altere META_USE_TEMPLATE para True no .env
-
+from dataclasses import dataclass
 import logging
 import re
+from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -20,6 +16,19 @@ _META_LAST_ERROR: str | None = None
 _META_COUNTRY_RESTRICTION: bool = False
 
 
+@dataclass(frozen=True)
+class ResultadoEnvioWhatsApp:
+    """Resultado sanitizado de um envio, sem telefone ou conteúdo da mensagem."""
+
+    sucesso: bool
+    provider: str
+    message_id: str | None = None
+    recipient_id: str | None = None
+    provider_status: str | None = None
+    error_code: int | None = None
+    error_message: str | None = None
+
+
 def obter_diagnostico_whatsapp() -> dict[str, object]:
     """Retorna o estado de diagnóstico atual das integrações Meta Cloud API e Evolution API."""
     meta_token = getattr(settings, "META_ACCESS_TOKEN", "") or ""
@@ -28,6 +37,7 @@ def obter_diagnostico_whatsapp() -> dict[str, object]:
     evolution_diag = obter_status_evolution()
 
     return {
+        "provider": getattr(settings, "KOMA_WHATSAPP_PROVIDER", "evolution"),
         "meta": {
             "phone_number_id_configured": bool(phone_id.strip()),
             "access_token_configured": bool(meta_token.strip()),
@@ -45,78 +55,218 @@ def _normalizar_telefone(telefone: str) -> str:
     return numero
 
 
+def _configuracao_evolution() -> tuple[str, str, str] | None:
+    evolution_url = settings.EVOLUTION_API_URL.strip().rstrip("/")
+    evolution_key = settings.EVOLUTION_API_KEY.strip()
+    evolution_instance = settings.EVOLUTION_INSTANCE_NAME.strip()
+    if not evolution_url or not evolution_key or not evolution_instance:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,100}", evolution_instance):
+        return None
+    return evolution_url, evolution_key, evolution_instance
+
+
+def _texto_limitado(value: Any, limite: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value[:limite] if value else None
+
+
+def _headers_evolution(api_key: str, *, json_content: bool = False) -> dict[str, str]:
+    headers = {"Accept": "application/json", "apikey": api_key}
+    origin = str(getattr(settings, "EVOLUTION_API_ORIGIN", "") or "").strip()
+    if origin:
+        headers["Origin"] = origin
+    if json_content:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
+def _resultado_evolution(response: httpx.Response) -> ResultadoEnvioWhatsApp:
+    try:
+        data = response.json()
+    except Exception:
+        data = None
+
+    key = data.get("key") if isinstance(data, dict) else None
+    message_id = _texto_limitado(
+        key.get("id") if isinstance(key, dict) else None,
+        255,
+    )
+    if message_id is None and isinstance(data, dict):
+        message_id = _texto_limitado(data.get("id"), 255)
+
+    recipient_id = _texto_limitado(
+        key.get("remoteJid") if isinstance(key, dict) else None,
+        50,
+    )
+    provider_status = _texto_limitado(
+        data.get("status") if isinstance(data, dict) else None,
+        50,
+    )
+    return ResultadoEnvioWhatsApp(
+        sucesso=True,
+        provider="evolution",
+        message_id=message_id,
+        recipient_id=recipient_id,
+        provider_status=(provider_status or "accepted").lower(),
+    )
+
+
+def enviar_texto_whatsapp_detalhado(
+    telefone: str,
+    mensagem: str,
+    *,
+    contexto: str = "mensagem",
+) -> ResultadoEnvioWhatsApp:
+    """Envia texto pela Evolution e retorna somente metadados seguros do envio."""
+    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
+        logger.debug(
+            "[WHATSAPP DESATIVADO] Envio automático ignorado "
+            "(KOMA_WHATSAPP_AUTOMATION_ENABLED=false)."
+        )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Automação de WhatsApp desativada.",
+        )
+
+    configuracao = _configuracao_evolution()
+    numero = _normalizar_telefone(telefone)
+    if configuracao is None:
+        logger.warning(
+            "[EVOLUTION API] %s não enviada: configuração inválida ou incompleta.",
+            contexto,
+        )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Configuração da Evolution inválida ou incompleta.",
+        )
+    if len(numero) not in {12, 13} or not numero.startswith("55"):
+        logger.warning(
+            "[EVOLUTION API] %s não enviada: telefone inválido.",
+            contexto,
+        )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Telefone inválido.",
+        )
+    if not isinstance(mensagem, str) or not mensagem.strip():
+        logger.warning(
+            "[EVOLUTION API] %s não enviada: mensagem vazia.",
+            contexto,
+        )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Mensagem vazia.",
+        )
+
+    evolution_url, evolution_key, evolution_instance = configuracao
+    url = (
+        f"{evolution_url}/message/sendText/"
+        f"{quote(evolution_instance, safe='')}"
+    )
+    headers = _headers_evolution(evolution_key, json_content=True)
+    payload = {
+        "number": numero,
+        "text": mensagem.strip(),
+    }
+
+    try:
+        timeout = float(
+            getattr(settings, "EVOLUTION_REQUEST_TIMEOUT_SECONDS", 10.0)
+        )
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+        return _resultado_evolution(response)
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code in {401, 403}:
+            error_message = "Chave da Evolution inválida ou não autorizada."
+            logger.error(
+                "[EVOLUTION API %s] Autenticação rejeitada ao enviar %s.",
+                status_code,
+                contexto,
+            )
+        elif status_code == 404:
+            error_message = "Instância da Evolution não encontrada."
+            logger.error(
+                "[EVOLUTION API 404] Instância não encontrada ao enviar %s.",
+                contexto,
+            )
+        elif status_code == 429:
+            error_message = "Limite de envios da Evolution excedido."
+            logger.warning(
+                "[EVOLUTION API 429] Limite de envios excedido ao enviar %s.",
+                contexto,
+            )
+        else:
+            error_message = f"Evolution respondeu HTTP {status_code}."
+            logger.warning(
+                "[EVOLUTION API HTTP %s] Falha ao enviar %s.",
+                status_code,
+                contexto,
+            )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_code=status_code,
+            error_message=error_message,
+        )
+    except httpx.TimeoutException:
+        logger.warning("[EVOLUTION API] Timeout ao enviar %s.", contexto)
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Tempo limite da Evolution excedido.",
+        )
+    except httpx.RequestError as exc:
+        logger.warning(
+            "[EVOLUTION API] Falha de conexão ao enviar %s: %s.",
+            contexto,
+            type(exc).__name__,
+        )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Evolution indisponível.",
+        )
+    except Exception as exc:
+        logger.warning(
+            "[EVOLUTION API] Falha local ao enviar %s: %s.",
+            contexto,
+            type(exc).__name__,
+        )
+        return ResultadoEnvioWhatsApp(
+            sucesso=False,
+            provider="evolution",
+            error_message="Falha local ao enviar pela Evolution.",
+        )
+
+
 def enviar_texto_whatsapp(
     telefone: str,
     mensagem: str,
     *,
     contexto: str = "mensagem",
 ) -> bool:
-    """Envia texto pela Evolution API e nunca registra telefone ou conteúdo."""
-    if not getattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", False):
-        logger.debug("[WHATSAPP DESATIVADO] Envio automático ignorado (KOMA_WHATSAPP_AUTOMATION_ENABLED=false).")
-        return False
-
-    try:
-        evolution_url = settings.EVOLUTION_API_URL.strip()
-        evolution_key = settings.EVOLUTION_API_KEY.strip()
-        evolution_instance = settings.EVOLUTION_INSTANCE_NAME.strip()
-        numero = _normalizar_telefone(telefone)
-
-        if not evolution_url or not evolution_key or not evolution_instance:
-            logger.warning(
-                "[EVOLUTION API] %s não enviada: configuração incompleta.",
-                contexto,
-            )
-            return False
-
-        if not numero:
-            logger.warning(
-                "[EVOLUTION API] %s não enviada: telefone ausente.",
-                contexto,
-            )
-            return False
-
-        url = f"{evolution_url.rstrip('/')}/message/sendText/{evolution_instance}"
-        headers = {
-            "Content-Type": "application/json",
-            "apikey": evolution_key,
-        }
-        payload = {
-            "number": numero,
-            "text": mensagem,
-        }
-
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-        return True
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code
-        if status_code == 401:
-            logger.error("[EVOLUTION API 401] Apikey inválida ou não autorizada ao enviar %s.", contexto)
-        elif status_code == 404:
-            logger.error("[EVOLUTION API 404] Instância não encontrada ao enviar %s.", contexto)
-        elif status_code == 429:
-            logger.warning("[EVOLUTION API 429] Rate limit excedido ao enviar %s.", contexto)
-        else:
-            logger.warning("[EVOLUTION API HTTP %s] Falha ao enviar %s.", status_code, contexto)
-        return False
-    except Exception as exc:
-        logger.warning(
-            "[EVOLUTION API] Falha ao enviar %s: %s",
-            contexto,
-            type(exc).__name__,
-        )
-        return False
+    """Compatibilidade: envia pela Evolution e retorna apenas sucesso/falha."""
+    return enviar_texto_whatsapp_detalhado(
+        telefone,
+        mensagem,
+        contexto=contexto,
+    ).sucesso
 
 
 def obter_status_evolution() -> dict[str, object]:
     """Diagnóstico sem segredos para a área autenticada de operações."""
-    evolution_url = settings.EVOLUTION_API_URL.strip()
-    evolution_key = settings.EVOLUTION_API_KEY.strip()
-    evolution_instance = settings.EVOLUTION_INSTANCE_NAME.strip()
-
-    if not evolution_url or not evolution_key or not evolution_instance:
+    configuracao = _configuracao_evolution()
+    if configuracao is None:
         return {
             "status": "red",
             "configured": False,
@@ -124,13 +274,15 @@ def obter_status_evolution() -> dict[str, object]:
             "details": "Evolution API não configurada",
         }
 
-    url = (
-        f"{evolution_url.rstrip('/')}/instance/connectionState/"
-        f"{evolution_instance}"
-    )
+    evolution_url, evolution_key, evolution_instance = configuracao
+    url = f"{evolution_url}/instance/connectionState/{quote(evolution_instance, safe='')}"
     try:
-        with httpx.Client(timeout=5.0) as client:
-            response = client.get(url, headers={"apikey": evolution_key})
+        timeout = min(
+            float(getattr(settings, "EVOLUTION_REQUEST_TIMEOUT_SECONDS", 10.0)),
+            5.0,
+        )
+        with httpx.Client(timeout=timeout) as client:
+            response = client.get(url, headers=_headers_evolution(evolution_key))
             response.raise_for_status()
             data = response.json()
         instance = data.get("instance") if isinstance(data, dict) else None
@@ -160,10 +312,10 @@ def obter_status_evolution() -> dict[str, object]:
 
 
 def enviar_codigo_otp_whatsapp(telefone: str, codigo: str, nome_restaurante: str = "Kôma") -> bool:
-    """Envia código OTP usando preferencialmente a Meta Cloud API com fallback para Evolution API."""
-    if enviar_otp_whatsapp_meta(telefone, nome_restaurante, codigo):
-        return True
-
+    """Envia OTP exclusivamente pelo provedor explicitamente configurado."""
+    provider = getattr(settings, "KOMA_WHATSAPP_PROVIDER", "evolution")
+    if provider == "meta":
+        return enviar_otp_whatsapp_meta(telefone, nome_restaurante, codigo)
     mensagem = (
         f"Seu código de acesso {nome_restaurante} é {codigo}. "
         "Ele expira em poucos minutos. Não compartilhe este código."

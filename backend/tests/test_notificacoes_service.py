@@ -12,9 +12,16 @@ def test_notificar_cliente_status_pedido_todos_status(monkeypatch):
 
     def mock_enviar_texto(telefone, mensagem, contexto=""):
         posted_messages.append((telefone, mensagem))
-        return True
+        return whatsapp_service.ResultadoEnvioWhatsApp(
+            sucesso=True,
+            provider="evolution",
+        )
 
-    monkeypatch.setattr(whatsapp_service, "enviar_texto_whatsapp", mock_enviar_texto)
+    monkeypatch.setattr(
+        whatsapp_service,
+        "enviar_texto_whatsapp_detalhado",
+        mock_enviar_texto,
+    )
 
 
     db = SessionLocal()
@@ -93,23 +100,40 @@ def test_notificar_cliente_status_pedido_todos_status(monkeypatch):
 
 
 def test_agendar_notificacao_status_task(monkeypatch):
+    from app.services import whatsapp as whatsapp_service
+
     class MockBackgroundTasks:
         def __init__(self):
             self.tasks = []
         def add_task(self, func, *args, **kwargs):
             self.tasks.append((func, args, kwargs))
 
+    monkeypatch.setattr(
+        whatsapp_service,
+        "enviar_texto_whatsapp_detalhado",
+        lambda *args, **kwargs: whatsapp_service.ResultadoEnvioWhatsApp(
+            sucesso=True,
+            provider="evolution",
+            message_id="scheduled-message-id",
+        ),
+    )
     bg = MockBackgroundTasks()
-    db = SessionLocal()
-    try:
-        agendar_notificacao_status_task(
-            background_tasks=bg,
-            db=db,
-            comanda_id=201,
-            novo_status="pronto",
-            telefone_cliente="81988887777",
-            nome_restaurante="Bistrô Agendado",
-        )
-        assert len(bg.tasks) == 1
-    finally:
-        db.close()
+    agendar_notificacao_status_task(
+        background_tasks=bg,
+        comanda_id=201,
+        novo_status="pronto",
+        telefone_cliente="81988887777",
+        nome_restaurante="Bistrô Agendado",
+        restaurante_id=1,
+    )
+    assert len(bg.tasks) == 1
+
+    func, args, kwargs = bg.tasks[0]
+    func(*args, **kwargs)
+
+    with SessionLocal() as db:
+        notificacao = db.query(NotificacaoWhatsApp).filter(
+            NotificacaoWhatsApp.comanda_id == "201"
+        ).one()
+        assert notificacao.restaurante_id == 1
+        assert notificacao.wamid == "scheduled-message-id"

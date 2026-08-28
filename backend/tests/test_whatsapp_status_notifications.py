@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
-from app.models import Comanda, Motoboy, Restaurante, Usuario
+from app.models import Comanda, Motoboy, NotificacaoWhatsApp, Restaurante, Usuario
 from app.routes import orders
 from app.security import create_access_token
 from app.services import whatsapp as whatsapp_service
@@ -151,8 +151,17 @@ def test_mudanca_status_enfileira_notificacao(
     chamadas = []
     monkeypatch.setattr(
         whatsapp_service,
-        "enviar_texto_whatsapp",
-        lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
+        "enviar_texto_whatsapp_detalhado",
+        lambda telefone, mensagem, contexto="": (
+            chamadas.append((telefone, mensagem))
+            or whatsapp_service.ResultadoEnvioWhatsApp(
+                sucesso=True,
+                provider="evolution",
+                message_id="evolution-message-test",
+                recipient_id="5581999990000@s.whatsapp.net",
+                provider_status="pending",
+            )
+        ),
     )
     comanda_id = _criar_comanda(
         tipo,
@@ -169,14 +178,23 @@ def test_mudanca_status_enfileira_notificacao(
     assert len(chamadas) == 1
     assert chamadas[0][0] == TELEFONE
     assert trecho_esperado in chamadas[0][1]
+    with SessionLocal() as db:
+        notificacao = db.query(NotificacaoWhatsApp).filter(
+            NotificacaoWhatsApp.comanda_id == comanda_id
+        ).one()
+        assert notificacao.wamid == "evolution-message-test"
+        assert notificacao.status_envio == "enviado"
 
 
 def test_status_repetido_nao_duplica_notificacao(monkeypatch):
     chamadas = []
     monkeypatch.setattr(
         whatsapp_service,
-        "enviar_texto_whatsapp",
-        lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
+        "enviar_texto_whatsapp_detalhado",
+        lambda telefone, mensagem, contexto="": (
+            chamadas.append((telefone, mensagem))
+            or whatsapp_service.ResultadoEnvioWhatsApp(True, "evolution")
+        ),
     )
     comanda_id = _criar_comanda("Retirada", "producao")
 
@@ -198,8 +216,11 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
     chamadas = []
     monkeypatch.setattr(
         whatsapp_service,
-        "enviar_texto_whatsapp",
-        lambda telefone, mensagem, contexto="": chamadas.append((telefone, mensagem)) or True,
+        "enviar_texto_whatsapp_detalhado",
+        lambda telefone, mensagem, contexto="": (
+            chamadas.append((telefone, mensagem))
+            or whatsapp_service.ResultadoEnvioWhatsApp(True, "evolution")
+        ),
     )
     comanda_id = _criar_comanda("Entrega", "pronto")
 
@@ -251,6 +272,91 @@ def test_falha_evolution_nao_impede_transicao(monkeypatch):
     with SessionLocal() as db:
         comanda = db.query(Comanda).filter(Comanda.id == comanda_id).one()
         assert comanda.delivery_status == "pronto"
+
+
+def test_envio_evolution_retorna_id_da_mensagem(monkeypatch):
+    class RespostaAceita:
+        status_code = 201
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        @staticmethod
+        def json():
+            return {
+                "key": {
+                    "id": "BAE5Evo123",
+                    "remoteJid": "5581999990000@s.whatsapp.net",
+                },
+                "status": "PENDING",
+            }
+
+    class ClienteEvolution:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        @staticmethod
+        def post(*args, **kwargs):
+            assert kwargs["json"] == {
+                "number": "5581999990000",
+                "text": "Mensagem de teste",
+            }
+            assert kwargs["headers"]["Origin"] == "https://koma.test"
+            return RespostaAceita()
+
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_AUTOMATION_ENABLED", True)
+    monkeypatch.setattr(settings, "EVOLUTION_API_URL", "https://evolution.test")
+    monkeypatch.setattr(settings, "EVOLUTION_API_KEY", "chave-teste")
+    monkeypatch.setattr(settings, "EVOLUTION_INSTANCE_NAME", "koma-teste")
+    monkeypatch.setattr(settings, "EVOLUTION_API_ORIGIN", "https://koma.test")
+    monkeypatch.setattr(
+        whatsapp_service.httpx,
+        "Client",
+        lambda *args, **kwargs: ClienteEvolution(),
+    )
+
+    resultado = whatsapp_service.enviar_texto_whatsapp_detalhado(
+        "(81) 99999-0000",
+        "Mensagem de teste",
+    )
+
+    assert resultado.sucesso is True
+    assert resultado.message_id == "BAE5Evo123"
+    assert resultado.recipient_id == "5581999990000@s.whatsapp.net"
+    assert resultado.provider_status == "pending"
+
+
+def test_otp_evolution_nao_tenta_meta(monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(settings, "KOMA_WHATSAPP_PROVIDER", "evolution")
+    monkeypatch.setattr(
+        whatsapp_service,
+        "enviar_otp_whatsapp_meta",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Meta não deveria ser chamada")
+        ),
+    )
+    monkeypatch.setattr(
+        whatsapp_service,
+        "enviar_texto_whatsapp",
+        lambda telefone, mensagem, contexto="": chamadas.append(
+            (telefone, mensagem, contexto)
+        ) or True,
+    )
+
+    enviado = whatsapp_service.enviar_codigo_otp_whatsapp(
+        "81999990000",
+        "123456",
+        "Bistrô Teste",
+    )
+
+    assert enviado is True
+    assert len(chamadas) == 1
+    assert "123456" in chamadas[0][1]
 
 
 def test_diagnostico_evolution_indica_configuracao_ausente(monkeypatch):

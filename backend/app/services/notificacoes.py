@@ -1,5 +1,6 @@
 import logging
 from sqlalchemy.orm import Session
+from ..database import SessionLocal
 from ..models import NotificacaoWhatsApp
 from . import whatsapp as whatsapp_service
 
@@ -63,42 +64,69 @@ async def notificar_cliente_status_pedido(
             "conteudo": conteudo,
         }
 
-    sucesso = whatsapp_service.enviar_texto_whatsapp(
-        telefone_cliente,
-        conteudo,
-        contexto=f"notificação de status '{novo_status}' (comanda #{comanda_id})",
-    )
-
-    status_envio = "enviado" if sucesso else "falhou"
-
+    notif = None
     try:
         notif = NotificacaoWhatsApp(
             restaurante_id=restaurante_id,
             comanda_id=comanda_id,
             telefone=telefone_cliente,
             tipo="status_pedido",
-            status_envio=status_envio,
+            status_envio="pendente",
             conteudo=conteudo,
         )
         db.add(notif)
         db.commit()
         db.refresh(notif)
     except Exception as err:
-        logger.error("[NOTIFICAÇÃO WA DB ERROR] Falha ao registrar em notificacoes_whatsapp: %s", err)
+        logger.error(
+            "[NOTIFICAÇÃO WA DB ERROR] Falha ao preparar registro de envio: %s",
+            type(err).__name__,
+        )
+        db.rollback()
+        return {
+            "sucesso": False,
+            "status_envio": "falhou",
+            "motivo": "registro_indisponivel",
+            "conteudo": conteudo,
+            "telefone": telefone_cliente,
+        }
+
+    resultado = whatsapp_service.enviar_texto_whatsapp_detalhado(
+        telefone_cliente,
+        conteudo,
+        contexto=f"notificação de status '{novo_status}' (comanda #{comanda_id})",
+    )
+    status_envio = "enviado" if resultado.sucesso else "falhou"
+
+    try:
+        notif.status_envio = status_envio
+        notif.wamid = resultado.message_id
+        notif.recipient_id = resultado.recipient_id
+        notif.status = resultado.provider_status
+        notif.error_code = resultado.error_code
+        notif.error_title = resultado.error_message
+        notif.error_message = None
+        notif.raw_payload = None
+        db.commit()
+    except Exception as err:
+        logger.error(
+            "[NOTIFICAÇÃO WA DB ERROR] Falha ao atualizar resultado do envio: %s",
+            type(err).__name__,
+        )
         db.rollback()
 
     return {
-        "sucesso": sucesso,
+        "sucesso": resultado.sucesso,
         "status_envio": status_envio,
         "conteudo": conteudo,
         "telefone": telefone_cliente,
+        "wamid": resultado.message_id,
     }
 
 
 def agendar_notificacao_status_task(
     background_tasks,
-    db: Session,
-    comanda_id: int,
+    comanda_id: str | int,
     novo_status: str,
     telefone_cliente: str,
     nome_restaurante: str,
@@ -107,21 +135,25 @@ def agendar_notificacao_status_task(
     restaurante_id: int | None = None,
 ) -> None:
     """
-    Auxiliar síncrono para agendar a notificação via FastAPI BackgroundTasks sem bloquear respostas HTTP.
+    Agenda o envio sem reutilizar a sessão de banco ligada à requisição HTTP.
     """
     import asyncio
 
     async def _runner():
-        await notificar_cliente_status_pedido(
-            db=db,
-            comanda_id=comanda_id,
-            novo_status=novo_status,
-            telefone_cliente=telefone_cliente,
-            nome_restaurante=nome_restaurante,
-            link_rastreamento=link_rastreamento,
-            telefone_restaurante=telefone_restaurante,
-            restaurante_id=restaurante_id,
-        )
+        db = SessionLocal(restaurante_id=restaurante_id)
+        try:
+            await notificar_cliente_status_pedido(
+                db=db,
+                comanda_id=comanda_id,
+                novo_status=novo_status,
+                telefone_cliente=telefone_cliente,
+                nome_restaurante=nome_restaurante,
+                link_rastreamento=link_rastreamento,
+                telefone_restaurante=telefone_restaurante,
+                restaurante_id=restaurante_id,
+            )
+        finally:
+            db.close()
 
     def _task_wrapper():
         try:
@@ -135,4 +167,3 @@ def agendar_notificacao_status_task(
 
     if background_tasks is not None:
         background_tasks.add_task(_task_wrapper)
-
