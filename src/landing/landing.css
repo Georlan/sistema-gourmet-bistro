@@ -1419,15 +1419,19 @@
 .koma-tablet-obj-screen {
   position: absolute;
   z-index: 2;
-  left: 9%;
-  top: 6.5%;
-  width: 82%;
-  height: 87%;
+  left: 11%;
+  top: 9%;
+  width: 78%;
+  height: 82%;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.88);
+  border: 2px solid rgba(0, 0, 0, 0.92);
   border-radius: 2.5%;
   background: #090a0f;
-  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.84);
+  box-shadow:
+    0 0 0 10px rgba(31, 39, 42, 0.96),
+    0 0 0 11px rgba(255, 255, 255, 0.16),
+    0 22px 46px rgba(0, 0, 0, 0.34),
+    inset 0 0 18px rgba(0, 0, 0, 0.84);
   transform: translateZ(1px);
 }
 
