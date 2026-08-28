@@ -105,16 +105,21 @@ def test_fabricated_ai_and_whatsapp_prototypes_are_not_shipped_in_the_ui():
         assert fabricated_local_flow not in panel
 
 
-def test_staff_invites_have_one_explicit_manual_delivery_path():
+def test_operational_whatsapp_delivery_is_automatic_and_tokens_stay_server_side():
     caixa_source = _source("backend/app/routes/caixa.py")
     auth_source = _source("backend/app/routes/auth.py")
     frontend_source = _source("src/components/CaixaPanel.tsx")
     team_ui_source = _source("src/components/equipe/EquipePessoasTab.tsx")
 
-    assert "enviar_texto_whatsapp" not in caixa_source
-    assert "enviar_texto_whatsapp" not in auth_source
+    motoboy_source = _source("src/components/MotoboyPwaPage.tsx")
+
+    assert "agendar_convite_equipe_task" in caixa_source
+    assert "agendar_convite_equipe_task" in auth_source
     assert "[WHATSAPP SIMULADO]" not in caixa_source
-    assert "sistema-gourmet-bistro.pages.dev/ativar" not in frontend_source
-    assert "window.location.origin" in frontend_source
-    assert "Você revisa a mensagem antes de enviar pelo WhatsApp." in team_ui_source
-    assert "Preparar convite" in team_ui_source
+    assert "openWaInvite" not in frontend_source
+    assert "handleDespacharWhatsApp" not in frontend_source
+    assert "/delivery/despachar" in frontend_source
+    assert "window.open(waUrl" not in frontend_source
+    assert "wa.me" not in motoboy_source
+    assert "O convite será enviado automaticamente pelo WhatsApp." in team_ui_source
+    assert "Cadastrar e enviar" in team_ui_source

@@ -134,7 +134,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
       setCargo('garcom');
       setInviteOpen(false);
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'Não foi possível preparar o convite.');
+      setFormError(error instanceof Error ? error.message : 'Não foi possível enviar o convite.');
     } finally {
       setSubmitting(false);
     }
@@ -254,7 +254,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
                       <div className="flex items-center gap-2">
                         {status === 'pendente' && (
                           <button type="button" disabled={Boolean(busyUserAction)} onClick={() => void handleResend(user)} className="koma-btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-60">
-                            <Send size={13} /> {busyUserAction === `invite-${user.id}` ? 'Abrindo...' : 'Enviar convite'}
+                            <Send size={13} /> {busyUserAction === `invite-${user.id}` ? 'Enviando...' : 'Reenviar convite'}
                           </button>
                         )}
                         {!isAdmin && (
@@ -293,7 +293,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400">Novo acesso</p>
                 <h2 id="invite-team-title" className="mt-1 font-serif text-lg font-bold text-koma-foreground">Convidar para a equipe</h2>
-                <p className="mt-1 text-[10px] text-koma-muted">Você revisa a mensagem antes de enviar pelo WhatsApp.</p>
+                <p className="mt-1 text-[10px] text-koma-muted">O convite será enviado automaticamente pelo WhatsApp.</p>
               </div>
               <button type="button" onClick={closeInvite} className="rounded-full p-2 text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground" aria-label="Fechar convite"><X size={17} /></button>
             </div>
@@ -331,7 +331,7 @@ export function EquipePessoasTab({ users, onCreate, onResendInvite, onRemove }: 
               <div className="grid grid-cols-2 gap-2 border-t border-koma-border pt-4">
                 <button type="button" onClick={closeInvite} className="koma-btn-secondary px-4 py-2.5 text-xs font-bold">Cancelar</button>
                 <button type="submit" disabled={submitting} className="koma-btn-success inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60">
-                  <Send size={14} /> {submitting ? 'Preparando...' : 'Preparar convite'}
+                  <Send size={14} /> {submitting ? 'Enviando...' : 'Cadastrar e enviar'}
                 </button>
               </div>
             </form>

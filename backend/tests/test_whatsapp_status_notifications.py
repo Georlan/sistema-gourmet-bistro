@@ -237,9 +237,26 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
 
     assert response.status_code == 200, response.text
     assert repetida.status_code == 200, repetida.text
-    assert len(chamadas) == 1
-    assert chamadas[0][0] == TELEFONE
-    assert "entrega" in chamadas[0][1].lower()
+    assert len(chamadas) == 2
+    assert chamadas[0][0] == "81988880000"
+    assert "NOVA ENTREGA" in chamadas[0][1]
+    assert "/entregador?token=" in chamadas[0][1]
+    assert chamadas[1][0] == TELEFONE
+    assert "entrega" in chamadas[1][1].lower()
+
+    with SessionLocal() as db:
+        registros = db.query(NotificacaoWhatsApp).filter(
+            NotificacaoWhatsApp.comanda_id == comanda_id,
+        ).all()
+        assert {registro.tipo for registro in registros} == {
+            "atribuicao_motoboy",
+            "status_pedido",
+        }
+        atribuicao = next(
+            registro for registro in registros
+            if registro.tipo == "atribuicao_motoboy"
+        )
+        assert "token=" not in atribuicao.conteudo
 
 
 def test_falha_evolution_nao_impede_transicao(monkeypatch):

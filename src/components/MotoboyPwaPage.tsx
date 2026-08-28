@@ -179,7 +179,6 @@ export function MotoboyPwaPage() {
           entregas.map((entrega) => {
             const cleanTel = formatWhatsAppPhone(entrega.delivery_telefone);
             const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(entrega.delivery_endereco || '')}`;
-            const waUrl = cleanTel ? `https://wa.me/${cleanTel}?text=${encodeURIComponent(`Olá ${entrega.cliente_nome}! Sou o entregador do *Kôma* a caminho com seu pedido #${entrega.numero_pedido || entrega.id}.`)}` : null;
             const telUrl = cleanTel ? `tel:${cleanTel}` : null;
 
             return (
@@ -247,33 +246,22 @@ export function MotoboyPwaPage() {
                   </div>
                 </div>
 
-                {/* Quick Action Buttons (Call / WhatsApp) */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[10px] text-emerald-700 dark:text-emerald-300">
+                  O cliente foi avisado automaticamente pelo WhatsApp no despacho.
+                </p>
+
+                {/* Contato excepcional por ligação */}
+                <div className="pt-1">
                   {telUrl ? (
                     <a
                       href={telUrl}
-                      className="py-2 px-3 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-secondary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised"
                     >
                       <Phone className="w-3.5 h-3.5 text-emerald-400" /> Ligar para Cliente
                     </a>
                   ) : (
-                    <button disabled className="py-2 px-3 bg-koma-card text-gray-600 text-xs font-bold rounded-xl cursor-not-allowed">
+                    <button disabled className="w-full cursor-not-allowed rounded-xl bg-koma-card px-3 py-2 text-xs font-bold text-gray-600">
                       Sem Telefone
-                    </button>
-                  )}
-
-                  {waUrl ? (
-                    <a
-                      href={waUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="py-2 px-3 bg-emerald-500/15 hover:bg-[#10b981]/25 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      WhatsApp
-                    </a>
-                  ) : (
-                    <button disabled className="py-2 px-3 bg-koma-card text-gray-600 text-xs font-bold rounded-xl cursor-not-allowed">
-                      Sem WhatsApp
                     </button>
                   )}
                 </div>

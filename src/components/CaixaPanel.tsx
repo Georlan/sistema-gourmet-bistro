@@ -55,13 +55,6 @@ import {
   getSubscriptionPlan,
   normalizeSubscriptionPlan
 } from '../config/subscriptionPlans';
-import {
-  formatWhatsAppPhone,
-  openWhatsAppMessage,
-  buildPedidoConfirmadoMsg,
-  buildStatusUpdateMsg,
-  buildPixMsg
-} from '../config/whatsappUtils';
 import clsx from 'clsx';
 import {
   SidebarProvider,
@@ -2436,17 +2429,7 @@ export function CaixaPanel({
       if (res.ok) {
         fetchDeliveryOrders();
         onRefreshOrders();
-        showToast('Status do pedido atualizado!');
-        const targetOrder = (deliveryOrders as any[]).find(o => String(o.id) === String(orderId));
-        if (targetOrder && (targetOrder.telefone || targetOrder.delivery_telefone)) {
-          const phone = targetOrder.telefone || targetOrder.delivery_telefone;
-          const nome = targetOrder.cliente || targetOrder.identificador || 'Cliente';
-          const isDelivery = statusNovo === 'transito' || statusNovo === 'saiu_para_entrega';
-          if (['pronto', 'transito', 'saiu_para_entrega'].includes(statusNovo)) {
-            const msg = buildStatusUpdateMsg(nome, isDelivery);
-            openWhatsAppMessage(phone, msg);
-          }
-        }
+        showToast('Status atualizado e cliente avisado automaticamente!');
         return true;
       } else {
         showToast('Erro ao atualizar status do pedido.', 'error');
@@ -2465,71 +2448,16 @@ export function CaixaPanel({
       return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/despachar?motoboy_id=${selectedMotoboyId}`, {
+      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
         method: 'POST',
-        headers: authHeaders
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motoboy_id: Number(selectedMotoboyId) })
       });
       if (res.ok) {
-        showToast('Pedido despachado com sucesso!');
+        showToast('Pedido despachado; motoboy e cliente avisados automaticamente!');
         setSelectedKanbanOrder(null);
         fetchDeliveryOrders();
         onRefreshOrders();
-      } else {
-        const err = await res.json();
-        showToast(`Erro ao despachar: ${err.detail}`, 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro de conexão ao despachar.', 'error');
-    }
-  };
-
-  const handleDespacharWhatsApp = async (order: any, selectedMotoboyId: string) => {
-    if (!selectedMotoboyId) {
-      showToast('Selecione um motoboy para despachar!', 'info');
-      return;
-    }
-    const mb = motoboys.find(m => String(m.id) === String(selectedMotoboyId));
-    if (!mb) {
-      showToast('Motoboy não encontrado.', 'error');
-      return;
-    }
-
-    try {
-      const linkRes = await fetch(`${apiBaseUrl}/comandas/motoboys/${selectedMotoboyId}/gerar-link`, {
-        method: 'POST',
-        headers: authHeaders
-      });
-      let linkPwa = '';
-      if (linkRes.ok) {
-        const linkData = await linkRes.json();
-        linkPwa = `${window.location.origin}${linkData.link}`;
-      } else {
-        linkPwa = `${window.location.origin}/entregador`;
-      }
-
-      const res = await fetch(`${apiBaseUrl}/comandas/${order.id}/despachar?motoboy_id=${selectedMotoboyId}`, {
-        method: 'POST',
-        headers: authHeaders
-      });
-
-      if (res.ok) {
-        showToast('Pedido despachado! Abrindo WhatsApp...', 'success');
-        if (typeof setSelectedKanbanOrder === 'function') setSelectedKanbanOrder(null);
-        if (typeof fetchDeliveryOrders === 'function') fetchDeliveryOrders();
-        if (typeof onRefreshOrders === 'function') onRefreshOrders();
-
-        const mbTel = (mb.telefone || '').replace(/\D/g, '');
-        const msg = `*NOVA ENTREGA - KÔMA*\n\n` +
-          `*Pedido:* #${order.numero_pedido || order.id}\n` +
-          `*Cliente:* ${order.cliente || order.identificador || 'Cliente'}\n` +
-          `*Endereço:* ${order.endereco || order.delivery_endereco || 'Não informado'}\n` +
-          `*Telefone Cliente:* ${order.telefone || order.delivery_telefone || 'Não informado'}\n` +
-          `*Valor a Cobrar:* R$ ${(order.total || 0).toFixed(2)}\n\n` +
-          `*Acesse o Painel do Entregador:* ${linkPwa}`;
-
-        const waUrl = mbTel ? `https://wa.me/55${mbTel}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-        window.open(waUrl, '_blank');
       } else {
         const err = await res.json();
         showToast(`Erro ao despachar: ${err.detail}`, 'error');
@@ -3571,20 +3499,10 @@ export function CaixaPanel({
     }
   };
 
-  const openWaInvite = (telefone: string, nome: string, token: string) => {
-    const link = `${window.location.origin}/ativar?token=${encodeURIComponent(token)}`;
-    const msg = `Olá ${nome}! Você foi convidado para trabalhar no Kôma. Clique no link para criar sua senha e ativar sua conta: ${link}`;
-    openWhatsAppMessage(telefone, msg);
-  };
-
   const handleAddUser = async (payload: { nome: string; telefone: string; cargo: string }) => {
-    const createdUser = await API.cadastrarFuncionario(payload);
+    await API.cadastrarFuncionario(payload);
     await fetchSystemUsers();
-    if (createdUser?.token_convite) {
-      openWaInvite(payload.telefone, createdUser.nome, createdUser.token_convite);
-    } else {
-      showToast('Pessoa cadastrada com sucesso!');
-    }
+    showToast('Pessoa cadastrada e convite agendado automaticamente!');
   };
 
   const handleResendInvite = async (user: SystemUser) => {
@@ -3595,11 +3513,7 @@ export function CaixaPanel({
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.token_convite) {
-          openWaInvite(data.telefone || user.telefone || '', data.nome || user.nome, data.token_convite);
-        } else {
-          showToast(`Link de convite gerado para ${user.nome}!`);
-        }
+        showToast(data.message || `Convite para ${user.nome} agendado automaticamente!`);
       } else {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Não foi possível reenviar o convite no momento.');
@@ -8047,15 +7961,6 @@ export function CaixaPanel({
                                   className={clsx('py-1.5', 'px-3', 'bg-emerald-600', 'hover:bg-emerald-500', 'disabled:opacity-50', 'text-white', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer')}
                                 >
                                   Despachar
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={!motoboyId}
-                                  onClick={() => handleDespacharWhatsApp(order, motoboyId)}
-                                  className={clsx('py-1.5', 'px-2.5', 'bg-[#10b981]/20', 'hover:bg-[#10b981]/30', 'border', 'border-[#10b981]/40', 'disabled:opacity-40', 'text-emerald-600 dark:text-emerald-300', 'font-bold', 'rounded-xl', 'text-[10px]', 'uppercase', 'tracking-wider', 'transition-colors', 'cursor-pointer', 'flex', 'items-center', 'gap-1')}
-                                  title="Despachar pedido e enviar link PWA pelo WhatsApp do Motoboy"
-                                >
-                                  WhatsApp
                                 </button>
                                 <button
                                   type="button"

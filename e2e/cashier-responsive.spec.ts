@@ -103,7 +103,7 @@ const teamMembers = [
     role: 'caixa',
     cargo: 'caixa',
     status: 'pendente_ativacao',
-    token_convite: 'convite-e2e-token',
+    convite_agendado: true,
   },
 ];
 

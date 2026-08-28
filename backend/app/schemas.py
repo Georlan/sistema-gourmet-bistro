@@ -25,14 +25,9 @@ class UsuarioResponse(BaseModel):
 
 
 class UsuarioInviteResponse(UsuarioResponse):
-    """Resposta restrita ao momento em que o administrador cria o convite."""
+    """Confirma o agendamento sem expor o token secreto ao navegador."""
 
-    token_convite: str
-
-    @field_validator("token_convite", mode="before")
-    @classmethod
-    def convert_uuid_to_str(cls, value):
-        return str(value)
+    convite_agendado: bool = True
 
 class UsuarioCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
@@ -990,4 +985,3 @@ class GrupoModificadorResponse(BaseModel):
     produto_ids: List[str] = []
 
     model_config = ConfigDict(from_attributes=True)
-

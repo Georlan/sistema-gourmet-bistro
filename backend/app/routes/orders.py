@@ -13,7 +13,7 @@ from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ..database import current_restaurante_id, get_db, require_tenant_id
-from ..models import Comanda, ConfiguracaoRestaurante, Motoboy, Usuario
+from ..models import Comanda, ConfiguracaoRestaurante, Motoboy, Restaurante, Usuario
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
@@ -23,12 +23,14 @@ from ..services.order_state_machine import (
     normalize_order_status,
     validate_order_transition,
 )
+from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..websocket_manager import manager
 
 # Reexporta a API estável do módulo histórico. Isso mantém imports como
 # ``from .orders import gerar_novo_numero_pedido`` sem duplicar o monólito.
 from .orders_core import *  # noqa: F401,F403
 from .orders_core import (
+    _criar_acesso_motoboy,
     _agendar_notificacao_whatsapp_status,
     enqueue_initial_production_for_order,
     print_in_background,
@@ -264,6 +266,7 @@ def despachar_delivery(
     status_anterior = normalize_order_status(comanda.delivery_status)
     comanda.motoboy_id = motoboy_id
     comanda.delivery_status = "transito"
+    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid)
 
     # Mantém a via operacional já existente, mas só a gera na primeira transição
     # válida para trânsito; retries não reimprimem.
@@ -310,6 +313,36 @@ def despachar_delivery(
 
     db.commit()
     db.refresh(comanda)
+
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rid).first()
+    nome_restaurante = restaurante.nome if restaurante else "Kôma"
+    total_pedido = sum(
+        float(item.preco_unit or 0)
+        for item in comanda.itens
+        if item.status != "cancelado"
+    ) + float(comanda.delivery_taxa or 0)
+    valor_a_cobrar = max(0.0, total_pedido - float(comanda.valor_pago or 0))
+    mensagem_motoboy = (
+        f"*NOVA ENTREGA - {nome_restaurante}*\n\n"
+        f"*Pedido:* #{comanda.numero_pedido or comanda.id}\n"
+        f"*Cliente:* {comanda.identificador or 'Cliente'}\n"
+        f"*Endereço:* {comanda.delivery_endereco or 'Não informado'}\n"
+        f"*Telefone do cliente:* {comanda.delivery_telefone or 'Não informado'}\n"
+        f"*Valor a cobrar:* R$ {valor_a_cobrar:.2f}\n\n"
+        f"*Painel do entregador:* {acesso_motoboy['link_publico']}"
+    )
+    agendar_notificacao_whatsapp_task(
+        background_tasks,
+        telefone=motoboy.telefone,
+        conteudo=mensagem_motoboy,
+        tipo="atribuicao_motoboy",
+        restaurante_id=rid,
+        comanda_id=comanda.id,
+        conteudo_auditoria=(
+            f"Atribuição do pedido {comanda.id} ao motoboy {motoboy.id}."
+        ),
+        contexto=f"atribuição de entrega (comanda #{comanda.id})",
+    )
     _agendar_notificacao_whatsapp_status(
         background_tasks,
         db,

@@ -7,7 +7,7 @@ import uuid
 import logging
 
 from ..database import bind_session_to_tenant, get_db, current_restaurante_id
-from ..models import Usuario
+from ..models import Restaurante, Usuario
 from ..schemas import LoginRequest, LoginResponse, UsuarioResponse, AtivarContaRequest
 from ..security import (
     create_access_token,
@@ -20,6 +20,7 @@ from ..services.staff_login_rate_limit import (
     record_staff_login_failure,
     staff_login_is_blocked,
 )
+from ..services.notificacoes import agendar_convite_equipe_task
 from ..websocket_manager import manager
 
 logger = logging.getLogger("koma.auth")
@@ -525,10 +526,11 @@ def gdpr_opt_out(
 @router.post("/usuarios/{user_id}/reenviar-convite")
 def reenviar_convite_usuario(
     user_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Renova o convite para compartilhamento manual pelo administrador."""
+    """Renova e envia automaticamente o convite pelo WhatsApp."""
     import datetime
     from datetime import timezone
 
@@ -548,17 +550,25 @@ def reenviar_convite_usuario(
             detail="Este usuário já ativou sua conta."
         )
 
-    # Gera ou renova o token se não existir ou se expirado
-    if not usuario.token_convite:
-        usuario.token_convite = str(uuid.uuid4())
+    # Um novo token permite reenviar intencionalmente sem reutilizar o segredo.
+    usuario.token_convite = str(uuid.uuid4())
     usuario.token_expira_em = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
     db.commit()
     db.refresh(usuario)
 
-    tel_clean = usuario.telefone or ""
+    restaurante = db.query(Restaurante).filter(
+        Restaurante.id == current_user.restaurante_id,
+    ).first()
+    agendar_convite_equipe_task(
+        background_tasks,
+        restaurante_id=current_user.restaurante_id,
+        usuario_id=usuario.id,
+        telefone=usuario.telefone or "",
+        nome_pessoa=usuario.nome,
+        nome_restaurante=restaurante.nome if restaurante else "Kôma",
+        token_convite=usuario.token_convite,
+    )
     return {
-        "message": f"Convite renovado para {usuario.nome}.",
-        "token_convite": usuario.token_convite,
-        "telefone": tel_clean,
-        "nome": usuario.nome,
+        "message": f"Convite para {usuario.nome} agendado no WhatsApp.",
+        "convite_agendado": True,
     }

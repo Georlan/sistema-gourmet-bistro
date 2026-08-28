@@ -8,13 +8,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database import Base, get_db, current_restaurante_id
+from app.database import Base, SessionLocal, get_db, current_restaurante_id
 from app.models import (
     Categoria,
     Comanda,
     ConfiguracaoRestaurante,
     Item,
     Lancamento,
+    NotificacaoWhatsApp,
     Produto,
     Restaurante,
     Usuario,
@@ -471,7 +472,18 @@ def test_manager_and_cashier_can_administer_team(username):
         )
 
 
-def test_admin_creates_only_pending_invite_in_own_tenant():
+def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
+    from app.services import whatsapp as whatsapp_service
+
+    mensagens = []
+    monkeypatch.setattr(
+        whatsapp_service,
+        "enviar_texto_whatsapp_detalhado",
+        lambda telefone, mensagem, contexto="": (
+            mensagens.append((telefone, mensagem, contexto))
+            or whatsapp_service.ResultadoEnvioWhatsApp(True, "evolution")
+        ),
+    )
     client = TestClient(app)
     headers = get_auth_headers(client, "admin", "123")
 
@@ -491,7 +503,11 @@ def test_admin_creates_only_pending_invite_in_own_tenant():
     assert created["restaurante_id"] == 1
     assert created["status"] == "pendente_ativacao"
     assert created["cargo"] == "garcom"
-    assert created["token_convite"]
+    assert created["convite_agendado"] is True
+    assert "token_convite" not in created
+    assert len(mensagens) == 1
+    assert mensagens[0][0] == "81999998877"
+    assert "/ativar?token=" in mensagens[0][1]
 
     with TestingSessionLocal() as db:
         saved = db.get(Usuario, created["id"])
@@ -499,6 +515,30 @@ def test_admin_creates_only_pending_invite_in_own_tenant():
         assert saved.restaurante_id == 1
         assert saved.telefone == "81999998877"
         assert saved.senha_hash is None
+        assert saved.token_convite is not None
+        token_inicial = saved.token_convite
+
+    resend = client.post(
+        f"/auth/usuarios/{created['id']}/reenviar-convite",
+        headers=headers,
+    )
+    assert resend.status_code == 200, resend.text
+    assert resend.json()["convite_agendado"] is True
+    assert "token_convite" not in resend.json()
+    assert len(mensagens) == 2
+
+    with TestingSessionLocal() as db:
+        renovado = db.get(Usuario, created["id"])
+        assert renovado.token_convite != token_inicial
+
+    with SessionLocal() as notification_db:
+        registro = notification_db.query(NotificacaoWhatsApp).filter(
+            NotificacaoWhatsApp.restaurante_id == 1,
+            NotificacaoWhatsApp.tipo == "convite_equipe",
+            NotificacaoWhatsApp.telefone == "81999998877",
+        ).order_by(NotificacaoWhatsApp.id.desc()).first()
+        assert registro is not None
+        assert "token=" not in registro.conteudo
 
 
 def test_team_creation_broadcasts_realtime_refresh(monkeypatch):

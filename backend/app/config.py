@@ -217,8 +217,11 @@ class Settings:
         "KOMA_WHATSAPP_PROVIDER",
         "evolution",
     ).strip().lower()
+    KOMA_PUBLIC_APP_URL: str = normalize_cors_origin(
+        os.getenv("KOMA_PUBLIC_APP_URL", OFFICIAL_PUBLIC_FRONTEND_ORIGIN)
+    )
 
-    # Evolution API (WhatsApp) - Opcional / Reservado para futuro
+    # Evolution API (WhatsApp)
     EVOLUTION_API_URL: str = os.getenv("EVOLUTION_API_URL", "")
     EVOLUTION_API_KEY: str = os.getenv("EVOLUTION_API_KEY", "")
     EVOLUTION_INSTANCE_NAME: str = os.getenv("EVOLUTION_INSTANCE_NAME", "")

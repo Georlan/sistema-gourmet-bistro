@@ -8,6 +8,7 @@ from typing import List, Optional, Any
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id
+from ..config import settings
 from ..timezone_utils import get_operational_now
 from ..models import (
     Comanda,
@@ -138,10 +139,6 @@ def _agendar_notificacao_whatsapp_status(
     }
     key_status = status_map.get((novo_status or "").lower(), novo_status)
 
-    link_rastreio = None
-    if key_status == "saiu_entrega" and comanda.id:
-        link_rastreio = f"/pedidos/{comanda.id}"
-
     from ..services.notificacoes import agendar_notificacao_status_task
 
     agendar_notificacao_status_task(
@@ -150,9 +147,11 @@ def _agendar_notificacao_whatsapp_status(
         novo_status=key_status,
         telefone_cliente=telefone,
         nome_restaurante=nome_restaurante,
-        link_rastreamento=link_rastreio,
+        link_rastreamento=None,
         telefone_restaurante=tel_restaurante,
         restaurante_id=comanda.restaurante_id,
+        numero_pedido=comanda.numero_pedido,
+        modalidade=comanda.tipo,
     )
 
 
@@ -2289,6 +2288,37 @@ def cadastrar_motoboy(
     return novo_motoboy
 
 
+def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
+    """Cria o acesso temporário dentro da transação do chamador."""
+    # 1. Revogar tokens ativos prévios deste motoboy
+    db.query(MotoboyTokenAtivo).filter(
+        MotoboyTokenAtivo.motoboy_id == motoboy.id,
+        MotoboyTokenAtivo.restaurante_id == rest_id,
+        MotoboyTokenAtivo.revogado == False
+    ).update({MotoboyTokenAtivo.revogado: True})
+
+    # 2. Criar novo JTI e token JWT
+    new_jti = str(uuid.uuid4())
+    novo_token_db = MotoboyTokenAtivo(
+        jti=new_jti,
+        motoboy_id=motoboy.id,
+        restaurante_id=rest_id,
+        revogado=False
+    )
+    db.add(novo_token_db)
+    db.flush()
+
+    token = create_motoboy_token(motoboy.id, rest_id, new_jti)
+    exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=4)).isoformat()
+    return {
+        "token": token,
+        "link": f"/entregador?token={token}",
+        "link_publico": f"{settings.KOMA_PUBLIC_APP_URL}/entregador?token={token}",
+        "expires_at": exp,
+        "motoboy_nome": motoboy.nome
+    }
+
+
 @router.post("/motoboys/{motoboy_id}/gerar-link")
 def gerar_link_motoboy(
     motoboy_id: int,
@@ -2307,32 +2337,9 @@ def gerar_link_motoboy(
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
 
-    # 1. Revogar tokens ativos prévios deste motoboy
-    db.query(MotoboyTokenAtivo).filter(
-        MotoboyTokenAtivo.motoboy_id == motoboy_id,
-        MotoboyTokenAtivo.restaurante_id == rest_id,
-        MotoboyTokenAtivo.revogado == False
-    ).update({MotoboyTokenAtivo.revogado: True})
-
-    # 2. Criar novo JTI e token JWT
-    new_jti = str(uuid.uuid4())
-    novo_token_db = MotoboyTokenAtivo(
-        jti=new_jti,
-        motoboy_id=motoboy.id,
-        restaurante_id=rest_id,
-        revogado=False
-    )
-    db.add(novo_token_db)
+    acesso = _criar_acesso_motoboy(db, motoboy, rest_id)
     db.commit()
-
-    token = create_motoboy_token(motoboy.id, rest_id, new_jti)
-    exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=4)).isoformat()
-    return {
-        "token": token,
-        "link": f"/entregador?token={token}",
-        "expires_at": exp,
-        "motoboy_nome": motoboy.nome
-    }
+    return acesso
 
 
 @router.post("/motoboys/{motoboy_id}/revogar-link")

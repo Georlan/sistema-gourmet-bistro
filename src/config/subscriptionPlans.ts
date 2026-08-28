@@ -110,7 +110,7 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: 'Básico', pro: 'Completo', premium: 'Completo' },
   { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: 'R$ 49/mês', pro: 'R$ 49/mês', premium: '✓ Incluso' },
   { category: 'Cardápio Digital', feature: 'Gaveta de Aceite de Pedidos Digitais no PDV', pocket: false, pro: 'Com Addon', premium: true },
-  { category: 'Notificações', feature: 'Contato manual por WhatsApp (wa.me)', pocket: true, pro: true, premium: true }
+  { category: 'Notificações', feature: 'Notificações automáticas de pedidos via WhatsApp', pocket: true, pro: true, premium: true }
 ];
 
 export function normalizeSubscriptionPlan(plan?: string | null): SubscriptionPlanId {

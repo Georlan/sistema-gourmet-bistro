@@ -13,6 +13,7 @@ from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..models import (
     Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento,
     ConfiguracaoRestaurante, ConfigFidelizacao, HistoricoFidelidade, Cliente,
+    Restaurante,
 )
 from ..schemas import (
     CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
@@ -39,6 +40,7 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.capabilities import has_capability
+from ..services.notificacoes import agendar_convite_equipe_task
 from ..timezone_utils import elapsed_minutes_since, to_utc
 
 logger = logging.getLogger("koma.caixa")
@@ -303,6 +305,17 @@ def cadastrar_funcionario(
             detail="Telefone indisponível para cadastro.",
         )
     db.refresh(novo_usuario)
+
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    agendar_convite_equipe_task(
+        background_tasks,
+        restaurante_id=rest_id,
+        usuario_id=novo_usuario.id,
+        telefone=novo_usuario.telefone,
+        nome_pessoa=novo_usuario.nome,
+        nome_restaurante=restaurante.nome if restaurante else "Kôma",
+        token_convite=token_convite,
+    )
 
     background_tasks.add_task(
         manager.broadcast,
