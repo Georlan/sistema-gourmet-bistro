@@ -343,8 +343,12 @@ class OrderApplicationService:
                 .first()
             )
             if cupom_model:
-                cupom_model.usos_atuais = (cupom_model.usos_atuais or 0) + 1
-                cupom_db_id = cupom_model.id
+                if cupom_model.limite_usos is not None and (cupom_model.usos_atuais or 0) >= cupom_model.limite_usos:
+                    # Limite atingido concorrentemente após cotação
+                    pass
+                else:
+                    cupom_model.usos_atuais = (cupom_model.usos_atuais or 0) + 1
+                    cupom_db_id = cupom_model.id
 
         parsed_troco = _parse_troco_para_float(cmd.change_for)
 

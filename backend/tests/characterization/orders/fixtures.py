@@ -61,7 +61,7 @@ def char_setup(char_client):
             db.add(rest)
             db.commit()
 
-        # 2. Usuário Operador / Caixa
+        # 2. Usuário Operador / Caixa e Garçom
         user = db.query(Usuario).filter(Usuario.id == "usr-char-admin").first()
         if not user:
             user = Usuario(
@@ -76,6 +76,22 @@ def char_setup(char_client):
                 status="ativo",
             )
             db.add(user)
+            db.commit()
+
+        garcom = db.query(Usuario).filter(Usuario.id == "usr-char-garcom").first()
+        if not garcom:
+            garcom = Usuario(
+                id="usr-char-garcom",
+                restaurante_id=CHAR_RESTAURANT_ID,
+                nome="Garçom Characterization",
+                email="garcom777@koma.com",
+                usuario="garcom777",
+                senha_hash=get_password_hash("senha123"),
+                role="garcom",
+                cargo="garcom",
+                status="ativo",
+            )
+            db.add(garcom)
             db.commit()
 
         # 3. Mesa
