@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { KomaLogo } from './components/KomaLogo';
-import { LoginButton } from '../components/shadcnblocks/login-button';
+import { LoginButton } from './components/auth/LoginButton';
 import { Menu, X, User, Wifi, WifiOff, SlidersHorizontal, ArrowDownRight, ArrowUpRight, RefreshCw, Bell, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag, Sun, Moon } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResumo } from './types';
 import { RESTAURANT_CONFIG } from './data';

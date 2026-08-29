@@ -2,7 +2,7 @@ import { CardapioAssetUploader } from './CardapioAssetUploader';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { KomaLogo } from './KomaLogo';
 import { KomaEmptyState } from './shared/KomaEmptyState';
-import { LoginButton } from '../../components/shadcnblocks/login-button';
+import { LoginButton } from './auth/LoginButton';
 import {
   DollarSign, ArrowUpRight, Lock, Users,
   Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
@@ -71,7 +71,7 @@ import {
   SidebarFooter,
   SidebarRail,
   SidebarTrigger
-} from '@/components/ui/sidebar';
+} from './ui/sidebar';
 
 
 interface CaixaPanelProps {

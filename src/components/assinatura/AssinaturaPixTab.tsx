@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { motion } from 'motion/react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { TimelineContent } from '@/components/ui/timeline-animation';
+import { Card, CardContent, CardHeader } from '../ui/card';
+import { TimelineContent } from '../ui/timeline-animation';
 import {
   CheckCircle2,
   Sparkles,

@@ -2,22 +2,16 @@ import sys
 import unittest
 from pathlib import Path
 
-AGENT_DIR = Path(__file__).resolve().parent
-if (AGENT_DIR / "adapters").is_dir():
+AGENT_DIR = Path(__file__).resolve().parent.parent
+if str(AGENT_DIR) not in sys.path:
     sys.path.insert(0, str(AGENT_DIR))
-    from adapters.escpos import (
-        INITIALIZE,
-        PARTIAL_CUT,
-        PORTUGUESE_CODE_PAGE,
-        build_escpos_payload,
-    )
-else:
-    from escpos import (
-        INITIALIZE,
-        PARTIAL_CUT,
-        PORTUGUESE_CODE_PAGE,
-        build_escpos_payload,
-    )
+
+from adapters.escpos import (
+    INITIALIZE,
+    PARTIAL_CUT,
+    PORTUGUESE_CODE_PAGE,
+    build_escpos_payload,
+)
 
 
 class EscPosPayloadTest(unittest.TestCase):

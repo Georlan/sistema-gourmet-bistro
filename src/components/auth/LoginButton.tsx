@@ -1,6 +1,6 @@
 import * as React from "react";
 import { LogOut, LogIn } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "../../utils/classNames";
 
 export interface LoginButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
