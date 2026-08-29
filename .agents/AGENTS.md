@@ -244,3 +244,30 @@ e
 "isso pode ser uma decisão de produto",
 
 classificar como HIPÓTESE e não alterar.
+
+---
+
+# KÔMA — Memória Arquitetural: Projeções de Mesa (Caixa e Garçom - Fase 7)
+
+## Janela Única e Projeção Canônica Compartilhada
+
+Caixa e Garçom representam **as mesmas mesas**.
+Quando representam o mesmo estado operacional, devem utilizar a **mesma linguagem visual, cores, labels e tempo decorrido**.
+
+## Separação Semântica: Pronto ≠ Aguardando Pagamento
+
+$$\text{PREPARANDO} \longrightarrow \text{PRONTO} \longrightarrow \text{ENTREGUE} \longrightarrow \text{AGUARDANDO PAGAMENTO}$$
+
+- Não inferir que uma mesa está aguardando pagamento apenas porque todos os itens terminaram de ser preparados na cozinha.
+- Separar:
+  1. `FREE` (Livre) → Verde
+  2. `IN_SERVICE / PREPARING` (Em atendimento) → Base operacional
+  3. `HAS_READY_ITEMS` / `ALL_ITEMS_READY` (Tem item pronto / Tudo pronto para servir) → Amarelo / Âmbar
+  4. `AWAITING_PAYMENT` (Aguardando pagamento / Fechamento) → Destaque de cobrança/fechamento
+- `AWAITING_PAYMENT` decorre de evento financeiro/operacional (ex: `status_comanda == 'aguardando_pagamento'` ou solicitação de conta), e não simplesmente de `allReady`.
+
+## Arquitetura Alvo da Fase 7
+
+- Nunca duplicar lógica entre `MesaCard.tsx` e `CaixaPanel.tsx`.
+- Criar seletor universal compartilhado `deriveTableOperationalState(...)` consumido igualmente por ambos os componentes.
+
