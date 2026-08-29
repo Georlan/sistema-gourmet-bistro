@@ -263,13 +263,30 @@ class OrderApplicationService:
             if garcom:
                 garcom_id = garcom.id
 
-        # 5. Cadastro / Atualização do Cliente
+        # 5. Cadastro / Atualização do Cliente (Preserva regra de segurança: pedidos web sem OTP não se apropriam de cadastro)
         cliente = None
-        if cmd.customer and cmd.customer.name and len(cmd.customer.name.strip()) >= 2:
+        if cmd.customer and cmd.customer.customer_id:
+            cliente = (
+                db.query(Cliente)
+                .filter(
+                    Cliente.restaurante_id == cmd.restaurant_id,
+                    Cliente.id == cmd.customer.customer_id,
+                )
+                .first()
+            )
+            if cliente is not None:
+                cliente = cadastrar_ou_atualizar_cliente(
+                    db,
+                    restaurante_id=cmd.restaurant_id,
+                    telefone=cliente.telefone,
+                    nome=cliente.nome,
+                    endereco=delivery_addr,
+                )
+        elif cmd.channel != OrderChannel.WEB_CARDAPIO and cmd.customer and cmd.customer.name and len(cmd.customer.name.strip()) >= 2 and clean_phone:
             cliente = cadastrar_ou_atualizar_cliente(
                 db,
                 restaurante_id=cmd.restaurant_id,
-                telefone=clean_phone or "",
+                telefone=clean_phone,
                 nome=cmd.customer.name,
                 endereco=delivery_addr,
             )
@@ -290,8 +307,8 @@ class OrderApplicationService:
         # Status inicial de comanda e lançamento
         if cmd.fulfillment == FulfillmentType.PICKUP:
             tipo_comanda = "Retirada"
-            auto_delivery_status = "producao"
-            initial_lancamento_status = "producao"
+            auto_delivery_status = "pendente"
+            initial_lancamento_status = "pendente"
         elif cmd.fulfillment == FulfillmentType.DELIVERY:
             tipo_comanda = "Delivery"
             auto_delivery_status = "pendente"
@@ -424,9 +441,8 @@ class OrderApplicationService:
 
             db.flush()
 
-            # 10. Consumo de Estoque para Pedidos que nascem em Produção
-            if auto_delivery_status == "producao":
-                consumir_estoque_dos_itens(db, itens_criados, liberar_pendente=True)
+            # 10. Consumo de Estoque (pedidos em produção baixam imediatamente, pendentes aguardam aceite)
+            consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id, liberar_pendente=False)
 
             if commit:
                 db.commit()

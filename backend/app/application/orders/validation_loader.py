@@ -134,6 +134,7 @@ class ValidationDataLoader:
                     Cupom.restaurante_id == restaurante_id,
                     Cupom.codigo == clean_code,
                 )
+                .with_for_update()
                 .first()
             )
             if cupom is not None:
@@ -186,6 +187,7 @@ class ValidationDataLoader:
                     Cliente.restaurante_id == restaurante_id,
                     Cliente.id == cliente_id,
                 )
+                .with_for_update()
                 .first()
             )
             if cliente and cliente.saldo_cashback:

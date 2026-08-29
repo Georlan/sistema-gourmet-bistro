@@ -356,6 +356,15 @@ class TestOrderApplicationServicePhase31:
             )
             created = OrderApplicationService.create_order(db, cmd)
 
+            # Aceitar para consumir estoque
+            OrderApplicationService.accept_order(
+                db,
+                AcceptOrderCommand(
+                    restaurant_id=CHAR_RESTAURANT_ID,
+                    order_id=created.order_id,
+                ),
+            )
+
             cancel_cmd = CancelOrderCommand(
                 restaurant_id=CHAR_RESTAURANT_ID,
                 order_id=created.order_id,
@@ -390,7 +399,16 @@ class TestOrderApplicationServicePhase31:
             )
             created = OrderApplicationService.create_order(db, cmd)
 
-            # Marcar pronto
+            # Aceitar (pendente -> producao)
+            OrderApplicationService.accept_order(
+                db,
+                AcceptOrderCommand(
+                    restaurant_id=CHAR_RESTAURANT_ID,
+                    order_id=created.order_id,
+                ),
+            )
+
+            # Marcar pronto (producao -> pronto)
             OrderApplicationService.mark_order_ready(
                 db,
                 MarkOrderReadyCommand(
@@ -399,7 +417,7 @@ class TestOrderApplicationServicePhase31:
                 ),
             )
 
-            # Finalizar
+            # Finalizar (pronto -> finalizado)
             OrderApplicationService.complete_order(
                 db,
                 CompleteOrderCommand(
@@ -424,7 +442,7 @@ class TestOrderApplicationServicePhase31:
         """Garante que Lancamento.status é persistido no banco com o status canônico correto."""
         db: Session = SessionLocal()
         try:
-            # Delivery nasce como pendente
+            # Delivery online nasce como pendente
             cmd_delivery = CreateOrderCommand(
                 restaurant_id=CHAR_RESTAURANT_ID,
                 channel=OrderChannel.WEB_CARDAPIO,
@@ -439,7 +457,7 @@ class TestOrderApplicationServicePhase31:
             assert lanc_del.status == "pendente"
             assert dto_del.status == "pendente"
 
-            # Retirada nasce como producao
+            # Retirada online nasce como pendente
             cmd_pickup = CreateOrderCommand(
                 restaurant_id=CHAR_RESTAURANT_ID,
                 channel=OrderChannel.WEB_CARDAPIO,
@@ -450,8 +468,22 @@ class TestOrderApplicationServicePhase31:
             dto_pick = OrderApplicationService.create_order(db, cmd_pickup)
             lanc_pick = db.query(Lancamento).filter(Lancamento.id == dto_pick.order_id).first()
             assert lanc_pick is not None
-            assert lanc_pick.status == "producao"
-            assert dto_pick.status == "producao"
+            assert lanc_pick.status == "pendente"
+            assert dto_pick.status == "pendente"
+
+            # Salão / POS nasce como producao
+            cmd_dine_in = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.POS,
+                fulfillment=FulfillmentType.DINE_IN,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+                customer=CustomerInput(name="Cliente Balcao", phone="11999990003"),
+            )
+            dto_dine = OrderApplicationService.create_order(db, cmd_dine_in)
+            lanc_dine = db.query(Lancamento).filter(Lancamento.id == dto_dine.order_id).first()
+            assert lanc_dine is not None
+            assert lanc_dine.status == "producao"
+            assert dto_dine.status == "producao"
         finally:
             db.close()
 
