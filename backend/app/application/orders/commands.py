@@ -32,13 +32,13 @@ class ExternalOrderReference:
 class OrderItemInput:
     """Item a ser lançado ou criado em um pedido."""
 
-    product_id: int
+    product_id: str | int
     quantity: Decimal
-    modifier_ids: Tuple[int, ...] = ()
+    modifier_ids: Tuple[str | int, ...] = ()
     notes: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if self.product_id <= 0:
+        if not self.product_id or (isinstance(self.product_id, int) and self.product_id <= 0):
             raise InvalidItemQuantityError(self.product_id, self.quantity)
         if self.quantity <= Decimal("0"):
             raise InvalidItemQuantityError(self.product_id, self.quantity)
@@ -48,7 +48,7 @@ class OrderItemInput:
 class CustomerInput:
     """Dados cadastrais ou de contato do cliente do pedido."""
 
-    customer_id: Optional[int] = None
+    customer_id: Optional[str | int] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     cpf: Optional[str] = None
@@ -84,14 +84,15 @@ class CreateOrderCommand:
     items: Tuple[OrderItemInput, ...]
     customer: Optional[CustomerInput] = None
     delivery: Optional[DeliveryInput] = None
-    table_id: Optional[int] = None
-    check_id: Optional[int] = None
-    atendimento_id: Optional[int] = None
+    table_id: Optional[str | int] = None
+    check_id: Optional[str | int] = None
+    atendimento_id: Optional[str | int] = None
     coupon_code: Optional[str] = None
     cashback_discount: Decimal = Decimal("0.00")
+    usar_cashback: bool = False
     idempotency_key: Optional[str] = None
     external_reference: Optional[ExternalOrderReference] = None
-    operator_user_id: Optional[int] = None
+    operator_user_id: Optional[str | int] = None
 
     def __post_init__(self) -> None:
         if self.restaurant_id <= 0:
@@ -109,8 +110,8 @@ class AcceptOrderCommand:
     """Comando para aceitar um pedido pendente para preparo."""
 
     restaurant_id: int
-    order_id: int
-    operator_user_id: Optional[int] = None
+    order_id: str | int
+    operator_user_id: Optional[str | int] = None
     estimated_prep_minutes: Optional[int] = None
 
 
@@ -119,8 +120,8 @@ class MarkOrderReadyCommand:
     """Comando para sinalizar que o pedido está pronto na cozinha/bar."""
 
     restaurant_id: int
-    order_id: int
-    operator_user_id: Optional[int] = None
+    order_id: str | int
+    operator_user_id: Optional[str | int] = None
 
 
 @dataclass(frozen=True)
@@ -128,9 +129,9 @@ class DispatchOrderCommand:
     """Comando para despachar pedido de delivery para entrega com motoboy."""
 
     restaurant_id: int
-    order_id: int
-    courier_id: Optional[int] = None
-    operator_user_id: Optional[int] = None
+    order_id: str | int
+    courier_id: Optional[str | int] = None
+    operator_user_id: Optional[str | int] = None
 
 
 @dataclass(frozen=True)
@@ -138,8 +139,8 @@ class CompleteOrderCommand:
     """Comando para finalizar e entregar o pedido."""
 
     restaurant_id: int
-    order_id: int
-    operator_user_id: Optional[int] = None
+    order_id: str | int
+    operator_user_id: Optional[str | int] = None
 
 
 @dataclass(frozen=True)
@@ -147,9 +148,9 @@ class RejectOrderCommand:
     """Comando para rejeitar um pedido antes de entrar em produção."""
 
     restaurant_id: int
-    order_id: int
+    order_id: str | int
     reason: str
-    operator_user_id: Optional[int] = None
+    operator_user_id: Optional[str | int] = None
 
 
 @dataclass(frozen=True)
@@ -157,7 +158,7 @@ class CancelOrderCommand:
     """Comando para cancelar um pedido em andamento com auditoria."""
 
     restaurant_id: int
-    order_id: int
+    order_id: str | int
     reason: str
-    operator_user_id: Optional[int] = None
+    operator_user_id: Optional[str | int] = None
     refund_stock: bool = True

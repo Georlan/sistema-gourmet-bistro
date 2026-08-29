@@ -20,6 +20,9 @@ from .dto import (
     CustomerDTO,
     DeliveryDTO,
 )
+from .pricing_loader import PricingDataLoader
+from .validation_loader import ValidationDataLoader
+from .service import OrderApplicationService
 
 __all__ = [
     "ExternalOrderReference",
@@ -38,4 +41,7 @@ __all__ = [
     "OrderModifierDTO",
     "CustomerDTO",
     "DeliveryDTO",
+    "PricingDataLoader",
+    "ValidationDataLoader",
+    "OrderApplicationService",
 ]

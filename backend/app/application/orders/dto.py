@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 class OrderModifierDTO:
     """Projeção de leitura de um modificador do item."""
 
-    modifier_id: int
+    modifier_id: str | int
     name: str
     price: Decimal
 
@@ -20,8 +20,8 @@ class OrderModifierDTO:
 class OrderItemDTO:
     """Projeção de leitura de um item do pedido."""
 
-    item_id: int
-    product_id: int
+    item_id: str | int
+    product_id: str | int
     product_name: str
     quantity: Decimal
     unit_price: Decimal
@@ -35,7 +35,7 @@ class OrderItemDTO:
 class CustomerDTO:
     """Projeção de leitura de dados do cliente."""
 
-    id: Optional[int] = None
+    id: Optional[str | int] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
@@ -48,7 +48,7 @@ class DeliveryDTO:
     address: Optional[str] = None
     fee: Decimal = Decimal("0.00")
     status: str = "waiting"
-    courier_id: Optional[int] = None
+    courier_id: Optional[str | int] = None
     courier_name: Optional[str] = None
     estimated_minutes: Optional[int] = None
 
@@ -57,18 +57,21 @@ class DeliveryDTO:
 class OrderDTO:
     """Projeção consolidada de um pedido para retorno aos canais/adapters."""
 
-    order_id: int
+    order_id: str | int
     restaurant_id: int
-    order_number: Optional[str]
+    display_number: Optional[str]
+    comanda_id: Optional[str | int]
     channel: str
     fulfillment: str
     status: str
     total: Decimal
     subtotal: Decimal
     discount: Decimal
+    delivery_fee: Decimal
+    service_fee: Decimal
     items: Tuple[OrderItemDTO, ...]
     customer: Optional[CustomerDTO] = None
     delivery: Optional[DeliveryDTO] = None
-    table_id: Optional[int] = None
-    check_id: Optional[int] = None
+    table_id: Optional[str | int] = None
+    check_id: Optional[str | int] = None
     created_at: Optional[str] = None
