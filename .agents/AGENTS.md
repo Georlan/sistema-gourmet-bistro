@@ -176,3 +176,71 @@ Arquitetura que estamos construindo.
 Não afirmar que o Caixa, PDV ou qualquer outro consumidor já usa Order.display_number até isso ser efetivamente implementado e validado.
 
 Se durante a refatoração forem encontradas novas inconsistências entre Comanda e Pedido, registrar antes de corrigir e verificar se a correção pertence à fase atual.
+
+---
+
+# KÔMA — Product Intent Protection
+
+Durante auditorias, refatorações e análises visuais:
+
+NUNCA classifique automaticamente uma diferença entre telas como bug.
+
+Antes de propor alteração, classifique o achado em uma destas categorias:
+
+[BUG CONFIRMADO]
+Existe comportamento contrário a uma regra de produto conhecida, invariante, teste ou especificação existente.
+
+[COMPORTAMENTO INTENCIONAL]
+Existe evidência de que a diferença foi deliberadamente projetada. Preservar.
+
+[AMBIGUIDADE DE UI]
+A regra pode estar correta, mas label, apresentação ou contexto podem induzir interpretação errada. Não alterar regra de domínio.
+
+[HIPÓTESE DE UX]
+Parece estranho ao agente, mas não existe especificação provando que está errado. Nunca corrigir automaticamente.
+
+[NÃO DETERMINADO]
+Falta evidência para decidir.
+
+REGRA CRÍTICA:
+
+Diferença visual ≠ inconsistência de domínio.
+Diferença entre projeções ≠ bug.
+Preferência do agente ≠ requisito do produto.
+
+Antes de modificar comportamento já existente, procurar:
+1. testes que o protegem;
+2. comentários/documentação;
+3. regras de negócio;
+4. comportamento equivalente em outras telas;
+5. intenção de produto já definida.
+
+Se uma alteração modificar significado operacional, cálculo, status, agrupamento, totalização ou fluxo do usuário, PARAR e apresentar a proposta antes de implementar.
+
+Em particular, preservar esta decisão do Caixa:
+
+Uma mesma Comanda pode ser projetada em diferentes fatias operacionais.
+
+Exemplo:
+
+Comanda total = R$160
+Em preparo = R$112
+Pronto = R$48
+
+112 + 48 = 160.
+
+Esses valores parciais são intencionais e permitem ao operador saber quanto valor está pronto e quanto ainda está em produção.
+
+Não substituir os subtotais das fatias pelo total da Comanda.
+
+É permitido melhorar a clareza dos labels sem alterar o cálculo, desde que isso pertença ao escopo da fase atual.
+
+Também não assumir que cards visualmente separados correspondem automaticamente a Orders/Lancamentos diferentes.
+Antes de aplicar identificadores como 24-A/24-B, confirmar qual lancamento_id / identidade operacional cada card representa.
+
+Quando houver dúvida entre:
+"isso parece inconsistente"
+e
+"isso pode ser uma decisão de produto",
+
+classificar como HIPÓTESE e não alterar.
