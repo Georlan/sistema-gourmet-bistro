@@ -228,6 +228,8 @@ class TestOrderQuoteValueObjects:
             items=(item,),
             subtotal=Decimal("56.00"),
             modifiers_total=Decimal("15.00"),
+            coupon_discount=Decimal("5.00"),
+            cashback_discount=Decimal("0.00"),
             discount_total=Decimal("5.00"),
             delivery_fee=Decimal("8.00"),
             service_fee=Decimal("0.00"),
