@@ -254,7 +254,7 @@ jobs:
               db.execute(text("""
                   INSERT INTO comandas (
                       id, restaurante_id, mesa_id, garcom_id, tipo,
-                      numero_pedido, valor_pago, fechada, aberta_em
+                      numero_pedido, valor_pago, fechada, criado_em
                   ) VALUES (
                       :id, :rid, :mesa_id, :garcom_id, :tipo,
                       :numero_pedido, :valor_pago, :fechada, CURRENT_TIMESTAMP
@@ -346,6 +346,13 @@ jobs:
                   WHERE restaurante_id = 9901 AND id = 'lan-b1-upgrade'
               """)).scalar_one()
               assert launch_origin == "desconhecida", launch_origin
+
+              launch_status = conn.execute(text("""
+                  SELECT status
+                  FROM lancamentos
+                  WHERE restaurante_id = 9901 AND id = 'lan-b1-upgrade'
+              """)).scalar_one()
+              assert launch_status == "pronto", f"Expected backfilled 'pronto', got: {launch_status}"
 
               intents = conn.execute(text(
                   "SELECT COUNT(*) FROM smartpos_payment_intents WHERE restaurante_id = 9901"

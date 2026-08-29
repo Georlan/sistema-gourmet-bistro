@@ -123,14 +123,26 @@ def test_dispatcher_skips_repeated_diagnostics_and_preserves_fifo(temp_dir):
 
 
 def test_dispatcher_processes_different_printers_in_parallel(temp_dir):
+    import threading
+
     journal = PrintJournal(os.path.join(temp_dir, "parallel.db"))
     adapter = MagicMock()
 
-    def slow_submit(*args, **kwargs):
-        time.sleep(0.12)
+    # Usa Barrier(2) para provar deterministicamente que duas impressoras distintas
+    # entram em execução simultânea antes de qualquer uma ser liberada.
+    barrier = threading.Barrier(2)
+    entered_simultaneously = []
+
+    def parallel_submit(*args, **kwargs):
+        printer_name = args[1] if len(args) > 1 else kwargs.get("printer_name", "printer")
+        try:
+            barrier.wait(timeout=5.0)
+            entered_simultaneously.append(printer_name)
+        except threading.BrokenBarrierError:
+            pass
         return True
 
-    adapter.print_ticket.side_effect = slow_submit
+    adapter.print_ticket.side_effect = parallel_submit
     jobs = [
         {
             "id": "job-kitchen",
@@ -148,7 +160,6 @@ def test_dispatcher_processes_different_printers_in_parallel(temp_dir):
         },
     ]
 
-    started = time.perf_counter()
     outcomes = dispatch_claimed_jobs(
         adapter,
         journal,
@@ -156,10 +167,55 @@ def test_dispatcher_processes_different_printers_in_parallel(temp_dir):
         {"COZINHA": "G250", "BAR": "Bar Thermal"},
         max_parallel_printers=2,
     )
-    elapsed = time.perf_counter() - started
 
     assert [item["state"] for item in outcomes] == ["accepted", "accepted"]
-    assert elapsed < 0.21
+    assert len(entered_simultaneously) == 2
+    assert set(entered_simultaneously) == {"G250", "Bar Thermal"}
+
+
+def test_dispatcher_serializes_jobs_for_same_printer(temp_dir):
+    import threading
+
+    journal = PrintJournal(os.path.join(temp_dir, "same_printer.db"))
+    adapter = MagicMock()
+
+    active_count = 0
+    max_concurrent_for_same_printer = 0
+    lock = threading.Lock()
+
+    def tracking_submit(*args, **kwargs):
+        nonlocal active_count, max_concurrent_for_same_printer
+        with lock:
+            active_count += 1
+            if active_count > max_concurrent_for_same_printer:
+                max_concurrent_for_same_printer = active_count
+        time.sleep(0.01)
+        with lock:
+            active_count -= 1
+        return True
+
+    adapter.print_ticket.side_effect = tracking_submit
+    jobs = [
+        {
+            "id": f"job-same-{i}",
+            "idempotency_key": f"ikey-same-{i}",
+            "destination": "COZINHA",
+            "document_type": "producao",
+            "payload_text": f"COZINHA {i}",
+        }
+        for i in range(4)
+    ]
+
+    outcomes = dispatch_claimed_jobs(
+        adapter,
+        journal,
+        jobs,
+        {"COZINHA": "G250"},
+        max_parallel_printers=4,
+    )
+
+    assert [item["state"] for item in outcomes] == ["accepted"] * 4
+    assert max_concurrent_for_same_printer == 1
 
 
 def test_offline_resilience_reconfirms_without_reprinting(temp_dir):
