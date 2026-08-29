@@ -140,7 +140,7 @@ def imprimir_recibo_mesa_com_identidade(
     response_model=LancamentoResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def lancar_itens_na_familia_principal(
+async def lancar_itens_na_familia_principal(
     comanda_id: str,
     lancamento_in: LancamentoCreate,
     background_tasks: BackgroundTasks,
@@ -159,7 +159,7 @@ def lancar_itens_na_familia_principal(
     from .orders import lancar_itens
 
     if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None:
-        return lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
+        return await lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
 
     try:
         materialize_table_accounts_for_write(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
@@ -175,7 +175,7 @@ def lancar_itens_na_familia_principal(
         db.rollback()
         _raise_domain(exc)
 
-    return lancar_itens(principal.id, lancamento_in, background_tasks, db, current_user)
+    return await lancar_itens(principal.id, lancamento_in, background_tasks, db, current_user)
 
 
 @router.post(
@@ -258,7 +258,7 @@ async def venda_direta_respeitando_familia_principal(
                 for item in venda_in.itens
             ],
         )
-        lancar_itens(command.id, launch_payload, background_tasks, db, current_user)
+        await lancar_itens(command.id, launch_payload, background_tasks, db, current_user)
         completed = (
             db.query(Comanda)
             .options(

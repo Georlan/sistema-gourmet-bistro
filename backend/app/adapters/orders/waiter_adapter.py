@@ -1,0 +1,416 @@
+"""Adaptador de Borda para Lançamentos de Pedidos por Garçom / Mesa (Fase 5B).
+
+Fronteira canônica: adiciona um novo pedido/lote a uma comanda/atendimento existente
+via OrderApplicationService.create_order(channel=OrderChannel.WAITER).
+"""
+
+from __future__ import annotations
+
+import datetime
+import logging
+from decimal import Decimal
+from typing import Optional
+
+from fastapi import BackgroundTasks, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, joinedload
+
+from ...application.orders.commands import (
+    CreateOrderCommand,
+    CustomerInput,
+    OrderItemInput,
+)
+from ...application.orders.service import OrderApplicationService
+from ...database import require_tenant_id
+from ...domain.orders.errors import (
+    EmptyOrderItemsError,
+    InvalidItemQuantityError,
+    ModifierGroupMismatchError,
+    ModifierInactiveError,
+    ModifierNotFoundError,
+    ProductInactiveError,
+    ProductNotFoundError,
+    ProductTenantMismatchError,
+)
+from ...domain.orders.types import FulfillmentType, OrderChannel
+from ...models import (
+    Comanda,
+    Item,
+    Lancamento,
+    Usuario,
+)
+from ...schemas import LancamentoCreate, LancamentoResponse
+from ...services.atendimentos import (
+    ensure_atendimento_for_comanda,
+    ensure_launch_identity,
+)
+from ...services.printing import (
+    PrintingRequestError,
+    enqueue_table_receipt,
+)
+from .pos_adapter import require_open_cash_shift
+from ...waiter_permissions import (
+    require_waiter_permission,
+    waiter_permission_enabled,
+)
+from ...websocket_manager import manager
+
+
+logger = logging.getLogger("koma.adapters.waiter")
+
+
+class WaiterAdapter:
+    """Adaptador de borda para o canal Garçom / Lançamentos em Comanda Existente."""
+
+    @classmethod
+    async def handle_launch_items(
+        cls,
+        *,
+        comanda_id: str,
+        lancamento_in: LancamentoCreate,
+        background_tasks: BackgroundTasks,
+        db: Session,
+        current_user: Usuario,
+    ) -> LancamentoResponse:
+        """Processa o lançamento de itens em comanda existente delegando ao Core."""
+        rid = require_tenant_id()
+        normalized_idempotency_key = (
+            lancamento_in.idempotency_key.strip()
+            if lancamento_in.idempotency_key
+            else None
+        )
+
+        # 1. Validação de comanda existente e ativa
+        comanda = (
+            db.query(Comanda)
+            .filter(
+                Comanda.restaurante_id == rid,
+                Comanda.id == comanda_id,
+            )
+            .first()
+        )
+        if not comanda:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Comanda não encontrada",
+            )
+
+        if comanda.fechada:
+            if not comanda.mesa_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Comanda já fechada. Reabra antes de lançar novos itens.",
+                )
+
+        # 2. Replay rápido de idempotência
+        def _ensure_launch_replay_matches(existing_launch: Lancamento) -> Lancamento:
+            existing_items = sorted(
+                (
+                    item.produto_id,
+                    (item.observacao or "").strip(),
+                )
+                for item in existing_launch.itens
+                if item.status != "cancelado"
+            )
+            requested_items = sorted(
+                (
+                    item.produto_id,
+                    (item.observacao or "").strip(),
+                )
+                for item in lancamento_in.itens
+            )
+            if (
+                existing_launch.comanda_id != comanda_id
+                or existing_launch.garcom_id != lancamento_in.garcom_id
+                or existing_items != requested_items
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A chave idempotente já foi usada em outro lançamento.",
+                )
+            return existing_launch
+
+        if normalized_idempotency_key:
+            existing_launch = (
+                db.query(Lancamento)
+                .options(joinedload(Lancamento.itens))
+                .filter(
+                    Lancamento.restaurante_id == rid,
+                    Lancamento.idempotency_key == normalized_idempotency_key,
+                )
+                .first()
+            )
+            if existing_launch is not None:
+                return _ensure_launch_replay_matches(existing_launch)
+
+        # 3. Políticas de permissões e caixa
+        has_existing_items = (
+            db.query(Item.id)
+            .filter(
+                Item.restaurante_id == rid,
+                Item.comanda_id == comanda.id,
+                Item.status != "cancelado",
+            )
+            .first()
+            is not None
+        )
+        if has_existing_items:
+            require_waiter_permission(
+                db,
+                current_user,
+                "perm_garcom_editar",
+            )
+
+        require_open_cash_shift(db, rid)
+
+        # 4. Resolução de operador / garçom
+        garcom_id = lancamento_in.garcom_id or current_user.id
+        garcom = (
+            db.query(Usuario)
+            .filter(
+                Usuario.restaurante_id == rid,
+                Usuario.id == garcom_id,
+            )
+            .first()
+        )
+        if not garcom:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Garçom '{lancamento_in.garcom_id}' não encontrado",
+            )
+
+        # 5. Mapeamento para CreateOrderCommand
+        if comanda.tipo == "Entrega":
+            fulfillment = FulfillmentType.DELIVERY
+        elif comanda.tipo == "Retirada":
+            fulfillment = FulfillmentType.PICKUP
+        else:
+            fulfillment = FulfillmentType.DINE_IN
+
+        items_input = tuple(
+            OrderItemInput(
+                product_id=item.produto_id,
+                quantity=Decimal("1"),
+                modifier_ids=(),
+                notes=item.observacao or "",
+            )
+            for item in lancamento_in.itens
+        )
+
+        customer_name = (
+            lancamento_in.itens[0].cliente_nome
+            if lancamento_in.itens and lancamento_in.itens[0].cliente_nome
+            else comanda.identificador
+        )
+
+        cmd = CreateOrderCommand(
+            restaurant_id=rid,
+            channel=OrderChannel.WAITER,
+            fulfillment=fulfillment,
+            items=items_input,
+            customer=CustomerInput(name=customer_name) if customer_name else None,
+            check_id=comanda.id,
+            table_id=str(comanda.mesa_id) if comanda.mesa_id is not None else None,
+            idempotency_key=normalized_idempotency_key,
+            operator_user_id=garcom_id,
+        )
+
+        # 6. Criação via Core Universal de Pedidos
+        try:
+            order_dto = OrderApplicationService.create_order(db, cmd, commit=False)
+
+            # Recarrega lançamento persistido
+            novo_lancamento = (
+                db.query(Lancamento)
+                .options(joinedload(Lancamento.itens).joinedload(Item.produto))
+                .filter(
+                    Lancamento.restaurante_id == rid,
+                    Lancamento.id == order_dto.order_id,
+                )
+                .first()
+            )
+            if not novo_lancamento:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Erro ao recuperar lançamento criado.",
+                )
+
+            # Identificador operacional canônico para consumo no local
+            if comanda.tipo == "Consumo no Local" and comanda.mesa_id is not None:
+                ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
+                ensure_launch_identity(db, novo_lancamento)
+
+            # 7. Impressão de Produção
+            itens_cozinha = [
+                it for it in novo_lancamento.itens
+                if it.status != "cancelado"
+            ]
+            should_print = any(
+                (
+                    it.produto.categoria.destino_impressao
+                    if (it.produto and it.produto.categoria)
+                    else getattr(it.produto, "local_impressao", getattr(it.produto, "destino", "COZINHA"))
+                ) not in ("NENHUM", "NONE", "")
+                for it in itens_cozinha
+            )
+
+            novo_lancamento.dispensado_impressao = False
+            if should_print and waiter_permission_enabled(
+                db,
+                current_user,
+                "perm_garcom_print",
+            ):
+                try:
+                    if comanda.tipo == "Consumo no Local" and comanda.mesa_id is not None:
+                        enqueue_table_receipt(
+                            db,
+                            rid,
+                            int(comanda.mesa_id),
+                            apenas_valores=False,
+                            source_type="lancamento",
+                            source_id=novo_lancamento.id,
+                            idempotency_key=f"mesa:auto:lancamento:{novo_lancamento.id}",
+                        )
+                    else:
+                        from ...domain.printing import PrintDocumentService
+                        from ...domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
+                        from ...domain.printing.time import get_operational_now
+                        from ...printing_background import print_in_background
+
+                        p_items = [
+                            DomainPrintItem(
+                                codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
+                                nome=it.produto.nome,
+                                quantidade=1,
+                                preco_unit=it.preco_unit,
+                                observacao=it.observacao,
+                                cliente_nome=it.cliente_nome,
+                                destino_impressao=(
+                                    it.produto.categoria.destino_impressao
+                                    if (it.produto and it.produto.categoria)
+                                    else getattr(it.produto, "local_impressao", getattr(it.produto, "destino", "COZINHA"))
+                                ),
+                            )
+                            for it in itens_cozinha
+                        ]
+                        doc_data = OrderPrintData(
+                            numero_pedido=str(comanda.numero_pedido),
+                            mesa="BALCAO",
+                            tipo_pedido=comanda.tipo,
+                            garcom_nome=garcom.nome if garcom else "GARCOM",
+                            horario=get_operational_now().strftime("%H:%M"),
+                            itens=p_items,
+                            restaurante_nome="KÔMA",
+                        )
+                        docs = PrintDocumentService.generate_production(doc_data)
+                        for dest_name, ticket_text in docs.items():
+                            background_tasks.add_task(
+                                print_in_background,
+                                printer_name=dest_name,
+                                ticket_text=ticket_text,
+                                document_type="producao",
+                                source_type="pedido",
+                                source_id=comanda.id,
+                                restaurante_id=rid,
+                            )
+                except PrintingRequestError as print_err:
+                    logger.warning("Falha ao gerar via canônica do lançamento: %s", print_err)
+                except Exception as print_err:
+                    logger.warning("Falha ao gerar impressões do lançamento do garçom: %s", print_err)
+            else:
+                novo_lancamento.dispensado_impressao = True
+
+            db.commit()
+            db.refresh(novo_lancamento)
+
+        except HTTPException:
+            db.rollback()
+            raise
+        except (ProductNotFoundError, ProductInactiveError, ProductTenantMismatchError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Um produto do pedido não está mais disponível.",
+            )
+        except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Modificador não encontrado ou inativo.",
+            )
+        except EmptyOrderItemsError:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="O pedido deve conter pelo menos um item.",
+            )
+        except InvalidItemQuantityError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(err),
+            )
+        except IntegrityError:
+            db.rollback()
+            if normalized_idempotency_key:
+                concurrent_launch = (
+                    db.query(Lancamento)
+                    .options(joinedload(Lancamento.itens))
+                    .filter(
+                        Lancamento.restaurante_id == rid,
+                        Lancamento.idempotency_key == normalized_idempotency_key,
+                    )
+                    .first()
+                )
+                if concurrent_launch is not None:
+                    return _ensure_launch_replay_matches(concurrent_launch)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Conflito de integridade ao processar o lançamento.",
+            )
+        except Exception as exc:
+            db.rollback()
+            logger.exception("Falha inesperada ao processar lançamento do garçom: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao processar lançamento do pedido.",
+            )
+
+        # 8. Broadcasts de WebSocket
+        if comanda.mesa_id is not None:
+            await manager.broadcast(
+                {
+                    "type": "MESA_UPDATED",
+                    "mesa_id": comanda.mesa_id,
+                    "status": "OCUPADA",
+                },
+                tenant_id=current_user.tenant_id,
+            )
+
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "type": "LANCAMENTO_CRIADO",
+                "comanda_id": comanda.id,
+                "lancamento_id": novo_lancamento.id,
+                "itens": [
+                    {
+                        "id": it.id,
+                        "produto_nome": it.produto.nome if it.produto else "",
+                        "quantidade": 1,
+                        "observacao": it.observacao,
+                        "preco_unit": it.preco_unit,
+                    }
+                    for it in novo_lancamento.itens
+                ],
+            },
+            tenant_id=current_user.tenant_id,
+        )
+
+        background_tasks.add_task(
+            manager.broadcast,
+            {"event": "tables_updated"},
+            require_tenant_id(),
+        )
+
+        return novo_lancamento
