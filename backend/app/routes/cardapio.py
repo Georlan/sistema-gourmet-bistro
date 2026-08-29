@@ -2,35 +2,22 @@ import uuid
 import datetime
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
-from sqlalchemy import or_, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id, tenant_session_scope
-from ..models import (
-    Comanda,
-    ConfiguracaoRestaurante,
-    Cupom,
-    HistoricoFidelidade,
-    Item,
-    ItemModificador,
-    Lancamento,
-    OpcaoModificador,
-    Produto,
-    Restaurante,
-    Usuario,
-)
+from ..models import Comanda
 from ..schemas import CardapioPedidoCreate
-from .cupons import _validar_regras_cupom
-from ..websocket_manager import manager
-from .cardapio_digital import resolve_restaurant_id
-from .orders import gerar_novo_numero_pedido
-from ..services.clientes import (
-    cadastrar_ou_atualizar_cliente,
-    normalizar_telefone_cliente,
+from ..services.public_orders import (
+    MAX_PUBLIC_ORDERS_PER_IP,
+    MAX_PUBLIC_ORDERS_PER_PHONE,
+    PUBLIC_ORDER_RATE_WINDOW_SECONDS,
+    authenticated_customer,
+    client_ip as _client_ip,
+    consume_rate_limit as _consume_rate_limit,
+    enforce_public_order_rate_limits,
+    resolve_restaurant_id,
 )
-from ..services.inventory import consumir_estoque_dos_itens
-from ..services.online_order_policy import evaluate_online_order_policy
-from .cardapio_clientes import authenticated_customer, _client_ip, _consume_rate_limit
+from ..adapters.orders.web_adapter import CardapioWebAdapter
 
 logger = logging.getLogger("koma.cardapio")
 router = APIRouter(
@@ -39,9 +26,6 @@ router = APIRouter(
 )
 
 MAX_PUBLIC_ORDER_UNITS = 200
-PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
-MAX_PUBLIC_ORDERS_PER_PHONE = 8
-MAX_PUBLIC_ORDERS_PER_IP = 120
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
 
 
@@ -87,28 +71,12 @@ def _enforce_public_order_rate_limits(
     telefone: str,
 ) -> None:
     """Persiste limites antes da transação do pedido para resistir a payloads inválidos."""
-    _consume_rate_limit(
+    enforce_public_order_rate_limits(
         db,
+        request=request,
         restaurante_id=restaurante_id,
-        scope="public_order_phone",
-        raw_key=telefone,
-        max_requests=MAX_PUBLIC_ORDERS_PER_PHONE,
-        window_seconds=PUBLIC_ORDER_RATE_WINDOW_SECONDS,
+        telefone=telefone,
     )
-    db.commit()
-
-    _consume_rate_limit(
-        db,
-        restaurante_id=restaurante_id,
-        scope="public_order_ip",
-        raw_key=_client_ip(request),
-        max_requests=MAX_PUBLIC_ORDERS_PER_IP,
-        window_seconds=PUBLIC_ORDER_RATE_WINDOW_SECONDS,
-    )
-    db.commit()
-
-
-from ..adapters.orders.web_adapter import CardapioWebAdapter
 
 
 @router.post("/pedidos", status_code=status.HTTP_201_CREATED)

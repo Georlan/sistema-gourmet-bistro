@@ -46,21 +46,23 @@ from ...models import (
     Usuario,
 )
 from ...schemas import CardapioPedidoCreate
-from ...services.clientes import (
-    cadastrar_ou_atualizar_cliente,
-    normalizar_telefone_cliente,
-)
+from ...services.clientes import normalizar_telefone_cliente
 from ...services.online_order_policy import evaluate_online_order_policy
+from ...services.public_orders import (
+    MAX_PUBLIC_ORDERS_PER_IP,
+    MAX_PUBLIC_ORDERS_PER_PHONE,
+    PUBLIC_ORDER_RATE_WINDOW_SECONDS,
+    authenticated_customer,
+    client_ip,
+    consume_rate_limit,
+    enforce_public_order_rate_limits,
+    resolve_restaurant_id,
+)
 from ...websocket_manager import manager
-from ...routes.cardapio_digital import resolve_restaurant_id
-from ...routes.cardapio_clientes import authenticated_customer, _client_ip, _consume_rate_limit
 
 logger = logging.getLogger("koma.adapters.web")
 
 MAX_PUBLIC_ORDER_UNITS = 200
-PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
-MAX_PUBLIC_ORDERS_PER_PHONE = 8
-MAX_PUBLIC_ORDERS_PER_IP = 120
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
 
 
@@ -110,29 +112,11 @@ def _enforce_public_order_rate_limits(
     telefone: str,
 ) -> None:
     """Persiste limites antes da transação do pedido para resistir a payloads inválidos."""
-    from ...routes import cardapio
-
-    max_phone = getattr(cardapio, "MAX_PUBLIC_ORDERS_PER_PHONE", MAX_PUBLIC_ORDERS_PER_PHONE)
-    max_ip = getattr(cardapio, "MAX_PUBLIC_ORDERS_PER_IP", MAX_PUBLIC_ORDERS_PER_IP)
-    window_sec = getattr(cardapio, "PUBLIC_ORDER_RATE_WINDOW_SECONDS", PUBLIC_ORDER_RATE_WINDOW_SECONDS)
-
-    _consume_rate_limit(
+    enforce_public_order_rate_limits(
         db,
+        request=request,
         restaurante_id=restaurante_id,
-        scope="public_order_phone",
-        raw_key=telefone,
-        max_requests=max_phone,
-        window_seconds=window_sec,
-    )
-    db.commit()
-
-    _consume_rate_limit(
-        db,
-        restaurante_id=restaurante_id,
-        scope="public_order_ip",
-        raw_key=_client_ip(request),
-        max_requests=max_ip,
-        window_seconds=window_sec,
+        telefone=telefone,
     )
     db.commit()
 

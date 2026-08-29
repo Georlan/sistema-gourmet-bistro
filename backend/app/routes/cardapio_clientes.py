@@ -71,65 +71,11 @@ def _profile(cliente: Cliente) -> CustomerProfileResponse:
     )
 
 
-def _client_ip(request: Request) -> str:
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else "unknown"
-
-
-def _consume_rate_limit(
-    db: Session,
-    *,
-    restaurante_id: int,
-    scope: str,
-    raw_key: str,
-    max_requests: int,
-    window_seconds: int,
-) -> None:
-    now = _utcnow()
-    key_hash = hash_public_rate_key(restaurante_id, scope, raw_key)
-    rate = db.query(PublicRateLimit).filter(
-        PublicRateLimit.restaurante_id == restaurante_id,
-        PublicRateLimit.scope == scope,
-        PublicRateLimit.key_hash == key_hash,
-    ).with_for_update().first()
-
-    if rate is None:
-        candidate = PublicRateLimit(
-            restaurante_id=restaurante_id,
-            scope=scope,
-            key_hash=key_hash,
-            janela_iniciada_em=now,
-            requisicoes=1,
-        )
-        try:
-            with db.begin_nested():
-                db.add(candidate)
-                db.flush([candidate])
-            return
-        except IntegrityError:
-            rate = db.query(PublicRateLimit).filter(
-                PublicRateLimit.restaurante_id == restaurante_id,
-                PublicRateLimit.scope == scope,
-                PublicRateLimit.key_hash == key_hash,
-            ).with_for_update().one()
-
-    window_start = rate.janela_iniciada_em
-    if window_start.tzinfo is None:
-        window_start = window_start.replace(tzinfo=datetime.timezone.utc)
-
-    if now - window_start >= datetime.timedelta(seconds=max(60, window_seconds)):
-        rate.janela_iniciada_em = now
-        rate.requisicoes = 1
-        return
-
-    if int(rate.requisicoes or 0) >= max(1, max_requests):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Muitas tentativas. Aguarde alguns minutos e tente novamente.",
-        )
-    rate.requisicoes = int(rate.requisicoes or 0) + 1
+from ..services.public_orders import (
+    authenticated_customer,
+    client_ip as _client_ip,
+    consume_rate_limit as _consume_rate_limit,
+)
 
 
 @contextmanager
@@ -147,42 +93,6 @@ def customer_token_scope(
 
     with tenant_session_scope(db, claims.restaurante_id):
         yield claims
-
-
-def authenticated_customer(
-    db: Session,
-    *,
-    raw_token: str,
-    expected_restaurante_id: int | None = None,
-) -> tuple[CustomerTokenClaims, Cliente]:
-    try:
-        claims = decode_customer_access_token(raw_token)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(exc),
-        ) from exc
-
-    if (
-        expected_restaurante_id is not None
-        and claims.restaurante_id != expected_restaurante_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sessão não pertence a este restaurante.",
-        )
-
-    cliente = buscar_cliente_por_id(
-        db,
-        restaurante_id=claims.restaurante_id,
-        cliente_id=claims.cliente_id,
-    )
-    if cliente is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sessão de cliente inválida ou expirada.",
-        )
-    return claims, cliente
 
 
 @router.post(

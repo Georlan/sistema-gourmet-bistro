@@ -231,3 +231,72 @@ class TestCardapioWebAdapter:
             assert comandas_count == 1
         finally:
             db.close()
+
+    def test_web_adapter_modifier_group_integrity_and_mismatch_protection(self, char_client, char_setup):
+        """[MODIFICADORES] Garante paridade: modificador permitido é aceito; grupo não vinculado é rejeitado."""
+        db = SessionLocal()
+        try:
+            from app.models import GrupoModificador, OpcaoModificador
+            grp_pizza = db.query(GrupoModificador).filter(GrupoModificador.id == "grp-char-pizza-only").first()
+            if not grp_pizza:
+                grp_pizza = GrupoModificador(
+                    id="grp-char-pizza-only",
+                    restaurante_id=CHAR_RESTAURANT_ID,
+                    nome="Bordas de Pizza",
+                    min_selecoes=0,
+                    max_selecoes=1,
+                    tipo="opcional",
+                )
+                db.add(grp_pizza)
+                db.flush()
+
+            opt_borda = db.query(OpcaoModificador).filter(OpcaoModificador.id == "mod-char-borda-catupiry").first()
+            if not opt_borda:
+                opt_borda = OpcaoModificador(
+                    id="mod-char-borda-catupiry",
+                    restaurante_id=CHAR_RESTAURANT_ID,
+                    grupo_id="grp-char-pizza-only",
+                    nome="Borda Catupiry",
+                    preco_adicional=8.0,
+                    ativo=True,
+                )
+                db.add(opt_borda)
+            db.commit()
+        finally:
+            db.close()
+
+        # 1. Modificador vinculado ao grupo do produto (Burguer + Bacon) -> 201 OK
+        valid_payload = {
+            "restaurante_id": CHAR_RESTAURANT_ID,
+            "cliente_nome": "Cliente Mod Valido",
+            "cliente_telefone": "11999990007",
+            "tipo_pedido": "retirada",
+            "itens": [
+                {
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": ["mod-char-bacon"],
+                }
+            ],
+        }
+        res_valid = char_client.post("/cardapio/pedidos", json=valid_payload)
+        assert res_valid.status_code == 201
+        assert res_valid.json()["total"] == 30.0
+
+        # 2. Modificador de outro grupo não vinculado ao produto (Burguer + Borda de Pizza) -> 404 Erro de Domínio
+        mismatch_payload = {
+            "restaurante_id": CHAR_RESTAURANT_ID,
+            "cliente_nome": "Cliente Mod Invalido",
+            "cliente_telefone": "11999990008",
+            "tipo_pedido": "retirada",
+            "itens": [
+                {
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": ["mod-char-borda-catupiry"],
+                }
+            ],
+        }
+        res_mismatch = char_client.post("/cardapio/pedidos", json=mismatch_payload)
+        assert res_mismatch.status_code == 404
+        assert "Modificador não encontrado" in res_mismatch.json()["detail"]
