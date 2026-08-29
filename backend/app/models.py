@@ -436,6 +436,10 @@ class Lancamento(Base):
             "idempotency_key IS NULL OR trim(idempotency_key) <> ''",
             name="ck_lancamentos_idempotency_nonblank",
         ),
+        CheckConstraint(
+            "status IN ('pendente', 'aceito', 'producao', 'pronto', 'finalizado', 'recusado', 'cancelado')",
+            name="ck_lancamentos_status",
+        ),
     )
 
     id = Column(String, primary_key=True, index=True)
@@ -448,6 +452,13 @@ class Lancamento(Base):
         nullable=False,
         default="desconhecida",
         server_default="desconhecida",
+    )
+    status = Column(
+        String(32),
+        nullable=False,
+        default="pendente",
+        server_default="pendente",
+        index=True,
     )
     timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     

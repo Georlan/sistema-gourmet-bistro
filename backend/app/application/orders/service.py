@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Any, Optional, Sequence
 import uuid
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ...domain.orders.events import (
@@ -33,6 +34,7 @@ from ...domain.orders.types import (
     format_order_family_id,
     normalize_to_fulfillment,
     normalize_to_order_status,
+    sequence_to_letters,
     to_legacy_delivery_status,
     to_legacy_fulfillment,
     to_legacy_order_status,
@@ -50,13 +52,14 @@ from ...models import (
     Restaurante,
     Usuario,
 )
-from ...routes.orders import gerar_novo_numero_pedido
+from ...services.atendimentos import ensure_launch_identity
 from ...services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ...services.online_order_policy import evaluate_online_order_policy
+from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from .commands import (
     AcceptOrderCommand,
     CancelOrderCommand,
@@ -169,7 +172,7 @@ class OrderApplicationService:
                     .first()
                 )
                 if comanda:
-                    return cls._to_order_dto(comanda=comanda, lancamento=existing_lancamento)
+                    return cls._to_order_dto(db=db, comanda=comanda, lancamento=existing_lancamento)
 
             # Fallback de idempotência por comanda
             existing_comanda = (
@@ -187,16 +190,16 @@ class OrderApplicationService:
                     .order_by(Lancamento.timestamp.asc())
                     .first()
                 )
-                return cls._to_order_dto(comanda=existing_comanda, lancamento=lanc)
+                return cls._to_order_dto(db=db, comanda=existing_comanda, lancamento=lanc)
 
-        # 2. Normalização e Validação Pura
+        # 2. Validação Pura e Contexto
+        delivery_addr = cmd.delivery.address if cmd.delivery else None
+        delivery_neighborhood = cmd.delivery.neighborhood if cmd.delivery else None
         clean_phone = (
             normalizar_telefone_cliente(cmd.customer.phone)
             if cmd.customer and cmd.customer.phone
             else None
         )
-        delivery_addr = cmd.delivery.address if cmd.delivery else (cmd.customer.address if cmd.customer else None)
-        delivery_neighborhood = cmd.delivery.neighborhood if cmd.delivery else None
 
         itens_solicitados = [
             {
@@ -223,7 +226,7 @@ class OrderApplicationService:
 
         validated_input = OrderValidationService.validate(val_context)
 
-        # 3. Cotação Financeira Pura (com Frete Autoritativo no Servidor)
+        # 3. Cotação Financeira Pura
         subtotal_base = sum(
             (it.base_price + sum(m.price for m in it.modifiers)) * it.quantity
             for it in validated_input.items
@@ -271,7 +274,7 @@ class OrderApplicationService:
                 endereco=delivery_addr,
             )
 
-        # 6. Resolução da Comanda (Nova ou Existente)
+        # 6. Resolução da Comanda
         comanda = None
         if cmd.check_id:
             comanda = (
@@ -284,16 +287,19 @@ class OrderApplicationService:
                 .first()
             )
 
-        # Status inicial e tipo
+        # Status inicial de comanda e lançamento
         if cmd.fulfillment == FulfillmentType.PICKUP:
             tipo_comanda = "Retirada"
             auto_delivery_status = "producao"
+            initial_lancamento_status = "producao"
         elif cmd.fulfillment == FulfillmentType.DELIVERY:
             tipo_comanda = "Delivery"
             auto_delivery_status = "pendente"
+            initial_lancamento_status = "pendente"
         else:
             tipo_comanda = "Consumo no Local"
             auto_delivery_status = None
+            initial_lancamento_status = "producao"
 
         cupom_db_id = None
         if quote.coupon_discount > Decimal("0.00") and cmd.coupon_code:
@@ -312,127 +318,152 @@ class OrderApplicationService:
 
         parsed_troco = _parse_troco_para_float(cmd.change_for)
 
-        if comanda is None:
-            comanda_id = str(cmd.check_id) if cmd.check_id else f"c-{uuid.uuid4().hex[:8]}"
-            numero_pedido = gerar_novo_numero_pedido(db, restaurante_id=cmd.restaurant_id)
+        try:
+            if comanda is None:
+                comanda_id = str(cmd.check_id) if cmd.check_id else f"c-{uuid.uuid4().hex[:8]}"
+                numero_pedido = gerar_novo_numero_pedido_atomico(db, restaurante_id=cmd.restaurant_id)
 
-            comanda = Comanda(
-                id=comanda_id,
-                restaurante_id=cmd.restaurant_id,
-                cliente_id=cliente.id if cliente is not None else None,
-                mesa_id=str(cmd.table_id) if cmd.table_id else None,
-                garcom_id=garcom_id,
-                tipo=tipo_comanda,
-                identificador=cmd.customer.name if cmd.customer else None,
-                numero_pedido=numero_pedido,
-                fechada=False,
-                criado_em=datetime.datetime.now(datetime.timezone.utc),
-                delivery_status=auto_delivery_status,
-                delivery_telefone=clean_phone,
-                delivery_endereco=delivery_addr,
-                delivery_bairro=delivery_neighborhood,
-                delivery_taxa=float(quote.delivery_fee),
-                cupom_id=cupom_db_id,
-                valor_desconto_cupom=float(quote.coupon_discount),
-                valor_desconto_cashback=float(quote.cashback_discount),
-                delivery_forma_pagamento=cmd.payment_method,
-                delivery_troco_para=parsed_troco,
-                idempotency_key=cmd.idempotency_key,
-            )
-            db.add(comanda)
-            db.flush()
-        else:
-            # Comanda existente (ex: mesa ou segundo pedido)
-            if quote.coupon_discount > Decimal("0.00") and cupom_db_id:
-                comanda.cupom_id = cupom_db_id
-                comanda.valor_desconto_cupom = float(quote.coupon_discount)
-            if quote.cashback_discount > Decimal("0.00"):
-                comanda.valor_desconto_cashback = float(quote.cashback_discount)
-
-        # 7. Efeitos Transacionais de Cashback no Saldo do Cliente
-        if quote.cashback_discount > Decimal("0.00") and cliente is not None:
-            cliente.saldo_cashback = max(
-                0.0,
-                round(float(cliente.saldo_cashback or 0.0) - float(quote.cashback_discount), 2),
-            )
-            hist = HistoricoFidelidade(
-                restaurante_id=cmd.restaurant_id,
-                cliente_id=cliente.id,
-                _cliente_telefone=cliente.telefone,
-                tipo_movimentacao="RESGATE",
-                valor_delta=-float(quote.cashback_discount),
-                comanda_id=comanda.id,
-            )
-            db.add(hist)
-
-        # 8. Criação do Pedido / Lançamento Canônico (Order != Comanda)
-        existing_launches_count = (
-            db.query(Lancamento)
-            .filter(Lancamento.comanda_id == comanda.id)
-            .count()
-        )
-        sequence = existing_launches_count + 1
-
-        origem_legada = _CHANNEL_TO_ORIGEM.get(cmd.channel, "cardapio")
-        lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
-        novo_lancamento = Lancamento(
-            id=lancamento_id,
-            restaurante_id=cmd.restaurant_id,
-            comanda_id=comanda.id,
-            garcom_id=garcom_id,
-            origem=origem_legada,
-            idempotency_key=cmd.idempotency_key,
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
-        )
-        db.add(novo_lancamento)
-        db.flush()
-
-        # 9. Persistência dos Itens e Modificadores
-        itens_criados: list[Item] = []
-        for v_item in validated_input.items:
-            unit_price = float(v_item.base_price + sum(m.price for m in v_item.modifiers))
-            qty_int = int(v_item.quantity)
-            for _ in range(qty_int):
-                item_id = f"i-{uuid.uuid4().hex[:8]}"
-                item_db = Item(
-                    id=item_id,
+                comanda = Comanda(
+                    id=comanda_id,
                     restaurante_id=cmd.restaurant_id,
-                    comanda_id=comanda.id,
-                    lancamento_id=lancamento_id,
-                    produto_id=v_item.product_id,
-                    preco_unit=unit_price,
-                    observacao=v_item.notes or "",
-                    cliente_nome=cmd.customer.name if cmd.customer else None,
-                    status="preparando",
-                    pago=False,
+                    cliente_id=cliente.id if cliente is not None else None,
+                    mesa_id=str(cmd.table_id) if cmd.table_id else None,
+                    garcom_id=garcom_id,
+                    tipo=tipo_comanda,
+                    identificador=cmd.customer.name if cmd.customer else None,
+                    numero_pedido=numero_pedido,
+                    fechada=False,
+                    criado_em=datetime.datetime.now(datetime.timezone.utc),
+                    delivery_status=auto_delivery_status,
+                    delivery_telefone=clean_phone,
+                    delivery_endereco=delivery_addr,
+                    delivery_bairro=delivery_neighborhood,
+                    delivery_taxa=float(quote.delivery_fee),
+                    cupom_id=cupom_db_id,
+                    valor_desconto_cupom=float(quote.coupon_discount),
+                    valor_desconto_cashback=float(quote.cashback_discount),
+                    delivery_forma_pagamento=cmd.payment_method,
+                    delivery_troco_para=parsed_troco,
+                    idempotency_key=cmd.idempotency_key,
                 )
-                db.add(item_db)
-                itens_criados.append(item_db)
+                db.add(comanda)
+                db.flush()
+            else:
+                # Comanda existente (ex: mesa ou segundo pedido)
+                if quote.coupon_discount > Decimal("0.00") and cupom_db_id:
+                    comanda.cupom_id = cupom_db_id
+                    comanda.valor_desconto_cupom = float(quote.coupon_discount)
+                if quote.cashback_discount > Decimal("0.00"):
+                    comanda.valor_desconto_cashback = float(quote.cashback_discount)
 
-                for mod in v_item.modifiers:
-                    item_mod = ItemModificador(
+            # 7. Efeitos Transacionais de Cashback no Saldo do Cliente
+            if quote.cashback_discount > Decimal("0.00") and cliente is not None:
+                cliente.saldo_cashback = max(
+                    0.0,
+                    round(float(cliente.saldo_cashback or 0.0) - float(quote.cashback_discount), 2),
+                )
+                hist = HistoricoFidelidade(
+                    restaurante_id=cmd.restaurant_id,
+                    cliente_id=cliente.id,
+                    _cliente_telefone=cliente.telefone,
+                    tipo_movimentacao="RESGATE",
+                    valor_delta=-float(quote.cashback_discount),
+                    comanda_id=comanda.id,
+                )
+                db.add(hist)
+
+            # 8. Criação do Pedido / Lançamento Canônico (Order != Comanda) com status persistido
+            origem_legada = _CHANNEL_TO_ORIGEM.get(cmd.channel, "cardapio")
+            lancamento_id = f"l-{uuid.uuid4().hex[:8]}"
+            novo_lancamento = Lancamento(
+                id=lancamento_id,
+                restaurante_id=cmd.restaurant_id,
+                comanda_id=comanda.id,
+                garcom_id=garcom_id,
+                origem=origem_legada,
+                status=initial_lancamento_status,
+                idempotency_key=cmd.idempotency_key,
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+            )
+            db.add(novo_lancamento)
+            db.flush()
+
+            # Identidade operacional canônica persistida (LancamentoIdentidade para salão, família para delivery/balcão)
+            sequence, display_number = cls._resolve_order_identity(db, novo_lancamento, comanda)
+
+            # 9. Persistência dos Itens e Modificadores
+            itens_criados: list[Item] = []
+            for v_item in validated_input.items:
+                unit_price = float(v_item.base_price + sum(m.price for m in v_item.modifiers))
+                qty_int = int(v_item.quantity)
+                for _ in range(qty_int):
+                    item_id = f"i-{uuid.uuid4().hex[:8]}"
+                    item_db = Item(
+                        id=item_id,
                         restaurante_id=cmd.restaurant_id,
-                        item_id=item_id,
-                        opcao_modificador_id=mod.id,
-                        preco_aplicado=float(mod.price),
+                        comanda_id=comanda.id,
+                        lancamento_id=lancamento_id,
+                        produto_id=v_item.product_id,
+                        preco_unit=unit_price,
+                        observacao=v_item.notes or "",
+                        cliente_nome=cmd.customer.name if cmd.customer else None,
+                        status="preparando",
+                        pago=False,
                     )
-                    db.add(item_mod)
+                    db.add(item_db)
+                    itens_criados.append(item_db)
 
-        db.flush()
+                    for mod in v_item.modifiers:
+                        item_mod = ItemModificador(
+                            restaurante_id=cmd.restaurant_id,
+                            item_id=item_id,
+                            opcao_modificador_id=mod.id,
+                            preco_aplicado=float(mod.price),
+                        )
+                        db.add(item_mod)
 
-        # 10. Consumo de Estoque para Pedidos que nascem em Produção
-        if auto_delivery_status == "producao":
-            consumir_estoque_dos_itens(db, itens_criados, liberar_pendente=True)
+            db.flush()
 
-        if commit:
-            db.commit()
-            db.refresh(comanda)
-            db.refresh(novo_lancamento)
+            # 10. Consumo de Estoque para Pedidos que nascem em Produção
+            if auto_delivery_status == "producao":
+                consumir_estoque_dos_itens(db, itens_criados, liberar_pendente=True)
+
+            if commit:
+                db.commit()
+                db.refresh(comanda)
+                db.refresh(novo_lancamento)
+
+        except IntegrityError:
+            db.rollback()
+            if cmd.idempotency_key:
+                # Corrida concorrente detectada: buscar vencedor
+                winner = (
+                    db.query(Lancamento)
+                    .filter(
+                        Lancamento.restaurante_id == cmd.restaurant_id,
+                        Lancamento.idempotency_key == cmd.idempotency_key,
+                    )
+                    .first()
+                )
+                if winner:
+                    comanda = (
+                        db.query(Comanda)
+                        .filter(
+                            Comanda.restaurante_id == cmd.restaurant_id,
+                            Comanda.id == winner.comanda_id,
+                        )
+                        .first()
+                    )
+                    if comanda:
+                        return cls._to_order_dto(db=db, comanda=comanda, lancamento=winner)
+            raise
 
         return cls._to_order_dto(
+            db=db,
             comanda=comanda,
             lancamento=novo_lancamento,
             sequence=sequence,
+            display_number=display_number,
             quote=quote,
         )
 
@@ -449,7 +480,9 @@ class OrderApplicationService:
         if not comanda:
             raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
 
-        current_status = normalize_to_order_status(comanda.delivery_status)
+        current_status = normalize_to_order_status(
+            lancamento.status if lancamento and lancamento.status else comanda.delivery_status
+        )
         fulfillment = normalize_to_fulfillment(comanda.tipo)
 
         OrderStateMachine.validate_transition(
@@ -457,6 +490,9 @@ class OrderApplicationService:
             target_status=OrderStatus.PREPARING,
             fulfillment=fulfillment,
         )
+
+        if lancamento:
+            lancamento.status = "producao"
 
         comanda.delivery_status = "producao"
 
@@ -469,7 +505,7 @@ class OrderApplicationService:
             if lancamento:
                 db.refresh(lancamento)
 
-        return cls._to_order_dto(comanda=comanda, lancamento=lancamento)
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
     def mark_order_ready(
@@ -484,7 +520,9 @@ class OrderApplicationService:
         if not comanda:
             raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
 
-        current_status = normalize_to_order_status(comanda.delivery_status)
+        current_status = normalize_to_order_status(
+            lancamento.status if lancamento and lancamento.status else comanda.delivery_status
+        )
         fulfillment = normalize_to_fulfillment(comanda.tipo)
 
         OrderStateMachine.validate_transition(
@@ -493,11 +531,17 @@ class OrderApplicationService:
             fulfillment=fulfillment,
         )
 
-        comanda.delivery_status = "pronto"
+        if lancamento:
+            lancamento.status = "pronto"
+
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
         for it in target_items:
             if it.status == "preparando":
                 it.status = "pronto"
+
+        active_items = [it for it in comanda.itens if it.status != "cancelado"]
+        if active_items and all(it.status == "pronto" for it in active_items):
+            comanda.delivery_status = "pronto"
 
         if commit:
             db.commit()
@@ -505,7 +549,7 @@ class OrderApplicationService:
             if lancamento:
                 db.refresh(lancamento)
 
-        return cls._to_order_dto(comanda=comanda, lancamento=lancamento)
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
     def cancel_order(
@@ -520,7 +564,9 @@ class OrderApplicationService:
         if not comanda:
             raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
 
-        current_status = normalize_to_order_status(comanda.delivery_status)
+        current_status = normalize_to_order_status(
+            lancamento.status if lancamento and lancamento.status else comanda.delivery_status
+        )
         fulfillment = normalize_to_fulfillment(comanda.tipo)
 
         OrderStateMachine.validate_transition(
@@ -528,6 +574,9 @@ class OrderApplicationService:
             target_status=OrderStatus.CANCELLED,
             fulfillment=fulfillment,
         )
+
+        if lancamento:
+            lancamento.status = "cancelado"
 
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
 
@@ -544,7 +593,8 @@ class OrderApplicationService:
                 usuario_id=str(cmd.operator_user_id) if cmd.operator_user_id else None,
             )
 
-        if all(it.status == "cancelado" for it in comanda.itens):
+        active_items = [it for it in comanda.itens if it.status != "cancelado"]
+        if not active_items:
             comanda.delivery_status = "recusado"
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
@@ -555,7 +605,7 @@ class OrderApplicationService:
             if lancamento:
                 db.refresh(lancamento)
 
-        return cls._to_order_dto(comanda=comanda, lancamento=lancamento)
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
     def reject_order(
@@ -588,7 +638,9 @@ class OrderApplicationService:
         if not comanda:
             raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
 
-        current_status = normalize_to_order_status(comanda.delivery_status)
+        current_status = normalize_to_order_status(
+            lancamento.status if lancamento and lancamento.status else comanda.delivery_status
+        )
         fulfillment = normalize_to_fulfillment(comanda.tipo)
 
         OrderStateMachine.validate_transition(
@@ -597,11 +649,20 @@ class OrderApplicationService:
             fulfillment=fulfillment,
         )
 
-        comanda.delivery_status = "finalizado"
+        if lancamento:
+            lancamento.status = "finalizado"
+
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
         for it in target_items:
             if it.status == "preparando":
                 it.status = "pronto"
+
+        active_launches = [
+            l for l in (comanda.lancamentos or [])
+            if (l.status or "pendente") not in {"cancelado", "recusado"}
+        ]
+        if active_launches and all(l.status == "finalizado" for l in active_launches):
+            comanda.delivery_status = "finalizado"
 
         if commit:
             db.commit()
@@ -609,7 +670,7 @@ class OrderApplicationService:
             if lancamento:
                 db.refresh(lancamento)
 
-        return cls._to_order_dto(comanda=comanda, lancamento=lancamento)
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
     def _resolve_lancamento_and_comanda(
@@ -662,29 +723,59 @@ class OrderApplicationService:
         return None, None
 
     @classmethod
+    def _resolve_order_identity(
+        cls,
+        db: Session,
+        lancamento: Lancamento,
+        comanda: Comanda,
+    ) -> tuple[int, str]:
+        """Resolve a identidade canônica (sequence, display_number) do pedido."""
+        if comanda.tipo == "Consumo no Local" and comanda.mesa_id:
+            try:
+                identity = ensure_launch_identity(db, lancamento)
+                return identity.sequencia, identity.label
+            except Exception:
+                pass
+
+        # Para Delivery / Retirada ou quando não há atendimento de mesa
+        launches = (
+            db.query(Lancamento.id)
+            .filter(Lancamento.comanda_id == comanda.id)
+            .order_by(Lancamento.timestamp.asc(), Lancamento.id.asc())
+            .all()
+        )
+        launch_ids = [l[0] for l in launches]
+        try:
+            seq = launch_ids.index(lancamento.id) + 1
+        except ValueError:
+            seq = len(launch_ids) or 1
+
+        label = (
+            format_order_family_id(comanda.numero_pedido, seq)
+            if comanda.numero_pedido
+            else f"{seq}"
+        )
+        return seq, label
+
+    @classmethod
     def _to_order_dto(
         cls,
+        db: Session | None,
         comanda: Comanda,
         lancamento: Lancamento | None = None,
         sequence: int | None = None,
+        display_number: str | None = None,
         quote: OrderQuote | None = None,
     ) -> OrderDTO:
         """Mapeia Lancamento + Comanda para o OrderDTO canônico."""
-        if sequence is None:
-            if lancamento:
-                all_launches = [l.id for l in comanda.lancamentos] if comanda.lancamentos else [lancamento.id]
-                try:
-                    sequence = all_launches.index(lancamento.id) + 1
-                except ValueError:
-                    sequence = 1
-            else:
-                sequence = 1
+        if (sequence is None or display_number is None) and lancamento and db is not None:
+            sequence, display_number = cls._resolve_order_identity(db, lancamento, comanda)
+        elif sequence is None:
+            sequence = 1
+            display_number = f"{comanda.numero_pedido}-A" if comanda.numero_pedido else None
 
-        display_num = (
-            format_order_family_id(comanda.numero_pedido, sequence)
-            if comanda.numero_pedido
-            else None
-        )
+        if display_number is None and comanda.numero_pedido:
+            display_number = format_order_family_id(comanda.numero_pedido, sequence)
 
         target_items = (
             [it for it in comanda.itens if it.lancamento_id == lancamento.id]
@@ -756,16 +847,21 @@ class OrderApplicationService:
             )
 
         order_id_val = lancamento.id if lancamento else comanda.id
+        status_val = (
+            lancamento.status
+            if lancamento and lancamento.status
+            else (comanda.delivery_status or "pendente")
+        )
 
         return OrderDTO(
             order_id=order_id_val,
             restaurant_id=comanda.restaurante_id,
-            display_number=display_num,
+            display_number=display_number,
             sequence=sequence,
             comanda_id=comanda.id,
             channel="cardapio" if comanda.tipo in {"Delivery", "Retirada"} else "mesa",
             fulfillment=to_legacy_fulfillment(normalize_to_fulfillment(comanda.tipo)),
-            status=comanda.delivery_status or "pendente",
+            status=status_val,
             total=quote.total if quote else total_calc,
             subtotal=quote.subtotal if quote else subtotal_calc,
             discount=quote.discount_total if quote else discount_total,

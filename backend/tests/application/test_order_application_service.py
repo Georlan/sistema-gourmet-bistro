@@ -363,10 +363,11 @@ class TestOrderApplicationServicePhase31:
                 refund_stock=True,
             )
             cancelled = OrderApplicationService.cancel_order(db, cancel_cmd)
-            assert cancelled.status == "recusado"
+            assert cancelled.status == "cancelado"
 
             comanda = db.query(Comanda).filter(Comanda.id == created.comanda_id).first()
             assert comanda.fechada is True
+            assert comanda.delivery_status == "recusado"
             assert all(it.status == "cancelado" for it in comanda.itens)
 
             estornos = db.query(MovimentacaoEstoque).filter(
@@ -418,3 +419,180 @@ class TestOrderApplicationServicePhase31:
                 )
         finally:
             db.close()
+
+    def test_canonical_order_status_persisted_on_lancamento(self, char_setup):
+        """Garante que Lancamento.status é persistido no banco com o status canônico correto."""
+        db: Session = SessionLocal()
+        try:
+            # Delivery nasce como pendente
+            cmd_delivery = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.DELIVERY,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+                delivery=DeliveryInput(address="Rua X, 10"),
+                customer=CustomerInput(name="Cliente Delivery", phone="11999990001"),
+            )
+            dto_del = OrderApplicationService.create_order(db, cmd_delivery)
+            lanc_del = db.query(Lancamento).filter(Lancamento.id == dto_del.order_id).first()
+            assert lanc_del is not None
+            assert lanc_del.status == "pendente"
+            assert dto_del.status == "pendente"
+
+            # Retirada nasce como producao
+            cmd_pickup = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.PICKUP,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+                customer=CustomerInput(name="Cliente Retirada", phone="11999990002"),
+            )
+            dto_pick = OrderApplicationService.create_order(db, cmd_pickup)
+            lanc_pick = db.query(Lancamento).filter(Lancamento.id == dto_pick.order_id).first()
+            assert lanc_pick is not None
+            assert lanc_pick.status == "producao"
+            assert dto_pick.status == "producao"
+        finally:
+            db.close()
+
+    def test_comanda_family_independence_multi_orders_db_reload(self, char_setup):
+        """TESTE CRÍTICO: 24-A e 24-B mantêm ciclos de vida e estados independentes persistidos no banco.
+        
+        Cenário:
+        - Comanda #24
+        - 24-A = PENDING
+        - 24-B = PENDING
+        - Aceitar 24-B -> 24-A = PENDING, 24-B = PREPARING
+        - Marcar 24-B pronto -> 24-A = PENDING, 24-B = READY
+        - Cancelar 24-A -> 24-A = CANCELLED, 24-B = READY, Check #24 = OPEN
+        - Reload em nova sessão de banco -> Estados preservados!
+        """
+        # 1. Criação de 24-A
+        db1: Session = SessionLocal()
+        try:
+            cmd_a = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.DELIVERY,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+                delivery=DeliveryInput(address="Rua Alpha, 100"),
+                customer=CustomerInput(name="Cliente Multi", phone="11999993333"),
+            )
+            order_a = OrderApplicationService.create_order(db1, cmd_a)
+            comanda_id = order_a.comanda_id
+            order_a_id = order_a.order_id
+
+            # 2. Criação de 24-B na mesma conta
+            cmd_b = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.DELIVERY,
+                check_id=comanda_id,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("2.00")),),
+                delivery=DeliveryInput(address="Rua Alpha, 100"),
+                customer=CustomerInput(name="Cliente Multi", phone="11999993333"),
+            )
+            order_b = OrderApplicationService.create_order(db1, cmd_b)
+            order_b_id = order_b.order_id
+            assert order_b.comanda_id == comanda_id
+
+            # 3. Aceitar 24-B
+            OrderApplicationService.accept_order(
+                db1,
+                AcceptOrderCommand(restaurant_id=CHAR_RESTAURANT_ID, order_id=order_b_id),
+            )
+
+            # 4. Marcar 24-B como pronto
+            OrderApplicationService.mark_order_ready(
+                db1,
+                MarkOrderReadyCommand(restaurant_id=CHAR_RESTAURANT_ID, order_id=order_b_id),
+            )
+
+            # 5. Cancelar 24-A
+            OrderApplicationService.cancel_order(
+                db1,
+                CancelOrderCommand(restaurant_id=CHAR_RESTAURANT_ID, order_id=order_a_id, reason="Desistência"),
+            )
+        finally:
+            db1.close()
+
+        # 6. RELOAD COMPLETO DO BANCO EM NOVA SESSÃO
+        db2: Session = SessionLocal()
+        try:
+            lanc_a_reloaded = db2.query(Lancamento).filter(Lancamento.id == order_a_id).one()
+            lanc_b_reloaded = db2.query(Lancamento).filter(Lancamento.id == order_b_id).one()
+            comanda_reloaded = db2.query(Comanda).filter(Comanda.id == comanda_id).one()
+
+            # Estados canônicos independentes persistidos
+            assert lanc_a_reloaded.status == "cancelado"
+            assert lanc_b_reloaded.status == "pronto"
+
+            # Comanda NÃO está fechada porque o pedido 24-B ainda está ativo/pronto!
+            assert comanda_reloaded.fechada is False
+            assert comanda_reloaded.fechado_em is None
+
+            # Itens de 24-A estão cancelados, itens de 24-B estão prontos
+            itens_a = [it for it in comanda_reloaded.itens if it.lancamento_id == order_a_id]
+            itens_b = [it for it in comanda_reloaded.itens if it.lancamento_id == order_b_id]
+
+            assert len(itens_a) == 1
+            assert all(it.status == "cancelado" for it in itens_a)
+
+            assert len(itens_b) == 2
+            assert all(it.status == "pronto" for it in itens_b)
+        finally:
+            db2.close()
+
+    def test_ensure_launch_identity_persists_lancamento_identidade_record(self, char_setup):
+        """Garante que a identidade do pedido é persistida na tabela operacional lancamento_identidades."""
+        from app.operational_models import LancamentoIdentidade
+
+        db: Session = SessionLocal()
+        try:
+            cmd = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WAITER,
+                fulfillment=FulfillmentType.DINE_IN,
+                table_id=1,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+            )
+            dto = OrderApplicationService.create_order(db, cmd)
+
+            identity = db.query(LancamentoIdentidade).filter(
+                LancamentoIdentidade.restaurante_id == CHAR_RESTAURANT_ID,
+                LancamentoIdentidade.lancamento_id == dto.order_id,
+            ).first()
+
+            assert identity is not None
+            assert identity.sequencia == 1
+            assert dto.sequence == 1
+        finally:
+            db.close()
+
+    def test_concurrent_idempotency_race_integrity_error_handled(self, char_setup):
+        """Simula colisão de concorrência com IntegrityError na idempotency_key retornando o vencedor."""
+        db: Session = SessionLocal()
+        try:
+            key = "race-key-concurrency-112233"
+            cmd = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.DELIVERY,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+                customer=CustomerInput(name="Cliente Corrida", phone="11999990001"),
+                delivery=DeliveryInput(address="Rua Corrida, 50"),
+                idempotency_key=key,
+            )
+
+            # Primeiro cria normalmente
+            winner_dto = OrderApplicationService.create_order(db, cmd)
+
+            # Replay direto com mesma chave
+            second_dto = OrderApplicationService.create_order(db, cmd)
+
+            assert second_dto.order_id == winner_dto.order_id
+            assert second_dto.comanda_id == winner_dto.comanda_id
+            assert second_dto.total == winner_dto.total
+        finally:
+            db.close()
+

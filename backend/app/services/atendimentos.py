@@ -39,20 +39,9 @@ class PedidoIdentidade:
     label: str
 
 
-def sequence_to_letters(sequence: int) -> str:
-    """1=A, 26=Z, 27=AA. Não existe limite artificial de 26 pedidos."""
-    if sequence < 1:
-        raise ValueError("A sequência deve ser positiva")
-    result = ""
-    value = sequence
-    while value:
-        value, remainder = divmod(value - 1, 26)
-        result = chr(ord("A") + remainder) + result
-    return result
+# Reexporta a fonte canônica única do domínio
+from ..domain.orders.types import format_order_family_id, sequence_to_letters
 
-
-def format_order_family_id(numero_conta: int, sequence: int) -> str:
-    return f"{int(numero_conta)}-{sequence_to_letters(sequence)}"
 
 
 def _operational_period(dt: Optional[datetime.datetime] = None) -> str:
