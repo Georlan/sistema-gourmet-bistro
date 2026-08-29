@@ -165,6 +165,12 @@ def atualizar_status_delivery(
 
     comanda.delivery_status = target
 
+    for lanc in (comanda.lancamentos or []):
+        if target in {"pendente", "producao", "pronto", "finalizado", "recusado", "cancelado"}:
+            lanc.status = target
+        elif target == "transito":
+            lanc.status = "pronto"
+
     if target in {"pronto", "transito", "finalizado"}:
         for item in comanda.itens:
             if item.status == "preparando":

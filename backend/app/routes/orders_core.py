@@ -1535,6 +1535,8 @@ def fechar_comanda(
     if comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
         if comanda.delivery_status != "recusado":
             comanda.delivery_status = "finalizado"
+            for lanc in (comanda.lancamentos or []):
+                lanc.status = "finalizado"
             if status_anterior != "finalizado":
                 _agendar_notificacao_whatsapp_status(
                     background_tasks,
@@ -2144,6 +2146,11 @@ def atualizar_status_delivery(
     if status_normalizado == "producao" and status_anterior != "producao":
         require_open_cash_shift(db, rid)
     comanda.delivery_status = status_normalizado
+    for lanc in (comanda.lancamentos or []):
+        if status_normalizado in {"pendente", "producao", "pronto", "finalizado", "recusado", "cancelado"}:
+            lanc.status = status_normalizado
+        elif status_normalizado == "transito":
+            lanc.status = "pronto"
     if status_normalizado in {"pronto", "transito", "finalizado"}:
         for item in comanda.itens:
             if item.status == "preparando":
@@ -2186,9 +2193,13 @@ def despachar_delivery(
     """
     Vincula um motoboy à comanda e altera o status para 'transito'.
     """
+    rid = require_tenant_id()
     comanda = (
         db.query(Comanda)
-        .filter(Comanda.id == comanda_id)
+        .filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        )
         .with_for_update()
         .first()
     )
@@ -2199,7 +2210,11 @@ def despachar_delivery(
     if not motoboy_id:
         raise HTTPException(status_code=400, detail="motoboy_id obrigatório")
         
-    motoboy = db.query(Motoboy).filter(Motoboy.id == motoboy_id).first()
+    motoboy = db.query(Motoboy).filter(
+        Motoboy.restaurante_id == rid,
+        Motoboy.id == motoboy_id,
+        Motoboy.ativo.is_(True),
+    ).first()
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
         

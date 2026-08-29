@@ -615,15 +615,43 @@ class OrderApplicationService:
         *,
         commit: bool = True,
     ) -> OrderDTO:
-        """Rejeita pedido pendente."""
-        cancel_cmd = CancelOrderCommand(
-            restaurant_id=cmd.restaurant_id,
-            order_id=cmd.order_id,
-            reason=cmd.reason,
-            operator_user_id=cmd.operator_user_id,
-            refund_stock=False,
+        """Rejeita pedido pendente marcando status canônico como 'recusado'."""
+        lancamento, comanda = cls._resolve_lancamento_and_comanda(db, cmd.restaurant_id, cmd.order_id)
+        if not comanda:
+            raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
+
+        current_status = normalize_to_order_status(
+            lancamento.status if lancamento and lancamento.status else comanda.delivery_status
         )
-        return cls.cancel_order(db, cancel_cmd, commit=commit)
+        fulfillment = normalize_to_fulfillment(comanda.tipo)
+
+        OrderStateMachine.validate_transition(
+            current_status=current_status,
+            target_status=OrderStatus.REJECTED,
+            fulfillment=fulfillment,
+        )
+
+        if lancamento:
+            lancamento.status = "recusado"
+
+        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
+        for it in target_items:
+            if it.status != "cancelado":
+                it.status = "cancelado"
+
+        active_items = [it for it in comanda.itens if it.status != "cancelado"]
+        if not active_items:
+            comanda.delivery_status = "recusado"
+            comanda.fechada = True
+            comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+
+        if commit:
+            db.commit()
+            db.refresh(comanda)
+            if lancamento:
+                db.refresh(lancamento)
+
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
     def complete_order(
@@ -731,11 +759,8 @@ class OrderApplicationService:
     ) -> tuple[int, str]:
         """Resolve a identidade canônica (sequence, display_number) do pedido."""
         if comanda.tipo == "Consumo no Local" and comanda.mesa_id:
-            try:
-                identity = ensure_launch_identity(db, lancamento)
-                return identity.sequencia, identity.label
-            except Exception:
-                pass
+            identity = ensure_launch_identity(db, lancamento)
+            return identity.sequencia, identity.label
 
         # Para Delivery / Retirada ou quando não há atendimento de mesa
         launches = (

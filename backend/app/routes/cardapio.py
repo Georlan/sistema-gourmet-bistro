@@ -405,6 +405,7 @@ def criar_pedido_online(
             comanda_id=comanda_id,
             garcom_id=garcom_id,
             origem="cardapio",
+            status=auto_delivery_status,
             timestamp=datetime.datetime.now(datetime.timezone.utc),
         )
         db.add(novo_lancamento)
