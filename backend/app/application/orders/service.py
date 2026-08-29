@@ -305,7 +305,20 @@ class OrderApplicationService:
             )
 
         # Status inicial de comanda e lançamento
-        if cmd.fulfillment == FulfillmentType.PICKUP:
+        if cmd.channel == OrderChannel.POS:
+            if cmd.fulfillment == FulfillmentType.PICKUP:
+                tipo_comanda = "Retirada"
+                auto_delivery_status = "producao"
+                initial_lancamento_status = "producao"
+            elif cmd.fulfillment == FulfillmentType.DELIVERY:
+                tipo_comanda = "Entrega"
+                auto_delivery_status = "producao"
+                initial_lancamento_status = "producao"
+            else:
+                tipo_comanda = "Consumo no Local"
+                auto_delivery_status = None
+                initial_lancamento_status = "producao"
+        elif cmd.fulfillment == FulfillmentType.PICKUP:
             tipo_comanda = "Retirada"
             auto_delivery_status = "pendente"
             initial_lancamento_status = "pendente"
