@@ -1,9 +1,3 @@
-# Diretrizes do Projeto Kôma / Sistema Gourmet Bistro
-
-- **Git Commits e Push Diretos**: Sempre realize `git commit` e `git push origin main` diretamente no repositório após concluir as alterações solicitadas pelo usuário para atualizar o deploy no Cloudflare Pages.
-
----
-
 # KÔMA — Memória Arquitetural: Comanda, Pedido e Identidade Operacional
 
 Esta é uma decisão arquitetural persistente do projeto KÔMA e deve ser considerada em todas as próximas fases de organização, refatoração e migração.
