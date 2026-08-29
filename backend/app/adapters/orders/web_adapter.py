@@ -111,14 +111,16 @@ def _enforce_public_order_rate_limits(
     restaurante_id: int,
     telefone: str,
 ) -> None:
-    """Persiste limites antes da transação do pedido para resistir a payloads inválidos."""
+    """Persiste limites antes da transação do pedido para resistir a payloads inválidos.
+
+    Ownership transacional delegada ao serviço — não fazer commit aqui.
+    """
     enforce_public_order_rate_limits(
         db,
         request=request,
         restaurante_id=restaurante_id,
         telefone=telefone,
     )
-    db.commit()
 
 
 class CardapioWebAdapter:

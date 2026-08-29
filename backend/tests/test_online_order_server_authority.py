@@ -266,8 +266,12 @@ def test_replay_idempotente_nao_quebra_se_loja_fechar_depois():
 
 
 def test_criacao_publica_tem_rate_limit_por_telefone(monkeypatch):
-    monkeypatch.setattr("app.routes.cardapio.MAX_PUBLIC_ORDERS_PER_PHONE", 2)
-    monkeypatch.setattr("app.routes.cardapio.MAX_PUBLIC_ORDERS_PER_IP", 999)
+    monkeypatch.setattr(
+        "app.services.public_orders.rate_limit.MAX_PUBLIC_ORDERS_PER_PHONE", 2
+    )
+    monkeypatch.setattr(
+        "app.services.public_orders.rate_limit.MAX_PUBLIC_ORDERS_PER_IP", 999
+    )
 
     statuses = []
     for index in range(3):
