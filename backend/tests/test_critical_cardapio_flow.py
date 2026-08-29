@@ -1099,10 +1099,11 @@ def test_koma_pocket_nao_enfileira_impressao_automatica(monkeypatch):
 
     db = SessionLocal()
     try:
+        resp_data = response.json()
+        lancamento_ids = [l["id"] for l in resp_data.get("lancamentos", [])]
         print_job = db.query(PrintJob).filter(
             PrintJob.restaurante_id == 100,
-            PrintJob.source_type == "pedido",
-            PrintJob.source_id == response.json()["id"],
+            PrintJob.source_id.in_([resp_data["id"], *lancamento_ids]),
         ).first()
         assert print_job is None
     finally:
@@ -1156,10 +1157,11 @@ def test_premium_de_homologacao_enfileira_sem_alterar_plano(monkeypatch):
         restaurante = db.query(Restaurante).filter(Restaurante.id == 100).one()
         assert restaurante.plano == "pocket"
 
+        resp_data = response.json()
+        lancamento_ids = [l["id"] for l in resp_data.get("lancamentos", [])]
         print_job = db.query(PrintJob).filter(
             PrintJob.restaurante_id == 100,
-            PrintJob.source_type == "pedido",
-            PrintJob.source_id == response.json()["id"],
+            PrintJob.source_id.in_([resp_data["id"], *lancamento_ids]),
         ).first()
         assert print_job is not None
     finally:
