@@ -11,6 +11,8 @@ from .types import (
     to_legacy_order_status,
     normalize_to_delivery_status,
     to_legacy_delivery_status,
+    sequence_to_letters,
+    format_order_family_id,
 )
 from .errors import (
     OrderDomainError,
@@ -130,4 +132,6 @@ __all__ = [
     "OrderCompleted",
     "OrderRejected",
     "OrderCancelled",
+    "sequence_to_letters",
+    "format_order_family_id",
 ]

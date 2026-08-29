@@ -188,3 +188,20 @@ def normalize_to_delivery_status(value: str | DeliveryStatus | None) -> Delivery
 def to_legacy_delivery_status(status: DeliveryStatus) -> str:
     """Traduz DeliveryStatus canônico para string legada do banco."""
     return _CANONICAL_DELIVERY_STATUS_TO_LEGACY.get(status, "pendente")
+
+
+def sequence_to_letters(sequence: int) -> str:
+    """Traduz sequência numérica para sufixo alfabético canônico: 1=A, 2=B, 26=Z, 27=AA."""
+    if sequence < 1:
+        raise ValueError("A sequência deve ser estritamente positiva.")
+    result = ""
+    value = sequence
+    while value:
+        value, remainder = divmod(value - 1, 26)
+        result = chr(ord("A") + remainder) + result
+    return result
+
+
+def format_order_family_id(numero_conta: int | str, sequence: int = 1) -> str:
+    """Formata o identificador operacional canônico por família de comanda (ex: '24-A', '24-B')."""
+    return f"{numero_conta}-{sequence_to_letters(sequence)}"

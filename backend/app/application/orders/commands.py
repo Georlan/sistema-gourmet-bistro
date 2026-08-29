@@ -61,7 +61,8 @@ class DeliveryInput:
     """Dados logísticos específicos para modalidade Delivery."""
 
     address: str
-    fee: Decimal = Decimal("0.00")
+    neighborhood: Optional[str] = None
+    fee: Optional[Decimal] = None
     estimated_minutes: Optional[int] = None
     notes: Optional[str] = None
 
@@ -70,7 +71,7 @@ class DeliveryInput:
             raise InvalidFulfillmentDetailsError(
                 "O endereço de entrega é obrigatório para pedidos na modalidade Delivery."
             )
-        if self.fee < Decimal("0.00"):
+        if self.fee is not None and self.fee < Decimal("0.00"):
             raise InvalidFulfillmentDetailsError("A taxa de entrega não pode ser negativa.")
 
 
@@ -90,6 +91,8 @@ class CreateOrderCommand:
     coupon_code: Optional[str] = None
     cashback_discount: Decimal = Decimal("0.00")
     usar_cashback: bool = False
+    payment_method: Optional[str] = None
+    change_for: Optional[str] = None
     idempotency_key: Optional[str] = None
     external_reference: Optional[ExternalOrderReference] = None
     operator_user_id: Optional[str | int] = None

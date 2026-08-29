@@ -60,6 +60,7 @@ class OrderDTO:
     order_id: str | int
     restaurant_id: int
     display_number: Optional[str]
+    sequence: int
     comanda_id: Optional[str | int]
     channel: str
     fulfillment: str
