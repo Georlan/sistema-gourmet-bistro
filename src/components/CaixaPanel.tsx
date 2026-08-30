@@ -1,71 +1,26 @@
 import clsx from 'clsx';
-import {
-AlertTriangle,
-ArrowUpRight,
-Bell,
-Check,
-ChevronLeft,ChevronRight,
-ClipboardList,
-Clock,
-CreditCard,
-DollarSign,
-Edit3,
-Globe,
-Info,
-Lock,
-Maximize2,
-Menu,
-Minimize2,
-Moon,
-Package,
-Percent,
-Plus,
-Printer,
-RefreshCw,
-Search,
-ShieldCheck,
-ShoppingCart,
-SlidersHorizontal,
-Smartphone,
-Sun,
-Trash2,
-TrendingUp,
-Users,
-Volume2,VolumeX,
-X
-} from 'lucide-react';
-import React,{ useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { AlertTriangle, ArrowUpRight, Bell, Check, ChevronLeft, ChevronRight, ClipboardList, Clock, CreditCard, DollarSign, Edit3, Globe, Info, Lock, Maximize2, Menu, Minimize2, Moon, Package, Percent, Plus, Printer, RefreshCw, Search, ShieldCheck, ShoppingCart, SlidersHorizontal, Smartphone, Sun, Trash2, TrendingUp, Users, Volume2, VolumeX, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { normalizeCatalogSnapshot } from '../catalog/catalog';
 import { API } from '../config/caixaService';
-import {
-getSubscriptionPlan,
-isAddonIncludedInPlan,
-normalizeSubscriptionPlan
-} from '../config/subscriptionPlans';
-import { KOMA_THEME_CHANGED_EVENT,nextKomaTheme,persistKomaTheme,readKomaTheme,type KomaTheme } from '../config/theme';
-import {
-formatCashierOldestAge as formatOldestAge,
-getCashierTableOrderPresentation,
-getCashierOrderSlaData as getOrderSlaData,
-projectCashierDeliveryState,
-projectCashierSalonTables,
-projectCashierTableSlices
-} from '../domain/cashierOrderProjection';
+import { getSubscriptionPlan, isAddonIncludedInPlan, normalizeSubscriptionPlan } from '../config/subscriptionPlans';
+import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from '../config/theme';
+import { formatCashierOldestAge as formatOldestAge, getCashierTableOrderPresentation, getCashierOrderSlaData as getOrderSlaData, projectCashierDeliveryState, projectCashierSalonTables, projectCashierTableSlices } from '../domain/cashierOrderProjection';
 import { getProductPresets } from '../domain/catalogPresentation';
 import { normalizeOperationalTimestamp } from '../domain/operationalTime';
 import { smartSearchMatch } from '../domain/search';
-import { Distribuidor,EntradaEstoque,FichaTecnicaProduto,Insumo,MovimentacaoEstoque,Product,SessaoContagemEstoque,SystemUser,Table } from '../types';
+import { Distribuidor, EntradaEstoque, FichaTecnicaProduto, Insumo, MovimentacaoEstoque, Product, SessaoContagemEstoque, SystemUser, Table } from '../types';
 import { clearOperatorSession } from '../utils/authSession';
 import { localCalendarDate } from '../utils/dateTime';
-import { makeOperationKey,operationalFetch } from '../utils/operationalRequest';
+import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
 import { aplicarMascaraTelefoneInput } from '../utils/phonePresentation';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { LoginButton } from './auth/LoginButton';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
 import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
-import type { CaixaPanelProps,LoyaltyCustomer } from './caixa/cashierContracts';
-import { formatCompactCurrency,formatCurrency } from './caixa/cashierPresentation';
+import type { CaixaPanelProps, LoyaltyCustomer } from './caixa/cashierContracts';
+import { formatCompactCurrency, formatCurrency } from './caixa/cashierPresentation';
 import { CheckoutDialog } from './caixa/checkout/CheckoutDialog';
 import { useCheckoutController } from './caixa/checkout/useCheckoutController';
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
@@ -105,22 +60,7 @@ import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
 import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
 import { KomaEmptyState } from './shared/KomaEmptyState';
 import { OperationalBanner } from './shared/OperationalBanner';
-import {
-Sidebar,
-SidebarContent,
-SidebarFooter,
-SidebarGroup,
-SidebarGroupContent,
-SidebarGroupLabel,
-SidebarHeader,
-SidebarMenu,
-SidebarMenuBadge,
-SidebarMenuButton,
-SidebarMenuItem,
-SidebarProvider,
-SidebarRail,
-SidebarTrigger
-} from './ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger } from './ui/sidebar';
 
 
 
@@ -350,7 +290,10 @@ export function CaixaPanel({
     handleRegistrarSuprimento,
     handleConfirmarFechamento,
     handleAbrirCaixa,
-  } = useCashShift({ apiBaseUrl, authHeaders, onRefreshTurnoResumo, showToast, setErrorMsg, setIsLoading });
+  } = useCashShift({
+    apiBaseUrl, authHeaders, onRefreshTurnoResumo,
+    showToast, setErrorMsg, setIsLoading,
+  });
 
   const [activeTab, setActiveTab] = useState<
     'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital' | 'dashboard'
@@ -397,7 +340,13 @@ export function CaixaPanel({
     return saved;
   });
 
-  const smartPos = useCashierSmartPos({ apiBaseUrl, authHeaders, onRefreshOrders, activeSubTab, showToast, fetchTurno, onReconciled: () => { setSelectedOrder(null); setShowCheckoutModal(false); } });
+  const smartPos = useCashierSmartPos({
+    apiBaseUrl, authHeaders, onRefreshOrders, activeSubTab, showToast, fetchTurno,
+    onReconciled: () => {
+      setSelectedOrder(null);
+      setShowCheckoutModal(false);
+    },
+  });
   const {
     setSmartPosRecoveryError,
     getSmartPosCardState,
@@ -447,7 +396,10 @@ export function CaixaPanel({
     handleTransferSelectedKanbanTable,
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
-  } = useCashierOrders({ orders, apiBaseUrl, authHeaders, onRefreshOrders, onOptimisticUpdateItemStatus, showToast, isLoading, setIsLoading });
+  } = useCashierOrders({
+    orders, apiBaseUrl, authHeaders, onRefreshOrders, onOptimisticUpdateItemStatus,
+    showToast, isLoading, setIsLoading,
+  });
   const {
     soundEnabled,
     toggleSound,
@@ -810,7 +762,13 @@ export function CaixaPanel({
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
 
-  const checkout = useCheckoutController({ orders, apiBaseUrl, authHeaders, onRefreshOrders, onRemovePendingPaymentOptimistic, onRefreshPagamentosPendentes, showToast, loyaltyUsers, taxaServicoAtiva, serviceTaxRate, isLoading, setErrorMsg, getSmartPosCardState, setSmartPosRecoveryError, fetchTurno, handleFecharDelivery, handleFinalizarPedido });
+  const checkout = useCheckoutController({
+    orders, apiBaseUrl, authHeaders, onRefreshOrders,
+    onRemovePendingPaymentOptimistic, onRefreshPagamentosPendentes,
+    showToast, loyaltyUsers, taxaServicoAtiva, serviceTaxRate, isLoading, setErrorMsg,
+    getSmartPosCardState, setSmartPosRecoveryError, fetchTurno,
+    handleFecharDelivery, handleFinalizarPedido,
+  });
   const {
     handleConfirmPendingCashPayment,
     handleRejectPendingCashPayment,
@@ -2390,7 +2348,10 @@ export function CaixaPanel({
     setBalcaoMobileView('produtos');
     setActiveSubTab('balcao');
   };
-  useCashierRealtime({ isWsConnected, onRefreshOrders, activeTab, fetchTurno, fetchDeliveryOrders, fetchMotoboys, fetchConfiguracoes });
+  useCashierRealtime({
+    isWsConnected, onRefreshOrders, activeTab,
+    fetchTurno, fetchDeliveryOrders, fetchMotoboys, fetchConfiguracoes,
+  });
 
   const selectedCheckoutSmartPosState = selectedOrder
     ? getSmartPosCardState(selectedOrder)

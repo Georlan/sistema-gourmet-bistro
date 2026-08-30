@@ -146,8 +146,97 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
 }
 
 async function showStage(page: Page, stage: 'Salão' | 'Concluir') {
+  await expect(page.locator('.orders-board')).toBeVisible();
   const stageTab = page.getByRole('tab', { name: new RegExp(stage) });
   if (await stageTab.isVisible()) await stageTab.click();
+}
+
+test('checkout mantém a mesma tentativa após erro e bloqueia submits concorrentes', async ({ page }) => {
+  await openOperationalScenario(page);
+  const payments: { payload: Record<string, unknown>; authorization: string | undefined }[] = [];
+  let releaseFirst!: () => void;
+  const firstResponse = new Promise<void>(resolve => { releaseFirst = resolve; });
+  await page.route(`${API_ORIGIN}/caixa/mesas/7/pagar`, async route => {
+    payments.push({ payload: route.request().postDataJSON(), authorization: route.request().headers().authorization });
+    const first = payments.length === 1;
+    if (first) await firstResponse;
+    await route.fulfill({
+      status: first ? 503 : 200, contentType: 'application/json',
+      body: JSON.stringify(first ? { detail: 'Falha controlada no pagamento' } : { ok: true }),
+    });
+  });
+  await showStage(page, 'Concluir');
+  await page.locator('.orders-card--closing').getByRole('button', { name: 'Receber itens prontos' }).click();
+  const submit = page.locator('form button[type="submit"]').filter({ hasText: /Receber|Lançar|Processando/ });
+  await expect(submit).toBeEnabled();
+  // Two submit events in the same JS task exercise the synchronous ref guard,
+  // independently from the disabled button set by React on the next render.
+  await submit.evaluate(button => {
+    const form = (button as HTMLButtonElement).form!;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await expect.poll(() => payments.length).toBe(1);
+  await expect(page.locator('form button[type="submit"]').filter({ hasText: /Processando|Receber|Lançar/ })).toBeDisabled();
+  expect(payments[0].authorization).toBe('Bearer phase7-fixture-token');
+  expect(payments[0].payload).toMatchObject({
+    valor: 48, metodo: 'pix', incluir_taxa_servico: false, item_ids: ['item-phase7-2'],
+  });
+  expect(payments[0].payload.idempotency_key).toEqual(expect.any(String));
+  releaseFirst();
+  await expect(page.getByText('Falha controlada no pagamento', { exact: true })).toBeVisible();
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect.poll(() => payments.length).toBe(2);
+  expect(payments[1]).toEqual(payments[0]);
+  await expect(page.getByText('Checkout / Caixa', { exact: true })).toHaveCount(0);
+});
+
+for (const state of ['pagamento_processando', 'aprovado_pendente_liquidacao'] as const) {
+  test(`SmartPOS ${state} impede baixa paralela e preserva recuperação`, async ({ page }) => {
+    const scenario = await openOperationalScenario(page, { statuses: ['pronto', 'pronto'] });
+    let projectionState: string = state;
+    let reconciliations = 0;
+    await page.route(`${API_ORIGIN}/auth/smartpos/caixa/operacao`, route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify([{ mesa_id: 7, estado_operacional: projectionState,
+        pagamento: { intent_id: 'intent-owned-7', status: 'APPROVED' } }]),
+    }));
+    await page.route(`${API_ORIGIN}/auth/smartpos/payment-intents/intent-owned-7/reconciliar-liquidacao`, async route => {
+      reconciliations++;
+      expect(route.request().method()).toBe('POST');
+      expect(route.request().headers().authorization).toBe('Bearer phase7-fixture-token');
+      if (reconciliations > 1) projectionState = 'pronto';
+      await route.fulfill({ status: reconciliations === 1 ? 503 : 200, contentType: 'application/json',
+        body: JSON.stringify(reconciliations === 1 ? { detail: 'Reconciliação temporariamente indisponível' } : { ok: true }) });
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated')));
+    await showStage(page, 'Concluir');
+    await page.locator('.orders-card--closing').getByRole('button', {
+      name: state === 'pagamento_processando' ? 'Acompanhar pagamento' : 'Revisar pagamento',
+    }).click();
+    const submit = page.locator('form button[type="submit"]').filter({ hasText: /Receber|Lançar/ });
+    await expect(submit).toBeDisabled();
+    await submit.evaluate(button => (button as HTMLButtonElement).form!.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true })
+    ));
+    await expect(page.getByText(/Revise a operação da maquininha antes de lançar outra baixa/)).toBeVisible();
+    expect(scenario.actions.filter(action => action.path.endsWith('/pagar'))).toEqual([]);
+    if (state === 'pagamento_processando') {
+      await expect(page.getByRole('button', { name: 'Concluir pagamento aprovado' })).toHaveCount(0);
+      expect(reconciliations).toBe(0);
+    } else {
+      const reconcile = page.getByRole('button', { name: 'Concluir pagamento aprovado' });
+      await reconcile.click();
+      await expect(page.getByText('Reconciliação temporariamente indisponível', { exact: true })).toBeVisible();
+      await expect(reconcile).toBeEnabled();
+      await reconcile.click();
+      await expect(page.getByText('Pagamento da maquininha conciliado com sucesso.', { exact: true })).toBeVisible();
+      await expect(page.getByText('Checkout / Caixa', { exact: true })).toHaveCount(0);
+      expect(reconciliations).toBe(2);
+      expect(scenario.actions.filter(action => action.path.endsWith('/pagar'))).toEqual([]);
+    }
+  });
 }
 
 test('fatias da mesma Comanda preservam R$112 em preparo e R$48 pronto', async ({ page }) => {

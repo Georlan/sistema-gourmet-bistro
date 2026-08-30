@@ -50,6 +50,16 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Measure source ownership and production chunks
+        run: node scripts/architecture-metrics.mjs > architecture-metrics.json
+
+      - name: Upload architecture measurements
+        uses: actions/upload-artifact@v6
+        with:
+          name: architecture-metrics-${{ github.run_id }}
+          path: architecture-metrics.json
+          retention-days: 30
+
   browser-e2e:
     name: Browser regression matrix
     runs-on: ubuntu-latest

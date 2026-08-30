@@ -15,6 +15,7 @@ def cashier_rendered_sources() -> list[str]:
         source("src/components/caixa/orders/KanbanOrderDetails.tsx"),
         source("src/components/caixa/salao/CaixaSalonTab.tsx"),
         source("src/components/caixa/checkout/CheckoutDialog.tsx"),
+        source("src/components/shared/SharedTableCard.tsx"),
     ]
 
 
