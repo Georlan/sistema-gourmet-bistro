@@ -9,6 +9,7 @@ type Scenario = {
   checkStatus?: 'aguardando_pagamento' | null;
   subtab?: 'pedidos' | 'mesas';
   sameLaunch?: boolean;
+  printFails?: boolean;
 };
 
 async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
@@ -51,6 +52,7 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
     itens: items,
   };
   const writes: { path: string; status: string | null }[] = [];
+  const actions: { path: string; query: string; method: string; body: unknown }[] = [];
 
   await page.addInitScript(({ subtab }) => {
     localStorage.setItem('koma_caixa_token', 'phase7-fixture-token');
@@ -66,6 +68,15 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method())) {
+      actions.push({
+        path,
+        query: url.search,
+        method: request.method(),
+        body: request.postData() ? request.postDataJSON() : null,
+      });
+    }
+    let responseStatus = 200;
     let body: unknown = [];
     if (path === '/comandas/detalhes/todos') body = [check];
     else if (path === '/mesas/') body = [
@@ -109,10 +120,27 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
       writes.push({ path, status: url.searchParams.get('status') });
       body = { ok: true };
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    else if (path === '/mesas/7/cancelar-itens' && request.method() === 'POST') {
+      const selectedIds = request.postDataJSON().item_ids as string[];
+      items.filter(item => selectedIds.includes(item.id)).forEach(item => { item.status = 'cancelado'; });
+      body = { mesa_id: 7, itens_cancelados: selectedIds.length, mesa_liberada: false };
+    }
+    else if (path === '/mesas/7/cancelar-consumo' && request.method() === 'POST') {
+      items.forEach(item => { item.status = 'cancelado'; });
+      body = { mesa_id: 7, itens_cancelados: items.length, mesa_liberada: true };
+    }
+    else if (path === '/comandas/check-phase7-24/transferir/8' && request.method() === 'POST') {
+      check.mesa_id = 8;
+      body = { ok: true };
+    }
+    else if (path.endsWith('/imprimir-recibo') || path.endsWith('/reimprimir')) {
+      responseStatus = scenario.printFails ? 500 : 200;
+      body = scenario.printFails ? { detail: 'Impressão indisponível no cenário' } : { ok: true };
+    }
+    await route.fulfill({ status: responseStatus, contentType: 'application/json', body: JSON.stringify(body) });
   });
   await page.goto('/?view=caixa');
-  return { writes };
+  return { writes, actions };
 }
 
 async function showStage(page: Page, stage: 'Salão' | 'Concluir') {
@@ -173,6 +201,7 @@ test('lançamentos da mesma Comanda mantêm ações isoladas por item técnico',
   await expect.poll(() => state.writes).toEqual([
     { path: '/comandas/itens/item-phase7-1/status', status: 'pronto' },
   ]);
+  await expect(page.locator('.orders-detail-modal')).toHaveCount(0);
 });
 
 test('salão preserva mesa livre e atendimento com consumo em aberto', async ({ page }) => {
@@ -185,4 +214,81 @@ test('salão preserva mesa livre e atendimento com consumo em aberto', async ({ 
   await expect(occupied).toContainText(/R\$\s*160,00/);
   await expect(occupied.getByRole('button', { name: 'Ver comanda' })).toBeVisible();
   await expect(free.getByRole('button', { name: 'Abrir pedido' })).toBeVisible();
+});
+
+test('detalhes por teclado preservam a rota de impressão da fatia sem usar o número humano', async ({ page }) => {
+  const state = await openOperationalScenario(page, { statuses: ['preparando', 'preparando'] });
+  const firstLaunch = page.locator('.orders-card--salon').filter({ hasText: 'Prato em preparo' });
+  await firstLaunch.focus();
+  await firstLaunch.press('Enter');
+  const details = page.locator('.orders-detail-modal');
+  await expect(details).toContainText('Prato em preparo');
+  await expect(details).not.toContainText('Prato da segunda rodada');
+  await details.getByRole('button', { name: 'Reimprimir produção', exact: true }).click();
+  await expect.poll(() => state.actions.filter(action => action.path.endsWith('/imprimir-recibo'))).toEqual([
+    { path: '/comandas/check-phase7-24/imprimir-recibo', query: '', method: 'POST', body: null },
+  ]);
+  await expect(details).toHaveCount(0);
+});
+
+test('falha de impressão mantém os detalhes abertos e não informa sucesso', async ({ page }) => {
+  const state = await openOperationalScenario(page, { printFails: true });
+  const launch = page.locator('.orders-card--salon');
+  await launch.focus();
+  await launch.press('Space');
+  const details = page.locator('.orders-detail-modal');
+  await details.getByRole('button', { name: 'Reimprimir produção', exact: true }).click();
+  await expect(page.getByText('Erro ao solicitar reimpressão.', { exact: true })).toBeVisible();
+  await expect(details).toBeVisible();
+  expect(state.actions.filter(action => action.path.endsWith('/imprimir-recibo'))).toHaveLength(1);
+});
+
+test('cancelar pelo detalhe do pedido envia somente os IDs dos itens daquela fatia', async ({ page }) => {
+  const state = await openOperationalScenario(page, { statuses: ['preparando', 'preparando'] });
+  await page.locator('.orders-card--salon').filter({ hasText: 'Prato em preparo' }).click();
+  const details = page.locator('.orders-detail-modal');
+  await expect(details.getByRole('combobox', { name: 'Mesa de destino' })).toHaveCount(0);
+  await details.getByRole('button', { name: 'Cancelar somente este pedido', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Cancelar somente este pedido?' });
+  await expect(confirmation.getByRole('button', { name: 'Cancelar pedido', exact: true })).toBeDisabled();
+  await confirmation.getByPlaceholder('Ex.: pedido lançado por engano').fill('Pedido lançado por engano');
+  await confirmation.getByRole('button', { name: 'Cancelar pedido', exact: true }).click();
+  await expect.poll(() => state.actions.filter(action => action.path.includes('/cancelar-'))).toEqual([
+    {
+      path: '/mesas/7/cancelar-itens', query: '', method: 'POST',
+      body: { motivo: 'Pedido lançado por engano', item_ids: ['item-phase7-1'] },
+    },
+  ]);
+  await expect(page.locator('.orders-card--salon')).toHaveCount(1);
+  await expect(page.locator('.orders-card--salon')).toContainText('Prato da segunda rodada');
+});
+
+test('cancelar a mesa inteira permanece uma ação de Salão com motivo e escopo próprios', async ({ page }) => {
+  const state = await openOperationalScenario(page, { subtab: 'mesas' });
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
+  const details = page.locator('.orders-detail-modal');
+  await expect(details).toContainText('Prato em preparo');
+  await expect(details).toContainText('Prato da segunda rodada');
+  await details.getByRole('button', { name: 'Cancelar toda a mesa e liberar', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Liberar Mesa 7 sem receber?' });
+  await expect(confirmation.getByRole('button', { name: 'Cancelar e liberar', exact: true })).toBeDisabled();
+  await confirmation.getByPlaceholder('Ex.: pedido lançado por engano').fill('Atendimento duplicado');
+  await confirmation.getByRole('button', { name: 'Cancelar e liberar', exact: true }).click();
+  await expect.poll(() => state.actions.filter(action => action.path.includes('/cancelar-'))).toEqual([
+    { path: '/mesas/7/cancelar-consumo', query: '', method: 'POST', body: { motivo: 'Atendimento duplicado' } },
+  ]);
+});
+
+test('transferência do Salão usa Comanda técnica e o destino selecionado', async ({ page }) => {
+  const state = await openOperationalScenario(page, { subtab: 'mesas' });
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
+  const details = page.locator('.orders-detail-modal');
+  await expect(details.getByRole('button', { name: 'Transferir', exact: true })).toBeDisabled();
+  await details.getByRole('combobox', { name: 'Mesa de destino' }).selectOption('8');
+  expect(state.actions.filter(action => action.path.includes('/transferir/'))).toHaveLength(0);
+  await details.getByRole('button', { name: 'Transferir', exact: true }).click();
+  await expect.poll(() => state.actions.filter(action => action.path.includes('/transferir/'))).toEqual([
+    { path: '/comandas/check-phase7-24/transferir/8', query: '', method: 'POST', body: null },
+  ]);
+  await expect(details).toHaveCount(0);
 });
