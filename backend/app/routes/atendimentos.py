@@ -158,7 +158,7 @@ async def lancar_itens_na_familia_principal(
 
     from .orders import lancar_itens
 
-    if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None:
+    if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None or supplied.fechada:
         return await lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
 
     try:
@@ -170,7 +170,7 @@ async def lancar_itens_na_familia_principal(
             actor_id=current_user.id,
         )
         if principal is None:
-            raise AtendimentoError("Família principal sem comanda aberta", status_code=409)
+            return await lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)

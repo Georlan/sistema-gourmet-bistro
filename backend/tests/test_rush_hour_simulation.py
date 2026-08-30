@@ -307,11 +307,43 @@ def test_coupon_usage_limit_race_condition():
         futures = [executor.submit(place_order, i) for i in range(5)]
         responses = [f.result() for f in as_completed(futures)]
 
+    # 1. Validação de status HTTP de sucesso para todos os 5 pedidos
+    assert len(responses) == 5
+    for status_code, data in responses:
+        assert status_code == 201, f"Falha ao criar pedido na corrida de cupom: {data}"
+
+    # 2. Validação financeira estrita nas respostas HTTP
+    # Hambúrguer R$ 35,00 + Entrega R$ 5,00 = R$ 40,00 base
+    # Com cupom RUSH2 (-R$ 10,00) = R$ 30,00
+    totals = [round(float(data["total"]), 2) for _, data in responses]
+    discounted_totals = [t for t in totals if t == 30.0]
+    full_price_totals = [t for t in totals if t == 40.0]
+
+    assert len(discounted_totals) == 2, f"Esperado exatamente 2 pedidos com desconto (R$ 30,00), obtido: {totals}"
+    assert len(full_price_totals) == 3, f"Esperado exatamente 3 pedidos a preço cheio (R$ 40,00), obtido: {totals}"
+
+    # 3. Validação de atomicidade e integridade no banco de dados
     db = SessionLocal()
     token = current_restaurante_id.set(SIM_REST_ID)
     try:
         cup = db.query(Cupom).filter(Cupom.restaurante_id == SIM_REST_ID, Cupom.codigo == "RUSH2").first()
-        assert cup.usos_atuais <= 2, f"Cupom ultrapassou limite: {cup.usos_atuais} / {cup.limite_usos}"
+        assert cup.usos_atuais == 2, f"Cupom deve ter exatamente 2 usos registrados no banco: {cup.usos_atuais} / {cup.limite_usos}"
+
+        order_ids = [data["id"] for _, data in responses]
+        comandas = db.query(Comanda).filter(Comanda.id.in_(order_ids)).all()
+        assert len(comandas) == 5
+
+        comandas_com_desconto = [
+            c for c in comandas
+            if c.cupom_id == cup.id and round(float(c.valor_desconto_cupom or 0.0), 2) == 10.0
+        ]
+        comandas_sem_desconto = [
+            c for c in comandas
+            if c.cupom_id is None and round(float(c.valor_desconto_cupom or 0.0), 2) == 0.0
+        ]
+
+        assert len(comandas_com_desconto) == 2, f"Esperado exatamente 2 comandas persistidas com desconto: {len(comandas_com_desconto)}"
+        assert len(comandas_sem_desconto) == 3, f"Esperado exatamente 3 comandas persistidas sem desconto: {len(comandas_sem_desconto)}"
     finally:
         current_restaurante_id.reset(token)
         db.close()

@@ -65,6 +65,7 @@ from ...services.printing import (
     PrintingRequestError,
     enqueue_table_receipt,
 )
+from ...services.shifts import require_open_cash_shift
 from ...subscription import subscription_has_printing
 from ...timezone_utils import get_operational_now
 from ...waiter_permissions import (
@@ -74,28 +75,6 @@ from ...waiter_permissions import (
 from ...websocket_manager import manager
 
 logger = logging.getLogger("koma.adapters.pos")
-
-
-def require_open_cash_shift(db: Session, restaurante_id: Optional[int] = None) -> CaixaTurno:
-    """Impede que consumo e impressão nasçam fora de um turno financeiro."""
-    rid = restaurante_id or require_tenant_id()
-    turno = (
-        db.query(CaixaTurno)
-        .filter(
-            CaixaTurno.restaurante_id == rid,
-            CaixaTurno.status == "aberto",
-        )
-        .first()
-    )
-    if turno is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "O caixa precisa estar aberto para criar, aceitar ou imprimir "
-                "pedidos. Abra o turno e tente novamente."
-            ),
-        )
-    return turno
 
 
 def print_in_background(

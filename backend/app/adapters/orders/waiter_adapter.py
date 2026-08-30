@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import uuid
 from decimal import Decimal
 from typing import Optional
 
@@ -44,11 +45,12 @@ from ...services.atendimentos import (
     ensure_atendimento_for_comanda,
     ensure_launch_identity,
 )
+from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from ...services.printing import (
     PrintingRequestError,
     enqueue_table_receipt,
 )
-from .pos_adapter import require_open_cash_shift
+from ...services.shifts import require_open_cash_shift
 from ...waiter_permissions import (
     require_waiter_permission,
     waiter_permission_enabled,
@@ -96,7 +98,23 @@ class WaiterAdapter:
             )
 
         if comanda.fechada:
-            if not comanda.mesa_id:
+            if comanda.mesa_id:
+                # Comanda de mesa fechada: abre uma nova comanda para a mesma mesa
+                nova_comanda = Comanda(
+                    id=f"c-{uuid.uuid4().hex[:8]}",
+                    restaurante_id=rid,
+                    mesa_id=comanda.mesa_id,
+                    garcom_id=lancamento_in.garcom_id or current_user.id,
+                    tipo="Consumo no Local",
+                    numero_pedido=gerar_novo_numero_pedido_atomico(db, restaurante_id=rid),
+                    fechada=False,
+                    criado_em=datetime.datetime.now(datetime.timezone.utc),
+                )
+                db.add(nova_comanda)
+                db.flush()
+                comanda = nova_comanda
+                comanda_id = nova_comanda.id
+            else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Comanda já fechada. Reabra antes de lançar novos itens.",

@@ -218,3 +218,75 @@ class TestWaiterOrderCreation:
         )
         assert res.status_code == 404
         assert "Comanda não encontrada" in res.json()["detail"]
+
+    def test_waiter_launch_on_closed_table_command_opens_new_check(
+        self, char_client: TestClient, char_setup: dict
+    ):
+        """[PARIDADE CANÔNICA] Lançamento em comanda de mesa fechada abre automaticamente uma nova comanda aberta."""
+        headers = char_setup["headers"]
+
+        db = SessionLocal()
+        try:
+            mesa11 = db.query(Mesa).filter(Mesa.restaurante_id == CHAR_RESTAURANT_ID, Mesa.id == 11).first()
+            if not mesa11:
+                mesa11 = Mesa(id=11, restaurante_id=CHAR_RESTAURANT_ID, capacidade=4, nome="Mesa 11")
+                db.add(mesa11)
+            db.query(Comanda).filter(Comanda.restaurante_id == CHAR_RESTAURANT_ID, Comanda.mesa_id == 11).update({"fechada": True})
+            db.commit()
+        finally:
+            db.close()
+
+        # 1. Cria comanda de mesa 11
+        venda_payload = {
+            "tipo": "mesa",
+            "mesa_id": 11,
+            "itens": [{"produto_id": "prod-char-refri"}],
+        }
+        res_venda = char_client.post("/comandas/venda-direta", json=venda_payload, headers=headers)
+        assert res_venda.status_code == 201
+        comanda_antiga_id = res_venda.json()["id"]
+
+        # 2. Fecha a comanda de mesa
+        db = SessionLocal()
+        try:
+            comanda_antiga = db.query(Comanda).filter(Comanda.id == comanda_antiga_id).first()
+            comanda_antiga.fechada = True
+            db.commit()
+        finally:
+            db.close()
+
+        # 3. Garçom lança novo pedido referenciando o ID da comanda fechada
+        novo_payload = {
+            "garcom_id": "usr-char-garcom",
+            "itens": [{"produto_id": "prod-char-simples", "observacao": "Novo lote mesa 11"}],
+        }
+        res_novo = char_client.post(
+            f"/comandas/{comanda_antiga_id}/lancamentos",
+            json=novo_payload,
+            headers=headers,
+        )
+        assert res_novo.status_code == 201
+        novo_lanc_data = res_novo.json()
+        novo_lanc_id = novo_lanc_data["id"]
+
+        db = SessionLocal()
+        try:
+            # Comanda antiga permanece fechada e intocada com apenas 1 lançamento
+            c_antiga = db.query(Comanda).filter(Comanda.id == comanda_antiga_id).first()
+            assert c_antiga.fechada is True
+            assert len(c_antiga.lancamentos) == 1
+            assert c_antiga.lancamentos[0].id != novo_lanc_id
+
+            # Lançamento pertence a uma nova comanda aberta da mesma mesa
+            novo_lanc = db.query(Lancamento).filter(Lancamento.id == novo_lanc_id).first()
+            assert novo_lanc is not None
+            assert novo_lanc.comanda_id != comanda_antiga_id
+
+            c_nova = db.query(Comanda).filter(Comanda.id == novo_lanc.comanda_id).first()
+            assert c_nova is not None
+            assert c_nova.mesa_id == 11
+            assert c_nova.fechada is False
+            assert c_nova.id != comanda_antiga_id
+        finally:
+            db.close()
+

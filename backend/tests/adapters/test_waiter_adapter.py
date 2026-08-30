@@ -27,10 +27,22 @@ class TestWaiterAdapter:
         """[PROVA ESTRUTURAL] A rota POST /comandas/{id}/lancamentos delega ao OrderApplicationService com channel=WAITER."""
         headers = char_setup["headers"]
 
+        db = SessionLocal()
+        try:
+            from app.models import Mesa
+            m20 = db.query(Mesa).filter(Mesa.restaurante_id == CHAR_RESTAURANT_ID, Mesa.id == 20).first()
+            if not m20:
+                m20 = Mesa(id=20, restaurante_id=CHAR_RESTAURANT_ID, capacidade=4, nome="Mesa 20")
+                db.add(m20)
+            db.query(Comanda).filter(Comanda.restaurante_id == CHAR_RESTAURANT_ID, Comanda.mesa_id == 20).update({"fechada": True})
+            db.commit()
+        finally:
+            db.close()
+
         # Cria comanda
         res_venda = char_client.post(
             "/comandas/venda-direta",
-            json={"tipo": "mesa", "mesa_id": 1, "itens": [{"produto_id": "prod-char-refri"}]},
+            json={"tipo": "mesa", "mesa_id": 20, "itens": [{"produto_id": "prod-char-refri"}]},
             headers=headers,
         )
         assert res_venda.status_code == 201
@@ -63,7 +75,7 @@ class TestWaiterAdapter:
 
             assert cmd.channel == OrderChannel.WAITER
             assert cmd.check_id == comanda_id
-            assert cmd.table_id == "1"
+            assert cmd.table_id == "20"
             assert cmd.fulfillment == FulfillmentType.DINE_IN
             assert len(cmd.items) == 1
             assert cmd.items[0].product_id == "prod-char-simples"

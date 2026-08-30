@@ -11,7 +11,7 @@ import datetime
 from decimal import Decimal
 from typing import Any, Optional, Sequence
 import uuid
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,8 @@ from ...domain.orders.events import (
     OrderReady,
     OrderRejected,
 )
-from ...domain.orders.pricing import OrderPricingService, to_money_decimal
+from ...domain.orders.errors import OrderValidationError
+from ...domain.orders.pricing import OrderPricingService, OrderQuote, to_money_decimal
 from ...domain.orders.state_machine import OrderStateMachine
 from ...domain.orders.types import (
     FulfillmentType,
@@ -303,6 +304,8 @@ class OrderApplicationService:
                 .with_for_update()
                 .first()
             )
+            if comanda and comanda.fechada:
+                raise OrderValidationError("Não é permitido adicionar pedidos a uma comanda fechada.")
 
         # Status inicial de comanda e lançamento
         if cmd.channel == OrderChannel.POS:
@@ -332,23 +335,61 @@ class OrderApplicationService:
             initial_lancamento_status = "producao"
 
         cupom_db_id = None
+        coupon_discount_applied = Decimal("0.00")
         if quote.coupon_discount > Decimal("0.00") and cmd.coupon_code:
-            cupom_model = (
+            clean_code = cmd.coupon_code.strip()
+            # Incremento atômico condicional no banco de dados (protege contra corridas em SQLite e PostgreSQL)
+            update_count = (
                 db.query(Cupom)
                 .filter(
                     Cupom.restaurante_id == cmd.restaurant_id,
-                    Cupom.codigo.ilike(cmd.coupon_code.strip()),
+                    Cupom.codigo.ilike(clean_code),
+                    Cupom.ativo == True,
+                    or_(
+                        Cupom.limite_usos.is_(None),
+                        func.coalesce(Cupom.usos_atuais, 0) < Cupom.limite_usos,
+                    ),
                 )
-                .with_for_update()
-                .first()
+                .update(
+                    {Cupom.usos_atuais: func.coalesce(Cupom.usos_atuais, 0) + 1},
+                    synchronize_session=False,
+                )
             )
-            if cupom_model:
-                if cupom_model.limite_usos is not None and (cupom_model.usos_atuais or 0) >= cupom_model.limite_usos:
-                    # Limite atingido concorrentemente após cotação
-                    pass
-                else:
-                    cupom_model.usos_atuais = (cupom_model.usos_atuais or 0) + 1
+            if update_count > 0:
+                cupom_model = (
+                    db.query(Cupom)
+                    .filter(
+                        Cupom.restaurante_id == cmd.restaurant_id,
+                        Cupom.codigo.ilike(clean_code),
+                    )
+                    .first()
+                )
+                if cupom_model:
                     cupom_db_id = cupom_model.id
+                    coupon_discount_applied = quote.coupon_discount
+            else:
+                # Limite de usos atingido concorrentemente sob o banco: cupom esgotado
+                cupom_db_id = None
+                coupon_discount_applied = Decimal("0.00")
+
+        # Atualiza a cotação de forma atômica e consistente com a decisão do banco
+        if coupon_discount_applied != quote.coupon_discount:
+            new_discount_total = coupon_discount_applied + quote.cashback_discount
+            new_total = max(
+                Decimal("0.00"),
+                quote.subtotal + quote.delivery_fee + quote.service_fee - new_discount_total,
+            )
+            quote = OrderQuote(
+                items=quote.items,
+                subtotal=quote.subtotal,
+                modifiers_total=quote.modifiers_total,
+                coupon_discount=coupon_discount_applied,
+                cashback_discount=quote.cashback_discount,
+                discount_total=new_discount_total,
+                delivery_fee=quote.delivery_fee,
+                service_fee=quote.service_fee,
+                total=new_total,
+            )
 
         parsed_troco = _parse_troco_para_float(cmd.change_for)
 
@@ -374,7 +415,7 @@ class OrderApplicationService:
                     delivery_bairro=delivery_neighborhood,
                     delivery_taxa=float(quote.delivery_fee),
                     cupom_id=cupom_db_id,
-                    valor_desconto_cupom=float(quote.coupon_discount),
+                    valor_desconto_cupom=float(coupon_discount_applied),
                     valor_desconto_cashback=float(quote.cashback_discount),
                     delivery_forma_pagamento=cmd.payment_method,
                     delivery_troco_para=parsed_troco,
@@ -384,9 +425,9 @@ class OrderApplicationService:
                 db.flush()
             else:
                 # Comanda existente (ex: mesa ou segundo pedido)
-                if quote.coupon_discount > Decimal("0.00") and cupom_db_id:
+                if coupon_discount_applied > Decimal("0.00") and cupom_db_id:
                     comanda.cupom_id = cupom_db_id
-                    comanda.valor_desconto_cupom = float(quote.coupon_discount)
+                    comanda.valor_desconto_cupom = float(coupon_discount_applied)
                 if quote.cashback_discount > Decimal("0.00"):
                     comanda.valor_desconto_cashback = float(quote.cashback_discount)
 
