@@ -70,6 +70,7 @@ const printProps = (
 });
 
 interface InspectableProps {
+  title?: string;
   children?: ReactNode;
   id?: string;
   disabled?: boolean;
@@ -183,4 +184,14 @@ test('diálogos encaminham extrato, valores e lançamento sem confundir identida
   const html = renderToStaticMarkup(createElement(MesaPrintDialogs, props));
   assert.match(html, /<strong>LOTE:<\/strong> #124-AA/);
   assert.doesNotMatch(html, /disabled=""|enviada com sucesso/);
+});
+
+test('editor recebe cliente e quantidade válida antes da confirmação', () => {
+  const calls: unknown[] = [];
+  const view = MesaConsumptionPanel(consumptionProps({ restauranteConfig: { perm_garcom_editar: true },
+    setEditingItem: item => calls.push(item) }));
+  const edit = elements(view).find(node => node.props.title === 'Editar observação do item')!;
+  edit.props.onClick!();
+  assert.deepEqual(calls, [{ id: 'technical-item-0', produtoId: 'product-0', nome: 'Prato 0',
+    observacao: '', clienteNome: 'Consumo Geral', quantidade: 1, orderId: 'technical-check-124' }]);
 });

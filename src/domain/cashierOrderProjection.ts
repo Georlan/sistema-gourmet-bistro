@@ -240,7 +240,8 @@ function projectTableProduction(orders: Order[], salonTables: Table[], now: numb
           id: lid,
           projectionScope: 'launch',
           // Only a canonical identity explicitly bound to this launch is usable.
-          displayNumber: comanda.lancamentoId === lid ? comanda.displayNumber : undefined,
+          displayNumber: comanda.launchIdentities?.[lid]?.displayNumber
+            || (comanda.lancamentoId === lid ? comanda.displayNumber : undefined),
           comandaId: comanda.id,
           numeroPedido: comanda.numeroPedido,
           origemOperacional: comanda.origemOperacional,

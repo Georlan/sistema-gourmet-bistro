@@ -35,7 +35,7 @@ interface MesaConsumptionPanelProps {
   setActiveTab: React.Dispatch<React.SetStateAction<'consumo' | 'lancamento' | 'transferir' | 'mesclar'>>;
   setTransferType: React.Dispatch<React.SetStateAction<'total' | 'parcial' | 'mesclar'>>;
   setSelectedOrderToPrint: (order: Order) => void;
-  setEditingItem: (item: Pick<OrderItem, 'id' | 'produtoId' | 'nome' | 'observacao'> & { orderId: string }) => void;
+  setEditingItem: (item: Pick<OrderItem, 'id' | 'produtoId' | 'nome' | 'observacao' | 'clienteNome'> & { orderId: string; quantidade: number }) => void;
   onPrintPreview: () => void;
   onPrintValues: () => void | Promise<void>;
   onCloseTable?: () => void;
@@ -392,6 +392,8 @@ export function MesaConsumptionPanel({
                                     produtoId: item.produtoId,
                                     nome: item.nome,
                                     observacao: item.observacao,
+                                    clienteNome: item.clienteNome || 'Consumo Geral',
+                                    quantidade: 1,
                                     orderId: order.id
                                   });
                                 }}

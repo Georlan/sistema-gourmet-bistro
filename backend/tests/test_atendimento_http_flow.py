@@ -484,3 +484,53 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     assert "MESA: 5" in payload_m5
     assert "VAI PARA MESA 5" in payload_m5
     assert "FICA NA MESA 3" not in payload_m5
+
+def test_check_read_models_preserve_launch_identity_and_transferred_items():
+    check = _open(1)
+    first = _launch_items(check["id"], ["FICA", "TRANSFERE"])
+    second = _launch_items(check["id"], ["SEGUNDO"])
+    labels = {first["id"]: f'{check["numero_pedido"]}-A',
+              second["id"]: f'{check["numero_pedido"]}-B'}
+    for url in (f'/comandas/{check["id"]}', "/comandas/detalhes/todos?mesa_id=1&fechada=false"):
+        response = client.get(url, headers=_headers())
+        assert response.status_code == 200, response.text
+        detail = response.json() if isinstance(response.json(), dict) else response.json()[0]
+        assert {row["id"]: row["display_number"] for row in detail["lancamentos"]} == labels
+        assert all(item["lancamento_display_number"] == labels[item["lancamento_id"]]
+                   for item in detail["itens"])
+    item_id = first["itens"][0]["id"]
+    moved = client.post("/comandas/itens/transferir-lote/4", headers=_headers(),
+                        json={"item_ids": [item_id]})
+    assert moved.status_code == 200, moved.text
+    response = client.get("/comandas/detalhes/todos?mesa_id=4&fechada=false", headers=_headers())
+    assert response.status_code == 200, response.text
+    destination = response.json()[0]
+    item = next(item for item in destination["itens"] if item["id"] == item_id)
+    assert item["lancamento_id"] == first["id"]
+    assert item["lancamento_display_number"] == labels[first["id"]]
+    assert destination["id"] != check["id"]
+
+
+def test_check_read_model_does_not_create_missing_identities_or_leak_tenants():
+    from app.services.order_read_projection import project_check_details
+    check = _open(1)
+    launch = _launch_items(check["id"], ["LEGADO"])
+    with SessionLocal() as db:
+        source = db.query(Comanda).filter(Comanda.id == check["id"]).one()
+        foreign_projection = project_check_details(db, [source], TENANT + 1)[0]
+        assert foreign_projection.lancamentos[0].display_number is None
+        assert foreign_projection.itens[0].lancamento_display_number is None
+        db.query(LancamentoIdentidade).filter(
+            LancamentoIdentidade.restaurante_id == TENANT,
+            LancamentoIdentidade.lancamento_id == launch["id"],
+        ).delete(synchronize_session=False)
+        db.commit()
+    response = client.get(f'/comandas/{check["id"]}', headers=_headers())
+    assert response.status_code == 200, response.text
+    assert response.json()["lancamentos"][0]["display_number"] is None
+    assert response.json()["itens"][0]["lancamento_display_number"] is None
+    with SessionLocal() as db:
+        assert db.query(LancamentoIdentidade).filter(
+            LancamentoIdentidade.restaurante_id == TENANT,
+            LancamentoIdentidade.lancamento_id == launch["id"],
+        ).count() == 0

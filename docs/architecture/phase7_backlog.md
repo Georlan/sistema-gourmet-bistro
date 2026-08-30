@@ -2,6 +2,15 @@
 
 Estes achados já existiam na base `b2fd680`, antes das alterações da Fase 7. Não autorizam ampliar o hardening, mudar cálculos ou abrir subfases. Uma correção futura exige escopo próprio e teste do comportamento esperado.
 
+## Atualização do escopo pós-hardening autorizado em 30/08/2026
+
+Resolvidos com testes: descrição da conta pedida (sem dupla contagem nem mudança de valor),
+vocabulário “Itens servidos” no card compartilhado, identidade no DTO agregado e em itens
+transferidos, inicialização do editor com cliente e quantidade. A lista abaixo registra a
+origem histórica dos achados; não deve ser lida como lista atual de pendências resolvidas.
+Continuam não determinados o contrato de `Item.pago` e a visibilidade no Kanban de itens
+todos servidos com conta aberta. Bundle é medido no bloco estrutural, sem promessa de redução.
+
 - **[BUG CONFIRMADO] Texto da fatia de conta pedida.** No Caixa, uma conta solicitada com um item preparando e um pronto inclui ambos no fechamento. O texto pode contar os dois como prontos e somar o preparando novamente (“2 de 3 itens prontos”); o tooltip também pode dizer “Valor dos itens prontos”. Corrigir somente a descrição em trabalho próprio, sem mudar a fatia financeira completa nem os subtotais.
 - **[AMBIGUIDADE DE UI] “Pronta para pagar” no mapa do Garçom.** É a apresentação histórica de itens todos servidos, não evidência de `AWAITING_PAYMENT`. A projeção financeira permanece independente. Revisar o vocabulário com intenção de produto explícita.
 - **[OBSERVADO] Identidade canônica no DTO agregado.** A resposta de detalhes de Comandas ainda não transporta a identidade humana persistida de cada lançamento. O modal usa o snapshot de atendimento já existente. Estender o contrato de leitura em trabalho próprio, sem criar uma sequência A/B no frontend ou adicionar requisição por card.

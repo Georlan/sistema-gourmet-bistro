@@ -1,6 +1,7 @@
 import React from 'react';
+import { SharedTableCard } from '../../shared/SharedTableCard';
 import clsx from 'clsx';
-import { AlertTriangle, ClipboardList, Users, CreditCard, Receipt, Plus } from 'lucide-react';
+import { AlertTriangle, ClipboardList, CreditCard, Receipt, Plus } from 'lucide-react';
 import type { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCompactCurrency } from '../cashierPresentation';
@@ -102,99 +103,18 @@ export function CaixaSalonTab({
             <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'sm:grid-cols-3', 'sm:gap-2.5', 'xl:grid-cols-4', '2xl:grid-cols-6')}>
               {visibleSalonTableCards.map((card) => {
                 const { table, displayMesaId, tableOrders, isMerged, isOccupied, hasPendingPayment, total } = card;
-                const tableOrderNumbers = Array.from(new Set(
-                  tableOrders
-                    .flatMap(order => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
-                    .map(number => Number(number))
-                    .filter(number => Number.isFinite(number) && number > 0)
-                ));
                 const originId = tableOrders.find(order => order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
                 const transferredFromId = tableOrders.find(order => order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
-                const statusLabel = isMerged
-                  ? 'Mesclada'
-                  : hasPendingPayment
-                    ? 'Para receber'
-                    : isOccupied
-                      ? 'Em atendimento'
-                      : 'Livre';
                 return (
-                  <article
+                  <SharedTableCard
                     key={table.id}
-                    data-table-status={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
-                    className={clsx(
-                      'group flex min-h-[106px] sm:min-h-[148px] flex-col justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5 transition-colors shadow-sm',
-                      isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
-                      hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
-                      isOccupied && !hasPendingPayment && 'border-koma-danger-border bg-koma-danger-bg hover:border-koma-danger-text',
-                      !isOccupied && !isMerged && 'koma-table-free-card'
-                    )}
+                    table={table}
+                    orders={tableOrders}
+                    operational={card.operational}
+                    total={total}
+                    filterStatus={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
+                    note={originId ? `Unida à M${originId}` : transferredFromId ? `Transf. M${transferredFromId}` : undefined}
                   >
-                    <div className={clsx('flex', 'items-start', 'justify-between', 'gap-2')}>
-                      <div className="min-w-0">
-                        <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-koma-muted')}>Mesa</span>
-                        <div className={clsx('mt-0.5', 'flex', 'items-baseline', 'gap-2')}>
-                          <strong className={clsx('text-xl sm:text-2xl', 'font-extrabold', 'leading-none', 'text-koma-foreground')}>{table.id}</strong>
-                          {table.nome && table.nome !== `Mesa ${table.id}` && (
-                            <span className={clsx('line-clamp-1', 'break-words', 'text-[10px]', 'font-semibold', 'text-koma-secondary')}>{table.nome}</span>
-                          )}
-                        </div>
-                      </div>
-                      {tableOrderNumbers.length > 0 && (
-                        <span
-                          className={clsx('shrink-0', 'rounded-lg', 'border', 'border-koma-border', 'bg-black/10', 'px-2', 'py-1', 'font-mono', 'text-[9px]', 'font-extrabold', 'text-koma-secondary')}
-                          title={`Pedido ${tableOrderNumbers.map(number => `#${number}`).join(' + ')}`}
-                        >
-                          Pedido {tableOrderNumbers[0]}{tableOrderNumbers.length > 1 ? ` +${tableOrderNumbers.length - 1}` : ''}
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-1.5 sm:space-y-2">
-                      <div className={clsx('flex', 'flex-wrap', 'items-center', 'gap-1.5')}>
-                        <span className={clsx(
-                          'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
-                          isMerged && 'border-koma-border bg-koma-card text-koma-muted',
-                          hasPendingPayment && 'border-amber-300 dark:border-[#8a4753] bg-amber-100 dark:bg-[#4b222b] text-amber-900 dark:text-[#efb2bc]',
-                          isOccupied && !hasPendingPayment && 'koma-badge-danger',
-                          !isOccupied && !isMerged && 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
-                        )}>
-                          <span
-                            className={clsx(
-                              'mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
-                              hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-koma-danger-text' : 'bg-emerald-500'
-                            )}
-                            aria-hidden="true"
-                          />
-                          {statusLabel}
-                        </span>
-                        <span className={clsx('flex', 'items-center', 'gap-1', 'text-[9px]', 'text-koma-muted')}>
-                          <Users size={10} /> {table.capacidade || 4}
-                        </span>
-                      </div>
-                      {isOccupied ? (
-                        <div className={clsx('flex', 'items-end', 'justify-between', 'gap-2')}>
-                          {tableOrders.length > 0 ? (
-                            <>
-                              <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo</span>
-                              <strong className={clsx(
-                                'font-mono text-xs sm:text-sm',
-                                hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-koma-danger-text'
-                              )}>
-                                {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </strong>
-                            </>
-                          ) : (
-                            <span className={clsx('text-[9px]', 'text-koma-muted')}>Sincronizando…</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className={clsx('hidden', 'sm:block', 'text-[10px]', 'text-koma-muted')}>Pronta para receber clientes</span>
-                      )}
-                      {(originId || transferredFromId) && (
-                        <span className={clsx('block', 'truncate', 'text-[9px]', 'text-koma-muted')}>
-                          {originId ? `Unida à M${originId}` : `Transf. M${transferredFromId}`}
-                        </span>
-                      )}
-                    </div>
                     {!isMerged && (
                       <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-koma-border', 'pt-2 sm:pt-2.5')}>
                         {isOccupied ? (
@@ -231,7 +151,7 @@ export function CaixaSalonTab({
                         )}
                       </div>
                     )}
-                  </article>
+                  </SharedTableCard>
                 );
               })}
             </div>

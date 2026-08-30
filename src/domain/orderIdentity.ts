@@ -20,6 +20,23 @@ export interface LaunchIdentity {
 
 export type LaunchIdentityMap = Record<string, LaunchIdentity>;
 
+/** GET check details, including original launch identities on transferred items. */
+export function readCheckLaunchIdentities(check: {
+  lancamentos?: readonly { id: string; display_number?: string | null }[];
+  itens?: readonly { lancamento_id: string; lancamento_display_number?: string | null }[];
+}): LaunchIdentityMap {
+  const identities: LaunchIdentityMap = Object.create(null);
+  for (const launch of check.lancamentos || []) {
+    const label = launch.display_number?.trim();
+    if (label) identities[launch.id] = { displayNumber: label };
+  }
+  for (const item of check.itens || []) {
+    const label = item.lancamento_display_number?.trim();
+    if (label) identities[item.lancamento_id] = { displayNumber: label };
+  }
+  return identities;
+}
+
 /** Missing persisted identities stay missing; ordering never invents A/B/etc. */
 export function buildLaunchIdentityMap(snapshot: TableFamilySnapshot): LaunchIdentityMap {
   const identities: LaunchIdentityMap = Object.create(null);
