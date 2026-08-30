@@ -327,7 +327,8 @@ export default function CardapioCartDrawer({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-40 flex items-end justify-end bg-black/65 sm:items-stretch animate-fade-in cursor-pointer"
+      // Above the sticky header (45), below authentication and checkout (50).
+      className="fixed inset-0 z-[46] flex items-end justify-end bg-black/65 sm:items-stretch animate-fade-in cursor-pointer"
       id="cart-overlay"
     >
       <div
@@ -359,7 +360,7 @@ export default function CardapioCartDrawer({
         </div>
 
         {cart.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
             <div className="mt-4 grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
               <ShoppingBag className="h-8 w-8" />
             </div>
@@ -423,7 +424,7 @@ export default function CardapioCartDrawer({
           </div>
         ) : (
           <>
-            <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
               {/* Status Alert */}
               {!orderingEnabled && (
                 <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] font-semibold leading-relaxed text-amber-300">

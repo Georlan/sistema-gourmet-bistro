@@ -612,7 +612,7 @@ export default function CardapioPage() {
       />
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
-        {notice && (
+        {notice && !isCartOpen && !isCheckoutOpen && (
           <div className="fixed bottom-5 left-1/2 z-[70] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-emerald-500/25 bg-[#102019] px-4 py-3 text-center text-[10px] font-bold text-emerald-200 shadow-2xl" role="status" onClick={() => setNotice("")}>
             {notice}
           </div>
