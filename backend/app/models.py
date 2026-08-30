@@ -727,6 +727,9 @@ class ConfiguracaoRestaurante(Base):
     perm_garcom_transferir_item = Column(Boolean, default=True)
     perm_garcom_chamar = Column(Boolean, default=True)
     perm_garcom_ociosas = Column(Boolean, default=True)
+    webhook_url = Column(String(255), nullable=True)
+    webhook_secret = Column(String(128), nullable=True)
+    webhook_ativo = Column(Boolean, default=False, nullable=False)
 
     restaurante = relationship("Restaurante", lazy="joined")
 
@@ -1342,3 +1345,47 @@ class NotificacaoWhatsApp(Base):
     raw_payload = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+
+class IntegrationOutbox(Base):
+    """Tabela de Transactional Outbox para mensageria e integrações assíncronas do KÔMA."""
+    __tablename__ = "integration_outbox"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    event_id = Column(String(64), nullable=False, index=True)
+    event_name = Column(String(64), nullable=False)  # ex: "koma.order.created", "koma.order.ready"
+    aggregate_type = Column(String(32), nullable=False, default="order")
+    aggregate_id = Column(String(64), nullable=False)
+    payload = Column(JSON, nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)  # "pending", "processing", "delivered", "failed", "dead_letter"
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=5)
+    next_retry_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    response_status_code = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "event_id", name="uq_integration_outbox_tenant_event"),
+        Index("ix_integration_outbox_dispatch_queue", "restaurante_id", "status", "next_retry_at", "created_at"),
+    )
+
+
+class ExternalOrderReference(Base):
+    """Mapeamento canônico de referências e IDs de pedidos de marketplaces externos."""
+    __tablename__ = "external_order_references"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="CASCADE"), default=lambda: current_restaurante_id.get(), nullable=False, index=True)
+    provider = Column(String(32), nullable=False)  # "ifood", "99food", "keeta", "whatsapp", "api"
+    external_order_id = Column(String(128), nullable=False)
+    internal_order_id = Column(String(64), nullable=False)
+    raw_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "provider", "external_order_id", name="uq_external_order_ref_provider_order"),
+        Index("ix_external_order_ref_internal_lookup", "restaurante_id", "internal_order_id"),
+    )
