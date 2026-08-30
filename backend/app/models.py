@@ -1364,12 +1364,15 @@ class IntegrationOutbox(Base):
     next_retry_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
     processed_at = Column(DateTime(timezone=True), nullable=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    locked_by = Column(String(64), nullable=True)
     last_error = Column(Text, nullable=True)
     response_status_code = Column(Integer, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("restaurante_id", "event_id", name="uq_integration_outbox_tenant_event"),
         Index("ix_integration_outbox_dispatch_queue", "restaurante_id", "status", "next_retry_at", "created_at"),
+        Index("ix_integration_outbox_processing_stale", "status", "locked_at"),
     )
 
 

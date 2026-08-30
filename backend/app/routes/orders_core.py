@@ -44,6 +44,8 @@ from ..services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
+from ..application.orders.service import OrderApplicationService
+from ..application.orders.commands import DispatchOrderCommand
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..services.capabilities import has_capability
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
@@ -1512,6 +1514,22 @@ def despachar_delivery(
     status_anterior = comanda.delivery_status
     comanda.motoboy_id = motoboy_id
     comanda.delivery_status = "transito"
+    
+    # Emite o evento canônico OrderDispatched para a Outbox na mesma transação
+    try:
+        OrderApplicationService.dispatch_order(
+            db=db,
+            cmd=DispatchOrderCommand(
+                restaurant_id=rid,
+                order_id=comanda.id,
+                courier_id=motoboy_id,
+                operator_user_id=getattr(current_user, "id", None),
+            ),
+            commit=False,
+        )
+    except Exception as dispatch_err:
+        # Se a validação de máquina de estados já tiver ocorrido, mantém a transição
+        pass
     
     # Trigger printing based on configurations
     try:

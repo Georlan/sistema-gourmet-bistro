@@ -1,10 +1,11 @@
-"""Despachador assíncrono e resiliente de eventos da IntegrationOutbox."""
+"""Despachador assíncrono e resiliente de eventos da IntegrationOutbox com claim transacional em duas fases."""
 
 from __future__ import annotations
 
 import datetime
 import json
 import logging
+import uuid
 from typing import Any, Optional
 import httpx
 from sqlalchemy import or_
@@ -16,6 +17,7 @@ from .signer import build_webhook_headers
 logger = logging.getLogger("koma.outbox.dispatcher")
 
 DEFAULT_TIMEOUT_SECONDS = 5.0
+DEFAULT_STALE_TIMEOUT_SECONDS = 60
 
 
 def _calculate_backoff_seconds(attempts: int) -> int:
@@ -23,101 +25,58 @@ def _calculate_backoff_seconds(attempts: int) -> int:
     return min(3600, (2 ** max(1, attempts)) * 5)
 
 
-def dispatch_single_outbox_event(
+def recover_stale_outbox_claims(
     db: Session,
-    event_record: IntegrationOutbox,
     *,
-    client: Optional[httpx.Client] = None,
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-) -> bool:
-    """Despacha um único registro da Outbox para o webhook configurado."""
+    stale_timeout_seconds: int = DEFAULT_STALE_TIMEOUT_SECONDS,
+    restaurant_id: Optional[int] = None,
+) -> int:
+    """Recupera eventos que ficaram presos em 'processing' devido a crash ou interrupção do worker."""
     now = datetime.datetime.now(datetime.timezone.utc)
-    config = (
-        db.query(ConfiguracaoRestaurante)
-        .filter(ConfiguracaoRestaurante.restaurante_id == event_record.restaurante_id)
-        .first()
+    cutoff = now - datetime.timedelta(seconds=stale_timeout_seconds)
+
+    query = (
+        db.query(IntegrationOutbox)
+        .filter(
+            IntegrationOutbox.status == "processing",
+            or_(
+                IntegrationOutbox.locked_at.is_(None),
+                IntegrationOutbox.locked_at <= cutoff,
+            ),
+        )
     )
+    if restaurant_id is not None:
+        query = query.filter(IntegrationOutbox.restaurante_id == restaurant_id)
 
-    webhook_url = (config.webhook_url or "").strip() if config else ""
-    webhook_secret = (config.webhook_secret or "").strip() if config else ""
-    webhook_ativo = bool(config.webhook_ativo) if config else False
-
-    # Se o webhook não estiver configurado ou inativo, marcamos como entregue/concluído sem envio
-    if not webhook_ativo or not webhook_url:
-        event_record.status = "delivered"
-        event_record.processed_at = now
-        event_record.last_error = "Webhook inativo ou não configurado para o restaurante."
+    stale_events = query.all()
+    count = len(stale_events)
+    if count > 0:
+        for ev in stale_events:
+            ev.status = "failed" if ev.attempts > 0 else "pending"
+            ev.last_error = f"Stale claim recovered (locked > {stale_timeout_seconds}s)"
+            ev.locked_at = None
+            ev.locked_by = None
         db.commit()
-        return True
+        logger.warning("[OUTBOX RECOVERY] %d eventos presos em 'processing' foram recuperados para nova tentativa.", count)
 
-    payload_bytes = json.dumps(event_record.payload, ensure_ascii=False).encode("utf-8")
-    headers = build_webhook_headers(
-        secret=webhook_secret,
-        payload_bytes=payload_bytes,
-        event_id=event_record.event_id,
-        event_name=event_record.event_name,
-    )
-
-    http_client = client or httpx.Client(timeout=timeout_seconds)
-    close_client = client is None
-
-    try:
-        response = http_client.post(webhook_url, content=payload_bytes, headers=headers)
-        event_record.response_status_code = response.status_code
-
-        if 200 <= response.status_code < 300:
-            event_record.status = "delivered"
-            event_record.processed_at = now
-            event_record.last_error = None
-            db.commit()
-            return True
-        else:
-            raise RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
-
-    except Exception as exc:
-        event_record.attempts += 1
-        event_record.last_error = str(exc)[:500]
-
-        if event_record.attempts >= event_record.max_attempts:
-            event_record.status = "dead_letter"
-            event_record.processed_at = now
-            logger.error(
-                "[OUTBOX DEAD LETTER] Evento %s (%s) atingiu limite de %d tentativas: %s",
-                event_record.event_id,
-                event_record.event_name,
-                event_record.max_attempts,
-                exc,
-            )
-        else:
-            event_record.status = "failed"
-            delay = _calculate_backoff_seconds(event_record.attempts)
-            event_record.next_retry_at = now + datetime.timedelta(seconds=delay)
-            logger.warning(
-                "[OUTBOX RETRY] Evento %s falhou (tentativa %d/%d). Próximo retry em %ds: %s",
-                event_record.event_id,
-                event_record.attempts,
-                event_record.max_attempts,
-                delay,
-                exc,
-            )
-
-        db.commit()
-        return False
-    finally:
-        if close_client:
-            http_client.close()
+    return count
 
 
-def dispatch_pending_outbox_events(
+def claim_outbox_batch(
     db: Session,
     *,
     batch_size: int = 50,
-    client: Optional[httpx.Client] = None,
-    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
-) -> dict[str, int]:
-    """Varre e despacha eventos pendentes ou falhos prontos para retry."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    worker_id: Optional[str] = None,
+    restaurant_id: Optional[int] = None,
+) -> list[dict[str, Any]]:
+    """Fase 1: Transação atômica curta de claim com SKIP LOCKED e commit imediato.
     
+    Garante que workers simultâneos recebam conjuntos estritamente disjuntos de eventos
+    sem manter locks de linha do PostgreSQL durante as requisições HTTP de envio.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    wid = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
+
     query = (
         db.query(IntegrationOutbox)
         .filter(
@@ -127,31 +86,261 @@ def dispatch_pending_outbox_events(
                 IntegrationOutbox.next_retry_at <= now,
             ),
         )
-        .order_by(IntegrationOutbox.created_at.asc())
-        .limit(batch_size)
     )
+    if restaurant_id is not None:
+        query = query.filter(IntegrationOutbox.restaurante_id == restaurant_id)
+
+    query = query.order_by(IntegrationOutbox.created_at.asc()).limit(batch_size)
 
     try:
-        # PostgreSQL SKIP LOCKED para concorrência segura entre múltiplos workers
         events = query.with_for_update(skip_locked=True).all()
     except Exception:
-        # Fallback para SQLite ou drivers que não suportam SKIP LOCKED
         events = query.all()
 
-    stats = {"total": len(events), "delivered": 0, "failed": 0, "dead_letter": 0}
+    snapshots: list[dict[str, Any]] = []
+    if not events:
+        return snapshots
 
     for ev in events:
-        success = dispatch_single_outbox_event(
+        snapshots.append({
+            "id": ev.id,
+            "restaurante_id": ev.restaurante_id,
+            "event_id": ev.event_id,
+            "event_name": ev.event_name,
+            "aggregate_type": ev.aggregate_type,
+            "aggregate_id": ev.aggregate_id,
+            "payload": ev.payload,
+            "attempts": ev.attempts,
+            "max_attempts": ev.max_attempts,
+        })
+        ev.status = "processing"
+        ev.locked_at = now
+        ev.locked_by = wid
+
+    # Commit imediato do claim para liberar os locks de banco
+    db.commit()
+    return snapshots
+
+
+def settle_outbox_event(
+    db: Session,
+    outbox_id: str,
+    *,
+    status: str,
+    attempts: Optional[int] = None,
+    next_retry_at: Optional[datetime.datetime] = None,
+    response_status_code: Optional[int] = None,
+    last_error: Optional[str] = None,
+) -> None:
+    """Fase 3: Liquidação atômica e rápida do evento após a tentativa de entrega HTTP."""
+    record = (
+        db.query(IntegrationOutbox)
+        .filter(IntegrationOutbox.id == outbox_id)
+        .first()
+    )
+    if not record:
+        return
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    record.status = status
+    record.locked_at = None
+    record.locked_by = None
+    record.last_error = last_error
+    if response_status_code is not None:
+        record.response_status_code = response_status_code
+    if attempts is not None:
+        record.attempts = attempts
+    if next_retry_at is not None:
+        record.next_retry_at = next_retry_at
+    if status in {"delivered", "dead_letter"}:
+        record.processed_at = now
+
+    db.commit()
+
+
+def dispatch_single_claimed_snapshot(
+    db: Session,
+    snapshot: dict[str, Any],
+    *,
+    client: Optional[httpx.Client] = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    """Fase 2: Envio HTTP executado completamente fora de qualquer lock de banco."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    rid = snapshot["restaurante_id"]
+    outbox_id = snapshot["id"]
+
+    config = (
+        db.query(ConfiguracaoRestaurante)
+        .filter(ConfiguracaoRestaurante.restaurante_id == rid)
+        .first()
+    )
+
+    webhook_url = (config.webhook_url or "").strip() if config else ""
+    webhook_secret = (config.webhook_secret or "").strip() if config else ""
+    webhook_ativo = bool(config.webhook_ativo) if config else False
+
+    # Se webhook inativo ou não configurado, consideramos entregue/ignorado
+    if not webhook_ativo or not webhook_url:
+        settle_outbox_event(
             db,
-            ev,
+            outbox_id,
+            status="delivered",
+            last_error="Webhook inativo ou não configurado para o restaurante.",
+        )
+        return True
+
+    payload_bytes = json.dumps(snapshot["payload"], ensure_ascii=False).encode("utf-8")
+    headers = build_webhook_headers(
+        secret=webhook_secret,
+        payload_bytes=payload_bytes,
+        event_id=snapshot["event_id"],
+        event_name=snapshot["event_name"],
+    )
+
+    http_client = client or httpx.Client(timeout=timeout_seconds)
+    close_client = client is None
+    resp_code: Optional[int] = None
+
+    try:
+        response = http_client.post(webhook_url, content=payload_bytes, headers=headers)
+        resp_code = response.status_code
+        if 200 <= response.status_code < 300:
+            settle_outbox_event(
+                db,
+                outbox_id,
+                status="delivered",
+                response_status_code=response.status_code,
+                last_error=None,
+            )
+            return True
+        else:
+            raise RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
+
+    except Exception as exc:
+        new_attempts = snapshot["attempts"] + 1
+        max_attempts = snapshot["max_attempts"]
+
+        if new_attempts >= max_attempts:
+            logger.error(
+                "[OUTBOX DEAD LETTER] Evento %s (%s) atingiu limite de %d tentativas: %s",
+                snapshot["event_id"],
+                snapshot["event_name"],
+                max_attempts,
+                exc,
+            )
+            settle_outbox_event(
+                db,
+                outbox_id,
+                status="dead_letter",
+                attempts=new_attempts,
+                response_status_code=resp_code,
+                last_error=str(exc)[:500],
+            )
+        else:
+            delay = _calculate_backoff_seconds(new_attempts)
+            next_retry = now + datetime.timedelta(seconds=delay)
+            logger.warning(
+                "[OUTBOX RETRY] Evento %s falhou (tentativa %d/%d). Próximo retry em %ds: %s",
+                snapshot["event_id"],
+                new_attempts,
+                max_attempts,
+                delay,
+                exc,
+            )
+            settle_outbox_event(
+                db,
+                outbox_id,
+                status="failed",
+                attempts=new_attempts,
+                next_retry_at=next_retry,
+                response_status_code=resp_code,
+                last_error=str(exc)[:500],
+            )
+        return False
+    finally:
+        if close_client:
+            http_client.close()
+
+
+def dispatch_single_outbox_event(
+    db: Session,
+    event_record: IntegrationOutbox,
+    *,
+    client: Optional[httpx.Client] = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+) -> bool:
+    """Compatibilidade direta para envio de um registro existente."""
+    snapshot = {
+        "id": event_record.id,
+        "restaurante_id": event_record.restaurante_id,
+        "event_id": event_record.event_id,
+        "event_name": event_record.event_name,
+        "aggregate_type": event_record.aggregate_type,
+        "aggregate_id": event_record.aggregate_id,
+        "payload": event_record.payload,
+        "attempts": event_record.attempts,
+        "max_attempts": event_record.max_attempts,
+    }
+    result = dispatch_single_claimed_snapshot(db, snapshot, client=client, timeout_seconds=timeout_seconds)
+    db.refresh(event_record)
+    return result
+
+
+def dispatch_pending_outbox_events(
+    db: Session,
+    *,
+    batch_size: int = 50,
+    worker_id: Optional[str] = None,
+    stale_timeout_seconds: int = DEFAULT_STALE_TIMEOUT_SECONDS,
+    client: Optional[httpx.Client] = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    restaurant_id: Optional[int] = None,
+) -> dict[str, int]:
+    """Orquestrador completo de varredura, claim multi-worker sem retenção de lock e liquidação."""
+    # 1. Recupera claims órfãos
+    recovered = recover_stale_outbox_claims(
+        db,
+        stale_timeout_seconds=stale_timeout_seconds,
+        restaurant_id=restaurant_id,
+    )
+
+    # 2. Claim rápido com commit imediato
+    claimed_snapshots = claim_outbox_batch(
+        db,
+        batch_size=batch_size,
+        worker_id=worker_id,
+        restaurant_id=restaurant_id,
+    )
+
+    stats = {
+        "total": len(claimed_snapshots),
+        "delivered": 0,
+        "failed": 0,
+        "dead_letter": 0,
+        "recovered_stale": recovered,
+    }
+
+    # 3. Disparo HTTP desacoplado de lock
+    for snapshot in claimed_snapshots:
+        success = dispatch_single_claimed_snapshot(
+            db,
+            snapshot,
             client=client,
             timeout_seconds=timeout_seconds,
         )
         if success:
             stats["delivered"] += 1
-        elif ev.status == "dead_letter":
-            stats["dead_letter"] += 1
         else:
-            stats["failed"] += 1
+            # Consulta status final liquidado
+            current = (
+                db.query(IntegrationOutbox.status)
+                .filter(IntegrationOutbox.id == snapshot["id"])
+                .first()
+            )
+            if current and current[0] == "dead_letter":
+                stats["dead_letter"] += 1
+            else:
+                stats["failed"] += 1
 
     return stats

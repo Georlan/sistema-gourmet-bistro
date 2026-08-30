@@ -20,6 +20,7 @@ from ...domain.orders.events import (
     OrderCancelled,
     OrderCompleted,
     OrderCreated,
+    OrderDispatched,
     OrderDomainEvent,
     OrderPreparing,
     OrderReady,
@@ -67,6 +68,7 @@ from .commands import (
     CancelOrderCommand,
     CompleteOrderCommand,
     CreateOrderCommand,
+    DispatchOrderCommand,
     MarkOrderReadyCommand,
     RejectOrderCommand,
 )
@@ -804,6 +806,62 @@ class OrderApplicationService:
         return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
+    def dispatch_order(
+        cls,
+        db: Session,
+        cmd: DispatchOrderCommand,
+        *,
+        commit: bool = True,
+    ) -> OrderDTO:
+        """Despacha um pedido de delivery para entrega com motoboy (transição para transito)."""
+        lancamento, comanda = cls._resolve_lancamento_and_comanda(db, cmd.restaurant_id, cmd.order_id)
+        if not comanda:
+            raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
+
+        current_status = normalize_to_order_status(
+            lancamento.status if lancamento and lancamento.status else comanda.delivery_status
+        )
+        fulfillment = normalize_to_fulfillment(comanda.tipo)
+
+        OrderStateMachine.validate_transition(
+            current_status=current_status,
+            target_status=OrderStatus.DISPATCHED,
+            fulfillment=fulfillment,
+        )
+
+        if lancamento and lancamento.status in ("pendente", "producao"):
+            lancamento.status = "pronto"
+
+        comanda.delivery_status = "transito"
+        if cmd.courier_id is not None:
+            try:
+                comanda.motoboy_id = int(cmd.courier_id)
+            except (ValueError, TypeError):
+                pass
+
+        event = OrderDispatched(
+            restaurant_id=cmd.restaurant_id,
+            order_id=comanda.numero_pedido if comanda else 0,
+            courier_id=int(cmd.courier_id) if cmd.courier_id is not None else None,
+            customer_name=comanda.identificador,
+            customer_phone=comanda.delivery_telefone,
+        )
+        enqueue_outbox_event_in_session(
+            db,
+            event,
+            aggregate_type="order",
+            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+        )
+
+        if commit:
+            db.commit()
+            db.refresh(comanda)
+            if lancamento:
+                db.refresh(lancamento)
+
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
+
+    @classmethod
     def complete_order(
         cls,
         db: Session,
@@ -1048,9 +1106,9 @@ class OrderApplicationService:
 
         order_id_val = lancamento.id if lancamento else comanda.id
         status_val = (
-            lancamento.status
-            if lancamento and lancamento.status
-            else (comanda.delivery_status or "pendente")
+            comanda.delivery_status
+            if comanda.tipo in {"Delivery", "Entrega"} and comanda.delivery_status in {"transito", "saiu_entrega"}
+            else (lancamento.status if lancamento and lancamento.status else (comanda.delivery_status or "pendente"))
         )
 
         channel_val = (
