@@ -34,6 +34,18 @@ import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
 import { EquipeCargosTab } from './equipe/EquipeCargosTab';
 import { EquipePessoasTab } from './equipe/EquipePessoasTab';
 import { normalizeOperationalTimestamp } from '../domain';
+import { deriveFinancialState, deriveProductionState } from '../domain/operationalState';
+import {
+  formatCashierOldestAge as formatOldestAge,
+  getCashierDeliveryStatusLabel as deliveryStatusLabel,
+  getCashierHumanOrderNumber as humanOrderNumber,
+  getCashierOrderSlaData as getOrderSlaData,
+  getCashierTableOrderPresentation,
+  isCashierTableOrder as isTableCheckoutOrder,
+  projectCashierSalonTables,
+  projectCashierDeliveryState,
+  projectCashierTableSlices,
+} from '../domain/cashierOrderProjection';
 import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
 import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
@@ -183,13 +195,7 @@ type KanbanDetailItem = {
   quantidade: number;
 };
 
-function humanOrderNumber(order: any): string {
-  const rawId = String(order?.comandaId || order?.id || '');
-  if (rawId.startsWith('temp-')) return '…';
-  const number = Number(order?.numeroPedido ?? order?.numero_pedido);
-  if (Number.isFinite(number) && number > 0) return String(number);
-  return String(order?.comandaId || order?.id || '—').slice(-4).toUpperCase();
-}
+
 
 function groupKanbanDetailItems(items: any[]): KanbanDetailItem[] {
   const grouped = new Map<string, KanbanDetailItem>();
@@ -218,13 +224,6 @@ function operationalOriginLabel(origin?: string): string {
   return 'Kôma';
 }
 
-function deliveryStatusLabel(status?: string, modalidade?: string): string {
-  if (status === 'producao') return 'Em preparo';
-  if (status === 'pronto') return modalidade === 'delivery' ? 'Pronto para envio' : 'Pronto para retirada';
-  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando retirada';
-  if (status === 'pendente' || status === 'analise') return 'Aguardando aceite';
-  return 'Em atendimento';
-}
 
 interface SmartPosCashPaymentView {
   intent_id: string;
@@ -288,11 +287,7 @@ const formatarTelefoneTabela = (tel?: string) => {
   return tel; // Retorna o valor original se contiver letras (como os usuários legados 'georlan', 'caixa1')
 };
 
-const isTableCheckoutOrder = (order: Order | null | undefined) => {
-  if (!order || Number(order.mesaId) <= 0) return false;
-  const normalizedType = String(order.tipo || '').toLowerCase();
-  return !['delivery', 'entrega', 'retirada'].includes(normalizedType);
-};
+
 
 const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -307,22 +302,7 @@ const formatCompactCurrency = (value: number) => new Intl.NumberFormat('pt-BR', 
   maximumFractionDigits: 0,
 }).format(Number(value) || 0);
 
-const formatOldestAge = (values: unknown[]) => {
-  const MIN_VALID_EPOCH = 1577836800000; // 2020-01-01T00:00:00Z
-  const now = Date.now();
-  const timestamps = values
-    .map(v => normalizeOperationalTimestamp(v, now))
-    .filter((value): value is number => value !== null && value >= MIN_VALID_EPOCH && value <= now + 60_000);
-  if (timestamps.length === 0) return '—';
-  const elapsedMinutes = Math.max(0, Math.floor((now - Math.min(...timestamps)) / 60_000));
-  if (elapsedMinutes < 1) return 'Agora';
-  if (elapsedMinutes < 60) return `${elapsedMinutes} min`;
-  const hours = Math.floor(elapsedMinutes / 60);
-  const minutes = elapsedMinutes % 60;
-  if (hours < 24) return minutes ? `${hours}h ${minutes}min` : `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ${hours % 24}h`;
-};
+
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -843,176 +823,13 @@ export function CaixaPanel({
   // ============================================================================
 
   // Col 1 — somente pedidos vinculados a uma mesa física, lançados pelo garçom ou caixa.
-  const tableOrdersInProduction = useMemo(() => {
-    const list: any[] = [];
-    (orders || []).forEach(comanda => {
-      const normalizedType = String(comanda.tipo || '').toLowerCase();
-      const isTableOrder = Number(comanda.mesaId) > 0
-        && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
-      if (!isTableOrder) return;
-      if ((comanda as any).statusComanda === 'aguardando_pagamento') return;
-      const itemsByLancamento: Record<string, OrderItem[]> = {};
-      const itensArr = Array.isArray(comanda?.itens) ? comanda.itens : Array.isArray(comanda?.items) ? comanda.items : [];
-      itensArr.forEach(item => {
-        const lid = item.lancamentoId || comanda.id;
-        if (!itemsByLancamento[lid]) itemsByLancamento[lid] = [];
-        itemsByLancamento[lid].push(item);
-      });
-      Object.entries(itemsByLancamento).forEach(([lid, items]) => {
-        const preparingItems = items.filter(i => i.status === 'preparando');
-        if (preparingItems.length > 0) {
-          const mesaEntity = (salonTables || []).find(t => t.id === comanda.mesaId);
-          const rawTableTimestamp =
-            (comanda as any).aberta_em ||
-            (comanda as any).data_abertura ||
-            (comanda as any).aberto_em ||
-            (mesaEntity as any)?.aberta_em ||
-            (mesaEntity as any)?.data_abertura ||
-            (mesaEntity as any)?.created_at ||
-            comanda.created_at ||
-            comanda.timestamp ||
-            (comanda as any).criadoEm;
-
-          list.push({
-            id: lid,
-            comandaId: comanda.id,
-            numeroPedido: comanda.numeroPedido,
-            origemOperacional: comanda.origemOperacional,
-            mesaId: comanda.mesaId,
-            mesaOrigemId: comanda.mesaOrigemId,
-            mesaTransferidaDe: comanda.mesaTransferidaDe,
-            identificador: (comanda as any).identificador ?? null,
-            garcomNome: comanda.garcomNome,
-            tipo: comanda.tipo,
-            aberta_em: rawTableTimestamp,
-            data_abertura: (comanda as any).data_abertura || rawTableTimestamp,
-            aberto_em: (comanda as any).aberto_em || rawTableTimestamp,
-            created_at: comanda.created_at || (comanda as any).criadoEm || rawTableTimestamp,
-            timestamp: normalizeOperationalTimestamp(comanda.timestamp || rawTableTimestamp) ?? Date.now(),
-            criadoEm: (comanda as any).criadoEm || comanda.created_at,
-            mesa: mesaEntity,
-            itens: preparingItems
-          });
-        }
-      });
-    });
-    return list;
-  }, [orders, salonTables]);
-
-  // Col 3 — Fechar conta: mesas com status 'aguardando_pagamento' (conta pedida) ou itens prontos individualmente
-  // Unifica comandas da mesma mesa em um único card de pagamento.
-  const tableOrdersReady = useMemo(() => {
-    const list: any[] = [];
-    const groupedByMesa: Record<number, Array<{ comanda: any; itens: any[]; contaPedida: boolean }>> = {};
-
-    (orders || []).forEach(comanda => {
-      const normalizedType = String(comanda.tipo || '').toLowerCase();
-      const isTableOrder = Number(comanda.mesaId) > 0
-        && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
-      if (!isTableOrder) return;
-
-      const itensArr = Array.isArray(comanda?.itens) ? comanda.itens : Array.isArray(comanda?.items) ? comanda.items : [];
-      const unpaid = itensArr.filter(i => (i.status as string) !== 'cancelado' && !i.pago);
-      const readyItems = itensArr.filter(item => item.status === 'pronto' && !item.pago);
-      const contaPedida = (comanda as any).statusComanda === 'aguardando_pagamento';
-
-      if (contaPedida && unpaid.length > 0) {
-        if (!groupedByMesa[comanda.mesaId]) {
-          groupedByMesa[comanda.mesaId] = [];
-        }
-        groupedByMesa[comanda.mesaId].push({ comanda, itens: unpaid, contaPedida: true });
-      } else if (readyItems.length > 0) {
-        if (!groupedByMesa[comanda.mesaId]) {
-          groupedByMesa[comanda.mesaId] = [];
-        }
-        groupedByMesa[comanda.mesaId].push({ comanda, itens: readyItems, contaPedida: false });
-      }
-    });
-
-    Object.entries(groupedByMesa).forEach(([mesaIdStr, entries]) => {
-      const mesaId = Number(mesaIdStr);
-      const allItems: any[] = [];
-      entries.forEach(e => {
-        (e.itens || []).forEach((it: any) => {
-          allItems.push({
-            ...it,
-            comandaId: e.comanda.id
-          });
-        });
-      });
-
-      const hasContaPedida = entries.some(e => e.contaPedida);
-      const relatedTableOrders = (orders || []).filter(o => Number(o.mesaId) === mesaId && !(o as any).fechada);
-      const itensEmPreparoCount = relatedTableOrders.reduce((count, relatedOrder) => {
-        const arr = Array.isArray(relatedOrder?.itens)
-          ? relatedOrder.itens
-          : Array.isArray(relatedOrder?.items)
-            ? relatedOrder.items
-            : [];
-        return count + arr.filter(item => item.status === 'preparando' && !item.pago).length;
-      }, 0);
-
-      const firstComanda = entries[0].comanda;
-      const mesaEntity = (salonTables || []).find(t => t.id === mesaId);
-
-      let oldestComandaTime: any = null;
-      entries.forEach(e => {
-        const cTime =
-          (e.comanda as any).aberta_em ||
-          (e.comanda as any).data_abertura ||
-          (e.comanda as any).aberto_em ||
-          e.comanda.created_at ||
-          e.comanda.timestamp ||
-          (e.comanda as any).criadoEm;
-        if (!oldestComandaTime) {
-          oldestComandaTime = cTime;
-        } else if (cTime) {
-          const t1 = normalizeOperationalTimestamp(cTime) ?? Number.NaN;
-          const t2 = normalizeOperationalTimestamp(oldestComandaTime) ?? Number.NaN;
-          if (!isNaN(t1) && (isNaN(t2) || t1 < t2)) {
-            oldestComandaTime = cTime;
-          }
-        }
-      });
-
-      if (!oldestComandaTime && mesaEntity) {
-        oldestComandaTime = (mesaEntity as any).aberta_em || (mesaEntity as any).data_abertura || (mesaEntity as any).created_at;
-      }
-
-      list.push({
-        id: firstComanda.id, // ID real da comanda principal para rotear requisições
-        comandaId: firstComanda.id,
-        numeroPedido: firstComanda.numeroPedido,
-        numeroPedidos: Array.from(new Set(
-          entries
-            .map(entry => Number(entry.comanda.numeroPedido))
-            .filter(number => Number.isFinite(number) && number > 0)
-        )),
-        origemOperacional: firstComanda.origemOperacional,
-        mesaId: mesaId,
-        mesaOrigemId: firstComanda.mesaOrigemId,
-        mesaTransferidaDe: firstComanda.mesaTransferidaDe,
-        identificador: firstComanda.identificador ?? null,
-        garcomNome: firstComanda.garcomNome,
-        tipo: firstComanda.tipo,
-        aberta_em: oldestComandaTime || (firstComanda as any).aberta_em,
-        data_abertura: (firstComanda as any).data_abertura || oldestComandaTime,
-        aberto_em: (firstComanda as any).aberto_em || oldestComandaTime,
-        created_at: firstComanda.created_at || (firstComanda as any).criadoEm || oldestComandaTime,
-        timestamp: normalizeOperationalTimestamp(firstComanda.timestamp || oldestComandaTime) ?? Date.now(),
-        criadoEm: (firstComanda as any).criadoEm || firstComanda.created_at,
-        mesa: mesaEntity,
-        valorPago: entries.reduce((sum, e) => sum + (e.comanda.valorPago || 0), 0),
-        itens: allItems,
-        contaPedida: hasContaPedida,
-        temItensEmPreparo: itensEmPreparoCount > 0,
-        itensEmPreparoCount,
-        comandaIds: entries.map(e => e.comanda.id)
-      });
-    });
-
-    return list;
-  }, [orders, salonTables]);
+  const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
+  // Capture the fallback opening time once per received snapshot, not on each
+  // presentation tick (an undated legacy card must not restart every 30s).
+  const { tableOrdersInProduction, tableOrdersReady } = useMemo(
+    () => projectCashierTableSlices(orders, salonTables, Date.now()),
+    [orders, salonTables],
+  );
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId as any);
@@ -1294,44 +1111,10 @@ export function CaixaPanel({
   const [tableMutation, setTableMutation] = useState<'create' | 'update' | 'delete' | null>(null);
   const [tableFormError, setTableFormError] = useState('');
 
-  const salonTableCards = useMemo(() => (salonTables || []).map((table) => {
-    const mergedIntoMesaId = orders.find(order => order.mesaOrigemId === table.id)?.mesaId || null;
-    const isMerged = mergedIntoMesaId !== null;
-    const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
-    const tableOrders = orders.filter(order => {
-      const normalizedOrderStatus = String(order.status || '').trim().toLowerCase();
-      return order.mesaId === displayMesaId
-        && !['fechada', 'fechado', 'cancelada', 'cancelado', 'finalizada', 'finalizado'].includes(normalizedOrderStatus);
-    });
-    const normalizedTableStatus = String(table.status || '').trim().toLowerCase();
-    const hasOperationalStatus = [
-      'ocupada',
-      'ocupado',
-      'pronta',
-      'pronto',
-      'aguardando_pagamento',
-      'para_receber',
-    ].includes(normalizedTableStatus);
-    const isOccupied = tableOrders.length > 0 || hasOperationalStatus;
-    const hasPendingPayment = ['aguardando_pagamento', 'para_receber'].includes(normalizedTableStatus)
-      || tableOrders.some(order => order.statusComanda === 'aguardando_pagamento')
-      || pagamentosPendentes.some(payment => (
-        tableOrders.some(order => order.id === payment.comanda_id)
-      ));
-    const total = tableOrders.reduce((sum, order) => (
-      sum + (order.itens || []).reduce((itemsTotal, item) => itemsTotal + Number(item.preco || 0), 0)
-    ), 0);
-
-    return {
-      table,
-      displayMesaId,
-      tableOrders,
-      isMerged,
-      isOccupied,
-      hasPendingPayment,
-      total,
-    };
-  }), [orders, pagamentosPendentes, salonTables]);
+  const salonTableCards = useMemo(
+    () => projectCashierSalonTables(salonTables, orders, pagamentosPendentes, nowTimestamp),
+    [orders, pagamentosPendentes, salonTables, nowTimestamp],
+  );
 
   const tableStatusCounts = useMemo(() => ({
     all: salonTableCards.length,
@@ -1356,16 +1139,13 @@ export function CaixaPanel({
         ? Math.round((activeCards.length / salonTableCards.length) * 100)
         : 0,
       openValue,
-      oldestService: formatOldestAge(timestamps),
+      oldestService: formatOldestAge(timestamps, nowTimestamp),
     };
-  }, [salonTableCards]);
+  }, [salonTableCards, nowTimestamp]);
 
   const pdvTableOptions = useMemo(() => salonTableCards
     .map((card) => {
-      const normalizedStatus = String(card.table.status || '').trim().toLowerCase();
-      const isOccupied = card.isOccupied
-        || card.hasPendingPayment
-        || ['ocupada', 'ocupado', 'pronta', 'pronto', 'aguardando_pagamento'].includes(normalizedStatus);
+      const isOccupied = card.isOccupied || card.hasPendingPayment;
 
       return {
         ...card,
@@ -1955,11 +1735,10 @@ export function CaixaPanel({
       && o.status !== 'cancelado'
     );
     const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
-    const billRequestedCount = active.filter(o =>
-      (o as any).status_comanda === 'aguardando_pagamento' ||
-      (o as any).statusComanda === 'aguardando_pagamento' ||
-      (o as any).contaPedida === true
-    ).length;
+    const billRequestedCount = active.filter(o => deriveFinancialState(
+      [o, { statusComanda: (o as any).status_comanda }],
+      { hasPendingPayment: (o as any).contaPedida === true },
+    ) === 'AWAITING_PAYMENT').length;
 
     if (isInitialOrdersMountRef.current) {
       isInitialOrdersMountRef.current = false;
@@ -1993,7 +1772,6 @@ export function CaixaPanel({
   };
 
   // ── MÓDULO 3: SLA, Impressão Rápida e Expansão Compacta de Itens ──────────────
-  const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -2018,97 +1796,7 @@ export function CaixaPanel({
     };
   }, []);
 
-  // Função auxiliar para calcular e formatar o tempo real decorrido da mesa/pedido
-  const getMinutosDecorridos = (card: any) => {
-    const timestamp =
-      card.mesa?.aberta_em ||
-      card.mesa?.data_abertura ||
-      card.mesa?.created_at ||
-      card.aberta_em ||
-      card.data_abertura ||
-      card.aberto_em ||
-      card.created_at ||
-      card.timestamp ||
-      card.criadoEm ||
-      (Array.isArray(card.itens) && card.itens.length > 0 && Math.min(
-        ...card.itens.map((i: any) => {
-          const t = i.criadoEm || i.created_at || i.timestamp;
-          return normalizeOperationalTimestamp(t) ?? Infinity;
-        }).filter((t: number) => t < Infinity)
-      ));
 
-    if (!timestamp) return 'AGORA';
-
-    const start = normalizeOperationalTimestamp(timestamp) ?? 0;
-
-    if (!start || isNaN(start)) return 'AGORA';
-
-    const now = Date.now();
-    const diff = Math.max(0, Math.floor((now - start) / 60000));
-    if (diff >= 2880) {
-      const days = Math.floor(diff / 1440);
-      return `${days}d ${Math.floor((diff % 1440) / 60)}h`;
-    }
-    if (diff >= 60) {
-      return `${Math.floor(diff / 60)}h ${diff % 60}m`;
-    }
-    return diff === 0 ? 'AGORA' : `${diff} MIN`;
-  };
-
-  // Função robusta de parser e cálculo de tempo decorrido (evitando UTC/NaN e nunca usando updated_at)
-  function calcularMinutosDecorridos(timestamp: any, agora: number): number {
-    if (!timestamp) return 0;
-
-    const dataInicio = normalizeOperationalTimestamp(timestamp, agora) ?? 0;
-
-    if (!dataInicio || isNaN(dataInicio)) return 0;
-
-    const diferencaMs = agora - dataInicio;
-    const minutos = Math.floor(diferencaMs / (1000 * 60));
-
-    return minutos > 0 ? minutos : 0;
-  }
-
-  // Cálculo de tempo de espera dinâmico (SLA) sincronizado entre Salão/Garçom e Caixa
-  const getOrderSlaData = (order: any, now: number) => {
-    const timeFormatted = getMinutosDecorridos(order);
-    const timestampReal =
-      order.mesa?.aberta_em ||
-      order.mesa?.data_abertura ||
-      order.mesa?.created_at ||
-      order.aberta_em ||
-      order.data_abertura ||
-      order.aberto_em ||
-      order.created_at ||
-      order.timestamp ||
-      order.criadoEm;
-
-    const elapsedMinutes = calcularMinutosDecorridos(timestampReal, now);
-    const labelText = timeFormatted;
-
-    if (elapsedMinutes > 25) {
-      return {
-        minutes: elapsedMinutes,
-        badgeClass: 'orders-card__time is-late',
-        borderTopClass: 'is-late',
-        label: labelText
-      };
-    } else if (elapsedMinutes >= 15) {
-      return {
-        minutes: elapsedMinutes,
-        badgeClass: 'orders-card__time is-attention',
-        borderTopClass: 'is-attention',
-        label: labelText
-      };
-    } else {
-      return {
-        minutes: elapsedMinutes,
-        badgeClass: 'orders-card__time is-normal',
-        borderTopClass: 'is-normal',
-        label: labelText
-      };
-    }
-  };
 
   // Renderizador compacto de itens de alta densidade
   const renderCompactItemsList = (
@@ -2167,28 +1855,9 @@ export function CaixaPanel({
     );
   };
 
-  const getTableOrderPresentation = (order: Order) => {
-    const mesaId = Number(order.mesaId || 0);
-    const configuredName = salonTables.find(table => Number(table.id) === mesaId)?.nome?.trim();
-    const activeItemCount = (order.itens || []).filter(item => item.status !== 'cancelado').length;
-    const orderNumbers = Array.from(new Set(
-      (order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
-        .map(number => Number(number))
-        .filter(number => Number.isFinite(number) && number > 0)
-    ));
-    const isPendingConfirmation = String(order.id || '').startsWith('temp-');
-    const orderLabel = isPendingConfirmation
-      ? 'Pedido em envio'
-      : orderNumbers.length > 1
-        ? `Pedidos ${orderNumbers.map(number => `#${number}`).join(' + ')}`
-        : `Pedido #${orderNumbers[0] || humanOrderNumber(order)}`;
-
-    return {
-      shortLabel: mesaId > 0 ? `M${mesaId}` : 'B',
-      title: configuredName || (mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão'),
-      subtitle: `${orderLabel} · ${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
-    };
-  };
+  const getTableOrderPresentation = (order: Order) => (
+    getCashierTableOrderPresentation(order, salonTables)
+  );
 
   // Impressão rápida de pré-conta do card no Kanban
   const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
@@ -2336,7 +2005,7 @@ export function CaixaPanel({
   // Monitor de pedidos delivery / online pendentes
   const prevDeliveryPendingCountRef = useRef<number | null>(null);
   useEffect(() => {
-    const pendingCount = deliveryOrders.filter(o => o.status === 'pendente' || o.status === 'analise').length;
+    const pendingCount = deliveryOrders.filter(o => projectCashierDeliveryState(o.status).awaitingAcceptance).length;
     if (prevDeliveryPendingCountRef.current === null) {
       prevDeliveryPendingCountRef.current = pendingCount;
       return;
@@ -4038,7 +3707,7 @@ export function CaixaPanel({
   }, [tableOrdersInProduction, searchQuery, matchesSearchQuery]);
 
   const filteredDigitalProduction = useMemo(() => {
-    return deliveryOrders.filter(o => o.status === 'producao').filter(order => matchesSearchQuery(order, searchQuery));
+    return deliveryOrders.filter(o => projectCashierDeliveryState(o.status).inProduction).filter(order => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
   const filteredCol2Table = useMemo(() => {
@@ -4047,7 +3716,7 @@ export function CaixaPanel({
 
   const filteredDeliveryFinalization = useMemo(() => {
     return deliveryOrders
-      .filter(o => ['pronto', 'transito', 'saiu_para_entrega'].includes(o.status))
+      .filter(o => projectCashierDeliveryState(o.status).inFinalization)
       .filter(order => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
@@ -4075,7 +3744,7 @@ export function CaixaPanel({
 
   const activeDeliveryOrdersCount = useMemo(
     () => deliveryOrders.reduce(
-      (count, order) => ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(order.status) ? count + 1 : count,
+      (count, order) => projectCashierDeliveryState(order.status).active ? count + 1 : count,
       0
     ),
     [deliveryOrders]
@@ -4083,7 +3752,7 @@ export function CaixaPanel({
   const sidebarOrderCount = tableOrdersInProduction.length + activeDeliveryOrdersCount + tableOrdersReady.length;
   const operationalOrderInsights = useMemo(() => {
     const activeDigitalOrders = deliveryOrders.filter(order => (
-      ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(order.status)
+      projectCashierDeliveryState(order.status).active
     ));
 
     const activeTableList = [...tableOrdersInProduction, ...tableOrdersReady];
@@ -4107,7 +3776,7 @@ export function CaixaPanel({
 
     const pendingPaymentCount = pagamentosPendentes.length;
     const pendingAcceptanceCount = activeDigitalOrders.filter(order =>
-      ['pendente', 'analise'].includes(order.status)
+      projectCashierDeliveryState(order.status).awaitingAcceptance
     ).length;
     const readyToFinishCount = tableOrdersReady.length;
     const overdueCount = [
@@ -4126,7 +3795,7 @@ export function CaixaPanel({
             : { label: 'sem pendências', value: 0, needsAttention: false };
 
     return {
-      oldestOrder: formatOldestAge(timestamps),
+      oldestOrder: formatOldestAge(timestamps, nowTimestamp),
       openValue: tableValue + digitalValue,
       actionMetric,
     };
@@ -4195,7 +3864,7 @@ export function CaixaPanel({
       ) ?? 0)
     : 0;
   const selectedCanAdvanceDigital = selectedIsDigital
-    && selectedKanbanOrder?.deliveryStatus === 'producao';
+    && projectCashierDeliveryState(selectedKanbanOrder?.deliveryStatus).inProduction;
   const selectedCheckoutSmartPosState = selectedOrder
     ? getSmartPosCardState(selectedOrder)
     : null;
@@ -5100,7 +4769,7 @@ export function CaixaPanel({
                     ) : (
                       <>
                         {filteredCol1.map((order) => {
-                          const preparingItems = order.itens.filter(item => item.status === 'preparando');
+                          const preparingItems = deriveProductionState(order.itens).preparingItems;
                           const tableMovement = getTableMovementContext(order);
                           const cardId = `prod-${order.id}`;
                           const sla = getOrderSlaData(order, nowTimestamp);
@@ -6414,6 +6083,7 @@ export function CaixaPanel({
                                       disabled={tableOrders.length === 0}
                                       onClick={() => tableOrders[0] && setSelectedKanbanOrder({
                                         ...tableOrders[0],
+                                        projectionScope: 'table',
                                         contextoSalao: true,
                                         itens: tableOrders.flatMap(order => order.itens || []),
                                         comandaIds: tableOrders.map(order => order.id),

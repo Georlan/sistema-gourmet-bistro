@@ -14,10 +14,24 @@ const ITEM_B = 'item-waiter-phase7-b';
 
 type ItemStatus = 'preparando' | 'pronto' | 'entregue';
 type Write = { method: string; path: string; status: string | null; tableId: string | null };
+type WaiterScenario = {
+  checkNumber?: number;
+  displayNumbers?: [string, string];
+  sequences?: [number, number];
+  emptySession?: boolean;
+  withoutCheck?: boolean;
+};
 
-async function openWaiterScenario(page: Page, statuses: [ItemStatus, ItemStatus] = ['preparando', 'pronto']) {
+async function openWaiterScenario(
+  page: Page,
+  statuses: [ItemStatus, ItemStatus] = ['preparando', 'pronto'],
+  scenario: WaiterScenario = {},
+) {
   const createdAt = new Date(NOW.getTime() - 12 * 60_000).toISOString();
-  const items = statuses.map((status, index) => ({
+  const checkNumber = scenario.checkNumber ?? 24;
+  const displayNumbers = scenario.displayNumbers ?? ['24-A', '24-B'];
+  const sequences = scenario.sequences ?? [1, 2];
+  const items = (scenario.emptySession ? [] : statuses).map((status, index) => ({
     id: index === 0 ? ITEM_A : ITEM_B,
     lancamento_id: index === 0 ? LAUNCH_A : LAUNCH_B,
     produto_id: `product-waiter-phase7-${index + 1}`,
@@ -40,7 +54,7 @@ async function openWaiterScenario(page: Page, statuses: [ItemStatus, ItemStatus]
     garcom_id: 'waiter-phase7',
     criada_por: { nome: 'Garçom Fase 7' },
     tipo: 'Consumo no Local',
-    numero_pedido: 24,
+    numero_pedido: checkNumber,
     fechada: false,
     valor_pago: 0,
     criado_em: createdAt,
@@ -93,16 +107,16 @@ async function openWaiterScenario(page: Page, statuses: [ItemStatus, ItemStatus]
         { id: 8, nome: 'Mesa 8', capacidade: 4, status: 'livre' },
       ];
     } else if (method === 'GET' && path === '/comandas/detalhes/todos') {
-      body = [check];
+      body = scenario.withoutCheck ? [] : [check];
     } else if (method === 'GET' && path === `/comandas/${CHECK_ID}`) {
       body = check;
     } else if (method === 'GET' && path === '/atendimentos/mesas/7') {
       body = {
         familias: [{
-          numero_conta: 24,
-          lancamentos: [
-            { lancamento_id: LAUNCH_A, pedido_id: '24-A', sequencia: 1 },
-            { lancamento_id: LAUNCH_B, pedido_id: '24-B', sequencia: 2 },
+          numero_conta: checkNumber,
+          lancamentos: scenario.emptySession ? [] : [
+            { lancamento_id: LAUNCH_A, pedido_id: displayNumbers[0], sequencia: sequences[0] },
+            { lancamento_id: LAUNCH_B, pedido_id: displayNumbers[1], sequencia: sequences[1] },
           ],
         }],
       };
@@ -148,7 +162,7 @@ async function openWaiterScenario(page: Page, statuses: [ItemStatus, ItemStatus]
 
   await page.goto('/?view=garcom');
   await expect(page.locator('#mesa-card-7')).toBeVisible();
-  await expect(page.locator('#mesa-card-7')).toContainText(/R\$\s*160/);
+  if (!scenario.emptySession) await expect(page.locator('#mesa-card-7')).toContainText(/R\$\s*160/);
   return { check, writes, unexpectedApiRequests };
 }
 
@@ -243,3 +257,59 @@ test('todos os itens prontos continuam servíveis com a conta aberta', async ({ 
   expect(state.writes).toEqual([]);
   expect(state.unexpectedApiRequests).toEqual([]);
 });
+
+for (const scenario of [
+  { checkNumber: 124, displayNumbers: ['124-A', '124-B'] as [string, string], sequences: [1, 2] as [number, number] },
+  { checkNumber: 24, displayNumbers: ['24-Z', '24-AA'] as [string, string], sequences: [26, 27] as [number, number] },
+]) {
+  test(`identidades ${scenario.displayNumbers.join(' e ')} permanecem completas com ações técnicas isoladas`, async ({ page }) => {
+    const state = await openWaiterScenario(page, ['preparando', 'pronto'], scenario);
+    await page.locator('#mesa-card-7').click();
+    const lots = page.locator('[id^="placed-order-"]');
+    const firstLot = lots.filter({ hasText: 'Prato da primeira rodada' });
+    const secondLot = lots.filter({ hasText: 'Prato da segunda rodada' });
+    await expect(lots).toHaveCount(2);
+    await expect(firstLot).toContainText(scenario.displayNumbers[0]);
+    await expect(secondLot).toContainText(scenario.displayNumbers[1]);
+
+    for (const [lot, displayNumber, launchId] of [
+      [firstLot, scenario.displayNumbers[0], LAUNCH_A],
+      [secondLot, scenario.displayNumbers[1], LAUNCH_B],
+    ] as const) {
+      await lot.getByRole('button', { name: 'Reimprimir', exact: true }).click();
+      await expect(page.getByText(`LOTE: #${displayNumber}`, { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Imprimir Via Cozinha', exact: true }).click();
+      await expect.poll(() => state.writes.some(write => write.path === `/comandas/lancamentos/${launchId}/reimprimir`)).toBe(true);
+      await expect(page.getByRole('button', { name: 'Imprimir Via Cozinha', exact: true })).toHaveCount(0);
+    }
+
+    await secondLot.getByRole('button', { name: 'Servir', exact: true }).click();
+    await expect.poll(() => state.writes).toEqual([
+      { method: 'POST', path: `/comandas/lancamentos/${LAUNCH_A}/reimprimir`, status: null, tableId: '7' },
+      { method: 'POST', path: `/comandas/lancamentos/${LAUNCH_B}/reimprimir`, status: null, tableId: '7' },
+      { method: 'PUT', path: `/comandas/itens/${ITEM_B}/status`, status: 'entregue', tableId: null },
+    ]);
+    await expect(firstLot).toContainText('Na Cozinha');
+    await expect(secondLot).toContainText('Servido');
+    expect(state.check.fechada).toBe(false);
+    expect(state.unexpectedApiRequests).toEqual([]);
+  });
+}
+
+for (const withoutCheck of [false, true]) {
+  test(`mesa com sessão vazia permanece ocupada ${withoutCheck ? 'pelo status explícito' : 'antes do primeiro lançamento'}`, async ({ page }) => {
+    const state = await openWaiterScenario(page, ['preparando', 'pronto'], { emptySession: true, withoutCheck });
+    const filters = page.getByRole('group', { name: 'Filtrar mesas por status' });
+    const occupiedTable = page.locator('#mesa-card-7');
+    await expect(occupiedTable).not.toContainText('Livre');
+    await filters.getByRole('button', { name: /^Ocupadas/ }).click();
+    await expect(occupiedTable).toBeVisible();
+    await expect(page.locator('#mesa-card-8')).toHaveCount(0);
+    await occupiedTable.click();
+    await expect(page.getByRole('heading', { name: 'Mesa 7', exact: true }).locator('..').getByText('Ocupada', { exact: true })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Cardápio/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[id^="placed-order-"]')).toHaveCount(0);
+    expect(state.writes).toEqual([]);
+    expect(state.unexpectedApiRequests).toEqual([]);
+  });
+}

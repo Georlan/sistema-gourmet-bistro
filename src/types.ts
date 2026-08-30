@@ -41,6 +41,10 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  /** Identidade técnica da conta, quando uma projeção usa outro id de card. */
+  checkId?: string;
+  /** Identidade humana persistida do lançamento; nunca calculada pelo frontend. */
+  displayNumber?: string;
   /** Número curto e humano exibido na operação. */
   numeroPedido?: number;
   /** Números preservados quando um card agrega famílias mescladas. */

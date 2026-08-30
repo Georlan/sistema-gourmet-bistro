@@ -1,0 +1,11 @@
+# Backlog não bloqueante identificado na Fase 7
+
+Estes achados já existiam na base `b2fd680`, antes das alterações da Fase 7. Não autorizam ampliar o hardening, mudar cálculos ou abrir subfases. Uma correção futura exige escopo próprio e teste do comportamento esperado.
+
+- **[BUG CONFIRMADO] Texto da fatia de conta pedida.** No Caixa, uma conta solicitada com um item preparando e um pronto inclui ambos no fechamento. O texto pode contar os dois como prontos e somar o preparando novamente (“2 de 3 itens prontos”); o tooltip também pode dizer “Valor dos itens prontos”. Corrigir somente a descrição em trabalho próprio, sem mudar a fatia financeira completa nem os subtotais.
+- **[AMBIGUIDADE DE UI] “Pronta para pagar” no mapa do Garçom.** É a apresentação histórica de itens todos servidos, não evidência de `AWAITING_PAYMENT`. A projeção financeira permanece independente. Revisar o vocabulário com intenção de produto explícita.
+- **[OBSERVADO] Identidade canônica no DTO agregado.** A resposta de detalhes de Comandas ainda não transporta a identidade humana persistida de cada lançamento. O modal usa o snapshot de atendimento já existente. Estender o contrato de leitura em trabalho próprio, sem criar uma sequência A/B no frontend ou adicionar requisição por card.
+- **[BUG CONFIRMADO] Inicialização do editor de item do modal.** O objeto inicial de edição não fornece `clienteNome`/`quantidade`, embora a confirmação use `clienteNome.trim()`. Reproduzir e corrigir esse fluxo separadamente; as extrações não devem disfarçar essa dívida mudando a regra de edição.
+- **[NÃO DETERMINADO] Transporte de `Item.pago` e totalização visual.** O mapper do App não transporta esse campo; alguns subtotais legados o excluem, enquanto o checkout de mesa usa pagamentos aprovados/`valorPago` como autoridade. Não introduzir o campo ou recalcular saldos durante refatoração sem validar o contrato financeiro.
+- **[NÃO DETERMINADO] Itens todos servidos com conta aberta no Kanban.** O comportamento existente não cria card de produção ou fechamento nessa situação. Não adicionar uma nova etapa por preferência de UX.
+- **[OBSERVADO] Aviso de tamanho do bundle.** O build já informa chunks acima de 500 kB. Modularização por responsabilidade não promete redução automática do bundle; otimização de carregamento demanda medição e escopo próprio.

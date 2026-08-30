@@ -1,11 +1,12 @@
 import type { Order, OrderItem } from '../types';
+import { getOrderCheckId, getOrderDisplayNumber, type LaunchIdentityMap } from './orderIdentity';
 
 /**
  * A comanda é a conta da mesa; o lançamento é a instância operacional criada
  * a cada confirmação de pedido. A tela de consumo deve renderizar um card por
  * lançamento sem alterar a identidade da comanda usada nas demais ações.
  */
-export const splitOrdersByLaunch = (orders: Order[]): Order[] => {
+export const splitOrdersByLaunch = (orders: Order[], identities?: Readonly<LaunchIdentityMap>): Order[] => {
   const lots: Order[] = [];
 
   orders.forEach((order) => {
@@ -23,9 +24,16 @@ export const splitOrdersByLaunch = (orders: Order[]): Order[] => {
     });
 
     groupedItems.forEach((itens, key) => {
+      const lancamentoId = key.startsWith('legacy:') ? undefined : key;
+      const displayNumber = lancamentoId
+        ? identities?.[lancamentoId]?.displayNumber
+          || (order.lancamentoId === lancamentoId ? getOrderDisplayNumber(order) : undefined)
+        : undefined;
       lots.push({
         ...order,
-        lancamentoId: key.startsWith('legacy:') ? undefined : key,
+        checkId: getOrderCheckId(order),
+        lancamentoId,
+        displayNumber,
         itens,
         items: itens,
       });

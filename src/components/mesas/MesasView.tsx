@@ -7,6 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { Activity, CheckCircle2, Grid2X2, Utensils } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
+import { deriveTableOperationalState } from '../../domain/operationalState';
 
 export interface MesasViewProps {
   salonTables: Table[];
@@ -42,22 +43,27 @@ export function MesasView({
 
   const tableRows = useMemo(() => (salonTables || []).map((table) => {
     const tableOrders = orders.filter((order) => order.mesaId === table.id);
-    const isReady = showOperationalStatus && tableOrders
-      .flatMap((order) => order.itens || [])
-      .some((item) => (item.status as string) === 'pronto');
-    return { table, tableOrders, isReady };
-  }), [orders, salonTables, showOperationalStatus]);
+    const operationalState = deriveTableOperationalState({
+      table,
+      orders: tableOrders,
+      pendingPayments: pagamentosPendentes,
+      mergedIntoMesaId: orders.find((order) => order.mesaOrigemId === table.id)?.mesaId || null,
+      now: currentTime,
+    });
+    const isReady = showOperationalStatus && operationalState.production.hasReadyItems;
+    return { table, tableOrders, operationalState, isReady };
+  }), [orders, salonTables, pagamentosPendentes, currentTime, showOperationalStatus]);
 
   const counts = useMemo(() => ({
     todos: tableRows.length,
-    livres: tableRows.filter(({ tableOrders }) => tableOrders.length === 0).length,
-    ocupadas: tableRows.filter(({ tableOrders }) => tableOrders.length > 0).length,
+    livres: tableRows.filter(({ operationalState }) => operationalState.occupancy === 'FREE').length,
+    ocupadas: tableRows.filter(({ operationalState }) => operationalState.occupancy === 'IN_SERVICE').length,
     prontas: tableRows.filter(({ isReady }) => isReady).length,
   }), [tableRows]);
 
-  const filteredRows = useMemo(() => tableRows.filter(({ tableOrders, isReady }) => {
-    if (currentFilter === 'livres') return tableOrders.length === 0;
-    if (currentFilter === 'ocupadas') return tableOrders.length > 0;
+  const filteredRows = useMemo(() => tableRows.filter(({ operationalState, isReady }) => {
+    if (currentFilter === 'livres') return operationalState.occupancy === 'FREE';
+    if (currentFilter === 'ocupadas') return operationalState.occupancy === 'IN_SERVICE';
     if (currentFilter === 'prontas') return isReady;
     return true;
   }), [currentFilter, tableRows]);
@@ -154,19 +160,17 @@ export function MesasView({
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
             Nenhuma mesa encontrada neste status.
           </div>
-        ) : filteredRows.map(({ table, tableOrders }) => {
+        ) : filteredRows.map(({ table, tableOrders, operationalState }) => {
           const waiterDrafts = draftItemsMap[table.id] || [];
           const draftQtyCount = waiterDrafts.reduce((sum, item) => sum + (item.quantidade || 1), 0);
           const otherWaitersServing = Object.keys(activeDrafts[table.id] || {})
             .filter((waiterId) => waiterId !== activeWaiterId)
             .map((waiterId) => activeDrafts[table.id][waiterId].garcomNome);
-          const hasPendingPayment = pagamentosPendentes.some((payment) =>
-            tableOrders.some((order) => order.id === payment.comanda_id)
-          );
+          const hasPendingPayment = operationalState.hasPendingConfirmation;
           const mergedSources = tableOrders
             .map((order) => order.mesaOrigemId)
             .filter((id): id is number => id !== null && id !== undefined && id !== table.id);
-          const mergedIntoMesaId = orders.find((order) => order.mesaOrigemId === table.id)?.mesaId || null;
+          const mergedIntoMesaId = operationalState.mergedIntoMesaId;
 
           return (
             <MesaCard
