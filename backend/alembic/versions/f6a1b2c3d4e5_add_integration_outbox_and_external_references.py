@@ -85,6 +85,38 @@ def upgrade():
         batch_op.add_column(sa.Column('webhook_secret', sa.String(length=128), nullable=True))
         batch_op.add_column(sa.Column('webhook_ativo', sa.Boolean(), nullable=False, server_default=sa.text('false')))
 
+    # 4. RLS e Grants para PostgreSQL (koma_app)
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        tenant_expression = """
+            NULLIF(
+                (
+                    SELECT current_setting(
+                        'app.current_restaurante_id',
+                        true
+                    )
+                ),
+                ''
+            )::integer
+        """
+        for table in ["integration_outbox", "external_order_references"]:
+            op.execute(f"ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY")
+            op.execute(f"ALTER TABLE public.{table} FORCE ROW LEVEL SECURITY")
+            op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON public.{table}")
+            op.execute(
+                f"""
+                CREATE POLICY tenant_isolation ON public.{table}
+                AS PERMISSIVE
+                FOR ALL
+                TO koma_app
+                USING (restaurante_id = {tenant_expression})
+                WITH CHECK (restaurante_id = {tenant_expression})
+                """
+            )
+            op.execute(
+                f"GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.{table} TO koma_app"
+            )
+
 
 def downgrade():
     with op.batch_alter_table('configuracoes_restaurante', schema=None) as batch_op:
