@@ -34,20 +34,20 @@ DIAS 1-2                    DIAS 3-4                    DIAS 5-6                
 
 ## 📋 Lista Ordenada de Tarefas
 
-### Bloco 1: Hardening Técnico & Fechamento de Riscos P1 (Dia 1)
+### Bloco 1: Hardening Técnico & Fechamento de Riscos P1 (Dia 1) — CONCLUÍDO ✅
 *Meta: Eliminar os riscos críticos identificados na `main` e consolidar o fluxo presencial.*
 
-- [ ] **Task 1.1 — Hotfix 5B.1: Resolução de Comanda Fechada no WaiterAdapter**
+- [x] **Task 1.1 — Hotfix 5B.1: Resolução de Comanda Fechada no WaiterAdapter**
   - **Contexto:** Comanda de mesa já encerrada não deve ser reutilizada para novos lançamentos.
   - **Ação:** Garantir que o `WaiterAdapter` verifique o status da comanda ativa, abrindo uma nova se a comanda anterior estiver fechada.
   - **Critério:** Testes unitários e de caracterização cobrindo comanda aberta vs. fechada.
 
-- [ ] **Task 1.2 — Hotfix 5B.1: Recálculo Seguro de Cupom sob Concorrência**
+- [x] **Task 1.2 — Hotfix 5B.1: Recálculo Seguro de Cupom sob Concorrência**
   - **Contexto:** Evitar que pedidos concorrentes utilizem desconto de cupom após esgotamento de cota no lock.
   - **Ação:** Revalidar/recalcular regras e descontos de cupom dentro do lock transacional no `OrderApplicationService`.
   - **Critério:** Teste de concorrência com 1 uso restante garantindo zero descontos indevidos.
 
-- [ ] **Task 1.3 — Quality Gate & PR #130**
+- [x] **Task 1.3 — Quality Gate & PR #130**
   - **Ação:** Executar `pytest`, typecheck, lint e build frontend. Abrir PR da branch `feature/fase-5b-1-hotfix` e mergear na `main`.
   - **Critério:** CI 100% verde no GitHub Actions.
 
