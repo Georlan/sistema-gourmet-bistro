@@ -25,6 +25,7 @@ from ...domain.orders.events import (
     OrderReady,
     OrderRejected,
 )
+from ...services.outbox import enqueue_outbox_event_in_session
 from ...domain.orders.errors import OrderValidationError
 from ...domain.orders.pricing import OrderPricingService, OrderQuote, to_money_decimal
 from ...domain.orders.state_machine import OrderStateMachine
@@ -502,6 +503,26 @@ class OrderApplicationService:
             # 10. Consumo de Estoque (pedidos em produção baixam imediatamente, pendentes aguardam aceite)
             consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id, liberar_pendente=False)
 
+            # 11. Transactional Outbox (mesma sessão ACID)
+            event = OrderCreated(
+                restaurant_id=cmd.restaurant_id,
+                order_id=comanda.numero_pedido if comanda else 0,
+                channel=cmd.channel,
+                fulfillment=cmd.fulfillment,
+                total=quote.total,
+                items_count=len(cmd.items),
+                table_id=cmd.table_id,
+                customer_name=cmd.customer.name if cmd.customer else None,
+                customer_phone=cmd.customer.phone if cmd.customer else None,
+                idempotency_key=cmd.idempotency_key,
+            )
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(novo_lancamento.id),
+            )
+
             if commit:
                 db.commit()
                 db.refresh(comanda)
@@ -573,6 +594,19 @@ class OrderApplicationService:
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
         consumir_estoque_dos_itens(db, target_items, liberar_pendente=True)
 
+        event = OrderAccepted(
+            restaurant_id=cmd.restaurant_id,
+            order_id=comanda.numero_pedido if comanda else 0,
+            operator_user_id=cmd.operator_user_id,
+            estimated_prep_minutes=cmd.estimated_prep_minutes,
+        )
+        enqueue_outbox_event_in_session(
+            db,
+            event,
+            aggregate_type="order",
+            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+        )
+
         if commit:
             db.commit()
             db.refresh(comanda)
@@ -616,6 +650,20 @@ class OrderApplicationService:
         active_items = [it for it in comanda.itens if it.status != "cancelado"]
         if active_items and all(it.status == "pronto" for it in active_items):
             comanda.delivery_status = "pronto"
+
+        event = OrderReady(
+            restaurant_id=cmd.restaurant_id,
+            order_id=comanda.numero_pedido if comanda else 0,
+            fulfillment=fulfillment,
+            customer_name=comanda.identificador,
+            customer_phone=comanda.delivery_telefone,
+        )
+        enqueue_outbox_event_in_session(
+            db,
+            event,
+            aggregate_type="order",
+            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+        )
 
         if commit:
             db.commit()
@@ -673,6 +721,20 @@ class OrderApplicationService:
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
+        event = OrderCancelled(
+            restaurant_id=cmd.restaurant_id,
+            order_id=comanda.numero_pedido if comanda else 0,
+            reason=cmd.reason or "Cancelado pela operação",
+            operator_user_id=cmd.operator_user_id,
+            refunded_stock=cmd.refund_stock,
+        )
+        enqueue_outbox_event_in_session(
+            db,
+            event,
+            aggregate_type="order",
+            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+        )
+
         if commit:
             db.commit()
             db.refresh(comanda)
@@ -718,6 +780,20 @@ class OrderApplicationService:
             comanda.delivery_status = "recusado"
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+
+        event = OrderRejected(
+            restaurant_id=cmd.restaurant_id,
+            order_id=comanda.numero_pedido if comanda else 0,
+            reason=cmd.reason or "Recusado pelo restaurante",
+            operator_user_id=cmd.operator_user_id,
+            customer_phone=comanda.delivery_telefone,
+        )
+        enqueue_outbox_event_in_session(
+            db,
+            event,
+            aggregate_type="order",
+            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+        )
 
         if commit:
             db.commit()
@@ -766,12 +842,37 @@ class OrderApplicationService:
         if active_launches and all(l.status == "finalizado" for l in active_launches):
             comanda.delivery_status = "finalizado"
 
+        event = OrderCompleted(
+            restaurant_id=cmd.restaurant_id,
+            order_id=comanda.numero_pedido if comanda else 0,
+            operator_user_id=cmd.operator_user_id,
+        )
+        enqueue_outbox_event_in_session(
+            db,
+            event,
+            aggregate_type="order",
+            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+        )
+
         if commit:
             db.commit()
             db.refresh(comanda)
             if lancamento:
                 db.refresh(lancamento)
 
+        return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
+
+    @classmethod
+    def get_order(
+        cls,
+        db: Session,
+        restaurant_id: int,
+        order_id: str | int,
+    ) -> Optional[OrderDTO]:
+        """Recupera um pedido de forma canônica."""
+        lancamento, comanda = cls._resolve_lancamento_and_comanda(db, restaurant_id, order_id)
+        if not comanda:
+            return None
         return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
@@ -952,13 +1053,19 @@ class OrderApplicationService:
             else (comanda.delivery_status or "pendente")
         )
 
+        channel_val = (
+            lancamento.origem
+            if lancamento and getattr(lancamento, "origem", None)
+            else ("cardapio" if comanda.tipo in {"Delivery", "Retirada"} else "mesa")
+        )
+
         return OrderDTO(
             order_id=order_id_val,
             restaurant_id=comanda.restaurante_id,
             display_number=display_number,
             sequence=sequence,
             comanda_id=comanda.id,
-            channel="cardapio" if comanda.tipo in {"Delivery", "Retirada"} else "mesa",
+            channel=channel_val,
             fulfillment=to_legacy_fulfillment(normalize_to_fulfillment(comanda.tipo)),
             status=status_val,
             total=quote.total if quote else total_calc,
