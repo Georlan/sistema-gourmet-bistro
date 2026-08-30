@@ -11,6 +11,7 @@ import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResum
 import { RESTAURANT_CONFIG } from './data';
 import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
 import { getTableTotal } from './domain';
+import { deriveProductionState, deriveTableOperationalState, getOrderItems } from './domain/operationalState';
 import { MesaCard } from './components/MesaCard';
 import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
@@ -2039,14 +2040,11 @@ export default function App() {
 
     (salonTables || []).forEach(table => {
       const tableOrders = (orders || []).filter(o => o.mesaId === table.id);
-      if (tableOrders.length === 0) {
+      const operationalState = deriveTableOperationalState({ table, orders: tableOrders, now: currentTime });
+      if (operationalState.occupancy === 'FREE') {
         libre++;
       } else {
-        const hasPronto = tableOrders.some(o => {
-          const arr = Array.isArray(o?.itens) ? o.itens : Array.isArray(o?.items) ? o.items : [];
-          return arr.some((i: any) => i?.status === 'pronto');
-        });
-        if (hasPronto) {
+        if (operationalState.production.hasReadyItems) {
           pronto++;
         } else {
           ocupada++;
@@ -2055,31 +2053,13 @@ export default function App() {
     });
 
     return { libre, ocupada, pronto };
-  }, [orders, salonTables]);
+  }, [orders, salonTables, currentTime]);
 
-  const filteredTables = React.useMemo(() => {
-    return (salonTables || []).filter(table => {
-      const tableOrders = (orders || []).filter(o => o.mesaId === table.id);
-      const hasPronto = tableOrders.some(o => {
-        const arr = Array.isArray(o?.itens) ? o.itens : Array.isArray(o?.items) ? o.items : [];
-        return arr.some((i: any) => i?.status === 'pronto');
-      });
-      const status = tableOrders.length === 0
-        ? 'livre'
-        : hasPronto
-          ? 'pronto'
-          : 'ocupada';
-
-      if (tableFilter === 'todos') return true;
-      if (tableFilter === 'livres') return status === 'livre';
-      if (tableFilter === 'ocupadas') return status === 'ocupada';
-      if (tableFilter === 'prontas') return status === 'pronto';
-      return true;
-    });
-  }, [salonTables, orders, tableFilter]);
-
-  const selectedTable = salonTables.find(t => t.id === selectedTableId);
-  const selectedTableOrders = selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [];
+  const selectedTable = useMemo(() => salonTables.find(t => t.id === selectedTableId), [salonTables, selectedTableId]);
+  const selectedTableOrders = useMemo(
+    () => selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [],
+    [orders, selectedTable],
+  );
 
 
 
@@ -2278,10 +2258,7 @@ export default function App() {
               {(() => {
                 const mesasOcupadasCount = tableCounts.ocupada + tableCounts.pronto;
                 const mesasLivresCount = tableCounts.libre;
-                const pratosProntosCount = orders.reduce((acc, o: any) => {
-                  const prontos = (o.itens || o.items || []).filter((i: any) => i.status === 'pronto' || i.status === 'READY');
-                  return acc + prontos.length;
-                }, 0);
+                const pratosProntosCount = deriveProductionState(orders.flatMap(getOrderItems)).readyItemCount;
 
                 const deliveryPendentesCount = orders.filter((o: any) =>
                   (o.tipo === 'DELIVERY' || o.tipo === 'BALCAO') &&

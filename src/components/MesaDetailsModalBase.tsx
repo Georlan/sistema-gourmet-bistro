@@ -6,7 +6,9 @@
 import React, { useState } from 'react';
 import { X, Clock, Receipt, PlusCircle, Move, ShoppingBag, Printer, Trash2, ArrowLeft, Edit2, Edit3, GitMerge, Zap, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Table, Order, DraftItem, AppSettings, Product, AppRole, OrderItem } from '../types';
-import { getTableTotal, getCustomerSubtotals, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
+import { getTableTotal, getCustomerSubtotals } from '../domain';
+import { deriveOrderOperationalState, deriveTableOperationalState } from '../domain/operationalState';
+import { getOrderDisplayNumber } from '../domain/orderIdentity';
 import { MenuPanel } from './MenuPanel';
 import { RESTAURANT_CONFIG } from '../data';
 import type { CatalogCategory } from '../catalog/catalog';
@@ -15,6 +17,8 @@ import { formatBackendDateTime, formatBackendTime } from '../utils/dateTime';
 interface MesaDetailsModalProps {
   table: Table;
   orders: Order[];
+  /** Internal adapter projection, computed before splitting checks into launches. */
+  tableOperationalState?: ReturnType<typeof deriveTableOperationalState>;
   allOrders?: Order[]; // The full list of active orders across all tables to identify empty tables
   draftItems: DraftItem[];
   settings: AppSettings;
@@ -59,6 +63,7 @@ interface MesaDetailsModalProps {
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   table,
   orders,
+  tableOperationalState,
   allOrders = [],
   draftItems,
   isSubmitting = false,
@@ -132,13 +137,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const totalValue = getTableTotal(orders);
   const customerSubtotals = getCustomerSubtotals(orders);
 
-  // Find oldest order timestamp
-  const validTimestamps = orders
-    .map(o => (o as any).created_at || o.timestamp)
-    .map(t => normalizeOperationalTimestamp(t, currentTime))
-    .filter((t): t is number => t !== null);
-  const firstTimestamp = validTimestamps.length > 0 ? Math.min(...validTimestamps) : undefined;
-  const permanenceTime = formatElapsedTime(firstTimestamp, currentTime);
+  const operationalState = tableOperationalState || deriveTableOperationalState({
+    table,
+    orders,
+    now: currentTime,
+  });
+  const permanenceTime = operationalState.elapsed;
 
   // Get other tables that are available for transfer (any table except the original one)
   const tablesList = salonTables || [];
@@ -185,13 +189,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   Mesa {table.id}{originStr}
                 </h2>
                 <span className={`px-2 py-0.5 text-[9px] font-sans font-bold tracking-wider uppercase rounded-full border shrink-0 ${
-                  orders.length === 0 
+                  operationalState.occupancy === 'FREE'
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                    : orders.some(o => o.itens.some(i => i.status === 'pronto'))
+                    : operationalState.production.hasReadyItems
                       ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
                       : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                 }`}>
-                  {orders.length === 0 ? 'Livre' : orders.some(o => o.itens.some(i => i.status === 'pronto')) ? 'Pronto' : 'Ocupada'}
+                  {operationalState.occupancy === 'FREE' ? 'Livre' : operationalState.production.hasReadyItems ? 'Pronto' : 'Ocupada'}
                 </span>
               </div>
             </div>
@@ -537,19 +541,21 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
 
                     <div className="space-y-3 sm:max-h-[45vh] sm:overflow-y-auto max-h-none overflow-y-visible pr-1 scrollbar-thin">
                       {orders.map((order) => {
+                        const orderState = deriveOrderOperationalState(order, currentTime);
+                        const launchKey = orderState.lancamentoId || orderState.checkId;
                         const unpaidItems = order.itens.filter((item: any) => !item.pago);
                         if (unpaidItems.length === 0) return null;
 
                         return (
                         <div
-                          key={order.id}
-                          id={`placed-order-${order.id}`}
+                          key={launchKey}
+                          id={`placed-order-${launchKey}`}
                           className="border border-koma-border rounded-xl sm:rounded-2xl overflow-hidden bg-koma-panel/40"
                         >
                           {/* Order Header */}
                           <div className="bg-koma-raised px-3.5 py-2 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-koma-border gap-2 w-full">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-xs font-bold text-koma-foreground font-sans">Lote #{order.id.slice(-4)}</span>
+                              <span className="text-xs font-bold text-koma-foreground font-sans">Lote #{orderState.displayNumber || launchKey.slice(-4)}</span>
                               <span className="text-[10px] bg-koma-panel text-koma-muted px-2 py-0.5 rounded font-bold font-sans">
                                 Garçom: {order.garcomNome}
                               </span>
@@ -1269,7 +1275,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               </div>
 
               <div className="space-y-1 border-b border-dashed border-koma-border pb-3">
-                <p><strong>LOTE:</strong> #{selectedOrderToPrint.id.slice(-4)}</p>
+                <p><strong>LOTE:</strong> #{getOrderDisplayNumber(selectedOrderToPrint) || (selectedOrderToPrint.lancamentoId || selectedOrderToPrint.id).slice(-4)}</p>
                 {selectedOrderToPrint.tipo && <p><strong>TIPO:</strong> {selectedOrderToPrint.tipo.toUpperCase()}</p>}
                 <p><strong>DATA:</strong> {formatBackendDateTime(selectedOrderToPrint.timestamp)}</p>
                 <p><strong>MESA:</strong> #{table.id}</p>
@@ -1350,7 +1356,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onClick={async () => {
                 if (onPrintKitchenLaunch && selectedOrderToPrint) {
                   try {
-                    await onPrintKitchenLaunch(selectedOrderToPrint.id);
+                    await onPrintKitchenLaunch(selectedOrderToPrint.lancamentoId || selectedOrderToPrint.id);
                     setPrintSuccess(true);
                     setTimeout(() => {
                       setPrintSuccess(false);

@@ -1,6 +1,8 @@
 import React from 'react';
 import { MesaDetailsModal as MesaDetailsModalBase } from './MesaDetailsModalBase';
 import { splitOrdersByLaunch } from '../domain/orderLots';
+import { buildLaunchIdentityMap, getOrderCheckId, type LaunchIdentityMap, type TableFamilySnapshot } from '../domain/orderIdentity';
+import { deriveTableOperationalState } from '../domain/operationalState';
 import { API_BASE_URL } from '../config/api';
 
 /**
@@ -11,18 +13,7 @@ import { API_BASE_URL } from '../config/api';
  * técnico l-xxxx nunca é perdido: ele continua sendo usado para impressão e
  * para ações que precisam alcançar o lançamento real.
  */
-type MesaDetailsModalProps = React.ComponentProps<typeof MesaDetailsModalBase>;
-
-type FamilySnapshot = {
-  familias?: Array<{
-    numero_conta: number;
-    lancamentos?: Array<{
-      lancamento_id: string;
-      pedido_id: string;
-      sequencia: number;
-    }>;
-  }>;
-};
+type MesaDetailsModalProps = Omit<React.ComponentProps<typeof MesaDetailsModalBase>, 'tableOperationalState'>;
 
 const currentAuthToken = (): string | null => {
   const params = new URLSearchParams(window.location.search);
@@ -45,13 +36,20 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
     onPrintKitchenLaunch,
     onTransferItems,
   } = props;
-  const [launchLabels, setLaunchLabels] = React.useState<Record<string, string>>({});
+  const [launchIdentities, setLaunchIdentities] = React.useState<LaunchIdentityMap>({});
+  // A check with no launch still occupies the table. Compute table facts from
+  // the original checks, before the consumption view splits them into launches.
+  const tableOperationalState = React.useMemo(() => deriveTableOperationalState({
+    table,
+    orders,
+    now: props.currentTime,
+  }), [table, orders, props.currentTime]);
 
   React.useEffect(() => {
     let cancelled = false;
     const token = currentAuthToken();
     if (!token || !table?.id || orders.length === 0) {
-      setLaunchLabels({});
+      setLaunchIdentities({});
       return () => { cancelled = true; };
     }
 
@@ -61,14 +59,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
-        const data = await response.json() as FamilySnapshot;
-        const labels: Record<string, string> = {};
-        for (const family of data.familias || []) {
-          for (const launch of family.lancamentos || []) {
-            labels[launch.lancamento_id] = launch.pedido_id;
-          }
-        }
-        if (!cancelled) setLaunchLabels(labels);
+        const data = await response.json() as TableFamilySnapshot;
+        if (!cancelled) setLaunchIdentities(buildLaunchIdentityMap(data));
       } catch (error) {
         console.error('Falha ao carregar identidade dos pedidos da mesa:', error);
       }
@@ -82,59 +74,32 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
     const mapping = new Map<string, string>();
     orders.forEach((order) => {
       order.itens.forEach((item) => {
-        if (item.lancamentoId) mapping.set(item.lancamentoId, order.id);
+        if (item.lancamentoId) mapping.set(item.lancamentoId, getOrderCheckId(order));
       });
     });
     return mapping;
   }, [orders]);
 
-  const displayToLaunch = React.useMemo(() => {
-    const mapping = new Map<string, string>();
-    Object.entries(launchLabels).forEach(([launchId, displayId]) => {
-      mapping.set(displayId, launchId);
-    });
-    launchToComanda.forEach((_commandId, launchId) => {
-      if (!mapping.has(launchId)) mapping.set(launchId, launchId);
-    });
-    return mapping;
-  }, [launchLabels, launchToComanda]);
-
   const lotOrders = React.useMemo(
-    () => splitOrdersByLaunch(orders).map((lot) => {
-      const launchId = lot.lancamentoId;
-      return {
-        ...lot,
-        // ID de apresentação é humano; lancamentoId conserva a identidade técnica.
-        id: launchId ? (launchLabels[launchId] || launchId) : lot.id,
-      };
-    }),
-    [orders, launchLabels],
-  );
-
-  const resolveLaunchId = React.useCallback(
-    (displayOrderId: string) => displayToLaunch.get(displayOrderId) || displayOrderId,
-    [displayToLaunch],
+    () => splitOrdersByLaunch(orders, launchIdentities),
+    [orders, launchIdentities],
   );
 
   const resolveComandaId = React.useCallback(
-    (displayOrderId: string) => {
-      const launchId = resolveLaunchId(displayOrderId);
-      return launchToComanda.get(launchId) || displayOrderId;
-    },
-    [launchToComanda, resolveLaunchId],
+    (technicalOrderId: string) => launchToComanda.get(technicalOrderId) || technicalOrderId,
+    [launchToComanda],
   );
 
   const handleDeliverItem = onDeliverItem
-    ? (displayOrderId: string, itemId: string) => onDeliverItem(resolveComandaId(displayOrderId), itemId)
+    ? (technicalOrderId: string, itemId: string) => onDeliverItem(resolveComandaId(technicalOrderId), itemId)
     : undefined;
 
   const handleUnmergeTable = onUnmergeTable
-    ? (displayOrderId: string) => onUnmergeTable(resolveComandaId(displayOrderId))
+    ? (technicalOrderId: string) => onUnmergeTable(resolveComandaId(technicalOrderId))
     : undefined;
 
   const handlePrintLaunch = onPrintKitchenLaunch
-    ? async (displayOrderId: string) => {
-        const launchId = resolveLaunchId(displayOrderId);
+    ? async (launchId: string) => {
         if (!launchToComanda.has(launchId)) {
           throw new Error('Este pedido não possui identificador de lançamento para impressão.');
         }
@@ -185,6 +150,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
     <MesaDetailsModalBase
       {...props}
       orders={lotOrders}
+      tableOperationalState={tableOperationalState}
       onDeliverItem={handleDeliverItem}
       onUnmergeTable={handleUnmergeTable}
       onPrintKitchenLaunch={handlePrintLaunch}

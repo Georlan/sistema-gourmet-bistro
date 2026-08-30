@@ -6,7 +6,8 @@
 import React from 'react';
 import { CirclePlus, Clock3, FileText, GitMerge, ReceiptText, UsersRound } from 'lucide-react';
 import { Table, Order } from '../types';
-import { getTableTotal, formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
+import { getTableTotal } from '../domain';
+import { deriveTableOperationalState } from '../domain/operationalState';
 
 interface MesaCardProps {
   table: Table;
@@ -29,31 +30,29 @@ export const MesaCard = React.memo<MesaCardProps>(({
   otherWaitersServing = [],
   currentTime,
   onClick,
-  hasPendingPayment = false,
+  hasPendingPayment: pendingPayment = false,
   mergedSources = [],
   mergedIntoMesaId = null,
   showOperationalStatus = true,
 }) => {
   const totalValue = getTableTotal(orders);
+  const operationalState = deriveTableOperationalState({
+    table,
+    orders,
+    hasPendingPayment: pendingPayment,
+    mergedIntoMesaId,
+    now: currentTime,
+  });
+  const hasPendingPayment = operationalState.hasPendingConfirmation;
   let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' | 'mesclada' = 'livre';
-  let firstOrderTimestamp: number | undefined;
 
-  if (mergedIntoMesaId) {
+  if (operationalState.mergedIntoMesaId) {
     status = 'mesclada';
-  } else if (orders.length > 0) {
-    const validTimestamps = orders
-      .map((order) => (order as any).created_at || order.timestamp)
-      .map((t) => normalizeOperationalTimestamp(t, currentTime))
-      .filter((t): t is number => t !== null);
-    if (validTimestamps.length > 0) {
-      firstOrderTimestamp = Math.min(...validTimestamps);
-    }
-    const activeItems = orders.flatMap((order) => order.itens.filter((item) => (item.status as string) !== 'cancelado'));
-    const hasReady = activeItems.some((item) => item.status === 'pronto');
-    const hasPreparing = activeItems.some((item) => item.status === 'preparando');
-    const allDelivered = activeItems.length > 0 && !hasReady && !hasPreparing;
+  } else if (operationalState.occupancy === 'IN_SERVICE') {
+    // Keep the existing visual priority; financial and service facts remain
+    // independent in the shared projection, including when everything is ready.
     status = showOperationalStatus
-      ? (hasReady ? 'pronto' : hasPreparing ? 'ocupada' : allDelivered ? 'entregue' : 'ocupada')
+      ? (operationalState.production.hasReadyItems ? 'pronto' : operationalState.service === 'SERVED' ? 'entregue' : 'ocupada')
       : 'ocupada';
   }
 
@@ -104,10 +103,8 @@ export const MesaCard = React.memo<MesaCardProps>(({
     },
   }[status];
 
-  const elapsed = formatElapsedTime(firstOrderTimestamp, currentTime);
-  const activeItemCount = orders.reduce((total, order) => (
-    total + order.itens.filter((item) => (item.status as string) !== 'cancelado').length
-  ), 0);
+  const elapsed = operationalState.elapsed;
+  const activeItemCount = operationalState.production.activeItemCount;
   const orderNumbers = Array.from(new Set(
     orders
       .flatMap((order) => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
