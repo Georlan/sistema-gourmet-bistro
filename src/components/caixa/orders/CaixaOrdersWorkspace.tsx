@@ -611,8 +611,8 @@ export function CaixaOrdersWorkspace({
                   const badgeText = contaPedida ? 'CONTA PEDIDA' : 'PRONTO / RECEBER';
                   const totalVal = order.itens.reduce((sum: number, it: OrderItem & { preco_unit?: number }) => sum + (it.preco_unit || it.preco || 0), 0);
                   const pendingTableItems = Number(order.itensEmPreparoCount || 0);
-                  const readyTableItems = order.itens.filter(item => (item.status as string) !== 'cancelado').length;
-                  const totalTableItems = readyTableItems + pendingTableItems;
+                  const readyTableItems = order.itens.filter(item => item.status === 'pronto').length;
+                  const totalTableItems = contaPedida ? order.itens.length : readyTableItems + pendingTableItems;
                   return (
                     <div
                       key={`close-${order.id}`}
@@ -639,10 +639,12 @@ export function CaixaOrdersWorkspace({
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
-                            {pendingTableItems > 0 ? `Itens prontos · ${presentation.title}` : presentation.title}
+                            {pendingTableItems > 0 && !contaPedida ? `Itens prontos · ${presentation.title}` : presentation.title}
                           </strong>
                           <span className="orders-card__identity-subtitle">
-                            {pendingTableItems > 0
+                            {contaPedida
+                              ? `Conta solicitada · ${totalTableItems} itens no fechamento · ${presentation.subtitle}`
+                              : pendingTableItems > 0
                               ? `${readyTableItems} de ${totalTableItems} ${totalTableItems === 1 ? 'item pronto' : 'itens prontos'} · ${presentation.subtitle}`
                               : presentation.subtitle}
                           </span>
@@ -671,7 +673,7 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                         <div className="orders-card__identity-side">
-                          <span className="orders-card__price" title={pendingTableItems > 0 ? 'Valor dos itens prontos' : 'Valor a receber'}>{formatCurrency(totalVal)}</span>
+                          <span className="orders-card__price" title={pendingTableItems > 0 && !contaPedida ? 'Valor dos itens prontos' : 'Valor a receber'}>{formatCurrency(totalVal)}</span>
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
@@ -701,7 +703,7 @@ export function CaixaOrdersWorkspace({
                         {smartPosState?.blocksPayment ? (
                           <><Smartphone size={13} /><span>{smartPosState.ctaLabel}</span></>
                         ) : (
-                          <><Check size={13} /><span>{pendingTableItems > 0 ? 'Receber itens prontos' : 'Abrir pagamento'}</span></>
+                          <><Check size={13} /><span>{pendingTableItems > 0 && !contaPedida ? 'Receber itens prontos' : 'Abrir pagamento'}</span></>
                         )}
                       </button>
                     </div>

@@ -10,6 +10,7 @@ type Scenario = {
   subtab?: 'pedidos' | 'mesas';
   sameLaunch?: boolean;
   printFails?: boolean;
+  canonicalIdentity?: boolean;
 };
 
 async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
@@ -45,6 +46,7 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
     status_comanda: scenario.checkStatus ?? null,
     lancamentos: [...new Set(items.map(item => item.lancamento_id))].map(id => ({
       id,
+      display_number: scenario.canonicalIdentity ? ({ 'launch-phase7-1': '24-A', 'launch-phase7-2': '24-B' }[id]) : null,
       comanda_id: 'check-phase7-24',
       origem: 'garcom',
       timestamp: createdAt,
@@ -214,7 +216,9 @@ test('salão preserva mesa livre e atendimento com consumo em aberto', async ({ 
   const free = page.locator('article[data-table-status="free"]');
   await expect(occupied).toHaveCount(1);
   await expect(free).toHaveCount(1);
-  await expect(occupied).toContainText('Em atendimento');
+  await expect(occupied).toContainText('Em preparo');
+  await expect(occupied).toHaveAttribute('data-operational-state', 'occupied');
+  await expect(occupied).not.toContainText('Aguardando pagamento');
   await expect(occupied).toContainText(/R\$\s*160,00/);
   await expect(occupied.getByRole('button', { name: 'Ver comanda' })).toBeVisible();
   await expect(free.getByRole('button', { name: 'Abrir pedido' })).toBeVisible();
@@ -313,4 +317,23 @@ test('busca e etapa móvel do Kanban sobrevivem à troca entre Pedidos e Salão'
   await expect(page.locator('.orders-card--closing')).toHaveCount(1);
   await expect(page.locator('.orders-card--salon')).toHaveCount(0);
   if (compact) await expect(page.locator('.orders-column--closing')).toHaveClass(/is-mobile-active/);
+});
+
+test('identidade persistida aparece no lançamento, mas não identifica a Mesa agregada', async ({ page }) => {
+  await openOperationalScenario(page, { canonicalIdentity: true, statuses: ['preparando', 'preparando'] });
+  const firstLaunch = page.locator('.orders-card--salon').filter({ hasText: 'Prato em preparo' });
+  await expect(firstLaunch).toContainText('Pedido 24-A');
+  await firstLaunch.click();
+  await expect(page.locator('.orders-detail-modal')).toContainText('24-A');
+});
+
+test('Mesa compartilhada mantém tempo, estado e ações do Caixa', async ({ page }, testInfo) => {
+  await openOperationalScenario(page, { canonicalIdentity: true, subtab: 'mesas' });
+  const card = page.locator('article[data-table-status="occupied"]');
+  await expect(card).toHaveAttribute('data-operational-state', 'ready');
+  await expect(card).toContainText('12m');
+  await expect(card).toContainText('2 itens');
+  await expect(card).not.toContainText('24-A');
+  await expect(card.getByRole('button', { name: 'Ver comanda' })).toBeVisible();
+  if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('shared-table.png'), fullPage: true });
 });

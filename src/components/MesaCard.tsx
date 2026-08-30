@@ -2,12 +2,11 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import React from 'react';
-import { CirclePlus, Clock3, FileText, GitMerge, ReceiptText, UsersRound } from 'lucide-react';
-import { Table, Order } from '../types';
+import type { Table, Order } from '../types';
 import { getTableTotal } from '../domain';
 import { deriveTableOperationalState } from '../domain/operationalState';
+import { SharedTableCard } from './shared/SharedTableCard';
 
 interface MesaCardProps {
   table: Table;
@@ -23,186 +22,20 @@ interface MesaCardProps {
   showOperationalStatus?: boolean;
 }
 
+/** Waiter variant owns only its navigation callback, not cashier actions. */
 export const MesaCard = React.memo<MesaCardProps>(({
-  table,
-  orders,
-  draftCount,
-  otherWaitersServing = [],
-  currentTime,
-  onClick,
-  hasPendingPayment: pendingPayment = false,
-  mergedSources = [],
-  mergedIntoMesaId = null,
-  showOperationalStatus = true,
+  table, orders, currentTime, onClick, hasPendingPayment = false, mergedIntoMesaId = null, ...view
 }) => {
-  const totalValue = getTableTotal(orders);
-  const operationalState = deriveTableOperationalState({
-    table,
-    orders,
-    hasPendingPayment: pendingPayment,
-    mergedIntoMesaId,
-    now: currentTime,
+  const operational = deriveTableOperationalState({
+    table, orders, hasPendingPayment, mergedIntoMesaId, now: currentTime,
   });
-  const hasPendingPayment = operationalState.hasPendingConfirmation;
-  let status: 'livre' | 'ocupada' | 'pronto' | 'entregue' | 'mesclada' = 'livre';
-
-  if (operationalState.mergedIntoMesaId) {
-    status = 'mesclada';
-  } else if (operationalState.occupancy === 'IN_SERVICE') {
-    // Keep the existing visual priority; financial and service facts remain
-    // independent in the shared projection, including when everything is ready.
-    status = showOperationalStatus
-      ? (operationalState.production.hasReadyItems ? 'pronto' : operationalState.service === 'SERVED' ? 'entregue' : 'ocupada')
-      : 'ocupada';
-  }
-
-  const statusConfig = {
-    livre: {
-      surface: 'bg-white dark:bg-[#0b1713] hover:bg-emerald-50/70 dark:hover:bg-[#0e211a]',
-      border: 'border-emerald-400/60 dark:border-emerald-900/50 hover:border-emerald-500 focus-visible:ring-emerald-400',
-      accent: 'bg-emerald-600 dark:bg-[#00b894]',
-      dot: 'bg-emerald-600 dark:bg-[#00d9a6]',
-      label: 'Livre',
-      labelColor: 'text-emerald-800 dark:text-[#00d9a6]',
-    },
-    ocupada: {
-      surface: hasPendingPayment
-        ? 'bg-amber-50 dark:bg-[#20180b] hover:bg-amber-100/80 dark:hover:bg-[#2a1f0c]'
-        : 'bg-rose-50 dark:bg-[#1b0d10] hover:bg-rose-100/80 dark:hover:bg-[#251014]',
-      border: hasPendingPayment
-        ? 'border-amber-400/80 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400'
-        : 'border-rose-400/80 dark:border-rose-900 hover:border-rose-600 focus-visible:ring-rose-400',
-      accent: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-500',
-      dot: hasPendingPayment ? 'bg-amber-500 dark:bg-amber-400' : 'bg-rose-600 dark:bg-rose-400',
-      label: hasPendingPayment ? 'Confirmar pagamento' : 'Em preparo',
-      labelColor: hasPendingPayment ? 'text-amber-900 dark:text-amber-300' : 'text-rose-900 dark:text-rose-300',
-    },
-    pronto: {
-      surface: 'bg-amber-50 dark:bg-[#211707] hover:bg-amber-100/80 dark:hover:bg-[#2b1e08]',
-      border: 'border-amber-400/80 dark:border-amber-800/60 hover:border-amber-500 focus-visible:ring-amber-400',
-      accent: 'bg-amber-500 dark:bg-amber-400',
-      dot: 'bg-amber-500 dark:bg-amber-400 animate-pulse',
-      label: 'Tem item pronto',
-      labelColor: 'text-amber-900 dark:text-amber-300',
-    },
-    entregue: {
-      surface: 'bg-sky-50 dark:bg-[#0b1621] hover:bg-sky-100/80 dark:hover:bg-[#0d1d2c]',
-      border: 'border-sky-300 dark:border-sky-900/60 hover:border-sky-500 focus-visible:ring-sky-400',
-      accent: 'bg-sky-500 dark:bg-sky-400',
-      dot: 'bg-sky-500 dark:bg-sky-400',
-      label: 'Pronta para pagar',
-      labelColor: 'text-sky-800 dark:text-sky-300',
-    },
-    mesclada: {
-      surface: 'bg-koma-panel hover:bg-koma-card',
-      border: 'border-dashed border-koma-border hover:border-zinc-400 dark:hover:border-zinc-600 focus-visible:ring-zinc-400',
-      accent: 'bg-zinc-400 dark:bg-zinc-600',
-      dot: 'bg-zinc-400 dark:bg-zinc-600',
-      label: `Junto com mesa ${mergedIntoMesaId}`,
-      labelColor: 'text-koma-muted',
-    },
-  }[status];
-
-  const elapsed = operationalState.elapsed;
-  const activeItemCount = operationalState.production.activeItemCount;
-  const orderNumbers = Array.from(new Set(
-    orders
-      .flatMap((order) => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
-      .map((number) => Number(number))
-      .filter((number) => Number.isFinite(number) && number > 0)
-  ));
-  const orderNumbersText = orderNumbers.map((number) => `#${number}`).join(' + ');
-  const compactOrderNumbers = orderNumbers.length > 1
-    ? `#${orderNumbers[0]} +${orderNumbers.length - 1}`
-    : orderNumbersText;
-  const defaultName = `Mesa ${table.id}`;
-  const hasCustomName = Boolean(table.nome && table.nome !== defaultName);
-
-  return (
-    <button
-      id={`mesa-card-${table.id}`}
-      type="button"
-      onClick={() => onClick(table.id)}
-      aria-label={`${hasCustomName ? table.nome : defaultName}: ${statusConfig.label}${orderNumbersText ? `, pedido ${orderNumbersText}` : ''}`}
-      className={`group relative min-w-0 min-h-[112px] sm:min-h-[132px] overflow-hidden rounded-2xl border p-3 sm:p-4 text-left transition-all duration-200 ${statusConfig.surface} ${statusConfig.border} hover:-translate-y-0.5 hover:shadow-[0_16px_32px_rgba(0,0,0,0.24)] active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2`}
-    >
-      <span className={`absolute left-0 top-0 h-[3px] w-full ${statusConfig.accent}`} aria-hidden="true" />
-      <span className="absolute -right-5 -top-8 font-serif text-[72px] sm:text-[88px] font-black leading-none text-koma-foreground/[0.025]" aria-hidden="true">
-        {table.id}
-      </span>
-
-      <div className="relative flex h-full flex-col justify-between gap-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <span className="block text-[8px] sm:text-[9px] font-mono font-bold uppercase tracking-[0.16em] text-koma-muted">
-              {hasCustomName ? `Mesa ${table.id}` : 'Mesa'}
-            </span>
-            <strong className={`${hasCustomName ? 'text-xs sm:text-sm font-bold tracking-tight leading-tight line-clamp-2 break-words' : 'text-2xl sm:text-3xl font-serif font-black tracking-[-0.05em] leading-none'} mt-0.5 block text-koma-foreground`}>
-              {hasCustomName ? table.nome : table.id}
-            </strong>
-            {mergedSources.length > 0 && (
-              <span className="mt-1 block text-[9px] font-mono text-koma-subtle">+ mesas {mergedSources.join(', ')}</span>
-            )}
-          </div>
-          {status === 'livre' ? (
-            <CirclePlus size={18} className="shrink-0 text-emerald-500 transition-transform group-hover:rotate-90" />
-          ) : status === 'mesclada' ? (
-            <GitMerge size={17} className="shrink-0 text-koma-muted" />
-          ) : (
-            <div
-              className="flex items-center gap-1.5 rounded-full border border-koma-border-subtle bg-black/20 px-2 py-1"
-              title={orderNumbersText ? `Pedido ${orderNumbersText}` : 'Atendimento ativo'}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${statusConfig.dot}`} />
-              <span className="font-mono text-[8px] font-bold uppercase tracking-wider text-koma-subtle">
-                {compactOrderNumbers || 'Ativa'}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between gap-2">
-            <span className={`min-w-0 truncate text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.11em] ${statusConfig.labelColor}`}>
-              {statusConfig.label}
-            </span>
-            {draftCount > 0 && (
-              <span className="flex shrink-0 items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-300">
-                <FileText size={9} /> {draftCount}
-              </span>
-            )}
-          </div>
-
-          {status !== 'livre' && status !== 'mesclada' && (
-            <div className="mt-2 flex items-end justify-between gap-2 border-t border-koma-border-subtle pt-2">
-              <div className="min-w-0 space-y-1">
-                <span className="flex items-center gap-1 text-[9px] sm:text-[10px] font-mono font-bold text-koma-secondary">
-                  <Clock3 size={10} className="shrink-0 text-koma-muted" /> {elapsed}
-                </span>
-                <span className="flex items-center gap-1 text-[8px] sm:text-[9px] text-koma-muted">
-                  <UsersRound size={9} /> {activeItemCount} {activeItemCount === 1 ? 'item' : 'itens'}
-                </span>
-              </div>
-              <span className={`shrink-0 font-mono text-xs sm:text-sm font-bold ${status === 'pronto' ? 'text-amber-200' : status === 'entregue' ? 'text-sky-200' : 'text-rose-100'}`}>
-                {totalValue > 0 ? `R$ ${totalValue.toFixed(0)}` : <ReceiptText size={15} />}
-              </span>
-            </div>
-          )}
-
-          {status === 'mesclada' && (
-            <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2 text-[9px] text-koma-muted">
-              <span>Atendimento junto</span>
-              <span className="font-mono">M{mergedIntoMesaId}</span>
-            </div>
-          )}
-
-          {otherWaitersServing.length > 0 && (
-            <p className="mt-1.5 truncate text-[8px] text-amber-400" title={`Em atendimento por ${otherWaitersServing.join(', ')}`}>
-              Atendida por {otherWaitersServing.join(', ')}
-            </p>
-          )}
-        </div>
-      </div>
-    </button>
-  );
+  return <SharedTableCard
+    {...view}
+    id={`mesa-card-${table.id}`}
+    table={table}
+    orders={orders}
+    operational={operational}
+    total={getTableTotal(orders)}
+    onClick={() => onClick(table.id)}
+  />;
 });

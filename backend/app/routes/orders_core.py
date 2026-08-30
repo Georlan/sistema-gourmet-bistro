@@ -1,7 +1,7 @@
 import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Any
@@ -46,6 +46,7 @@ from ..services.clientes import (
 )
 from ..application.orders.service import OrderApplicationService
 from ..application.orders.commands import DispatchOrderCommand
+from ..services.order_read_projection import project_check_details
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..services.capabilities import has_capability
@@ -408,13 +409,15 @@ def get_comandas_detalhes(
     """
     query = db.query(Comanda).options(
         joinedload(Comanda.itens).joinedload(Item.produto),
-        joinedload(Comanda.criada_por)
+        joinedload(Comanda.criada_por),
+        selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
     ).filter(Comanda.restaurante_id == require_tenant_id())
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
         query = query.filter(Comanda.fechada == fechada)
-    return query.order_by(Comanda.criado_em.asc(), Comanda.id.asc()).all()
+    checks = query.order_by(Comanda.criado_em.asc(), Comanda.id.asc()).all()
+    return project_check_details(db, checks, require_tenant_id())
 
 @router.get("/{comanda_id}", response_model=ComandaDetail)
 def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -426,6 +429,7 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
         .options(
             joinedload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por),
+            selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
         )
         .filter(
             Comanda.restaurante_id == require_tenant_id(),
@@ -438,7 +442,7 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Comanda não encontrada"
         )
-    return comanda
+    return project_check_details(db, [comanda], require_tenant_id())[0]
 
 # ----------------- WRITE/ACTION ENDPOINTS -----------------
 

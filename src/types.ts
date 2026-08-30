@@ -45,6 +45,8 @@ export interface Order {
   checkId?: string;
   /** Identidade humana persistida do lançamento; nunca calculada pelo frontend. */
   displayNumber?: string;
+  /** Persisted identities keyed by launch, never a label for the aggregate check. */
+  launchIdentities?: Record<string, { displayNumber: string; sequence?: number }>;
   /** Número curto e humano exibido na operação. */
   numeroPedido?: number;
   /** Números preservados quando um card agrega famílias mescladas. */
