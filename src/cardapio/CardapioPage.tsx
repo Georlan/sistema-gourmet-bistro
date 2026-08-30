@@ -34,6 +34,7 @@ import CardapioAuthModal from "./components/CardapioAuthModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
+import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { smartSearchMatch } from "../domain";
@@ -748,6 +749,8 @@ export default function CardapioPage() {
             </button>
           </div>
         </section>
+
+        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} />
 
         {activeBrand.storeStatus === "closed" && (
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">

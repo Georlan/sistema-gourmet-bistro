@@ -18,9 +18,15 @@ Nenhuma tabela, configuração de restaurante, regra de mínimo, desconto ou cob
 - [BUG CONFIRMADO] A sacola aplica o mínimo também à retirada, enquanto `domain/orders/validation.py` limita `minimum_delivery_subtotal` a `FulfillmentType.DELIVERY`. Manter o bloqueio existente nesta fase; propor correção separada ao usuário antes de alterar o fluxo.
 - [NÃO DETERMINADO] O payload público não inclui prazo de entrega. Não inventar minutos nem copiar o prazo de concorrentes.
 
-## Ideia aguardando aprovação
+## Resumo aprovado e implementado na fase seguinte
 
-Resumo compacto de mínimo e acesso às taxas no topo do cardápio, antes de encher a sacola. Não implementado nesta fase sem resposta do usuário.
+O usuário aprovou o resumo compacto de mínimo e acesso às taxas no topo do cardápio. A consulta usa o restaurante ativo e abre as informações da loja antes de adicionar produtos, com tabela por bairro, mínimo e limiar de frete grátis quando configurados. Não inventa prazo de entrega.
+
+A etapa de apresentação do pagamento também expõe seleção, momento de pagamento e troco na revisão, com controles maiores no celular. Nenhuma cobrança online foi adicionada.
+
+### Decisão de pagamento pendente
+
+Foi perguntado ao usuário se a sacola deve limitar opções às formas cadastradas por restaurante, incluindo débito quando habilitado. Até a resposta, preservar as três opções atuais e seus callbacks. O rótulo de cartão foi explicitado como crédito, que já era o valor enviado. Não afirmar que o filtro por formas aceitas está implementado.
 
 ## Validação
 

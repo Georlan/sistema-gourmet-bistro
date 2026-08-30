@@ -678,66 +678,72 @@ export default function CardapioCartDrawer({
 
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-koma-border pt-5">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted mb-2.5">4. Pagamento (na entrega/retirada)</h3>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">4. Como quer pagar?</h3>
+                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pagamento direto ao restaurante, {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}. Sem cobrança online agora.</p>
                 
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
+                    aria-pressed={paymentDetail === "pix"}
                     onClick={() => { setPaymentDetail("pix"); setPrecisaTroco(false); }}
-                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1.5 ${
+                    className={`min-h-20 min-w-0 p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
                       paymentDetail === "pix"
                         ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold"
                         : "border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
                     }`}
                   >
-                    <QrCode className="w-4 h-4" />
-                    <span className="text-[11px]">Pix</span>
+                    <QrCode className="w-5 h-5" aria-hidden="true" />
+                    <span className="text-xs">Pix</span>
                   </button>
 
                   <button
                     type="button"
+                    aria-pressed={paymentDetail === "cartao_credito"}
                     onClick={() => { setPaymentDetail("cartao_credito"); setPrecisaTroco(false); }}
-                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1.5 ${
+                    className={`min-h-20 min-w-0 p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
                       paymentDetail === "cartao_credito"
                         ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold"
                         : "border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
                     }`}
                   >
-                    <CreditCard className="w-4 h-4" />
-                    <span className="text-[11px]">Cartão</span>
+                    <CreditCard className="w-5 h-5" aria-hidden="true" />
+                    <span className="text-xs leading-snug">Cartão de crédito</span>
                   </button>
 
                   <button
                     type="button"
+                    aria-pressed={paymentDetail === "dinheiro"}
                     onClick={() => setPaymentDetail("dinheiro")}
-                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1.5 ${
+                    className={`min-h-20 min-w-0 p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
                       paymentDetail === "dinheiro"
                         ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold"
                         : "border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
                     }`}
                   >
-                    <Banknote className="w-4 h-4" />
-                    <span className="text-[11px]">Dinheiro</span>
+                    <Banknote className="w-5 h-5" aria-hidden="true" />
+                    <span className="text-xs">Dinheiro</span>
                   </button>
                 </div>
 
                 {/* Troco Calculator for Dinheiro */}
                 {paymentDetail === "dinheiro" && (
                   <div className="mt-3 p-3 bg-koma-card border border-koma-border rounded-xl space-y-2.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-bold text-koma-foreground">Precisa de troco?</span>
                       <div className="flex gap-2">
                         <button
                           type="button"
+                          aria-pressed={!precisaTroco}
                           onClick={() => setPrecisaTroco(false)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold ${!precisaTroco ? 'bg-emerald-500 text-white' : 'bg-koma-raised text-koma-muted'}`}
+                          className={`min-h-11 min-w-11 px-3 py-2 rounded-lg text-xs font-bold ${!precisaTroco ? 'bg-emerald-500 text-white' : 'bg-koma-raised text-koma-muted'}`}
                         >
                           Não
                         </button>
                         <button
                           type="button"
+                          aria-pressed={precisaTroco}
                           onClick={() => setPrecisaTroco(true)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold ${precisaTroco ? 'bg-emerald-500 text-white' : 'bg-koma-raised text-koma-muted'}`}
+                          className={`min-h-11 min-w-11 px-3 py-2 rounded-lg text-xs font-bold ${precisaTroco ? 'bg-emerald-500 text-white' : 'bg-koma-raised text-koma-muted'}`}
                         >
                           Sim
                         </button>
@@ -746,14 +752,15 @@ export default function CardapioCartDrawer({
 
                     {precisaTroco && (
                       <div className="space-y-2 pt-2 border-t border-koma-border/60">
-                        <span className="block text-[10px] text-koma-muted">Troco para quanto?</span>
+                        <label htmlFor="payment-change-for" className="block text-xs font-semibold text-koma-foreground">Vai pagar com quanto?</label>
                         <div className="flex gap-2">
                           {[50, 100, 200].map((val) => (
                             <button
                               key={val}
                               type="button"
+                              aria-pressed={trocoPara === String(val)}
                               onClick={() => setTrocoPara(String(val))}
-                              className={`flex-1 py-1.5 rounded-lg border text-xs font-mono font-bold transition ${
+                              className={`min-h-11 min-w-0 flex-1 py-2 rounded-lg border text-xs font-mono font-bold transition ${
                                 trocoPara === String(val)
                                   ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                                   : "border-koma-border bg-koma-raised text-koma-muted"
@@ -767,16 +774,18 @@ export default function CardapioCartDrawer({
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-koma-muted">R$</span>
                           <input
                             type="number"
+                            id="payment-change-for"
+                            inputMode="decimal"
                             step="0.01"
                             placeholder="Outro valor..."
                             value={trocoPara}
                             onChange={(e) => setTrocoPara(e.target.value)}
-                            className="w-full pl-9 pr-3 py-2 bg-koma-raised border border-koma-border rounded-xl text-xs font-mono font-bold text-koma-foreground outline-none focus:border-emerald-500"
+                            className="min-h-12 w-full pl-9 pr-3 py-2 bg-koma-raised border border-koma-border rounded-xl text-base font-mono font-bold text-koma-foreground outline-none focus:border-emerald-500"
                           />
                         </div>
                         {trocoCalculado > 0 && (
                           <div className="flex justify-between text-xs pt-1 text-emerald-400 font-bold">
-                            <span>Levar troco de:</span>
+                            <span>Troco estimado:</span>
                             <span className="font-mono">{formatPrice(trocoCalculado)}</span>
                           </div>
                         )}

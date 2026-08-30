@@ -23,6 +23,7 @@ import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
+import CardapioPaymentSummary from "./CardapioPaymentSummary";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -362,7 +363,8 @@ export default function CardapioDigital({
               </section>
 
               <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
-                <div className="flex items-start gap-3"><CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" /><div className="min-w-0 flex-1"><h3 className="text-xs font-black text-koma-foreground">Pagamento direto ao restaurante</h3><p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Não há cobrança automática nesta tela. O restaurante recebe o pedido e você paga usando uma das formas aceitas.</p>{paymentMethods.length > 0 ? <div className="mt-3 flex flex-wrap gap-1.5">{paymentMethods.map((method) => <span key={method.type} className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2.5 py-1.5 text-[9px] font-bold text-emerald-500">{method.type}</span>)}</div> : <p className="mt-2 text-[9px] font-semibold text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}</div></div>
+                <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} />
+                {paymentMethods.length > 0 ? <div className="mt-3 border-t border-koma-border pt-3"><p className="text-xs text-koma-muted">Formas informadas pelo restaurante</p><div className="mt-2 flex flex-wrap gap-1.5">{paymentMethods.map((method) => <span key={method.type} className="rounded-lg border border-koma-border px-2.5 py-1.5 text-xs text-koma-secondary">{method.type}</span>)}</div></div> : <p className="mt-3 text-xs leading-relaxed text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}
               </section>
 
               <section className="space-y-1.5 border-t border-koma-border pt-4 text-xs">

@@ -6,6 +6,7 @@
 import React from "react";
 import { BrandConfig } from "../CardapioTypes";
 import { Clock3, CreditCard, ExternalLink, Info, MapPin, MessageCircle, Store, X } from "lucide-react";
+import { CardapioDeliveryInfo } from "./CardapioOrderConditions";
 
 interface CardapioStoreInfoDrawerProps {
   brand: BrandConfig;
@@ -73,8 +74,9 @@ export default function CardapioStoreInfoDrawer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 no-scrollbar">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5 no-scrollbar">
           <div className="space-y-5">
+            <CardapioDeliveryInfo brand={brand} />
             {brand.about && (
               <section>
                 <div className="flex items-center gap-2">
