@@ -73,7 +73,7 @@ export function MesaConsumptionPanel({
         </div>
       ) : (
         <div className="flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
-          
+
           {/* 1. RESUMO FINANCEIRO & AÇÕES RÁPIDAS (RENDERIZA NO TOPO NO MOBILE - 0 ROLAGEM) */}
           <div className="order-1 lg:order-2 lg:col-span-5 bg-koma-panel border border-koma-border rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 flex flex-col justify-between space-y-3 shadow-sm">
             <div className="space-y-3">
@@ -293,7 +293,7 @@ export function MesaConsumptionPanel({
                       <span className="text-[10px] text-koma-subtle font-mono font-bold">
                         {formatBackendTime(order.timestamp)}
                       </span>
-                      
+
                       {order.mesaOrigemId && onUnmergeTable && (
                         <button
                           type="button"
@@ -351,7 +351,7 @@ export function MesaConsumptionPanel({
                         {/* Status Badge & Waiter Delivery Control */}
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-koma-foreground text-xs sm:text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
-                          
+
                           {item.status === 'preparando' && (
                             <span className="px-2 py-0.5 text-[9px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400 rounded-md animate-pulse-subtle uppercase tracking-wider">
                               Na Cozinha

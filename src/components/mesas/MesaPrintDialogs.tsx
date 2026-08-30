@@ -43,7 +43,7 @@ export function MesaPrintDialogs({
           className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in cursor-pointer"
         >
           <div className="bg-koma-panel border border-koma-border rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
-            
+
             {/* Invoice Header */}
             <div className="space-y-2 pb-3 border-b border-koma-border">
               <div className="flex justify-between items-center font-sans">
@@ -77,10 +77,10 @@ export function MesaPrintDialogs({
                   <span>ITEM</span>
                   <span>PREÇO</span>
                 </div>
-                
+
                 {(() => {
                   const items = orders.flatMap(o => o.itens);
-                  
+
                   // Check if there are any items with actual client names
                   const clientsWithItems = Array.from(new Set(
                     items.map(i => i.clienteNome ? i.clienteNome.trim() : '')
@@ -234,7 +234,7 @@ export function MesaPrintDialogs({
           className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-50 animate-fade-in cursor-pointer"
         >
           <div className="bg-koma-panel border border-koma-border rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 max-h-[85vh] flex flex-col justify-between">
-            
+
             {/* Invoice Header */}
             <div className="space-y-2 pb-3 border-b border-koma-border">
               <div className="flex justify-between items-center font-sans">
@@ -269,7 +269,7 @@ export function MesaPrintDialogs({
                   <span>ITEM</span>
                   <span>PREÇO</span>
                 </div>
-                
+
                 <div className="space-y-2.5">
                   {/* Group duplicate items by name + observation + clientName to display quantity cleanly */}
                   {(() => {

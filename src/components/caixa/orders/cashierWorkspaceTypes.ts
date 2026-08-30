@@ -52,4 +52,3 @@ export interface PendingCashPaymentCard extends PendingCashPayment {
 }
 
 export type OrdersStage = 'salon' | 'digital' | 'closing';
-

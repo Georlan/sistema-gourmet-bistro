@@ -18,4 +18,3 @@ export function operationalOriginLabel(origin?: string): string {
   if (origin === 'garcom') return 'Garçom';
   return 'Kôma';
 }
-
