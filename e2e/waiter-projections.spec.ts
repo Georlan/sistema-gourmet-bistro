@@ -4,7 +4,7 @@ import { expect, Page, test } from '@playwright/test';
 // projections are introduced. One financial check contains two real launches;
 // the persisted family snapshot supplies their human identities.
 const API_ORIGIN = 'http://127.0.0.1:8000';
-const APP_ORIGIN = 'http://127.0.0.1:4173';
+const APP_ORIGIN = `http://127.0.0.1:${process.env.KOMA_E2E_PORT || 4173}`;
 const NOW = new Date('2026-08-30T15:00:00.000Z');
 const CHECK_ID = 'check-waiter-phase7-24';
 const LAUNCH_A = 'launch-waiter-phase7-a';

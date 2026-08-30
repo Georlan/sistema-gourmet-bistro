@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const APP_ORIGIN = 'http://127.0.0.1:4173';
+const APP_ORIGIN = `http://127.0.0.1:${process.env.KOMA_E2E_PORT || 4173}`;
 const API_ORIGIN = 'http://127.0.0.1:8000';
 const NOW = new Date('2026-08-30T15:00:00.000Z');
 const SETTINGS_KEY = 'koma_settings_vFinal_v3';
