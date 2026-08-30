@@ -51,5 +51,5 @@ test('screen corners stay within the cropped shell and the tour uses the approve
   const tour = readFileSync(new URL('../src/landing/sections/HowItWorks.tsx', import.meta.url), 'utf8');
   assert.ok(tour.includes('<TabletFrame view={screen.view} screenshot={cozinhaScreenshot} />'));
   assert.ok(tour.includes('<EditablePhoneFrame'));
-  assert.ok(tour.includes('<FrontalLaptopFrame'));
+  assert.ok(tour.includes('<LaptopFrame'));
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { FrontalLaptopFrame } from '../product/FrontalLaptopFrame';
+import { LaptopFrame } from '../product/LaptopFrame';
 import { EditablePhoneFrame, type PhoneScreenshot } from '../product/EditablePhoneFrame';
 import { ProductScreen } from '../product/ProductScreen';
 import { TabletFrame } from '../product/TabletFrame';
@@ -31,9 +31,10 @@ export const PRODUCT_TOUR = [
   },
 ] as const;
 
-export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot }: {
+export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot, pedidosScreenshot }: {
   cardapioScreenshot?: PhoneScreenshot;
   cozinhaScreenshot?: DeviceScreenshot;
+  pedidosScreenshot?: DeviceScreenshot;
 } = {}) {
   const [active, setActive] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -98,7 +99,7 @@ export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot }: {
               </EditablePhoneFrame>
             ) : screen.device === 'tablet' ? (
               <TabletFrame view={screen.view} screenshot={cozinhaScreenshot} />
-            ) : <FrontalLaptopFrame device={screen.device} view={screen.view} />)}
+            ) : <LaptopFrame view={screen.view} screenshot={pedidosScreenshot} />)}
             <figcaption>Prévia ilustrativa do Kôma · {screen.label}</figcaption>
           </figure>
         </div>

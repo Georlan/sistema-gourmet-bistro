@@ -1,0 +1,45 @@
+.koma-editable-laptop {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 900px;
+  min-width: 0;
+  aspect-ratio: 1536 / 1024;
+  margin-inline: auto;
+  overflow: hidden;
+  filter: drop-shadow(0 16px 22px #0004);
+}
+
+.koma-editable-laptop-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #0a0a0a;
+}
+
+.koma-editable-laptop-content {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+
+.koma-editable-laptop .koma-editable-laptop-capture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.koma-editable-laptop .koma-editable-laptop-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
