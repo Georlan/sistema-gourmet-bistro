@@ -26,6 +26,8 @@ from ..services.order_state_machine import (
 from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..websocket_manager import manager
 
+from ..services.shifts import require_open_cash_shift
+
 # Reexporta a API estável do módulo histórico. Isso mantém imports como
 # ``from .orders import gerar_novo_numero_pedido`` sem duplicar o monólito.
 from .orders_core import *  # noqa: F401,F403
@@ -34,7 +36,6 @@ from .orders_core import (
     _agendar_notificacao_whatsapp_status,
     enqueue_initial_production_for_order,
     print_in_background,
-    require_open_cash_shift,
     router,
 )
 
