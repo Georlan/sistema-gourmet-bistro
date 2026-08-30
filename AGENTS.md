@@ -16,7 +16,7 @@
 | Criar Pedido | `backend/app/application/orders/` | `service.py` / `commands.py`; adapters em `backend/app/adapters/orders/` |
 | Identidade / read models | `docs/architecture/orders_identity_memory.md` | identidade persistida, `src/domain/orderIdentity.ts` |
 | Mesa / estado operacional | `docs/architecture/table_projections_memory.md` | `src/domain/operationalState.ts` |
-| Caixa / Kanban | `src/components/caixa/` | `src/domain/cashierOrderProjection.ts`; contratos/testes locais |
+| Caixa / Kanban | `docs/engineering/cashier-ownership.md` | Owners em `src/components/caixa/`; `src/domain/cashierOrderProjection.ts` |
 | Integrações / outbox | `backend/app/adapters/orders/` e busca por `IntegrationOutbox` | adapter do canal e serviço de outbox existente |
 | Intenção de produto / backlog | `docs/architecture/product_intent_protection.md` | `docs/architecture/phase7_backlog.md` |
 | Cardápio público | `src/cardapio/` | `docs/architecture/cardapio_delivery_presentation.md` e `cardapio_addons_direction.md` |

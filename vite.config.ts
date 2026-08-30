@@ -11,6 +11,8 @@ export default defineConfig(() => {
     || ""
   ).slice(0, 12);
   return {
+    // Worktrees may share node_modules, but must not share the E2E optimizer cache.
+    cacheDir: process.env.KOMA_E2E === 'true' ? path.resolve(__dirname, '.vite/e2e') : undefined,
     define: {
       "import.meta.env.VITE_BUILD_SHA": JSON.stringify(buildSha || "não informado"),
     },

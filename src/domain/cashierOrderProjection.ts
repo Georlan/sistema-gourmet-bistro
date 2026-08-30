@@ -1,5 +1,5 @@
 import type { Order, OrderItem, Table } from '../types';
-import { normalizeOperationalTimestamp } from '../domain';
+import { normalizeOperationalTimestamp } from './operationalTime';
 import {
   deriveFinancialState, deriveOperationalElapsedTime, deriveProductionState,
   deriveTableOperationalState, getOrderItems, isActiveOperationalOrder,

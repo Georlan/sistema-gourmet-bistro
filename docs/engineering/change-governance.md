@@ -16,10 +16,24 @@ mas a contagem administrativa mínima de aprovações permanece zero. Não confu
 Workflows de migração/drift/B1.4 continuam adicionais e condicionais; não exigir checks que não são disparados.
 Configuração remota deve ser lida de volta após alteração. Não considerar a documentação prova de proteção aplicada.
 
+## Rotina de análise de código
+
+`codeql-analysis.yml` analisa JavaScript/TypeScript e Python em PR, push na main e semanalmente,
+com `security-extended`, sem build para essas linguagens interpretadas. Usa a configuração
+[oficial do CodeQL Action](https://github.com/github/codeql-action).
+Os resultados ficam em Security / Code scanning. Não tratar execução bem-sucedida como ausência
+de alertas: triar novas descobertas e registrar falsos positivos com justificativa, sem desativar queries.
+É rotina adicional aos quatro checks obrigatórios, npm audit, pip-audit/SBOM e auditoria PostgreSQL.
+
 ## E2E e diagnóstico
 
 Executar com fontes congeladas e porta exclusiva (`KOMA_E2E_PORT`). O runner falha se a porta estiver ocupada.
 Nunca reaproveitar um servidor de outro worktree. Registrar SHA, teste, viewport e DOM/trace antes de mudar seletor.
+O runner desliga HMR e usa cache de otimização em `.vite/e2e` dentro do worktree,
+mesmo quando `node_modules` é compartilhado. Congelar também documentação e configuração até o fim.
+Uma execução local deste bloco foi descartada após o trace mostrar navegação/reconexão do servidor
+de desenvolvimento no meio do fechamento do convite de Equipe. O teste não foi alterado;
+a validação deve ser repetida com o ambiente isolado.
 
 Em `30acd1a`, oito falhas de `public-menu-order.spec.ts` foram causadas pelo nome acessível
 alterado de Delivery para Entrega. O DOM do artefato de CI confirmou o controle Entrega.

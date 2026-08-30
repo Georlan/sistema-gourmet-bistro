@@ -84,7 +84,7 @@ As views extraídas são controladas pelos componentes que já coordenavam os fl
 
 | Coordenador | Responsabilidades de apresentação extraídas | Responsabilidades preservadas no coordenador |
 | --- | --- | --- |
-| `CaixaPanel` | `CaixaOrdersWorkspace`, `CaixaSalonTab`, `KanbanOrderDetails` | Subscriptions, relógio, estado das abas/busca, atualização otimista, ações HTTP, contexto de cancelamento/transferência, checkout, idempotência e SmartPOS |
+| `CaixaPanel` | `CaixaOrdersWorkspace`, `CaixaSalonTab`, `KanbanOrderDetails`, `CheckoutDialog` | Composição, navegação e abas/busca; ownership operacional extraído conforme `docs/engineering/cashier-ownership.md` |
 | `App` | `OperationalDrawer`, `OperationalLogin` | Roteamento, sessão/autenticação, WebSocket, polling, drafts, disponibilidade, preferências, tema e bloqueio de scroll |
 | `MesaDetailsModalBase` | `MesaConsumptionPanel`, `MesaTransferMergePanel`, `MesaPrintDialogs` | API pública, aba ativa, permissões, seleção/confirmações, editor, estado e timeouts de feedback, bloqueio de scroll |
 
