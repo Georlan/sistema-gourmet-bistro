@@ -79,23 +79,8 @@ MENSAGEM_WHATSAPP_RECUSADO = (
     "ser aceito no momento. Entre em contato conosco para mais detalhes."
 )
 
-
-def require_open_cash_shift(db: Session, restaurante_id: Optional[int] = None) -> CaixaTurno:
-    """Impede que consumo e impressão nasçam fora de um turno financeiro."""
-    rid = restaurante_id or require_tenant_id()
-    turno = db.query(CaixaTurno).filter(
-        CaixaTurno.restaurante_id == rid,
-        CaixaTurno.status == "aberto",
-    ).first()
-    if turno is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "O caixa precisa estar aberto para criar, aceitar ou imprimir "
-                "pedidos. Abra o turno e tente novamente."
-            ),
-        )
-    return turno
+from ..services.shifts import require_open_cash_shift
+from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
 
 
 def _agendar_notificacao_whatsapp_status(
@@ -122,7 +107,6 @@ def _agendar_notificacao_whatsapp_status(
 
     nome_restaurante = restaurante.nome if restaurante else "restaurante"
     tel_restaurante = getattr(restaurante, "telefone", None) if restaurante else None
-
 
     status_map = {
         "pendente": "recebido",
@@ -154,33 +138,6 @@ def _agendar_notificacao_whatsapp_status(
         numero_pedido=comanda.numero_pedido,
         modalidade=comanda.tipo,
     )
-
-
-def gerar_novo_numero_pedido(db: Session, restaurante_id: Optional[int] = None) -> int:
-    """
-    Gera o próximo número sequencial global de pedido de forma atômica e segura.
-    Reinicia no início de cada mês (começando de 1).
-    """
-    tenant_id = restaurante_id or current_restaurante_id.get()
-    if tenant_id:
-        from ..services.atendimentos import allocate_account_number
-        numero, _ = allocate_account_number(db, tenant_id)
-        return numero
-
-    now = datetime.datetime.now(datetime.timezone.utc)
-    start_of_month = datetime.datetime(now.year, now.month, 1)
-    
-    if now.month == 12:
-        start_of_next_month = datetime.datetime(now.year + 1, 1, 1)
-    else:
-        start_of_next_month = datetime.datetime(now.year, now.month + 1, 1)
-        
-    max_pedido = db.query(Comanda.numero_pedido).filter(
-        Comanda.restaurante_id == tenant_id,
-        Comanda.criado_em >= start_of_month,
-        Comanda.criado_em < start_of_next_month
-    ).order_by(Comanda.numero_pedido.desc()).limit(1).with_for_update().scalar()
-    return (max_pedido or 0) + 1
 
 
 def _get_print_preferences(db: Session, restaurante_id: int) -> dict:
