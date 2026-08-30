@@ -6,8 +6,9 @@ const API_ORIGIN = 'http://127.0.0.1:8000';
 
 type Scenario = {
   statuses?: string[];
-  checkStatus?: string;
+  checkStatus?: 'aguardando_pagamento' | null;
   subtab?: 'pedidos' | 'mesas';
+  sameLaunch?: boolean;
 };
 
 async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
@@ -15,7 +16,7 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
   const statuses = scenario.statuses ?? ['preparando', 'pronto'];
   const items = statuses.map((status, index) => ({
     id: `item-phase7-${index + 1}`,
-    lancamento_id: `launch-phase7-${index + 1}`,
+    lancamento_id: `launch-phase7-${scenario.sameLaunch ? 1 : index + 1}`,
     produto_id: `product-phase7-${index + 1}`,
     preco_unit: index === 0 ? 112 : 48,
     status,
@@ -40,9 +41,9 @@ async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
     fechada: false,
     valor_pago: 0,
     criado_em: createdAt,
-    status_comanda: scenario.checkStatus ?? 'aberta',
-    lancamentos: items.map(item => ({
-      id: item.lancamento_id,
+    status_comanda: scenario.checkStatus ?? null,
+    lancamentos: [...new Set(items.map(item => item.lancamento_id))].map(id => ({
+      id,
       comanda_id: 'check-phase7-24',
       origem: 'garcom',
       timestamp: createdAt,
@@ -120,7 +121,7 @@ async function showStage(page: Page, stage: 'Salão' | 'Concluir') {
 }
 
 test('fatias da mesma Comanda preservam R$112 em preparo e R$48 pronto', async ({ page }) => {
-  await openOperationalScenario(page);
+  await openOperationalScenario(page, { sameLaunch: true });
   await expect(page.locator('.orders-board')).toBeVisible();
   const production = page.locator('.orders-card--salon');
   await expect(production).toHaveCount(1);
