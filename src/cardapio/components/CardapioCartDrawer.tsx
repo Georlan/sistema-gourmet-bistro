@@ -8,7 +8,6 @@ import {
   Product, 
   ProductOption, 
   BrandConfig, 
-  BairroTaxa,
   getProductImageUrl, 
   LOCAL_PRODUCT_PLACEHOLDER 
 } from "../CardapioTypes";
@@ -37,6 +36,7 @@ import {
 } from "lucide-react";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
 import { API_BASE_URL } from "../../config/api";
+import { getDeliveryQuote } from "../deliveryPresentation";
 
 export interface CartItem {
   id: string;
@@ -173,26 +173,14 @@ export default function CardapioCartDrawer({
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Delivery Fee Calculation based on Bairro and Free Delivery rules
-  const deliveryFee = useMemo(() => {
-    if (deliveryMethod !== "delivery") return 0;
-
-    // Check free shipping threshold
-    const freteGratis = brandConfig?.freteGratisValor || 0;
-    if (freteGratis > 0 && subtotal >= freteGratis) {
-      return 0;
-    }
-
-    // Check neighborhood fee
-    if (selectedBairro && brandConfig?.tabelaTaxasBairros?.length) {
-      const found = brandConfig.tabelaTaxasBairros.find(
-        (b) => b.bairro.toLowerCase() === selectedBairro.toLowerCase()
-      );
-      if (found) return found.taxa;
-    }
-
-    return brandConfig?.taxaEntregaPadrao ?? 7;
-  }, [deliveryMethod, brandConfig, subtotal, selectedBairro]);
+  const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
+  const deliveryFee = deliveryMethod === "delivery" ? deliveryQuote.fee : 0;
+  const deliveryLabel = deliveryQuote.awaitingNeighborhood
+    ? "Taxa por bairro"
+    : deliveryQuote.fee === 0 ? "Sem taxa de entrega" : `Taxa de ${formatPrice(deliveryQuote.fee)}`;
+  const minimumOrder = brandConfig?.pedidoMinimo || 0;
+  const remainingMinimum = Math.max(0, minimumOrder - subtotal);
+  const freeDeliveryThreshold = brandConfig?.freteGratisValor || 0;
 
   // Cashback deduction calculation
   const userCashbackBalance = Number(user?.saldo_cashback || 0);
@@ -434,23 +422,23 @@ export default function CardapioCartDrawer({
               )}
 
               {/* Free Delivery Banner Progress */}
-              {brandConfig?.freteGratisValor && brandConfig.freteGratisValor > 0 && deliveryMethod === "delivery" && (
+              {freeDeliveryThreshold > 0 && deliveryMethod === "delivery" && (
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs">
-                  {subtotal >= brandConfig.freteGratisValor ? (
+                  {subtotal >= freeDeliveryThreshold ? (
                     <div className="flex items-center gap-2 text-emerald-400 font-bold">
                       <Sparkles className="w-4 h-4 shrink-0" />
                       <span>Parabéns! Você ganhou Frete Grátis neste pedido!</span>
                     </div>
                   ) : (
                     <div>
-                      <div className="flex items-center justify-between text-[11px] font-semibold text-koma-foreground mb-1.5">
-                        <span>Adicione mais <strong>{formatPrice(brandConfig.freteGratisValor - subtotal)}</strong></span>
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs font-semibold text-koma-foreground mb-1.5">
+                        <span>Adicione mais <strong>{formatPrice(freeDeliveryThreshold - subtotal)}</strong></span>
                         <span className="text-emerald-400 font-bold">Frete Grátis</span>
                       </div>
                       <div className="w-full h-1.5 bg-koma-card rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, (subtotal / brandConfig.freteGratisValor) * 100)}%` }}
+                          style={{ width: `${Math.min(100, (subtotal / freeDeliveryThreshold) * 100)}%` }}
                         />
                       </div>
                     </div>
@@ -557,30 +545,37 @@ export default function CardapioCartDrawer({
               <section className="border-t border-koma-border pt-5">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">2. Como quer receber?</h3>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => { setDeliveryMethod("pickup"); setErrorMessage(""); }} className={`rounded-2xl border p-3 text-left transition ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
-                    <ShoppingBag className={deliveryMethod === "pickup" ? "h-4 w-4 text-emerald-500" : "h-4 w-4 text-koma-muted"} />
-                    <strong className="mt-2 block text-xs text-koma-foreground">Retirada</strong>
-                    <span className="mt-0.5 block text-[9px] text-koma-muted">{restaurantAddress ? `Buscar em ${restaurantAddress}` : "Buscar no restaurante"}</span>
+                  <button type="button" aria-pressed={deliveryMethod === "pickup"} onClick={() => { setDeliveryMethod("pickup"); setErrorMessage(""); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                    <span className="flex items-center justify-between gap-2"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
+                    <strong className="mt-2 block text-sm text-koma-foreground">Retirada</strong>
+                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Buscar no restaurante</span>
                   </button>
-                  <button type="button" onClick={() => { setDeliveryMethod("delivery"); setErrorMessage(""); }} className={`rounded-2xl border p-3 text-left transition ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
-                    <Truck className={deliveryMethod === "delivery" ? "h-4 w-4 text-emerald-500" : "h-4 w-4 text-koma-muted"} />
-                    <strong className="mt-2 block text-xs text-koma-foreground">Delivery</strong>
-                    <span className="mt-0.5 block text-[9px] text-koma-muted">
-                      {deliveryFee === 0 ? "Frete Grátis" : `Taxa de ${formatPrice(deliveryFee)}`}
-                    </span>
+                  <button type="button" aria-pressed={deliveryMethod === "delivery"} onClick={() => { setDeliveryMethod("delivery"); setErrorMessage(""); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                    <span className="flex items-center justify-between gap-2"><Truck className={deliveryMethod === "delivery" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "delivery" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
+                    <strong className="mt-2 block text-sm text-koma-foreground">Entrega</strong>
+                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">{deliveryLabel}</span>
                   </button>
                 </div>
 
+                {deliveryMethod === "pickup" && restaurantAddress && (
+                  <div className="mt-3 flex items-start gap-2 rounded-xl border border-koma-border p-3">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                    <div className="min-w-0 text-xs leading-relaxed"><strong className="text-koma-foreground">Local de retirada</strong><p className="mt-1 break-words text-koma-muted">{restaurantAddress}</p></div>
+                  </div>
+                )}
+
                 {deliveryMethod === "delivery" && (
-                  <div className="mt-3 space-y-2.5">
+                  <div className="mt-3 space-y-3">
                     {/* Bairro Selector if configured */}
                     {brandConfig?.tabelaTaxasBairros && brandConfig.tabelaTaxasBairros.length > 0 && (
                       <div>
-                        <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Selecione o Bairro</span>
+                        <label htmlFor="delivery-neighborhood" className="mb-1.5 block text-xs font-semibold text-koma-foreground">Bairro de entrega</label>
                         <select
+                          id="delivery-neighborhood"
+                          aria-describedby="delivery-neighborhood-help"
                           value={selectedBairro}
                           onChange={(e) => setSelectedBairro(e.target.value)}
-                          className="w-full h-11 px-3 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground outline-none focus:border-emerald-500"
+                          className="w-full min-w-0 h-12 px-3 bg-koma-card border border-koma-border rounded-xl text-base text-koma-foreground outline-none focus:border-emerald-500"
                         >
                           <option value="">Selecione seu bairro...</option>
                           {brandConfig.tabelaTaxasBairros.map((b) => (
@@ -589,12 +584,17 @@ export default function CardapioCartDrawer({
                             </option>
                           ))}
                         </select>
+                        <p id="delivery-neighborhood-help" className="mt-1.5 break-words text-xs leading-relaxed text-koma-muted" aria-live="polite">
+                          {deliveryQuote.awaitingNeighborhood
+                            ? "Selecione seu bairro para atualizar a taxa. Por enquanto, o total usa a taxa padrão estimada."
+                            : `${selectedBairro ? `${selectedBairro}: ` : ""}${deliveryQuote.fee === 0 ? "sem taxa de entrega neste pedido." : `taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}`}
+                        </p>
                       </div>
                     )}
 
                     <label className="block">
-                      <span className="mb-1.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> Endereço de entrega</span>
-                      <textarea rows={3} placeholder="Rua, número, complemento e bairro" value={address} onChange={(event) => { setAddress(event.target.value); if (errorMessage) setErrorMessage(""); }} className="w-full resize-none rounded-xl border border-koma-border bg-koma-card p-3 text-xs leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-delivery-address" />
+                      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-koma-foreground"><MapPin className="h-4 w-4 text-emerald-500" /> Endereço de entrega</span>
+                      <textarea rows={3} autoComplete="street-address" placeholder="Rua, número, complemento e bairro" value={address} onChange={(event) => { setAddress(event.target.value); if (errorMessage) setErrorMessage(""); }} className="w-full resize-none rounded-xl border border-koma-border bg-koma-card p-3 text-base leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-delivery-address" />
                     </label>
                   </div>
                 )}
@@ -826,7 +826,7 @@ export default function CardapioCartDrawer({
                 <div className="flex justify-between text-koma-muted"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                 {deliveryMethod === "delivery" && (
                   <div className="flex justify-between text-koma-muted">
-                    <span>Taxa de entrega</span>
+                    <span>{deliveryQuote.awaitingNeighborhood ? "Entrega estimada" : "Taxa de entrega"}</span>
                     <span className={deliveryFee === 0 ? "text-emerald-400 font-bold" : ""}>
                       {deliveryFee === 0 ? "Grátis" : formatPrice(deliveryFee)}
                     </span>
@@ -845,10 +845,13 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
                 <div className="flex justify-between border-t border-koma-border pt-2 text-sm font-black text-koma-foreground">
-                  <span>Total final</span>
+                  <span>Total estimado</span>
                   <span className="text-base text-emerald-500">{formatPrice(total)}</span>
                 </div>
               </div>
+              {remainingMinimum > 0 && (
+                <p className="mt-2 text-xs leading-relaxed text-amber-400" role="status">Faltam <strong>{formatPrice(remainingMinimum)}</strong> em produtos para o pedido mínimo de {formatPrice(minimumOrder)}.</p>
+              )}
               <button
                 type="button"
                 onClick={handleCheckout}

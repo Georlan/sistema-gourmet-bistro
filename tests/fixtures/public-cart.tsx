@@ -6,6 +6,8 @@ import '../../src/index.css';
 import '../../src/cardapio/cardapioTone.css';
 import '../../src/cardapio/cardapioPublic.css';
 
+const deliveryScenario = new URLSearchParams(location.search).get('entrega');
+
 // No request is forwarded to a real API, including OTP, coupons and order submission.
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
@@ -21,6 +23,16 @@ window.fetch = async (input, init) => {
         logo_url: '', banner_url: '',
         status_override: 'Forçado Aberto',
         formas_pagamento_aceitas: ['Pix', 'Dinheiro'],
+        ...(deliveryScenario ? {
+          taxa_entrega_padrao: id === 901 ? 8 : 12,
+          pedido_minimo: 30,
+          frete_gratis_valor: deliveryScenario === 'gratis' ? 25 : 75,
+          tabela_taxas_bairros: deliveryScenario === 'fixa' ? [] : [
+            { bairro: 'Centro', taxa: id === 901 ? 5 : 9 },
+            { bairro: 'Bairro com nome bastante longo para testar no celular', taxa: 11 },
+            { bairro: 'Retiro', taxa: 0 },
+          ],
+        } : {}),
       },
       categorias: [{ id: 'lanches', nome: 'Lanches' }],
       produtos: Array.from({ length: 8 }, (_, index) => ({
