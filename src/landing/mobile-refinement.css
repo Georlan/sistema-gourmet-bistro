@@ -59,7 +59,10 @@
 .koma-tour-copy small { display: block; max-width: 44ch; color: #79d5b9; font-size: 0.83rem; line-height: 1.5; }
 .koma-tour-plans-link { display: flex; align-items: center; min-height: 44px; width: fit-content; margin-top: 1rem; color: #fff; font-size: 0.88rem; text-underline-offset: 4px; }
 .koma-tour-device { min-width: 0; width: 100%; margin: 0; }
-.koma-tour-device figcaption { margin-top: 1rem; text-align: center; color: #a8b6ae; font-size: 0.75rem; }
+/* Tour-only sizing: preserve the approved laptop and the tablet in the hero.
+   Resize the whole frame so its independent screen stays aligned. */
+.koma-tour-device .koma-editable-tablet { width: min(84%, 560px); }
+.koma-tour-device .koma-editable-phone { width: min(100%, 192px); }
 
 /* Native dialog uses the browser top layer, focus containment and inert background. */
 .koma-demo-dialog {
@@ -174,7 +177,7 @@
   .koma-frontal-base { height: 8px; }
   .koma-frontal-device--tablet .koma-frontal-lid { padding: 12px 8px; border-radius: 15px; }
   .koma-frontal-device--phone { max-width: 250px; }
-  .koma-tour-device figcaption { font-size: 0.72rem; }
+  .koma-tour-device .koma-editable-phone { width: min(100%, 176px); }
   .koma-implementation-main { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   .koma-implementation-copy > p { margin: 1rem 0 1.25rem; font-size: 1rem; line-height: 1.55; }
   .koma-implementation-copy .koma-btn { width: 100%; }

@@ -92,7 +92,7 @@ export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot, pedidosScree
             <small>{screen.note}</small>
             <a href="#planos" className="koma-tour-plans-link">Compare os planos →</a>
           </div>
-          <figure className="koma-tour-device">
+          <figure className="koma-tour-device" aria-label={`Kôma · ${screen.label}`}>
             {active === index && (screen.device === 'phone' ? (
               <EditablePhoneFrame shellSrc={phoneShell} screenshot={cardapioScreenshot}>
                 <ProductScreen view="cardapio" scaleLogicalWidth={430} />
@@ -100,7 +100,6 @@ export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot, pedidosScree
             ) : screen.device === 'tablet' ? (
               <TabletFrame view={screen.view} screenshot={cozinhaScreenshot} />
             ) : <LaptopFrame view={screen.view} screenshot={pedidosScreenshot} />)}
-            <figcaption>Prévia ilustrativa do Kôma · {screen.label}</figcaption>
           </figure>
         </div>
       ))}

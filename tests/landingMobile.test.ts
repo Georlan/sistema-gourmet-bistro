@@ -71,3 +71,15 @@ test('tour and device structure protect compact responsive layout and keyboard n
   assert.equal(landing.includes('<Capabilities />'), false);
   assert.ok(landing.indexOf('<Plans />') < landing.indexOf('<FAQ />'));
 });
+
+test('tour removes the illustration caption and scales only tablet and phone frames', () => {
+  const tour = readFileSync(new URL('../src/landing/sections/HowItWorks.tsx', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/landing/mobile-refinement.css', import.meta.url), 'utf8');
+  assert.equal(tour.includes('Prévia ilustrativa'), false);
+  assert.equal(tour.includes('<figcaption>'), false);
+  assert.ok(tour.includes('aria-label={`Kôma · ${screen.label}`}'));
+  assert.match(css, /\.koma-tour-device \.koma-editable-tablet\s*\{\s*width: min\(84%, 560px\)/);
+  assert.match(css, /\.koma-tour-device \.koma-editable-phone\s*\{\s*width: min\(100%, 192px\)/);
+  assert.match(css, /@media \(max-width: 768px\)[\s\S]*\.koma-tour-device \.koma-editable-phone\s*\{\s*width: min\(100%, 176px\)/);
+  assert.equal(css.includes('.koma-tour-device .koma-editable-laptop'), false);
+});
