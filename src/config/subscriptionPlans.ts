@@ -26,7 +26,7 @@ export const ONLINE_MENU_ADDON = {
   id: 'online_menu',
   name: 'Cardápio Digital Kôma',
   price: 49,
-  description: 'Link e QR Code com pedidos no PDV, sem depender do app do entregador.',
+  description: 'O cliente escolhe os itens pelo link ou QR Code e envia o pedido ao Kôma.',
   includedIn: ['pro', 'premium'],
 } as const satisfies SubscriptionAddon;
 
@@ -89,7 +89,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     tagline: 'Mesas e delivery organizados, mesmo sem impressora.',
     features: [
       'Mesas, comandas e balcão',
-      'Retirada e delivery no mesmo caixa',
+      'Retirada e delivery com lançamento manual',
       'Fila de preparo na tela, sem impressora',
       'Caixa, fechamento e resumo de vendas',
       'Clientes e histórico de pedidos',

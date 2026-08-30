@@ -21,13 +21,13 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
     stage: 'PARA COMEÇAR',
     action: 'ORGANIZAR',
     fit: 'Para quem atende mesas, faz entregas ou os dois, com uma operação enxuta.',
-    note: 'Delivery funciona mesmo sem cardápio digital ou app do entregador.',
+    note: 'Pedidos por WhatsApp ou telefone? Você lança no Kôma. Com o cardápio digital opcional, o cliente pede pelo link.',
   },
   pro: {
     stage: 'MELHOR ESCOLHA',
     action: 'CONECTAR',
     fit: 'Para vender online e ter atendimento, cozinha e gestão trabalhando juntos.',
-    note: 'Receba pedidos online sem precisar contratar o app do entregador.',
+    note: 'O cliente pede pelo link e o pedido chega ao Kôma, sem precisar do app do entregador.',
   },
   premium: {
     stage: 'PACOTE COMPLETO',

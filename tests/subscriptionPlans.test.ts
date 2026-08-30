@@ -57,3 +57,14 @@ test('landing starts monthly without annual savings cards and displays all addon
     for (const feature of plan.features) assert.ok(html.includes(feature));
   }
 });
+
+test('Pocket explains manual delivery and distinguishes the optional online menu', () => {
+  const html = renderToStaticMarkup(createElement(Plans));
+  const pocketCard = html.match(/<article aria-labelledby="plan-pocket-title"[\s\S]*?<\/article>/)?.[0];
+  assert.ok(pocketCard);
+  assert.ok(pocketCard.includes('Retirada e delivery com lançamento manual'));
+  assert.ok(pocketCard.includes('Pedidos por WhatsApp ou telefone? Você lança no Kôma.'));
+  assert.ok(pocketCard.includes('Com o cardápio digital opcional, o cliente pede pelo link.'));
+  assert.ok(pocketCard.includes('Adicionais do Kôma Pocket'));
+  assert.equal(pocketCard.includes('Delivery funciona mesmo sem'), false);
+});
