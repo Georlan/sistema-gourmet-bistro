@@ -1,120 +1,129 @@
-import { CardapioAssetUploader } from './CardapioAssetUploader';
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { KomaLogo } from './KomaLogo';
-import { KomaEmptyState } from './shared/KomaEmptyState';
-import { LoginButton } from './auth/LoginButton';
-import {
-  DollarSign, ArrowUpRight, Lock, Users,
-  Receipt, ShoppingCart, Percent, CreditCard, Check, AlertTriangle,
-  Clock, X, RefreshCw, Edit3, Trash2, Plus, ChevronLeft, ChevronRight,
-  MapPin, ClipboardList, BarChart2, Package, Shield, ShieldCheck, Star,
-  Printer, Info, Smartphone,
-  Gift, Tag, TrendingUp, Heart, Globe, Menu, Maximize2, Minimize2,
-  SlidersHorizontal, Upload, Copy, Search, Sun, Moon, Volume2, VolumeX, Bell, User } from 'lucide-react';
-import { Order, OrderItem, CaixaTurno, CaixaMovimentacao, Pagamento, Table, Product, EntradaEstoque, MovimentacaoEstoque, SessaoContagemEstoque, CaixaTurnoResumo, FechamentoCaixaResult, Distribuidor, FichaTecnicaProduto, Insumo, SystemUser } from '../types';
-import { EntradaManualModal } from './estoque/EntradaManualModal';
-import MoneyInput from './MoneyInput';
-import { EstoqueHistoricoTab } from './estoque/EstoqueHistoricoTab';
-import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
-import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
-import { ContagemEstoqueModal } from './estoque/ContagemEstoqueModal';
-import { EstoqueIngredientesTab } from './estoque/EstoqueIngredientesTab';
-import { EstoqueFornecedoresTab } from './estoque/EstoqueFornecedoresTab';
-import { FichaTecnicaModal } from './estoque/FichaTecnicaModal';
-import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
-import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
-import { CaixaSalonTab } from './caixa/salao/CaixaSalonTab';
-import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
-import type { CashierTableCard, DeliveryOrderView, PendingCashPayment, SmartPosCardState } from './caixa/orders/cashierWorkspaceTypes';
-import { formatCompactCurrency, formatCurrency } from './caixa/cashierPresentation';
-import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
-import { SangriaModal } from './caixa/SangriaModal';
-import { SuprimentoModal } from './caixa/SuprimentoModal';
-import { ManagerPinModal } from './ManagerPinModal';
-import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
-import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
-import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
-import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
-import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
-import { EquipeCargosTab } from './equipe/EquipeCargosTab';
-import { EquipePessoasTab } from './equipe/EquipePessoasTab';
-import { normalizeOperationalTimestamp } from '../domain';
-import { deriveFinancialState, deriveProductionState } from '../domain/operationalState';
-import {
-  formatCashierOldestAge as formatOldestAge,
-  getCashierOrderSlaData as getOrderSlaData,
-  getCashierTableOrderPresentation,
-  isCashierTableOrder as isTableCheckoutOrder,
-  projectCashierSalonTables,
-  projectCashierDeliveryState,
-  projectCashierTableSlices,
-} from '../domain/cashierOrderProjection';
-import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
-import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
-import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
-import ComplementosTab from './cardapio/ComplementosTab';
-import CuponsTab from './clientes/CuponsTab';
-import { CategoriaModal } from './cardapio/CategoriaModal';
-import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
-import { OperationalBanner } from './shared/OperationalBanner';
-import { normalizeCatalogSnapshot, type CatalogCategory } from '../catalog/catalog';
-import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
-import { formatBackendTime, localCalendarDate } from '../utils/dateTime';
-import { clearOperatorSession } from '../utils/authSession';
-import { API } from '../config/caixaService';
-import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from '../config/theme';
-import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
-import {
-  isAddonIncludedInPlan,
-  SUBSCRIPTION_PLANS,
-  getSubscriptionPlan,
-  normalizeSubscriptionPlan
-} from '../config/subscriptionPlans';
 import clsx from 'clsx';
 import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuBadge,
-  SidebarFooter,
-  SidebarRail,
-  SidebarTrigger
+AlertTriangle,
+ArrowUpRight,
+Bell,
+Check,
+ChevronLeft,ChevronRight,
+ClipboardList,
+Clock,
+CreditCard,
+DollarSign,
+Edit3,
+Globe,
+Info,
+Lock,
+Maximize2,
+Menu,
+Minimize2,
+Moon,
+Package,
+Percent,
+Plus,
+Printer,
+RefreshCw,
+Search,
+ShieldCheck,
+ShoppingCart,
+SlidersHorizontal,
+Smartphone,
+Sun,
+Trash2,
+TrendingUp,
+Users,
+Volume2,VolumeX,
+X
+} from 'lucide-react';
+import React,{ useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { normalizeCatalogSnapshot } from '../catalog/catalog';
+import { API } from '../config/caixaService';
+import {
+getSubscriptionPlan,
+isAddonIncludedInPlan,
+normalizeSubscriptionPlan
+} from '../config/subscriptionPlans';
+import { KOMA_THEME_CHANGED_EVENT,nextKomaTheme,persistKomaTheme,readKomaTheme,type KomaTheme } from '../config/theme';
+import {
+formatCashierOldestAge as formatOldestAge,
+getCashierTableOrderPresentation,
+getCashierOrderSlaData as getOrderSlaData,
+projectCashierDeliveryState,
+projectCashierSalonTables,
+projectCashierTableSlices
+} from '../domain/cashierOrderProjection';
+import { getProductPresets } from '../domain/catalogPresentation';
+import { normalizeOperationalTimestamp } from '../domain/operationalTime';
+import { smartSearchMatch } from '../domain/search';
+import { Distribuidor,EntradaEstoque,FichaTecnicaProduto,Insumo,MovimentacaoEstoque,Product,SessaoContagemEstoque,SystemUser,Table } from '../types';
+import { clearOperatorSession } from '../utils/authSession';
+import { localCalendarDate } from '../utils/dateTime';
+import { makeOperationKey,operationalFetch } from '../utils/operationalRequest';
+import { aplicarMascaraTelefoneInput } from '../utils/phonePresentation';
+import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
+import { LoginButton } from './auth/LoginButton';
+import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
+import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
+import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
+import type { CaixaPanelProps,LoyaltyCustomer } from './caixa/cashierContracts';
+import { formatCompactCurrency,formatCurrency } from './caixa/cashierPresentation';
+import { CheckoutDialog } from './caixa/checkout/CheckoutDialog';
+import { useCheckoutController } from './caixa/checkout/useCheckoutController';
+import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
+import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
+import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
+import { useCashierOrders } from './caixa/orders/useCashierOrders';
+import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
+import { useCashierClock } from './caixa/realtime/useCashierClock';
+import { useCashierRealtime } from './caixa/realtime/useCashierRealtime';
+import { CaixaSalonTab } from './caixa/salao/CaixaSalonTab';
+import { SangriaModal } from './caixa/SangriaModal';
+import { useCashShift } from './caixa/shift/useCashShift';
+import { useCashierSmartPos } from './caixa/smartpos/useCashierSmartPos';
+import { SuprimentoModal } from './caixa/SuprimentoModal';
+import { CardapioCategoriasTab } from './cardapio/CardapioCategoriasTab';
+import { CardapioProdutosTab } from './cardapio/CardapioProdutosTab';
+import { CategoriaModal } from './cardapio/CategoriaModal';
+import ComplementosTab from './cardapio/ComplementosTab';
+import { CardapioAssetUploader } from './CardapioAssetUploader';
+import CuponsTab from './clientes/CuponsTab';
+import { EquipeCargosTab } from './equipe/EquipeCargosTab';
+import { EquipeDesempenhoTab } from './equipe/EquipeDesempenhoTab';
+import { EquipePessoasTab } from './equipe/EquipePessoasTab';
+import { ContagemEstoqueModal } from './estoque/ContagemEstoqueModal';
+import { EntradaManualModal } from './estoque/EntradaManualModal';
+import { EstoqueContagemTab } from './estoque/EstoqueContagemTab';
+import { EstoqueFornecedoresTab } from './estoque/EstoqueFornecedoresTab';
+import { EstoqueHistoricoTab } from './estoque/EstoqueHistoricoTab';
+import { EstoqueIngredientesTab } from './estoque/EstoqueIngredientesTab';
+import { FichaTecnicaModal } from './estoque/FichaTecnicaModal';
+import { MovimentacaoEstoqueModal } from './estoque/MovimentacaoEstoqueModal';
+import { KomaLogo } from './KomaLogo';
+import MoneyInput from './MoneyInput';
+import { PrintMonitorPanel } from './printing/PrintMonitorPanel';
+import { RelatorioFinanceiroTab } from './relatorios/RelatorioFinanceiroTab';
+import { RelatoriosProdutosTab } from './relatorios/RelatoriosProdutosTab';
+import { RelatoriosVisaoGeralTab } from './relatorios/RelatoriosVisaoGeralTab';
+import { KomaEmptyState } from './shared/KomaEmptyState';
+import { OperationalBanner } from './shared/OperationalBanner';
+import {
+Sidebar,
+SidebarContent,
+SidebarFooter,
+SidebarGroup,
+SidebarGroupContent,
+SidebarGroupLabel,
+SidebarHeader,
+SidebarMenu,
+SidebarMenuBadge,
+SidebarMenuButton,
+SidebarMenuItem,
+SidebarProvider,
+SidebarRail,
+SidebarTrigger
 } from './ui/sidebar';
 
 
-interface CaixaPanelProps {
-  orders: Order[];
-  onRefreshOrders: () => Promise<void>;
-  apiBaseUrl: string;
-  authHeaders: Record<string, string>;
-  activeWaiterNome: string;
-  salonTables: Table[];
-  onCreateMesa: (id: number, capacidade: number, nome?: string) => Promise<void>;
-  onUpdateMesa: (id: number, capacidade?: number, nome?: string) => Promise<void>;
-  onDeleteMesa: (id: number) => Promise<void>;
-  pagamentosPendentes?: any[];
-  onRefreshPagamentosPendentes?: () => Promise<void>;
-  isWsConnected?: boolean;
-  turnoResumo: CaixaTurnoResumo | null;
-  isTurnoResumoLoading: boolean;
-  onRefreshTurnoResumo: () => Promise<void>;
-  liveProdutos?: Product[];
-  liveCategorias?: CatalogCategory[];
-  catalogReady?: boolean;
-  onRefreshCategorias?: () => Promise<void>;
-  restauranteConfig?: any;
-  fetchError?: string | null;
-  onOptimisticUpdateItemStatus?: (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => void;
-  onOptimisticAddOrder?: (newOrder: any) => void;
-  onRemovePendingPaymentOptimistic?: (pagamentoId: string) => void;
-}
+
 
 const CASHIER_SIDEBAR_GROUPS = [
   {
@@ -175,48 +184,11 @@ interface AccountItem {
 
 
 
-interface SmartPosCashPaymentView {
-  intent_id: string;
-  status: string;
-  metodo?: string;
-  provider_last_error?: string | null;
-  pagamento_id?: string | null;
-}
-
-interface SmartPosCashRow {
-  mesa_id: number;
-  estado_operacional:
-    | 'em_preparo'
-    | 'pronto'
-    | 'aguardando_pagamento'
-    | 'pagamento_processando'
-    | 'aprovado_pendente_liquidacao';
-  origem_smartpos?: boolean;
-  pagamento?: SmartPosCashPaymentView | null;
-}
 
 
-interface LoyaltyCustomer {
-  id: string;
-  cliente: string;
-  nome?: string;
-  telefone: string;
-  endereco?: string;
-  pontos: number;
-  saldoCashback: number;
-  saldo_pontos?: number;
-  saldo_cashback?: number;
-  historico?: any[];
-}
 
-const aplicarMascaraTelefoneInput = (valor: string) => {
-  const apenasNumeros = valor.replace(/\D/g, '').slice(0, 11);
-  if (apenasNumeros.length === 0) return '';
-  if (apenasNumeros.length <= 2) return `(${apenasNumeros}`;
-  if (apenasNumeros.length <= 6) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
-  if (apenasNumeros.length <= 10) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 6)}-${apenasNumeros.slice(6)}`;
-  return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
-};
+
+
 
 const formatarTelefoneTabela = (tel?: string) => {
   if (!tel) return '-';
@@ -349,14 +321,8 @@ export function CaixaPanel({
       }
     }
   };
-
-  // Turno & Sync state
-  const [turno, setTurno] = useState<CaixaTurno | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const isProcessingPaymentRef = React.useRef(false); // Synchronous guard against double-click
-  const [idempotencyKey, setIdempotencyKey] = useState('');
   const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
 
@@ -364,6 +330,28 @@ export function CaixaPanel({
     setToastData({ msg, type });
     setTimeout(() => setToastData(null), 3000);
   };
+  const {
+    turno,
+    showAbrirModal,
+    setShowAbrirModal,
+    caixaMovimentacoes,
+    isCaixaMovimentacoesLoading,
+    fechamentoResult,
+    showSangriaModal,
+    setShowSangriaModal,
+    showSuprimentoModal,
+    setShowSuprimentoModal,
+    saldoInicial,
+    setSaldoInicial,
+    fetchTurno,
+    fetchTurnoResumo,
+    fetchCaixaMovimentacoes,
+    handleRegistrarSangria,
+    handleRegistrarSuprimento,
+    handleConfirmarFechamento,
+    handleAbrirCaixa,
+  } = useCashShift({ apiBaseUrl, authHeaders, onRefreshTurnoResumo, showToast, setErrorMsg, setIsLoading });
+
   const [activeTab, setActiveTab] = useState<
     'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes' | 'relatorios' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao' | 'assinatura_pix' | 'cardapio_digital' | 'dashboard'
   >(() => {
@@ -409,106 +397,62 @@ export function CaixaPanel({
     return saved;
   });
 
-  const [smartPosCashRows, setSmartPosCashRows] = useState<SmartPosCashRow[]>([]);
-  const [isReconcilingSmartPos, setIsReconcilingSmartPos] = useState(false);
-  const [smartPosRecoveryError, setSmartPosRecoveryError] = useState('');
-  const smartPosAuthorization = authHeaders.Authorization || authHeaders.authorization || '';
-  const smartPosCashByTable = useMemo(
-    () => new Map(smartPosCashRows.map(row => [Number(row.mesa_id), row])),
-    [smartPosCashRows],
-  );
-
-  const refreshSmartPosCashProjection = useCallback(async () => {
-    if (activeSubTab !== 'pedidos' || !smartPosAuthorization) {
-      setSmartPosCashRows([]);
-      return;
-    }
-    try {
-      const response = await fetch(`${apiBaseUrl}/auth/smartpos/caixa/operacao`, {
-        headers: { Authorization: smartPosAuthorization },
-        cache: 'no-store',
-      });
-      if (response.status === 401 || response.status === 403) {
-        setSmartPosCashRows([]);
-        return;
-      }
-      if (!response.ok) return;
-      const data = await response.json().catch(() => []);
-      setSmartPosCashRows(Array.isArray(data) ? data : []);
-    } catch {
-      // A fila principal continua utilizável; o próximo refresh reconcilia o indicador.
-    }
-  }, [activeSubTab, apiBaseUrl, smartPosAuthorization]);
-
-  useEffect(() => {
-    if (activeSubTab !== 'pedidos' || !smartPosAuthorization) {
-      setSmartPosCashRows([]);
-      return;
-    }
-
-    void refreshSmartPosCashProjection();
-    // O WebSocket já reconcilia eventos operacionais. Este fallback mais lento
-    // evita milhares de leituras durante um expediente e pausa em aba oculta.
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
-    }, 30_000);
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') void refreshSmartPosCashProjection();
-    };
-    window.addEventListener('focus', refreshWhenVisible);
-    window.addEventListener('koma_orders_updated', refreshWhenVisible);
-    document.addEventListener('visibilitychange', refreshWhenVisible);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener('focus', refreshWhenVisible);
-      window.removeEventListener('koma_orders_updated', refreshWhenVisible);
-      document.removeEventListener('visibilitychange', refreshWhenVisible);
-    };
-  }, [activeSubTab, refreshSmartPosCashProjection, smartPosAuthorization]);
-
-  const getSmartPosCardState = useCallback((order: Order): SmartPosCardState | null => {
-    const mesaId = Number(order?.mesaId || 0);
-    if (mesaId <= 0) return null;
-    const row = smartPosCashByTable.get(mesaId);
-    if (!row) return null;
-
-    if (row.pagamento?.provider_last_error) {
-      return {
-        label: 'MAQUININHA · ATENÇÃO',
-        chipClass: 'is-attention',
-        blocksPayment: true,
-        ctaLabel: 'Revisar pagamento',
-        intentId: row.pagamento.intent_id,
-      };
-    }
-    if (row.estado_operacional === 'aprovado_pendente_liquidacao') {
-      return {
-        label: 'MAQUININHA · FINALIZANDO',
-        chipClass: 'is-primary',
-        blocksPayment: true,
-        ctaLabel: 'Revisar pagamento',
-        intentId: row.pagamento?.intent_id,
-        canReconcile: true,
-      };
-    }
-    if (row.estado_operacional === 'pagamento_processando') {
-      return {
-        label: 'MAQUININHA · PROCESSANDO',
-        chipClass: 'is-primary',
-        blocksPayment: true,
-        ctaLabel: 'Acompanhar pagamento',
-        intentId: row.pagamento?.intent_id,
-      };
-    }
-    if (row.origem_smartpos) {
-      return {
-        label: 'MAQUININHA',
-        chipClass: 'is-muted',
-        blocksPayment: false,
-      };
-    }
-    return null;
-  }, [smartPosCashByTable]);
+  const smartPos = useCashierSmartPos({ apiBaseUrl, authHeaders, onRefreshOrders, activeSubTab, showToast, fetchTurno, onReconciled: () => { setSelectedOrder(null); setShowCheckoutModal(false); } });
+  const {
+    setSmartPosRecoveryError,
+    getSmartPosCardState,
+  } = smartPos;
+  const {
+    selectedKanbanOrder,
+    setSelectedKanbanOrder,
+    cancelConsumptionTarget,
+    setCancelConsumptionTarget,
+    cancelTableReason,
+    setCancelTableReason,
+    isCancellingTable,
+    tableTransferTargetId,
+    setTableTransferTargetId,
+    isTransferringTable,
+    handleCancelTableConsumption,
+    getTableMovementContext,
+    deliveryOrders,
+    motoboys,
+    selectedMotoboys,
+    setSelectedMotoboys,
+    novoMotoboyNome,
+    setNewMotoboyNome,
+    novoMotoboyTelefone,
+    setNewMotoboyTelefone,
+    isDrawerOpen,
+    setIsDrawerOpen,
+    handleQuickPrintOrder,
+    fetchDeliveryOrders,
+    fetchMotoboys,
+    openDeliveryOrderDetails,
+    handleDespacharKanban,
+    handleRevogarAcessoMotoboy,
+    handleFecharDelivery,
+    handleFinalizarPedido,
+    handleAddMotoboy,
+    handleUpdateItemStatus,
+    handleAcceptPendingDeliveryOrder,
+    handleRejectPendingDeliveryOrder,
+    handleMarkTableItemsReady,
+    handleAdvanceDigitalOrder,
+    handleAdvanceSelectedKanbanOrder,
+    handleReprintSelectedKanbanProduction,
+    handlePrintSelectedKanbanTable,
+    handlePrintSelectedKanbanValues,
+    handleInspectSalonTable,
+    handleTransferSelectedKanbanTable,
+    handleCancelSelectedKanbanConsumption,
+    handleCancelSelectedKanbanOrder,
+  } = useCashierOrders({ orders, apiBaseUrl, authHeaders, onRefreshOrders, onOptimisticUpdateItemStatus, showToast, isLoading, setIsLoading });
+  const {
+    soundEnabled,
+    toggleSound,
+    playOrderAlert,
+  } = useCashierAlerts({ orders, deliveryOrders, isDrawerOpen });
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
@@ -557,186 +501,6 @@ export function CaixaPanel({
     sessionStorage.setItem('koma_active_subtab', sanitized);
   }, [activeSubTab, activeTab]);
 
-  const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
-  const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
-    scope: 'order' | 'table' | 'digital';
-    mesaId: number;
-    orderId?: string;
-    comandas: number;
-    itens: number;
-    total: number;
-    itemIds: string[];
-  } | null>(null);
-  const [cancelTableReason, setCancelTableReason] = useState('');
-  const [isCancellingTable, setIsCancellingTable] = useState(false);
-  const [tableTransferTargetId, setTableTransferTargetId] = useState('');
-  const [isTransferringTable, setIsTransferringTable] = useState(false);
-
-  const openCancelTableConfirmation = (mesaId: number) => {
-    const tableOrders = orders.filter(order => Number(order.mesaId) === Number(mesaId));
-    const activeItems = tableOrders.flatMap(order => order.itens || [])
-      .filter(item => (item.status as string) !== 'cancelado');
-    setCancelConsumptionTarget({
-      scope: 'table',
-      mesaId,
-      comandas: tableOrders.length,
-      itens: activeItems.length,
-      total: activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0),
-      itemIds: activeItems.map(item => String(item.id)).filter(Boolean),
-    });
-    setCancelTableReason('');
-    setSelectedKanbanOrder(null);
-  };
-
-  const openCancelOrderConfirmation = (order: any) => {
-    const activeItems = (order?.itens || []).filter(
-      (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id,
-    );
-    const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
-    const isDigitalOrder = Number(order?.mesaId || 0) <= 0
-      || ['delivery', 'entrega', 'retirada'].includes(normalizedType);
-    const comandaIds = new Set(
-      activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean),
-    );
-    setCancelConsumptionTarget({
-      scope: isDigitalOrder ? 'digital' : 'order',
-      mesaId: Number(order.mesaId || 0),
-      orderId: isDigitalOrder ? String(order.id || order.comandaId || '') : undefined,
-      comandas: isDigitalOrder ? 1 : comandaIds.size,
-      itens: activeItems.length || Number(order.quantidadeItens || 0),
-      total: Number(order.total) || activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
-      itemIds: activeItems.map((item: any) => String(item.id)),
-    });
-    setCancelTableReason('');
-    setSelectedKanbanOrder(null);
-  };
-
-  const handleCancelTableConsumption = async () => {
-    if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
-    setIsCancellingTable(true);
-    try {
-      const isOrderScope = cancelConsumptionTarget.scope === 'order';
-      const isDigitalScope = cancelConsumptionTarget.scope === 'digital';
-      const response = isDigitalScope
-        ? await fetch(
-            `${apiBaseUrl}/comandas/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/delivery/status?status_novo=recusado`,
-            { method: 'PUT', headers: authHeaders },
-          )
-        : await fetch(`${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`, {
-            method: 'POST',
-            headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              motivo: cancelTableReason.trim(),
-              ...(isOrderScope ? { item_ids: cancelConsumptionTarget.itemIds } : {}),
-            }),
-          });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o pedido.');
-
-      const cancelledOrderId = cancelConsumptionTarget.orderId;
-      setCancelConsumptionTarget(null);
-      setCancelTableReason('');
-      if (isDigitalScope) {
-        setDeliveryOrders(current => current.filter(order => String(order.id) !== String(cancelledOrderId)));
-        window.dispatchEvent(new Event('koma_orders_updated'));
-        showToast('Pedido cancelado e removido da operação ativa.', 'success');
-      } else {
-        await onRefreshOrders();
-        showToast(
-          isOrderScope
-            ? `${data.itens_cancelados} item(ns) deste pedido cancelado(s).${data.mesa_liberada ? ` Mesa ${data.mesa_id} liberada.` : ' Os demais pedidos da mesa foram preservados.'}`
-            : `Mesa ${data.mesa_id} liberada. ${data.itens_cancelados} item(ns) cancelado(s), sem lançamento no caixa.`,
-          'success',
-        );
-      }
-    } catch (error: any) {
-      showToast(error?.message || 'Não foi possível cancelar o pedido.', 'error');
-    } finally {
-      setIsCancellingTable(false);
-    }
-  };
-
-  const handleTransferTableFromSalon = async (order: any) => {
-    const sourceMesaId = Number(order?.mesaId || 0);
-    const targetMesaId = Number(tableTransferTargetId || 0);
-    const primaryComandaId = String(order?.comandaId || order?.id || '');
-    if (!sourceMesaId || !targetMesaId || !primaryComandaId || isTransferringTable) return;
-    setIsTransferringTable(true);
-    try {
-      const response = await fetch(`${apiBaseUrl}/comandas/${primaryComandaId}/transferir/${targetMesaId}`, {
-        method: 'POST',
-        headers: authHeaders,
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.detail || 'Não foi possível transferir a mesa.');
-      setSelectedKanbanOrder(null);
-      setTableTransferTargetId('');
-      await onRefreshOrders();
-      showToast(`Mesa ${sourceMesaId} transferida para a Mesa ${targetMesaId}.`, 'success');
-    } catch (error: any) {
-      showToast(error?.message || 'Não foi possível transferir a mesa.', 'error');
-    } finally {
-      setIsTransferringTable(false);
-    }
-  };
-
-  const buildTableCheckoutOrder = (tableComandas: Order[]): Order | null => {
-    if (tableComandas.length === 0) return null;
-
-    const primaryComanda = tableComandas[0];
-    const combinedItems = tableComandas.flatMap(comanda => {
-      const arr = Array.isArray(comanda?.itens) ? comanda.itens : Array.isArray(comanda?.items) ? comanda.items : [];
-      return arr.map((item: any) => ({
-        id: item.id,
-        produtoId: item.produto_id || item.produtoId,
-        nome: item.nome || `Item ${item.produto_id || item.produtoId}`,
-        preco: item.preco_unit || item.preco,
-        observacao: item.observacao || '',
-        clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-        status: item.status,
-        pago: item.pago,
-        comandaId: comanda.id
-      }));
-    });
-
-    return {
-      ...primaryComanda,
-      valorPago: tableComandas.reduce(
-        (sum, comanda) => sum + Number(comanda.valorPago || 0),
-        0
-      ),
-      itens: combinedItems,
-      comandaIds: tableComandas.map(comanda => comanda.id)
-    } as Order;
-  };
-
-  const getTableMovementContext = (order: Order | any) => {
-    const mesaId = Number(order?.mesaId || 0);
-    if (mesaId <= 0) {
-      return { mergedMesaIds: [] as number[], transferredFromMesaIds: [] as number[] };
-    }
-
-    const relatedOrders = (orders || []).filter(candidate => {
-      const normalizedType = String(candidate.tipo || '').toLowerCase();
-      return Number(candidate.mesaId) === mesaId
-        && !(candidate as any).fechada
-        && !['delivery', 'entrega', 'retirada'].includes(normalizedType);
-    });
-    const movementSources = relatedOrders.length > 0 ? relatedOrders : [order];
-    const mergedMesaIds = Array.from(new Set(
-      movementSources
-        .map(candidate => Number(candidate.mesaOrigemId || 0))
-        .filter(originId => originId > 0 && originId !== mesaId)
-    )).sort((a, b) => a - b);
-    const transferredFromMesaIds = Array.from(new Set(
-      movementSources
-        .map(candidate => Number(candidate.mesaTransferidaDe || 0))
-        .filter(originId => originId > 0 && originId !== mesaId)
-    )).sort((a, b) => a - b);
-
-    return { mergedMesaIds, transferredFromMesaIds };
-  };
-
 
   // Configurações do cardápio online Whitelabel
   const [cardapioStatusOverride, setCardapioStatusOverride] = useState<string>('Automático');
@@ -747,15 +511,12 @@ export function CaixaPanel({
   const [cardapioSobreNos, setCardapioSobreNos] = useState<string>('');
   const [cardapioEndereco, setCardapioEndereco] = useState<string>('');
   const [isSavingCardapioConfig, setIsSavingCardapioConfig] = useState<boolean>(false);
-
-  // ============================================================================
-  // ⚡ FILTRAGEM DINÂMICA DAS COMANDAS DE MESA PARA O KANBAN
-  // ============================================================================
-
-  // Col 1 — somente pedidos vinculados a uma mesa física, lançados pelo garçom ou caixa.
-  const [nowTimestamp, setNowTimestamp] = useState<number>(() => Date.now());
   // Capture the fallback opening time once per received snapshot, not on each
   // presentation tick (an undated legacy card must not restart every 30s).
+  const {
+    nowTimestamp,
+  } = useCashierClock();
+
   const { tableOrdersInProduction, tableOrdersReady } = useMemo(
     () => projectCashierTableSlices(orders, salonTables, Date.now()),
     [orders, salonTables],
@@ -837,100 +598,6 @@ export function CaixaPanel({
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
   const systemUsersRequestRef = useRef<Promise<void> | null>(null);
 
-  // Modals state
-  const [showAbrirModal, setShowAbrirModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
-
-  const identifiedCustomer = useMemo(() => {
-    if (!selectedOrder) return null;
-
-    // 1. Direct phone on selectedOrder
-    const directPhone = (
-      selectedOrder.clientePhone
-      || (selectedOrder as any).delivery_telefone
-      || (selectedOrder as any).telefone
-      || (selectedOrder as any).cliente?.telefone
-      || ''
-    ).trim();
-
-    // 2. Direct client ID
-    const directClientId = selectedOrder.clienteId || (selectedOrder as any).cliente_id;
-    if (directClientId) {
-      const user = loyaltyUsers.find(u => String(u.id) === String(directClientId));
-      if (user) {
-        return {
-          id: user.id,
-          nome: user.cliente || user.nome || selectedOrder.identificador || 'Cliente',
-          telefone: user.telefone || directPhone || '',
-          saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
-          pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
-        };
-      }
-    }
-
-    if (directPhone) {
-      const cleanPhone = directPhone.replace(/\D/g, '');
-      const user = loyaltyUsers.find(u => (u.telefone || '').replace(/\D/g, '') === cleanPhone);
-      if (user) {
-        return {
-          id: user.id,
-          nome: user.cliente || user.nome || selectedOrder.identificador || 'Cliente',
-          telefone: user.telefone,
-          saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
-          pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
-        };
-      }
-      return {
-        id: null,
-        nome: selectedOrder.identificador || 'Cliente',
-        telefone: directPhone,
-        saldoCashback: 0,
-        pontos: 0,
-      };
-    }
-
-    // 3. Match by item.clienteNome or selectedOrder.identificador in loyaltyUsers
-    const nameToMatch = (selectedOrder.identificador || '').trim().toLowerCase();
-    if (nameToMatch && nameToMatch !== 'consumo geral') {
-      const user = loyaltyUsers.find(u =>
-        (u.cliente || '').trim().toLowerCase() === nameToMatch
-        || (u.nome || '').trim().toLowerCase() === nameToMatch
-      );
-      if (user && user.telefone) {
-        return {
-          id: user.id,
-          nome: user.cliente || user.nome,
-          telefone: user.telefone,
-          saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
-          pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
-        };
-      }
-    }
-
-    // 4. Check items for client name that matches a registered customer with phone
-    for (const item of (selectedOrder.itens || [])) {
-      const itName = (item.clienteNome || '').trim().toLowerCase();
-      if (itName && itName !== 'consumo geral') {
-        const user = loyaltyUsers.find(u =>
-          (u.cliente || '').trim().toLowerCase() === itName
-          || (u.nome || '').trim().toLowerCase() === itName
-        );
-        if (user && user.telefone) {
-          return {
-            id: user.id,
-            nome: user.cliente || user.nome,
-            telefone: user.telefone,
-            saldoCashback: Number(user.saldoCashback ?? user.saldo_cashback ?? 0),
-            pontos: Number(user.pontos ?? user.saldo_pontos ?? 0),
-          };
-        }
-      }
-    }
-
-    return null;
-  }, [selectedOrder, loyaltyUsers]);
-
   // Otimizações / Estoque / Desempenho States
   const [waitersPerformance, setWaitersPerformance] = useState<{ nome_garcon: string, pedidos_atendidos: number, comissao_acumulada: number }[]>([]);
   const [generalStats, setGeneralStats] = useState<any>(null);
@@ -955,14 +622,6 @@ export function CaixaPanel({
   const [showMovimentacaoModal, setShowMovimentacaoModal] = useState<boolean>(false);
   const [showContagemModal, setShowContagemModal] = useState<boolean>(false);
   const [selectedContagemId, setSelectedContagemId] = useState<string | null>(null);
-
-  // Caixa Reorganization States
-  const [caixaMovimentacoes, setCaixaMovimentacoes] = useState<CaixaMovimentacao[]>([]);
-  const [isCaixaMovimentacoesLoading, setIsCaixaMovimentacoesLoading] = useState(false);
-  const caixaMovimentacoesRequestRef = useRef(0);
-  const [fechamentoResult, setFechamentoResult] = useState<FechamentoCaixaResult | null>(null);
-  const [showSangriaModal, setShowSangriaModal] = useState<boolean>(false);
-  const [showSuprimentoModal, setShowSuprimentoModal] = useState<boolean>(false);
   const [xmlUploadState, setXmlUploadState] = useState<{ loading: boolean, result: any | null, error: string | null, isDragging: boolean }>({ loading: false, result: null, error: null, isDragging: false });
   const xmlFileInputRef = useRef<HTMLInputElement>(null);
   const [horariosPico, setHorariosPico] = useState<{ dia_semana_label: string, dia_semana: number, hora: string, total_pedidos: number }[]>([]);
@@ -1147,21 +806,24 @@ export function CaixaPanel({
   const [distFormRazaoSocial, setDistFormRazaoSocial] = useState('');
   const [distFormCnpj, setDistFormCnpj] = useState('');
   const [distFormLeadTime, setDistFormLeadTime] = useState<number>(3);
-
-  // Form states
-  const [saldoInicial, setSaldoInicial] = useState<number | ''>(100);
-
-  // Counted values for closing cashier
-
-  // Checkout payment states
-  const [checkoutServiceTax, setCheckoutServiceTax] = useState(true);
   const [taxaServicoAtiva, setTaxaServicoAtiva] = useState(true);
   const [serviceTaxRate, setServiceTaxRate] = useState(10); // Customizable service rate percentage
   const [unificarViasDelivery, setUnificarViasDelivery] = useState(false);
-  const [splitPeople, setSplitPeople] = useState('1');
-  const [paymentMetodo, setPaymentMetodo] = useState<'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'>('pix');
-  const [paymentValor, setPaymentValor] = useState<number | ''>('');
-  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+
+  const checkout = useCheckoutController({ orders, apiBaseUrl, authHeaders, onRefreshOrders, onRemovePendingPaymentOptimistic, onRefreshPagamentosPendentes, showToast, loyaltyUsers, taxaServicoAtiva, serviceTaxRate, isLoading, setErrorMsg, getSmartPosCardState, setSmartPosRecoveryError, fetchTurno, handleFecharDelivery, handleFinalizarPedido });
+  const {
+    handleConfirmPendingCashPayment,
+    handleRejectPendingCashPayment,
+  } = checkout;
+  const {
+    selectedOrder,
+    setSelectedOrder,
+    setShowCheckoutModal,
+    setCheckoutServiceTax,
+    handleOpenTablePayment,
+    handleFinalizeDigitalOrder,
+    handleReceiveSalonTable,
+  } = checkout;
 
   const updateConfiguracoes = async (updates: {
     taxa_servico_ativa?: boolean;
@@ -1351,7 +1013,6 @@ export function CaixaPanel({
   const [pdvCustomerId, setPdvCustomerId] = useState<string | null>(null);
   const [pdvCustomerLookup, setPdvCustomerLookup] = useState<'idle' | 'loading' | 'found' | 'new'>('idle');
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
-  const [paymentCPF, setPaymentCPF] = useState('');
   const [pdvOrderType, setPdvOrderType] = useState<'retirada' | 'entrega' | 'mesa'>('retirada');
   const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);
@@ -1406,35 +1067,6 @@ export function CaixaPanel({
       controller.abort();
     };
   }, [pdvCustomerPhone, pdvOrderType, apiBaseUrl]);
-
-  // Generate idempotency key when checkout order changes
-  useEffect(() => {
-    if (selectedOrder) {
-      setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-    } else {
-      setIdempotencyKey('');
-    }
-  }, [selectedOrder]);
-
-  // Auto-initialize paymentValor when checkout modal opens. Mesas priorizam itens prontos;
-  // sem itens prontos, o operador precisa optar conscientemente por um adiantamento.
-  useEffect(() => {
-    if (showCheckoutModal && selectedOrder) {
-      if (!paymentValor || Number(paymentValor || 0) <= 0) {
-        const readyItemIds = selectedOrder.itens
-          .filter(item => !item.pago && isItemReadyForCheckout(item))
-          .map(item => item.id);
-        const balance = isTableCheckoutOrder(selectedOrder)
-          ? (readyItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, readyItemIds) : 0)
-          : getCheckoutBalance(selectedOrder);
-        if (balance > 0) {
-          setPaymentValor(balance);
-        }
-      }
-    } else if (!showCheckoutModal) {
-      setPaymentValor('');
-    }
-  }, [showCheckoutModal, selectedOrder]);
 
   // POS Drawer Custom Events (Sangria, Suprimento, Sync)
   useEffect(() => {
@@ -1499,195 +1131,6 @@ export function CaixaPanel({
   const [printSettingsSaveState, setPrintSettingsSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
 
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
-  const [motoboys, setMotoboys] = useState<any[]>([]);
-  const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
-  const [novoMotoboyNome, setNewMotoboyNome] = useState('');
-  const [novoMotoboyTelefone, setNewMotoboyTelefone] = useState('');
-
-  // ── Gaveta de Aceite (Floating Drawer) & Sistema de Áudio Unificado do Caixa ────
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioUnlockedRef = useRef(false);
-
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('@koma:sound_enabled') !== 'false';
-  });
-
-  const toggleSound = () => {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    localStorage.setItem('@koma:sound_enabled', String(next));
-    if (next) {
-      playOrderAlert('test');
-    }
-  };
-
-  // Motor de Síntese Sonora Web Audio API — Independente, sem arquivo de áudio externo
-  const playOrderAlert = useCallback((type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
-    if (type !== 'test' && (!soundEnabled || !audioUnlockedRef.current)) return;
-    try {
-      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        // Fora de uma interação do usuário o navegador bloqueia resume().
-        // O desbloqueio é feito pelo listener abaixo; não poluímos o console
-        // nem criamos alertas parciais enquanto o áudio ainda está suspenso.
-        if (type !== 'test') return;
-        void ctx.resume().then(() => { audioUnlockedRef.current = true; }).catch(() => undefined);
-      } else if (ctx.state === 'running') {
-        audioUnlockedRef.current = true;
-      }
-      const t = ctx.currentTime;
-
-      if (type === 'new_order') {
-        // Um único bipe curto confirma um novo pedido. Outros eventos mantêm
-        // assinaturas sonoras próprias, evitando a sensação de evento duplicado.
-        const notes = [
-          { freq: 783.99, start: 0, dur: 0.18, vol: 0.34 },
-        ];
-        notes.forEach(({ freq, start, dur, vol }) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, t + start);
-          gain.gain.setValueAtTime(0.001, t + start);
-          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.03);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t + start);
-          osc.stop(t + start + dur + 0.05);
-        });
-      } else if (type === 'bill_requested') {
-        // Alerta de mesa pedindo conta / pré-conta (Ding-Dong: C6 -> G5)
-        const notes = [
-          { freq: 1046.50, start: 0, dur: 0.14, vol: 0.35 },
-          { freq: 783.99, start: 0.14, dur: 0.28, vol: 0.40 },
-        ];
-        notes.forEach(({ freq, start, dur, vol }) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, t + start);
-          gain.gain.setValueAtTime(0.001, t + start);
-          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t + start);
-          osc.stop(t + start + dur + 0.05);
-        });
-      } else if (type === 'delivery_pending') {
-        // Alerta de pedido online / WhatsApp / Retirada: 880 -> 1174 -> 880
-        const notes = [
-          { freq: 880.00, start: 0, dur: 0.10, vol: 0.30 },
-          { freq: 1174.66, start: 0.12, dur: 0.14, vol: 0.38 },
-          { freq: 880.00, start: 0.28, dur: 0.18, vol: 0.30 },
-        ];
-        notes.forEach(({ freq, start, dur, vol }) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, t + start);
-          gain.gain.setValueAtTime(0.001, t + start);
-          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t + start);
-          osc.stop(t + start + dur + 0.05);
-        });
-      } else if (type === 'test') {
-        // Teste de som: 3 notas ascendentes (C5 -> E5 -> G5)
-        const notes = [
-          { freq: 523.25, start: 0, dur: 0.10, vol: 0.25 },
-          { freq: 659.25, start: 0.10, dur: 0.10, vol: 0.30 },
-          { freq: 783.99, start: 0.20, dur: 0.22, vol: 0.35 },
-        ];
-        notes.forEach(({ freq, start, dur, vol }) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, t + start);
-          gain.gain.setValueAtTime(0.001, t + start);
-          gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.02);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t + start);
-          osc.stop(t + start + dur + 0.05);
-        });
-      }
-    } catch (e) { /* audio context unavailable */ }
-  }, [soundEnabled]);
-
-  // Desbloqueia o contexto de áudio somente dentro de uma interação real.
-  useEffect(() => {
-    const unlock = () => {
-      try {
-        if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-          audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-        const ctx = audioCtxRef.current;
-        if (ctx.state === 'running') {
-          audioUnlockedRef.current = true;
-          return;
-        }
-        void ctx.resume()
-          .then(() => { audioUnlockedRef.current = ctx.state === 'running'; })
-          .catch(() => { audioUnlockedRef.current = false; });
-      } catch {
-        audioUnlockedRef.current = false;
-      }
-    };
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('keydown', unlock, { passive: true });
-    return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
-    };
-  }, []);
-
-  // Monitor universal de pedidos e mesas (Garçom / Caixa / Salão)
-  const isInitialOrdersMountRef = useRef(true);
-  const prevOrdersSignatureRef = useRef({
-    itemsCount: 0,
-    billRequestedCount: 0
-  });
-
-  useEffect(() => {
-    const active = orders.filter(o =>
-      !String(o.id || '').startsWith('temp-')
-      && o.status !== 'fechada'
-      && o.status !== 'cancelado'
-    );
-    const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
-    const billRequestedCount = active.filter(o => deriveFinancialState(
-      [o, { statusComanda: (o as any).status_comanda }],
-      { hasPendingPayment: (o as any).contaPedida === true },
-    ) === 'AWAITING_PAYMENT').length;
-
-    if (isInitialOrdersMountRef.current) {
-      isInitialOrdersMountRef.current = false;
-      prevOrdersSignatureRef.current = { itemsCount, billRequestedCount };
-      return;
-    }
-
-    const prev = prevOrdersSignatureRef.current;
-    if (billRequestedCount > prev.billRequestedCount) {
-      playOrderAlert('bill_requested');
-    } else if (itemsCount > prev.itemsCount) {
-      // Uma comanda vazia é apenas sessão de mesa, não um pedido novo.
-      // O som nasce somente quando os itens que também geram o card chegam.
-      playOrderAlert('new_order');
-    }
-
-    prevOrdersSignatureRef.current = { itemsCount, billRequestedCount };
-  }, [orders, playOrderAlert]);
-
   // Drawer Overlay do Operador/Login
   const [isOperatorDrawerOpen, setIsOperatorDrawerOpen] = useState(false);
 
@@ -1704,27 +1147,10 @@ export function CaixaPanel({
   // ── MÓDULO 3: SLA, Impressão Rápida e Expansão Compacta de Itens ──────────────
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNowTimestamp(Date.now());
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   const toggleCardExpansion = (cardId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setExpandedCardIds(prev => ({ ...prev, [cardId]: !prev[cardId] }));
   };
-
-  useEffect(() => {
-    const handleOrdersUpdated = () => {
-      setNowTimestamp(Date.now());
-    };
-    window.addEventListener('koma_orders_updated', handleOrdersUpdated);
-    return () => {
-      window.removeEventListener('koma_orders_updated', handleOrdersUpdated);
-    };
-  }, []);
 
 
 
@@ -1735,30 +1161,6 @@ export function CaixaPanel({
     smartPosState: getSmartPosCardState(order),
     presentation: getCashierTableOrderPresentation(order, salonTables),
   });
-
-  // Impressão rápida de pré-conta do card no Kanban
-  const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    try {
-      let url = "";
-      if (order.mesaId && Number(order.mesaId) > 0) {
-        url = `${apiBaseUrl}/mesas/${order.mesaId}/imprimir-recibo?apenas_valores=false`;
-      } else {
-        url = `${apiBaseUrl}/comandas/${order.id}/imprimir-recibo`;
-      }
-      const response = await fetch(url, { method: 'POST', headers: authHeaders });
-      if (response.ok) {
-        showToast("Impressão via de conferência enviada para a fila!", "success");
-        window.dispatchEvent(new Event('koma_print_monitor_refresh'));
-      } else {
-        const errData = await response.json().catch(() => null);
-        showToast(errData?.detail || "Solicitação de impressão rápida concluída.", "info");
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Falha na comunicação com o servidor de impressão.", "error");
-    }
-  };
 
 
 
@@ -1793,304 +1195,6 @@ export function CaixaPanel({
     };
   }, []);
 
-  const mapComandaToDeliveryView = (c: any): DeliveryOrderView => {
-    const itemCounts: { [name: string]: number } = {};
-    const itensArr = Array.isArray(c?.itens) ? c.itens : Array.isArray(c?.items) ? c.items : [];
-    const activeItems = itensArr.filter((it: any) => it.status !== 'cancelado');
-    activeItems.forEach((it: any) => {
-      if (it.status !== 'cancelado') {
-        const name = it.produto?.nome || it.nome || 'Item';
-        itemCounts[name] = (itemCounts[name] || 0) + 1;
-      }
-    });
-    const itensStr = Object.entries(itemCounts)
-      .map(([name, qty]) => `${qty}x ${name}`)
-      .join(' + ') || 'Nenhum item';
-
-    const subtotal = activeItems
-      .reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
-    const total = subtotal + (c.delivery_taxa || 0);
-
-    const parsedTime = formatBackendTime(c.criado_em);
-    const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
-
-    const origins = (Array.isArray(c?.lancamentos) ? c.lancamentos : [])
-      .map((launch: any) => String(launch?.origem || '').toLowerCase());
-    const origemOperacional: DeliveryOrderView['origemOperacional'] = origins.includes('smartpos')
-      ? 'smartpos'
-      : origins.includes('cardapio')
-        ? 'cardapio'
-        : origins.includes('caixa')
-          ? 'caixa'
-          : origins.includes('garcom')
-            ? 'garcom'
-            : 'desconhecida';
-
-    let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
-    if (c.identificador && c.identificador.toLowerCase().includes('ifood')) {
-      canal = 'ifood';
-    } else if (c.identificador && c.identificador.toLowerCase().includes('whats')) {
-      canal = 'whats';
-    }
-
-    const rawAddress = String(c.delivery_endereco || '').trim();
-    const rawType = String(c.tipo || '').toLowerCase();
-    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
-      ? 'retirada'
-      : 'delivery';
-    const isQuickSale = modalidade === 'retirada' && (
-      origemOperacional === 'smartpos'
-      || (
-        String(c.identificador || '').trim().toLowerCase() === 'balcão'
-        && !String(c.delivery_telefone || '').trim()
-      )
-    );
-
-    return {
-      id: c.id,
-      cliente: c.identificador || 'Cliente Sem Nome',
-      telefone: c.delivery_telefone || '',
-      itens: itensStr,
-      total: total,
-      canal: canal,
-      origemOperacional,
-      isQuickSale,
-      quantidadeItens: activeItems.length,
-      modalidade,
-      pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
-      status: c.delivery_status || 'pendente',
-      endereco: modalidade === 'delivery' ? rawAddress : '',
-      criadoEm: criadoEm,
-      created_at: c.criado_em,
-      numeroPedido: c.numero_pedido
-    };
-  };
-
-  const fetchDeliveryOrders = async () => {
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        const mapped = data.map(mapComandaToDeliveryView);
-        setDeliveryOrders(mapped);
-      }
-    } catch (err) {
-      console.error('Error fetching delivery orders', err);
-    }
-  };
-
-  // Monitor de pedidos delivery / online pendentes
-  const prevDeliveryPendingCountRef = useRef<number | null>(null);
-  useEffect(() => {
-    const pendingCount = deliveryOrders.filter(o => projectCashierDeliveryState(o.status).awaitingAcceptance).length;
-    if (prevDeliveryPendingCountRef.current === null) {
-      prevDeliveryPendingCountRef.current = pendingCount;
-      return;
-    }
-    if (pendingCount > prevDeliveryPendingCountRef.current && !isDrawerOpen) {
-      playOrderAlert('delivery_pending');
-    }
-    prevDeliveryPendingCountRef.current = pendingCount;
-  }, [deliveryOrders, isDrawerOpen, playOrderAlert]);
-
-  const fetchMotoboys = async () => {
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/lista`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setMotoboys(data);
-      }
-    } catch (err) {
-      console.error('Error fetching motoboys', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchDeliveryOrders();
-    fetchMotoboys();
-
-    const handleDeliveryUpdate = () => {
-      fetchDeliveryOrders();
-    };
-
-    window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
-    return () => {
-      window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
-    };
-  }, [apiBaseUrl]);
-
-  const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
-    const fullComanda = orders.find(o => o.id === order.id);
-    const itemsMapped = fullComanda
-      ? fullComanda.itens.map((it: any) => ({
-          id: it.id,
-          comandaId: fullComanda.id,
-          nome: it.produto?.nome || it.nome || 'Item',
-          preco: it.preco_unit || it.preco || 0,
-          observacao: it.observacao || '',
-          cliente_nome: it.cliente_nome || it.clienteNome || 'Consumo Geral',
-          status: it.status,
-          pago: it.pago,
-          lancamentoId: it.lancamentoId || it.lancamento_id,
-        }))
-      : order.itens.split(' + ').map((itStr: string) => {
-          const match = itStr.match(/^(\d+)x\s+(.+)$/);
-          return {
-            nome: match ? match[2] : itStr,
-            observacao: '',
-            cliente_nome: 'Consumo Geral',
-            status: order.status === 'pronto' ? 'pronto' : (order.status === 'transito' ? 'entregue' : 'preparando'),
-            lancamentoId: undefined,
-          };
-        });
-
-    setSelectedKanbanOrder({
-      id: order.id,
-      comandaId: order.id,
-      mesaId: 0,
-      quantidadeItens: order.quantidadeItens,
-      identificador: order.cliente,
-      itens: itemsMapped,
-      total: order.total,
-      numeroPedido: order.numeroPedido,
-      origemOperacional: order.origemOperacional,
-      isQuickSale: order.isQuickSale,
-      modalidade: order.modalidade,
-      deliveryStatus: order.status,
-      canal: order.canal,
-      telefone: order.telefone,
-      endereco: order.endereco,
-      criadoEm: order.criadoEm,
-      created_at: order.created_at,
-      lancamentoId: itemsMapped.find((item: any) => item.lancamentoId)?.lancamentoId,
-    });
-  };
-
-  const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
-      if (res.ok) {
-        fetchDeliveryOrders();
-        onRefreshOrders();
-        showToast('Status atualizado e cliente avisado automaticamente!');
-        return true;
-      } else {
-        showToast('Erro ao atualizar status do pedido.', 'error');
-        return false;
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro de conexão ao atualizar status.', 'error');
-      return false;
-    }
-  };
-
-  const handleDespacharKanban = async (orderId: string, selectedMotoboyId: string) => {
-    if (!selectedMotoboyId) {
-      showToast('Selecione um motoboy para despachar o pedido!', 'info');
-      return;
-    }
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/despachar`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motoboy_id: Number(selectedMotoboyId) })
-      });
-      if (res.ok) {
-        showToast('Pedido despachado; motoboy e cliente avisados automaticamente!');
-        setSelectedKanbanOrder(null);
-        fetchDeliveryOrders();
-        onRefreshOrders();
-      } else {
-        const err = await res.json();
-        showToast(`Erro ao despachar: ${err.detail}`, 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro de conexão ao despachar.', 'error');
-    }
-  };
-
-  const handleRevogarAcessoMotoboy = async (selectedMotoboyId: string) => {
-    if (!selectedMotoboyId) {
-      showToast('Selecione um motoboy para revogar o acesso!', 'info');
-      return;
-    }
-    const mb = motoboys.find(m => String(m.id) === String(selectedMotoboyId));
-    if (!mb) {
-      showToast('Motoboy não encontrado.', 'error');
-      return;
-    }
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/${selectedMotoboyId}/revogar-link`, {
-        method: 'POST',
-        headers: authHeaders
-      });
-      if (res.ok) {
-        showToast(`Acesso do entregador '${mb.nome}' revogado com sucesso!`, 'success');
-      } else {
-        showToast('Não foi possível revogar o acesso.', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro ao tentar revogar o acesso.', 'error');
-    }
-  };
-
-  const handleFecharDelivery = async (orderId: string) => {
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
-        method: 'PUT',
-        headers: authHeaders
-      });
-      if (res.ok) {
-        showToast('Comanda de delivery encerrada com sucesso!');
-        setSelectedKanbanOrder(null);
-        fetchDeliveryOrders();
-        onRefreshOrders();
-      } else {
-        showToast('Erro ao fechar comanda.', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro de conexão ao finalizar pedido.', 'error');
-    }
-  };
-
-  const handleRecusarPedido = async (orderId: string) => {
-    await handleUpdateDeliveryStatus(orderId, 'recusado');
-  };
-
-  const handleFinalizarPedido = async (orderId: string) => {
-    await handleFecharDelivery(orderId);
-  };
-
-  const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
-    e.preventDefault();
-    if (!newMotoboyNome.trim() || !newMotoboyTelefone.trim()) return;
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: newMotoboyNome, telefone: newMotoboyTelefone, ativo: true })
-      });
-      if (res.ok) {
-        showToast('Fretista cadastrado com sucesso!');
-        await fetchMotoboys();
-        setNewMotoboyNome('');
-        setNewMotoboyTelefone('');
-      } else {
-        showToast('Erro ao cadastrar fretista.', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Erro de conexão ao cadastrar fretista.', 'error');
-    }
-  };
-
   const [dynamicMenu, setDynamicMenu] = useState<Product[]>(() => {
     if (liveProdutos && liveProdutos.length > 0) return liveProdutos;
     return [];
@@ -2105,22 +1209,6 @@ export function CaixaPanel({
     const width = Math.max(3, ...numericCodes.map((code) => code.length));
     return String(nextNumber).padStart(width, '0');
   }, [apiProdutos]);
-
-  // Fetch current shift status
-  const fetchTurno = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setTurno(data);
-      }
-    } catch (err) {
-      console.error('Error fetching shift status', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Fetch registered users (team CRUD)
   const fetchSystemUsers = (): Promise<void> => {
@@ -2495,117 +1583,17 @@ export function CaixaPanel({
   };
 
   useEffect(() => {
-    fetchTurno();
-    fetchDeliveryOrders();
-    fetchMotoboys();
-    fetchConfiguracoes();
-  }, []);
-
-  useEffect(() => {
     if (activeTab !== 'permissoes_cargos') return;
     const refreshTeam = () => void fetchSystemUsers();
     window.addEventListener('koma_team_updated', refreshTeam);
     return () => window.removeEventListener('koma_team_updated', refreshTeam);
   }, [activeTab, apiBaseUrl, authHeaders.Authorization]);
 
-  // Contingência apenas quando o WebSocket estiver indisponível. Com a conexão
-  // saudável, os eventos são a fonte de verdade e não há polling concorrente.
-  useEffect(() => {
-    if (isWsConnected || activeTab !== 'operacao') return;
-    const refreshIfVisible = () => {
-      if (!document.hidden) {
-        fetchTurno();
-        fetchDeliveryOrders();
-        onRefreshOrders();
-      }
-    };
-    const interval = setInterval(refreshIfVisible, 12000);
-    return () => clearInterval(interval);
-  }, [isWsConnected, activeTab, onRefreshOrders]);
-
   useEffect(() => {
     if (activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) {
       fetchSystemUsers();
     }
   }, [activeTab, activeSubTab]);
-
-  // Caixa API Handlers
-  const fetchTurnoResumo = onRefreshTurnoResumo;
-
-  const fetchCaixaMovimentacoes = useCallback(async () => {
-    const requestId = ++caixaMovimentacoesRequestRef.current;
-    setIsCaixaMovimentacoesLoading(true);
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, { headers: authHeaders });
-      if (!res.ok) throw new Error(`Falha ao consultar movimentações (${res.status})`);
-      const data: CaixaMovimentacao[] = await res.json();
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        setCaixaMovimentacoes(data);
-      }
-    } catch (error) {
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        console.error('Erro ao buscar movimentações de caixa:', error);
-      }
-    } finally {
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        setIsCaixaMovimentacoesLoading(false);
-      }
-    }
-  }, [apiBaseUrl, authHeaders]);
-
-  useEffect(() => {
-    const handleCashUpdated = () => {
-      void fetchCaixaMovimentacoes();
-    };
-    window.addEventListener('koma_cash_updated', handleCashUpdated);
-    return () => window.removeEventListener('koma_cash_updated', handleCashUpdated);
-  }, [fetchCaixaMovimentacoes]);
-
-  const handleRegistrarSangria = async (payload: { valor: number; motivo: string; observacao: string }) => {
-    const res = await fetch(`${apiBaseUrl}/caixa/sangria`, {
-      method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Erro ao registrar sangria.');
-    }
-    showToast('Sangria registrada com sucesso!');
-    await fetchTurnoResumo();
-    await fetchCaixaMovimentacoes();
-  };
-
-  const handleRegistrarSuprimento = async (payload: { valor: number; motivo: string; observacao: string }) => {
-    const res = await fetch(`${apiBaseUrl}/caixa/suprimento`, {
-      method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Erro ao registrar suprimento.');
-    }
-    showToast('Suprimento registrado com sucesso!');
-    await fetchTurnoResumo();
-    await fetchCaixaMovimentacoes();
-  };
-
-  const handleConfirmarFechamento = async (payload: { declarado_dinheiro: number; declarado_cartao: number; declarado_pix: number; observacao: string }) => {
-    const res = await fetch(`${apiBaseUrl}/caixa/fechamento`, {
-      method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Erro ao fechar caixa.');
-    }
-    const resultData = await res.json();
-    setFechamentoResult(resultData);
-    showToast('Turno de caixa encerrado com sucesso!');
-    await fetchTurnoResumo();
-  };
 
   // Fetch optimized statistics, stock, and reports
   useEffect(() => {
@@ -2782,233 +1770,6 @@ export function CaixaPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSubTab, pdvCart]);
 
-  // Handle open cashier
-  const handleAbrirCaixa = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/abrir`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saldo_inicial: Number(saldoInicial || 0) })
-      });
-      if (res.ok) {
-        setShowAbrirModal(false);
-        fetchTurno();
-      } else {
-        const data = await res.json();
-        setErrorMsg(data.detail || 'Erro ao abrir caixa');
-      }
-    } catch (err) {
-      setErrorMsg('Erro de conexão ao servidor.');
-    }
-  };
-
-  // Handle payment processing
-  const handleProcessPayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedOrder || isProcessingPaymentRef.current) return; // Sync ref guard
-    const smartPosState = getSmartPosCardState(selectedOrder);
-    if (smartPosState?.blocksPayment) {
-      setSmartPosRecoveryError(
-        'Revise a operação da maquininha antes de lançar outra baixa para esta mesa.'
-      );
-      return;
-    }
-    isProcessingPaymentRef.current = true;
-    setErrorMsg('');
-    setIsProcessingPayment(true);
-
-    try {
-      let valorPagamento = Number(paymentValor || 0);
-      if (!Number.isFinite(valorPagamento) || valorPagamento <= 0) {
-        const autoBalance = getCheckoutBalance(selectedOrder);
-        if (autoBalance > 0) {
-          valorPagamento = autoBalance;
-        } else {
-          throw new Error('Informe um valor de pagamento maior que zero.');
-        }
-      }
-
-      const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];
-      const isMesaPayment = isTableCheckoutOrder(selectedOrder);
-      const effectiveIdempotencyKey = idempotencyKey
-        || `idem-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-
-      if (selectedItemIds.length > 0) {
-        const totalSelecionado = getSelectedItemsTotal(
-          selectedOrder,
-          selectedItemIds
-        );
-        if (Math.abs(valorPagamento - totalSelecionado) > 0.01) {
-          throw new Error(
-            'Para pagar itens marcados, use o valor total da seleção. '
-            + 'Limpe a seleção para lançar um valor livre.'
-          );
-        }
-      }
-
-      const effectiveClienteId = identifiedCustomer?.id || selectedOrder.clienteId || null;
-      const effectiveCpfOrPhone = (identifiedCustomer?.telefone || paymentCPF).replace(/\D/g, '') || null;
-      const effectiveClienteNome = identifiedCustomer?.nome || selectedOrder.identificador || null;
-
-      if (isMesaPayment) {
-        // A mesa é uma única conta monetária. O backend distribui esta baixa,
-        // de forma atômica, entre todas as comandas abertas da mesa. A seleção
-        // é opcional e serve para registrar quais itens foram quitados.
-        const res = await operationalFetch(`${apiBaseUrl}/caixa/mesas/${selectedOrder.mesaId}/pagar`, {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            valor: valorPagamento,
-            metodo: paymentMetodo,
-            incluir_taxa_servico: taxaServicoAtiva && checkoutServiceTax,
-            item_ids: selectedItemIds.length > 0 ? selectedItemIds : null,
-            idempotency_key: effectiveIdempotencyKey,
-            cliente_id: effectiveClienteId,
-            cpf_cliente: effectiveCpfOrPhone,
-            nome_cliente: effectiveClienteNome,
-          })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.detail || 'Erro ao registrar pagamento da mesa');
-        }
-      } else if (selectedItemIds.length > 0) {
-        // Opção 1: Itens selecionados. Agrupa os IDs de itens pela comanda de origem
-        const itemsByComanda: Record<string, { itemIds: string[]; subtotal: number }> = {};
-        selectedItemIds.forEach(itemId => {
-          const itemObj = selectedOrder.itens.find(i => i.id === itemId);
-          if (itemObj) {
-            const cid = itemObj.comandaId || selectedOrder.id;
-            if (!itemsByComanda[cid]) {
-              itemsByComanda[cid] = { itemIds: [], subtotal: 0 };
-            }
-            itemsByComanda[cid].itemIds.push(itemId);
-            itemsByComanda[cid].subtotal += itemObj.preco;
-          }
-        });
-
-        // Efetua o pagamento em cada comanda correspondente
-        const comandaEntries = Object.entries(itemsByComanda);
-        let idx = 0;
-        const totalSubtotal = Object.values(itemsByComanda).reduce((sum, d) => sum + d.subtotal, 0);
-        const originalVal = Number(paymentValor || 0);
-
-        for (const [cid, data] of comandaEntries) {
-          const isLast = idx === comandaEntries.length - 1;
-          // Distribui o valor proporcionalmente baseado no subtotal
-          const ratio = data.subtotal / totalSubtotal;
-          const valToPay = isLast 
-            ? originalVal - comandaEntries.slice(0, idx).reduce((sum, entry) => sum + (entry[1].subtotal / totalSubtotal) * originalVal, 0)
-            : originalVal * ratio;
-
-          const res = await operationalFetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
-            method: 'POST',
-            headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              valor: parseFloat(valToPay.toFixed(2)),
-              metodo: paymentMetodo,
-              item_ids: data.itemIds,
-              idempotency_key: `${effectiveIdempotencyKey}-${cid}`,
-              cliente_id: effectiveClienteId,
-              cpf_cliente: effectiveCpfOrPhone,
-              nome_cliente: effectiveClienteNome,
-            })
-          });
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.detail || `Erro ao pagar itens da comanda ${cid}`);
-          }
-          idx++;
-        }
-      } else {
-        // Opção 2: Valor geral. Liquida as comandas sequencialmente
-        let remainingVal = Number(paymentValor || 0);
-
-        for (const cid of comandaIds) {
-          if (remainingVal <= 0.01) break;
-
-          // Busca itens pendentes desta comanda no card unificado
-          const comUnpaidItems = selectedOrder.itens.filter(i => i.comandaId === cid && !i.pago && i.status !== ('cancelado' as any));
-          if (comUnpaidItems.length === 0) continue;
-
-          const comSubtotal = comUnpaidItems.reduce((sum, item) => sum + item.preco, 0);
-          const comTaxa = (taxaServicoAtiva && checkoutServiceTax) ? comSubtotal * (serviceTaxRate / 100) : 0;
-          const comTotal = comSubtotal + comTaxa;
-
-          // Valor a pagar para esta comanda
-          const valToPay = Math.min(remainingVal, comTotal);
-
-          const res = await operationalFetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
-            method: 'POST',
-            headers: { ...authHeaders, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              valor: parseFloat(valToPay.toFixed(2)),
-              metodo: paymentMetodo,
-              item_ids: null,
-              idempotency_key: `${effectiveIdempotencyKey}-${cid}`,
-              cliente_id: effectiveClienteId,
-              cpf_cliente: effectiveCpfOrPhone,
-              nome_cliente: effectiveClienteNome,
-            })
-          });
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.detail || `Erro ao registrar pagamento na comanda ${cid}`);
-          }
-          remainingVal -= valToPay;
-        }
-      }
-
-      setPaymentValor('');
-      setPaymentCPF('');
-      setSelectedItemIds([]);
-      setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-
-      setSelectedOrder(null);
-      setShowCheckoutModal(false);
-      await Promise.all([onRefreshOrders(), fetchTurno()]);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erro de conexão ao servidor.');
-    } finally {
-      isProcessingPaymentRef.current = false;
-      setIsProcessingPayment(false);
-    }
-  };
-
-  const handleReconcileSmartPosPayment = async (intentId: string) => {
-    if (!intentId || isReconcilingSmartPos) return;
-    setIsReconcilingSmartPos(true);
-    setSmartPosRecoveryError('');
-    try {
-      const response = await operationalFetch(
-        `${apiBaseUrl}/auth/smartpos/payment-intents/${encodeURIComponent(intentId)}/reconciliar-liquidacao`,
-        {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(data?.detail || 'Não foi possível concluir a liquidação da maquininha.');
-      }
-
-      setSelectedOrder(null);
-      setShowCheckoutModal(false);
-      showToast('Pagamento da maquininha conciliado com sucesso.', 'success');
-      await Promise.all([
-        onRefreshOrders(),
-        fetchTurno(),
-        refreshSmartPosCashProjection(),
-      ]);
-    } catch (err: any) {
-      setSmartPosRecoveryError(err?.message || 'Falha ao reconciliar o pagamento aprovado.');
-    } finally {
-      setIsReconcilingSmartPos(false);
-    }
-  };
-
   // Free table instantly (Cashier power)
   // Add dynamic mesa CRUD handlers
   const handleAddMesaSubmit = async (e: React.FormEvent) => {
@@ -3091,84 +1852,6 @@ export function CaixaPanel({
       showToast(message, 'error');
       throw err;
     }
-  };
-
-  // KDS Kitchen actions (status updates)
-  const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
-    // 1. Atualização Otimista Instantânea (0ms no front-end)
-    if (onOptimisticUpdateItemStatus) {
-      onOptimisticUpdateItemStatus(itemId, newStatus);
-    }
-    try {
-      const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}`, {
-        method: "PUT",
-        headers: authHeaders
-      });
-      if (!res.ok) {
-        alert("Erro ao atualizar status na cozinha.");
-        onRefreshOrders();
-      }
-    } catch (err) {
-      console.error(err);
-      onRefreshOrders();
-    }
-  };
-
-  const isItemReadyForCheckout = (item: OrderItem, order?: Order | null) => {
-    if (item.status === 'pronto' || item.status === 'entregue') return true;
-    const currentOrder = order || selectedOrder;
-    if (currentOrder && !isTableCheckoutOrder(currentOrder) && ['pronto', 'transito', 'saiu_para_entrega'].includes(String(currentOrder.deliveryStatus || currentOrder.status || ''))) {
-      return (item.status as string) !== 'cancelado';
-    }
-    return false;
-  };
-
-  // Checkout calculations helper
-  const getCheckoutTotals = (
-    order: Order,
-    includeServiceTax = checkoutServiceTax
-  ) => {
-    // Em mesa, Item.pago é apenas histórico visual: o saldo é financeiro e
-    // corresponde ao consumo ativo menos Pagamento(s) aprovados.
-    const chargeableItems = isTableCheckoutOrder(order)
-      ? order.itens.filter(i => (i.status as string) !== 'cancelado')
-      : order.itens.filter(i => !i.pago && (i.status as string) !== 'cancelado');
-    const subtotal = chargeableItems.reduce((sum, item) => sum + item.preco, 0);
-    const taxa = (taxaServicoAtiva && includeServiceTax) ? subtotal * (serviceTaxRate / 100) : 0;
-    const total = subtotal + taxa;
-    return { subtotal, taxa, total, chargeableItems };
-  };
-
-  const getCheckoutBalance = (
-    order: Order,
-    includeServiceTax = checkoutServiceTax
-  ) => {
-    const { total } = getCheckoutTotals(order, includeServiceTax);
-    return Math.max(0, total - Number(order.valorPago || 0));
-  };
-
-  const getSelectedItemsTotal = (
-    order: Order,
-    itemIds: string[],
-    includeServiceTax = checkoutServiceTax
-  ) => {
-    const selectedItems = order.itens.filter(item =>
-      itemIds.includes(item.id)
-      && !item.pago
-      && (item.status as string) !== 'cancelado'
-      && isItemReadyForCheckout(item)
-    );
-    const subtotal = selectedItems.reduce((sum, item) => sum + item.preco, 0);
-    const taxa = (taxaServicoAtiva && includeServiceTax)
-      ? subtotal * (serviceTaxRate / 100)
-      : 0;
-    const selectedTotal = subtotal + taxa;
-
-    // Na mesa, uma baixa anterior sem vínculo com itens pode deixar o saldo
-    // menor que a seleção. Nesse caso, o máximo devido continua sendo o saldo.
-    return isTableCheckoutOrder(order)
-      ? Math.min(selectedTotal, getCheckoutBalance(order, includeServiceTax))
-      : selectedTotal;
   };
 
   // Handle local PDV cart item additions
@@ -3699,164 +2382,7 @@ export function CaixaPanel({
     }
   };
 
-  // Complete actions stay with the state/effects owner; extracted views only request them.
-  const handleConfirmPendingCashPayment = async (pag: PendingCashPayment) => {
-    if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
-        method: 'POST',
-        headers: authHeaders
-      });
-      if (res.ok) {
-        showToast("Pagamento em dinheiro confirmado!");
-        onRefreshOrders();
-        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-      } else {
-        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-      }
-    } catch (e) {
-      console.error(e);
-      if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-    }
-  };
 
-  const handleRejectPendingCashPayment = async (pag: PendingCashPayment) => {
-    if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
-    try {
-      const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
-        method: 'POST',
-        headers: authHeaders
-      });
-      if (res.ok) {
-        showToast("Pagamento recusado.");
-        onRefreshOrders();
-        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-      } else {
-        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-      }
-    } catch (e) {
-      console.error(e);
-      if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-    }
-  };
-
-  const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
-    await handleUpdateDeliveryStatus(order.id, 'producao');
-    // Close drawer if no more pending
-    if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
-  };
-
-  const handleRejectPendingDeliveryOrder = async (order: DeliveryOrderView) => {
-    await handleRecusarPedido(order.id);
-    if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
-  };
-
-  const handleMarkTableItemsReady = async (order: CashierTableCard['order']) => {
-    if (isLoading) return;
-    const ids = deriveProductionState(order.itens).preparingItems.map(item => item.id);
-    if (onOptimisticUpdateItemStatus && ids.length > 0) {
-      onOptimisticUpdateItemStatus(ids, 'pronto');
-    }
-    setIsLoading(true);
-    try {
-      await Promise.all(ids.map(id =>
-        fetch(`${apiBaseUrl}/comandas/itens/${id}/status?status=pronto`, {
-          method: "PUT",
-          headers: authHeaders
-        })
-      ));
-    } catch (err) {
-      console.error(err);
-      onRefreshOrders();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
-    if (isLoading) return;
-    const isDeliveryOrder = order.modalidade === 'delivery';
-    handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
-  };
-
-  const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
-    if (isLoading) return;
-
-    const tableComandas = orders.filter(
-      o => Number(o.mesaId) === Number(order.mesaId)
-        && isTableCheckoutOrder(o)
-    );
-    const checkoutOrder = buildTableCheckoutOrder(tableComandas);
-    if (!checkoutOrder) return;
-
-    const readyItemIds = checkoutOrder.itens
-      .filter(item => !item.pago && isItemReadyForCheckout(item))
-      .map(item => item.id);
-    setSelectedOrder(checkoutOrder);
-    setShowCheckoutModal(true);
-    setCheckoutServiceTax(true);
-    setSplitPeople('1');
-    setSelectedItemIds(readyItemIds);
-    setSmartPosRecoveryError('');
-    const readyTotal = readyItemIds.length > 0
-      ? getSelectedItemsTotal(checkoutOrder, readyItemIds, true)
-      : 0;
-    setPaymentValor(readyTotal > 0 ? readyTotal : '');
-  };
-
-  const handleFinalizeDigitalOrder = async (order: DeliveryOrderView) => {
-    if (isLoading) return;
-    if (order.pago) {
-      await handleFecharDelivery(order.id);
-      return;
-    }
-    const fullOrder = orders.find(o => o.id === order.id);
-    if (fullOrder) {
-      const mappedOrder: Order = {
-        ...fullOrder,
-        deliveryStatus: (order.status === 'analise' ? 'pendente' : order.status) as Order['deliveryStatus'],
-        itens: fullOrder.itens.map((item: any) => ({
-          id: item.id,
-          produtoId: item.produto_id || item.produtoId,
-          nome: item.nome || `Item ${item.produtoId}`,
-          preco: item.preco_unit || item.preco,
-          observacao: item.observacao || '',
-          clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-          status: (item.status === 'preparando' && ['pronto', 'transito', 'saiu_para_entrega'].includes(order.status)) ? 'pronto' : item.status,
-          pago: item.pago
-        }))
-      };
-      const activeUnpaidItemIds = mappedOrder.itens
-        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-        .map((item: any) => item.id);
-      setSelectedOrder(mappedOrder);
-      setShowCheckoutModal(true);
-      setCheckoutServiceTax(false);
-      setSplitPeople('1');
-      setSelectedItemIds(activeUnpaidItemIds);
-      const sub = mappedOrder.itens
-        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-        .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-      setPaymentValor(sub);
-    } else {
-      handleFinalizarPedido(order.id);
-    }
-  };
-
-  const handleReceiveSalonTable = (tableOrders: Order[]) => {
-    const checkoutOrder = buildTableCheckoutOrder(tableOrders);
-    if (!checkoutOrder) return;
-    setSelectedOrder(checkoutOrder);
-    setShowCheckoutModal(true);
-    setCheckoutServiceTax(true);
-    setSplitPeople('1');
-    setSelectedItemIds([]);
-    const subtotal = checkoutOrder.itens
-      .filter(item => (item.status as string) !== 'cancelado')
-      .reduce((sum, item) => sum + item.preco, 0);
-    const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
-    setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)));
-  };
 
   const handleOpenSalonTableOrder = (tableId: number) => {
     setPdvOrderType('mesa');
@@ -3864,89 +2390,8 @@ export function CaixaPanel({
     setBalcaoMobileView('produtos');
     setActiveSubTab('balcao');
   };
+  useCashierRealtime({ isWsConnected, onRefreshOrders, activeTab, fetchTurno, fetchDeliveryOrders, fetchMotoboys, fetchConfiguracoes });
 
-  const handleAdvanceSelectedKanbanOrder = async () => {
-    const isDelivery = selectedKanbanOrder.modalidade === 'delivery';
-    const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, isDelivery ? 'transito' : 'pronto');
-    if (updated) setSelectedKanbanOrder(null);
-  };
-
-  const handleReprintSelectedKanbanProduction = async () => {
-    try {
-      const printUrl = selectedKanbanOrder.lancamentoId
-        ? `${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.lancamentoId}/reimprimir`
-        : `${apiBaseUrl}/comandas/${selectedKanbanOrder.comandaId || selectedKanbanOrder.id}/imprimir-recibo`;
-      const res = await fetch(printUrl, {
-        method: "POST",
-        headers: authHeaders
-      });
-      if (res.ok) {
-        window.dispatchEvent(
-          new Event('koma_print_monitor_refresh')
-        );
-        setSelectedKanbanOrder(null);
-      } else {
-        showToast("Erro ao solicitar reimpressão.", 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Erro ao solicitar reimpressão.", 'error');
-    }
-  };
-
-  const handlePrintSelectedKanbanTable = async () => {
-    try {
-      const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-      const response = await fetch(url, { method: 'POST', headers: authHeaders });
-      if (response.ok) {
-        window.dispatchEvent(
-          new Event('koma_print_monitor_refresh')
-        );
-        setSelectedKanbanOrder(null);
-      } else {
-        const errD = await response.json();
-        showToast(`Erro: ${errD.detail}`, 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Erro ao imprimir comanda inteira.", 'error');
-    }
-  };
-
-  const handlePrintSelectedKanbanValues = async () => {
-    try {
-      const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-      const response = await fetch(url, { method: 'POST', headers: authHeaders });
-      if (response.ok) {
-        window.dispatchEvent(
-          new Event('koma_print_monitor_refresh')
-        );
-        setSelectedKanbanOrder(null);
-      } else {
-        const errD = await response.json();
-        showToast(`Erro: ${errD.detail}`, 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Erro ao imprimir apenas valores.", 'error');
-    }
-  };
-
-  const handleInspectSalonTable = (tableOrders: Order[]) => tableOrders[0] && setSelectedKanbanOrder({
-      ...tableOrders[0],
-      projectionScope: 'table',
-      contextoSalao: true,
-      itens: tableOrders.flatMap(order => order.itens || []),
-      comandaIds: tableOrders.map(order => order.id),
-    });
-
-  const handleTransferSelectedKanbanTable = () => handleTransferTableFromSalon(selectedKanbanOrder);
-
-  const handleCancelSelectedKanbanConsumption = () => selectedKanbanOrder.contextoSalao
-    ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
-    : openCancelOrderConfirmation(selectedKanbanOrder);
-
-  const handleCancelSelectedKanbanOrder = () => openCancelOrderConfirmation(selectedKanbanOrder);
   const selectedCheckoutSmartPosState = selectedOrder
     ? getSmartPosCardState(selectedOrder)
     : null;
@@ -7137,607 +5582,7 @@ export function CaixaPanel({
         )
       }
 
-      {/* 4. MODAL: LIQUIDAÇÃO DE CONTA */}
-      {
-        selectedOrder && showCheckoutModal && (
-          <div
-            className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'overflow-y-auto')}
-            onClick={() => setShowCheckoutModal(false)}
-          >
-            <div
-              className={clsx('bg-koma-input/95', 'backdrop-blur-xl', 'rounded-3xl', 'border', 'border-koma-accent/15', 'shadow-2xl', 'w-full', 'max-w-3xl', 'overflow-hidden', 'max-h-[90vh]', 'flex', 'flex-col', 'my-4')}
-              onClick={(e) => e.stopPropagation()}
-            >
-
-              <div className={clsx('bg-koma-raised', 'text-koma-foreground', 'p-5', 'flex', 'justify-between', 'items-center', 'shrink-0', 'border-b', 'border-koma-border')}>
-                <div>
-                  <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'uppercase', 'tracking-wider', 'block')}>Checkout / Caixa</span>
-                  <h3 className={clsx('font-serif', 'text-lg', 'font-bold', 'text-koma-foreground')}>
-                    {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
-                  </h3>
-                  {selectedOrder.mesaOrigemId && Number(selectedOrder.mesaOrigemId) !== Number(selectedOrder.mesaId) && (
-                    <span className={clsx('inline-flex', 'items-center', 'gap-1', 'mt-1', 'px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'bg-emerald-500/10', 'text-emerald-600 dark:text-emerald-300', 'border', 'border-emerald-500/25', 'rounded-full')}>
-                      🔗 Mesclado de Mesa {selectedOrder.mesaOrigemId}
-                    </span>
-                  )}
-                  {selectedOrder.mesaTransferidaDe && Number(selectedOrder.mesaTransferidaDe) !== Number(selectedOrder.mesaId) && (
-                    <span className={clsx('inline-flex', 'items-center', 'gap-1', 'mt-1', 'px-2', 'py-0.5', 'text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'bg-purple-500/10', 'text-purple-300', 'border', 'border-purple-500/25', 'rounded-full')}>
-                      🔗 Transferido da Mesa {selectedOrder.mesaTransferidaDe}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowCheckoutModal(false)}
-                  className={clsx('p-1.5', 'hover:bg-koma-raised', 'rounded-full', 'text-koma-subtle', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer', 'border', 'border-transparent')}
-                  title="Fechar (o pedido permanece na fila)"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {selectedCheckoutSmartPosState?.blocksPayment && (
-                <div className={clsx(
-                  'mx-5', 'mt-4', 'rounded-2xl', 'border', 'p-4', 'text-left',
-                  selectedCheckoutSmartPosState.canReconcile
-                    ? 'border-emerald-500/30 bg-emerald-500/10'
-                    : 'border-amber-500/30 bg-amber-500/10'
-                )}>
-                  <div className="flex items-start gap-3">
-                    <Smartphone size={18} className="mt-0.5 shrink-0 text-emerald-500" />
-                    <div className="min-w-0 flex-1">
-                      <strong className="block text-sm text-koma-foreground">
-                        {selectedCheckoutSmartPosState.canReconcile
-                          ? 'Pagamento aprovado aguardando conclusão'
-                          : 'Pagamento em andamento na maquininha'}
-                      </strong>
-                      <p className="mt-1 text-[11px] leading-relaxed text-koma-secondary">
-                        {selectedCheckoutSmartPosState.canReconcile
-                          ? 'A cobrança já foi aprovada. Conclua a liquidação idempotente antes de lançar outra baixa.'
-                          : 'O Kôma bloqueia uma segunda cobrança, mas mantém esta tela aberta para acompanhamento e recuperação.'}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {selectedCheckoutSmartPosState.canReconcile && selectedCheckoutSmartPosState.intentId && (
-                          <button
-                            type="button"
-                            disabled={isReconcilingSmartPos}
-                            onClick={() => handleReconcileSmartPosPayment(selectedCheckoutSmartPosState.intentId!)}
-                            className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-white disabled:cursor-wait disabled:opacity-60"
-                          >
-                            {isReconcilingSmartPos ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
-                            Concluir pagamento aprovado
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSmartPosRecoveryError('');
-                            void refreshSmartPosCashProjection();
-                          }}
-                          className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-koma-border px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-koma-secondary"
-                        >
-                          <RefreshCw size={13} /> Atualizar estado
-                        </button>
-                      </div>
-                      {smartPosRecoveryError && (
-                        <p className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-2.5 text-[10px] font-semibold text-rose-400">
-                          {smartPosRecoveryError}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className={clsx('p-5', 'overflow-y-auto', 'flex-1', 'bg-koma-raised', 'grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-5')}>
-                <div className="space-y-4">
-                  <div className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-koma-border', 'pb-1.5')}>
-                    <div>
-                      <h4 className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Extrato Consumo</h4>
-                      <span className={clsx('text-[8px]', 'text-koma-muted')}>
-                        Itens prontos já podem ser recebidos. Itens em preparo ficam visíveis, mas bloqueados até avançarem na cozinha.
-                      </span>
-                    </div>
-                    {taxaServicoAtiva && (
-                      <label className={clsx('flex', 'items-center', 'gap-1.5', 'text-[10px]', 'text-koma-subtle', 'font-bold', 'uppercase', 'tracking-wider', 'cursor-pointer')}>
-                        <input
-                          type="checkbox"
-                          checked={checkoutServiceTax}
-                          onChange={(e) => {
-                            const includeServiceTax = e.target.checked;
-                            setCheckoutServiceTax(includeServiceTax);
-                            const nextValue = selectedItemIds.length > 0
-                              ? getSelectedItemsTotal(
-                                selectedOrder,
-                                selectedItemIds,
-                                includeServiceTax
-                              )
-                              : getCheckoutBalance(
-                                selectedOrder,
-                                includeServiceTax
-                              );
-                            setPaymentValor(nextValue);
-                          }}
-                          className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-3.5', 'w-3.5', 'bg-koma-card')}
-                        />
-                        <span>Taxa de {serviceTaxRate}%</span>
-                      </label>
-                    )}
-                  </div>
-
-                  <div className={clsx('space-y-2.5', 'max-h-[40vh]', 'overflow-y-auto', 'pr-1')}>
-                    {selectedOrder.itens.map((item) => {
-                      const isPaid = item.pago;
-                      const isCancelled = (item.status as string) === 'cancelado';
-                      const isReadyForCheckout = isItemReadyForCheckout(item);
-                      const canSelect = !isPaid && !isCancelled && isReadyForCheckout;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => {
-                            if (!canSelect) return;
-                            setSplitPeople('1');
-                            setSelectedItemIds(prev => {
-                              const copy = [...prev];
-                              const idx = copy.indexOf(item.id);
-                              if (idx >= 0) {
-                                copy.splice(idx, 1);
-                              } else {
-                                copy.push(item.id);
-                              }
-                              const nextValue = copy.length > 0
-                                ? getSelectedItemsTotal(selectedOrder, copy)
-                                : getCheckoutBalance(selectedOrder);
-                              setPaymentValor(nextValue);
-                              return copy;
-                            });
-                          }}
-                          className={`flex items-start justify-between p-2.5 rounded-xl border border-transparent transition-all text-[11px] ${isCancelled
-                            ? 'bg-rose-500/5 border-rose-500/10 text-rose-400 opacity-60'
-                            : isPaid
-                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400'
-                            : !isReadyForCheckout
-                              ? 'bg-amber-500/5 border-amber-500/15 text-koma-secondary cursor-not-allowed opacity-80'
-                              : selectedItemIds.includes(item.id)
-                                ? 'bg-emerald-500/15 border-emerald-500/30 cursor-pointer shadow-inner'
-                                : 'bg-koma-card/60 border-koma-border/50 hover:border-koma-border cursor-pointer'
-                            }`}
-                        >
-                          <div className={clsx('flex', 'gap-2', 'items-start', 'flex-1', 'min-w-0')}>
-                            {canSelect && (
-                              <div className={`mt-0.5 h-3.5 w-3.5 rounded border border-koma-border flex items-center justify-center shrink-0 bg-koma-card ${selectedItemIds.includes(item.id) ? 'border-[#10b981] bg-emerald-500/15' : ''
-                                }`}>
-                                {selectedItemIds.includes(item.id) && <Check size={10} className="text-emerald-700 dark:text-emerald-400" />}
-                              </div>
-                            )}
-                            <div className={clsx('min-w-0', 'space-y-0.5')}>
-                              <span className={clsx('font-semibold', 'text-koma-foreground', 'block', 'truncate')}>{item.nome}</span>
-                              <span className={clsx('text-[9px]', 'text-koma-subtle', 'block')}>Cliente: {item.clienteNome}</span>
-                              {!isPaid && !isCancelled && !isReadyForCheckout && (
-                                <span className={clsx('text-[8px]', 'font-semibold', 'text-amber-600', 'dark:text-amber-300', 'block')}>
-                                  Em preparo · avance na cozinha antes de baixar este item
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className={clsx('text-right', 'pl-3', 'shrink-0', 'font-mono')}>
-                            <span className={clsx('font-bold', 'text-koma-secondary')}>R$ {item.preco.toFixed(2)}</span>
-                            {isPaid && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-emerald-500', 'font-sans', 'mt-0.5')}>Pago</span>}
-                            {isCancelled && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-rose-500', 'font-sans', 'mt-0.5')}>Cancelado</span>}
-                            {!isPaid && !isCancelled && !isReadyForCheckout && <span className={clsx('text-[8px]', 'uppercase', 'tracking-wider', 'block', 'font-bold', 'text-amber-600', 'dark:text-amber-300', 'font-sans', 'mt-0.5')}>Em preparo</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {(() => {
-                    const { subtotal, taxa } = getCheckoutTotals(selectedOrder);
-                    const currentBalance = getCheckoutBalance(selectedOrder);
-                    const selectedTotal = selectedItemIds.length > 0
-                      ? getSelectedItemsTotal(selectedOrder, selectedItemIds)
-                      : 0;
-                    const projectedBalance = Math.max(0, currentBalance - selectedTotal);
-                    return (
-                      <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'p-4', 'rounded-2xl', 'font-mono', 'text-[11px]', 'space-y-2')}>
-                        <div className={clsx('flex', 'justify-between')}>
-                          <span className={clsx('font-sans', 'text-koma-subtle')}>
-                            {isTableCheckoutOrder(selectedOrder) ? 'Consumo da Mesa:' : 'Total Itens em Aberto:'}
-                          </span>
-                          <span className="text-koma-secondary">R$ {subtotal.toFixed(2)}</span>
-                        </div>
-                        {taxaServicoAtiva && checkoutServiceTax && (
-                          <div className={clsx('flex', 'justify-between')}>
-                            <span className={clsx('font-sans', 'text-koma-subtle')}>Taxa Serviço ({serviceTaxRate}%):</span>
-                            <span className="text-koma-secondary">R$ {taxa.toFixed(2)}</span>
-                          </div>
-                        )}
-                        {selectedItemIds.length > 0 && (
-                          <div className={clsx('flex', 'justify-between', 'text-emerald-700 dark:text-emerald-400', 'font-bold', 'border-t', 'border-koma-border/40', 'pt-2')}>
-                            <span className="font-sans">Total Selecionado:</span>
-                            <span>R$ {selectedTotal.toFixed(2)}</span>
-                          </div>
-                        )}
-                        {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
-                          <div className={clsx('flex', 'justify-between', 'text-emerald-400')}>
-                            <span className={clsx('font-sans', 'font-bold')}>Total Pago Parcial:</span>
-                            <span className="font-bold">R$ {selectedOrder.valorPago.toFixed(2)}</span>
-                          </div>
-                        ) : null}
-                        <div className={clsx('flex', 'justify-between', 'border-t', 'border-koma-border', 'pt-2', 'text-sm', 'text-emerald-700 dark:text-emerald-400', 'font-bold')}>
-                          <span className="font-sans">{selectedItemIds.length > 0 ? 'Restará após receber:' : 'Saldo restante:'}</span>
-                          <span>R$ {(selectedItemIds.length > 0 ? projectedBalance : currentBalance).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
-                  <div className={clsx('bg-koma-card/40', 'border', 'border-koma-border/50', 'p-4', 'rounded-2xl', 'space-y-3', 'text-left')}>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Reimpressão de Extrato</span>
-                    <div className={clsx('flex', 'gap-2')}>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-                            
-                            const response = await fetch(url, {
-                              method: 'POST',
-                              headers: authHeaders
-                            });
-                            if (response.ok) {
-                              window.dispatchEvent(
-                                new Event('koma_print_monitor_refresh')
-                              );
-                            } else {
-                              const err = await response.json();
-                              alert(`Erro ao imprimir: ${err.detail}`);
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            alert("Erro de conexão ao imprimir extrato.");
-                          }
-                        }}
-                        className={clsx('flex-1', 'py-2', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-koma-foreground', 'transition-all', 'cursor-pointer', 'text-center')}
-                        title="Imprime a via térmica completa com todos os itens consumidos"
-                      >
-                        Extrato Completo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const url = `${apiBaseUrl}/mesas/${selectedOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-                            
-                            const response = await fetch(url, {
-                              method: 'POST',
-                              headers: authHeaders
-                            });
-                            if (response.ok) {
-                              window.dispatchEvent(
-                                new Event('koma_print_monitor_refresh')
-                              );
-                            } else {
-                              const err = await response.json();
-                              alert(`Erro ao imprimir: ${err.detail}`);
-                            }
-                          } catch (err) {
-                            console.error(err);
-                            alert("Erro de conexão ao imprimir extrato resumido.");
-                          }
-                        }}
-                        className={clsx('flex-1', 'py-2', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'rounded-xl', 'text-[10px]', 'font-bold', 'text-koma-foreground', 'transition-all', 'cursor-pointer', 'text-center')}
-                        title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
-                      >
-                        Apenas Valores
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'border-b', 'border-koma-border', 'pb-1.5')}>Divisão e Recebimento</h4>
-
-                  {selectedItemIds.length > 0 ? (
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-3', 'bg-koma-card', 'p-3', 'rounded-2xl', 'border', 'border-koma-border')}>
-                      <div>
-                        <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Itens prontos</span>
-                        <strong className={clsx('mt-1', 'block', 'text-sm', 'text-koma-foreground', 'font-mono')}>{selectedItemIds.length}</strong>
-                      </div>
-                      <div className="text-right">
-                        <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Recebendo agora</span>
-                        <strong className={clsx('mt-1', 'block', 'text-sm', 'text-emerald-700 dark:text-emerald-300', 'font-mono')}>
-                          R$ {getSelectedItemsTotal(selectedOrder, selectedItemIds).toFixed(2)}
-                        </strong>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-3', 'bg-koma-card', 'p-3', 'rounded-2xl', 'border', 'border-koma-border')}>
-                      <div className="space-y-1">
-                        <label className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Pessoas:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={splitPeople}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSplitPeople(val);
-                            const peopleNum = parseInt(val, 10) || 1;
-                            setPaymentValor((getCheckoutBalance(selectedOrder) / peopleNum));
-                          }}
-                          className={clsx('w-full', 'px-3', 'py-1.5', 'text-xs', 'bg-koma-panel', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'text-koma-foreground', 'text-center', 'font-mono')}
-                        />
-                      </div>
-                      <div className={clsx('space-y-1', 'flex', 'flex-col', 'justify-end', 'text-right')}>
-                        <span className={clsx('text-[9px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Valor por pessoa:</span>
-                        <span className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'leading-relaxed')}>
-                          R$ {(() => {
-                            const peopleNum = parseInt(splitPeople, 10) || 1;
-                            return (getCheckoutBalance(selectedOrder) / peopleNum).toFixed(2);
-                          })()}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleProcessPayment} className={clsx('space-y-4', 'bg-koma-card/40', 'p-4', 'rounded-2xl', 'border', 'border-koma-border/50')}>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'uppercase', 'tracking-wider', 'block')}>Receber Pagamento</span>
-
-                    <div className="space-y-1.5">
-                      <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Método de Baixa:</label>
-                      <div className={clsx('flex', 'gap-1.5', 'p-1', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-xl', 'shrink-0', 'flex-wrap')}>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMetodo('pix')}
-                          className={`flex-1 min-w-[50px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'pix' ? 'bg-emerald-600 text-white shadow-sm' : 'text-koma-subtle hover:text-white'
-                            }`}
-                        >
-                          Pix
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMetodo('dinheiro')}
-                          className={`flex-1 min-w-[60px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'dinheiro' ? 'bg-emerald-600 text-white shadow-sm' : 'text-koma-subtle hover:text-white'
-                            }`}
-                        >
-                          Dinheiro
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMetodo('cartao_debito')}
-                          className={`flex-1 min-w-[70px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'cartao_debito' ? 'bg-emerald-600 text-white shadow-sm' : 'text-koma-subtle hover:text-white'
-                            }`}
-                        >
-                          C. Débito
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMetodo('cartao_credito')}
-                          className={`flex-1 min-w-[70px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${paymentMetodo === 'cartao_credito' ? 'bg-emerald-600 text-white shadow-sm' : 'text-koma-subtle hover:text-white'
-                            }`}
-                        >
-                          C. Crédito
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className={clsx('space-y-1.5', 'font-sans')}>
-                      <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>Valor a Lançar (R$):</label>
-                      <div className={clsx('flex', 'gap-2')}>
-                        <div className={clsx('relative', 'flex-1')}>
-                          <span className={clsx('absolute', 'left-3.5', 'top-2.5', 'text-koma-subtle', 'font-mono', 'text-[11px]')}>R$</span>
-                          <MoneyInput
-                            required
-                            value={paymentValor}
-                            onValueChange={setPaymentValor}
-                            readOnly={selectedItemIds.length > 0}
-                            title={selectedItemIds.length > 0
-                              ? 'O valor é calculado automaticamente pelos itens selecionados.'
-                              : 'Digite qualquer valor para abater do saldo.'}
-                            className={clsx(
-                              'w-full',
-                              'pl-9',
-                              'pr-4',
-                              'py-2',
-                              'text-xs',
-                              'bg-koma-card',
-                              'border',
-                              'border-koma-border',
-                              'rounded-xl',
-                              'focus:outline-none',
-                              'focus:border-[#10b981]',
-                              'text-koma-foreground',
-                              'font-mono',
-                              selectedItemIds.length > 0 && 'cursor-not-allowed text-emerald-600 dark:text-emerald-300'
-                            )}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!selectedOrder) return;
-                            setSplitPeople('1');
-                            if (selectedItemIds.length > 0) {
-                              setSelectedItemIds([]);
-                              setPaymentValor('');
-                            } else {
-                              setPaymentValor(getCheckoutBalance(selectedOrder));
-                            }
-                          }}
-                          className={clsx(
-                            'px-3.5',
-                            'py-2',
-                            'bg-emerald-500/15',
-                            'hover:bg-[#10b981]/25',
-                            'border',
-                            'border-emerald-500/30',
-                            'rounded-xl',
-                            'text-[10px]',
-                            'font-bold',
-                            'text-emerald-700 dark:text-emerald-400',
-                            'transition-all',
-                            'cursor-pointer',
-                            'whitespace-nowrap'
-                          )}
-                        >
-                          {selectedItemIds.length > 0 ? 'Adiantar outro valor' : 'Usar saldo total'}
-                        </button>
-                      </div>
-                      <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'mt-1.5', 'leading-normal')}>
-                        <strong>Dica:</strong> {selectedItemIds.length > 0
-                          ? 'Os itens prontos marcados serão baixados juntos. “Adiantar outro valor” limpa a seleção e libera um valor manual.'
-                          : isTableCheckoutOrder(selectedOrder)
-                            ? 'Sem itens marcados, o lançamento é um adiantamento sobre o saldo geral da mesa; itens em preparo continuam sem baixa individual.'
-                            : 'Para pagamentos múltiplos, digite qualquer valor e faça as baixas em sequência.'}
-                      </span>
-                    </div>
-
-                    {/* BOTÕES DE ATALHO DE CÉDULAS (CASH SHORTCUTS) */}
-                    <div className="space-y-1">
-                      <label className={clsx('text-[8px]', 'font-bold', 'text-koma-muted', 'uppercase', 'tracking-wider', 'block')}>Atalhos de Cédulas:</label>
-                      <div className={clsx('flex', 'flex-wrap', 'gap-1')}>
-                        {[2, 5, 10, 20, 50, 100, 200].map((val) => (
-                          <button
-                            key={val}
-                            type="button"
-                            onClick={() => {
-                              setSelectedItemIds([]);
-                              setPaymentValor(val);
-                            }}
-                            className={clsx('px-2.5', 'py-1', 'bg-koma-panel', 'hover:bg-koma-raised', 'border', 'border-koma-border', 'rounded-lg', 'text-[9px]', 'font-bold', 'text-koma-secondary', 'font-mono', 'transition-all', 'cursor-pointer', 'hover:border-gray-500', 'hover:text-koma-foreground')}
-                          >
-                            R$ {val}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {identifiedCustomer && identifiedCustomer.telefone ? (
-                      <div className={clsx(
-                        'p-2.5',
-                        'rounded-xl',
-                        'border',
-                        'border-emerald-500/25',
-                        'bg-emerald-500/10',
-                        'text-koma-foreground',
-                        'space-y-1'
-                      )}>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-400">
-                            <Check size={11} className="stroke-[3]" />
-                            <span>Cliente Identificado</span>
-                          </div>
-                          {(Number(identifiedCustomer.saldoCashback || 0) > 0 || Number(identifiedCustomer.pontos || 0) > 0) && (
-                            <span className="text-[9px] font-bold text-emerald-300">
-                              Cashback: R$ {Number(identifiedCustomer.saldoCashback || 0).toFixed(2)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between text-xs font-bold pt-0.5">
-                          <span className="text-white flex items-center gap-1.5 min-w-0">
-                            <User size={12} className="text-emerald-400 shrink-0" />
-                            <span className="truncate">{identifiedCustomer.nome}</span>
-                          </span>
-                          <span className="font-mono text-emerald-300 text-[11px] shrink-0 ml-2">
-                            {aplicarMascaraTelefoneInput(identifiedCustomer.telefone)}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className={clsx('space-y-1.5', 'font-sans')}>
-                        <label className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'uppercase', 'tracking-wider', 'block')}>
-                          Celular do cliente (Opcional - Fidelidade):
-                        </label>
-                        <input
-                          type="tel"
-                          inputMode="numeric"
-                          autoComplete="tel"
-                          value={paymentCPF}
-                          onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
-                          placeholder="(00) 00000-0000"
-                          className={clsx('w-full', 'px-3', 'py-2', 'text-xs', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-xl', 'focus:outline-none', 'focus:border-[#10b981]', 'text-koma-foreground')}
-                        />
-                      </div>
-                    )}
-
-                    {/* TROCO EM TEMPO REAL */}
-                    {(() => {
-                      if (!selectedOrder) return null;
-                      const restante = getCheckoutBalance(selectedOrder);
-                      const inputVal = Number(paymentValor || 0) || 0;
-                      if (paymentMetodo === 'dinheiro' && inputVal > restante) {
-                        const troco = inputVal - restante;
-                        return (
-                          <div className={clsx(
-                            'bg-emerald-950/45',
-                            'border',
-                            'border-emerald-800/40',
-                            'text-emerald-600 dark:text-emerald-300',
-                            'p-3',
-                            'rounded-xl',
-                            'text-xs',
-                            'font-mono',
-                            'flex',
-                            'justify-between',
-                            'items-center',
-                            'shadow-md',
-                            'shadow-emerald-950/20'
-                          )}>
-                            <span className={clsx('font-bold', 'uppercase', 'text-[9px]', 'tracking-wider', 'text-emerald-400')}>Troco devido:</span>
-                            <span className={clsx('font-extrabold', 'text-sm', 'text-emerald-600 dark:text-emerald-300')}>R$ {troco.toFixed(2)}</span>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-
-                    {selectedItemIds.length > 0 && (
-                      <div className={clsx('bg-emerald-500/15', 'border', 'border-emerald-500/30', 'text-emerald-700 dark:text-emerald-400', 'p-2.5', 'rounded-xl', 'text-[10px]', 'flex', 'items-center', 'justify-between', 'gap-2')}>
-                        <span>
-                          Pagando <strong>{selectedItemIds.length} item(ns)</strong> selecionado(s).
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedItemIds([]);
-                            setSplitPeople('1');
-                            setPaymentValor('');
-                          }}
-                          className={clsx('shrink-0', 'rounded-lg', 'border', 'border-emerald-500/30', 'px-2', 'py-1', 'text-[8px]', 'font-bold', 'uppercase', 'hover:bg-emerald-500/15')}
-                        >
-                          Outro valor
-                        </button>
-                      </div>
-                    )}
-
-                    {errorMsg && (
-                      <div className={clsx('bg-rose-500/10', 'border', 'border-rose-500/25', 'text-rose-400', 'p-2.5', 'rounded-xl', 'text-center', 'font-medium', 'block')}>
-                        {errorMsg}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
-                      className={clsx('w-full', 'py-3', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-xl', 'font-bold', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'shadow-md', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-[10px]', 'disabled:cursor-not-allowed', 'disabled:opacity-50')}
-                    >
-                      <Check size={14} />
-                      <span>
-                        {selectedItemIds.length > 0
-                          ? (isTableCheckoutOrder(selectedOrder) ? 'Receber itens prontos' : 'Receber itens selecionados')
-                          : (isTableCheckoutOrder(selectedOrder) ? 'Registrar adiantamento' : 'Lançar pagamento / baixa')}
-                      </span>
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        )
-      }
+      <CheckoutDialog controller={checkout} smartPos={smartPos} errorMsg={errorMsg} taxaServicoAtiva={taxaServicoAtiva} serviceTaxRate={serviceTaxRate} />
 
       {/* 5. MODAL: ADICIONAR MESA */}
       {

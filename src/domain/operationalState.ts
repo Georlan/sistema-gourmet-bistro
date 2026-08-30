@@ -1,5 +1,5 @@
 import type { Order, OrderItem, Table } from '../types';
-import { formatElapsedTime, normalizeOperationalTimestamp } from '../domain';
+import { formatElapsedTime, normalizeOperationalTimestamp } from './operationalTime';
 import { getOrderCheckId, getOrderDisplayNumber } from './orderIdentity';
 
 export interface ProductionProjection<T extends Pick<OrderItem, 'status'> = OrderItem> {

@@ -10,8 +10,12 @@ def _source(relative_path: str) -> str:
 
 def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_parsers():
     panel = _source("src/components/CaixaPanel.tsx")
+    checkout = _source("src/components/caixa/checkout/CheckoutDialog.tsx")
+    owners = checkout + _source("src/components/caixa/checkout/useCheckoutController.ts") + _source("src/components/caixa/shift/useCashShift.ts")
 
     assert "import MoneyInput from './MoneyInput';" in panel
+    assert "import MoneyInput from '../../MoneyInput';" in checkout
+    assert "<CheckoutDialog" in panel
 
     # Fluxos monetários operacionais não podem voltar a interpretar strings
     # manualmente. MoneyInput entrega o valor decimal já normalizado para a UI;
@@ -24,9 +28,10 @@ def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_pars
         "setPdvDeliveryTaxa('0.00')",
     ):
         assert forbidden not in panel
+        assert forbidden not in owners
 
     assert "onValueChange={setSaldoInicial}" in panel
-    assert "onValueChange={setPaymentValor}" in panel
+    assert "onValueChange={setPaymentValor}" in checkout
     assert "onValueChange={setProdFormPreco}" in panel
     assert panel.count(
         "onValueChange={(value) => setInsumoFormCusto(Number(value || 0))}"

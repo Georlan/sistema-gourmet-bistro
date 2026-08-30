@@ -14,6 +14,7 @@ def cashier_rendered_sources() -> list[str]:
         source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx"),
         source("src/components/caixa/orders/KanbanOrderDetails.tsx"),
         source("src/components/caixa/salao/CaixaSalonTab.tsx"),
+        source("src/components/caixa/checkout/CheckoutDialog.tsx"),
     ]
 
 
@@ -333,16 +334,22 @@ def test_cashier_reference_viewports_choose_expected_kanban_mode():
 
 def test_smartpos_pending_state_opens_checkout_with_safe_recovery_instead_of_dead_button():
     caixa = source("src/components/CaixaPanel.tsx")
+    checkout = source("src/components/caixa/checkout/CheckoutDialog.tsx")
+    controller = source("src/components/caixa/checkout/useCheckoutController.ts")
+    smartpos = source("src/components/caixa/smartpos/useCashierSmartPos.ts")
 
     for rendered_source in cashier_rendered_sources():
         assert "disabled={smartPosState?.blocksPayment === true}" not in rendered_source
         assert "if (smartPosState?.blocksPayment || isLoading) return" not in rendered_source
-    assert "Revisar pagamento" in caixa
-    assert "Acompanhar pagamento" in caixa
-    assert "Concluir pagamento aprovado" in caixa
-    assert "/reconciliar-liquidacao" in caixa
-    assert "disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}" in caixa
-    assert "Revise a operação da maquininha antes de lançar outra baixa" in caixa
+    assert "Revisar pagamento" in smartpos
+    assert "useCashierSmartPos(" in caixa
+    assert "useCheckoutController(" in caixa
+    assert "<CheckoutDialog" in caixa
+    assert "Acompanhar pagamento" in smartpos
+    assert "Concluir pagamento aprovado" in " ".join(checkout.split())
+    assert "/reconciliar-liquidacao" in smartpos
+    assert "disabled={selectedCheckoutSmartPosState?.blocksPayment||isProcessingPayment}" in "".join(checkout.split())
+    assert "Revise a operação da maquininha antes de lançar outra baixa" in controller
 
 
 def test_waiter_cart_customization_edits_selected_quantity_without_appending_a_duplicate():

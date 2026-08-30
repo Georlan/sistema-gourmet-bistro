@@ -19,6 +19,7 @@ def test_production_kitchen_uses_real_finish_handler_and_marketing_stays_read_on
 
 def test_cashier_operational_forms_are_wired_to_real_handlers():
     panel = _source("src/components/CaixaPanel.tsx")
+    orders = _source("src/components/caixa/orders/useCashierOrders.ts")
 
     for removed_stub in (
         "handleSaveFidelityConfig",
@@ -33,8 +34,9 @@ def test_cashier_operational_forms_are_wired_to_real_handlers():
     assert "onClick={() => handleDespacharKanban(order.id, motoboyId)}" in panel
     assert "parseInt(motoboyId)" not in panel
     assert "onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}" in panel
-    assert "setNewMotoboyNome('');" in panel
-    assert "setNewMotoboyTelefone('');" in panel
+    assert "useCashierOrders(" in panel
+    assert "setNewMotoboyNome('');" in orders
+    assert "setNewMotoboyTelefone('');" in orders
 
 
 def test_operator_logout_only_clears_authentication_keys():
@@ -75,6 +77,9 @@ def test_fabricated_ai_and_whatsapp_prototypes_are_not_shipped_in_the_ui():
         _source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx"),
         _source("src/components/caixa/orders/KanbanOrderDetails.tsx"),
         _source("src/components/caixa/salao/CaixaSalonTab.tsx"),
+        _source("src/components/caixa/checkout/CheckoutDialog.tsx"),
+        _source("src/components/caixa/checkout/useCheckoutController.ts"),
+        _source("src/components/caixa/orders/useCashierOrders.ts"),
     ]
     menu = _source("src/cardapio/CardapioPage.tsx")
     plans = _source("src/config/subscriptionPlans.ts")
@@ -131,7 +136,8 @@ def test_operational_whatsapp_delivery_is_automatic_and_tokens_stay_server_side(
     assert "[WHATSAPP SIMULADO]" not in caixa_source
     assert "openWaInvite" not in frontend_source
     assert "handleDespacharWhatsApp" not in frontend_source
-    assert "/delivery/despachar" in frontend_source
+    assert "useCashierOrders(" in frontend_source
+    assert "/delivery/despachar" in _source("src/components/caixa/orders/useCashierOrders.ts")
     assert "window.open(waUrl" not in frontend_source
     assert "wa.me" not in motoboy_source
     assert "O convite será enviado automaticamente pelo WhatsApp." in team_ui_source
