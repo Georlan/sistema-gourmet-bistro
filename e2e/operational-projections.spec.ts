@@ -164,6 +164,10 @@ test('fatias da mesma Comanda preservam R$112 em preparo e R$48 pronto', async (
   await expect(ready).toContainText('PRONTO / RECEBER');
   await expect(ready).not.toContainText('CONTA PEDIDA');
   await expect(ready).toContainText('Outro item continua em preparo.');
+  await ready.getByRole('button', { name: 'Receber itens prontos', exact: true }).click();
+  const paymentForm = page.locator('form').filter({ hasText: 'Receber Pagamento' });
+  await expect(paymentForm.locator('input[inputmode="numeric"][readonly]')).toHaveValue('48,00');
+  await expect(page.locator('.orders-detail-modal')).toHaveCount(0);
 });
 
 test('todos prontos não significam conta pedida', async ({ page }) => {
@@ -291,4 +295,22 @@ test('transferência do Salão usa Comanda técnica e o destino selecionado', as
     { path: '/comandas/check-phase7-24/transferir/8', query: '', method: 'POST', body: null },
   ]);
   await expect(details).toHaveCount(0);
+});
+
+test('busca e etapa móvel do Kanban sobrevivem à troca entre Pedidos e Salão', async ({ page }) => {
+  await openOperationalScenario(page);
+  const search = page.getByPlaceholder('Buscar mesa, cliente, telefone ou item');
+  await search.fill('segunda rodada');
+  const closingTab = page.getByRole('tab', { name: /Concluir/ });
+  const compact = await closingTab.isVisible();
+  if (compact) await closingTab.click();
+  await expect(page.locator('.orders-card--closing')).toHaveCount(1);
+  await expect(page.locator('.orders-card--salon')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Salão', exact: true }).click();
+  await expect(page.locator('article[data-table-status="occupied"]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Pedidos', exact: true }).click();
+  await expect(search).toHaveValue('segunda rodada');
+  await expect(page.locator('.orders-card--closing')).toHaveCount(1);
+  await expect(page.locator('.orders-card--salon')).toHaveCount(0);
+  if (compact) await expect(page.locator('.orders-column--closing')).toHaveClass(/is-mobile-active/);
 });

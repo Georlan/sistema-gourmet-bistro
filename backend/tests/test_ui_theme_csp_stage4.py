@@ -8,6 +8,15 @@ def source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def cashier_rendered_sources() -> list[str]:
+    return [
+        source("src/components/CaixaPanel.tsx"),
+        source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx"),
+        source("src/components/caixa/orders/KanbanOrderDetails.tsx"),
+        source("src/components/caixa/salao/CaixaSalonTab.tsx"),
+    ]
+
+
 def test_theme_is_bootstrapped_before_first_paint_and_react_for_every_route():
     html = source("index.html")
     prepaint = source("public/theme-init.js")
@@ -131,11 +140,12 @@ def test_csp_preserves_required_integrations_and_cardapio_cep_lookup():
 def test_operational_copy_does_not_restore_legacy_lote_or_ambiguous_financial_labels():
     caixa = source("src/components/CaixaPanel.tsx")
 
-    assert "Lote: #" not in caixa
-    assert "Itens do Lote" not in caixa
-    assert "import logoImg from '../assets/logo.png'" not in caixa
-    assert "Faturamento Total;R$" not in caixa
-    assert "Faturamento de Hoje;R$" not in caixa
+    for rendered_source in cashier_rendered_sources():
+        assert "Lote: #" not in rendered_source
+        assert "Itens do Lote" not in rendered_source
+        assert "import logoImg from '../assets/logo.png'" not in rendered_source
+        assert "Faturamento Total;R$" not in rendered_source
+        assert "Faturamento de Hoje;R$" not in rendered_source
     assert "Vendas Líquidas;R$" in caixa
     assert "Receita Líquida" in caixa
 
@@ -180,6 +190,7 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
 def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
     css = source("src/index.css")
     caixa = source("src/components/CaixaPanel.tsx")
+    workspace = source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx")
 
     # O container ainda compacta detalhes internos, mas não decide mais se as
     # colunas existem. Essa decisão usa viewport/capacidade informadas pelo navegador.
@@ -199,18 +210,23 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
 
     # As três trilhas reais não dependem de feature flags locais sempre
     # verdadeiras e continuam sem mínimos rígidos capazes de ampliar a página.
-    assert "const ordersStages = [" in caixa
-    assert "repeat(${ordersStages.length}, minmax(0, 1fr))" in caixa
-    assert "visibleOrdersStages" not in caixa
-    assert "modulesActive" not in caixa
-    assert "minmax(15rem" not in caixa
-    assert "minmax(20rem" not in caixa
+    assert "const ordersStages = [" in workspace
+    assert "import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';" in caixa
+    assert "<CaixaOrdersWorkspace" in caixa
+    assert "stage: mobileOrdersStage" in caixa
+    assert "onStageChange: setMobileOrdersStage" in caixa
+    assert "repeat(${ordersStages.length}, minmax(0, 1fr))" in workspace
+    for rendered_source in cashier_rendered_sources():
+        assert "visibleOrdersStages" not in rendered_source
+        assert "modulesActive" not in rendered_source
+        assert "minmax(15rem" not in rendered_source
+        assert "minmax(20rem" not in rendered_source
     assert "is-channel-disabled" not in css
 
     # A etapa de fechamento continua estruturalmente presente no Kanban.
-    assert "orders-column--closing" in caixa
-    assert "03 / FECHAMENTO" in caixa
-    assert "Itens prontos e conclusão" in caixa
+    assert "orders-column--closing" in workspace
+    assert "03 / FECHAMENTO" in workspace
+    assert "Itens prontos e conclusão" in workspace
 
 
 def test_cashier_mobile_uses_one_natural_scroll_owner():
@@ -232,11 +248,12 @@ def test_cashier_mobile_uses_one_natural_scroll_owner():
     assert "height: 100dvh;" in shell_block
     assert "min-height: 100svh;" in shell_block
 
-    assert "cashier-shell flex w-full h-screen" not in caixa
-    assert "'cashier-content', 'flex-1', 'overflow-y-auto'" not in caixa
-    assert "'orders-board', 'flex-1', 'gap-3', 'overflow-x-auto'" not in caixa
-    assert "snap-mandatory" not in caixa
-    assert "snap-center" not in caixa
+    for rendered_source in cashier_rendered_sources():
+        assert "cashier-shell flex w-full h-screen" not in rendered_source
+        assert "'cashier-content', 'flex-1', 'overflow-y-auto'" not in rendered_source
+        assert "'orders-board', 'flex-1', 'gap-3', 'overflow-x-auto'" not in rendered_source
+        assert "snap-mandatory" not in rendered_source
+        assert "snap-center" not in rendered_source
 
     mobile_block = css.split("@media (max-width: 768px)", 1)[1].split(
         "@media (min-width: 480px) and (max-width: 768px)", 1
@@ -277,7 +294,7 @@ def test_cashier_width_tracks_the_real_content_container_without_page_overflow()
     assert "closing-count-field__header" in closing
     assert "closing-toolbar-actions" in closing
 
-    assert "w-screen" not in caixa
+    assert all("w-screen" not in rendered_source for rendered_source in cashier_rendered_sources())
     assert "100vw" not in css.split("/* Cashier workspace", 1)[1]
 
 
@@ -317,8 +334,9 @@ def test_cashier_reference_viewports_choose_expected_kanban_mode():
 def test_smartpos_pending_state_opens_checkout_with_safe_recovery_instead_of_dead_button():
     caixa = source("src/components/CaixaPanel.tsx")
 
-    assert "disabled={smartPosState?.blocksPayment === true}" not in caixa
-    assert "if (smartPosState?.blocksPayment || isLoading) return" not in caixa
+    for rendered_source in cashier_rendered_sources():
+        assert "disabled={smartPosState?.blocksPayment === true}" not in rendered_source
+        assert "if (smartPosState?.blocksPayment || isLoading) return" not in rendered_source
     assert "Revisar pagamento" in caixa
     assert "Acompanhar pagamento" in caixa
     assert "Concluir pagamento aprovado" in caixa
@@ -361,7 +379,7 @@ def test_cashier_low_desktop_height_compacts_non_operational_chrome():
 
 def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():
     css = source("src/index.css")
-    caixa = source("src/components/CaixaPanel.tsx")
+    caixa = source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx")
 
     assert "Aceitar pedidos online automaticamente" in caixa
     assert 'className="orders-auto-accept__label"' in caixa

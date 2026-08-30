@@ -22,6 +22,11 @@ import { EstoqueIngredientesTab } from './estoque/EstoqueIngredientesTab';
 import { EstoqueFornecedoresTab } from './estoque/EstoqueFornecedoresTab';
 import { FichaTecnicaModal } from './estoque/FichaTecnicaModal';
 import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
+import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
+import { CaixaSalonTab } from './caixa/salao/CaixaSalonTab';
+import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
+import type { CashierTableCard, DeliveryOrderView, PendingCashPayment, SmartPosCardState } from './caixa/orders/cashierWorkspaceTypes';
+import { formatCompactCurrency, formatCurrency } from './caixa/cashierPresentation';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
 import { SangriaModal } from './caixa/SangriaModal';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
@@ -37,8 +42,6 @@ import { normalizeOperationalTimestamp } from '../domain';
 import { deriveFinancialState, deriveProductionState } from '../domain/operationalState';
 import {
   formatCashierOldestAge as formatOldestAge,
-  getCashierDeliveryStatusLabel as deliveryStatusLabel,
-  getCashierHumanOrderNumber as humanOrderNumber,
   getCashierOrderSlaData as getOrderSlaData,
   getCashierTableOrderPresentation,
   isCashierTableOrder as isTableCheckoutOrder,
@@ -168,61 +171,8 @@ interface AccountItem {
   tipo: 'pagar' | 'receber';
 }
 
-interface DeliveryOrderView {
-  id: string;
-  cliente: string;
-  telefone: string;
-  itens: string;
-  total: number;
-  canal: 'ifood' | 'site' | 'whats' | 'smartpos';
-  origemOperacional: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
-  isQuickSale: boolean;
-  quantidadeItens: number;
-  modalidade: 'delivery' | 'retirada';
-  pago: boolean;
-  status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
-  endereco?: string;
-  criadoEm: string;
-  created_at?: string;
-  numeroPedido?: number;
-}
-
-type KanbanDetailItem = {
-  nome: string;
-  observacao: string;
-  clienteNome: string;
-  status: string;
-  quantidade: number;
-};
 
 
-
-function groupKanbanDetailItems(items: any[]): KanbanDetailItem[] {
-  const grouped = new Map<string, KanbanDetailItem>();
-  (Array.isArray(items) ? items : []).forEach((item: any) => {
-    if (String(item?.status || '').toLowerCase() === 'cancelado') return;
-    const nome = String(item?.nome || item?.produto?.nome || 'Item');
-    const observacao = String(item?.observacao || '').trim();
-    const clienteNome = String(item?.cliente_nome || item?.clienteNome || 'Consumo Geral').trim();
-    const status = String(item?.status || 'preparando').toLowerCase();
-    const key = [nome, observacao, clienteNome, status].join('\u0000');
-    const current = grouped.get(key);
-    if (current) {
-      current.quantidade += 1;
-    } else {
-      grouped.set(key, { nome, observacao, clienteNome, status, quantidade: 1 });
-    }
-  });
-  return Array.from(grouped.values());
-}
-
-function operationalOriginLabel(origin?: string): string {
-  if (origin === 'smartpos') return 'SmartPOS';
-  if (origin === 'cardapio') return 'Cardápio online';
-  if (origin === 'caixa') return 'Caixa';
-  if (origin === 'garcom') return 'Garçom';
-  return 'Kôma';
-}
 
 
 interface SmartPosCashPaymentView {
@@ -245,14 +195,6 @@ interface SmartPosCashRow {
   pagamento?: SmartPosCashPaymentView | null;
 }
 
-interface SmartPosCardState {
-  label: string;
-  chipClass: 'is-muted' | 'is-primary' | 'is-attention';
-  blocksPayment: boolean;
-  ctaLabel?: string;
-  intentId?: string;
-  canReconcile?: boolean;
-}
 
 interface LoyaltyCustomer {
   id: string;
@@ -289,18 +231,6 @@ const formatarTelefoneTabela = (tel?: string) => {
 
 
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-}).format(Number(value) || 0);
-
-const formatCompactCurrency = (value: number) => new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-  maximumFractionDigits: 0,
-}).format(Number(value) || 0);
 
 
 
@@ -1798,66 +1728,13 @@ export function CaixaPanel({
 
 
 
-  // Renderizador compacto de itens de alta densidade
-  const renderCompactItemsList = (
-    items: any,
-    cardId: string,
-    isExpanded: boolean,
-    onToggle: (cardId: string, e: React.MouseEvent) => void
-  ) => {
-    let itemList: { name: string; qty: number }[] = [];
 
-    if (Array.isArray(items)) {
-      const counts: Record<string, number> = {};
-      items.forEach(it => {
-        const name = it.nome || 'Item';
-        counts[name] = (counts[name] || 0) + 1;
-      });
-      itemList = Object.entries(counts).map(([name, qty]) => ({ name, qty }));
-    } else if (typeof items === 'string') {
-      const parts = items.split(/\+|\,/);
-      itemList = parts.map(p => {
-        const trimmed = p.trim();
-        const match = trimmed.match(/^(\d+)x?\s*(.+)$/i);
-        if (match) {
-          return { qty: parseInt(match[1], 10), name: match[2].trim() };
-        }
-        return { qty: 1, name: trimmed };
-      }).filter(it => it.name.length > 0);
-    }
-
-    if (itemList.length === 0) {
-      return <p className={clsx('orders-card__items', 'font-medium', 'text-[11px]', 'text-koma-subtle', 'italic', 'p-2', 'rounded-lg')}>Nenhum item adicionado</p>;
-    }
-
-    const visibleItems = isExpanded ? itemList : itemList.slice(0, 3);
-    const hiddenCount = itemList.length - 3;
-
-    return (
-      <div className={clsx('orders-card__items', 'space-y-0.5', 'p-2', 'rounded-lg')}>
-        <ul className="space-y-0.5">
-          {visibleItems.map((it, idx) => (
-            <li key={idx} className={clsx('font-medium', 'text-xs', 'text-koma-secondary', 'flex', 'items-center', 'justify-between', 'font-sans', 'truncate')}>
-              <span className="truncate">{it.qty}× {it.name}</span>
-            </li>
-          ))}
-        </ul>
-        {itemList.length > 3 && (
-          <button
-            type="button"
-            onClick={(e) => onToggle(cardId, e)}
-            className={clsx('mt-0.5', 'text-[11px]', 'font-bold', 'text-emerald-700 dark:text-emerald-400', 'hover:text-emerald-600 dark:text-emerald-300', 'underline', 'cursor-pointer', 'block', 'transition-all')}
-          >
-            {isExpanded ? "▲ Recolher itens" : `+ ${hiddenCount} mais itens (expandir)`}
-          </button>
-        )}
-      </div>
-    );
-  };
-
-  const getTableOrderPresentation = (order: Order) => (
-    getCashierTableOrderPresentation(order, salonTables)
-  );
+  const buildCashierTableCard = (order: CashierTableCard['order']): CashierTableCard => ({
+    order,
+    tableMovement: getTableMovementContext(order),
+    smartPosState: getSmartPosCardState(order),
+    presentation: getCashierTableOrderPresentation(order, salonTables),
+  });
 
   // Impressão rápida de pré-conta do card no Kanban
   const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
@@ -3720,27 +3597,6 @@ export function CaixaPanel({
       .filter(order => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
-  const totalResultadosBusca = useMemo(() => {
-    return filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
-  }, [filteredCol1, filteredDigitalProduction, filteredCol2Table, filteredDeliveryFinalization]);
-
-  const ordersStages = [
-    { id: 'salon' as const, label: 'Salão', count: filteredCol1.length },
-    { id: 'digital' as const, label: 'Balcão', count: filteredDigitalProduction.length },
-    { id: 'closing' as const, label: 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
-  ];
-  const effectiveMobileOrdersStage = mobileOrdersStage;
-  const ordersColumnCounts = ordersStages.map(stage => stage.count);
-  const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
-  const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
-  const ordersColumnsTemplate = activeOrdersColumns === 0
-    ? `repeat(${ordersStages.length}, minmax(0, 1fr))`
-    : ordersColumnCounts
-      .map(count => count === 0 ? 'minmax(0, 0.68fr)' : `minmax(0, ${ordersColumnWeight}fr)`)
-      .join(' ');
-  const ordersBoardStyle = {
-    '--orders-columns': ordersColumnsTemplate
-  } as React.CSSProperties;
 
   const activeDeliveryOrdersCount = useMemo(
     () => deliveryOrders.reduce(
@@ -3843,28 +3699,254 @@ export function CaixaPanel({
     }
   };
 
-  const selectedDetailItems = selectedKanbanOrder
-    ? groupKanbanDetailItems(selectedKanbanOrder.itens)
-    : [];
-  const selectedOrderNumber = selectedKanbanOrder
-    ? humanOrderNumber(selectedKanbanOrder)
-    : '—';
-  const selectedIsQuickSale = Boolean(selectedKanbanOrder?.isQuickSale)
-    || (
-      selectedKanbanOrder?.origemOperacional === 'smartpos'
-      && Number(selectedKanbanOrder?.mesaId || 0) === 0
-      && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
+  // Complete actions stay with the state/effects owner; extracted views only request them.
+  const handleConfirmPendingCashPayment = async (pag: PendingCashPayment) => {
+    if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
+        method: 'POST',
+        headers: authHeaders
+      });
+      if (res.ok) {
+        showToast("Pagamento em dinheiro confirmado!");
+        onRefreshOrders();
+        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+      } else {
+        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+      }
+    } catch (e) {
+      console.error(e);
+      if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+    }
+  };
+
+  const handleRejectPendingCashPayment = async (pag: PendingCashPayment) => {
+    if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
+    try {
+      const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
+        method: 'POST',
+        headers: authHeaders
+      });
+      if (res.ok) {
+        showToast("Pagamento recusado.");
+        onRefreshOrders();
+        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+      } else {
+        if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+      }
+    } catch (e) {
+      console.error(e);
+      if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
+    }
+  };
+
+  const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
+    await handleUpdateDeliveryStatus(order.id, 'producao');
+    // Close drawer if no more pending
+    if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+  };
+
+  const handleRejectPendingDeliveryOrder = async (order: DeliveryOrderView) => {
+    await handleRecusarPedido(order.id);
+    if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+  };
+
+  const handleMarkTableItemsReady = async (order: CashierTableCard['order']) => {
+    if (isLoading) return;
+    const ids = deriveProductionState(order.itens).preparingItems.map(item => item.id);
+    if (onOptimisticUpdateItemStatus && ids.length > 0) {
+      onOptimisticUpdateItemStatus(ids, 'pronto');
+    }
+    setIsLoading(true);
+    try {
+      await Promise.all(ids.map(id =>
+        fetch(`${apiBaseUrl}/comandas/itens/${id}/status?status=pronto`, {
+          method: "PUT",
+          headers: authHeaders
+        })
+      ));
+    } catch (err) {
+      console.error(err);
+      onRefreshOrders();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
+    if (isLoading) return;
+    const isDeliveryOrder = order.modalidade === 'delivery';
+    handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
+  };
+
+  const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
+    if (isLoading) return;
+
+    const tableComandas = orders.filter(
+      o => Number(o.mesaId) === Number(order.mesaId)
+        && isTableCheckoutOrder(o)
     );
-  const selectedIsDigital = Boolean(selectedKanbanOrder)
-    && ['retirada', 'entrega', 'delivery'].includes(String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase());
-  const selectedOrderTotal = selectedKanbanOrder
-    ? Number(selectedKanbanOrder.total ?? selectedKanbanOrder.itens?.reduce(
-        (sum: number, item: any) => sum + Number(item.preco_unit || item.preco || 0),
-        0,
-      ) ?? 0)
-    : 0;
-  const selectedCanAdvanceDigital = selectedIsDigital
-    && projectCashierDeliveryState(selectedKanbanOrder?.deliveryStatus).inProduction;
+    const checkoutOrder = buildTableCheckoutOrder(tableComandas);
+    if (!checkoutOrder) return;
+
+    const readyItemIds = checkoutOrder.itens
+      .filter(item => !item.pago && isItemReadyForCheckout(item))
+      .map(item => item.id);
+    setSelectedOrder(checkoutOrder);
+    setShowCheckoutModal(true);
+    setCheckoutServiceTax(true);
+    setSplitPeople('1');
+    setSelectedItemIds(readyItemIds);
+    setSmartPosRecoveryError('');
+    const readyTotal = readyItemIds.length > 0
+      ? getSelectedItemsTotal(checkoutOrder, readyItemIds, true)
+      : 0;
+    setPaymentValor(readyTotal > 0 ? readyTotal : '');
+  };
+
+  const handleFinalizeDigitalOrder = async (order: DeliveryOrderView) => {
+    if (isLoading) return;
+    if (order.pago) {
+      await handleFecharDelivery(order.id);
+      return;
+    }
+    const fullOrder = orders.find(o => o.id === order.id);
+    if (fullOrder) {
+      const mappedOrder: Order = {
+        ...fullOrder,
+        deliveryStatus: (order.status === 'analise' ? 'pendente' : order.status) as Order['deliveryStatus'],
+        itens: fullOrder.itens.map((item: any) => ({
+          id: item.id,
+          produtoId: item.produto_id || item.produtoId,
+          nome: item.nome || `Item ${item.produtoId}`,
+          preco: item.preco_unit || item.preco,
+          observacao: item.observacao || '',
+          clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
+          status: (item.status === 'preparando' && ['pronto', 'transito', 'saiu_para_entrega'].includes(order.status)) ? 'pronto' : item.status,
+          pago: item.pago
+        }))
+      };
+      const activeUnpaidItemIds = mappedOrder.itens
+        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
+        .map((item: any) => item.id);
+      setSelectedOrder(mappedOrder);
+      setShowCheckoutModal(true);
+      setCheckoutServiceTax(false);
+      setSplitPeople('1');
+      setSelectedItemIds(activeUnpaidItemIds);
+      const sub = mappedOrder.itens
+        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
+        .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
+      setPaymentValor(sub);
+    } else {
+      handleFinalizarPedido(order.id);
+    }
+  };
+
+  const handleReceiveSalonTable = (tableOrders: Order[]) => {
+    const checkoutOrder = buildTableCheckoutOrder(tableOrders);
+    if (!checkoutOrder) return;
+    setSelectedOrder(checkoutOrder);
+    setShowCheckoutModal(true);
+    setCheckoutServiceTax(true);
+    setSplitPeople('1');
+    setSelectedItemIds([]);
+    const subtotal = checkoutOrder.itens
+      .filter(item => (item.status as string) !== 'cancelado')
+      .reduce((sum, item) => sum + item.preco, 0);
+    const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
+    setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)));
+  };
+
+  const handleOpenSalonTableOrder = (tableId: number) => {
+    setPdvOrderType('mesa');
+    setPdvTargetMesaId(tableId);
+    setBalcaoMobileView('produtos');
+    setActiveSubTab('balcao');
+  };
+
+  const handleAdvanceSelectedKanbanOrder = async () => {
+    const isDelivery = selectedKanbanOrder.modalidade === 'delivery';
+    const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, isDelivery ? 'transito' : 'pronto');
+    if (updated) setSelectedKanbanOrder(null);
+  };
+
+  const handleReprintSelectedKanbanProduction = async () => {
+    try {
+      const printUrl = selectedKanbanOrder.lancamentoId
+        ? `${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.lancamentoId}/reimprimir`
+        : `${apiBaseUrl}/comandas/${selectedKanbanOrder.comandaId || selectedKanbanOrder.id}/imprimir-recibo`;
+      const res = await fetch(printUrl, {
+        method: "POST",
+        headers: authHeaders
+      });
+      if (res.ok) {
+        window.dispatchEvent(
+          new Event('koma_print_monitor_refresh')
+        );
+        setSelectedKanbanOrder(null);
+      } else {
+        showToast("Erro ao solicitar reimpressão.", 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Erro ao solicitar reimpressão.", 'error');
+    }
+  };
+
+  const handlePrintSelectedKanbanTable = async () => {
+    try {
+      const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
+      const response = await fetch(url, { method: 'POST', headers: authHeaders });
+      if (response.ok) {
+        window.dispatchEvent(
+          new Event('koma_print_monitor_refresh')
+        );
+        setSelectedKanbanOrder(null);
+      } else {
+        const errD = await response.json();
+        showToast(`Erro: ${errD.detail}`, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Erro ao imprimir comanda inteira.", 'error');
+    }
+  };
+
+  const handlePrintSelectedKanbanValues = async () => {
+    try {
+      const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
+      const response = await fetch(url, { method: 'POST', headers: authHeaders });
+      if (response.ok) {
+        window.dispatchEvent(
+          new Event('koma_print_monitor_refresh')
+        );
+        setSelectedKanbanOrder(null);
+      } else {
+        const errD = await response.json();
+        showToast(`Erro: ${errD.detail}`, 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Erro ao imprimir apenas valores.", 'error');
+    }
+  };
+
+  const handleInspectSalonTable = (tableOrders: Order[]) => tableOrders[0] && setSelectedKanbanOrder({
+      ...tableOrders[0],
+      projectionScope: 'table',
+      contextoSalao: true,
+      itens: tableOrders.flatMap(order => order.itens || []),
+      comandaIds: tableOrders.map(order => order.id),
+    });
+
+  const handleTransferSelectedKanbanTable = () => handleTransferTableFromSalon(selectedKanbanOrder);
+
+  const handleCancelSelectedKanbanConsumption = () => selectedKanbanOrder.contextoSalao
+    ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
+    : openCancelOrderConfirmation(selectedKanbanOrder);
+
+  const handleCancelSelectedKanbanOrder = () => openCancelOrderConfirmation(selectedKanbanOrder);
   const selectedCheckoutSmartPosState = selectedOrder
     ? getSmartPosCardState(selectedOrder)
     : null;
@@ -4465,824 +4547,48 @@ export function CaixaPanel({
 
           {/* VIEW 1: MEUS PEDIDOS (Kanban) */}
           {activeSubTab === 'pedidos' && (
-            <div className={clsx('orders-workspace', 'flex', 'flex-col', 'space-y-4')}>
-
-              <OperationalBanner
-                id="orders-heading"
-                eyebrow="OPERAÇÃO"
-                title="Pedidos"
-                accent="por etapa"
-                description="Clique no card para ver o pedido e escolher a próxima ação."
-                metrics={[
-                  { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
-                  { label: 'valor em aberto', value: formatCompactCurrency(operationalOrderInsights.openValue) },
-                  {
-                    label: operationalOrderInsights.actionMetric.label,
-                    value: operationalOrderInsights.actionMetric.value,
-                    valueClassName: operationalOrderInsights.actionMetric.needsAttention ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300',
-                  },
-                ]}
-              />
-
-              {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
-              {pagamentosPendentes.length > 0 && (
-                <div className={clsx('bg-koma-card', 'border-2', 'border-amber-500/40', 'p-4', 'rounded-2xl', 'space-y-3', 'animate-pulse-subtle')}>
-                  <div className={clsx('flex', 'items-center', 'gap-2', 'text-amber-500', 'font-bold', 'uppercase', 'tracking-wider', 'text-[10px]')}>
-                    <AlertTriangle size={14} />
-                    <span>Confirmação de Dinheiro Pendente ({pagamentosPendentes.length})</span>
-                  </div>
-                  <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-3')}>
-                    {pagamentosPendentes.map((pag) => {
-                      const comandaMesa = orders.find(o => o.id === pag.comanda_id);
-                      const mesaNum = comandaMesa ? comandaMesa.mesaId : '?';
-                      return (
-                        <div key={pag.id} className={clsx('bg-koma-canvas', 'border', 'border-koma-border', 'p-3', 'rounded-xl', 'flex', 'justify-between', 'items-center', 'gap-4', 'text-[11px]', 'text-left')}>
-                          <div>
-                            <span className={clsx('text-koma-subtle', 'block')}>Mesa {mesaNum}</span>
-                            <span className={clsx('font-bold', 'text-koma-foreground', 'block')}>{formatCurrency(pag.valor)} em Dinheiro</span>
-                            <span className={clsx('text-[9.5px]', 'text-emerald-700 dark:text-emerald-400', 'block', 'font-mono')}>Garçom solicitante: {pag.nome_cliente || 'Garçom'}</span>
-                          </div>
-                          <div className={clsx('flex', 'gap-2')}>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
-                                try {
-                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/aprovar`, {
-                                    method: 'POST',
-                                    headers: authHeaders
-                                  });
-                                  if (res.ok) {
-                                    showToast("Pagamento em dinheiro confirmado!");
-                                    onRefreshOrders();
-                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-                                  } else {
-                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-                                  }
-                                } catch (e) {
-                                  console.error(e);
-                                  if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-                                }
-                              }}
-                              className={clsx('px-3', 'py-1.5', 'bg-emerald-600', 'hover:bg-emerald-700', 'text-white', 'rounded-lg', 'font-bold', 'text-[9px]', 'uppercase', 'tracking-wider', 'transition-all', 'cursor-pointer')}
-                            >
-                              Confirmar Recebimento
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
-                                try {
-                                  const res = await fetch(`${apiBaseUrl}/caixa/pagamentos/${pag.id}/recusar`, {
-                                    method: 'POST',
-                                    headers: authHeaders
-                                  });
-                                  if (res.ok) {
-                                    showToast("Pagamento recusado.");
-                                    onRefreshOrders();
-                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-                                  } else {
-                                    if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-                                  }
-                                } catch (e) {
-                                  console.error(e);
-                                  if (onRefreshPagamentosPendentes) onRefreshPagamentosPendentes();
-                                }
-                              }}
-                              className={clsx('px-3', 'py-1.5', 'bg-rose-50', 'border', 'border-rose-300', 'text-rose-800', 'hover:bg-rose-700', 'hover:text-white', 'dark:bg-rose-950/30', 'dark:border-rose-900/35', 'dark:text-rose-300', 'dark:hover:bg-rose-900/50', 'rounded-lg', 'font-bold', 'text-[9px]', 'transition-all', 'cursor-pointer')}
-                            >
-                              Rejeitar
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Controls bar with Search Input */}
-              <div className={clsx('orders-toolbar', 'sticky', 'top-0', 'z-20')}>
-                {/* Search Bar Component */}
-                <div className={clsx('orders-search', 'relative')}>
-                  <Search className={clsx('absolute', 'left-3', 'top-1/2', '-translate-y-1/2', 'w-4', 'h-4', 'text-koma-muted')} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar mesa, cliente, telefone ou item"
-                    className="orders-search__input"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="orders-search__clear"
-                      title="Limpar busca"
-                      aria-label="Limpar busca"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-
-                {searchQuery.trim() !== '' && (
-                  <span className="orders-search__result" aria-live="polite">
-                    {totalResultadosBusca} {totalResultadosBusca === 1 ? 'resultado' : 'resultados'}
-                  </span>
-                )}
-
-                <div className="orders-toolbar__actions">
-                  <label className="orders-auto-accept">
-                    <input
-                      type="checkbox"
-                      checked={autoAccept}
-                      onChange={(e) => setAutoAccept(e.target.checked)}
-                      className={clsx('sr-only', 'peer')}
-                      aria-label="Aceitar pedidos online automaticamente"
-                    />
-                    <span className="orders-switch" aria-hidden="true"><span /></span>
-                    <span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>
-                  </label>
-                  <div className="orders-delivery-total">
-                    <span>Balcão e delivery</span>
-                    <strong>{formatCurrency(deliveryOrders.reduce((s, o) => s + o.total, 0))}</strong>
-                  </div>
-                  {/* Bell button — opens floating drawer */}
-                  <button
-                    type="button"
-                    onClick={() => { setIsDrawerOpen(true); }}
-                    className="orders-new-orders"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span>Aguardando aceite</span>
-                    {deliveryOrders.filter(o => o.status === 'pendente').length > 0 && (
-                      <span className="orders-new-orders__count">
-                        {deliveryOrders.filter(o => o.status === 'pendente').length}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* ── FLOATING DRAWER: Pedidos Pendentes ─────────────────────────────── */}
-              {isDrawerOpen && (
-                <div
-                  className={clsx('fixed', 'inset-0', 'z-50', 'flex')}
-                  onClick={() => setIsDrawerOpen(false)}
-                >
-                  {/* Backdrop */}
-                  <div className={clsx('absolute', 'inset-0', 'bg-black/60', 'backdrop-blur-sm')} />
-                  {/* Drawer panel */}
-                  <div
-                    className={clsx('relative', 'ml-auto', 'h-full', 'w-full', 'max-w-sm', 'bg-koma-panel', 'border-l', 'border-koma-border', 'flex', 'flex-col', 'shadow-2xl')}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    {/* Drawer header */}
-                    <div className={clsx('flex', 'items-center', 'justify-between', 'px-5', 'py-4', 'border-b', 'border-koma-border', 'shrink-0')}>
-                      <div>
-                        <h2 className={clsx('font-bold', 'text-koma-foreground', 'text-sm')}>Pedidos aguardando aceite</h2>
-                        <p className={clsx('text-[10px]', 'text-koma-subtle', 'mt-0.5')}>Aceite ou recuse cada pedido antes de produzir</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsDrawerOpen(false)}
-                        className={clsx('p-1.5', 'rounded-lg', 'bg-koma-raised', 'border', 'border-koma-border', 'text-koma-subtle', 'hover:text-koma-foreground', 'cursor-pointer')}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
-                    </div>
-
-                    {/* Drawer body */}
-                    <div className={clsx('flex-1', 'overflow-y-auto', 'p-4', 'space-y-3')}>
-                      {deliveryOrders.filter(o => o.status === 'pendente').length === 0 ? (
-                        <div className={clsx('flex', 'flex-col', 'items-center', 'justify-center', 'h-40', 'text-koma-muted', 'text-[11px]', 'italic')}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={clsx('mb-3', 'opacity-40')}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                          Nenhum pedido pendente
-                        </div>
-                      ) : (
-                        deliveryOrders.filter(o => o.status === 'pendente').map((order) => (
-                          <div key={order.id} className={clsx('orders-pending-card', 'p-4', 'rounded-xl', 'space-y-3')}>
-                            <div className={clsx('flex', 'justify-between', 'items-start')}>
-                              <div>
-                                <div className={clsx('flex', 'flex-wrap', 'gap-1', 'mb-1')}>
-                                  <span className={clsx('orders-card__chip', 'is-primary')}>
-                                    {order.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
-                                  </span>
-                                  <span className={clsx('orders-card__chip', 'is-muted')}>
-                                    {order.canal}
-                                  </span>
-                                </div>
-                                <strong className={clsx('text-koma-foreground', 'text-sm', 'block')}>{order.cliente}</strong>
-                                <span className={clsx('text-[10px]', 'text-koma-subtle', 'block')}>{order.telefone}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                                <span className={clsx('text-[9px]', 'text-koma-muted')}>{order.criadoEm}</span>
-                                {order.numeroPedido && <span className={clsx('text-[8px]', 'text-gray-600', 'font-mono', 'block')}>#{order.numeroPedido}</span>}
-                              </div>
-                            </div>
-
-                            <p className={clsx('text-[10px]', 'text-koma-secondary', 'bg-koma-page', 'p-2', 'rounded', 'border', 'border-koma-border/30', 'leading-relaxed', 'font-mono')}>
-                              {order.itens}
-                            </p>
-
-                            {order.endereco && (
-                              <span className={clsx('text-[10px]', 'text-koma-subtle', 'flex', 'items-start', 'gap-1')}>
-                                <MapPin size={11} className={clsx('shrink-0', 'text-emerald-600 dark:text-emerald-300/80', 'mt-0.5')} />
-                                <span>{order.endereco}</span>
-                              </span>
-                            )}
-
-                            <div className={clsx('flex', 'gap-2', 'pt-1')}>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await handleUpdateDeliveryStatus(order.id, 'producao');
-                                  // Close drawer if no more pending
-                                  if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
-                                }}
-                                className="orders-pending-card__accept"
-                              >
-                                ✓ Aceitar
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  await handleRecusarPedido(order.id);
-                                  if (deliveryOrders.filter(o => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
-                                }}
-                                className="orders-pending-card__reject"
-                              >
-                                Recusar
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="orders-mobile-stages" role="tablist" aria-label="Etapa dos pedidos">
-                {ordersStages.map(stage => (
-                  <button
-                    key={stage.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={effectiveMobileOrdersStage === stage.id}
-                    onClick={() => setMobileOrdersStage(stage.id)}
-                    className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active')}
-                  >
-                    <span>{stage.label}</span>
-                    <strong>{stage.count}</strong>
-                  </button>
-                ))}
-              </div>
-
-              {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
-              <div
-                className={clsx('orders-board', 'flex-1', 'gap-3', 'pb-3')}
-                style={ordersBoardStyle}
-              >
-
-
-                {/* COLUMN 1: Em produção */}
-                <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
-                  <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <div>
-                      <span className="orders-column__number">01 / SALÃO</span>
-                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Mesas em Atendimento</span>
-                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Lançados pelo garçom ou caixa</span>
-                    </div>
-                    <span className="orders-column__count">
-                      {filteredCol1.length}
-                    </span>
-                  </div>
-
-                  <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {filteredCol1.length === 0 ? (
-                      <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-koma-subtle', 'text-xs', 'space-y-1')}>
-                        <ClipboardList size={20} className={clsx('mx-auto', 'opacity-70', 'mb-2', 'text-emerald-700', 'dark:text-emerald-400')} />
-                        <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido local em produção"}</p>
-                      </div>
-                    ) : (
-                      <>
-                        {filteredCol1.map((order) => {
-                          const preparingItems = deriveProductionState(order.itens).preparingItems;
-                          const tableMovement = getTableMovementContext(order);
-                          const cardId = `prod-${order.id}`;
-                          const sla = getOrderSlaData(order, nowTimestamp);
-                          const isExpanded = !!expandedCardIds[cardId];
-                          const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
-                          const smartPosState = getSmartPosCardState(order);
-                          const presentation = getTableOrderPresentation(order);
-
-                          return (
-                            <div 
-                              key={`table-prod-${order.id}`} 
-                              onClick={() => setSelectedKanbanOrder(order)}
-                              onKeyDown={(event) => {
-                                if (event.target !== event.currentTarget) return;
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  setSelectedKanbanOrder(order);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`${presentation.title}, ${presentation.subtitle}, ver detalhes`}
-                              className={clsx(
-                                'orders-card orders-card--salon rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
-                                sla.borderTopClass
-                              )}
-                            >
-                              <div className="orders-card__identity">
-                                <div className="orders-card__number is-table">
-                                  <Users size={15} />
-                                  <strong>{presentation.shortLabel}</strong>
-                                </div>
-                                <div className="min-w-0">
-                                  <strong className="orders-card__identity-title">{presentation.title}</strong>
-                                  <span className="orders-card__identity-subtitle">{presentation.subtitle}</span>
-                                  <div className="orders-card__identity-chips">
-                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                                    <span className={clsx('orders-card__chip', 'is-primary')}>EM ATENDIMENTO</span>
-                                    {smartPosState ? (
-                                      <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
-                                        {smartPosState.label}
-                                      </span>
-                                    ) : (
-                                      <span className={clsx('orders-card__chip', 'is-muted')}>
-                                        {operationalOriginLabel(order.origemOperacional)}
-                                      </span>
-                                    )}
-                                    {tableMovement.transferredFromMesaIds.length > 0 && (
-                                      <span className={clsx('orders-card__chip', 'is-muted')}>
-                                        ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
-                                      </span>
-                                    )}
-                                    {tableMovement.mergedMesaIds.length > 0 && (
-                                      <span className={clsx('orders-card__chip', 'is-muted')}>
-                                        ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="orders-card__identity-side">
-                                  <span className="orders-card__price">{formatCurrency(totalVal)}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="orders-card__icon"
-                                    title="Imprimir pré-conta / conferência"
-                                    aria-label={`Imprimir conferência da ${presentation.title}`}
-                                  >
-                                    <Printer size={12} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
-
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  const ids = preparingItems.map(item => item.id);
-                                  if (onOptimisticUpdateItemStatus && ids.length > 0) {
-                                    onOptimisticUpdateItemStatus(ids, 'pronto');
-                                  }
-                                  setIsLoading(true);
-                                  try {
-                                    await Promise.all(ids.map(id =>
-                                      fetch(`${apiBaseUrl}/comandas/itens/${id}/status?status=pronto`, {
-                                        method: "PUT",
-                                        headers: authHeaders
-                                      })
-                                    ));
-                                  } catch (err) {
-                                    console.error(err);
-                                    onRefreshOrders();
-                                  } finally {
-                                    setIsLoading(false);
-                                  }
-                                }}
-                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
-                              >
-                                <Check size={13} />
-                                <span>{preparingItems.length === 1 ? 'Marcar item como pronto' : 'Marcar itens como prontos'}</span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
-                <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
-                  <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <div>
-                      <span className="orders-column__number">02 / SEM MESA</span>
-                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Balcão e delivery</span>
-                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Venda rápida, retirada e entrega</span>
-                    </div>
-                    <span className="orders-column__count">
-                      {filteredDigitalProduction.length}
-                    </span>
-                  </div>
-
-                  <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {filteredDigitalProduction.length === 0 ? (
-                      <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-koma-subtle', 'text-xs', 'space-y-1')}>
-                        <Globe size={20} className={clsx('mx-auto', 'opacity-40', 'mb-2', 'text-emerald-600 dark:text-emerald-300')} />
-                        <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido online em preparo"}</p>
-                      </div>
-                    ) : (
-                      <>
-                        {filteredDigitalProduction.map((order) => {
-                          const cardId = `sim-prod-${order.id}`;
-                          const sla = getOrderSlaData(order, nowTimestamp);
-                          const isExpanded = !!expandedCardIds[cardId];
-                          const isDeliveryOrder = order.modalidade === 'delivery';
-                          const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
-                          const buttonText = isDeliveryOrder ? 'SAIU PARA ENTREGA' : 'PRONTO PARA RETIRADA';
-
-                          return (
-                            <div 
-                              key={order.id} 
-                              onClick={() => openDeliveryOrderDetails(order)}
-                              onKeyDown={(event) => {
-                                if (event.target !== event.currentTarget) return;
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  openDeliveryOrderDetails(order);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`${order.isQuickSale ? 'Venda rápida' : order.modalidade} pedido ${humanOrderNumber(order)}, ver detalhes`}
-                              className={clsx(
-                                'orders-card orders-card--digital rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
-                                order.isQuickSale && 'orders-card--quick-sale',
-                                sla.borderTopClass
-                              )}
-                            >
-                              <div className="orders-card__identity">
-                                <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale')}>
-                                  {order.isQuickSale ? <Smartphone size={15} /> : <Globe size={15} />}
-                                  <strong>#{humanOrderNumber(order)}</strong>
-                                </div>
-                                <div className="min-w-0">
-                                  <strong className="orders-card__identity-title">
-                                    {order.isQuickSale ? 'Venda rápida' : order.cliente}
-                                  </strong>
-                                  <span className="orders-card__identity-subtitle">
-                                    {order.isQuickSale
-                                      ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
-                                      : `${isDeliveryOrder ? 'Delivery' : 'Retirada'}${order.telefone ? ` · ${order.telefone}` : ''}`}
-                                  </span>
-                                  <div className="orders-card__identity-chips">
-                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                                    <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
-                                    <span className={clsx('orders-card__chip', 'is-muted')}>{operationalOriginLabel(order.origemOperacional)}</span>
-                                  </div>
-                                </div>
-                                <div className="orders-card__identity-side">
-                                  <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                                  <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="orders-card__icon"
-                                    title="Imprimir pré-conta / conferência"
-                                    aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
-                                  >
-                                    <Printer size={12} />
-                                  </button>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
-
-                              {isDeliveryOrder && order.endereco && (
-                                <span className={clsx('font-normal', 'text-xs', 'text-koma-subtle', 'flex', 'items-center', 'gap-1', 'truncate')}>
-                                  <MapPin size={11} className={clsx('shrink-0', 'text-emerald-600 dark:text-emerald-300/80')} />
-                                  <span className="truncate">{order.endereco}</span>
-                                </span>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
-                                }}
-                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
-                              >
-                                <Check size={13} />
-                                <span>{buttonText === 'SAIU PARA ENTREGA' ? 'Saiu para entrega' : 'Pronto para retirada'}</span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-                <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
-                  <div className={clsx('orders-column__header', 'px-4', 'py-2.5', 'flex', 'justify-between', 'items-center', 'shrink-0')}>
-                    <div>
-                      <span className="orders-column__number">03 / FECHAMENTO</span>
-                      <span className={clsx('font-bold', 'text-koma-foreground', 'font-sans', 'block', 'text-sm')}>Itens prontos e conclusão</span>
-                      <span className={clsx('text-xs', 'text-koma-subtle', 'block', 'mt-0.5', 'font-normal')}>Veja o que já pode ser recebido ou finalizado</span>
-                    </div>
-                    <span className="orders-column__count">
-                      {filteredCol2Table.length + filteredDeliveryFinalization.length}
-                    </span>
-                  </div>
-
-                  <div className={clsx('orders-column__body', 'p-2.5', 'sm:p-3', 'flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                    {filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 ? (
-                      <div className={clsx('orders-empty-state', 'py-16', 'text-center', 'text-koma-subtle', 'text-xs', 'space-y-1')}>
-                        <Check size={20} className={clsx('mx-auto', 'opacity-40', 'mb-2', 'text-emerald-600 dark:text-emerald-300')} />
-                        <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido aguardando finalização"}</p>
-                      </div>
-                    ) : (
-                      <>
-                        {/* 1. Mesas/Consumo Local aguardando pagamento */}
-                        {filteredCol2Table.map((order) => {
-                          const cardId = `ready-${order.id}`;
-                          const sla = getOrderSlaData(order, nowTimestamp);
-                          const isExpanded = !!expandedCardIds[cardId];
-                          const contaPedida = !!(order as any).contaPedida;
-                          const badgeText = contaPedida ? 'CONTA PEDIDA' : 'PRONTO / RECEBER';
-                          const totalVal = order.itens.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
-                          const tableMovement = getTableMovementContext(order);
-                          const pendingTableItems = Number((order as any).itensEmPreparoCount || 0);
-                          const readyTableItems = order.itens.filter(item => (item.status as string) !== 'cancelado').length;
-                          const totalTableItems = readyTableItems + pendingTableItems;
-                          const smartPosState = getSmartPosCardState(order);
-                          const presentation = getTableOrderPresentation(order);
-
-                          return (
-                            <div
-                              key={`close-${order.id}`}
-                              onClick={() => setSelectedKanbanOrder(order)}
-                              onKeyDown={(event) => {
-                                if (event.target !== event.currentTarget) return;
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  setSelectedKanbanOrder(order);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`${presentation.title}, ${badgeText.toLowerCase()}, ver detalhes`}
-                              className={clsx(
-                                'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
-                                sla.borderTopClass
-                              )}
-                            >
-                              <div className="orders-card__identity">
-                                <div className="orders-card__number is-table">
-                                  <Users size={15} />
-                                  <strong>{presentation.shortLabel}</strong>
-                                </div>
-                                <div className="min-w-0">
-                                  <strong className="orders-card__identity-title">
-                                    {pendingTableItems > 0 ? `Itens prontos · ${presentation.title}` : presentation.title}
-                                  </strong>
-                                  <span className="orders-card__identity-subtitle">
-                                    {pendingTableItems > 0
-                                      ? `${readyTableItems} de ${totalTableItems} ${totalTableItems === 1 ? 'item pronto' : 'itens prontos'} · ${presentation.subtitle}`
-                                      : presentation.subtitle}
-                                  </span>
-                                  <div className="orders-card__identity-chips">
-                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                                    <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
-                                    {smartPosState ? (
-                                      <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
-                                        {smartPosState.label}
-                                      </span>
-                                    ) : (
-                                      <span className={clsx('orders-card__chip', 'is-muted')}>
-                                        {operationalOriginLabel(order.origemOperacional)}
-                                      </span>
-                                    )}
-                                    {tableMovement.transferredFromMesaIds.length > 0 && (
-                                      <span className={clsx('orders-card__chip', 'is-muted')}>
-                                        ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
-                                      </span>
-                                    )}
-                                    {tableMovement.mergedMesaIds.length > 0 && (
-                                      <span className={clsx('orders-card__chip', 'is-muted')}>
-                                        ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="orders-card__identity-side">
-                                  <span className="orders-card__price" title={pendingTableItems > 0 ? 'Valor dos itens prontos' : 'Valor a receber'}>{formatCurrency(totalVal)}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="orders-card__icon"
-                                    title="Imprimir pré-conta / conferência"
-                                    aria-label={`Imprimir conferência da ${presentation.title}`}
-                                  >
-                                    <Printer size={12} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {pendingTableItems > 0 && (
-                                <div className={clsx('flex', 'items-center', 'gap-2', 'rounded-lg', 'border', 'border-koma-warning-border', 'bg-koma-warning-bg', 'px-2.5', 'py-2', 'text-[11px]', 'font-semibold', 'text-koma-warning-text')}>
-                                  <Clock size={13} className="shrink-0" />
-                                  <span>
-                                    {pendingTableItems === 1 ? 'Outro item continua em preparo.' : `Outros ${pendingTableItems} itens continuam em preparo.`}
-                                  </span>
-                                </div>
-                              )}
-
-                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
-
-                              <button
-                                type="button"
-                                disabled={isLoading}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  
-                                  const tableComandas = orders.filter(
-                                    o => Number(o.mesaId) === Number(order.mesaId)
-                                      && isTableCheckoutOrder(o)
-                                  );
-                                  const checkoutOrder = buildTableCheckoutOrder(tableComandas);
-                                  if (!checkoutOrder) return;
-
-                                  const readyItemIds = checkoutOrder.itens
-                                    .filter(item => !item.pago && isItemReadyForCheckout(item))
-                                    .map(item => item.id);
-                                  setSelectedOrder(checkoutOrder);
-                                  setShowCheckoutModal(true);
-                                  setCheckoutServiceTax(true);
-                                  setSplitPeople('1');
-                                  setSelectedItemIds(readyItemIds);
-                                  setSmartPosRecoveryError('');
-                                  const readyTotal = readyItemIds.length > 0
-                                    ? getSelectedItemsTotal(checkoutOrder, readyItemIds, true)
-                                    : 0;
-                                  setPaymentValor(readyTotal > 0 ? readyTotal : '');
-                                }}
-                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
-                              >
-                                {smartPosState?.blocksPayment ? (
-                                  <><Smartphone size={13} /><span>{smartPosState.ctaLabel}</span></>
-                                ) : (
-                                  <><Check size={13} /><span>{pendingTableItems > 0 ? 'Receber itens prontos' : 'Abrir pagamento'}</span></>
-                                )}
-                              </button>
-                            </div>
-                          );
-                        })}
-
-                        {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
-                        {filteredDeliveryFinalization.map((order) => {
-                          const cardId = `transito-${order.id}`;
-                          const sla = getOrderSlaData(order, nowTimestamp);
-                          const isExpanded = !!expandedCardIds[cardId];
-                          const isDeliveryOrder = order.modalidade === 'delivery';
-                          const badgeText = order.pago
-                            ? 'PAGO'
-                            : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
-
-                          return (
-                            <div 
-                              key={`transito-${order.id}`} 
-                              onClick={() => openDeliveryOrderDetails(order)}
-                              onKeyDown={(event) => {
-                                if (event.target !== event.currentTarget) return;
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  openDeliveryOrderDetails(order);
-                                }
-                              }}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`${order.isQuickSale ? 'Venda rápida' : order.modalidade} pedido ${humanOrderNumber(order)}, ver detalhes`}
-                              className={clsx(
-                                'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
-                                order.isQuickSale && 'orders-card--quick-sale',
-                                sla.borderTopClass
-                              )}
-                            >
-                              <div className="orders-card__identity">
-                                <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale')}>
-                                  {order.isQuickSale ? <Smartphone size={15} /> : <Globe size={15} />}
-                                  <strong>#{humanOrderNumber(order)}</strong>
-                                </div>
-                                <div className="min-w-0">
-                                  <strong className="orders-card__identity-title">
-                                    {order.isQuickSale ? 'Venda rápida' : order.cliente}
-                                  </strong>
-                                  <span className="orders-card__identity-subtitle">
-                                    {order.isQuickSale
-                                      ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
-                                      : `${isDeliveryOrder ? 'Delivery' : 'Retirada'}${order.telefone ? ` · ${order.telefone}` : ''}`}
-                                  </span>
-                                  <div className="orders-card__identity-chips">
-                                    <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                                    <span className={clsx('orders-card__chip', 'is-primary')}>{badgeText}</span>
-                                    <span className={clsx('orders-card__chip', 'is-muted')}>{operationalOriginLabel(order.origemOperacional)}</span>
-                                  </div>
-                                </div>
-                                <div className="orders-card__identity-side">
-                                  <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                                  <div className="flex items-center justify-end gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => handleQuickPrintOrder(order, e)}
-                                    className="orders-card__icon"
-                                    title="Imprimir pré-conta / conferência"
-                                    aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
-                                  >
-                                    <Printer size={12} />
-                                  </button>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion)}
-
-                              {isDeliveryOrder && order.endereco && (
-                                <span className={clsx('font-normal', 'text-xs', 'text-koma-subtle', 'flex', 'items-center', 'gap-1', 'truncate')}>
-                                  <MapPin size={11} className={clsx('shrink-0', 'text-emerald-600 dark:text-emerald-300/80')} />
-                                  <span className="truncate">{order.endereco}</span>
-                                </span>
-                              )}
-
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (isLoading) return;
-                                  if (order.pago) {
-                                    await handleFecharDelivery(order.id);
-                                    return;
-                                  }
-                                  const fullOrder = orders.find(o => o.id === order.id);
-                                  if (fullOrder) {
-                                    const mappedOrder: Order = {
-                                      ...fullOrder,
-                                      deliveryStatus: (order.status === 'analise' ? 'pendente' : order.status) as Order['deliveryStatus'],
-                                      itens: fullOrder.itens.map((item: any) => ({
-                                        id: item.id,
-                                        produtoId: item.produto_id || item.produtoId,
-                                        nome: item.nome || `Item ${item.produtoId}`,
-                                        preco: item.preco_unit || item.preco,
-                                        observacao: item.observacao || '',
-                                        clienteNome: item.cliente_nome || item.clienteNome || 'Consumo Geral',
-                                        status: (item.status === 'preparando' && ['pronto', 'transito', 'saiu_para_entrega'].includes(order.status)) ? 'pronto' : item.status,
-                                        pago: item.pago
-                                      }))
-                                    };
-                                    const activeUnpaidItemIds = mappedOrder.itens
-                                      .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-                                      .map((item: any) => item.id);
-                                    setSelectedOrder(mappedOrder);
-                                    setShowCheckoutModal(true);
-                                    setCheckoutServiceTax(false);
-                                    setSplitPeople('1');
-                                    setSelectedItemIds(activeUnpaidItemIds);
-                                    const sub = mappedOrder.itens
-                                      .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-                                      .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
-                                    setPaymentValor(sub);
-                                  } else {
-                                    handleFinalizarPedido(order.id);
-                                  }
-                                }}
-                                className={clsx('orders-card__action', 'w-full', 'py-2', 'px-3', 'h-8', 'sm:h-9', 'font-bold', 'text-xs', 'sm:text-sm', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'flex', 'items-center', 'justify-center', 'gap-1.5')}
-                              >
-                                <Check size={13} /><span>{order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-            </div>
+            <CaixaOrdersWorkspace
+              columns={{
+                tableProduction: filteredCol1.map(buildCashierTableCard),
+                digitalProduction: filteredDigitalProduction,
+                tableClosing: filteredCol2Table.map(buildCashierTableCard),
+                digitalFinalization: filteredDeliveryFinalization,
+              }}
+              pendingCashPayments={pagamentosPendentes.map(pag => {
+                const comandaMesa = orders.find(order => order.id === pag.comanda_id);
+                return { ...pag, mesaNum: comandaMesa ? comandaMesa.mesaId : '?' };
+              })}
+              insights={operationalOrderInsights}
+              search={{ query: searchQuery, onChange: setSearchQuery }}
+              acceptance={{
+                orders: deliveryOrders,
+                automatic: autoAccept,
+                drawerOpen: isDrawerOpen,
+                onAutomaticChange: setAutoAccept,
+                onDrawerChange: setIsDrawerOpen,
+              }}
+              navigation={{
+                stage: mobileOrdersStage,
+                onStageChange: setMobileOrdersStage,
+                expandedCardIds,
+                onToggleCard: toggleCardExpansion,
+              }}
+              actions={{
+                confirmCashPayment: handleConfirmPendingCashPayment,
+                rejectCashPayment: handleRejectPendingCashPayment,
+                acceptDigitalOrder: handleAcceptPendingDeliveryOrder,
+                rejectDigitalOrder: handleRejectPendingDeliveryOrder,
+                inspectTableOrder: order => setSelectedKanbanOrder(order),
+                inspectDigitalOrder: openDeliveryOrderDetails,
+                printConference: handleQuickPrintOrder,
+                markTableItemsReady: handleMarkTableItemsReady,
+                advanceDigitalOrder: handleAdvanceDigitalOrder,
+                openTablePayment: handleOpenTablePayment,
+                finalizeDigitalOrder: handleFinalizeDigitalOrder,
+              }}
+              isLoading={isLoading}
+              now={nowTimestamp}
+            />
           )}
 
           {/* VIEW 2: PDV (Pedidos Balcão) */}
@@ -5879,246 +5185,20 @@ export function CaixaPanel({
 
           {/* VIEW 3: MAPA DE MESAS (Salão) */}
           {activeSubTab === 'mesas' && (
-            <div className={clsx('orders-workspace', 'flex', 'h-full', 'min-h-0', 'flex-col', 'gap-3')}>
-              <OperationalBanner
-                id="tables-heading"
-                eyebrow="SALÃO"
-                title="Mesas"
-                accent="por situação"
-                description="A cor e o texto de cada mesa mostram o que precisa acontecer agora."
-                metrics={[
-                  { label: 'ocupação', value: `${salonInsights.occupancy}%` },
-                  { label: 'consumo em aberto', value: formatCompactCurrency(salonInsights.openValue) },
-                  { label: 'maior atendimento', value: salonInsights.oldestService },
-                ]}
-              />
-
-              <section className={clsx('flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-hidden', 'rounded-[22px]', 'border', 'border-koma-border', 'bg-koma-panel')}>
-                <div className={clsx('flex', 'flex-col', 'gap-2', 'border-b', 'border-koma-border', 'px-3', 'py-3', 'sm:flex-row', 'sm:items-center', 'sm:justify-between', 'sm:px-4')}>
-                  <div className={clsx('flex', 'w-full', 'min-w-0', 'max-w-full', 'gap-1', 'overflow-x-auto', 'overscroll-x-contain', 'rounded-xl', 'bg-koma-page', 'p-1.5', 'pr-3', '[scrollbar-width:none]', '[&::-webkit-scrollbar]:hidden')}>
-                    {[
-                      { id: 'all' as const, label: 'Todas', count: tableStatusCounts.all, dot: 'bg-zinc-500' },
-                      { id: 'free' as const, label: 'Livres', count: tableStatusCounts.free, dot: 'bg-[#45b995]' },
-                      { id: 'occupied' as const, label: 'Em atendimento', count: tableStatusCounts.occupied, dot: 'bg-koma-danger-text' },
-                      { id: 'payment' as const, label: 'Para receber', count: tableStatusCounts.payment, dot: 'bg-amber-500' },
-                    ].map(filter => (
-                      <button
-                        key={filter.id}
-                        type="button"
-                        aria-pressed={tableStatusFilter === filter.id}
-                        onClick={() => setTableStatusFilter(filter.id)}
-                        className={clsx(
-                          'shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-[10px] font-bold transition-colors',
-                          tableStatusFilter === filter.id
-                            ? filter.id === 'occupied'
-                              ? 'bg-koma-danger-bg text-koma-danger-text'
-                              : filter.id === 'payment'
-                                ? 'bg-amber-100 text-amber-900 dark:bg-[#46212a] dark:text-[#efb2bc]'
-                                : filter.id === 'free'
-                                  ? 'bg-emerald-100 text-emerald-900 dark:bg-[#123c31] dark:text-[#6ee7b7]'
-                                  : 'bg-koma-raised text-koma-foreground border border-koma-border'
-                            : 'text-koma-muted hover:bg-black/5 dark:hover:bg-white/[0.04] hover:text-koma-secondary'
-                        )}
-                      >
-                        <span className={clsx('mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle', filter.dot)} aria-hidden="true" />
-                        {filter.label} <span className={clsx('ml-1', 'font-mono', 'opacity-70')}>{filter.count}</span>
-                      </button>
-                    ))}
-                    <span className="w-2 shrink-0" aria-hidden="true" />
-                  </div>
-                </div>
-
-                <div className={clsx('min-h-0', 'flex-1', 'overflow-y-auto', 'p-3', 'sm:p-4')}>
-                  {salonTableCards.length === 0 ? (
-                    <div className={clsx('flex', 'min-h-56', 'items-center', 'justify-center', 'text-center')}>
-                      {fetchError ? (
-                        <div className={clsx('max-w-md', 'space-y-2', 'rounded-2xl', 'border', 'border-rose-900/40', 'bg-rose-950/15', 'p-5')}>
-                          <AlertTriangle className={clsx('mx-auto', 'text-rose-400')} size={20} />
-                          <strong className={clsx('block', 'text-sm', 'text-koma-foreground')}>Não foi possível carregar o salão</strong>
-                          <p className={clsx('break-words', 'font-mono', 'text-[10px]', 'leading-relaxed', 'text-koma-subtle')}>{fetchError}</p>
-                        </div>
-                      ) : (
-                        <div className={clsx('space-y-2', 'text-koma-muted')}>
-                          <ClipboardList className={clsx('mx-auto', 'text-emerald-700 dark:text-emerald-400')} size={22} />
-                          <strong className={clsx('block', 'text-sm', 'text-koma-secondary')}>Nenhuma mesa cadastrada</strong>
-                          <p className="text-xs">Revise a configuração do salão antes de iniciar a operação.</p>
-                        </div>
-                      )}
-                    </div>
-                  ) : visibleSalonTableCards.length === 0 ? (
-                    <div className={clsx('flex', 'min-h-56', 'items-center', 'justify-center', 'text-center', 'text-xs', 'text-koma-muted')}>
-                      Nenhuma mesa neste filtro.
-                    </div>
-                  ) : (
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-2', 'sm:grid-cols-3', 'sm:gap-2.5', 'xl:grid-cols-4', '2xl:grid-cols-6')}>
-                      {visibleSalonTableCards.map((card) => {
-                        const { table, displayMesaId, tableOrders, isMerged, isOccupied, hasPendingPayment, total } = card;
-                        const tableOrderNumbers = Array.from(new Set(
-                          tableOrders
-                            .flatMap(order => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
-                            .map(number => Number(number))
-                            .filter(number => Number.isFinite(number) && number > 0)
-                        ));
-                        const originId = tableOrders.find(order => order.mesaOrigemId && Number(order.mesaOrigemId) !== Number(displayMesaId))?.mesaOrigemId;
-                        const transferredFromId = tableOrders.find(order => order.mesaTransferidaDe && Number(order.mesaTransferidaDe) !== Number(displayMesaId))?.mesaTransferidaDe;
-                        const statusLabel = isMerged
-                          ? 'Mesclada'
-                          : hasPendingPayment
-                            ? 'Para receber'
-                            : isOccupied
-                              ? 'Em atendimento'
-                              : 'Livre';
-
-                        return (
-                          <article
-                            key={table.id}
-                            data-table-status={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
-                            className={clsx(
-                              'group flex min-h-[106px] sm:min-h-[148px] flex-col justify-between gap-2 sm:gap-3 rounded-xl sm:rounded-2xl border p-2.5 sm:p-3.5 transition-colors shadow-sm',
-                              isMerged && 'border-dashed border-koma-border bg-black/10 dark:bg-black/20 opacity-65',
-                              hasPendingPayment && 'border-amber-300 dark:border-[#74404b] bg-amber-50/90 dark:bg-[#241419] hover:border-amber-500',
-                              isOccupied && !hasPendingPayment && 'border-koma-danger-border bg-koma-danger-bg hover:border-koma-danger-text',
-                              !isOccupied && !isMerged && 'koma-table-free-card'
-                            )}
-                          >
-                            <div className={clsx('flex', 'items-start', 'justify-between', 'gap-2')}>
-                              <div className="min-w-0">
-                                <span className={clsx('block', 'font-mono', 'text-[8px]', 'font-bold', 'uppercase', 'tracking-[0.2em]', 'text-koma-muted')}>Mesa</span>
-                                <div className={clsx('mt-0.5', 'flex', 'items-baseline', 'gap-2')}>
-                                  <strong className={clsx('text-xl sm:text-2xl', 'font-extrabold', 'leading-none', 'text-koma-foreground')}>{table.id}</strong>
-                                  {table.nome && table.nome !== `Mesa ${table.id}` && (
-                                    <span className={clsx('line-clamp-1', 'break-words', 'text-[10px]', 'font-semibold', 'text-koma-secondary')}>{table.nome}</span>
-                                  )}
-                                </div>
-                              </div>
-                              {tableOrderNumbers.length > 0 && (
-                                <span
-                                  className={clsx('shrink-0', 'rounded-lg', 'border', 'border-koma-border', 'bg-black/10', 'px-2', 'py-1', 'font-mono', 'text-[9px]', 'font-extrabold', 'text-koma-secondary')}
-                                  title={`Pedido ${tableOrderNumbers.map(number => `#${number}`).join(' + ')}`}
-                                >
-                                  Pedido {tableOrderNumbers[0]}{tableOrderNumbers.length > 1 ? ` +${tableOrderNumbers.length - 1}` : ''}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="space-y-1.5 sm:space-y-2">
-                              <div className={clsx('flex', 'flex-wrap', 'items-center', 'gap-1.5')}>
-                                <span className={clsx(
-                                  'rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider',
-                                  isMerged && 'border-koma-border bg-koma-card text-koma-muted',
-                                  hasPendingPayment && 'border-amber-300 dark:border-[#8a4753] bg-amber-100 dark:bg-[#4b222b] text-amber-900 dark:text-[#efb2bc]',
-                                  isOccupied && !hasPendingPayment && 'koma-badge-danger',
-                                  !isOccupied && !isMerged && 'border-emerald-300 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300'
-                                )}>
-                                  <span
-                                    className={clsx(
-                                      'mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle',
-                                      hasPendingPayment ? 'bg-amber-500' : isOccupied ? 'bg-koma-danger-text' : 'bg-emerald-500'
-                                    )}
-                                    aria-hidden="true"
-                                  />
-                                  {statusLabel}
-                                </span>
-                                <span className={clsx('flex', 'items-center', 'gap-1', 'text-[9px]', 'text-koma-muted')}>
-                                  <Users size={10} /> {table.capacidade || 4}
-                                </span>
-                              </div>
-
-                              {isOccupied ? (
-                                <div className={clsx('flex', 'items-end', 'justify-between', 'gap-2')}>
-                                  {tableOrders.length > 0 ? (
-                                    <>
-                                      <span className={clsx('text-[9px]', 'text-koma-muted')}>Consumo</span>
-                                      <strong className={clsx(
-                                        'font-mono text-xs sm:text-sm',
-                                        hasPendingPayment ? 'text-amber-800 dark:text-[#efb2bc]' : 'text-koma-danger-text'
-                                      )}>
-                                        {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                      </strong>
-                                    </>
-                                  ) : (
-                                    <span className={clsx('text-[9px]', 'text-koma-muted')}>Sincronizando…</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className={clsx('hidden', 'sm:block', 'text-[10px]', 'text-koma-muted')}>Pronta para receber clientes</span>
-                              )}
-
-                              {(originId || transferredFromId) && (
-                                <span className={clsx('block', 'truncate', 'text-[9px]', 'text-koma-muted')}>
-                                  {originId ? `Unida à M${originId}` : `Transf. M${transferredFromId}`}
-                                </span>
-                              )}
-                            </div>
-
-                            {!isMerged && (
-                              <div className={clsx('flex', 'gap-1.5', 'border-t', 'border-koma-border', 'pt-2 sm:pt-2.5')}>
-                                {isOccupied ? (
-                                  hasPendingPayment ? (
-                                    <button
-                                      type="button"
-                                      disabled={tableOrders.length === 0}
-                                      onClick={() => {
-                                        const checkoutOrder = buildTableCheckoutOrder(tableOrders);
-                                        if (!checkoutOrder) return;
-                                        setSelectedOrder(checkoutOrder);
-                                        setShowCheckoutModal(true);
-                                        setCheckoutServiceTax(true);
-                                        setSplitPeople('1');
-                                        setSelectedItemIds([]);
-                                        const subtotal = checkoutOrder.itens
-                                          .filter(item => (item.status as string) !== 'cancelado')
-                                          .reduce((sum, item) => sum + item.preco, 0);
-                                        const checkoutTotal = subtotal * (1.0 + (taxaServicoAtiva ? serviceTaxRate / 100 : 0));
-                                        setPaymentValor(Math.max(0, checkoutTotal - Number(checkoutOrder.valorPago || 0)));
-                                      }}
-                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-badge-warning', 'hover:bg-amber-200 dark:hover:bg-amber-900/40', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
-                                    >
-                                      <CreditCard size={11} />
-                                      Receber
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      disabled={tableOrders.length === 0}
-                                      onClick={() => tableOrders[0] && setSelectedKanbanOrder({
-                                        ...tableOrders[0],
-                                        projectionScope: 'table',
-                                        contextoSalao: true,
-                                        itens: tableOrders.flatMap(order => order.itens || []),
-                                        comandaIds: tableOrders.map(order => order.id),
-                                      })}
-                                      className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-table-occupied-action', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-all', 'disabled:cursor-wait', 'disabled:opacity-45', 'cursor-pointer')}
-                                    >
-                                      <Receipt size={11} />
-                                      Ver comanda
-                                    </button>
-                                  )
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setPdvOrderType('mesa');
-                                      setPdvTargetMesaId(table.id);
-                                      setBalcaoMobileView('produtos');
-                                      setActiveSubTab('balcao');
-                                    }}
-                                    className={clsx('flex', 'min-h-8 sm:min-h-9', 'flex-1', 'items-center', 'justify-center', 'gap-1', 'rounded-lg', 'koma-table-free-action', 'px-2', 'text-[9px]', 'font-extrabold', 'uppercase', 'tracking-wide', 'transition-colors', 'cursor-pointer', 'shadow-xs')}
-                                  >
-                                    <Plus size={11} />
-                                    Abrir pedido
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </section>
-            </div>
+            <CaixaSalonTab
+              cards={salonTableCards}
+              visibleCards={visibleSalonTableCards}
+              counts={tableStatusCounts}
+              insights={salonInsights}
+              filter={tableStatusFilter}
+              onFilterChange={setTableStatusFilter}
+              fetchError={fetchError}
+              actions={{
+                receiveTable: handleReceiveSalonTable,
+                inspectTable: handleInspectSalonTable,
+                openTableOrder: handleOpenSalonTableOrder,
+              }}
+            />
           )}
 
           {/* VIEW 4: MEU DESEMPENHO (Analytics) */}
@@ -8951,260 +8031,25 @@ export function CaixaPanel({
 
       {/* 6. MODAL: INSPECIONAR E REIMPRIMIR PEDIDO DO KANBAN */}
       {selectedKanbanOrder && (
-        <div
-          onClick={(e) => { if (e.target === e.currentTarget) setSelectedKanbanOrder(null); }}
-          className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
-        >
-          <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={clsx('orders-detail-modal', 'w-full', 'max-w-md', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'relative', 'animate-scale-in')}>
-            <div className="orders-detail-modal__hero">
-              <div className={clsx('orders-detail-modal__number', selectedIsQuickSale && 'is-quick-sale')}>
-                {selectedIsQuickSale ? <Smartphone size={18} /> : selectedKanbanOrder.mesaId > 0 ? <Users size={18} /> : <ShoppingCart size={18} />}
-                <strong>{selectedKanbanOrder.mesaId > 0 ? `M${selectedKanbanOrder.mesaId}` : `#${selectedOrderNumber}`}</strong>
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="orders-detail-modal__eyebrow">
-                  {selectedIsQuickSale ? 'Venda rápida' : selectedKanbanOrder.mesaId > 0 ? 'Atendimento do salão' : selectedKanbanOrder.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
-                </span>
-                <h3 id="kanban-detail-title" className="orders-detail-modal__title">
-                  {selectedIsQuickSale
-                    ? `Pedido #${selectedOrderNumber}`
-                    : selectedKanbanOrder.mesaId > 0
-                      ? `Mesa ${selectedKanbanOrder.mesaId}`
-                      : selectedKanbanOrder.identificador || `Pedido #${selectedOrderNumber}`}
-                </h3>
-                <div className="orders-detail-modal__status-line">
-                  <span>{operationalOriginLabel(selectedKanbanOrder.origemOperacional)}</span>
-                  <span aria-hidden="true">•</span>
-                  <strong>{deliveryStatusLabel(selectedKanbanOrder.deliveryStatus, selectedKanbanOrder.modalidade)}</strong>
-                </div>
-              </div>
-              <div className="orders-detail-modal__hero-side">
-                <strong>{formatCurrency(selectedOrderTotal)}</strong>
-              <button
-                type="button"
-                onClick={() => setSelectedKanbanOrder(null)}
-                  className="orders-detail-modal__close"
-                  aria-label="Fechar detalhes"
-              >
-                <X size={16} />
-              </button>
-              </div>
-            </div>
-
-            <div className="orders-detail-modal__metrics">
-              <div><span>Pedido</span><strong>#{selectedOrderNumber}</strong></div>
-              <div><span>Horário</span><strong>{selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</strong></div>
-              <div><span>Itens</span><strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)}</strong></div>
-            </div>
-
-            {/* Itens e info extras */}
-            <div className="space-y-3">
-              {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
-                <div className={clsx('bg-emerald-950/20', 'p-3', 'rounded-2xl', 'border', 'border-emerald-900/40', 'text-xs', 'text-emerald-600 dark:text-emerald-300', 'flex', 'items-center', 'justify-between', 'shadow-sm', 'font-sans')}>
-                  <div>
-                    <strong className={clsx('text-emerald-400', 'block', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold')}>Consumo Mesclado:</strong>
-                    <span className="leading-relaxed">Este lote possui consumo mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
-                  </div>
-                  <span className={clsx('text-lg', 'shrink-0', 'pl-2')}>🔗</span>
-                </div>
-              )}
-
-              {selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
-                <div className={clsx('bg-purple-950/20', 'p-3', 'rounded-2xl', 'border', 'border-purple-900/40', 'text-xs', 'text-purple-300', 'flex', 'items-center', 'justify-between', 'shadow-sm', 'font-sans', 'animate-pulse-subtle')}>
-                  <div>
-                    <strong className={clsx('text-purple-400', 'block', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold')}>Consumo Transferido:</strong>
-                    <span className="leading-relaxed">Este lote foi transferido da <strong>Mesa {selectedKanbanOrder.mesaTransferidaDe}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
-                  </div>
-                  <span className={clsx('text-lg', 'shrink-0', 'pl-2')}>🔄</span>
-                </div>
-              )}
-
-              {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
-                <div className="orders-detail-modal__customer">
-                  <div>
-                    <span>Cliente</span>
-                    <strong>{selectedKanbanOrder.identificador}</strong>
-                  </div>
-                  {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <div className="orders-detail-modal__section-title">
-                  <span>Itens do pedido</span>
-                  <strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} no total</strong>
-                </div>
-                <div className="orders-detail-modal__items">
-                {selectedDetailItems.map((item, idx) => (
-                  <div key={`${item.nome}-${item.observacao}-${idx}`} className="orders-detail-modal__item">
-                    <span className="orders-detail-modal__quantity">{item.quantidade}×</span>
-                    <div className="min-w-0 flex-1">
-                      <strong>{item.nome}</strong>
-                      {item.observacao && <span className="orders-detail-modal__observation">{item.observacao}</span>}
-                      {item.clienteNome !== 'Consumo Geral' && item.clienteNome.toLowerCase() !== 'balcão' && (
-                        <span className="orders-detail-modal__for">Para: {item.clienteNome}</span>
-                      )}
-                    </div>
-                    <span className={clsx('orders-detail-modal__item-status', item.status === 'pronto' && 'is-ready')}>
-                      {item.status === 'preparando' ? 'Em preparo' : item.status === 'pronto' ? 'Pronto' : item.status}
-                    </span>
-                  </div>
-                ))}
-                </div>
-              </div>
-
-              {/* Botões de impressão */}
-              <div className={clsx('flex', 'flex-col', 'gap-2', 'pt-1')}>
-                {selectedCanAdvanceDigital && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const isDelivery = selectedKanbanOrder.modalidade === 'delivery';
-                      const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, isDelivery ? 'transito' : 'pronto');
-                      if (updated) setSelectedKanbanOrder(null);
-                    }}
-                    className="orders-detail-modal__primary-action"
-                  >
-                    <Check size={15} />
-                    <span>{selectedKanbanOrder.modalidade === 'delivery' ? 'Marcar saída para entrega' : 'Marcar pronto para retirada'}</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const printUrl = selectedKanbanOrder.lancamentoId
-                        ? `${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.lancamentoId}/reimprimir`
-                        : `${apiBaseUrl}/comandas/${selectedKanbanOrder.comandaId || selectedKanbanOrder.id}/imprimir-recibo`;
-                      const res = await fetch(printUrl, {
-                        method: "POST",
-                        headers: authHeaders
-                      });
-                      if (res.ok) {
-                        window.dispatchEvent(
-                          new Event('koma_print_monitor_refresh')
-                        );
-                        setSelectedKanbanOrder(null);
-                      } else {
-                        showToast("Erro ao solicitar reimpressão.", 'error');
-                      }
-                    } catch (err) {
-                      console.error(err);
-                      showToast("Erro ao solicitar reimpressão.", 'error');
-                    }
-                  }}
-                  className="orders-detail-modal__reprint"
-                >
-                  <Printer size={13} />
-                  <span>Reimprimir produção</span>
-                </button>
-
-                {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
-                  <div className={clsx('space-y-2', 'w-full')}>
-                    <div className={clsx('flex', 'gap-2', 'w-full')}>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-                          const response = await fetch(url, { method: 'POST', headers: authHeaders });
-                          if (response.ok) {
-                            window.dispatchEvent(
-                              new Event('koma_print_monitor_refresh')
-                            );
-                            setSelectedKanbanOrder(null);
-                          } else {
-                            const errD = await response.json();
-                            showToast(`Erro: ${errD.detail}`, 'error');
-                          }
-                        } catch (err) {
-                          console.error(err);
-                          showToast("Erro ao imprimir comanda inteira.", 'error');
-                        }
-                      }}
-                      className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-koma-raised', 'text-koma-secondary', 'hover:text-koma-foreground', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
-                    >
-                      <Printer size={13} />
-                      <span>Comanda Inteira</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-                          const response = await fetch(url, { method: 'POST', headers: authHeaders });
-                          if (response.ok) {
-                            window.dispatchEvent(
-                              new Event('koma_print_monitor_refresh')
-                            );
-                            setSelectedKanbanOrder(null);
-                          } else {
-                            const errD = await response.json();
-                            showToast(`Erro: ${errD.detail}`, 'error');
-                          }
-                        } catch (err) {
-                          console.error(err);
-                          showToast("Erro ao imprimir apenas valores.", 'error');
-                        }
-                      }}
-                      className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-koma-raised', 'text-koma-secondary', 'hover:text-koma-foreground', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
-                    >
-                      <Printer size={13} />
-                      <span>Só Valores</span>
-                    </button>
-                    </div>
-                    {selectedKanbanOrder.contextoSalao && (
-                      <div className={clsx('flex', 'gap-2', 'w-full')}>
-                        <select
-                          aria-label="Mesa de destino"
-                          value={tableTransferTargetId}
-                          onChange={(event) => setTableTransferTargetId(event.target.value)}
-                          disabled={isTransferringTable}
-                          className={clsx('min-h-10', 'min-w-0', 'flex-1', 'rounded-xl', 'border', 'border-koma-border', 'bg-koma-panel', 'px-3', 'text-xs', 'font-bold', 'text-koma-secondary', 'outline-none', 'focus:border-emerald-500/60')}
-                        >
-                          <option value="">Transferir para…</option>
-                          {salonTables
-                            .filter(table => Number(table.id) !== Number(selectedKanbanOrder.mesaId))
-                            .map(table => <option key={table.id} value={table.id}>Mesa {table.id}{table.nome ? ` · ${table.nome}` : ''}</option>)}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => handleTransferTableFromSalon(selectedKanbanOrder)}
-                          disabled={!tableTransferTargetId || isTransferringTable}
-                          className={clsx('flex', 'min-h-10', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-emerald-500/30', 'bg-emerald-500/10', 'px-3', 'text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-300', 'hover:bg-emerald-500/20', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}
-                        >
-                          {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <ArrowUpRight size={13} />}
-                          Transferir
-                        </button>
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => selectedKanbanOrder.contextoSalao
-                        ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
-                        : openCancelOrderConfirmation(selectedKanbanOrder)}
-                      className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
-                    >
-                      <Trash2 size={13} />
-                      {selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : 'Cancelar somente este pedido'}
-                    </button>
-                  </div>
-                )}
-                {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
-                  <button
-                    type="button"
-                    onClick={() => openCancelOrderConfirmation(selectedKanbanOrder)}
-                    className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
-                  >
-                    <Trash2 size={13} />
-                    Cancelar pedido
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <KanbanOrderDetails
+          order={selectedKanbanOrder}
+          transfer={{
+            targetId: tableTransferTargetId,
+            onTargetChange: setTableTransferTargetId,
+            isTransferring: isTransferringTable,
+            tables: salonTables,
+          }}
+          actions={{
+            close: () => setSelectedKanbanOrder(null),
+            advanceDigitalOrder: handleAdvanceSelectedKanbanOrder,
+            reprintProduction: handleReprintSelectedKanbanProduction,
+            printFullTable: handlePrintSelectedKanbanTable,
+            printTableValues: handlePrintSelectedKanbanValues,
+            transferTable: handleTransferSelectedKanbanTable,
+            cancelConsumption: handleCancelSelectedKanbanConsumption,
+            cancelOrder: handleCancelSelectedKanbanOrder,
+          }}
+        />
       )}
 
       {cancelConsumptionTarget && (
