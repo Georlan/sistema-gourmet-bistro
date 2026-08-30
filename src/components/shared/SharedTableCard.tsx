@@ -15,7 +15,7 @@ export function tableCardPresentation(state: TableOperationalProjection, showPro
 }
 
 const tones: Record<string, string> = {
-  free: 'border-emerald-400/60 bg-emerald-50 dark:border-emerald-900/50 dark:bg-[#0b1713] text-emerald-800 dark:text-emerald-300',
+  free: 'koma-table-free-card text-emerald-800 dark:text-emerald-300',
   occupied: 'border-rose-400/70 bg-rose-50 dark:border-rose-900 dark:bg-[#1b0d10] text-rose-900 dark:text-rose-300',
   ready: 'border-amber-400/80 bg-amber-50 dark:border-amber-800/60 dark:bg-[#211707] text-amber-900 dark:text-amber-300',
   payment: 'border-sky-400/80 bg-sky-50 dark:border-sky-800/60 dark:bg-[#0b1621] text-sky-900 dark:text-sky-300',
