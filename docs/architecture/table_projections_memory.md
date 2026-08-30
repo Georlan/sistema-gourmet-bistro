@@ -64,3 +64,19 @@ Quando a conta é explicitamente solicitada, o fechamento agrega todos os itens 
 Antes da migração dos consumidores foram executados testes de caracterização em `tests/operationalCharacterization.test.ts`, `e2e/operational-projections.spec.ts` e `e2e/waiter-projections.spec.ts`. Os testes verificam também IDs técnicos de serviço/reimpressão e o fatiamento de itens do mesmo lançamento.
 
 Extrações estruturais mantêm API pública, efeitos, assinaturas WebSocket, atalhos e fluxos. Casos preexistentes não bloqueantes ficam em `phase7_backlog.md`; não constituem novas subfases.
+
+## 6. FRONTEIRAS ESTRUTURAIS DO FRONTEND
+
+As views extraídas são controladas pelos componentes que já coordenavam os fluxos. Trocar uma aba não deve reinicializar busca, disponibilidade, seleção, confirmação ou impressão.
+
+| Coordenador | Responsabilidades de apresentação extraídas | Responsabilidades preservadas no coordenador |
+| --- | --- | --- |
+| `CaixaPanel` | `CaixaOrdersWorkspace`, `CaixaSalonTab`, `KanbanOrderDetails` | Subscriptions, relógio, estado das abas/busca, atualização otimista, ações HTTP, contexto de cancelamento/transferência, checkout, idempotência e SmartPOS |
+| `App` | `OperationalDrawer`, `OperationalLogin` | Roteamento, sessão/autenticação, WebSocket, polling, drafts, disponibilidade, preferências, tema e bloqueio de scroll |
+| `MesaDetailsModalBase` | `MesaConsumptionPanel`, `MesaTransferMergePanel`, `MesaPrintDialogs` | API pública, aba ativa, permissões, seleção/confirmações, editor, estado e timeouts de feedback, bloqueio de scroll |
+
+Os módulos do Caixa ficam em `src/components/caixa/orders` e `src/components/caixa/salao`; os do modal em `src/components/mesas`. Tipos de view e formatadores de apresentação não introduzem nova autoridade de domínio. Os filhos não recebem credenciais nem implementam requisições financeiras.
+
+O checkout permanece junto de sua coordenação transacional. Extrair seu JSX apenas para diminuir o arquivo exigiria transportar estado financeiro e setters sem criar uma fronteira útil nesta fase.
+
+As regressões de navegador exercitam os componentes através das telas reais: IDs técnicos de impressão/transferência, cancelamento por item versus mesa inteira, seleção de R$48 prontos mantendo R$112 em preparo, falhas de impressão, callbacks do modal, login e persistência do drawer. Guardrails estáticos seguem os novos arquivos proprietários e verificam a ligação real com os coordenadores; não são substituídos por strings mortas ou remoção de asserções.

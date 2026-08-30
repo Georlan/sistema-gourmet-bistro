@@ -13,13 +13,26 @@ const ITEM_A = 'item-waiter-phase7-a';
 const ITEM_B = 'item-waiter-phase7-b';
 
 type ItemStatus = 'preparando' | 'pronto' | 'entregue';
-type Write = { method: string; path: string; status: string | null; tableId: string | null };
+type Write = {
+  method: string;
+  path: string;
+  status: string | null;
+  tableId: string | null;
+  sourceTableId?: string | null;
+  valuesOnly?: string | null;
+  payload?: { item_ids: string[] };
+};
 type WaiterScenario = {
   checkNumber?: number;
   displayNumbers?: [string, string];
   sequences?: [number, number];
   emptySession?: boolean;
   withoutCheck?: boolean;
+  canCloseTable?: boolean;
+  canTransferTables?: boolean;
+  canTransferItems?: boolean;
+  deferPrinting?: boolean;
+  printFails?: boolean;
 };
 
 async function openWaiterScenario(
@@ -67,8 +80,17 @@ async function openWaiterScenario(
     })),
     itens: items,
   };
+  const checks = scenario.withoutCheck ? [] : [check];
+  const tables = [
+    { id: 7, nome: 'Mesa 7', capacidade: 4, status: 'ocupada' },
+    { id: 8, nome: 'Mesa 8', capacidade: 4, status: 'livre' },
+  ];
   const writes: Write[] = [];
   const unexpectedApiRequests: string[] = [];
+  let releasePrint: () => void = () => {};
+  const printResponse = scenario.deferPrinting
+    ? new Promise<void>(resolve => { releasePrint = resolve; })
+    : Promise.resolve();
 
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(() => {
@@ -99,15 +121,13 @@ async function openWaiterScenario(
 
     const path = url.pathname;
     const method = request.method();
+    let responseStatus = 200;
     let body: unknown;
 
     if (method === 'GET' && path === '/mesas/') {
-      body = [
-        { id: 7, nome: 'Mesa 7', capacidade: 4, status: 'ocupada' },
-        { id: 8, nome: 'Mesa 8', capacidade: 4, status: 'livre' },
-      ];
+      body = tables;
     } else if (method === 'GET' && path === '/comandas/detalhes/todos') {
-      body = scenario.withoutCheck ? [] : [check];
+      body = checks;
     } else if (method === 'GET' && path === `/comandas/${CHECK_ID}`) {
       body = check;
     } else if (method === 'GET' && path === '/atendimentos/mesas/7') {
@@ -131,17 +151,48 @@ async function openWaiterScenario(
         taxa_servico_padrao: 0,
         perm_garcom_status: true,
         perm_garcom_print: true,
-        perm_garcom_fechar: false,
+        perm_garcom_fechar: scenario.canCloseTable ?? false,
         perm_garcom_editar: true,
         perm_garcom_cancelar_item: true,
-        perm_garcom_transferir_mesa: true,
-        perm_garcom_transferir_item: true,
+        perm_garcom_transferir_mesa: scenario.canTransferTables ?? true,
+        perm_garcom_transferir_item: scenario.canTransferItems ?? true,
         perm_garcom_delivery: false,
       };
     } else if (method === 'GET' && path === '/caixa/pagamentos/pendentes') {
       body = [];
     } else if (method === 'POST' && [LAUNCH_A, LAUNCH_B].some(id => path === `/comandas/lancamentos/${id}/reimprimir`)) {
       writes.push({ method, path, status: null, tableId: url.searchParams.get('mesa_id') });
+      await printResponse;
+      responseStatus = scenario.printFails ? 503 : 200;
+      body = scenario.printFails ? { detail: 'Impressora indisponível na fixture' } : { ok: true };
+    } else if (method === 'POST' && path === '/mesas/7/imprimir-recibo') {
+      writes.push({ method, path, status: null, tableId: '7', valuesOnly: url.searchParams.get('apenas_valores') });
+      await printResponse;
+      responseStatus = scenario.printFails ? 503 : 200;
+      body = scenario.printFails ? { detail: 'Impressora indisponível na fixture' } : { ok: true };
+    } else if (method === 'POST' && path === '/comandas/itens/transferir-lote/8') {
+      const payload = request.postDataJSON() as { item_ids: string[] };
+      writes.push({ method, path, status: null, tableId: '8', payload });
+      const movedItems = check.itens.filter(item => payload.item_ids.includes(item.id));
+      check.itens = check.itens.filter(item => !payload.item_ids.includes(item.id));
+      checks.push({ ...check, id: 'check-waiter-phase7-destination', mesa_id: 8, itens: movedItems });
+      tables[1].status = 'ocupada';
+      body = { ok: true };
+    } else if (method === 'POST' && [ITEM_A, ITEM_B].some(id => path === `/comandas/itens/${id}/transferir/8`)) {
+      // The adapter invokes these legacy idempotent callbacks only after the batch succeeds.
+      writes.push({ method, path, status: null, tableId: '8' });
+      body = { ok: true };
+    } else if (method === 'POST' && path === `/comandas/${CHECK_ID}/transferir/8`) {
+      writes.push({ method, path, status: null, tableId: '8' });
+      check.mesa_id = 8;
+      tables[0].status = 'livre';
+      tables[1].status = 'ocupada';
+      body = { ok: true };
+    } else if (method === 'POST' && path === '/comandas/mesclar') {
+      writes.push({ method, path, status: null, tableId: url.searchParams.get('mesa_destino_id'), sourceTableId: url.searchParams.get('mesa_origem_id') });
+      check.mesa_id = 8;
+      tables[0].status = 'livre';
+      tables[1].status = 'ocupada';
       body = { ok: true };
     } else if (method === 'PUT' && path === `/comandas/itens/${ITEM_B}/status` && url.searchParams.get('status') === 'entregue') {
       writes.push({ method, path, status: 'entregue', tableId: null });
@@ -157,13 +208,13 @@ async function openWaiterScenario(
       return;
     }
 
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    await route.fulfill({ status: responseStatus, contentType: 'application/json', body: JSON.stringify(body) });
   });
 
   await page.goto('/?view=garcom');
   await expect(page.locator('#mesa-card-7')).toBeVisible();
   if (!scenario.emptySession) await expect(page.locator('#mesa-card-7')).toContainText(/R\$\s*160/);
-  return { check, writes, unexpectedApiRequests };
+  return { check, writes, unexpectedApiRequests, releasePrint };
 }
 
 test('mapa do Garçom preserva mesa livre, ocupada e pronta nos filtros', async ({ page }) => {
@@ -313,3 +364,169 @@ for (const withoutCheck of [false, true]) {
     expect(state.unexpectedApiRequests).toEqual([]);
   });
 }
+
+test('transferência parcial conserva seleção entre abas e exige confirmação antes da transação', async ({ page }) => {
+  const state = await openWaiterScenario(page);
+  await page.locator('#mesa-card-7').click();
+  await page.locator('#tab-transferir-btn').click();
+  await page.getByRole('button', { name: 'Selecionar Itens', exact: true }).click();
+  const target = page.locator('#transfer-target-mesa-8');
+  await expect(target).toBeDisabled();
+  const selectedItem = page.getByRole('checkbox', { name: /Prato da primeira rodada/ });
+  await selectedItem.check();
+
+  // Panel remounts must not discard selection owned by the modal.
+  await page.locator('#tab-consumo-btn').click();
+  await page.locator('#tab-transferir-btn').click();
+  await page.getByRole('button', { name: 'Selecionar Itens', exact: true }).click();
+  await expect(selectedItem).toBeChecked();
+  await target.click();
+  await expect(target).toContainText('Confirmar?');
+  expect(state.writes).toEqual([]);
+
+  await target.click();
+  await expect.poll(() => state.writes).toEqual([
+    { method: 'POST', path: '/comandas/itens/transferir-lote/8', status: null, tableId: '8', payload: { item_ids: [ITEM_A] } },
+    { method: 'POST', path: `/comandas/itens/${ITEM_A}/transferir/8`, status: null, tableId: '8' },
+  ]);
+  await expect(target).toBeDisabled();
+  await page.locator('#tab-consumo-btn').click();
+  await expect(page.locator('[id^="placed-order-"]')).toHaveCount(1);
+  await expect(page.locator('[id^="placed-order-"]')).toContainText('Prato da segunda rodada');
+  expect(state.check.itens.map(item => item.id)).toEqual([ITEM_B]);
+  expect(state.check.fechada).toBe(false);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+for (const movement of ['transferir', 'mesclar'] as const) {
+  test(`${movement} mesa inteira confirma uma vez e usa IDs técnicos de mesa ou Comanda`, async ({ page }) => {
+    const state = await openWaiterScenario(page);
+    await page.locator('#mesa-card-7').click();
+    await page.locator(`#tab-${movement}-btn`).click();
+    const target = page.locator(movement === 'transferir' ? '#transfer-target-mesa-8' : '#merge-target-mesa-free-8');
+    await target.click();
+    await expect(target).toContainText('Confirmar?');
+    expect(state.writes).toEqual([]);
+    await target.click();
+
+    await expect.poll(() => state.writes).toEqual(movement === 'transferir' ? [
+      { method: 'POST', path: `/comandas/${CHECK_ID}/transferir/8`, status: null, tableId: '8' },
+    ] : [
+      { method: 'POST', path: '/comandas/mesclar', status: null, tableId: '8', sourceTableId: '7' },
+    ]);
+    await expect(page.locator('#modal-outer-overlay')).toHaveCount(0);
+    await expect(page.locator('#mesa-card-8')).toContainText(/R\$\s*160/);
+    expect(state.check.id).toBe(CHECK_ID);
+    expect(state.check.mesa_id).toBe(8);
+    expect(state.check.fechada).toBe(false);
+    expect(state.unexpectedApiRequests).toEqual([]);
+  });
+}
+
+test('impressão direta mantém estado entre abas e só confirma após resposta do servidor', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferPrinting: true });
+  await page.locator('#mesa-card-7').click();
+  const printButton = page.locator('#quick-print-values-btn');
+  await printButton.click();
+  await expect.poll(() => state.writes).toEqual([
+    { method: 'POST', path: '/mesas/7/imprimir-recibo', status: null, tableId: '7', valuesOnly: 'true' },
+  ]);
+  await expect(printButton).toBeDisabled();
+  await expect(page.getByText('Impressão enviada com sucesso.', { exact: true })).toHaveCount(0);
+  await page.locator('#tab-transferir-btn').click();
+  await page.locator('#tab-consumo-btn').click();
+  await expect(printButton).toBeDisabled();
+
+  state.releasePrint();
+  await expect(page.getByText('Impressão enviada com sucesso.', { exact: true })).toBeVisible();
+  await expect(printButton).toBeEnabled();
+  expect(state.check.status_comanda).toBeNull();
+  expect(state.check.fechada).toBe(false);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('extrato completo preserva prévia, mesa e confirmação de impressão do servidor', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferPrinting: true });
+  await page.locator('#mesa-card-7').click();
+  await page.locator('#print-invoice-preview-btn').click();
+  const printButton = page.locator('#finalize-physical-print-btn');
+  await expect(page.getByText('Extrato de Mesa', { exact: true })).toBeVisible();
+  await printButton.click();
+  await expect.poll(() => state.writes).toEqual([
+    { method: 'POST', path: '/mesas/7/imprimir-recibo', status: null, tableId: '7', valuesOnly: 'false' },
+  ]);
+  await expect(page.getByText('Impressão enviada com sucesso.', { exact: true })).toHaveCount(0);
+  state.releasePrint();
+  await expect(page.getByText('Impressão enviada com sucesso.', { exact: true })).toBeVisible();
+  await expect(printButton).toHaveCount(0);
+  await expect(page.locator('#modal-outer-overlay')).toBeVisible();
+  expect(state.check.fechada).toBe(false);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+for (const printKind of ['direta', 'extrato', 'cozinha'] as const) {
+  test(`falha de impressão ${printKind} não gera sucesso nem fecha o diálogo ou a conta`, async ({ page }) => {
+    const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferPrinting: true, printFails: true });
+    const alerts: string[] = [];
+    page.on('dialog', async dialog => {
+      alerts.push(dialog.message());
+      await dialog.accept();
+    });
+    await page.locator('#mesa-card-7').click();
+    if (printKind === 'extrato') await page.locator('#print-invoice-preview-btn').click();
+    if (printKind === 'cozinha') {
+      await page.locator('[id^="placed-order-"]').filter({ hasText: 'Prato da segunda rodada' })
+        .getByRole('button', { name: 'Reimprimir', exact: true }).click();
+      await expect(page.getByText('LOTE: #24-B', { exact: true })).toBeVisible();
+    }
+    const printButton = printKind === 'direta' ? page.locator('#quick-print-values-btn')
+      : printKind === 'extrato' ? page.locator('#finalize-physical-print-btn')
+        : page.getByRole('button', { name: 'Imprimir Via Cozinha', exact: true });
+    await printButton.click();
+    await expect.poll(() => state.writes.length).toBe(1);
+    expect(state.writes[0]).toEqual(printKind === 'cozinha'
+      ? { method: 'POST', path: `/comandas/lancamentos/${LAUNCH_B}/reimprimir`, status: null, tableId: '7' }
+      : { method: 'POST', path: '/mesas/7/imprimir-recibo', status: null, tableId: '7', valuesOnly: String(printKind === 'direta') });
+    await expect(page.getByText(/enviada com sucesso/)).toHaveCount(0);
+    state.releasePrint();
+    await expect.poll(() => alerts).toEqual([printKind === 'direta' ? 'Erro ao enviar impressão de fechamento'
+      : printKind === 'extrato' ? 'Erro ao enviar impressão do recibo completo'
+        : 'Erro ao enviar reimpressão para a cozinha']);
+    await expect(printButton).toBeVisible();
+    await expect(printButton).toBeEnabled();
+    await expect(page.getByText(/enviada com sucesso/)).toHaveCount(0);
+    expect(state.check.fechada).toBe(false);
+    expect(state.unexpectedApiRequests).toEqual([]);
+  });
+}
+
+test('permissões ocultam fechamento e movimentação sem alterar ações de consumo', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], {
+    canCloseTable: false, canTransferTables: false, canTransferItems: false,
+  });
+  await page.locator('#mesa-card-7').click();
+  await expect(page.locator('#close-table-btn-consumo')).toHaveCount(0);
+  await expect(page.locator('#tab-transferir-btn')).toHaveCount(0);
+  await expect(page.locator('#tab-mesclar-btn')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Transferir', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Mesclar', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Servir', exact: true })).toBeVisible();
+  await expect(page.locator('#quick-print-values-btn')).toBeEnabled();
+  expect(state.writes).toEqual([]);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('confirmação de fechamento permanece no owner ao alternar painéis sem fechar no primeiro clique', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { canCloseTable: true });
+  await page.locator('#mesa-card-7').click();
+  const closeButton = page.locator('#close-table-btn-consumo');
+  await closeButton.click();
+  await expect(closeButton).toContainText('Confirmar Fechamento?');
+  expect(state.writes).toEqual([]);
+  await page.locator('#tab-transferir-btn').click();
+  await page.locator('#tab-consumo-btn').click();
+  await expect(closeButton).toContainText('Confirmar Fechamento?');
+  expect(state.check.fechada).toBe(false);
+  expect(state.writes).toEqual([]);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});

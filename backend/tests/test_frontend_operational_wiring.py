@@ -54,15 +54,28 @@ def test_operator_logout_only_clears_authentication_keys():
 
 def test_print_actions_never_report_success_without_a_real_handler():
     modal = _source("src/components/MesaDetailsModalBase.tsx")
+    printing = _source("src/components/mesas/MesaPrintDialogs.tsx")
 
-    assert "finalize-physical-print-mock-btn" not in modal
-    assert "Simulated Print Button" not in modal
-    assert "disabled={!onPrintReceipt}" in modal
-    assert "disabled={!onPrintKitchenLaunch || !selectedOrderToPrint}" in modal
+    assert "import { MesaPrintDialogs } from './mesas/MesaPrintDialogs';" in modal
+    assert "<MesaPrintDialogs" in modal
+    assert "onPrintReceipt={onPrintReceipt ? handleReceiptPrint : undefined}" in modal
+    assert "onPrintKitchenLaunch={onPrintKitchenLaunch ? handleKitchenPrint : undefined}" in modal
+    assert "await onPrintReceipt(apenasValores);" in modal
+    assert "await onPrintKitchenLaunch(launchId);" in modal
+    for rendered_source in (modal, printing):
+        assert "finalize-physical-print-mock-btn" not in rendered_source
+        assert "Simulated Print Button" not in rendered_source
+    assert "disabled={!onPrintReceipt}" in printing
+    assert "disabled={!onPrintKitchenLaunch || !selectedOrderToPrint}" in printing
 
 
 def test_fabricated_ai_and_whatsapp_prototypes_are_not_shipped_in_the_ui():
-    panel = _source("src/components/CaixaPanel.tsx")
+    cashier_sources = [
+        _source("src/components/CaixaPanel.tsx"),
+        _source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx"),
+        _source("src/components/caixa/orders/KanbanOrderDetails.tsx"),
+        _source("src/components/caixa/salao/CaixaSalonTab.tsx"),
+    ]
     menu = _source("src/cardapio/CardapioPage.tsx")
     plans = _source("src/config/subscriptionPlans.ts")
     billing = _source("src/components/assinatura/AssinaturaPixTab.tsx")
@@ -74,7 +87,7 @@ def test_fabricated_ai_and_whatsapp_prototypes_are_not_shipped_in_the_ui():
         "Piloto Automático",
         "Parâmetros de governança da IA salvos no banco de dados",
     ):
-        assert prototype_marker not in panel
+        assert all(prototype_marker not in rendered_source for rendered_source in cashier_sources)
 
     assert "CardapioAiChefAssistant" not in menu
     assert not (ROOT / "src/cardapio/components/CardapioAiChefAssistant.tsx").exists()
@@ -102,7 +115,7 @@ def test_fabricated_ai_and_whatsapp_prototypes_are_not_shipped_in_the_ui():
         "false && activeTab",
         "Simulador de Custos (CMV)",
     ):
-        assert fabricated_local_flow not in panel
+        assert all(fabricated_local_flow not in rendered_source for rendered_source in cashier_sources)
 
 
 def test_operational_whatsapp_delivery_is_automatic_and_tokens_stay_server_side():
