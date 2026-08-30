@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+const port = Number(process.env.KOMA_E2E_PORT || 4173);
+const baseURL = `http://127.0.0.1:${port}`;
+
 const viewportMatrix = [
   { name: 'mobile-360', width: 360, height: 640, touch: true },
   { name: 'mobile-390', width: 390, height: 720, touch: true },
@@ -21,7 +24,7 @@ export default defineConfig({
     ? [['line'], ['html', { open: 'never' }]]
     : [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL,
     browserName: 'chromium',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
@@ -36,9 +39,9 @@ export default defineConfig({
     },
   })),
   webServer: {
-    command: 'npm run dev:e2e',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    command: `npm run dev:e2e -- --port=${port} --strictPort`,
+    url: baseURL,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

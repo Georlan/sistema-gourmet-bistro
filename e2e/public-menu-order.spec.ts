@@ -166,8 +166,9 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Revise e confirme', exact: true })).toBeVisible();
-  await expect(page.getByText('Pagamento direto ao restaurante', { exact: true })).toBeVisible();
-  await expect(page.getByText('Pix', { exact: true })).toBeVisible();
+  const paymentSummary = page.getByRole('heading', { name: 'Pagamento escolhido', exact: true }).locator('..');
+  await expect(paymentSummary.getByText('Você paga diretamente ao restaurante. Não há cobrança online nesta etapa.', { exact: true })).toBeVisible();
+  await expect(paymentSummary.getByText(/^Pix\s*· na retirada$/)).toBeVisible();
   await expect(page.getByText('Ana Teste', { exact: true })).toBeVisible();
   await expect(page.getByText(/R\$\s*48,00/).last()).toBeVisible();
 
@@ -203,7 +204,9 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   await openCart(page);
   await page.getByPlaceholder('Como devemos chamar você?').fill('Bruno Cliente');
   await page.getByPlaceholder('(00) 00000-0000').fill('85988887777');
-  await page.getByRole('button', { name: /Delivery/ }).click();
+  const deliveryButton = page.getByRole('button', { name: /^Entrega\b/ });
+  await deliveryButton.click();
+  await expect(deliveryButton).toHaveAttribute('aria-pressed', 'true');
   await page.getByPlaceholder('Rua, número, complemento e bairro').fill('Rua das Flores, 123, Centro');
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
@@ -302,4 +305,3 @@ test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', asy
   await expect(page.getByText('Meus Pedidos', { exact: true })).toBeVisible();
   await expect(page.getByText('Em andamento (2)')).toBeVisible();
 });
-

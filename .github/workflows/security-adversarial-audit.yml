@@ -3,20 +3,10 @@ name: Koma Security Adversarial Audit
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'backend/tools/security_adversarial_audit.py'
-      - 'backend/tools/security_a_db_assertions.py'
-      - 'backend/tools/security_b_db_assertions.py'
-      - 'backend/alembic/versions/**'
-      - '.github/workflows/security-adversarial-audit.yml'
   push:
     branches: [main]
-    paths:
-      - 'backend/tools/security_adversarial_audit.py'
-      - 'backend/tools/security_a_db_assertions.py'
-      - 'backend/tools/security_b_db_assertions.py'
-      - 'backend/alembic/versions/**'
-      - '.github/workflows/security-adversarial-audit.yml'
+  schedule:
+    - cron: '23 8 * * 1'
   workflow_dispatch:
 
 permissions:
