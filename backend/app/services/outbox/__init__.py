@@ -13,7 +13,7 @@ from .dispatcher import (
     dispatch_single_outbox_event,
     recover_stale_outbox_claims,
 )
-from .worker import OutboxWorker, default_outbox_worker
+from .worker import OutboxWorker, default_outbox_worker, discover_active_restaurant_ids
 
 __all__ = [
     "enqueue_outbox_event_in_session",
@@ -27,4 +27,5 @@ __all__ = [
     "dispatch_single_outbox_event",
     "OutboxWorker",
     "default_outbox_worker",
+    "discover_active_restaurant_ids",
 ]

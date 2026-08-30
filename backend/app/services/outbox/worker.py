@@ -8,14 +8,39 @@ import os
 import signal
 import uuid
 from typing import Optional
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+from sqlalchemy.orm import Session, sessionmaker
 
-from ...database import TenantSession, engine
+from ...database import TenantSession, engine, tenant_session_scope
 from .dispatcher import DEFAULT_STALE_TIMEOUT_SECONDS, dispatch_pending_outbox_events
 
 logger = logging.getLogger("koma.outbox.worker")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=TenantSession)
+
+
+def discover_active_restaurant_ids(db: Session) -> list[int]:
+    """Descobre IDs de restaurantes disponíveis para varredura do worker multi-tenant.
+
+    No PostgreSQL, utiliza a função SECURITY DEFINER `koma_internal.list_public_restaurants()`
+    autorizada para o papel `koma_app` sem depender de tenant contextual prévio.
+    No SQLite (testes/local), consulta diretamente a tabela `restaurantes`.
+    """
+    bind = db.get_bind()
+    try:
+        if bind and bind.dialect.name == "postgresql":
+            result = db.execute(
+                text("SELECT id FROM koma_internal.list_public_restaurants()")
+            ).scalars().all()
+            return [int(rid) for rid in result if rid]
+        else:
+            result = db.execute(
+                text("SELECT id FROM restaurantes")
+            ).scalars().all()
+            return [int(rid) for rid in result if rid]
+    except Exception as exc:
+        logger.warning("[OUTBOX WORKER] Falha ao descobrir restaurantes ativos: %s", exc)
+        return []
 
 
 class OutboxWorker:
@@ -25,7 +50,7 @@ class OutboxWorker:
         self,
         *,
         poll_interval_seconds: float = 2.0,
-        batch_size: int = 50,
+        batch_size: int = 20,
         worker_id: Optional[str] = None,
         stale_timeout_seconds: int = DEFAULT_STALE_TIMEOUT_SECONDS,
     ):
@@ -37,17 +62,50 @@ class OutboxWorker:
         self._stop_event: Optional[asyncio.Event] = None
         self._task: Optional[asyncio.Task] = None
 
-    def run_once(self, *, restaurant_id: Optional[int] = None) -> dict[str, int]:
-        """Executa um ciclo único de despacho de forma síncrona."""
+    def run_once(
+        self,
+        *,
+        restaurant_id: Optional[int] = None,
+        client: Optional[httpx.Client] = None,
+    ) -> dict[str, int]:
+        """Executa um ciclo único de despacho de forma síncrona sob isolamento RLS para cada tenant."""
         db: TenantSession = SessionLocal()
+        aggregated_stats = {
+            "claimed": 0,
+            "delivered": 0,
+            "failed": 0,
+            "dead_letter": 0,
+            "recovered_stale": 0,
+            "total": 0,
+        }
         try:
-            return dispatch_pending_outbox_events(
-                db,
-                batch_size=self.batch_size,
-                worker_id=self.worker_id,
-                stale_timeout_seconds=self.stale_timeout_seconds,
-                restaurant_id=restaurant_id,
-            )
+            if restaurant_id is not None:
+                target_tenant_ids = [restaurant_id]
+            else:
+                target_tenant_ids = discover_active_restaurant_ids(db)
+
+            for rid in target_tenant_ids:
+                try:
+                    with tenant_session_scope(db, rid):
+                        stats = dispatch_pending_outbox_events(
+                            db,
+                            batch_size=self.batch_size,
+                            worker_id=self.worker_id,
+                            stale_timeout_seconds=self.stale_timeout_seconds,
+                            restaurant_id=rid,
+                            client=client,
+                        )
+                        for k in aggregated_stats:
+                            aggregated_stats[k] += stats.get(k, 0)
+                except Exception as tenant_exc:
+                    logger.error(
+                        "[OUTBOX WORKER] Erro ao processar outbox do tenant %s: %s",
+                        rid,
+                        tenant_exc,
+                        exc_info=True,
+                    )
+
+            return aggregated_stats
         finally:
             db.close()
 
@@ -117,7 +175,7 @@ async def _run_standalone_cli():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
     worker = OutboxWorker(
         poll_interval_seconds=float(os.getenv("OUTBOX_POLL_INTERVAL", "2.0")),
-        batch_size=int(os.getenv("OUTBOX_BATCH_SIZE", "50")),
+        batch_size=int(os.getenv("OUTBOX_BATCH_SIZE", "20")),
     )
 
     loop = asyncio.get_running_loop()
