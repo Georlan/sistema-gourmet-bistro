@@ -45,6 +45,7 @@ class OrderStatus(StrEnum):
     ACCEPTED = "accepted"
     PREPARING = "preparing"
     READY = "ready"
+    DISPATCHED = "dispatched"
     COMPLETED = "completed"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
@@ -96,7 +97,9 @@ _LEGACY_STATUS_TO_CANONICAL = {
     "preparing": OrderStatus.PREPARING,
     "pronto": OrderStatus.READY,
     "ready": OrderStatus.READY,
-    "transito": OrderStatus.PREPARING,  # Operacionalmente transito é logístico; o pedido está pronto/em rota
+    "transito": OrderStatus.DISPATCHED,
+    "saiu_entrega": OrderStatus.DISPATCHED,
+    "dispatched": OrderStatus.DISPATCHED,
     "finalizado": OrderStatus.COMPLETED,
     "concluido": OrderStatus.COMPLETED,
     "concluído": OrderStatus.COMPLETED,
@@ -113,6 +116,7 @@ _CANONICAL_STATUS_TO_LEGACY = {
     OrderStatus.ACCEPTED: "producao",
     OrderStatus.PREPARING: "producao",
     OrderStatus.READY: "pronto",
+    OrderStatus.DISPATCHED: "transito",
     OrderStatus.COMPLETED: "finalizado",
     OrderStatus.REJECTED: "recusado",
     OrderStatus.CANCELLED: "recusado",

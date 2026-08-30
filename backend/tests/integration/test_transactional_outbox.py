@@ -100,19 +100,21 @@ def test_outbox_signature_and_constant_time_verification():
         payload_bytes=payload,
         signature_header=headers["X-Koma-Signature"],
         timestamp_str=now_ts,
+        event_id="evt-123",
+        event_name="koma.order.test",
     )
     assert is_valid is True
 
     # Rejeição com payload adulterado
     tampered_payload = b'{"event":"test","data":999}'
-    assert verify_webhook_signature(secret, tampered_payload, headers["X-Koma-Signature"], now_ts) is False
+    assert verify_webhook_signature(secret, tampered_payload, headers["X-Koma-Signature"], now_ts, event_id="evt-123", event_name="koma.order.test") is False
 
     # Rejeição com segredo incorreto
-    assert verify_webhook_signature("wrong_secret", payload, headers["X-Koma-Signature"], now_ts) is False
+    assert verify_webhook_signature("wrong_secret", payload, headers["X-Koma-Signature"], now_ts, event_id="evt-123", event_name="koma.order.test") is False
 
     # Rejeição com timestamp fora da tolerância (> 300s drift)
     expired_ts = str(int(time.time()) - 400)
-    assert verify_webhook_signature(secret, payload, headers["X-Koma-Signature"], expired_ts) is False
+    assert verify_webhook_signature(secret, payload, headers["X-Koma-Signature"], expired_ts, event_id="evt-123", event_name="koma.order.test") is False
 
 
 def test_order_creation_enqueues_outbox_atomically(outbox_db):

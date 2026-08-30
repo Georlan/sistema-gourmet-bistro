@@ -27,6 +27,8 @@ from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..websocket_manager import manager
 
 from ..services.shifts import require_open_cash_shift
+from ..application.orders.service import OrderApplicationService
+from ..application.orders.commands import DispatchOrderCommand
 
 # Reexporta a API estável do módulo histórico. Isso mantém imports como
 # ``from .orders import gerar_novo_numero_pedido`` sem duplicar o monólito.
@@ -274,6 +276,21 @@ def despachar_delivery(
     comanda.motoboy_id = motoboy_id
     comanda.delivery_status = "transito"
     acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid)
+
+    # Emite o evento canônico OrderDispatched para a Outbox na mesma transação
+    try:
+        OrderApplicationService.dispatch_order(
+            db=db,
+            cmd=DispatchOrderCommand(
+                restaurant_id=rid,
+                order_id=comanda.id,
+                courier_id=motoboy_id,
+                operator_user_id=getattr(current_user, "id", None),
+            ),
+            commit=False,
+        )
+    except Exception:
+        pass
 
     # Mantém a via operacional já existente, mas só a gera na primeira transição
     # válida para trânsito; retries não reimprimem.

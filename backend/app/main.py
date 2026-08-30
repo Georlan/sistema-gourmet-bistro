@@ -89,7 +89,22 @@ async def lifespan(app: FastAPI):
             "[DATABASE] create_all desativado; Alembic é a fonte do esquema.",
             flush=True,
         )
-    yield
+
+    # Inicializa o worker da Outbox se não estiver em ambiente de teste ou se habilitado explicitamente
+    worker_enabled = os.getenv("ENABLE_OUTBOX_WORKER", "true").lower() == "true" and os.getenv("ENVIRONMENT") != "test"
+    outbox_task = None
+    if worker_enabled:
+        from .services.outbox import default_outbox_worker
+        outbox_task = default_outbox_worker.start()
+        print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
+
+    try:
+        yield
+    finally:
+        if outbox_task and worker_enabled:
+            from .services.outbox import default_outbox_worker
+            await default_outbox_worker.stop()
+            print("[OUTBOX] Worker de integração finalizado com sucesso.", flush=True)
 
 
 app = FastAPI(
