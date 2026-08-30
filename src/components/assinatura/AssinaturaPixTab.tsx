@@ -23,7 +23,9 @@ import {
 } from 'lucide-react';
 import {
   SUBSCRIPTION_PLANS,
-  ONLINE_MENU_ADDON,
+  SUBSCRIPTION_ADDONS,
+  IMPLEMENTATION_FEE,
+  getPlanAddons,
   PLAN_COMPARISON_MATRIX,
   SubscriptionPlanId,
   getSubscriptionPlan,
@@ -360,6 +362,8 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                             ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
                             : 'Cobrança mensal'}
                         </p>
+                        <p className="mt-1 text-[10px] leading-4 text-koma-muted">Implantação: {formatCurrency(plan.implementationFee)}</p>
+                        {isYearly && <p className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Economize {formatCurrency(pricing.annualSavings)} por ano</p>}
                       </div>
                     </CardHeader>
 
@@ -406,6 +410,20 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                           ))}
                         </ul>
                       </div>
+                      <div className="border-t border-koma-border pt-3" aria-label={`Adicionais do ${plan.name}`}>
+                        <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider">Adicionais e inclusões</span>
+                        <dl className="mt-2 space-y-2">
+                          {getPlanAddons(plan.id).map(addon => (
+                            <div key={addon.id} className="flex flex-wrap justify-between gap-2 text-xs">
+                              <dt>{addon.name}</dt>
+                              <dd className={clsx('font-semibold', addon.included && 'text-emerald-700 dark:text-emerald-400')}>
+                                {addon.included ? 'Incluído' : `${formatCurrency(addon.price)}/mês`}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <p className="mt-3 text-[10px] leading-4 text-koma-muted">Adicionais opcionais cobrados por mês, sem desconto anual.</p>
+                      </div>
                     </CardContent>
                   </Card>
                 </TimelineContent>
@@ -413,28 +431,28 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             })}
           </div>
 
-          {/* CARD DO ADDON "CARDÁPIO ONLINE KÔMA" */}
+          {/* Adicionais do catálogo comercial, sem alterar a assinatura atual. */}
           <div className="p-5 bg-koma-panel border border-koma-border rounded-3xl text-left space-y-3 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-koma-border pb-3">
+            {SUBSCRIPTION_ADDONS.map(addon => <div key={addon.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-koma-border pb-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <strong className="text-koma-foreground font-serif text-sm block">{ONLINE_MENU_ADDON.name}</strong>
+                  <strong className="text-koma-foreground font-serif text-sm block">{addon.name}</strong>
                 </div>
-                <p className="text-xs text-koma-muted mt-1">{ONLINE_MENU_ADDON.description}</p>
+                <p className="text-xs text-koma-muted mt-1">{addon.description}</p>
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
                 <span className="px-2.5 py-1 bg-koma-raised text-koma-foreground border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
-                  R$ {ONLINE_MENU_ADDON.price}/mês no Pocket e Pro
+                  {formatCurrency(addon.price)}/mês {addon.id === 'online_menu' ? 'no Pocket' : 'no Pocket e Pro'}
                 </span>
                 <span className="px-2.5 py-1 koma-badge-success text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
-                  Incluso no Premium
+                  {addon.id === 'online_menu' ? 'Incluído no Pro e Premium' : 'Incluído no Premium'}
                 </span>
               </div>
-            </div>
+            </div>)}
 
             <p className="text-[10px] text-koma-muted leading-relaxed">
-              Implantação e configuração inicial podem ser cobradas separadamente.
+              Implantação: {formatCurrency(IMPLEMENTATION_FEE)} em todos os planos. Adicionais cobrados por mês, sem desconto anual.
             </p>
           </div>
 

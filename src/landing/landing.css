@@ -6416,8 +6416,9 @@
 .koma-plans-simple-heading > div:last-child > p strong { color: var(--koma-black); font-family: var(--koma-accent); font-size: 0.8em; letter-spacing: 0.04em; }
 .koma-plans-simple-heading > div:last-child > small { display: block; max-width: 46ch; color: #707670; line-height: 1.5; }
 
-.koma-plans-grid--simple { gap: 1px; background: var(--koma-line-light); border: 1px solid var(--koma-line-light); }
+.koma-plans-grid--simple { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--koma-line-light); border: 1px solid var(--koma-line-light); }
 .koma-plan-card--simple {
+  min-width: 0;
   min-height: 620px;
   border: 0;
 }
@@ -6425,8 +6426,10 @@
   transform: none;
   box-shadow: inset 0 5px 0 var(--koma-green);
 }
-.koma-plan-card--simple .koma-plan-card-heading small { padding: 0.45rem 0.55rem; border: 1px solid currentColor; }
-.koma-plan-card--simple .koma-plan-card-heading h3 { font-size: clamp(2.8rem, 4vw, 4.2rem); }
+.koma-plan-card--simple .koma-plan-card-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; }
+.koma-plan-card--simple .koma-plan-card-heading > div { display: contents; }
+.koma-plan-card--simple .koma-plan-card-heading small { grid-column: 2; grid-row: 1; padding: 0.45rem 0.55rem; border: 1px solid currentColor; }
+.koma-plan-card--simple .koma-plan-card-heading h3 { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: clamp(2rem, 3.2vw, 4rem); line-height: 1.12; }
 .koma-plan-fit {
   min-height: 7.2rem;
   max-width: 38ch;
@@ -6444,8 +6447,8 @@
   letter-spacing: 0.1em;
 }
 .koma-plan-card--featured .koma-plan-fit b { color: var(--koma-green); }
-.koma-plan-card--simple .koma-plan-price { padding: 1.25rem 0; }
-.koma-plan-card--simple .koma-plan-price strong { font-size: clamp(4.1rem, 6vw, 6rem); }
+.koma-plan-card--simple .koma-plan-price { flex-wrap: wrap; padding: 1.25rem 0; }
+.koma-plan-card--simple .koma-plan-price strong { min-width: 0; font-size: clamp(2.7rem, 4.4vw, 4.8rem); line-height: 1; white-space: nowrap; }
 .koma-plan-card--simple .koma-plan-billing-note { min-height: 2.4rem; line-height: 1.45; }
 .koma-plan-card--simple ul { margin: 1.15rem 0; }
 .koma-plan-card--simple li {
@@ -6465,6 +6468,23 @@
   line-height: 1.45;
 }
 .koma-plan-card--featured .koma-plan-extra { color: rgba(255, 255, 255, 0.5); }
+
+.koma-plan-addons { margin: auto 0 1.5rem; padding: 1.15rem 0 0; border-top: 1px solid var(--koma-line-light); }
+.koma-plan-addons h4 { margin: 0 0 0.8rem; color: var(--koma-green-dark); font-family: var(--koma-accent); font-size: 0.65rem; font-weight: 800; letter-spacing: 0.08em; line-height: 1.5; }
+.koma-plan-addons dl { margin: 0; }
+.koma-plan-addons dl > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding: 0.65rem 0; border-bottom: 1px solid var(--koma-line-light); }
+.koma-plan-addons dt { min-width: 0; font-size: 0.8rem; line-height: 1.45; }
+.koma-plan-addons dd { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end; gap: 0.2rem; margin: 0; font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.koma-plan-addons dd small { font-size: 0.68rem; font-weight: 400; }
+.koma-plan-addons dd svg { align-self: center; }
+.koma-plan-addons .is-included dd { color: var(--koma-green-dark); }
+.koma-plan-addons > p { margin: 0.85rem 0 0; color: var(--koma-muted-light); font-size: 0.68rem; line-height: 1.55; }
+.koma-plan-card--featured .koma-plan-addons,
+.koma-plan-card--featured .koma-plan-addons dl > div { border-color: var(--koma-line-dark); }
+.koma-plan-card--featured .koma-plan-addons h4,
+.koma-plan-card--featured .koma-plan-addons .is-included dd { color: var(--koma-green); }
+.koma-plan-card--featured .koma-plan-addons > p { color: var(--koma-muted-dark); }
+.koma-plan-card--simple .koma-btn { margin-top: 0; }
 
 @media (max-width: 900px) {
   .koma-plans-simple-heading { grid-template-columns: 1fr; gap: 2rem; }

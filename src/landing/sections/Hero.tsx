@@ -3,6 +3,9 @@ import { motion } from 'motion/react';
 import { KomaLogo } from '../../components/KomaLogo';
 import { TabletFrame } from '../product/TabletFrame';
 import { LeadCaptureModal } from '../components/LeadCaptureModal';
+import { SUBSCRIPTION_PLANS, formatCurrency } from '../../config/subscriptionPlans';
+
+const ENTRY_PRICE = Math.min(...SUBSCRIPTION_PLANS.map(plan => plan.price));
 
 const HERO_STRIP_ITEMS = [
   {
@@ -130,9 +133,9 @@ export function Hero() {
             <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
               Ver o Kôma em ação
             </button>
-            <div className="koma-hero-entry-price" aria-label="Planos a partir de noventa e nove reais por mês">
+            <div className="koma-hero-entry-price" aria-label={`Planos a partir de ${formatCurrency(ENTRY_PRICE)} por mês`}>
               <span>PLANOS A PARTIR DE</span>
-              <strong><small>R$</small> 99 <em>/mês</em></strong>
+              <strong><small>R$</small> {ENTRY_PRICE} <em>/mês</em></strong>
             </div>
           </motion.div>
 
