@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ArrowDownRight, Check, MessageCircle } from 'lucide-react';
 import { KOMA_SLOGAN, KOMA_WORDMARK_ON_LIGHT_SRC } from '../../brand/komaBrand';
 import { KomaLogo } from '../../components/KomaLogo';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
-import { LeadCaptureModal } from '../components/LeadCaptureModal';
+import { useLeadCapture } from '../components/LeadCaptureProvider';
 
 const NEXT_STEPS = [
   'Você conta como seu restaurante funciona.',
@@ -13,18 +13,18 @@ const NEXT_STEPS = [
 ] as const;
 
 export function FinalCTA() {
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const openDemo = useLeadCapture();
 
   return (
     <>
       <section className="koma-final-conversion" id="cadastro" aria-labelledby="final-title">
         <div className="koma-final-conversion-copy">
-          <span>09 / PRÓXIMO PASSO</span>
-          <h2 id="final-title">VEJA MENOS CORRERIA NA PRÁTICA.</h2>
-          <p>Conte o essencial sobre sua operação e receba uma demonstração focada no que realmente precisa melhorar.</p>
+          <span>07 / PRÓXIMO PASSO</span>
+          <h2 id="final-title">VEJA O KÔMA NA PRÁTICA.</h2>
+          <p>Conheça o sistema com uma demonstração voltada para a rotina do seu restaurante.</p>
 
           <div className="koma-final-conversion-actions">
-            <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
+            <button type="button" className="koma-btn koma-btn--primary" onClick={() => openDemo()}>
               SOLICITAR DEMONSTRAÇÃO <ArrowDownRight size={17} aria-hidden="true" />
             </button>
             <a href={KOMA_LANDING_CONFIG.whatsappUrl} target="_blank" rel="noopener noreferrer">
@@ -48,7 +48,6 @@ export function FinalCTA() {
         </aside>
       </section>
 
-      <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
 
       <footer className="koma-footer" role="contentinfo">
         <a href="/landing" aria-label="Kôma, início" className="koma-footer-brand">

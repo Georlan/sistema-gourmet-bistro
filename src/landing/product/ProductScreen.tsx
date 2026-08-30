@@ -54,7 +54,8 @@ export function ProductScreen({ view = 'mesas', scaleLogicalWidth = 1280 }: Prod
       <div
         style={{
           width: `${scaleLogicalWidth}px`,
-          minHeight: '800px',
+          height: '100%',
+          minHeight: '100%',
           transformOrigin: 'top left',
           transform: 'scale(var(--koma-preview-scale, 1))',
         }}

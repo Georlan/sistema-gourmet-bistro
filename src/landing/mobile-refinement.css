@@ -1,0 +1,230 @@
+/* Mobile-first refinements. Device canvases are sized independently from their frames. */
+.koma-landing *, .koma-landing *::before, .koma-landing *::after { box-sizing: border-box; }
+.koma-landing [id] { scroll-margin-top: 104px; }
+.koma-landing :is(button, a, summary):focus-visible { outline: 3px solid #00b894; outline-offset: 4px; }
+.koma-landing button { cursor: pointer; }
+.koma-landing :is(.koma-section-heading, .koma-value-header, .koma-plans-simple-heading, .koma-implementation-main, .koma-faq-sales-heading) > * { min-width: 0; }
+.koma-landing :is(.koma-value-header h2, .koma-section-heading h2, .koma-implementation-copy h2, .koma-plans-simple-heading h2, .koma-faq-sales-heading h2, .koma-final-conversion-copy h2) {
+  line-height: 1.06;
+  letter-spacing: -0.045em;
+  overflow-wrap: normal;
+  text-wrap: balance;
+}
+.koma-management-card h3 { line-height: 1.08; }
+.koma-mobile-demo { display: none; }
+.koma-mobile-menu[inert] { visibility: hidden; }
+.koma-comparison-link { display: flex; align-items: center; width: fit-content; min-height: 48px; margin: 1.5rem auto 0; color: var(--koma-green-dark); font-weight: 700; text-decoration: none; }
+
+/* Three checkable assurances replace a second feature catalogue. */
+.koma-confidence-strip {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem; padding: 2rem max(var(--koma-section-x), calc((100% - 1480px) / 2));
+  color: var(--koma-black); background: #edf1ed;
+  border-block: 1px solid var(--koma-line-light);
+}
+.koma-confidence-strip > * { display: flex; gap: 1rem; align-items: center; min-width: 0; color: inherit; text-decoration: none; }
+.koma-confidence-strip svg { flex: 0 0 24px; color: var(--koma-green-dark); }
+.koma-confidence-strip p { margin: 0; }
+.koma-confidence-strip strong { display: block; font-size: 0.94rem; }
+.koma-confidence-strip span { display: block; margin-top: 0.25rem; font-size: 0.82rem; line-height: 1.5; color: #56615c; }
+
+/* A bounded canvas, rather than a transformed element in normal layout flow. */
+.koma-frontal-device { position: relative; width: 100%; min-width: 0; margin-inline: auto; filter: drop-shadow(0 16px 26px #0005); }
+.koma-frontal-lid { width: 96%; margin: auto; position: relative; padding: 14px 12px 10px; border: 2px solid #34383e; border-radius: 16px 16px 0 0; background: #111419; }
+.koma-frontal-camera { position: absolute; top: 4px; left: 50%; width: 4px; height: 4px; border-radius: 50%; background: #48555e; }
+.koma-frontal-screen { position: relative; width: 100%; min-width: 0; overflow: hidden; border-radius: 5px; background: #0a0a0a; }
+.koma-frontal-canvas { position: absolute; inset: 0 auto auto 0; transform-origin: top left; pointer-events: none; user-select: none; }
+.koma-frontal-base { display: flex; justify-content: center; height: 12px; background: linear-gradient(#e1e5e8, #87939c); border-radius: 0 0 16px 16px; }
+.koma-frontal-base i { display: block; width: 18%; height: 4px; background: #697783; border-radius: 0 0 5px 5px; }
+.koma-frontal-device--tablet .koma-frontal-lid { width: 100%; padding: 16px; border-radius: 20px; }
+.koma-frontal-device--phone { max-width: 280px; }
+.koma-frontal-device--phone .koma-frontal-lid { width: 100%; padding: 18px 8px 10px; border-radius: 28px; }
+.koma-frontal-device--phone .koma-frontal-screen { border-radius: 15px; }
+.koma-frontal-device--phone .koma-frontal-camera { top: 6px; }
+
+/* Tabs show one complete screen; the other two never create dead scroll space. */
+.koma-compact-tour { padding-block: 5rem; }
+.koma-tour-tabs { width: min(100%, 1480px); margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #3a423e; }
+.koma-tour-tabs button { min-width: 0; min-height: 64px; display: flex; align-items: center; justify-content: center; gap: 0.8rem; padding: 0.85rem; background: transparent; color: #ced4d0; border: 0; border-right: 1px solid #3a423e; font-family: var(--koma-accent); font-size: 1rem; font-weight: 700; }
+.koma-tour-tabs button:last-child { border-right: 0; }
+.koma-tour-tabs button[aria-selected="true"] { background: var(--koma-green); color: #07140f; }
+.koma-tour-tabs span { font-size: 0.68rem; opacity: 0.75; }
+.koma-tour-panel { width: min(100%, 1480px); margin: 0 auto; padding: 2.5rem 0 0; display: grid; grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); gap: clamp(2rem, 5vw, 5rem); align-items: center; min-height: 530px; }
+.koma-tour-panel[hidden] { display: none; }
+.koma-tour-panel:focus { outline: none; }
+.koma-tour-panel:focus-visible { outline: 2px solid var(--koma-green); outline-offset: 4px; }
+.koma-tour-copy { min-width: 0; }
+.koma-tour-copy h3 { max-width: 15ch; margin: 0 0 1.25rem; font: 900 clamp(1.8rem, 3.1vw, 3.25rem)/1.08 var(--koma-display); letter-spacing: -0.04em; }
+.koma-tour-copy p { max-width: 42ch; margin: 0 0 1rem; color: #bec7c1; font-size: 1rem; line-height: 1.6; }
+.koma-tour-copy small { display: block; max-width: 44ch; color: #79d5b9; font-size: 0.83rem; line-height: 1.5; }
+.koma-tour-plans-link { display: flex; align-items: center; min-height: 44px; width: fit-content; margin-top: 1rem; color: #fff; font-size: 0.88rem; text-underline-offset: 4px; }
+.koma-tour-device { min-width: 0; width: 100%; margin: 0; }
+.koma-tour-device figcaption { margin-top: 1rem; text-align: center; color: #a8b6ae; font-size: 0.75rem; }
+
+/* Native dialog uses the browser top layer, focus containment and inert background. */
+.koma-demo-dialog {
+  position: fixed; inset: 0; width: min(560px, calc(100% - 32px));
+  max-width: none; max-height: calc(100dvh - 32px); margin: auto;
+  padding: 1.75rem; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid #315a4e; border-radius: 12px; color: #fff; background: #101813;
+  box-shadow: 0 24px 100px #0008;
+}
+.koma-demo-dialog::backdrop { background: #000b; backdrop-filter: blur(5px); }
+.koma-demo-dialog::before { display: none; }
+.koma-demo-dialog .koma-lead-dialog-head { align-items: start; gap: 0.75rem; }
+.koma-demo-dialog .koma-lead-dialog-head > div { min-width: 0; }
+.koma-demo-dialog .koma-lead-dialog-head span { font-size: 0.65rem; color: #65d9bb; line-height: 1.6; }
+.koma-demo-dialog .koma-lead-dialog-head h2 { margin: 0.75rem 0 0; font: 900 clamp(1.8rem, 6vw, 2.4rem)/1.12 var(--koma-display); letter-spacing: -0.04em; }
+.koma-demo-dialog h2:focus { outline: none; }
+.koma-demo-dialog .koma-lead-close { flex: 0 0 44px; width: 44px; height: 44px; font-size: 1.8rem; }
+.koma-demo-dialog .koma-lead-intro { margin: 1rem 0 1.4rem; font-size: 0.94rem; color: #c1ccc5; line-height: 1.55; }
+.koma-lead-selection { padding: 0.75rem; margin-bottom: 1rem; border: 1px solid #37594b; color: #b6e8d5; font-size: 0.87rem; line-height: 1.5; }
+.koma-demo-dialog .koma-lead-form { gap: 1rem; }
+.koma-demo-dialog .koma-lead-form input { font-size: 16px; min-height: 48px; }
+.koma-demo-dialog .koma-lead-submit { width: 100%; padding-inline: 0.7rem; margin: 0.25rem 0 0; font-size: 0.76rem; min-height: 52px; }
+.koma-demo-dialog .koma-lead-form > small { color: #b5c3ba; font-size: 0.76rem; line-height: 1.5; }
+.koma-demo-dialog .koma-lead-form > [role="status"]:empty { display: none; }
+.koma-copy-message { justify-self: start; min-height: 44px; border: 0; padding: 0; background: none; color: #bbcec3; font-size: 0.82rem; text-decoration: underline; text-underline-offset: 4px; }
+.koma-plan-card--simple .koma-btn { width: 100%; }
+
+@media (max-width: 1024px) {
+  .koma-header { gap: 0.7rem; height: 64px; padding-inline: 20px; background: #0a0a0af5; }
+  .koma-header-logo { margin-right: auto; flex-shrink: 0; }
+  .koma-header-logo img { width: 105px; height: auto; }
+  .koma-header-nav, .koma-header-actions { display: none; }
+  .koma-mobile-demo { display: inline-flex; min-height: 44px; padding: 0.7rem 1rem; font-size: 0.72rem; white-space: nowrap; }
+  .koma-hamburger { display: flex; width: 44px; height: 44px; padding: 9px; flex: 0 0 44px; }
+  .koma-hamburger span { width: 26px; }
+  .koma-mobile-menu { top: 64px; height: calc(100dvh - 64px); padding: 1.5rem; overflow-y: auto; }
+  .koma-mobile-menu nav { width: 100%; }
+  .koma-mobile-menu nav > a { min-height: 48px; font-size: clamp(1.3rem, 6vw, 2rem); }
+  .koma-mobile-menu nav > .koma-btn { width: 100%; font-size: 0.85rem; }
+  .koma-landing [id] { scroll-margin-top: 88px; }
+  .koma-tour-panel { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
+  .koma-tour-copy h3 { max-width: 22ch; }
+  .koma-tour-device { max-width: 720px; margin-inline: auto; }
+}
+
+@media (max-width: 768px) {
+  .koma-landing { --koma-section-x: 20px; }
+  .koma-landing .koma-btn { min-height: 48px; max-width: 100%; white-space: normal; line-height: 1.4; }
+  .koma-landing .koma-mobile-demo { flex-shrink: 0; white-space: nowrap; min-height: 44px; padding: 0.65rem 0.75rem; font-size: 0.68rem; }
+  .koma-angle-divider { height: 26px; }
+  .koma-hero { min-height: 0; padding: 108px 20px 40px; }
+  .koma-hero-grid { display: block; min-height: 0; }
+  .koma-hero-content, .koma-hero-title-axis { width: 100%; min-width: 0; max-width: 100%; }
+  .koma-hero-headline { margin: 0; }
+  .koma-hero-line { line-height: 1.03; white-space: normal; letter-spacing: -0.045em; }
+  .koma-hero-line--sm, .koma-hero-line--xl { display: inline; font-size: clamp(2.7rem, 12vw, 4rem); }
+  .koma-hero-line--sm::after { content: ' '; }
+  .koma-hero-title-axis { display: inline; }
+  .koma-hero-bar-wrap { width: 100%; margin: 0.7rem 0; }
+  .koma-hero-line--benefit { font-size: clamp(2.1rem, 9.6vw, 3.3rem); line-height: 1.1; max-width: 100%; white-space: normal; }
+  .koma-hero-eyebrow { margin: 0 0 1rem; font-size: 0.68rem; letter-spacing: 0.08em; }
+  .koma-hero-sub { margin: 1.25rem 0; font-size: 1rem; line-height: 1.6; }
+  .koma-hero-benefits, .koma-hero-brand-signature, .koma-hero-strip, .koma-hero-device-container { display: none; }
+  .koma-hero-cta-group { margin-top: 1.5rem; gap: 1rem; }
+  .koma-hero-entry-price { flex-direction: row; align-items: baseline; gap: 0.7rem; }
+  .koma-hero-entry-price strong { font-size: 1.8rem; }
+  .koma-hero-cta-note { font-size: 0.8rem; color: #b5c5bc; margin-top: 0.8rem; }
+  .koma-hero-color-plane { inset: 0; width: 100%; height: 100%; opacity: 0.3; }
+  .koma-value-strip, .koma-management-section, .koma-compact-tour,
+  .koma-implementation-section, .koma-faq-section--sales, .koma-plans-section--simple { padding: 48px 20px; }
+  .koma-landing :is(.koma-value-header h2, .koma-section-heading h2, .koma-implementation-copy h2, .koma-plans-simple-heading h2, .koma-faq-sales-heading h2, .koma-final-conversion-copy h2) {
+    max-width: 100%; width: auto; font-size: clamp(1.95rem, 8.3vw, 2.75rem); line-height: 1.1; letter-spacing: -0.04em;
+  }
+  .koma-landing :is(.koma-value-header, .koma-section-heading, .koma-plans-simple-heading, .koma-faq-sales-heading) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-bottom: 1.75rem; }
+  .koma-section-heading > span, .koma-value-intro { margin: 0; }
+  .koma-landing :is(.koma-value-header, .koma-section-heading, .koma-plans-simple-heading, .koma-faq-sales-heading) p { max-width: 100%; margin: 0; font-size: 1rem; line-height: 1.55; }
+  .koma-value-comparison { grid-template-columns: minmax(0, 1fr); }
+  .koma-value-lane { min-height: 0; padding: 1.25rem; }
+  .koma-value-lane-head { min-height: 0; padding-bottom: 1rem; align-items: center; }
+  .koma-value-lane-head strong { font-family: var(--koma-display); font-size: clamp(1.6rem, 7vw, 2rem); line-height: 1.15; letter-spacing: -0.04em; }
+  .koma-value-lane-head::after { display: none; }
+  .koma-value-lane-head > span { font-size: 0.6rem; padding: 0.5rem; }
+  .koma-value-route { gap: 1rem; margin-block: 1.25rem; padding: 0; }
+  .koma-value-route-step { min-height: 0; padding: 0; gap: 0.7rem; grid-template-columns: 9px 1.3rem minmax(0, 1fr); }
+  .koma-value-route-step strong { font-size: 0.72rem; line-height: 1.5; }
+  .koma-value-route-step small { font-size: 0.85rem; line-height: 1.45; }
+  .koma-value-lane-foot { margin-top: 1rem; padding-top: 1rem; }
+  .koma-value-lane-foot > small, .koma-value-versus { display: none; }
+  .koma-value-lane-foot > strong { font-size: 0.73rem; line-height: 1.5; }
+  .koma-value-lane-head { padding-top: 0; }
+  .koma-value-lane-head strong { font-weight: 900; }
+  .koma-confidence-strip { grid-template-columns: 1fr; gap: 1.15rem; padding: 1.5rem 20px; }
+  .koma-confidence-strip > * { gap: 0.8rem; }
+  .koma-confidence-strip span { margin-top: 0.1rem; }
+  .koma-management-grid { grid-template-columns: minmax(0, 1fr); }
+  .koma-management-card { min-height: 0; padding: 1.35rem; }
+  .koma-management-card h3 { margin: 1rem 0 0.75rem; max-width: 18ch; font-size: 1.65rem; line-height: 1.12; }
+  .koma-management-card > p { margin: 0; font-size: 0.94rem; line-height: 1.55; }
+  .koma-management-card ul { margin-top: 1rem; }
+  .koma-management-card li { min-height: 0; padding-block: 0.65rem; font-size: 0.78rem; line-height: 1.45; }
+  .koma-management-card-top i { width: 32px; height: 32px; }
+  .koma-management-card-top span { font-size: 0.65rem; }
+  .koma-tour-tabs button { gap: 0.3rem; min-height: 52px; padding: 0.7rem 0.3rem; font-size: 0.83rem; }
+  .koma-tour-tabs span { display: none; }
+  .koma-tour-panel { min-height: 0; padding-top: 1.5rem; gap: 1.5rem; }
+  .koma-tour-copy h3 { font-size: 1.55rem; line-height: 1.12; max-width: 22ch; margin-bottom: 0.8rem; }
+  .koma-tour-copy p { font-size: 0.94rem; margin-bottom: 0.65rem; }
+  .koma-tour-copy small { font-size: 0.78rem; }
+  .koma-tour-plans-link { margin-top: 0.6rem; }
+  .koma-frontal-lid { padding: 10px 6px 6px; border-radius: 10px 10px 0 0; }
+  .koma-frontal-camera { top: 3px; width: 3px; height: 3px; }
+  .koma-frontal-base { height: 8px; }
+  .koma-frontal-device--tablet .koma-frontal-lid { padding: 12px 8px; border-radius: 15px; }
+  .koma-frontal-device--phone { max-width: 250px; }
+  .koma-tour-device figcaption { font-size: 0.72rem; }
+  .koma-implementation-main { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .koma-implementation-copy > p { margin: 1rem 0 1.25rem; font-size: 1rem; line-height: 1.55; }
+  .koma-implementation-copy .koma-btn { width: 100%; }
+  .koma-implementation-steps li { grid-template-columns: 1.5rem minmax(0, 1fr); gap: 0.75rem; padding: 1rem 0; }
+  .koma-implementation-steps h3 { font-size: 1rem; line-height: 1.4; margin-bottom: 0.3rem; }
+  .koma-implementation-steps p { font-size: 0.9rem; line-height: 1.5; }
+  .koma-compatibility-strip { display: none; } /* Already stated in the assurance strip and FAQ. */
+  .koma-plans-simple-heading > div:last-child small { margin-top: 0.75rem; font-size: 0.85rem; line-height: 1.5; }
+  .koma-plans-billing { margin: 1.5rem 0 2rem; }
+  .koma-plans-billing-switch button { min-height: 44px; }
+  .koma-plans-billing > p { font-size: 0.8rem; }
+  .koma-plans-grid--simple { gap: 1rem; background: transparent; border: 0; }
+  .koma-plan-card--simple { min-width: 0; min-height: 0; padding: 1.25rem; border: 1px solid #c5cdc6; }
+  .koma-plan-card--featured { border-top: 4px solid var(--koma-green); }
+  .koma-plan-card--simple .koma-plan-card-heading h3 { font-size: clamp(2rem, 9vw, 2.6rem); }
+  .koma-plan-card--simple .koma-plan-card-heading small { font-size: 0.6rem; }
+  .koma-plan-fit { margin-top: 0.8rem; min-height: 0; font-size: 0.94rem; line-height: 1.5; }
+  .koma-plan-fit b { display: none; }
+  .koma-plan-card--simple .koma-plan-price { margin-top: 1rem; padding-block: 1rem; min-height: 0; gap: 0.35rem; }
+  .koma-plan-card--simple .koma-plan-price strong { font-size: clamp(2.8rem, 13vw, 3.6rem); }
+  .koma-plan-card--simple .koma-plan-billing-note { min-height: 0; font-size: 0.8rem; margin-top: 0.65rem; }
+  .koma-plan-card--simple ul { margin: 1rem 0; }
+  .koma-plan-card--simple li { padding-block: 0.4rem; font-size: 0.9rem; line-height: 1.5; gap: 0.5rem; }
+  .koma-plan-extra { font-size: 0.82rem; line-height: 1.5; margin-bottom: 1rem; color: #52645a; }
+  .koma-plan-card--featured .koma-plan-extra { color: #afc2b8; }
+  .koma-plan-addons { margin-bottom: 1rem; padding-top: 1rem; }
+  .koma-plan-addons dl > div { gap: 0.4rem; }
+  .koma-plan-addons dt { font-size: 0.8rem; }
+  .koma-plan-addons > p, .koma-plan-addons > .koma-plan-bundle-comparison { font-size: 0.78rem; }
+  .koma-plan-savings { font-size: 0.66rem; white-space: normal; }
+  .koma-plans-note { margin-top: 1.5rem; font-size: 0.8rem; line-height: 1.65; color: #526158; }
+  .koma-faq-section--sales .koma-faq-list summary { min-height: 70px; padding-block: 1rem; grid-template-columns: 1.4rem minmax(0, 1fr) 1.25rem; gap: 0.6rem; }
+  .koma-faq-section--sales .koma-faq-list summary strong { font-size: 1rem; line-height: 1.4; text-transform: none; }
+  .koma-faq-section--sales .koma-faq-list details > p { margin: 0 0 1.25rem 2rem; font-size: 0.94rem; line-height: 1.6; }
+  .koma-final-conversion { min-height: 0; }
+  .koma-final-conversion-copy { padding: 3rem 20px; }
+  .koma-final-conversion-copy h2 { max-width: 12ch; margin: 1rem 0; }
+  .koma-final-conversion-copy > p { font-size: 1rem; line-height: 1.55; margin-bottom: 1.5rem; }
+  .koma-final-conversion-copy > small { font-size: 0.8rem; color: #b4c5bb; }
+  .koma-final-next { min-height: 0; gap: 1.25rem; padding: 1.5rem 20px; }
+  .koma-final-next > img { width: 130px; }
+  .koma-final-next > div > span, .koma-final-next > strong { display: none; }
+  .koma-final-next ol { margin-top: 0; }
+  .koma-final-next li { grid-template-columns: 1.2rem minmax(0, 1fr) 1rem; gap: 0.7rem; padding-block: 0.8rem; font-size: 0.9rem; }
+  .koma-footer { padding: 1.75rem 20px; gap: 1rem; }
+  .koma-footer nav { display: flex; flex-wrap: wrap; gap: 0.9rem; justify-content: center; }
+  .koma-footer nav a { display: inline-flex; align-items: center; min-height: 44px; }
+  .koma-demo-dialog { padding: 1.1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .koma-landing *, .koma-landing *::before, .koma-landing *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

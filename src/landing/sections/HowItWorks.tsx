@@ -1,114 +1,93 @@
-import React from 'react';
-import { motion } from 'motion/react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FrontalLaptopFrame } from '../product/FrontalLaptopFrame';
-import { TabletFrame } from '../product/TabletFrame';
-import { PhoneFrame } from '../product/PhoneFrame';
 
-const PRODUCT_TOUR = [
+export const PRODUCT_TOUR = [
   {
-    id: 'pedidos',
-    num: '01',
-    label: 'PEDIDOS',
-    short: 'Atendimento e status',
-    title: 'VEJA CADA PEDIDO AVANÇAR.',
-    description: 'Mesas, balcão e delivery aparecem organizados por etapa. A equipe sabe o que entrou, o que está em preparo e o que já pode ser concluído.',
-    points: ['SALÃO, BALCÃO E DELIVERY', 'ETAPAS E STATUS', 'HISTÓRICO DO PEDIDO'],
-    outcome: 'PRIORIDADE VISÍVEL. PRÓXIMA AÇÃO CLARA.',
-    device: 'laptop',
-    view: 'pdv',
+    id: 'pedidos', num: '01', label: 'Pedidos',
+    title: 'CADA PEDIDO NO SEU LUGAR.',
+    description: 'Veja o que entrou, o que está em preparo e o que já pode sair. Mesas e delivery na mesma operação.',
+    note: 'Pedidos e fila de preparo em todos os planos.',
+    device: 'laptop', view: 'pdv',
   },
   {
-    id: 'salao',
-    num: '02',
-    label: 'COZINHA',
-    short: 'Produção e prioridade',
-    title: 'A PRODUÇÃO RECEBE O QUE PRECISA.',
-    description: 'Itens, quantidades, observações e tempo chegam à cozinha no mesmo pedido lançado pelo atendimento.',
-    points: ['FILA DE PRODUÇÃO', 'TEMPO E OBSERVAÇÕES', 'KDS E IMPRESSÃO'],
-    outcome: 'MENOS PERGUNTA NO BALCÃO. MAIS FOCO NA PRODUÇÃO.',
-    device: 'tablet',
-    view: 'kds',
+    id: 'salao', num: '02', label: 'Cozinha',
+    title: 'MENOS PERGUNTAS. MAIS AGILIDADE.',
+    description: 'A cozinha recebe itens, quantidades e observações na tela. Sem repetir o pedido no balcão.',
+    note: 'Painel de cozinha (KDS) e impressão automática no Pro e Premium.',
+    device: 'tablet', view: 'kds',
   },
   {
-    id: 'cardapio',
-    num: '03',
-    label: 'CARDÁPIO',
-    short: 'Pedido no celular',
-    title: 'O CLIENTE PEDE PELO PRÓPRIO CELULAR.',
-    description: 'O QR Code abre um cardápio conectado à mesma base do caixa. Preço, disponibilidade, adicionais e observações seguem para o pedido sem cadastro repetido.',
-    points: ['QR CODE', 'CARDÁPIO CENTRALIZADO', 'PEDIDO CONECTADO'],
-    outcome: 'O CLIENTE PEDE. A OPERAÇÃO CONTINUA NO MESMO FLUXO.',
-    device: 'phone',
-    view: 'cardapio',
+    id: 'cardapio', num: '03', label: 'Cardápio',
+    title: 'SEU CLIENTE PEDE PELO CELULAR.',
+    description: 'Compartilhe o link ou o QR Code. O pedido chega ao Kôma, sem você precisar digitar tudo de novo.',
+    note: 'Cardápio digital incluído em todos os planos.',
+    device: 'phone', view: 'cardapio',
   },
 ] as const;
 
-type TourScreen = (typeof PRODUCT_TOUR)[number];
-
-function TourDevice({ screen }: { screen: TourScreen }) {
-  if (screen.device === 'phone') return <PhoneFrame />;
-  if (screen.device === 'tablet') return <TabletFrame view={screen.view} />;
-  return <FrontalLaptopFrame view={screen.view} />;
-}
-
 export function HowItWorks() {
+  const [active, setActive] = useState(0);
+  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+  const section = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const followHash = () => {
+      const index = PRODUCT_TOUR.findIndex(screen => `#${screen.id}` === window.location.hash);
+      if (index < 0) return;
+      setActive(index);
+      requestAnimationFrame(() => section.current?.scrollIntoView({ block: 'start' }));
+    };
+    followHash();
+    window.addEventListener('hashchange', followHash);
+    return () => window.removeEventListener('hashchange', followHash);
+  }, []);
+
+  const select = (index: number) => {
+    setActive(index);
+    window.history.replaceState(null, '', `#${PRODUCT_TOUR[index].id}`);
+  };
+
   return (
-    <section className="koma-flow-section koma-scroll-flow" id="como-funciona" aria-labelledby="how-title">
+    <section ref={section} className="koma-flow-section koma-scroll-flow koma-compact-tour" id="como-funciona" aria-labelledby="how-title">
       <div className="koma-section-heading koma-section-heading--dark">
-        <span>04 / TOUR DO PRODUTO</span>
+        <span>03 / VEJA O PRODUTO</span>
         <h2 id="how-title">UM TOUR.<br />TRÊS TELAS.</h2>
-        <p>Veja como o mesmo pedido aparece para quem atende, produz e compra.</p>
+        <p>Escolha uma tela para conhecer o fluxo. Prévia com dados de demonstração.</p>
       </div>
-
-      <nav className="koma-tour-rail" aria-label="Etapas do tour do produto">
-        {PRODUCT_TOUR.map((screen) => (
-          <a href={`#${screen.id}`} key={screen.id}>
-            <span>{screen.num}</span>
-            <strong>{screen.label}</strong>
-            <small>{screen.short}</small>
-          </a>
-        ))}
-      </nav>
-
-      <div className="koma-scroll-modules">
+      <div className="koma-tour-tabs" role="tablist" aria-label="Telas do produto">
         {PRODUCT_TOUR.map((screen, index) => (
-          <motion.article
-            key={screen.id}
-            id={screen.id}
-            className={`koma-scroll-module koma-scroll-module--${screen.device}`}
-            initial={{ opacity: 0.42, y: 34 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.32 }}
-            transition={{ duration: 0.62, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <motion.div
-              className="koma-scroll-module-copy"
-              initial={{ opacity: 0, x: index % 2 === 0 ? -24 : 24 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, amount: 0.45 }}
-              transition={{ duration: 0.55, delay: 0.08 }}
-            >
-              <span>{screen.num} / {screen.label}</span>
-              <h3>{screen.title}</h3>
-              <p>{screen.description}</p>
-              <ul>
-                {screen.points.map((point) => <li key={point}>{point}</li>)}
-              </ul>
-              <strong className="koma-scroll-module-outcome">{screen.outcome}</strong>
-            </motion.div>
-
-            <motion.div
-              className="koma-scroll-module-device"
-              initial={{ opacity: 0, y: 28, scale: 0.97 }}
-              whileInView={{ opacity: 1, y: 0, scale: 1 }}
-              viewport={{ once: true, amount: 0.28 }}
-              transition={{ duration: 0.68, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <TourDevice screen={screen} />
-            </motion.div>
-          </motion.article>
+          <button key={screen.id} ref={element => { tabs.current[index] = element; }} type="button" role="tab"
+            id={`tab-${screen.id}`} aria-controls={screen.id} aria-selected={active === index} tabIndex={active === index ? 0 : -1}
+            onClick={() => select(index)} onKeyDown={event => {
+              let next = index;
+              if (event.key === 'ArrowRight') next = (index + 1) % PRODUCT_TOUR.length;
+              else if (event.key === 'ArrowLeft') next = (index + PRODUCT_TOUR.length - 1) % PRODUCT_TOUR.length;
+              else if (event.key === 'Home') next = 0;
+              else if (event.key === 'End') next = PRODUCT_TOUR.length - 1;
+              else return;
+              event.preventDefault();
+              select(next);
+              tabs.current[next]?.focus();
+            }}>
+            <span>{screen.num}</span>{screen.label}
+          </button>
         ))}
       </div>
+      {PRODUCT_TOUR.map((screen, index) => (
+        <div key={screen.id} id={screen.id} role="tabpanel" aria-labelledby={`tab-${screen.id}`} tabIndex={0}
+          hidden={active !== index} className={`koma-tour-panel koma-tour-panel--${screen.device}`}>
+          <div className="koma-tour-copy">
+            <h3>{screen.title}</h3>
+            <p>{screen.description}</p>
+            <small>{screen.note}</small>
+            <a href="#planos" className="koma-tour-plans-link">Compare os planos →</a>
+          </div>
+          <figure className="koma-tour-device">
+            {active === index && <FrontalLaptopFrame device={screen.device} view={screen.view} />}
+            <figcaption>Prévia ilustrativa do Kôma · {screen.label}</figcaption>
+          </figure>
+        </div>
+      ))}
     </section>
   );
 }

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLeadCapture } from '../components/LeadCaptureProvider';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../../brand/komaBrand';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
@@ -6,6 +7,8 @@ import { WhatsAppIcon } from '../components/WhatsAppIcon';
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const openDemo = useLeadCapture();
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -15,15 +18,30 @@ export function Header() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && menuOpen) setMenuOpen(false);
+      if (e.key === 'Escape' && menuOpen) {
+        setMenuOpen(false);
+        toggleRef.current?.focus();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [menuOpen]);
 
   useEffect(() => {
-    document.body.style.overflow = menuOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    if (!menuOpen) return;
+    const previous = document.body.style.overflow;
+    const main = toggleRef.current?.closest('.koma-landing')?.querySelector('main');
+    const wasInert = main?.inert ?? false;
+    if (main) main.inert = true;
+    document.body.style.overflow = 'hidden';
+    const desktop = window.matchMedia('(min-width: 1025px)');
+    const closeOnDesktop = () => { if (desktop.matches) setMenuOpen(false); };
+    desktop.addEventListener('change', closeOnDesktop);
+    return () => {
+      document.body.style.overflow = previous;
+      if (main) main.inert = wasInert;
+      desktop.removeEventListener('change', closeOnDesktop);
+    };
   }, [menuOpen]);
 
   return (
@@ -52,16 +70,20 @@ export function Header() {
             <WhatsAppIcon />
             Falar no WhatsApp
           </a>
-          <a href={KOMA_LANDING_CONFIG.signupAnchor} className="koma-btn koma-btn--primary koma-btn--sm">
+          <button type="button" onClick={() => openDemo()} className="koma-btn koma-btn--primary koma-btn--sm">
             Ver o Kôma em ação
-          </a>
+          </button>
         </div>
 
+        <button type="button" className="koma-mobile-demo koma-btn koma-btn--primary" onClick={() => { setMenuOpen(false); openDemo(); }}>Ver demo</button>
         <button
+          ref={toggleRef}
+          type="button"
           className={`koma-hamburger ${menuOpen ? 'koma-hamburger--open' : ''}`}
           onClick={() => setMenuOpen(!menuOpen)}
           aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
           aria-expanded={menuOpen}
+          aria-controls="koma-mobile-navigation"
         >
           <span />
           <span />
@@ -70,20 +92,22 @@ export function Header() {
       </header>
 
       <div
+        id="koma-mobile-navigation"
         className={`koma-mobile-menu ${menuOpen ? 'koma-mobile-menu--open' : ''}`}
         aria-hidden={!menuOpen}
+        inert={!menuOpen}
       >
         <nav aria-label="Menu mobile">
           <a href="#como-funciona" onClick={() => setMenuOpen(false)}>Como funciona</a>
           <a href="#duvidas" onClick={() => setMenuOpen(false)}>Dúvidas</a>
           <a href="#planos" onClick={() => setMenuOpen(false)}>Planos</a>
-          <a
-            href={KOMA_LANDING_CONFIG.signupAnchor}
+          <button
+            type="button"
             className="koma-btn koma-btn--primary"
-            onClick={() => setMenuOpen(false)}
+            onClick={() => { setMenuOpen(false); toggleRef.current?.focus(); openDemo(); }}
           >
             Ver o Kôma em ação
-          </a>
+          </button>
           <a
             href={KOMA_LANDING_CONFIG.whatsappUrl}
             target="_blank"

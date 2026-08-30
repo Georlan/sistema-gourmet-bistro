@@ -1,32 +1,25 @@
 import React from 'react';
-import { LifeBuoy, MonitorSmartphone, Wrench } from 'lucide-react';
-
-const ASSURANCES = [
-  { icon: MonitorSmartphone, title: 'USE O QUE JÁ TEM', text: 'Celular, tablet ou computador.' },
-  { icon: Wrench, title: 'CONFIRA ANTES', text: 'Equipamentos avaliados antes da contratação.' },
-  { icon: LifeBuoy, title: 'COMECE ACOMPANHADO', text: 'Configuração e orientação para a equipe.' },
-] as const;
 
 const QUESTIONS = [
   {
-    question: 'PRECISO TROCAR MEUS EQUIPAMENTOS?',
-    answer: 'Não necessariamente. Conferimos computador, tablet, conexão e impressão antes da contratação. Se algo não for compatível, você fica sabendo antes de começar.',
+    question: 'Preciso comprar uma impressora?',
+    answer: 'Não. No Pocket, você acompanha a fila de preparo na tela. Para impressão automática no Pro ou Premium, conferimos o modelo e a conexão da sua impressora antes da contratação.',
   },
   {
-    question: 'QUANTO TEMPO LEVA PARA COMEÇAR?',
-    answer: 'Depende do cardápio, da equipe e dos equipamentos. Primeiro entendemos sua rotina; depois combinamos cadastro, configuração e orientação sem interromper o atendimento.',
+    question: 'Posso atender mesas e delivery juntos?',
+    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam ao Kôma; pedidos de WhatsApp ou telefone são lançados por você. O app do entregador é opcional e não é necessário para fazer delivery.',
   },
   {
-    question: 'PRECISA DE INTERNET?',
-    answer: 'Sim. A conexão mantém caixa, salão e cozinha sincronizados. Durante a implantação, avaliamos o Wi-Fi e orientamos a melhor forma de reduzir riscos na operação.',
+    question: 'Precisa de internet?',
+    answer: 'Sim. A conexão mantém caixa, salão e cozinha sincronizados. Na implantação, avaliamos a conexão e os equipamentos para orientar o uso.',
   },
   {
-    question: 'COMO FUNCIONA O SUPORTE?',
-    answer: 'A implantação é acompanhada e as dúvidas operacionais são orientadas conforme o plano contratado e a etapa do restaurante.',
+    question: 'Quanto tempo leva para começar?',
+    answer: 'Depende do cardápio, da equipe e dos equipamentos. Combinamos o prazo e o escopo da implantação antes de contratar.',
   },
   {
-    question: 'FUNCIONA EM CELULAR, TABLET E COMPUTADOR?',
-    answer: 'Sim. O Kôma funciona pelo navegador e adapta as telas para cada função. Periféricos específicos são confirmados antes da contratação.',
+    question: 'Como funciona o suporte?',
+    answer: 'Você recebe orientação na implantação e no uso do sistema. Os canais e horários são combinados na contratação. O suporte prioritário do Premium não é plantão 24 horas.',
   },
 ];
 
@@ -34,33 +27,13 @@ export function FAQ() {
   return (
     <section className="koma-faq-section koma-faq-section--sales" id="duvidas" aria-labelledby="faq-title">
       <div className="koma-faq-sales-heading">
-        <div>
-          <span>07 / ANTES DE DECIDIR</span>
-          <h2 id="faq-title">O QUE VOCÊ PRECISA SABER.</h2>
-        </div>
-        <p>Sem resposta escondida. Você entende o encaixe, os equipamentos e a implantação antes de contratar.</p>
+        <div><span>06 / DÚVIDAS</span><h2 id="faq-title">ANTES DE COMEÇAR.</h2></div>
+        <p>Respostas diretas para você decidir.</p>
       </div>
-
-      <div className="koma-faq-assurances" aria-label="Garantias antes de contratar">
-        {ASSURANCES.map((item) => {
-          const Icon = item.icon;
-          return (
-            <article key={item.title}>
-              <Icon size={22} strokeWidth={1.7} aria-hidden="true" />
-              <div><strong>{item.title}</strong><span>{item.text}</span></div>
-            </article>
-          );
-        })}
-      </div>
-
       <div className="koma-faq-list">
         {QUESTIONS.map((item, index) => (
-          <details key={item.question} open={index === 0}>
-            <summary>
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{item.question}</strong>
-              <i aria-hidden="true" />
-            </summary>
+          <details key={item.question}>
+            <summary><span>{String(index + 1).padStart(2, '0')}</span><strong>{item.question}</strong><i aria-hidden="true" /></summary>
             <p>{item.answer}</p>
           </details>
         ))}

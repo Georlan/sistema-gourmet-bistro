@@ -1,10 +1,23 @@
+export interface LeadSelection {
+  plan: string;
+  billing: 'mensal' | 'anual';
+}
+
+export interface LeadFormData {
+  responsavel: string;
+  estabelecimento: string;
+  whatsapp?: string;
+  tipoOperacao?: string;
+  tamanhoOperacao?: string;
+}
+
 /**
  * Configurações comerciais e de contato para a Landing Page Oficial do KÔMA.
  */
 export const KOMA_LANDING_CONFIG = {
   // Número do WhatsApp oficial (formatado para wa.me/55...)
   whatsappNumber: '5588999616937',
-  whatsappMessage: encodeURIComponent('Olá! Vim pela página oficial do KÔMA e quero saber como iniciar o cadastro do meu restaurante.'),
+  whatsappMessage: encodeURIComponent('Olá! Vim pela página do KÔMA e quero conhecer o sistema para meu restaurante. Podemos conversar?'),
 
   // Links de CTA
   signupAnchor: '#cadastro',
@@ -17,33 +30,22 @@ export const KOMA_LANDING_CONFIG = {
     return `https://wa.me/${this.whatsappNumber}?text=${this.whatsappMessage}`;
   },
 
-  getLeadMessage(lead: {
-    responsavel: string;
-    estabelecimento: string;
-    whatsapp: string;
-    tipoOperacao: string;
-    tamanhoOperacao: string;
-  }) {
+  getLeadMessage(lead: LeadFormData, selection?: LeadSelection) {
     return [
-      'Olá! Quero iniciar o cadastro do meu restaurante no KÔMA.',
+      'Olá! Quero uma demonstração do KÔMA, sem compromisso.',
       '',
       `Responsável: ${lead.responsavel.trim()}`,
       `Estabelecimento: ${lead.estabelecimento.trim()}`,
-      `WhatsApp: ${lead.whatsapp.trim()}`,
-      `Tipo de operação: ${lead.tipoOperacao}`,
-      `Tamanho da operação: ${lead.tamanhoOperacao}`,
+      ...(lead.whatsapp?.trim() ? [`WhatsApp: ${lead.whatsapp.trim()}`] : []),
+      ...(lead.tipoOperacao ? [`Tipo de operação: ${lead.tipoOperacao}`] : []),
+      ...(lead.tamanhoOperacao ? [`Tamanho da operação: ${lead.tamanhoOperacao}`] : []),
+      ...(selection ? [`Plano de interesse: ${selection.plan} · cobrança ${selection.billing}`] : []),
       '',
-      'Quero saber quais são os próximos passos para começar.',
+      'Quero entender se o sistema se encaixa na minha operação.',
     ].join('\n');
   },
 
-  getLeadWhatsappUrl(lead: {
-    responsavel: string;
-    estabelecimento: string;
-    whatsapp: string;
-    tipoOperacao: string;
-    tamanhoOperacao: string;
-  }) {
-    return `https://wa.me/${this.whatsappNumber}?text=${encodeURIComponent(this.getLeadMessage(lead))}`;
+  getLeadWhatsappUrl(lead: LeadFormData, selection?: LeadSelection) {
+    return `https://wa.me/${this.whatsappNumber}?text=${encodeURIComponent(this.getLeadMessage(lead, selection))}`;
   }
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLeadCapture } from '../components/LeadCaptureProvider';
 import { ArrowDownRight, Laptop, Monitor, Smartphone, Tablet } from 'lucide-react';
 
 const STEPS = [
@@ -20,16 +21,17 @@ const STEPS = [
 ] as const;
 
 export function Implementation() {
+  const openDemo = useLeadCapture();
   return (
     <section className="koma-implementation-section" id="implantacao" aria-labelledby="implementation-title">
       <div className="koma-implementation-main">
         <div className="koma-implementation-copy">
-          <span>06 / COMEÇAR É SIMPLES</span>
-          <h2 id="implementation-title">SEM TROCAR TUDO.<br />SEM COMEÇAR SOZINHO.</h2>
-          <p>Primeiro mostramos como o Kôma se encaixa no seu restaurante. Depois organizamos a entrada junto com sua equipe.</p>
-          <a className="koma-btn koma-btn--primary" href="#cadastro">
-            QUERO VER COMO FUNCIONA <ArrowDownRight size={17} aria-hidden="true" />
-          </a>
+          <span>04 / COMEÇAR É SIMPLES</span>
+          <h2 id="implementation-title">COM VOCÊ.<br />DESDE O INÍCIO.</h2>
+          <p>Da configuração ao primeiro pedido, sua equipe recebe orientação.</p>
+          <button type="button" className="koma-btn koma-btn--primary" onClick={() => openDemo()}>
+            SOLICITAR DEMONSTRAÇÃO <ArrowDownRight size={17} aria-hidden="true" />
+          </button>
         </div>
 
         <ol className="koma-implementation-steps">

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import NumberFlow from '@number-flow/react';
 import { Check } from 'lucide-react';
 import {
   ANNUAL_DISCOUNT_RATE,
@@ -10,7 +9,7 @@ import {
   getPremiumBundleComparison,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
-import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
+import { useLeadCapture } from '../components/LeadCaptureProvider';
 
 const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   stage: string;
@@ -40,13 +39,14 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
+  const openDemo = useLeadCapture();
   const bundle = getPremiumBundleComparison(isYearly);
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
       <div className="koma-plans-simple-heading">
         <div>
-          <span>08 / PLANOS</span>
+          <span>05 / PLANOS</span>
           <h2 id="plans-title">COMECE CERTO.<br />CRESÇA SEM TROCAR.</h2>
         </div>
         <div>
@@ -98,15 +98,10 @@ export function Plans() {
               <div className="koma-plan-price" aria-label={`${formatCurrency(displayPrice)} por mês${isYearly ? ', equivalente no plano anual' : ''}`}>
                 <span>R$</span>
                 <strong>
-                  <NumberFlow
-                    value={displayPrice}
-                    locales="pt-BR"
-                    format={{
+                  {displayPrice.toLocaleString('pt-BR', {
                       minimumFractionDigits: isYearly ? 2 : 0,
                       maximumFractionDigits: 2,
-                    }}
-                    willChange
-                  />
+                  })}
                 </strong>
                 <small>/mês</small>
               </div>
@@ -147,9 +142,9 @@ export function Plans() {
                 )}
               </div>
 
-              <a href={KOMA_LANDING_CONFIG.signupAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
+              <button type="button" onClick={() => openDemo({ plan: plan.name, billing: isYearly ? 'anual' : 'mensal' })} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
                 ESCOLHER {plan.name.replace('Kôma ', '').toUpperCase()}
-              </a>
+              </button>
             </article>
           );
         })}

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { KomaLogo } from '../../components/KomaLogo';
 import { TabletFrame } from '../product/TabletFrame';
-import { LeadCaptureModal } from '../components/LeadCaptureModal';
+import { useLeadCapture } from '../components/LeadCaptureProvider';
 import { SUBSCRIPTION_PLANS, formatCurrency } from '../../config/subscriptionPlans';
 
 const ENTRY_PRICE = Math.min(...SUBSCRIPTION_PLANS.map(plan => plan.price));
@@ -18,7 +18,7 @@ const HERO_STRIP_ITEMS = [
     num: '02',
     name: 'MESAS ATUALIZADAS AO VIVO',
     detail: 'Status e consumo visíveis para todo o salão.',
-    href: '#salao',
+    href: '#pedidos',
   },
   {
     num: '03',
@@ -55,11 +55,11 @@ const HERO_BENEFITS = [
 
 export function Hero() {
   const sectionRef = useRef<HTMLElement>(null);
-  const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const openDemo = useLeadCapture();
   const [liveStep, setLiveStep] = useState(0);
 
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce), (max-width: 768px)').matches) return;
     const timer = window.setInterval(() => {
       setLiveStep((current) => (current + 1) % HERO_LIVE_STEPS.length);
     }, 3200);
@@ -85,7 +85,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
           >
-            SISTEMA COMPLETO PARA VENDER, OPERAR E CONTROLAR
+            SISTEMA PARA RESTAURANTES
           </motion.p>
 
           <h1 className="koma-hero-headline" aria-label="Venda mais. Controle toda a operação do restaurante.">
@@ -110,7 +110,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Pedidos, salão, cozinha, delivery e caixa trabalhando juntos — do primeiro pedido ao fechamento.
+            Mesas, delivery e caixa em um só lugar. Com cardápio digital incluído desde o primeiro plano.
           </motion.p>
 
           <motion.ul
@@ -130,8 +130,8 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.55 }}
           >
-            <button type="button" className="koma-btn koma-btn--primary" onClick={() => setLeadModalOpen(true)}>
-              Ver o Kôma em ação
+            <button type="button" className="koma-btn koma-btn--primary" onClick={() => openDemo()}>
+              Solicitar demonstração
             </button>
             <div className="koma-hero-entry-price" aria-label={`Planos a partir de ${formatCurrency(ENTRY_PRICE)} por mês`}>
               <span>PLANOS A PARTIR DE</span>
@@ -145,7 +145,7 @@ export function Hero() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.66 }}
           >
-            Demonstração guiada, sem compromisso. Você escolhe como continuar.
+            Sem compromisso. Veja se funciona para o seu restaurante.
           </motion.p>
 
           <motion.div
@@ -199,7 +199,6 @@ export function Hero() {
         ))}
       </motion.div>
 
-      <LeadCaptureModal open={leadModalOpen} onClose={() => setLeadModalOpen(false)} />
     </section>
   );
 }

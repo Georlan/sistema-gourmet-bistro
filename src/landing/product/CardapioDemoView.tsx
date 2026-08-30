@@ -54,11 +54,11 @@ export function CardapioDemoView() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <KomaLogo size="lg" variant="dark" />
           <div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>KÔMA BISTRO</div>
-            <div style={{ fontSize: '0.65rem', color: '#00b894', fontWeight: 600 }}>Mesa 04 / Atendimento aberto</div>
+            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>KÔMA BISTRO</div>
+            <div style={{ fontSize: '0.875rem', color: '#00b894', fontWeight: 600 }}>Mesa 04 / Atendimento aberto</div>
           </div>
         </div>
-        <div style={{ background: 'rgba(0, 184, 148, 0.15)', color: '#00b894', fontSize: '0.65rem', fontWeight: 700, padding: '4px 8px', borderRadius: '4px' }}>
+        <div style={{ background: 'rgba(0, 184, 148, 0.15)', color: '#00b894', fontSize: '0.875rem', fontWeight: 700, padding: '4px 8px', borderRadius: '4px' }}>
           Cardápio QR
         </div>
       </div>
@@ -94,7 +94,7 @@ export function CardapioDemoView() {
         })}
       </div>
 
-      <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto' }}>
+      <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
         {products.map((item) => (
           <div
             key={item.id}
@@ -102,22 +102,22 @@ export function CardapioDemoView() {
               background: '#121420',
               border: '1px solid #1a1d2e',
               borderRadius: '8px',
-              padding: '10px 12px',
+              padding: '16px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '4px',
+              gap: '8px',
             }}
           >
             {item.badge && (
-              <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#00b894', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#00b894', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {item.badge}
               </span>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#ffffff' }}>{item.name}</div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#00b894' }}>{item.price}</div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#ffffff' }}>{item.name}</div>
+              <div style={{ fontSize: '1rem', fontWeight: 800, color: '#00b894' }}>{item.price}</div>
             </div>
-            <div style={{ fontSize: '0.65rem', color: '#888999', lineHeight: 1.35 }}>{item.desc}</div>
+            <div style={{ fontSize: '0.875rem', color: '#888999', lineHeight: 1.5 }}>{item.desc}</div>
           </div>
         ))}
       </div>
@@ -133,8 +133,8 @@ export function CardapioDemoView() {
         }}
       >
         <div>
-          <div style={{ fontSize: '0.6rem', color: '#777' }}>1 item selecionado</div>
-          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff' }}>R$ 32,90</div>
+          <div style={{ fontSize: '0.8rem', color: '#777' }}>1 item selecionado</div>
+          <div style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>R$ 32,90</div>
         </div>
         <div
           style={{

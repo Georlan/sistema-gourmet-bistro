@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import './landing.css';
+import './mobile-refinement.css';
 import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
 import { ValueStrip } from './sections/ValueStrip';
 import { SocialProof } from './sections/SocialProof';
 import { Management } from './sections/Management';
 import { HowItWorks } from './sections/HowItWorks';
-import { Capabilities } from './sections/Capabilities';
+import { LeadCaptureProvider } from './components/LeadCaptureProvider';
 import { Implementation } from './sections/Implementation';
 import { FAQ } from './sections/FAQ';
 import { Plans } from './sections/Plans';
@@ -88,30 +89,32 @@ export default function LandingPage() {
     document.getElementById(structuredData.id)?.remove();
     document.head.appendChild(structuredData);
 
-    window.scrollTo(0, 0);
+    if (!window.location.hash) window.scrollTo(0, 0);
+    else requestAnimationFrame(() => document.getElementById(window.location.hash.slice(1))?.scrollIntoView());
 
     return () => structuredData.remove();
   }, []);
 
   return (
     <div className="koma-landing">
-      <Header />
-      <main>
-        <Hero />
-        <AngleDivider variant="dark-light" />
-        <ValueStrip />
-        <SocialProof />
-        <Management />
-        <AngleDivider variant="light-dark" />
-        <HowItWorks />
-        <Capabilities />
-        <AngleDivider variant="dark-light" />
-        <Implementation />
-        <FAQ />
-        <Plans />
-        <AngleDivider variant="light-dark" />
-        <FinalCTA />
-      </main>
+      <LeadCaptureProvider>
+        <Header />
+        <main>
+          <Hero />
+          <AngleDivider variant="dark-light" />
+          <ValueStrip />
+          <SocialProof />
+          <Management />
+          <AngleDivider variant="light-dark" />
+          <HowItWorks />
+          <AngleDivider variant="dark-light" />
+          <Implementation />
+          <Plans />
+          <FAQ />
+          <AngleDivider variant="light-dark" />
+          <FinalCTA />
+        </main>
+      </LeadCaptureProvider>
     </div>
   );
 }

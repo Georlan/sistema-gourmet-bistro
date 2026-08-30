@@ -7,7 +7,7 @@ const GROUPS = [
     slug: 'vender',
     eyebrow: 'VENDER',
     icon: ShoppingBag,
-    title: 'VENDA POR ONDE O CLIENTE CHEGAR.',
+    title: 'ATENDA EM TODOS OS CANAIS.',
     text: 'Salão, balcão, retirada, delivery e cardápio digital alimentam a mesma operação.',
     features: ['PDV, mesas e comandas', 'Retirada e delivery', 'Cardápio digital e QR Code'],
   },
@@ -16,8 +16,8 @@ const GROUPS = [
     slug: 'operar',
     eyebrow: 'OPERAR',
     icon: Workflow,
-    title: 'TODO MUNDO NO MESMO FLUXO.',
-    text: 'O pedido segue do atendimento à produção sem depender de novos repasses manuais.',
+    title: 'AGILIZE A COZINHA.',
+    text: 'Itens e observações chegam à produção sem precisar repetir o pedido.',
     features: ['Salão atualizado ao vivo', 'KDS e impressão automática', 'Status compartilhado pela equipe'],
   },
   {
@@ -25,8 +25,8 @@ const GROUPS = [
     slug: 'controlar',
     eyebrow: 'CONTROLAR',
     icon: ChartNoAxesCombined,
-    title: 'DECIDA COM O HISTÓRICO NA MÃO.',
-    text: 'Caixa, estoque, relatórios, equipe e relacionamento ficam ligados ao que realmente aconteceu.',
+    title: 'SAIBA COMO SEU NEGÓCIO VAI.',
+    text: 'Acompanhe vendas, custos e clientes para decidir com mais clareza.',
     features: ['Caixa e financeiro', 'Estoque e relatórios', 'CRM, fidelidade e cupons'],
   },
 ];
@@ -35,9 +35,9 @@ export function Management() {
   return (
     <section className="koma-management-section" id="gestao" aria-labelledby="management-title">
       <div className="koma-section-heading koma-section-heading--light">
-        <span>03 / TRÊS PILARES</span>
+        <span>02 / SEU RESTAURANTE CONECTADO</span>
         <h2 id="management-title">VENDER. OPERAR.<br />CONTROLAR.</h2>
-        <p>Três objetivos simples organizam tudo o que o Kôma entrega para o restaurante.</p>
+        <p>Do atendimento à gestão, cada pessoa sabe o que fazer.</p>
       </div>
 
       <div className="koma-management-grid">
