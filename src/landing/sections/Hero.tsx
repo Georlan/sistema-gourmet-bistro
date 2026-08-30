@@ -160,7 +160,7 @@ export function Hero() {
         </motion.div>
 
         <div className="koma-hero-device-container">
-          <TabletFrame view={activeStep.view} className="koma-hero-device-frame" />
+          <TabletFrame view={activeStep.view} className="koma-hero-device-frame" priority />
           <motion.div
             key={activeStep.label}
             className="koma-hero-live-status"
