@@ -84,14 +84,12 @@ test('consulta fica antes das categorias e usa a loja ativa', () => {
   assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('<CardapioCategoryNav'));
 });
 
-test('controles de pagamento mantêm ações e tornam seleção e troco acessíveis', () => {
+test('controles de pagamento configurados mantêm seleção e troco acessíveis', () => {
   const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');
-  assert.match(cart, /aria-pressed=\{paymentDetail === "pix"\}/);
-  assert.match(cart, /aria-pressed=\{paymentDetail === "dinheiro"\}/);
-  assert.match(cart, /aria-pressed=\{paymentDetail === "cartao_credito"\}/);
+  assert.match(cart, /<CardapioPaymentOptions available=\{availablePayments\} selected=\{paymentDetail\} onSelect=\{selectPayment\}/);
   assert.match(cart, /htmlFor="payment-change-for"/);
   assert.match(cart, /id="payment-change-for"/);
-  assert.match(cart, /setPaymentDetail\("pix"\); setPrecisaTroco\(false\)/);
+  assert.match(cart, /if \(method !== 'dinheiro'\) \{\s*setPrecisaTroco\(false\);\s*setTrocoPara\(""\)/);
   const checkout = readFileSync(new URL('../src/cardapio/components/CardapioDigital.tsx', import.meta.url), 'utf8');
   assert.match(checkout, /method=\{paymentMethodDetail\} fulfillment=\{deliveryMethod\} changeFor=\{trocoPara\}/);
   assert.match(checkout, /forma_pagamento_detalhe: paymentMethodDetail/);

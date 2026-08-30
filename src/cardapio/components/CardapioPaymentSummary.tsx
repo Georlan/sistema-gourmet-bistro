@@ -1,12 +1,8 @@
 import React from 'react';
 import { CreditCard } from 'lucide-react';
 
-export const PAYMENT_LABELS = {
-  pix: 'Pix',
-  dinheiro: 'Dinheiro',
-  cartao_credito: 'Cartão de crédito',
-  cartao_debito: 'Cartão de débito',
-};
+import { PAYMENT_LABELS } from '../paymentMethods';
+export { PAYMENT_LABELS } from '../paymentMethods';
 
 interface Props {
   method: keyof typeof PAYMENT_LABELS;

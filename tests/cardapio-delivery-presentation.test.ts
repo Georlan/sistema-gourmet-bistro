@@ -53,10 +53,10 @@ test('UI expõe seleção, nome acessível do bairro e endereço legível sem al
   assert.match(cart, /deliveryMethod === "delivery" \? deliveryQuote.fee : 0/);
 });
 
-test('resumo não promete total final e mostra mínimo sem alterar bloqueios', () => {
+test('resumo não promete total final, mostra mínimo e preserva bloqueio de loja pausada', () => {
   assert.match(cart, /<span>Total estimado<\/span>/);
   assert.match(cart, /remainingMinimum > 0 &&/);
-  assert.match(cart, /disabled=\{!orderingEnabled\}/);
+  assert.match(cart, /disabled=\{!orderingEnabled \|\| availablePayments.length === 0\}/);
 });
 
 test('promoção ausente não renderiza zero solto na sacola', () => {

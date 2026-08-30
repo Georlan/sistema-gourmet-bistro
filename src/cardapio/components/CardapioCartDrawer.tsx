@@ -30,13 +30,12 @@ import {
   Truck,
   UserRound,
   X,
-  CreditCard,
-  QrCode,
-  Banknote,
 } from "lucide-react";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
 import { API_BASE_URL } from "../../config/api";
 import { getDeliveryQuote } from "../deliveryPresentation";
+import CardapioPaymentOptions from "./CardapioPaymentOptions";
+import { getAvailablePaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
 
 export interface CartItem {
   id: string;
@@ -110,9 +109,32 @@ export default function CardapioCartDrawer({
   const [errorMessage, setErrorMessage] = useState("");
 
   // Payment detail & Change (Troco)
-  const [paymentDetail, setPaymentDetail] = useState<"pix" | "dinheiro" | "cartao_credito" | "cartao_debito">("pix");
+  const availablePayments = useMemo(() => getAvailablePaymentMethods(brandConfig?.paymentMethods), [brandConfig?.paymentMethods]);
+  const [paymentSelection, setPaymentSelection] = useState<{ restaurantId: string; method: PaymentMethod | null }>(() => ({
+    restaurantId: String(restaurantId),
+    method: availablePayments[0] ?? null,
+  }));
+  const paymentDetail = resolvePaymentSelection(paymentSelection, restaurantId, availablePayments);
+  const paymentError = getPaymentSelectionError(paymentDetail, availablePayments);
   const [trocoPara, setTrocoPara] = useState<string>("");
   const [precisaTroco, setPrecisaTroco] = useState(false);
+
+  const selectPayment = (method: PaymentMethod) => {
+    if (!availablePayments.includes(method)) return;
+    setPaymentSelection({ restaurantId: String(restaurantId), method });
+    setErrorMessage("");
+    if (method !== 'dinheiro') {
+      setPrecisaTroco(false);
+      setTrocoPara("");
+    }
+  };
+
+  useEffect(() => {
+    if (paymentDetail !== null) return;
+    setPaymentSelection({ restaurantId: String(restaurantId), method: null });
+    setPrecisaTroco(false);
+    setTrocoPara("");
+  }, [paymentDetail, restaurantId]);
 
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
@@ -266,6 +288,10 @@ export default function CardapioCartDrawer({
       setErrorMessage("Sua sacola está vazia.");
       return;
     }
+    if (paymentError || !paymentDetail) {
+      setErrorMessage(paymentError || "Escolha uma forma de pagamento.");
+      return;
+    }
 
     // Check minimum order
     const pedidoMin = brandConfig?.pedidoMinimo || 0;
@@ -301,7 +327,7 @@ export default function CardapioCartDrawer({
       customerName: customerName.trim(),
       customerPhone: normalizeBrazilianPhone(customerPhone),
       paymentMethodDetail: paymentDetail,
-      trocoPara: precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
+      trocoPara: paymentDetail === "dinheiro" && precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
       bairro: selectedBairro || undefined,
       cupomCodigo: appliedCoupon?.codigo,
       descontoCupom: couponDiscount > 0 ? couponDiscount : undefined,
@@ -681,49 +707,7 @@ export default function CardapioCartDrawer({
                 <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">4. Como quer pagar?</h3>
                 <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pagamento direto ao restaurante, {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}. Sem cobrança online agora.</p>
                 
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    aria-pressed={paymentDetail === "pix"}
-                    onClick={() => { setPaymentDetail("pix"); setPrecisaTroco(false); }}
-                    className={`min-h-20 min-w-0 p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
-                      paymentDetail === "pix"
-                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold"
-                        : "border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
-                    }`}
-                  >
-                    <QrCode className="w-5 h-5" aria-hidden="true" />
-                    <span className="text-xs">Pix</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    aria-pressed={paymentDetail === "cartao_credito"}
-                    onClick={() => { setPaymentDetail("cartao_credito"); setPrecisaTroco(false); }}
-                    className={`min-h-20 min-w-0 p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
-                      paymentDetail === "cartao_credito"
-                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold"
-                        : "border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
-                    }`}
-                  >
-                    <CreditCard className="w-5 h-5" aria-hidden="true" />
-                    <span className="text-xs leading-snug">Cartão de crédito</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    aria-pressed={paymentDetail === "dinheiro"}
-                    onClick={() => setPaymentDetail("dinheiro")}
-                    className={`min-h-20 min-w-0 p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${
-                      paymentDetail === "dinheiro"
-                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold"
-                        : "border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
-                    }`}
-                  >
-                    <Banknote className="w-5 h-5" aria-hidden="true" />
-                    <span className="text-xs">Dinheiro</span>
-                  </button>
-                </div>
+                <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
 
                 {/* Troco Calculator for Dinheiro */}
                 {paymentDetail === "dinheiro" && (
@@ -864,11 +848,11 @@ export default function CardapioCartDrawer({
               <button
                 type="button"
                 onClick={handleCheckout}
-                disabled={!orderingEnabled}
+                disabled={!orderingEnabled || availablePayments.length === 0}
                 className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-koma-raised disabled:text-koma-muted"
                 id="btn-confirm-order"
               >
-                <span>{orderingEnabled ? "Revisar pedido" : "Pedidos pausados"}</span>
+                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : "Revisar pedido"}</span>
                 {orderingEnabled && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>

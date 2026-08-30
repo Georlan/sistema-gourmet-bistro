@@ -24,10 +24,16 @@ O usuário aprovou o resumo compacto de mínimo e acesso às taxas no topo do ca
 
 A etapa de apresentação do pagamento também expõe seleção, momento de pagamento e troco na revisão, com controles maiores no celular. Nenhuma cobrança online foi adicionada.
 
-### Decisão de pagamento pendente
+### Decisão de pagamento aprovada e implementada
 
-Foi perguntado ao usuário se a sacola deve limitar opções às formas cadastradas por restaurante, incluindo débito quando habilitado. Até a resposta, preservar as três opções atuais e seus callbacks. O rótulo de cartão foi explicitado como crédito, que já era o valor enviado. Não afirmar que o filtro por formas aceitas está implementado.
+O usuário aprovou limitar as opções às formas cadastradas por restaurante, incluindo débito quando habilitado. A sacola e a revisão agora usam `getAvailablePaymentMethods` e validam a escolha contra a configuração da loja ativa. Crédito e débito são distintos; nomes conhecidos com/sem acento e códigos legados são normalizados, sem interpretar tipos genéricos ou desconhecidos como outra forma de pagamento.
+
+A sacola inicia com a primeira opção cadastrada suportada, nunca com Pix arbitrário. Sem opções suportadas, mostra aviso e bloqueia a revisão. Uma escolha removida da configuração precisa ser refeita, e seleções/troco não são reutilizados entre restaurantes. Troco só é enviado para dinheiro. Nenhuma configuração de restaurante, cobrança online ou regra financeira foi modificada.
+
+Limite da garantia: validação no frontend contra a configuração pública carregada. Não inclui atualização automática em tempo real nem nova validação de formas aceitas no servidor; o endpoint continua com seu contrato existente. O código de débito já era aceito pelo contrato de envio.
 
 ## Validação
 
 Testes unitários de cotação, isolamento das configurações e contratos de UI. Prévia local com dados fictícios de duas lojas; nenhuma requisição de teste é encaminhada à API real. Validar bairro pago/gratuito, taxa padrão, limiar de promoção, mínimo, retirada e ausência de overflow em telas estreitas.
+
+Filtro de pagamento: 155 testes unitários aprovados e build concluído. Verificação visual local em 390 px e 320 px: loja A só Pix/dinheiro, loja B só crédito/débito, débito na revisão, quatro opções em duas colunas, limpeza de troco ao trocar a forma e bloqueio com aviso em configuração vazia. Testes de renderização cobrem débito único e revisão com forma removida/ausente. Nenhum pedido real foi enviado.

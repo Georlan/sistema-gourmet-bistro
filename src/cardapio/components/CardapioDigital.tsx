@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
-  CreditCard,
   MapPin,
   MessageCircle,
   Send,
@@ -24,6 +23,7 @@ import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/what
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
+import { getAvailablePaymentMethods, getPaymentSelectionError } from "../paymentMethods";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -82,7 +82,7 @@ export default function CardapioDigital({
   customerName,
   customerPhone,
   customerToken,
-  paymentMethodDetail = "pix",
+  paymentMethodDetail,
   trocoPara,
   bairro,
   cupomCodigo,
@@ -114,6 +114,8 @@ export default function CardapioDigital({
     () => (activeBrand.paymentMethods || []).filter((method) => method?.type),
     [activeBrand.paymentMethods],
   );
+  const availablePayments = useMemo(() => getAvailablePaymentMethods(activeBrand.paymentMethods), [activeBrand.paymentMethods]);
+  const paymentError = getPaymentSelectionError(paymentMethodDetail, availablePayments);
 
   const resolvePersistentIdempotencyKey = (fingerprint: string) => {
     let key = idempotencyKeyRef.current;
@@ -153,6 +155,10 @@ export default function CardapioDigital({
 
   const handlePlaceOrder = async () => {
     if (isSubmittingRef.current) return;
+    if (paymentError) {
+      setErrorMessage(paymentError);
+      return;
+    }
 
     const targetRestauranteId = Number(activeBrand.id);
     const normalizedPhone = customerPhone.replace(/\D/g, "");
@@ -223,7 +229,7 @@ export default function CardapioDigital({
           taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
           forma_pagamento: "na_entrega",
           forma_pagamento_detalhe: paymentMethodDetail,
-          troco_para: trocoPara,
+          troco_para: paymentMethodDetail === "dinheiro" ? trocoPara : undefined,
           bairro: bairro,
           cupom_codigo: cupomCodigo,
           usar_cashback: usarCashback,
@@ -363,7 +369,7 @@ export default function CardapioDigital({
               </section>
 
               <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
-                <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} />
+                {!paymentError && paymentMethodDetail ? <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} /> : <p role="alert" className="text-sm leading-relaxed text-amber-500">{paymentError} Volte à sacola para conferir.</p>}
                 {paymentMethods.length > 0 ? <div className="mt-3 border-t border-koma-border pt-3"><p className="text-xs text-koma-muted">Formas informadas pelo restaurante</p><div className="mt-2 flex flex-wrap gap-1.5">{paymentMethods.map((method) => <span key={method.type} className="rounded-lg border border-koma-border px-2.5 py-1.5 text-xs text-koma-secondary">{method.type}</span>)}</div></div> : <p className="mt-3 text-xs leading-relaxed text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}
               </section>
 
@@ -381,7 +387,7 @@ export default function CardapioDigital({
 
         {!createdOrder && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6 sm:py-5">
-            <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : errorMessage ? "Tentar novamente" : "Fazer pedido"}</span></button>
+            <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : "Fazer pedido"}</span></button>
             <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">Ao confirmar, o pedido entra no painel do restaurante para aceite. A cozinha só começa depois que o restaurante aceitar.</p>
           </footer>
         )}

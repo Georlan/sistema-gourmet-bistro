@@ -7,6 +7,14 @@ import '../../src/cardapio/cardapioTone.css';
 import '../../src/cardapio/cardapioPublic.css';
 
 const deliveryScenario = new URLSearchParams(location.search).get('entrega');
+const paymentScenario = new URLSearchParams(location.search).get('pagamentos');
+const paymentScenarios: Record<string, string[]> = {
+  todos: ['Pix', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito'],
+  debito: ['Cartão de débito'],
+  dinheiro: ['Dinheiro'],
+  vazio: [],
+  desconhecido: ['Vale-refeição'],
+};
 
 // No request is forwarded to a real API, including OTP, coupons and order submission.
 window.fetch = async (input, init) => {
@@ -22,7 +30,7 @@ window.fetch = async (input, init) => {
         endereco: 'Endereço fictício para teste de retirada',
         logo_url: '', banner_url: '',
         status_override: 'Forçado Aberto',
-        formas_pagamento_aceitas: ['Pix', 'Dinheiro'],
+        formas_pagamento_aceitas: paymentScenarios[paymentScenario ?? ''] ?? (id === 901 ? ['Pix', 'Dinheiro'] : ['Cartão de crédito', 'Cartão de débito']),
         ...(deliveryScenario ? {
           taxa_entrega_padrao: id === 901 ? 8 : 12,
           pedido_minimo: 30,

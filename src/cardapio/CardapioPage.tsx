@@ -268,12 +268,7 @@ export default function CardapioPage() {
       if (Array.isArray(paymentConfig)) {
         const names = paymentConfig.filter((item): item is string => typeof item === "string");
         names.forEach((name) => {
-          const normalized = name.toLocaleLowerCase("pt-BR");
-          if (normalized.includes("crédito") || normalized === "credito") paymentMethods.push({ type: "Crédito", accepted: [] });
-          else if (normalized.includes("débito") || normalized === "debito") paymentMethods.push({ type: "Débito", accepted: [] });
-          else if (normalized.includes("pix")) paymentMethods.push({ type: "Pix", accepted: [] });
-          else if (normalized.includes("dinheiro")) paymentMethods.push({ type: "Dinheiro", accepted: [] });
-          else paymentMethods.push({ type: name, accepted: [] });
+          if (name.trim()) paymentMethods.push({ type: name.trim(), accepted: [] });
         });
       }
 
@@ -817,6 +812,7 @@ export default function CardapioPage() {
 
       {isCartOpen && (
         <CardapioCartDrawer
+          key={activeBrand.id}
           cart={cart}
           restaurantId={activeBrand.id}
           restaurantAddress={activeBrand.address}
