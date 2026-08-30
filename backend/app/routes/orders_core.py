@@ -46,6 +46,7 @@ from ..services.clientes import (
 )
 from ..application.orders.service import OrderApplicationService
 from ..application.orders.commands import DispatchOrderCommand
+from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..services.capabilities import has_capability
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
@@ -1512,10 +1513,8 @@ def despachar_delivery(
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
         
     status_anterior = comanda.delivery_status
-    comanda.motoboy_id = motoboy_id
-    comanda.delivery_status = "transito"
-    
-    # Emite o evento canônico OrderDispatched para a Outbox na mesma transação
+
+    # Executa a transição canônica, vinculação de motoboy e emissão na Outbox atomicamente
     try:
         OrderApplicationService.dispatch_order(
             db=db,
@@ -1527,9 +1526,10 @@ def despachar_delivery(
             ),
             commit=False,
         )
-    except Exception as dispatch_err:
-        # Se a validação de máquina de estados já tiver ocorrido, mantém a transição
-        pass
+    except InvalidOrderTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except OrderValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     
     # Trigger printing based on configurations
     try:

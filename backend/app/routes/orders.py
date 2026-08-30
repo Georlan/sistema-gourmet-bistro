@@ -29,6 +29,7 @@ from ..websocket_manager import manager
 from ..services.shifts import require_open_cash_shift
 from ..application.orders.service import OrderApplicationService
 from ..application.orders.commands import DispatchOrderCommand
+from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 
 # Reexporta a API estável do módulo histórico. Isso mantém imports como
 # ``from .orders import gerar_novo_numero_pedido`` sem duplicar o monólito.
@@ -273,11 +274,9 @@ def despachar_delivery(
         return comanda
 
     status_anterior = normalize_order_status(comanda.delivery_status)
-    comanda.motoboy_id = motoboy_id
-    comanda.delivery_status = "transito"
     acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid)
 
-    # Emite o evento canônico OrderDispatched para a Outbox na mesma transação
+    # Executa a transição canônica, vinculação de motoboy e emissão na Outbox atomicamente
     try:
         OrderApplicationService.dispatch_order(
             db=db,
@@ -289,8 +288,10 @@ def despachar_delivery(
             ),
             commit=False,
         )
-    except Exception:
-        pass
+    except InvalidOrderTransitionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except OrderValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     # Mantém a via operacional já existente, mas só a gera na primeira transição
     # válida para trânsito; retries não reimprimem.
