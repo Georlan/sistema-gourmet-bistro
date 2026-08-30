@@ -22,6 +22,7 @@ import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
 import { saveStoredOrder } from "../orderTracking";
+import { buildCardapioOrderItems } from "../orderItems";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -183,22 +184,7 @@ export default function CardapioDigital({
       ? `${normalizedName} (Mesa ${savedMesa})`
       : normalizedName;
 
-    const cleanedItems = cart.map((item) => {
-      const optionDetails = Object.values(item.selectedOptions)
-        .flatMap((options) => options.map((option) => option.name))
-        .filter(Boolean);
-      const observacao = [
-        item.notes.trim(),
-        optionDetails.length > 0 ? `Opções: ${optionDetails.join(", ")}` : "",
-      ].filter(Boolean).join(" - ");
-
-      return {
-        produto_id: item.product.id,
-        quantidade: item.quantity,
-        observacao,
-        cliente_nome: finalClienteNome,
-      };
-    });
+    const cleanedItems = buildCardapioOrderItems(cart, finalClienteNome);
 
     const fingerprint = JSON.stringify({
       restaurante_id: targetRestauranteId,
