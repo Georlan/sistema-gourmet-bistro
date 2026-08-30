@@ -13,6 +13,7 @@ import { RESTAURANT_CONFIG } from './data';
 import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
 import { getTableTotal } from './domain';
 import { deriveTableOperationalState } from './domain/operationalState';
+import { readCheckLaunchIdentities } from './domain/orderIdentity';
 import { MesaCard } from './components/MesaCard';
 import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
@@ -1228,6 +1229,7 @@ export default function App() {
   };
 
   const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
+    launchIdentities: readCheckLaunchIdentities(comanda),
     id: comanda.id,
     numeroPedido: Number.isFinite(Number(comanda.numero_pedido)) ? Number(comanda.numero_pedido) : undefined,
     origemOperacional: (() => {

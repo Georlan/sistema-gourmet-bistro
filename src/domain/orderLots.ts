@@ -27,6 +27,7 @@ export const splitOrdersByLaunch = (orders: Order[], identities?: Readonly<Launc
       const lancamentoId = key.startsWith('legacy:') ? undefined : key;
       const displayNumber = lancamentoId
         ? identities?.[lancamentoId]?.displayNumber
+          || order.launchIdentities?.[lancamentoId]?.displayNumber
           || (order.lancamentoId === lancamentoId ? getOrderDisplayNumber(order) : undefined)
         : undefined;
       lots.push({

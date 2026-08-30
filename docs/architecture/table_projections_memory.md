@@ -10,6 +10,14 @@ Caixa e Garçom representam **as mesmas mesas** e consomem os mesmos fatos opera
 
 Convergência semântica não exige redesenhar cada contexto. Cores, labels, filtros e prioridades visuais existentes permanecem protegidos por caracterização; diferenças de apresentação não são automaticamente bugs. O relógio entra explicitamente nas projeções, sem efeitos, requisições ou estado persistido derivado.
 
+Evolução deliberada aprovada após a Fase 7: Caixa e Garçom usam agora
+`SharedTableCard` para layout, identidade da Mesa/Comanda, cores, estado, tempo e contagem.
+As ações continuam distintas: navegação do Garçom versus abrir pedido/ver comanda/receber no Caixa.
+Financeiro explícito ganha destaque sem apagar a produção; itens servidos são rotulados
+“Itens servidos”, nunca usados como prova de solicitação de conta. Permissão de ocultar
+produção no Garçom continua respeitada. Totais ainda vêm de cada projeção existente,
+sem modificar a autoridade financeira ou o contrato ainda não determinado de `Item.pago`.
+
 ---
 
 ## 2. SEPARAÇÃO SEMÂNTICA DE ESTADOS
@@ -43,7 +51,12 @@ DTOs de Comanda / lançamento / item
 
 `Order` em `src/types.ts` continua sendo o nome legado do DTO de Comanda. Seu `id` não deve ser confundido com `lancamentoId`. A identidade humana pertence a `displayNumber`, não à chave de callback, impressão ou transferência.
 
-[OBSERVADO] `/comandas/detalhes/todos` não expõe `display_number`. O modal já recebe a identidade persistida por `/atendimentos/mesas/{id}`, em `familias[].lancamentos[].pedido_id`. Não calcular A/B por posição, nem aplicar a identidade do primeiro lançamento a um card agregado de mesa. Identidade ausente permanece ausente, com fallback visual legado explícito.
+[OBSERVADO] `/comandas/detalhes/todos` e `/comandas/{id}` expõem `lancamentos[].display_number`.
+`itens[].lancamento_display_number` preserva a identidade ORIGINAL quando o item foi transferido.
+O lookup é em lote, filtrado por tenant, somente leitura; ausência permanece null, sem backfill.
+O App mapeia essas identidades por ID de lançamento para `Order.launchIdentities`.
+Lotes e fatias de produção consomem o mapa; a Mesa agregada não recebe o rótulo do primeiro Pedido.
+O snapshot `familias[].lancamentos[].pedido_id` permanece compatível e não gera sequência no frontend.
 
 ---
 

@@ -171,6 +171,8 @@ class ItemResponse(BaseModel):
     id: str
     comanda_id: str
     lancamento_id: str
+    # Identity of the original order, including after an item transfer.
+    lancamento_display_number: Optional[str] = None
     produto_id: str
     preco_unit: float
     observacao: str
@@ -261,6 +263,7 @@ class LancamentoCreate(BaseModel):
 
 class LancamentoResponse(BaseModel):
     id: str
+    display_number: Optional[str] = None
     comanda_id: str
     garcom_id: str
     origem: str = "desconhecida"

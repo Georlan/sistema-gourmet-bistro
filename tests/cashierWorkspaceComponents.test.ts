@@ -93,6 +93,8 @@ test('workspace consumes frozen projections: 112/48 remain separate; requested b
   const requestedMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, requested));
   assert.equal(requested.columns.tableProduction.length, 0);
   assert.match(requestedMarkup, /CONTA PEDIDA/);
+  assert.match(requestedMarkup, /2 itens no fechamento/);
+  assert.doesNotMatch(requestedMarkup, /2 de 3|Valor dos itens prontos|Receber itens prontos/);
   assert.match(requestedMarkup, /R\$\s*160,00/);
   assert.deepEqual(requested.columns.tableClosing[0].order.itens.map(entry => entry.status), ['preparando', 'pronto']);
 });
