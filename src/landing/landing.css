@@ -6479,6 +6479,7 @@
 .koma-plan-addons dd svg { align-self: center; }
 .koma-plan-addons .is-included dd { color: var(--koma-green-dark); }
 .koma-plan-addons > p { margin: 0.85rem 0 0; color: var(--koma-muted-light); font-size: 0.68rem; line-height: 1.55; }
+.koma-plan-addons > .koma-plan-bundle-comparison { color: var(--koma-green-dark); font-size: 0.76rem; font-weight: 600; }
 .koma-plan-card--featured .koma-plan-addons,
 .koma-plan-card--featured .koma-plan-addons dl > div { border-color: var(--koma-line-dark); }
 .koma-plan-card--featured .koma-plan-addons h4,

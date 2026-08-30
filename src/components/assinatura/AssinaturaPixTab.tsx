@@ -215,6 +215,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               <div className="font-mono text-right">
                 <span className="text-emerald-700 dark:text-emerald-400 font-extrabold text-lg">{formatCurrency(currentPlan.price)}</span>
                 <span className="text-koma-muted text-[10px]">/mês</span>
+                <span className="block text-koma-muted text-[10px]">Preço de tabela</span>
               </div>
             </div>
 
@@ -238,11 +239,12 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                   ? 'koma-badge-success'
                   : 'koma-badge-warning'
               )}>
-                {hasOnlineMenu ? 'Cardápio Digital Ativo' : 'Cardápio Digital Opcional (+R$ 49/mês)'}
+                {hasOnlineMenu ? 'Cardápio Digital Incluído' : 'Cardápio incluído — consulte a ativação'}
               </span>
             </div>
 
             <div className="pt-2">
+              <p className="mb-3 text-[10px] text-koma-muted">Sua cobrança segue as condições contratadas. Os preços abaixo são da oferta atual.</p>
               <button
                 type="button"
                 onClick={() => setActiveSubTab('planos_upgrade')}
@@ -422,7 +424,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                             </div>
                           ))}
                         </dl>
-                        <p className="mt-3 text-[10px] leading-4 text-koma-muted">Adicionais opcionais cobrados por mês, sem desconto anual.</p>
+                        <p className="mt-3 text-[10px] leading-4 text-koma-muted">{plan.id === 'premium' ? 'Esses módulos já estão incluídos, sem cobrança extra.' : 'Adicionais opcionais cobrados por mês, sem desconto anual.'}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -442,11 +444,11 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               </div>
 
               <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-                <span className="px-2.5 py-1 bg-koma-raised text-koma-foreground border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
-                  {formatCurrency(addon.price)}/mês {addon.id === 'online_menu' ? 'no Pocket' : 'no Pocket e Pro'}
-                </span>
+                {addon.includedIn.length < SUBSCRIPTION_PLANS.length && <span className="px-2.5 py-1 bg-koma-raised text-koma-foreground border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
+                  {formatCurrency(addon.price)}/mês no Pocket e Pro
+                </span>}
                 <span className="px-2.5 py-1 koma-badge-success text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
-                  {addon.id === 'online_menu' ? 'Incluído no Pro e Premium' : 'Incluído no Premium'}
+                  {addon.includedIn.length === SUBSCRIPTION_PLANS.length ? 'Incluído em todos os planos' : 'Incluído no Premium'}
                 </span>
               </div>
             </div>)}

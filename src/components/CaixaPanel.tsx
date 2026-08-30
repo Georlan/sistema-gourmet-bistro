@@ -50,7 +50,7 @@ import { API } from '../config/caixaService';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from '../config/theme';
 import { makeOperationKey, operationalFetch } from '../utils/operationalRequest';
 import {
-  ONLINE_MENU_ADDON,
+  isAddonIncludedInPlan,
   SUBSCRIPTION_PLANS,
   getSubscriptionPlan,
   normalizeSubscriptionPlan
@@ -379,7 +379,7 @@ export function CaixaPanel({
   );
   const currentPlan = getSubscriptionPlan(currentPlanId);
   const hasPrinting = currentPlanId !== 'pocket';
-  const hasOnlineMenu = currentPlanId === 'premium' || restauranteConfig?.cardapio_online_addon === true;
+  const hasOnlineMenu = isAddonIncludedInPlan(currentPlanId, 'online_menu') || restauranteConfig?.cardapio_online_addon === true;
   const pendingPaymentsTotal = useMemo(
     () => pagamentosPendentes.reduce((total, payment) => total + (Number(payment?.valor) || 0), 0),
     [pagamentosPendentes],
@@ -4148,9 +4148,7 @@ export function CaixaPanel({
       setActiveTab('assinatura_pix');
       setActiveSubTab('planos');
       showToast(
-        currentPlanId === 'pro'
-          ? `Ative o ${ONLINE_MENU_ADDON.name} ou migre para o Kôma Premium.`
-          : 'O cardápio online está disponível no Kôma Pro como adicional e incluído no Premium.',
+        'O cardápio digital está incluído em todos os planos. Consulte a ativação com o suporte.',
         'info'
       );
       return;
@@ -8088,9 +8086,9 @@ export function CaixaPanel({
           {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && !hasOnlineMenu && (
             <div className={clsx('bg-koma-card', 'border', 'border-amber-500/20', 'rounded-3xl', 'p-8', 'text-center', 'max-w-xl', 'mx-auto', 'space-y-3')}>
               <Lock size={24} className={clsx('text-amber-400', 'mx-auto')} />
-              <h3 className={clsx('text-koma-foreground', 'font-bold')}>Cardápio online não incluído neste plano</h3>
+              <h3 className={clsx('text-koma-foreground', 'font-bold')}>Confira a ativação do cardápio digital</h3>
               <p className={clsx('text-[10px]', 'text-koma-subtle')}>
-                No Kôma Pro, ele pode ser contratado por R$ {ONLINE_MENU_ADDON.price}/mês. No Kôma Premium, link, QR Code e gaveta de aceite já estão incluídos.
+                Link, QR Code e aceite de pedidos já estão incluídos em todos os planos. Fale com o suporte para conferir a ativação.
               </p>
               <button
                 type="button"

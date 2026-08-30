@@ -25,15 +25,16 @@ export interface SubscriptionAddon {
 export const ONLINE_MENU_ADDON = {
   id: 'online_menu',
   name: 'Cardápio Digital Kôma',
-  price: 49,
+  // Mantém o identificador legado, mas não é mais um adicional pago.
+  price: 0,
   description: 'O cliente escolhe os itens pelo link ou QR Code e envia o pedido ao Kôma.',
-  includedIn: ['pro', 'premium'],
+  includedIn: ['pocket', 'pro', 'premium'],
 } as const satisfies SubscriptionAddon;
 
 export const DELIVERY_APP_ADDON = {
   id: 'delivery_app',
   name: 'App do entregador',
-  price: 49,
+  price: 59,
   description: 'Pedidos, endereço, valor a cobrar e confirmação de entrega. Sem rastreamento GPS ao vivo.',
   includedIn: ['premium'],
 } as const satisfies SubscriptionAddon;
@@ -41,7 +42,7 @@ export const DELIVERY_APP_ADDON = {
 export const LOYALTY_ADDON = {
   id: 'loyalty',
   name: 'Fidelidade e cupons',
-  price: 69,
+  price: 59,
   description: 'Pontos, cashback e cupons para incentivar a próxima compra.',
   includedIn: ['premium'],
 } as const satisfies SubscriptionAddon;
@@ -57,6 +58,27 @@ export function getPlanAddons(planId: SubscriptionPlanId) {
     ...addon,
     included: addon.includedIn.includes(planId),
   }));
+}
+
+export function isAddonIncludedInPlan(planId: SubscriptionPlanId, addonId: SubscriptionAddon['id']) {
+  return getPlanAddons(planId).some(addon => addon.id === addonId && addon.included);
+}
+
+/** Compara o mesmo ciclo; adicionais avulsos continuam mensais no anual. */
+export function getPremiumBundleComparison(isYearly = false) {
+  const pro = getSubscriptionPricing(getSubscriptionPlan('pro').price);
+  const premium = getSubscriptionPricing(getSubscriptionPlan('premium').price);
+  const extras = getPlanAddons('pro').filter(addon =>
+    !addon.included && addon.includedIn.includes('premium'),
+  );
+  const separatePrice = (isYearly ? pro.annualMonthlyEquivalent : pro.monthly)
+    + extras.reduce((sum, addon) => sum + addon.price, 0);
+  const bundlePrice = isYearly ? premium.annualMonthlyEquivalent : premium.monthly;
+  return {
+    separatePrice: Math.round(separatePrice * 100) / 100,
+    bundlePrice,
+    monthlySavings: Math.round((separatePrice - bundlePrice) * 100) / 100,
+  };
 }
 
 export function getSubscriptionPricing(monthlyPrice: number) {
@@ -84,34 +106,35 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pocket',
     name: 'Kôma Pocket',
-    price: 119,
+    price: 99,
     implementationFee: IMPLEMENTATION_FEE,
-    tagline: 'Mesas e delivery organizados, mesmo sem impressora.',
+    tagline: 'Venda pelo link, nas mesas e no balcão, sem precisar de impressora.',
     features: [
       'Mesas, comandas e balcão',
-      'Retirada e delivery com lançamento manual',
+      'Cardápio digital e QR Code com pedidos no PDV',
+      'Retirada e delivery no mesmo caixa',
       'Fila de preparo na tela, sem impressora',
       'Caixa, fechamento e resumo de vendas',
       'Clientes e histórico de pedidos',
     ],
     limitations: [
       'Sem impressão automática de cozinha',
-      'Cardápio digital, app do entregador e fidelidade opcionais',
+      'App do entregador e fidelidade opcionais',
     ]
   },
   {
     id: 'pro',
     name: 'Kôma Pro',
-    price: 229,
+    price: 189,
     implementationFee: IMPLEMENTATION_FEE,
-    tagline: 'Venda online e conecte sua equipe à gestão.',
+    tagline: 'Conecte atendimento, cozinha, estoque e financeiro.',
     recommended: true,
     features: [
       'Tudo do Pocket',
-      'Cardápio digital e QR Code com pedidos no PDV',
       'KDS e impressão automática',
       'Estoque, fichas técnicas e financeiro',
-      'Garçom, permissões e relatórios completos',
+      'Garçom web e permissões da equipe',
+      'Relatórios completos para acompanhar o negócio',
     ],
     limitations: [
       'App do entregador e fidelidade opcionais',
@@ -120,14 +143,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'premium',
     name: 'Kôma Premium',
-    price: 329,
+    price: 279,
     implementationFee: IMPLEMENTATION_FEE,
     tagline: 'Gestão, entregas e fidelização no mesmo pacote.',
     features: [
       'Tudo do Pro',
       'App do entregador incluído',
       'Pontos, cashback e cupons incluídos',
-      'Cardápio digital já incluído no pacote',
       'Suporte prioritário',
     ],
     limitations: []
@@ -151,13 +173,12 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Gestão & Equipe', feature: 'Gestão de Funcionários e Permissões por Cargo', pocket: false, pro: true, premium: true },
   { category: 'Gestão & Equipe', feature: 'Relatórios Financeiros e DRE de Vendas', pocket: 'Básico', pro: 'Completo', premium: 'Completo' },
   { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },
-  { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: `${formatCurrency(ONLINE_MENU_ADDON.price)}/mês`, pro: true, premium: true },
-  { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: 'Com adicional de cardápio', pro: true, premium: true },
+  { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: true, pro: true, premium: true },
+  { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: true, pro: true, premium: true },
   { category: 'Entrega', feature: 'App do Entregador', pocket: `${formatCurrency(DELIVERY_APP_ADDON.price)}/mês`, pro: `${formatCurrency(DELIVERY_APP_ADDON.price)}/mês`, premium: true },
   { category: 'Clientes', feature: 'Cadastro e Histórico de Clientes', pocket: true, pro: true, premium: true },
   { category: 'Clientes', feature: 'Pontos, Cashback e Cupons', pocket: `${formatCurrency(LOYALTY_ADDON.price)}/mês`, pro: `${formatCurrency(LOYALTY_ADDON.price)}/mês`, premium: true },
   { category: 'Suporte', feature: 'Atendimento Prioritário', pocket: false, pro: false, premium: true },
-  { category: 'Notificações', feature: 'Notificações automáticas de pedidos via WhatsApp', pocket: true, pro: true, premium: true }
 ];
 
 export function normalizeSubscriptionPlan(plan?: string | null): SubscriptionPlanId {

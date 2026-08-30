@@ -7,6 +7,7 @@ import {
   formatCurrency,
   getSubscriptionPricing,
   getPlanAddons,
+  getPremiumBundleComparison,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
@@ -21,24 +22,25 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
     stage: 'PARA COMEÇAR',
     action: 'ORGANIZAR',
     fit: 'Para quem atende mesas, faz entregas ou os dois, com uma operação enxuta.',
-    note: 'Pedidos por WhatsApp ou telefone? Você lança no Kôma. Com o cardápio digital opcional, o cliente pede pelo link.',
+    note: 'Pelo link, o cliente envia o pedido ao Kôma. Por WhatsApp ou telefone, você lança manualmente. Não precisa contratar o app do entregador.',
   },
   pro: {
     stage: 'MELHOR ESCOLHA',
     action: 'CONECTAR',
-    fit: 'Para vender online e ter atendimento, cozinha e gestão trabalhando juntos.',
-    note: 'O cliente pede pelo link e o pedido chega ao Kôma, sem precisar do app do entregador.',
+    fit: 'Para quem quer a equipe conectada e mais controle do estoque e do dinheiro.',
+    note: 'O cardápio já vem incluído. Adicione entregadores ou fidelidade apenas se precisar.',
   },
   premium: {
     stage: 'PACOTE COMPLETO',
     action: 'EXPANDIR',
     fit: 'Para reunir gestão, entregadores e fidelização, com suporte prioritário.',
-    note: 'Os três adicionais abaixo já fazem parte do seu plano.',
+    note: 'Cardápio, app do entregador e fidelidade já incluídos. Sem pagar esses módulos à parte.',
   },
 };
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
+  const bundle = getPremiumBundleComparison(isYearly);
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
@@ -48,8 +50,8 @@ export function Plans() {
           <h2 id="plans-title">COMECE CERTO.<br />CRESÇA SEM TROCAR.</h2>
         </div>
         <div>
-          <p><strong>POCKET</strong> organiza. <strong>PRO</strong> conecta e vende online. <strong>PREMIUM</strong> reúne entregas e fidelização.</p>
-          <small>Mesas e delivery em todos os planos. Adicione só o que fizer sentido para você.</small>
+          <p><strong>POCKET</strong> começa vendendo. <strong>PRO</strong> conecta a equipe e a gestão. <strong>PREMIUM</strong> inclui entregadores e fidelidade.</p>
+          <small>Cardápio digital, mesas e delivery em todos os planos. Uma assinatura por estabelecimento.</small>
         </div>
       </div>
 
@@ -127,7 +129,7 @@ export function Plans() {
               <p className="koma-plan-extra">{presentation.note}</p>
 
               <div className="koma-plan-addons" aria-label={`Adicionais do ${plan.name}`}>
-                <h4>{plan.id === 'premium' ? 'JÁ INCLUÍDOS NO PACOTE' : 'PERSONALIZE SEU PLANO'}</h4>
+                <h4>{plan.id === 'premium' ? 'JÁ INCLUÍDOS NO PACOTE' : 'INCLUÍDO + OPCIONAIS'}</h4>
                 <dl>
                   {getPlanAddons(plan.id).map(addon => (
                     <div className={addon.included ? 'is-included' : ''} key={addon.id}>
@@ -137,6 +139,12 @@ export function Plans() {
                   ))}
                 </dl>
                 <p>{plan.id === 'premium' ? 'Sem cobrança extra por esses adicionais.' : 'Opcionais, cobrados à parte por mês, inclusive no plano anual.'}</p>
+                {plan.id === 'premium' && (
+                  <p className="koma-plan-bundle-comparison">
+                    Pro + entregador + fidelidade: {formatCurrency(bundle.separatePrice)}/mês{isYearly ? ' equivalentes' : ''}.
+                    {' '}No Premium, você paga {formatCurrency(bundle.monthlySavings)} a menos por mês.
+                  </p>
+                )}
               </div>
 
               <a href={KOMA_LANDING_CONFIG.signupAnchor} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
@@ -146,7 +154,7 @@ export function Plans() {
           );
         })}
       </div>
-      <p className="koma-plans-note">O desconto anual vale para o plano, sem incluir implantação ou adicionais. O app do entregador não inclui rastreamento GPS ao vivo. Condições e compatibilidade são confirmadas antes da contratação.</p>
+      <p className="koma-plans-note">Implantação paga uma única vez: configuração inicial e orientação de uso, com escopo combinado antes da contratação. O desconto anual vale para o plano, sem incluir implantação ou adicionais. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal, pagamento online e integração com marketplaces não fazem parte desta oferta.</p>
     </section>
   );
 }
