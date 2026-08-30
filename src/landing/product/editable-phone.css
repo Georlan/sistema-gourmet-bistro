@@ -1,0 +1,53 @@
+.koma-editable-phone {
+  position: relative;
+  isolation: isolate;
+  width: min(100%, 304px);
+  aspect-ratio: 660 / 1460;
+  min-width: 0;
+  margin-inline: auto;
+  overflow: hidden;
+  filter: drop-shadow(0 16px 20px #0005);
+}
+
+.koma-editable-phone-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 430px;
+  height: 990px;
+  transform-origin: top left;
+  border-radius: 56px;
+  overflow: hidden;
+  background: #0d0e15;
+}
+
+.koma-editable-phone-content {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding-top: 54px;
+  padding-bottom: 16px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.koma-editable-phone .koma-editable-phone-capture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.koma-editable-phone-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .koma-editable-phone { width: min(100%, 264px); }
+}
