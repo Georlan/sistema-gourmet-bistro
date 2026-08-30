@@ -108,6 +108,35 @@ class OrderApplicationService:
     """Orquestrador canônico da aplicação para pedidos."""
 
     @classmethod
+    def _event_identity_kwargs(
+        cls,
+        db: Session,
+        lancamento: Lancamento | None,
+        comanda: Comanda,
+    ) -> dict:
+        """Monta os campos canônicos de identidade para eventos de domínio.
+
+        Retorna um dict com: order_id, check_id, display_number, check_number.
+        """
+        order_id = lancamento.id if lancamento else comanda.id
+        check_id = comanda.id
+        check_number = comanda.numero_pedido if comanda.numero_pedido else None
+        display_number = None
+        if lancamento and db is not None:
+            try:
+                _, display_number = cls._resolve_order_identity(db, lancamento, comanda)
+            except Exception:
+                pass
+        if display_number is None and check_number:
+            display_number = format_order_family_id(check_number, 1)
+        return {
+            "order_id": order_id,
+            "check_id": check_id,
+            "display_number": display_number,
+            "check_number": check_number,
+        }
+
+    @classmethod
     def resolve_server_delivery_fee(
         cls,
         db: Session,
@@ -506,9 +535,13 @@ class OrderApplicationService:
             consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id, liberar_pendente=False)
 
             # 11. Transactional Outbox (mesma sessão ACID)
+            eid = cls._event_identity_kwargs(db, novo_lancamento, comanda)
             event = OrderCreated(
                 restaurant_id=cmd.restaurant_id,
-                order_id=comanda.numero_pedido if comanda else 0,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=display_number or eid["display_number"],
+                check_number=eid["check_number"],
                 channel=cmd.channel,
                 fulfillment=cmd.fulfillment,
                 total=quote.total,
@@ -595,10 +628,13 @@ class OrderApplicationService:
 
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
         consumir_estoque_dos_itens(db, target_items, liberar_pendente=True)
-
+        eid = cls._event_identity_kwargs(db, lancamento, comanda)
         event = OrderAccepted(
             restaurant_id=cmd.restaurant_id,
-            order_id=comanda.numero_pedido if comanda else 0,
+            order_id=eid["order_id"],
+            check_id=eid["check_id"],
+            display_number=eid["display_number"],
+            check_number=eid["check_number"],
             operator_user_id=cmd.operator_user_id,
             estimated_prep_minutes=cmd.estimated_prep_minutes,
         )
@@ -606,7 +642,7 @@ class OrderApplicationService:
             db,
             event,
             aggregate_type="order",
-            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+            aggregate_id=str(eid["order_id"]),
         )
 
         if commit:
@@ -653,9 +689,13 @@ class OrderApplicationService:
         if active_items and all(it.status == "pronto" for it in active_items):
             comanda.delivery_status = "pronto"
 
+        eid = cls._event_identity_kwargs(db, lancamento, comanda)
         event = OrderReady(
             restaurant_id=cmd.restaurant_id,
-            order_id=comanda.numero_pedido if comanda else 0,
+            order_id=eid["order_id"],
+            check_id=eid["check_id"],
+            display_number=eid["display_number"],
+            check_number=eid["check_number"],
             fulfillment=fulfillment,
             customer_name=comanda.identificador,
             customer_phone=comanda.delivery_telefone,
@@ -664,7 +704,7 @@ class OrderApplicationService:
             db,
             event,
             aggregate_type="order",
-            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+            aggregate_id=str(eid["order_id"]),
         )
 
         if commit:
@@ -723,9 +763,13 @@ class OrderApplicationService:
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
+        eid = cls._event_identity_kwargs(db, lancamento, comanda)
         event = OrderCancelled(
             restaurant_id=cmd.restaurant_id,
-            order_id=comanda.numero_pedido if comanda else 0,
+            order_id=eid["order_id"],
+            check_id=eid["check_id"],
+            display_number=eid["display_number"],
+            check_number=eid["check_number"],
             reason=cmd.reason or "Cancelado pela operação",
             operator_user_id=cmd.operator_user_id,
             refunded_stock=cmd.refund_stock,
@@ -734,7 +778,7 @@ class OrderApplicationService:
             db,
             event,
             aggregate_type="order",
-            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+            aggregate_id=str(eid["order_id"]),
         )
 
         if commit:
@@ -783,9 +827,13 @@ class OrderApplicationService:
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
+        eid = cls._event_identity_kwargs(db, lancamento, comanda)
         event = OrderRejected(
             restaurant_id=cmd.restaurant_id,
-            order_id=comanda.numero_pedido if comanda else 0,
+            order_id=eid["order_id"],
+            check_id=eid["check_id"],
+            display_number=eid["display_number"],
+            check_number=eid["check_number"],
             reason=cmd.reason or "Recusado pelo restaurante",
             operator_user_id=cmd.operator_user_id,
             customer_phone=comanda.delivery_telefone,
@@ -794,7 +842,7 @@ class OrderApplicationService:
             db,
             event,
             aggregate_type="order",
-            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+            aggregate_id=str(eid["order_id"]),
         )
 
         if commit:
@@ -839,9 +887,13 @@ class OrderApplicationService:
             except (ValueError, TypeError):
                 pass
 
+        eid = cls._event_identity_kwargs(db, lancamento, comanda)
         event = OrderDispatched(
             restaurant_id=cmd.restaurant_id,
-            order_id=comanda.numero_pedido if comanda else 0,
+            order_id=eid["order_id"],
+            check_id=eid["check_id"],
+            display_number=eid["display_number"],
+            check_number=eid["check_number"],
             courier_id=int(cmd.courier_id) if cmd.courier_id is not None else None,
             customer_name=comanda.identificador,
             customer_phone=comanda.delivery_telefone,
@@ -850,7 +902,7 @@ class OrderApplicationService:
             db,
             event,
             aggregate_type="order",
-            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+            aggregate_id=str(eid["order_id"]),
         )
 
         if commit:
@@ -900,16 +952,20 @@ class OrderApplicationService:
         if active_launches and all(l.status == "finalizado" for l in active_launches):
             comanda.delivery_status = "finalizado"
 
+        eid = cls._event_identity_kwargs(db, lancamento, comanda)
         event = OrderCompleted(
             restaurant_id=cmd.restaurant_id,
-            order_id=comanda.numero_pedido if comanda else 0,
+            order_id=eid["order_id"],
+            check_id=eid["check_id"],
+            display_number=eid["display_number"],
+            check_number=eid["check_number"],
             operator_user_id=cmd.operator_user_id,
         )
         enqueue_outbox_event_in_session(
             db,
             event,
             aggregate_type="order",
-            aggregate_id=str(lancamento.id if lancamento else comanda.id),
+            aggregate_id=str(eid["order_id"]),
         )
 
         if commit:

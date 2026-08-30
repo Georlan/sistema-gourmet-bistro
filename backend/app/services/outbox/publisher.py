@@ -68,7 +68,13 @@ def enqueue_outbox_event_in_session(
     """Grava o evento na tabela IntegrationOutbox na mesma sessão/transação ACID do domínio.
 
     Garante atomicidade estrita: se a transação der rollback, o evento da outbox é descartado.
-    Se a transação comitar, o evento fica garantido para entrega assíncrona.
+    Se a transação comitar, o evento fica garantido para entrega assíncrona com garantia at-least-once.
+
+    Semântica de entrega:
+    - O KÔMA garante entrega AT-LEAST-ONCE. Não há garantia de zero-duplicatas na rede.
+    - O campo ``event_id`` (UUID estável) DEVE ser usado pelo consumidor / webhook receiver
+      como chave de idempotência e deduplicação.
+    - ``aggregate_id`` e ``payload.order_id`` apontam para a mesma entidade (o Pedido / Lançamento).
     """
     payload = domain_event_to_payload(event)
     ev_name = event_name or resolve_event_name(event)

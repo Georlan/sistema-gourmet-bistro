@@ -38,10 +38,13 @@ from app.models import (
 )
 from app.application.orders.commands import (
     AcceptOrderCommand,
+    CancelOrderCommand,
+    CompleteOrderCommand,
     CreateOrderCommand,
     DispatchOrderCommand,
     MarkOrderReadyCommand,
     OrderItemInput,
+    RejectOrderCommand,
     CustomerInput,
     DeliveryInput,
 )
@@ -596,3 +599,183 @@ def test_settle_ownership_protection(op_db):
     op_db.refresh(ev_db)
     assert ev_db.status == "delivered"
     assert ev_db.locked_by is None
+
+
+def test_canonical_event_contract_multi_order_comanda_family_24a_24b(op_db):
+    """Regressão A: Comanda contendo 24-A e 24-B gera eventos com:
+    - mesmos check_id e check_number
+    - order_id distintos (apontando para Lancamento.id)
+    - display_number distintos (24-A e 24-B)
+    - aggregate_id == payload['order_id'] em toda a esteira de lifecycle.
+    """
+    # 1. Cria primeiro pedido na Mesa 1 (Pedido A -> ex. 24-A)
+    cmd_a = CreateOrderCommand(
+        restaurant_id=CHAR_RESTAURANT_ID,
+        channel=OrderChannel.WAITER,
+        fulfillment=FulfillmentType.DINE_IN,
+        table_id=1,
+        items=(
+            OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),
+        ),
+        idempotency_key="idemp-family-24a",
+    )
+    order_a = OrderApplicationService.create_order(db=op_db, cmd=cmd_a)
+    assert order_a.sequence == 1
+    assert order_a.display_number.endswith("-A")
+
+    # 2. Cria segundo pedido na MESMA comanda (Pedido B -> ex. 24-B)
+    cmd_b = CreateOrderCommand(
+        restaurant_id=CHAR_RESTAURANT_ID,
+        channel=OrderChannel.WAITER,
+        fulfillment=FulfillmentType.DINE_IN,
+        table_id=1,
+        check_id=order_a.comanda_id,
+        items=(
+            OrderItemInput(product_id="prod-char-simples", quantity=Decimal("2.00")),
+        ),
+        idempotency_key="idemp-family-24b",
+    )
+    order_b = OrderApplicationService.create_order(db=op_db, cmd=cmd_b)
+    assert order_b.sequence == 2
+    assert order_b.display_number.endswith("-B")
+    assert order_b.comanda_id == order_a.comanda_id
+    assert order_b.order_id != order_a.order_id
+
+    # Consulta eventos gravados na Outbox
+    events_created = (
+        op_db.query(IntegrationOutbox)
+        .filter(
+            IntegrationOutbox.restaurante_id == CHAR_RESTAURANT_ID,
+            IntegrationOutbox.event_name == "koma.order.created",
+        )
+        .order_by(IntegrationOutbox.created_at.asc())
+        .all()
+    )
+    assert len(events_created) >= 2
+    ev_a = [e for e in events_created if e.aggregate_id == str(order_a.order_id)][-1]
+    ev_b = [e for e in events_created if e.aggregate_id == str(order_b.order_id)][-1]
+
+    # Validações estruturais do contrato canônico
+    # Pedido A
+    assert ev_a.payload["order_id"] == order_a.order_id
+    assert ev_a.payload["check_id"] == order_a.comanda_id
+    assert ev_a.payload["display_number"] == order_a.display_number
+    assert ev_a.payload["check_number"] is not None
+    assert ev_a.aggregate_id == str(ev_a.payload["order_id"])
+
+    # Pedido B
+    assert ev_b.payload["order_id"] == order_b.order_id
+    assert ev_b.payload["check_id"] == order_b.comanda_id
+    assert ev_b.payload["display_number"] == order_b.display_number
+    assert ev_b.payload["check_number"] is not None
+    assert ev_b.aggregate_id == str(ev_b.payload["order_id"])
+
+    # Relação entre A e B na mesma família
+    assert ev_a.payload["check_id"] == ev_b.payload["check_id"]
+    assert ev_a.payload["check_number"] == ev_b.payload["check_number"]
+    assert ev_a.payload["order_id"] != ev_b.payload["order_id"]
+    assert ev_a.payload["display_number"] != ev_b.payload["display_number"]
+
+    # 3. Executa transições de lifecycle no Pedido B e valida persistência de identidade em todos os eventos
+    OrderApplicationService.accept_order(
+        db=op_db,
+        cmd=AcceptOrderCommand(restaurant_id=CHAR_RESTAURANT_ID, order_id=order_b.order_id),
+    )
+    OrderApplicationService.mark_order_ready(
+        db=op_db,
+        cmd=MarkOrderReadyCommand(restaurant_id=CHAR_RESTAURANT_ID, order_id=order_b.order_id),
+    )
+    OrderApplicationService.complete_order(
+        db=op_db,
+        cmd=CompleteOrderCommand(restaurant_id=CHAR_RESTAURANT_ID, order_id=order_b.order_id),
+    )
+
+    lifecycle_events_b = (
+        op_db.query(IntegrationOutbox)
+        .filter(
+            IntegrationOutbox.restaurante_id == CHAR_RESTAURANT_ID,
+            IntegrationOutbox.aggregate_id == str(order_b.order_id),
+        )
+        .all()
+    )
+    names_b = {e.event_name for e in lifecycle_events_b}
+    assert "koma.order.created" in names_b
+    assert "koma.order.accepted" in names_b
+    assert "koma.order.ready" in names_b
+    assert "koma.order.completed" in names_b
+
+    for ev in lifecycle_events_b:
+        assert ev.payload["order_id"] == order_b.order_id
+        assert ev.payload["check_id"] == order_b.comanda_id
+        assert ev.payload["display_number"] == order_b.display_number
+        assert ev.payload["check_number"] is not None
+        assert ev.aggregate_id == str(ev.payload["order_id"])
+
+
+def test_outbox_at_least_once_delivery_semantics_and_consumer_deduplication(op_db):
+    """Regressão B: Formaliza a entrega at-least-once com estabilidade de event_id."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stable_event_id = "evt-stable-at-least-once-123"
+
+    ev = IntegrationOutbox(
+        id="outbox-alo-1",
+        restaurante_id=CHAR_RESTAURANT_ID,
+        event_id=stable_event_id,
+        event_name="koma.order.created",
+        aggregate_type="order",
+        aggregate_id="ord-alo-1",
+        payload={"order_id": "ord-alo-1", "display_number": "24-A", "check_id": 10},
+        status="pending",
+        created_at=now,
+    )
+    op_db.add(ev)
+    op_db.commit()
+
+    received_payloads: list[bytes] = []
+    received_headers: list[dict] = []
+
+    def mock_transport(request: httpx.Request):
+        received_payloads.append(request.content)
+        received_headers.append(dict(request.headers))
+        return httpx.Response(200, json={"status": "ok"})
+
+    client = httpx.Client(transport=httpx.MockTransport(mock_transport))
+
+    # 1. Primeira entrega (garantia de entrega)
+    stats1 = dispatch_pending_outbox_events(op_db, client=client, restaurant_id=CHAR_RESTAURANT_ID)
+    assert stats1["delivered"] == 1
+    assert len(received_payloads) == 1
+
+    # 2. Simulação de entrega duplicada na rede / redelivery
+    # O consumidor usa event_id como chave de deduplicação idempotente
+    consumer_cache: set[str] = set()
+
+    # Primeira recepção pelo consumidor -> aceita
+    valid1, reason1 = verify_webhook_envelope(
+        secret="super-secret-key-fase-6-1",
+        payload_bytes=received_payloads[0],
+        headers=received_headers[0],
+        processed_event_ids=consumer_cache,
+    )
+    assert valid1 is True
+    assert reason1 == "OK"
+    assert stable_event_id in consumer_cache
+
+    # Segunda recepção (duplicata at-least-once) -> detectada e rejeitada com segurança
+    valid2, reason2 = verify_webhook_envelope(
+        secret="super-secret-key-fase-6-1",
+        payload_bytes=received_payloads[0],
+        headers=received_headers[0],
+        processed_event_ids=consumer_cache,
+    )
+    assert valid2 is False
+    assert "Replay attack detected" in reason2
+
+
+def test_worker_discovery_fail_closed_on_database_error(op_db):
+    """Regressão C: Garante comportamento fail-closed se a descoberta de tenants falhar."""
+    with patch.object(op_db, "execute", side_effect=RuntimeError("PostgreSQL connection refused")):
+        # discover_active_restaurant_ids NÃO pode engolir o erro como []
+        with pytest.raises(RuntimeError, match="PostgreSQL connection refused"):
+            discover_active_restaurant_ids(op_db)
+
