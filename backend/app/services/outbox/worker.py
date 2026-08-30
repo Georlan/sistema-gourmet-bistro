@@ -25,22 +25,22 @@ def discover_active_restaurant_ids(db: Session) -> list[int]:
     No PostgreSQL, utiliza a função SECURITY DEFINER `koma_internal.list_public_restaurants()`
     autorizada para o papel `koma_app` sem depender de tenant contextual prévio.
     No SQLite (testes/local), consulta diretamente a tabela `restaurantes`.
+
+    Fail-closed: Qualquer erro de banco, permissão ou migração ausente é propagado
+    (não engolido como lista vazia), garantindo que o worker trate o erro no loop,
+    faça retry e o incidente seja observável em métricas/logs.
     """
     bind = db.get_bind()
-    try:
-        if bind and bind.dialect.name == "postgresql":
-            result = db.execute(
-                text("SELECT id FROM koma_internal.list_public_restaurants()")
-            ).scalars().all()
-            return [int(rid) for rid in result if rid]
-        else:
-            result = db.execute(
-                text("SELECT id FROM restaurantes")
-            ).scalars().all()
-            return [int(rid) for rid in result if rid]
-    except Exception as exc:
-        logger.warning("[OUTBOX WORKER] Falha ao descobrir restaurantes ativos: %s", exc)
-        return []
+    if bind and bind.dialect.name == "postgresql":
+        result = db.execute(
+            text("SELECT id FROM koma_internal.list_public_restaurants()")
+        ).scalars().all()
+    else:
+        result = db.execute(
+            text("SELECT id FROM restaurantes")
+        ).scalars().all()
+
+    return [int(rid) for rid in result if rid is not None]
 
 
 class OutboxWorker:
