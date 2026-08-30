@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FrontalLaptopFrame } from '../product/FrontalLaptopFrame';
 import { EditablePhoneFrame, type PhoneScreenshot } from '../product/EditablePhoneFrame';
 import { ProductScreen } from '../product/ProductScreen';
+import { TabletFrame } from '../product/TabletFrame';
+import type { DeviceScreenshot } from '../product/DeviceScreenshot';
 import phoneShell from '../../assets/koma-phone-graphite-shell-v2.png';
 import '../product/editable-phone.css';
 
@@ -29,7 +31,10 @@ export const PRODUCT_TOUR = [
   },
 ] as const;
 
-export function HowItWorks({ cardapioScreenshot }: { cardapioScreenshot?: PhoneScreenshot } = {}) {
+export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot }: {
+  cardapioScreenshot?: PhoneScreenshot;
+  cozinhaScreenshot?: DeviceScreenshot;
+} = {}) {
   const [active, setActive] = useState(0);
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const section = useRef<HTMLElement>(null);
@@ -91,6 +96,8 @@ export function HowItWorks({ cardapioScreenshot }: { cardapioScreenshot?: PhoneS
               <EditablePhoneFrame shellSrc={phoneShell} screenshot={cardapioScreenshot}>
                 <ProductScreen view="cardapio" scaleLogicalWidth={430} />
               </EditablePhoneFrame>
+            ) : screen.device === 'tablet' ? (
+              <TabletFrame view={screen.view} screenshot={cozinhaScreenshot} />
             ) : <FrontalLaptopFrame device={screen.device} view={screen.view} />)}
             <figcaption>Prévia ilustrativa do Kôma · {screen.label}</figcaption>
           </figure>

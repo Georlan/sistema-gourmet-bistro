@@ -1,13 +1,8 @@
 import React, { useId, useRef } from 'react';
 import { usePerspectiveTransform, type NormalizedPoint } from './usePerspectiveTransform';
+import type { DeviceScreenshot } from './DeviceScreenshot';
 
-export interface PhoneScreenshot {
-  src: string;
-  alt: string;
-  /** Contain preserves the whole screenshot; cover is an explicit editorial crop. */
-  fit?: 'contain' | 'cover';
-  position?: string;
-}
+export type PhoneScreenshot = DeviceScreenshot;
 
 interface EditablePhoneFrameProps {
   shellSrc: string;

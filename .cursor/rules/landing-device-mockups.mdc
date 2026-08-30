@@ -1,0 +1,16 @@
+---
+description: Preservar os modelos 3D aprovados da landing, com telas trocáveis, transparência real e boa qualidade.
+globs: src/landing/**,src/assets/koma-*,docs/landing-*
+alwaysApply: false
+---
+
+# Dispositivos da landing Kôma
+
+- O usuário prefere modelos com aparência 3D. Não substituir por dispositivos planos sem aprovação.
+- Separar sempre a moldura da tela. A tela deve aceitar tanto a demonstração em HTML quanto capturas reais futuras.
+- Gerar e entregar molduras com fundo transparente e, quando sobrepostas à interface, visor transparente. Quadriculado desenhado não é transparência.
+- Validar o canal alpha do arquivo final e inspecionar sobre fundo claro e escuro.
+- Preservar detalhes e proporções; não ampliar raster além da resolução útil nem esticar capturas. `contain` é o padrão; `cover` exige escolha de recorte.
+- Tela e moldura devem escalar juntas, sem overflow horizontal, inclusive em 320 px.
+- Manter originais e documentar encaixe, fonte e prompt. Não incorporar fotos com dados pessoais sem revisão.
+- Pedidos de prévia não autorizam substituir a landing. Aplicar somente após aprovação.

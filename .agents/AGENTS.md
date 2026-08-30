@@ -2,6 +2,8 @@
 
 - **Git Commits e Push Diretos**: Sempre realize `git commit` e `git push origin main` diretamente no repositório após concluir as alterações solicitadas pelo usuário para atualizar o deploy no Cloudflare Pages.
 
+- **Modelos da landing**: Preservar o visual 3D aprovado. Novos dispositivos devem ter moldura de boa qualidade com transparência real e tela separada/substituível. Validar alpha e fundos claro/escuro; quadriculado desenhado não conta como transparência. Seguir `.cursor/rules/landing-device-mockups.mdc` e os guias `docs/landing-*-mockup.md`.
+
 ---
 
 # KÔMA — Memória Arquitetural: Comanda, Pedido e Identidade Operacional
@@ -270,4 +272,3 @@ $$\text{PREPARANDO} \longrightarrow \text{PRONTO} \longrightarrow \text{ENTREGUE
 
 - Nunca duplicar lógica entre `MesaCard.tsx` e `CaixaPanel.tsx`.
 - Criar seletor universal compartilhado `deriveTableOperationalState(...)` consumido igualmente por ambos os componentes.
-
