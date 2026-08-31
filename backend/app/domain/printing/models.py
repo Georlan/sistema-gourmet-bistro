@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+
 @dataclass
 class PrintItem:
     """Representa um item genérico a ser processado no domínio de impressão."""
+
     codigo: str
     nome: str
     quantidade: int = 1
@@ -16,9 +18,11 @@ class PrintItem:
     def total(self) -> float:
         return round(self.quantidade * self.preco_unit, 2)
 
+
 @dataclass
 class OrderPrintData:
-    """Dados de um pedido para emissão de documento de PRODUÇÃO."""
+    """Dados de um pedido para emissão de documento operacional/produção."""
+
     restaurante_nome: str = "KÔMA"
     numero_pedido: str = ""
     tipo_pedido: str = "LOCAL"  # LOCAL | RETIRADA | DELIVERY
@@ -27,10 +31,13 @@ class OrderPrintData:
     garcom_nome: str = ""
     numero_lancamento: Optional[str] = None
     itens: List[PrintItem] = field(default_factory=list)
+    is_reprint: bool = False
+
 
 @dataclass
 class CommandPrintData:
     """Dados de uma comanda/mesa para emissão de documento de FECHAMENTO."""
+
     restaurante_nome: str = "KÔMA"
     mesa: Optional[str] = None
     numero_pedido: Optional[str] = None
@@ -38,9 +45,11 @@ class CommandPrintData:
     desconto: float = 0.0
     itens: List[PrintItem] = field(default_factory=list)
 
+
 @dataclass
 class DeliveryOrderPrintData:
     """Dados de um pedido de delivery para emissão de documento de ENTREGA."""
+
     restaurante_nome: str = "KÔMA"
     numero_pedido: str = ""
     tipo_pedido: str = "DELIVERY"
