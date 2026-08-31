@@ -1,5 +1,5 @@
 from app.database import Base, SessionLocal, current_restaurante_id, engine
-from app.main import app  # noqa: F401 - instala o adaptador de numeração
+from app.main import app  # noqa: F401 - carrega a aplicação e seus modelos
 from app.models import Restaurante
 from app.operational_models import NumeradorOperacional
 from app.routes import cardapio, orders

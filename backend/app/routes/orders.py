@@ -1,8 +1,8 @@
 """Rotas públicas de pedidos com state machine hardened para delivery.
 
-O módulo legado completo fica em ``orders_core`` para manter compatibilidade de
-imports. As três rotas que alteram o ciclo de vida de delivery são substituídas
-aqui por boundaries que compartilham a mesma máquina de estados.
+``orders_core`` mantém as rotas e callbacks compartilhados de pedidos. As três
+rotas do ciclo de vida de delivery são registradas somente aqui e compartilham
+a mesma máquina de estados.
 """
 
 from __future__ import annotations
@@ -31,32 +31,19 @@ from ..application.orders.service import OrderApplicationService
 from ..application.orders.commands import DispatchOrderCommand
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 
-# Reexporta a API estável do módulo histórico. Isso mantém imports como
-# ``from .orders import gerar_novo_numero_pedido`` sem duplicar o monólito.
-from .orders_core import *  # noqa: F401,F403
+# Compatibilidade Python explícita para os adapters de atendimento e impressão.
 from .orders_core import (
     _criar_acesso_motoboy,
     _agendar_notificacao_whatsapp_status,
+    criar_venda_direta,
     enqueue_initial_production_for_order,
+    gerar_novo_numero_pedido,
+    lancar_itens,
+    logger,
     print_in_background,
+    reimprimir_lancamento_cozinha,
     router,
 )
-
-
-_LEGACY_DELIVERY_ENDPOINTS = {
-    "atualizar_status_delivery",
-    "despachar_delivery",
-    "confirmar_entrega_motoboy",
-}
-
-# O APIRouter é o mesmo objeto criado pelo módulo histórico. Removemos somente
-# os três handlers permissivos e registramos abaixo suas versões hardened.
-router.routes[:] = [
-    route
-    for route in router.routes
-    if getattr(getattr(route, "endpoint", None), "__name__", "")
-    not in _LEGACY_DELIVERY_ENDPOINTS
-]
 
 
 def _canonical_target_or_422(raw_status: str) -> str:

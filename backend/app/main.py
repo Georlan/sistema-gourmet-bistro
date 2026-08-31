@@ -36,18 +36,10 @@ from .routes import (
     websocket,
     whatsapp_webhook,
 )
-from .services.order_numbers import gerar_novo_numero_pedido_atomico
 
 
 install_sensitive_query_log_filter()
 
-
-# Há dois consumidores legados da função de numeração: orders (salão/caixa)
-# e cardapio (delivery/retirada público). Até a criação de pedidos inteira ser
-# consolidada em um único service, ambos apontam para o MESMO alocador atômico
-# do NumeradorOperacional. Isso evita Conta #47 e Delivery #47 simultâneos.
-orders.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
-cardapio.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
 
 if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
     sentry_sdk.init(
@@ -361,8 +353,7 @@ app.add_middleware(
 )
 
 
-# Os adaptadores de atendimento/impressão vêm antes das rotas legadas para
-# preservar URLs do frontend com semântica transacional nova.
+# Explicit composition: each HTTP operation has one registered owner.
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(atendimentos.router)
@@ -370,8 +361,7 @@ app.include_router(atendimento_printing.router)
 app.include_router(tables.router)
 app.include_router(orders.router)
 app.include_router(websocket.router)
-# O GET legado usado somente pela montagem oculta do Caixa é interceptado antes
-# do router monolítico e não consulta Restaurante novamente.
+# Compatibility GET retains its existing payload without shadowing another route.
 app.include_router(cardapio_config_bridge.router)
 app.include_router(caixa.router)
 app.include_router(optimization.router)

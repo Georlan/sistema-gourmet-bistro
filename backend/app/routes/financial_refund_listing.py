@@ -8,7 +8,6 @@ from ..models import Pagamento, Usuario
 from ..smartpos_models import SmartPosPaymentIntent
 from ..security import require_permission
 from ..services.refund_ui import refundable_payment_payload_human
-from . import caixa as legacy_cash
 
 
 def find_refundable_payments(
@@ -85,19 +84,3 @@ def listar_pagamentos_estornaveis_paginado(
         require_tenant_id(),
         limite=limite,
     )
-
-
-legacy_cash.router.routes[:] = [
-    route
-    for route in legacy_cash.router.routes
-    if not (
-        getattr(route, "path", None) == "/caixa/pagamentos/estornaveis"
-        and "GET" in (getattr(route, "methods", set()) or set())
-    )
-]
-legacy_cash.router.add_api_route(
-    "/pagamentos/estornaveis",
-    listar_pagamentos_estornaveis_paginado,
-    methods=["GET"],
-    name="listar_pagamentos_estornaveis_paginado",
-)

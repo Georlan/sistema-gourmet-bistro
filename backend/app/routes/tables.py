@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from ..database import get_db, current_restaurante_id, require_tenant_id
+from typing import List
+from ..database import get_db, require_tenant_id
 from ..models import (
     Mesa,
     ObservacaoPredefinida,
@@ -22,10 +22,8 @@ from ..schemas import (
     CancelarItensMesaRequest,
     ObservacaoPredefinidaResponse,
 )
-from ..security import get_current_garcom_optional, get_current_user, require_permission
-from ..services.printing import PrintingRequestError, enqueue_table_receipt
+from ..security import get_current_user, require_permission
 from ..services.inventory import estornar_estoque_dos_itens
-from ..waiter_permissions import require_waiter_permission
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -427,56 +425,3 @@ def get_observacoes_por_categoria(categoria_id: str, db: Session = Depends(get_d
         ObservacaoPredefinida.restaurante_id == rest_id,
         ObservacaoPredefinida.categoria_id == categoria_id,
     ).all()
-
-
-@router.post("/{mesa_id}/imprimir-recibo", status_code=status.HTTP_200_OK)
-def imprimir_recibo_mesa(
-    mesa_id: int,
-    print_header: Optional[str] = None,
-    print_footer: Optional[str] = None,
-    apenas_valores: bool = False,
-    db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(get_current_user)
-):
-    """Enfileira a via canônica de uma mesa aberta.
-
-    ``apenas_valores=false`` é o Extrato Completo. ``true`` é o Fechamento de
-    mesa pré-pagamento. Ambos usam o mesmo snapshot e o mesmo formatter usados
-    pelas impressões automáticas e reimpressões de consumo no local.
-    """
-    require_waiter_permission(db, current_garcom, "perm_garcom_print")
-    rest_id = require_tenant_id()
-    try:
-        job = enqueue_table_receipt(
-            db,
-            rest_id,
-            mesa_id,
-            apenas_valores=apenas_valores,
-            source_type="mesa",
-            source_id=str(mesa_id),
-            print_header=print_header,
-            print_footer=print_footer,
-            printed_by=current_garcom.nome,
-        )
-        db.commit()
-    except PrintingRequestError as exc:
-        db.rollback()
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao enfileirar impressão do recibo.",
-        ) from exc
-
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="A impressão física não está disponível no plano atual.",
-        )
-
-    return {
-        "status": "success",
-        "detail": "Impressão do recibo enviada com sucesso para a fila de impressão",
-        "job_id": job.id,
-    }

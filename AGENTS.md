@@ -22,6 +22,7 @@
 | Cardápio público | `src/cardapio/` | `docs/architecture/cardapio_delivery_presentation.md` e `cardapio_addons_direction.md` |
 | Landing / dispositivos | `.cursor/rules/landing-device-mockups.mdc` | `docs/landing-*-mockup.md`; preservar visual 3D, alpha real e tela substituível |
 | CI / governança | `.github/workflows/quality-gate.yml` | `docs/engineering/change-governance.md` |
+| Rotas / aliases HTTP | `docs/engineering/route-ownership.md` | Um responsável por método/URL; preservar contratos e imports explícitos |
 
 ## Invariantes essenciais
 

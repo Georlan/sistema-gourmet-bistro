@@ -1,15 +1,15 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
 from decimal import Decimal, ROUND_HALF_UP
 import logging
 
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, Insumo, ConfigFidelizacao, HistoricoFidelidade, ActivityLog, Pagamento, Cliente
-from ..schemas import InsumoResponse, ConfigFidelizacaoResponse, HistoricoFidelidadeResponse
+from ..models import Comanda, Insumo, ConfigFidelizacao, Pagamento, Cliente
+from ..schemas import ConfigFidelizacaoResponse
 from ..security import require_permission
 from ..models import Usuario
 from ..services.clientes import (
@@ -23,13 +23,10 @@ from ..services.clientes import (
 )
 from ..websocket_manager import manager
 from ..timezone_utils import (
-    get_operational_now,
-    operational_day_bounds_utc,
     parse_operational_filter_datetime,
     to_database_utc,
     to_operational_local_time,
 )
-from .relatorios import _orders_from_payments
 
 logger = logging.getLogger("koma.optimization")
 
@@ -102,173 +99,6 @@ def get_pico_horarios(
             "total_pedidos": total,
         })
     return results
-
-@router.get("/comandas/estatisticas/geral")
-def get_estatisticas_geral(
-    data_inicio: Optional[str] = None,
-    data_fim: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("relatorios:consultar"))
-):
-    """
-    Retorna estatísticas consolidadas de vendas para o painel de BI (dashboard financeiro).
-    """
-    from ..database import current_restaurante_id, require_tenant_id
-    from ..models import Pagamento, Comanda, Produto
-    
-    rest_id = require_tenant_id()
-    
-    dt_inicio = parse_operational_filter_datetime(data_inicio)
-    fim_eh_dia = bool(data_fim and len(data_fim.strip()) == 10)
-    dt_fim = parse_operational_filter_datetime(data_fim, end_of_day=fim_eh_dia)
-    db_inicio = to_database_utc(dt_inicio)
-    db_fim = to_database_utc(dt_fim)
-
-    # 1. Total faturamento
-    pags_query = db.query(Pagamento).filter(
-        Pagamento.restaurante_id == rest_id,
-        Pagamento.status == "aprovado"
-    )
-    if db_inicio:
-        pags_query = pags_query.filter(Pagamento.criado_em >= db_inicio)
-    if db_fim:
-        pags_query = pags_query.filter(
-            Pagamento.criado_em < db_fim
-            if fim_eh_dia
-            else Pagamento.criado_em <= db_fim
-        )
-        
-    pags = pags_query.all()
-    paid_orders = _orders_from_payments(pags)
-    paid_comanda_ids = list(paid_orders)
-
-    # O grão do relatório é a venda paga, não toda comanda fechada. Isso
-    # exclui comandas vazias/testes e consolida pagamentos divididos como
-    # uma única venda, igual às demais abas de relatórios.
-    faturamento = sum(order["total"] for order in paid_orders.values())
-    faturamento_dinheiro = sum(p.valor for p in pags if p.metodo == "dinheiro")
-    faturamento_pix = sum(p.valor for p in pags if p.metodo == "pix")
-    faturamento_cartao = sum(p.valor for p in pags if p.metodo in ["cartao", "cartao_debito", "cartao_credito"])
-
-    # 1b. Faturamento de hoje
-    import sqlalchemy as sa
-    today_start, today_end = operational_day_bounds_utc(get_operational_now().date())
-    today_start = to_database_utc(today_start)
-    today_end = to_database_utc(today_end)
-    faturamento_hoje = db.query(sa.func.sum(Pagamento.valor)).filter(
-        Pagamento.restaurante_id == rest_id,
-        Pagamento.status == "aprovado",
-        Pagamento.criado_em >= today_start,
-        Pagamento.criado_em < today_end
-    ).scalar() or 0.0
-    
-    from sqlalchemy.orm import joinedload
-    from ..models import Item as ComandaItem
-
-    # 2. Carrega somente as comandas que possuem pagamento aprovado no
-    # período (com eager loading para evitar N+1 no Sentry).
-    comandas_query = db.query(Comanda).options(
-        joinedload(Comanda.itens).joinedload(ComandaItem.produto)
-    ).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.id.in_(paid_comanda_ids),
-    )
-    comandas = comandas_query.all() if paid_comanda_ids else []
-    total_pedidos = len(paid_orders)
-    
-    # 3. Ticket médio
-    ticket_medio = faturamento / total_pedidos if total_pedidos > 0 else 0.0
-    
-    # 4. Clientes únicos
-    cpfs = set(p.cpf_cliente for p in pags if p.cpf_cliente)
-    clientes_ativos = len(cpfs) if cpfs else total_pedidos
-    
-    # 5. Pedidos e entregas semanal
-    dias = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]
-    chart_data = {dia: {"delivery": 0, "local": 0} for dia in dias}
-    
-    for c in comandas:
-        if c.fechado_em:
-            local_closed_at = to_operational_local_time(c.fechado_em)
-            wday = local_closed_at.strftime('%w')
-            dia_label = dias[int(wday)]
-            is_delivery = c.tipo == "Delivery"
-            if is_delivery:
-                chart_data[dia_label]["delivery"] += 1
-            else:
-                chart_data[dia_label]["local"] += 1
-                
-    weekly_chart = []
-    for dia in dias:
-        weekly_chart.append({
-            "label": dia,
-            "delivery": chart_data[dia]["delivery"],
-            "local": chart_data[dia]["local"]
-        })
-        
-    # 6. Qualidade do cardápio
-    total_produtos = db.query(Produto).filter(Produto.restaurante_id == rest_id).count()
-    if total_produtos > 0:
-        produtos_otimizados = db.query(Produto).filter(
-            Produto.restaurante_id == rest_id,
-            Produto.descricao != "",
-            Produto.descricao.isnot(None),
-            Produto.imagem != "",
-            Produto.imagem.isnot(None)
-        ).count()
-        qualidade_cardapio = int((produtos_otimizados / total_produtos) * 100)
-    else:
-        qualidade_cardapio = 100
-        
-    # 7. Pedidos por modalidade
-    pedidos_modalidade = {"local": 0, "delivery": 0, "balcao": 0}
-    for c in comandas:
-        tipo = c.tipo or "Consumo no Local"
-        if tipo == "Delivery":
-            pedidos_modalidade["delivery"] += 1
-        elif tipo == "Balcão":
-            pedidos_modalidade["balcao"] += 1
-        else:
-            pedidos_modalidade["local"] += 1
-            
-    # 8. Top 5 Itens Mais Pedidos
-    item_counts = {}
-    for c in comandas:
-        for item in c.itens:
-            if item.status != "cancelado":
-                prod_name = item.produto.nome if item.produto else f"Item {item.produto_id}"
-                preco = item.preco_unit
-                if prod_name not in item_counts:
-                    item_counts[prod_name] = {"count": 0, "price": preco}
-                item_counts[prod_name]["count"] += 1
-                
-    top_itens = []
-    sorted_items = sorted(item_counts.items(), key=lambda x: x[1]["count"], reverse=True)[:5]
-    for idx, (name, data) in enumerate(sorted_items):
-        top_itens.append({
-            "rank": f"{idx+1}º",
-            "name": name,
-            "count": data["count"],
-            "price": round(data["price"], 2)
-        })
-        
-    return {
-        "faturamento": round(faturamento, 2),
-        "faturamento_hoje": round(faturamento_hoje, 2),
-        "ticket_medio": round(ticket_medio, 2),
-        "total_pedidos": total_pedidos,
-        "clientes_ativos": clientes_ativos,
-        "weekly_chart": weekly_chart,
-        "qualidade_cardapio": qualidade_cardapio,
-        "pedidos_modalidade": pedidos_modalidade,
-        "top_itens": top_itens,
-        "breakdown_pagamentos": {
-            "dinheiro": round(faturamento_dinheiro, 2),
-            "pix": round(faturamento_pix, 2),
-            "cartao": round(faturamento_cartao, 2)
-        }
-    }
-
 
 # ----------------- PROGRAMA DE FIDELIDADE UNIFICADO -----------------
 
@@ -784,3 +614,8 @@ def create_loyalty_client(
         target_audience="internal",
     )
     return cliente_payload(new_c)
+
+
+from .financial_read_routes import get_dashboard_financeiro
+
+router.add_api_route("/comandas/estatisticas/geral", get_dashboard_financeiro, methods=["GET"])
