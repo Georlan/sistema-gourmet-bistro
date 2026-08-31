@@ -16,6 +16,7 @@ class PrintAction(str, Enum):
     REPRINT = "reimprimir"
     RECEIPT = "extrato"
     CLOSING = "fechamento"
+    DISPATCH = "despacho"
 
 
 class PrintTrigger(str, Enum):
@@ -41,4 +42,5 @@ class PrintIntent:
     table_id: Optional[int] = None
     values_only: bool = False
     requested_by: Optional[str] = None
+    courier_name: Optional[str] = None
     idempotency_key: Optional[str] = None
