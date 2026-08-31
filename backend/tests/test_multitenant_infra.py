@@ -103,51 +103,71 @@ def test_postgres_transaction_receives_explicit_tenant(restaurante_id):
     assert parameters == {"id": str(restaurante_id)}
 
 
-def test_print_background_uses_explicit_tenant_for_each_job(monkeypatch):
-    from app import database
-    from app.routes.orders import print_in_background
+def test_canonical_print_enqueue_keeps_explicit_tenant_for_each_job(monkeypatch):
+    from app.services import printing as printing_service
 
-    created_sessions = []
     created_jobs = []
 
+    class FakeQuery:
+        def filter(self, *_args):
+            return self
+
+        def first(self):
+            return None
+
+    class FakeNested:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
     class FakeDb:
-        def __init__(self, restaurante_id):
-            created_sessions.append(restaurante_id)
-
         def query(self, _model):
-            class FakeQuery:
-                def filter(self, *_args):
-                    return self
-
-                def first(self):
-                    # Plano com impressão habilitada para que o teste alcance
-                    # a criação do job, que é o comportamento sob validação.
-                    return type("FakeRestaurant", (), {"plano": "pro"})()
-
             return FakeQuery()
 
         def add(self, job):
             created_jobs.append(job)
 
-        def commit(self):
+        def flush(self):
             return None
 
-        def close(self):
-            return None
+        def begin_nested(self):
+            return FakeNested()
 
     monkeypatch.setattr(
-        database,
-        "SessionLocal",
-        lambda *, restaurante_id: FakeDb(restaurante_id),
+        printing_service,
+        "_printing_allowed",
+        lambda _db, _restaurante_id: True,
     )
 
+    db = FakeDb()
     original_context = current_restaurante_id.set(999)
     try:
-        print_in_background("cozinha", "tenant 11", restaurante_id=11)
-        print_in_background("cozinha", "tenant 22", restaurante_id=22)
+        job_11 = printing_service.enqueue_print_job(
+            db,
+            restaurante_id=11,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="pedido",
+            source_id="c-tenant-11",
+            payload_text="tenant 11",
+            idempotency_key="tenant:test:11",
+        )
+        job_22 = printing_service.enqueue_print_job(
+            db,
+            restaurante_id=22,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="pedido",
+            source_id="c-tenant-22",
+            payload_text="tenant 22",
+            idempotency_key="tenant:test:22",
+        )
 
-        assert created_sessions == [11, 22]
         assert [job.restaurante_id for job in created_jobs] == [11, 22]
+        assert job_11.restaurante_id == 11
+        assert job_22.restaurante_id == 22
         assert current_restaurante_id.get() == 999
     finally:
         current_restaurante_id.reset(original_context)
