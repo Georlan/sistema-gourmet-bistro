@@ -657,13 +657,12 @@ export function useCashierOrders({
     }
   };
 
-  const handleInspectSalonTable = (tableOrders: Order[], focusTransfer = false) =>
+  const handleInspectSalonTable = (tableOrders: Order[]) =>
     tableOrders[0] &&
     setSelectedKanbanOrder({
       ...tableOrders[0],
       projectionScope: 'table',
       contextoSalao: true,
-      focusTransfer,
       tableContext: describeTableOrders(tableOrders),
       itens: tableOrders.flatMap((order) => order.itens || []),
       comandaIds: tableOrders.map((order) => order.id),

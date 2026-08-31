@@ -182,8 +182,7 @@ test('Salão renders its current visual priorities and delegates table-scoped ac
   const props: CaixaSalonTabProps = freeze({ cards, visibleCards: cards,
     counts: { all: 3, free: 1, occupied: 1, payment: 1 }, insights: { occupancy: 67, openValue: 320, oldestService: '2 min' },
     filter: 'all', onFilterChange: filter => calls.push(filter),
-    actions: { receiveTable: rows => calls.push(rows), inspectTable: rows => calls.push(rows),
-      prepareTransfer: rows => calls.push(['transfer', rows]), openTableOrder: id => calls.push(id) },
+    actions: { inspectTable: rows => calls.push(rows), openTableOrder: id => calls.push(id) },
   });
   const view = CaixaSalonTab(props);
   const markup = renderToStaticMarkup(createElement(CaixaSalonTab, props));
@@ -194,19 +193,18 @@ test('Salão renders its current visual priorities and delegates table-scoped ac
   assert.equal(cardElements.length, 3);
   const cardViews = cardElements.map(element => CashierSalonCard(element.props as unknown as Parameters<typeof CashierSalonCard>[0]));
   invoke(button(cardViews[0], 'Ver comanda'), 'onClick');
-  invoke(button(cardViews[1], 'Receber'), 'onClick');
+  invoke(button(cardViews[1], 'Ver comanda'), 'onClick');
   invoke(button(cardViews[2], 'Abrir pedido'), 'onClick');
   invoke(button(view, 'Para receber 1'), 'onClick');
   assert.deepEqual(calls, [cards[0].tableOrders, cards[1].tableOrders, 9, 'payment']);
-  invoke(button(cardViews[0], 'Adicionar consumo'), 'onClick');
-  invoke(button(cardViews[0], 'Transferir…'), 'onClick');
-  assert.deepEqual(calls.slice(-2), [7, ['transfer', cards[0].tableOrders]]);
+  assert.doesNotMatch(markup, /Contexto da mesa|Atendentes registrados|0 servidos|Transferir…/);
+  for (const cardView of cardViews) assert.equal(elements(cardView).filter(element => element.type === 'button').length, 1);
 });
 
 test('Salão keeps empty, error and filtered-empty states separate', () => {
   const base: CaixaSalonTabProps = { cards: [], visibleCards: [], counts: { all: 0, free: 0, occupied: 0, payment: 0 },
     insights: { occupancy: 0, openValue: 0, oldestService: '—' }, filter: 'all', onFilterChange: noop,
-    actions: { receiveTable: noop, inspectTable: noop, prepareTransfer: noop, openTableOrder: noop } };
+    actions: { inspectTable: noop, openTableOrder: noop } };
   assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, base)), /Nenhuma mesa cadastrada/);
   assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, { ...base, fetchError: 'Sem conexão' })), /Não foi possível carregar o salão/);
   const cards = projectCashierSalonTables([TABLE], [check()], [], NOW);
@@ -241,6 +239,21 @@ test('details groups visible units and delegates print/transfer/cancellation wit
   assert.equal(calls.length, 5);
   invoke(backdrop, 'onClick', { target, currentTarget: target });
   assert.equal(calls.at(-1), 'close');
+  const salonView = KanbanOrderDetails({ ...props, salonActions: {
+    addConsumption: () => calls.push('add'), receive: () => calls.push('receive'), canReceive: true,
+  } });
+  invoke(button(salonView, 'Adicionar consumo'), 'onClick');
+  invoke(button(salonView, 'Receber'), 'onClick');
+  assert.deepEqual(calls.slice(-2), ['add', 'receive']);
+  const disabledView = KanbanOrderDetails({ ...props, salonActions: {
+    addConsumption: noop, receive: noop, canReceive: false,
+  } });
+  assert.equal(button(disabledView, 'Receber').props.disabled, true);
+  const launchMarkup = renderToStaticMarkup(createElement(KanbanOrderDetails, {
+    ...props, order: { ...props.order, contextoSalao: false },
+    salonActions: { addConsumption: noop, receive: noop, canReceive: true },
+  }));
+  assert.doesNotMatch(launchMarkup, /Ações da mesa/);
 });
 
 test('digital detail uses the same controlled advance and order-only cancellation actions', () => {

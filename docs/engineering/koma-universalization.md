@@ -39,7 +39,7 @@ filtrar o snapshot inteiro novamente para cada mesa. Há teste de equivalência
 com a projeção anterior do Caixa, incluindo união, contas fechadas e pagamentos.
 O export anterior em cashierOrderProjection permanece como compatibilidade.
 
-## Evolução funcional do Salão aprovada
+## Histórico: evolução funcional do Salão na PR #143
 
 O Caixa vê comandas, pedidos identificados pelo Core, atendentes registrados e
 contagens de preparo/prontos/servidos. Uma lista de pedidos não renomeia a Mesa.
@@ -52,7 +52,35 @@ Transferir abre o mesmo fluxo, com foco no destino; só a confirmação efetua a
 Mesas unidas não recebem ações duplicadas e mesas sem conta não recebem ações inválidas.
 Não houve alteração de permissões, de Item.pago ou da visibilidade de servidos no Kanban.
 
-## Limpeza mecânica de estilos
+## Ajuste de densidade aprovado após os prints da PR #143
+
+O usuário aprovou reduzir a informação simultânea, manter os recursos nos detalhes
+e evitar emojis decorativos. Não é mudança de domínio ou redução de permissões.
+
+- `SharedTableCard.density`: variante compacta opt-in do mesmo componente;
+  Garçom conserva a variante regular. Mesa, estado, tempo, quantidade e valor continuam
+  vindo das projeções existentes. Identidades completas ficam nos detalhes e no nome acessível.
+- `CashierSalonCard`: uma ação de entrada; sessão sem conta ainda permite adicionar consumo,
+  e mesa unida não recebe ações duplicadas. Grade ocupa a largura disponível sem esticar
+  cards livres para a altura dos ocupados. Sem diminuir fonte para comprimir conteúdo.
+- `KanbanOrderDetails.salonActions`: consumo e recebimento delegam aos mesmos controllers,
+  usando a projeção atual da mesa. Transferência continua exigindo destino e confirmação.
+  Contexto completo permanece; métricas duplicadas e emojis de movimentação foram retirados.
+  Origens de transferência/união usam `getTableMovementContext`, já compartilhado pelo Kanban,
+  inclusive quando a origem aparece numa Comanda diferente da primeira.
+  O modal tem altura limitada à janela e rolagem própria.
+- `CheckoutDialog`: cédulas renderizadas só quando o método é Dinheiro. Trocar método
+  não recalcula saldo, não muda valor e não registra pagamento.
+- Prova: `salon-density.spec.ts` exercita 30 mesas, altura dos cards, ausência de
+  overflow horizontal, alcance das ações e cédulas; `salon-context.spec.ts` protege
+  várias comandas, identidade, transferência, recebimento e rascunho via detalhes.
+
+Medida no cenário de 30 mesas, fonte padrão e menu lateral aberto: cards ocupados
+~176 px e livres ~153 px; seis mesas completas em 1024×768 e dez em 1366×768.
+Em 360×640: ~172/~149 px, duas mesas completas. Nomes longos e fonte ampliada
+podem aumentar a altura; não há recorte fixo de texto ou de botões.
+
+## Histórico da limpeza mecânica de estilos
 
 scripts/simplify-static-classes.mjs verifica (padrão) ou simplifica (--write)
 somente chamadas clsx formadas por strings literais. Preserva a string resultante,

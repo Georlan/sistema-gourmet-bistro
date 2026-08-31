@@ -591,8 +591,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                   </span>
                 </div>
 
-                {/* BOTÕES DE ATALHO DE CÉDULAS (CASH SHORTCUTS) */}
-                <div className="space-y-1">
+                {paymentMetodo === 'dinheiro' && <div className="space-y-1" role="group" aria-label="Atalhos de cédulas">
                   <label
                     className={"text-[8px] font-bold text-koma-muted uppercase tracking-wider block"}
                   >
@@ -613,7 +612,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                       </button>
                     ))}
                   </div>
-                </div>
+                </div>}
 
                 {identifiedCustomer && identifiedCustomer.telefone ? (
                   <div

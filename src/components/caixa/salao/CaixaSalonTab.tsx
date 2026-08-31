@@ -95,7 +95,7 @@ export function CaixaSalonTab({
               Nenhuma mesa neste filtro.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,180px),1fr))] items-start gap-3">
               {visibleSalonTableCards.map(card => <CashierSalonCard key={card.table.id} card={card} actions={actions} />)}
             </div>
           )}

@@ -1,9 +1,10 @@
 import React from 'react';
 import clsx from 'clsx';
-import { Smartphone, Users, ShoppingCart, X, Check, Printer, RefreshCw, ArrowUpRight, Trash2 } from 'lucide-react';
+import { Smartphone, Users, ShoppingCart, X, Check, Printer, RefreshCw, ArrowUpRight, Trash2, Plus, CreditCard } from 'lucide-react';
 import type { Table } from '../../../types';
 import type { TableOrderContext as Context } from '../../../domain/tableReadModel';
 import { TableOrderContext } from '../../shared/TableOrderContext';
+import type { CashierTableCard } from './cashierWorkspaceTypes';
 import {
   getCashierDeliveryStatusLabel as deliveryStatusLabel,
   getCashierHumanOrderNumber as humanOrderNumber,
@@ -46,12 +47,17 @@ export interface KanbanDetailOrder {
   readonly mesaOrigemId?: number;
   readonly mesaTransferidaDe?: number;
   readonly contextoSalao?: boolean;
-  readonly focusTransfer?: boolean;
   readonly tableContext?: Context;
 }
 
 export interface KanbanOrderDetailsProps {
   readonly order: KanbanDetailOrder;
+  readonly tableMovement?: CashierTableCard['tableMovement'];
+  readonly salonActions?: {
+    readonly addConsumption: () => void;
+    readonly receive: () => void;
+    readonly canReceive: boolean;
+  };
   readonly transfer: {
     readonly targetId: string;
     readonly onTargetChange: (targetId: string) => void;
@@ -101,7 +107,7 @@ function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): Kanba
 
 
 /** Modal UI only; owner callbacks preserve failure handling and close-on-success behavior. */
-export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actions }: KanbanOrderDetailsProps) {
+export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actions, salonActions, tableMovement }: KanbanOrderDetailsProps) {
   const { targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId,
     isTransferring: isTransferringTable, tables: salonTables } = transfer;
   const selectedDetailItems = selectedKanbanOrder
@@ -132,7 +138,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
       onClick={(e) => { if (e.target === e.currentTarget) actions.close(); }}
       className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={"orders-detail-modal w-full max-w-md rounded-3xl p-5 space-y-4 text-left relative animate-scale-in"}>
+      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={"orders-detail-modal w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-3xl p-5 space-y-4 text-left relative animate-scale-in"}>
         <div className="orders-detail-modal__hero">
           <div className={clsx('orders-detail-modal__number', selectedIsQuickSale && 'is-quick-sale')}>
             {selectedIsQuickSale ? <Smartphone size={18} /> : selectedKanbanOrder.mesaId > 0 ? <Users size={18} /> : <ShoppingCart size={18} />}
@@ -167,30 +173,44 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
             </button>
           </div>
         </div>
-        <div className="orders-detail-modal__metrics">
-          <div><span>{selectedKanbanOrder.tableContext ? 'Comandas' : 'Pedido'}</span><strong>{selectedKanbanOrder.tableContext ? selectedKanbanOrder.tableContext.checkCount : '#' + selectedOrderNumber}</strong></div>
-          <div><span>Horário</span><strong>{selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</strong></div>
-          <div><span>Itens</span><strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)}</strong></div>
-        </div>
+        {selectedKanbanOrder.contextoSalao && salonActions && (
+          <div className="grid grid-cols-2 gap-2" aria-label="Ações da mesa">
+            <button type="button" onClick={salonActions.addConsumption} className="orders-detail-modal__reprint min-h-11">
+              <Plus size={14} aria-hidden="true" />Adicionar consumo
+            </button>
+            <button type="button" onClick={salonActions.receive} disabled={!salonActions.canReceive} className="orders-detail-modal__primary-action min-h-11 disabled:cursor-not-allowed disabled:opacity-40">
+              <CreditCard size={14} aria-hidden="true" />Receber
+            </button>
+          </div>
+        )}
+        {!selectedKanbanOrder.tableContext && (
+          <div className="orders-detail-modal__metrics">
+            <div><span>Pedido</span><strong>#{selectedOrderNumber}</strong></div>
+            <div><span>Horário</span><strong>{selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</strong></div>
+            <div><span>Itens</span><strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)}</strong></div>
+          </div>
+        )}
         {/* Itens e info extras */}
         <div className="space-y-3">
           {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
-          {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
+          {tableMovement && <div className="space-y-1 text-xs text-koma-secondary">
+            {tableMovement.mergedMesaIds.length > 0 && <p>Consumo unido de: {tableMovement.mergedMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
+            {tableMovement.transferredFromMesaIds.length > 0 && <p>Consumo transferido de: {tableMovement.transferredFromMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
+          </div>}
+          {!tableMovement && selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
             <div className={"bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/40 text-xs text-emerald-600 dark:text-emerald-300 flex items-center justify-between shadow-sm font-sans"}>
               <div>
                 <strong className={"text-emerald-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Mesclado:</strong>
                 <span className="leading-relaxed">Este lote possui consumo mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
               </div>
-              <span className={"text-lg shrink-0 pl-2"}>🔗</span>
             </div>
           )}
-          {selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
-            <div className={"bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans animate-pulse-subtle"}>
+          {!tableMovement && selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
+            <div className={"bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans"}>
               <div>
                 <strong className={"text-purple-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Transferido:</strong>
                 <span className="leading-relaxed">Este lote foi transferido da <strong>Mesa {selectedKanbanOrder.mesaTransferidaDe}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
               </div>
-              <span className={"text-lg shrink-0 pl-2"}>🔄</span>
             </div>
           )}
           {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
@@ -269,7 +289,6 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                   <div className={"flex gap-2 w-full"}>
                     <select
                       aria-label="Mesa de destino"
-                      autoFocus={selectedKanbanOrder.focusTransfer}
                       value={tableTransferTargetId}
                       onChange={(event) => setTableTransferTargetId(event.target.value)}
                       disabled={isTransferringTable}

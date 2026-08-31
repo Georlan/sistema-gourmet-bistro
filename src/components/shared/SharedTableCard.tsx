@@ -38,13 +38,15 @@ interface Props {
   /** Compatibility with cashier filters, not a second presentation authority. */
   filterStatus?: string;
   note?: string;
+  /** Compact overview; complete account context stays in the caller's details. */
+  density?: 'regular' | 'compact';
   children?: React.ReactNode;
 }
 
 /** Common shell; caller owns navigation, payment and any role-specific actions. */
 export function SharedTableCard({
   id, table, orders, operational, total, draftCount = 0, mergedSources = [],
-  otherWaitersServing = [], showOperationalStatus = true, onClick, filterStatus, note, children,
+  otherWaitersServing = [], showOperationalStatus = true, onClick, filterStatus, note, density = 'regular', children,
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
@@ -52,6 +54,8 @@ export function SharedTableCard({
   const customName = table.nome && table.nome !== `Mesa ${table.id}`;
   const Container = onClick ? 'button' : 'article';
   const occupied = operational.occupancy === 'IN_SERVICE' && !operational.mergedIntoMesaId;
+  const compact = density === 'compact';
+  const formattedTotal = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
     <Container
       id={id}
@@ -60,7 +64,8 @@ export function SharedTableCard({
       aria-label={`${customName ? table.nome : `Mesa ${table.id}`}: ${presentation.label}${numbersText ? `, comanda ${numbersText}` : ''}`}
       data-table-status={filterStatus}
       data-operational-state={presentation.key}
-      className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between gap-3 overflow-hidden rounded-2xl border p-3 sm:p-4 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+      data-density={density}
+      className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${compact ? 'gap-2 p-3' : 'gap-3 p-3 sm:p-4'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
     >
       <span className="absolute left-0 top-0 h-[3px] w-full bg-current opacity-70" aria-hidden="true" />
       <div className="flex items-start justify-between gap-2">
@@ -69,19 +74,24 @@ export function SharedTableCard({
           <strong className={`block text-koma-foreground ${customName ? 'break-words text-sm' : 'font-serif text-3xl leading-none'}`}>{customName ? table.nome : table.id}</strong>
           {mergedSources.length > 0 && <span className="block text-[9px] text-koma-muted">+ mesas {mergedSources.join(', ')}</span>}
         </div>
-        {checkNumbers.length > 0 && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`Comanda ${numbersText}`}>Comanda {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
+        {compact && occupied && <strong className="shrink-0 font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
+        {!compact && checkNumbers.length > 0 && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`Comanda ${numbersText}`}>Comanda {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-1">
-          <span className="text-[9px] font-bold uppercase tracking-wide">{presentation.label}</span>
+          <span className={`${compact ? 'text-[11px]' : 'text-[9px]'} font-bold uppercase tracking-wide`}>{presentation.label}</span>
           {draftCount > 0 && <span className="inline-flex items-center gap-1 rounded-md border border-current/20 px-1.5 text-[10px]"><FileText size={10} />{draftCount}</span>}
         </div>
-        {occupied && <div className="flex flex-wrap items-end justify-between gap-2 border-t border-koma-border-subtle pt-2">
+        {occupied && compact && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-koma-secondary">
+          <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={11} aria-hidden="true" />{operational.elapsed}</span>
+          {operational.production.activeItemCount > 0 && <span>{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
+        </div>}
+        {occupied && !compact && <div className="flex flex-wrap items-end justify-between gap-2 border-t border-koma-border-subtle pt-2">
           <div className="space-y-1 text-[10px] text-koma-secondary">
             <span className="flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
             <span className="flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
           </div>
-          <strong className="font-mono text-xs text-koma-foreground">{`R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</strong>
+          <strong className="font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
         </div>}
         {occupied && showOperationalStatus && operational.financial === 'AWAITING_PAYMENT' && operational.production.hasPreparingItems && <p className="text-[9px] text-koma-secondary">{operational.production.preparingItemCount} em preparo</p>}
         {operational.mergedIntoMesaId && <span className="flex items-center gap-1 text-[9px]"><GitMerge size={11} />Atendimento junto · M{operational.mergedIntoMesaId}</span>}

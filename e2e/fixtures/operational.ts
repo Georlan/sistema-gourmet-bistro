@@ -12,6 +12,8 @@ type Scenario = {
   printFails?: boolean;
   canonicalIdentity?: boolean;
   secondCheck?: boolean;
+  tableCount?: number;
+  transferredSecondCheck?: boolean;
 };
 
 export async function openOperationalScenario(page: Page, scenario: Scenario = {}) {
@@ -57,6 +59,7 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
   const writes: { path: string; status: string | null }[] = [];
   const checks = [check, ...(scenario.secondCheck ? [{
     ...check, id: 'check-phase7-25', numero_pedido: 25,
+    mesa_transferida_de: scenario.transferredSecondCheck ? 9 : null,
     garcom_id: 'waiter-bruno', criada_por: { nome: 'Bruno' },
     lancamentos: [{ id: 'launch-phase7-extra', display_number: '25-Z', comanda_id: 'check-phase7-25', origem: 'garcom', timestamp: createdAt }],
     itens: [{ ...items[0], id: 'item-phase7-extra', lancamento_id: 'launch-phase7-extra', preco_unit: 12, status: 'entregue' }],
@@ -91,6 +94,9 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
     else if (path === '/mesas/') body = [
       { id: 7, nome: 'Mesa 7', capacidade: 4, status: 'ocupada' },
       { id: 8, nome: 'Mesa 8', capacidade: 4, status: 'livre' },
+      ...Array.from({ length: Math.max(0, (scenario.tableCount ?? 2) - 2) }, (_, index) => ({
+        id: index + 9, nome: `Mesa ${index + 9}`, capacidade: 4, status: 'livre',
+      })),
     ];
     else if (path === '/produtos/catalogo') body = {
       categorias: [{ id: 'phase7-meals', nome: 'Pratos', destino_impressao: 'COZINHA' }],
