@@ -185,6 +185,50 @@ test('login controlado mantém submit para autenticação real do App e tema ind
   expect(state.unexpectedRequests).toEqual([]);
 });
 
+test('logout seguido de novo login renova sessão, refaz fluxo de dados e persiste no reload', async ({ page }) => {
+  const state = await openShell(page);
+  const tablesBeforeLogout = state.requests.filter(value => value === 'GET /mesas/').length;
+  const ordersBeforeLogout = state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length;
+
+  await openDrawer(page);
+  await page.getByRole('button', { name: 'LOGOUT / SAIR', exact: true }).click();
+  await expect(page.getByLabel('E-MAIL')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => ({
+    token: localStorage.getItem('koma_waiter_token'),
+    user: localStorage.getItem('koma_waiter_id'),
+    name: localStorage.getItem('koma_waiter_name'),
+    role: localStorage.getItem('koma_user_role'),
+    unrelated: localStorage.getItem('shell-unrelated-data'),
+  }))).toEqual({ token: null, user: null, name: null, role: null, unrelated: 'preserve-me' });
+
+  await page.getByLabel('E-MAIL').fill('GARCOM@KOMA.TEST');
+  await page.getByLabel('Senha').fill('fresh-login-password');
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+
+  await expect(page.locator('#mesa-card-7')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => ({
+    token: localStorage.getItem('koma_waiter_token'),
+    user: localStorage.getItem('koma_waiter_id'),
+    name: localStorage.getItem('koma_waiter_name'),
+    role: localStorage.getItem('koma_user_role'),
+  }))).toEqual({
+    token: 'waiter-shell-login-fixture-token',
+    user: 'waiter-shell-e2e',
+    name: 'Garçom Shell E2E',
+    role: 'garcom',
+  });
+  expect(state.loginBodies).toEqual([{ username: 'garcom@koma.test', password: 'fresh-login-password' }]);
+  await expect.poll(() => state.requests.filter(value => value === 'GET /mesas/').length).toBeGreaterThan(tablesBeforeLogout);
+  await expect.poll(() => state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length).toBeGreaterThan(ordersBeforeLogout);
+
+  await page.reload();
+  await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+  await expect(page.locator('#mesa-card-7')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-shell-login-fixture-token');
+  expect(await page.evaluate(() => localStorage.getItem('shell-unrelated-data'))).toBe('preserve-me');
+  expect(state.unexpectedRequests).toEqual([]);
+});
+
 test('sessão de cozinha conserva ramo alternativo do drawer e eventos exatos dos atalhos', async ({ page }) => {
   const state = await openShell(page, 'cozinha');
   const actions = [
