@@ -33,6 +33,7 @@ def test_every_http_operation_has_exactly_one_owner():
     ("POST", "/comandas/itens/{item_id}/transferir/{nova_mesa_id}", "atendimentos.transferir_item_compativel"),
     ("PUT", "/comandas/{comanda_id}/reabrir", "atendimentos.reabrir_comanda_compativel"),
     ("POST", "/comandas/lancamentos/{lancamento_id}/reimprimir", "atendimento_printing.reimprimir_lancamento_na_mesa_atual"),
+    ("POST", "/impressao", "printing.imprimir_universal"),
     ("GET", "/caixa/config-cardapio", "cardapio_config_bridge.legacy_cardapio_config_bridge"),
     ("PUT", "/caixa/config-cardapio", "caixa.atualizar_configuracao_restaurante"),
     ("POST", "/caixa/config-cardapio", "caixa.atualizar_configuracao_restaurante"),
