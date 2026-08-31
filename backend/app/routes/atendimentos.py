@@ -8,6 +8,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, joinedload
 
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 from ..database import get_db, require_tenant_id
 from ..models import Cliente, Comanda, Item, Usuario
 from ..operational_models import AtendimentoComanda
@@ -35,7 +42,6 @@ from ..services.atendimentos import (
     transfer_items_batch,
     unmerge_by_comanda,
 )
-from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..waiter_permissions import require_waiter_permission
 from ..websocket_manager import manager
 
@@ -95,26 +101,32 @@ def imprimir_recibo_mesa_com_identidade(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    """Alias temporário para o Core Universal de Impressão.
+
+    ``print_header``/``print_footer`` são aceitos apenas para não quebrar clientes
+    antigos; o layout deixa de ser customizado pela borda e passa a ser canônico.
+    """
+    del print_header, print_footer
     require_waiter_permission(db, current_user, "perm_garcom_print")
     rid = require_tenant_id()
     try:
         materialize_table_accounts_for_write(db, rid, mesa_id, actor_id=current_user.id)
-        job = enqueue_table_receipt(
+        jobs = PrintingApplicationService.request_print(
             db,
-            rid,
-            mesa_id,
-            apenas_valores=apenas_valores,
-            source_type="mesa",
-            source_id=str(mesa_id),
-            print_header=print_header,
-            print_footer=print_footer,
-            printed_by=current_user.nome,
+            PrintIntent(
+                restaurant_id=rid,
+                source_type=PrintSourceType.TABLE,
+                source_id=str(mesa_id),
+                action=PrintAction.RECEIPT,
+                values_only=apenas_valores,
+                requested_by=current_user.nome,
+            ),
         )
         db.commit()
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
-    except PrintingRequestError as exc:
+    except UniversalPrintingError as exc:
         db.rollback()
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
@@ -123,7 +135,7 @@ def imprimir_recibo_mesa_com_identidade(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao enfileirar impressão do recibo.",
         ) from exc
-    if job is None:
+    if not jobs:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="A impressão física não está disponível no plano atual.",
@@ -131,7 +143,7 @@ def imprimir_recibo_mesa_com_identidade(
     return {
         "status": "success",
         "detail": "Impressão do recibo enviada com sucesso para a fila de impressão",
-        "job_id": job.id,
+        "job_id": jobs[0].id,
     }
 
 
