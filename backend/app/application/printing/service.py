@@ -32,13 +32,21 @@ class PrintingApplicationService:
 
     @classmethod
     def request_print(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
-        if intent.source_type == PrintSourceType.ORDER:
-            return cls._request_order(db, intent)
-        if intent.source_type == PrintSourceType.TABLE:
-            return cls._request_table(db, intent)
-        if intent.source_type == PrintSourceType.CASH_SHIFT:
-            return cls._request_cash_shift(db, intent)
-        raise UniversalPrintingError("Origem de impressão inválida", status_code=422)
+        try:
+            if intent.source_type == PrintSourceType.ORDER:
+                return cls._request_order(db, intent)
+            if intent.source_type == PrintSourceType.TABLE:
+                return cls._request_table(db, intent)
+            if intent.source_type == PrintSourceType.CASH_SHIFT:
+                return cls._request_cash_shift(db, intent)
+            raise UniversalPrintingError("Origem de impressão inválida", status_code=422)
+        except UniversalPrintingError:
+            raise
+        except PrintingRequestError as exc:
+            raise UniversalPrintingError(
+                str(exc),
+                status_code=exc.status_code,
+            ) from exc
 
     @classmethod
     def _request_table(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
@@ -77,14 +85,17 @@ class PrintingApplicationService:
 
     @classmethod
     def _request_order(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
+        requested_source_id = str(intent.source_id or "").strip()
+        requested_is_launch = requested_source_id.startswith("l-")
         lancamento, comanda, source_items = cls._load_order_source(
             db,
             intent.restaurant_id,
-            intent.source_id,
+            requested_source_id,
         )
 
         # Consumo no local mantém o snapshot parcial/financeiro já validado.
-        # A entrada, porém, já é universal: a rota não escolhe formatter.
+        # Se a borda pediu uma Comanda, não a convertemos silenciosamente no
+        # primeiro Lançamento: identidade e escopo da origem são preservados.
         if cls._is_dine_in(comanda):
             mesa_id = intent.table_id or comanda.mesa_id
             if mesa_id is None:
@@ -92,11 +103,19 @@ class PrintingApplicationService:
                     "Pedido local não possui mesa para impressão",
                     status_code=409,
                 )
-            source_id = lancamento.id if lancamento is not None else comanda.id
+            source_id = (
+                lancamento.id
+                if requested_is_launch and lancamento is not None
+                else comanda.id
+            )
             source_type = (
                 "reimpressao"
                 if intent.action == PrintAction.REPRINT
-                else ("lancamento" if lancamento is not None else "pedido")
+                else (
+                    "lancamento"
+                    if requested_is_launch and lancamento is not None
+                    else "pedido"
+                )
             )
             job = enqueue_table_receipt(
                 db,
@@ -123,7 +142,7 @@ class PrintingApplicationService:
         preferences = get_print_preferences(db, intent.restaurant_id)
         source_time = (
             lancamento.timestamp
-            if lancamento is not None
+            if requested_is_launch and lancamento is not None
             else comanda.criado_em
         )
         local_time = to_operational_local_time(source_time)
@@ -137,7 +156,11 @@ class PrintingApplicationService:
             mesa=str(comanda.mesa_id) if comanda.mesa_id else "BALCAO",
             horario=(local_time.strftime("%H:%M") if local_time else ""),
             garcom_nome=garcom_nome,
-            numero_lancamento=(lancamento.id if lancamento is not None else None),
+            numero_lancamento=(
+                lancamento.id
+                if requested_is_launch and lancamento is not None
+                else None
+            ),
             itens=print_items,
             is_reprint=(intent.action == PrintAction.REPRINT),
         )
@@ -152,7 +175,10 @@ class PrintingApplicationService:
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d%H%M%S%f"
         )
-        source_id = lancamento.id if lancamento is not None else comanda.id
+        # O histórico e as chaves mantêm exatamente a origem recebida pela borda.
+        # Isso evita que uma Comanda antiga (`c-*`) vire `l-*` só porque possui
+        # Lançamentos associados.
+        source_id = requested_source_id
         for destination, payload in documents.items():
             destination_key = str(destination).strip().upper() or "COZINHA"
             if intent.idempotency_key:
@@ -234,12 +260,7 @@ class PrintingApplicationService:
                 source_items = list(comanda.itens)
                 launches = sorted(
                     list(comanda.lancamentos or []),
-                    key=lambda launch: (
-                        launch.timestamp or datetime.datetime.min.replace(
-                            tzinfo=datetime.timezone.utc
-                        ),
-                        launch.id,
-                    ),
+                    key=lambda launch: (str(launch.timestamp or ""), launch.id),
                 )
                 lancamento = launches[0] if launches else None
 
