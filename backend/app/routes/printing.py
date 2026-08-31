@@ -28,6 +28,7 @@ class UniversalPrintRequest(BaseModel):
     action: PrintAction = PrintAction.PRINT
     table_id: Optional[int] = Field(default=None, gt=0)
     values_only: bool = False
+    courier_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=180)
 
 
@@ -60,6 +61,7 @@ def _execute_print(
                 table_id=payload.table_id,
                 values_only=payload.values_only,
                 requested_by=current_user.nome,
+                courier_name=payload.courier_name,
                 idempotency_key=payload.idempotency_key,
             ),
         )
@@ -91,8 +93,9 @@ def imprimir_universal(
     """Entrada canônica para qualquer solicitação interna de impressão.
 
     A rota recebe somente intenção/origem. O Core de Impressão resolve regra,
-    snapshot, documento, destino e PrintJob. Rotas antigas podem permanecer
-    como aliases enquanto seus consumidores são migrados sem big-bang.
+    motor, snapshot, documento, destino e PrintJob. URLs antigas permanecem
+    temporariamente somente como aliases sem lógica própria enquanto o frontend
+    termina a migração.
     """
     jobs = _execute_print(db, current_user, payload)
     return {
