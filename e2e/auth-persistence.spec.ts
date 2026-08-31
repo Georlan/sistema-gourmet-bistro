@@ -67,14 +67,15 @@ test('caixa normaliza role legado pelo cargo, persiste sessão e não vaza para 
 
   await page.goto('/?view=caixa');
   await submitLogin(page, 'caixa@koma.test', 'senha-teste');
-  const persisted = await page.evaluate(() => ({
+  await expect.poll(() => page.evaluate(() => ({
     token: localStorage.getItem('koma_caixa_token'),
     role: localStorage.getItem('koma_caixa_role'),
-    operator: JSON.parse(localStorage.getItem('koma_operator_session') || 'null'),
-  }));
-  expect(persisted.token).toBe('cashier-persist-token');
-  expect(persisted.role).toBe('caixa');
-  expect(persisted.operator?.user?.role).toBe('caixa');
+    operatorRole: JSON.parse(localStorage.getItem('koma_operator_session') || 'null')?.user?.role ?? null,
+  }))).toEqual({
+    token: 'cashier-persist-token',
+    role: 'caixa',
+    operatorRole: 'caixa',
+  });
   await page.reload();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
   await page.goto('/?view=garcom');
