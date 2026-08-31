@@ -12,6 +12,12 @@ def _item(code: str, name: str, destination: str, price: float = 5.0) -> PrintIt
     )
 
 
+def _without_reprint_marker(text: str) -> str:
+    return "\n".join(
+        line for line in text.splitlines() if line.strip() != "REIMPRESSÃO"
+    )
+
+
 def test_local_only_no_destination_keeps_silent_waiter_rule():
     order = OrderPrintData(
         numero_pedido="201",
@@ -112,4 +118,4 @@ def test_reprint_uses_same_canonical_layout_with_explicit_marker():
 
     assert "REIMPRESSÃO" not in original_text
     assert "REIMPRESSÃO" in reprint_text
-    assert reprint_text.replace("REIMPRESSÃO\n", "") == original_text
+    assert _without_reprint_marker(reprint_text) == original_text
