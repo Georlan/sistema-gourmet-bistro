@@ -10,25 +10,14 @@ import { useCashierInventoryData } from './useCashierInventoryData';
 
 type BoundaryProps = Pick<
   ReturnType<typeof useCashierInventoryData>,
-  | 'setEstoqueInsumos'
-  | 'setNotasEntrada'
-  | 'setEntradasEstoque'
-  | 'setDistribuidores'
-  | 'setMovimentacoesEstoque'
-  | 'setSessoesContagemEstoque'
-  | 'setFichasTecnicas'
+  'refreshInventory' | 'setFichasTecnicas'
 > & { apiBaseUrl: string; authHeaders: Record<string, string>; showToast: CashierNotice };
 
 /** Owns stock operation forms, XML upload and mutations; all views share the inventory snapshot. */
 export function useCashierInventoryOperations({
   apiBaseUrl,
   authHeaders,
-  setEstoqueInsumos,
-  setNotasEntrada,
-  setEntradasEstoque,
-  setDistribuidores,
-  setMovimentacoesEstoque,
-  setSessoesContagemEstoque,
+  refreshInventory,
   setFichasTecnicas,
   showToast,
 }: BoundaryProps) {
@@ -74,27 +63,8 @@ export function useCashierInventoryOperations({
       const json = await res.json();
       if (!res.ok) throw new Error(json.detail || 'Erro ao importar XML.');
       setXmlUploadState((s) => ({ ...s, loading: false, result: json }));
-      // Refresh all estoque data
-      fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
-        .then((r) => r.json())
-        .then((d) => {
-          if (Array.isArray(d)) setEstoqueInsumos(d);
-        });
-      fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
-        .then((r) => r.json())
-        .then((d) => {
-          if (Array.isArray(d)) setNotasEntrada(d);
-        });
-      fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders })
-        .then((r) => r.json())
-        .then((d) => {
-          if (Array.isArray(d)) setEntradasEstoque(d);
-        });
-      fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
-        .then((r) => r.json())
-        .then((d) => {
-          if (Array.isArray(d)) setDistribuidores(d);
-        });
+      // The data owner controls reads; mutations name only the affected resources.
+      void refreshInventory('insumos', 'notas', 'entradas', 'distribuidores');
     } catch (err: any) {
       setXmlUploadState((s) => ({
         ...s,
@@ -105,31 +75,13 @@ export function useCashierInventoryOperations({
   };
 
   const refreshHistory: NonNullable<React.ComponentProps<typeof EstoqueHistoricoTab>['onRefresh']> = () => {
-    fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setEntradasEstoque(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setMovimentacoesEstoque(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setNotasEntrada(d);
-      });
+    void refreshInventory('entradas', 'movimentacoes', 'notas');
   };
 
   const refreshCounts: NonNullable<
     React.ComponentProps<typeof EstoqueContagemTab>['onRefreshContagens']
   > = () => {
-    fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setSessoesContagemEstoque(d);
-      });
+    void refreshInventory('contagens');
   };
 
   const saveRecipe: NonNullable<React.ComponentProps<typeof FichaTecnicaModal>['onSave']> = async (
@@ -168,23 +120,8 @@ export function useCashierInventoryOperations({
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail || 'Erro ao gravar entrada manual.');
-    showToast('✓ Entrada manual gravada com sucesso!');
-    // Refresh stock data
-    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setEstoqueInsumos(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setEntradasEstoque(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setMovimentacoesEstoque(d);
-      });
+    showToast('Entrada manual gravada com sucesso!');
+    void refreshInventory('insumos', 'entradas', 'movimentacoes');
   };
 
   const registerMovement: NonNullable<
@@ -197,18 +134,8 @@ export function useCashierInventoryOperations({
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail || 'Erro ao salvar movimentação.');
-    showToast('✓ Movimentação de estoque gravada!');
-    // Refresh stock data
-    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setEstoqueInsumos(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setMovimentacoesEstoque(d);
-      });
+    showToast('Movimentação de estoque gravada!');
+    void refreshInventory('insumos', 'movimentacoes');
   };
 
   const saveCountDraft: NonNullable<
@@ -225,12 +152,8 @@ export function useCashierInventoryOperations({
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail || 'Erro ao salvar rascunho de contagem.');
-    showToast('✓ Rascunho de contagem salvo com sucesso!');
-    fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setSessoesContagemEstoque(d);
-      });
+    showToast('Rascunho de contagem salvo com sucesso!');
+    void refreshInventory('contagens');
   };
 
   const confirmCount: NonNullable<React.ComponentProps<typeof ContagemEstoqueModal>['onConfirm']> = async (
@@ -247,22 +170,8 @@ export function useCashierInventoryOperations({
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail || 'Erro ao confirmar contagem.');
-    showToast('✓ Contagem confirmada e estoques ajustados!');
-    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setEstoqueInsumos(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setMovimentacoesEstoque(d);
-      });
-    fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setSessoesContagemEstoque(d);
-      });
+    showToast('Contagem confirmada e estoques ajustados!');
+    void refreshInventory('insumos', 'movimentacoes', 'contagens');
   };
   return {
     showFichaTecnicaModal,

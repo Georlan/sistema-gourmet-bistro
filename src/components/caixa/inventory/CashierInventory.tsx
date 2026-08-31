@@ -41,21 +41,15 @@ export default function CashierInventory({
 }: Props) {
   const {
     estoqueInsumos,
-    setEstoqueInsumos,
     notasEntrada,
-    setNotasEntrada,
     distribuidores,
-    setDistribuidores,
     entradasEstoque,
-    setEntradasEstoque,
     movimentacoesEstoque,
-    setMovimentacoesEstoque,
     sessoesContagemEstoque,
-    setSessoesContagemEstoque,
     fichasTecnicas,
     setFichasTecnicas,
     estoqueInsights,
-    refreshEstoqueData,
+    refreshInventory,
   } = useCashierInventoryData({ apiBaseUrl, authHeaders, activeTab, activeSubTab });
 
   const {
@@ -81,14 +75,9 @@ export default function CashierInventory({
     saveCountDraft,
     confirmCount,
   } = useCashierInventoryOperations({
+    refreshInventory,
     apiBaseUrl,
     authHeaders,
-    setEstoqueInsumos,
-    setNotasEntrada,
-    setEntradasEstoque,
-    setDistribuidores,
-    setMovimentacoesEstoque,
-    setSessoesContagemEstoque,
     setFichasTecnicas,
     showToast,
   });
@@ -120,7 +109,7 @@ export default function CashierInventory({
     setAjusteJustificativa,
     handleSaveInsumo,
     handleAjustarEstoque,
-  } = useCashierIngredientEditor({ apiBaseUrl, authHeaders, refreshEstoqueData });
+  } = useCashierIngredientEditor({ apiBaseUrl, authHeaders, refreshInventory });
 
   const {
     showNewDistModal,
@@ -139,7 +128,7 @@ export default function CashierInventory({
     setDistFormLeadTime,
     handleSaveDistribuidor,
     handleDeleteDistribuidor,
-  } = useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshEstoqueData });
+  } = useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshInventory });
 
   return (
     <>

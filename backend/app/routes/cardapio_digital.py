@@ -34,6 +34,8 @@ from ..schemas import (
     RestauranteConfigUpdate,
 )
 from ..websocket_manager import manager
+from ..services.restaurant_profile import apply_restaurant_profile_update
+from .products import ordered_categories as _ordered_categories
 
 logger = logging.getLogger("koma.cardapio_digital")
 router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Assets"])
@@ -154,20 +156,6 @@ def public_tenant_scope(
     )
     with tenant_session_scope(db, rest_id):
         yield rest_id
-
-
-def _ordered_categories(categories: list[Categoria]) -> list[Categoria]:
-    order_list = [
-        "Hambúrgueres Bovinos", "Hambúrgueres de Frango", "Hambúrgueres Suínos",
-        "Baguetes", "Pastéis Tradicionais", "Pastelões Especiais", "Pastéis Doces",
-        "Petiscos", "Combos Promocionais", "Sucos", "Refrigerantes e Águas",
-        "Cervejas", "Bebidas Quentes",
-    ]
-    order_index = {name: index for index, name in enumerate(order_list)}
-    return sorted(
-        categories,
-        key=lambda category: order_index.get(category.nome, len(order_list)),
-    )
 
 
 def _public_restaurant_payload(
@@ -584,38 +572,7 @@ def atualizar_config_cardapio_digital(
             detail="Restaurante não encontrado para atualização."
         )
 
-    if config_in.nome is not None:
-        restaurante.nome = config_in.nome
-    if config_in.slug is not None:
-        restaurante.slug = config_in.slug
-    if config_in.logo_url is not None:
-        restaurante.logo_url = config_in.logo_url
-    if config_in.banner_url is not None:
-        restaurante.banner_url = config_in.banner_url
-    if config_in.subtitulo is not None:
-        restaurante.subtitulo = config_in.subtitulo
-    if config_in.sobre_nos is not None:
-        restaurante.sobre_nos = config_in.sobre_nos
-    if config_in.endereco is not None:
-        restaurante.endereco = config_in.endereco
-    if config_in.google_maps_url is not None:
-        restaurante.google_maps_url = config_in.google_maps_url
-    if config_in.latitude is not None:
-        restaurante.latitude = config_in.latitude
-    if config_in.longitude is not None:
-        restaurante.longitude = config_in.longitude
-    if config_in.socials is not None:
-        restaurante.socials = config_in.socials
-    if config_in.horarios_funcionamento is not None:
-        restaurante.horarios_funcionamento = config_in.horarios_funcionamento
-    if config_in.formas_pagamento_aceitas is not None:
-        restaurante.formas_pagamento_aceitas = config_in.formas_pagamento_aceitas
-    if config_in.status_override is not None:
-        restaurante.status_override = config_in.status_override
-    if config_in.cor_primaria is not None:
-        restaurante.cor_primaria = config_in.cor_primaria
-    if config_in.cor_fundo is not None:
-        restaurante.cor_fundo = config_in.cor_fundo
+    apply_restaurant_profile_update(restaurante, config_in)
 
     db.commit()
     db.refresh(restaurante)

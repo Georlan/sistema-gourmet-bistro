@@ -49,12 +49,6 @@ install_sensitive_query_log_filter()
 orders.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
 cardapio.gerar_novo_numero_pedido = gerar_novo_numero_pedido_atomico
 
-# Caixa, garçom e storefront público compartilham a mesma prioridade visual de
-# categorias. Mantemos a regra canônica no módulo de produtos para evitar que
-# os canais apresentem o mesmo catálogo em ordens diferentes.
-cardapio_digital._ordered_categories = products.ordered_categories
-
-
 if os.getenv("ENVIRONMENT") != "test" and settings.SENTRY_DSN:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,

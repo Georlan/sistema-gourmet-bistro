@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { normalizeCatalogSnapshot, type CatalogCategory } from '../../../catalog/catalog';
+import { normalizeCatalogSnapshot, type CatalogSnapshot } from '../../../catalog/catalog';
 import { API_BASE_URL } from '../../../config/api';
-import { Product } from '../../../types';
 
 import type { OperationalRequestContext } from '../operationalContracts';
+const EMPTY_CATALOG: CatalogSnapshot = { produtos: [], categorias: [] };
 type BoundaryProps = Pick<OperationalRequestContext, 'handleLogout'> & {
   portal: 'garcom' | 'caixa';
   isAuthenticated: boolean;
@@ -17,26 +17,32 @@ export function useOperationalCatalog({
   isAuthenticated,
   isWsConnected,
 }: BoundaryProps) {
-  const [isProductsLoaded, setIsProductsLoaded] = useState(false);
-
-  const [liveProdutos, setLiveProdutos] = useState<Product[]>([]);
-
-  const [liveCategorias, setLiveCategorias] = useState<CatalogCategory[]>([]);
+  const tokenKey = portal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
+  const token = isAuthenticated ? localStorage.getItem(tokenKey) : null;
+  const scope = token ? `${portal}:${token}` : null;
+  const [snapshot, setSnapshot] = useState<{ scope: string; data: CatalogSnapshot } | null>(null);
+  const catalogAbortRef = useRef<AbortController | null>(null);
 
   const catalogRequestRef = useRef(0);
 
   const fetchLiveCatalog = useCallback(async () => {
+    if (!scope || !token) return;
     const requestId = ++catalogRequestRef.current;
+    catalogAbortRef.current?.abort();
+    const controller = new AbortController();
+    catalogAbortRef.current = controller;
+    const isCurrent = () => !controller.signal.aborted
+      && requestId === catalogRequestRef.current && localStorage.getItem(tokenKey) === token;
     try {
-      const tokenKey = portal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
-      const token = localStorage.getItem(tokenKey);
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       let payload: unknown;
       const catalogResponse = await fetch(`${API_BASE_URL}/produtos/catalogo`, {
         headers,
         cache: 'no-store',
+        signal: controller.signal,
       });
 
+      if (!isCurrent()) return;
       if (catalogResponse.status === 401) {
         handleLogout();
         return;
@@ -48,9 +54,10 @@ export function useOperationalCatalog({
         // Compatibilidade durante deploy gradual: o endpoint atômico pode
         // chegar alguns segundos depois do frontend novo.
         const [productsResponse, categoriesResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/produtos/`, { headers, cache: 'no-store' }),
-          fetch(`${API_BASE_URL}/produtos/categorias`, { headers, cache: 'no-store' }),
+          fetch(`${API_BASE_URL}/produtos/`, { headers, cache: 'no-store', signal: controller.signal }),
+          fetch(`${API_BASE_URL}/produtos/categorias`, { headers, cache: 'no-store', signal: controller.signal }),
         ]);
+        if (!isCurrent()) return;
         if (productsResponse.status === 401 || categoriesResponse.status === 401) {
           handleLogout();
           return;
@@ -66,28 +73,29 @@ export function useOperationalCatalog({
         throw new Error(`CATALOG_HTTP_${catalogResponse.status}`);
       }
 
-      if (requestId !== catalogRequestRef.current) return;
-      const catalog = normalizeCatalogSnapshot(payload);
-      setLiveProdutos(catalog.produtos);
-      setLiveCategorias(catalog.categorias);
-      setIsProductsLoaded(true);
+      if (!isCurrent()) return;
+      setSnapshot({ scope, data: normalizeCatalogSnapshot(payload) });
     } catch (err) {
-      if (requestId === catalogRequestRef.current) {
+      if (isCurrent()) {
         console.error('Error fetching live catalog', err);
       }
     }
-  }, [portal]);
+  }, [scope, token, tokenKey, handleLogout]);
 
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     fetchLiveCatalog();
-    if (isWsConnected) return;
+    const cancel = () => {
+      ++catalogRequestRef.current;
+      catalogAbortRef.current?.abort();
+    };
+    if (isWsConnected) return cancel;
     const interval = setInterval(() => {
       fetchLiveCatalog();
     }, 40000); // refresh every 40s if not connected to WS
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); cancel(); };
   }, [isAuthenticated, isWsConnected, fetchLiveCatalog]);
 
   useEffect(() => {
@@ -109,5 +117,12 @@ export function useOperationalCatalog({
       window.removeEventListener('offline', handleOffline);
     };
   }, [fetchLiveCatalog]);
-  return { isProductsLoaded, liveProdutos, liveCategorias, fetchLiveCatalog, isOnline };
+  const catalog = snapshot?.scope === scope ? snapshot.data : null;
+  const data = catalog ?? EMPTY_CATALOG;
+  return {
+    isProductsLoaded: catalog !== null,
+    liveProdutos: data.produtos,
+    liveCategorias: data.categorias,
+    fetchLiveCatalog, isOnline,
+  };
 }

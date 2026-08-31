@@ -1,13 +1,13 @@
 import { useState } from 'react';
+import type { useCashierInventoryData } from './useCashierInventoryData';
 
-type BoundaryProps = {
+type BoundaryProps = Pick<ReturnType<typeof useCashierInventoryData>, 'refreshInventory'> & {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  refreshEstoqueData: () => void;
 };
 
 /** Owns supplier drafts and mutations; inventory consumes one shared refresh callback. */
-export function useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshEstoqueData }: BoundaryProps) {
+export function useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshInventory }: BoundaryProps) {
   const [showNewDistModal, setShowNewDistModal] = useState(false);
 
   const [showEditDistModal, setShowEditDistModal] = useState(false);
@@ -48,7 +48,7 @@ export function useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshEstoq
         alert(isNew ? 'Distribuidor cadastrado com sucesso!' : 'Distribuidor atualizado com sucesso!');
         setShowNewDistModal(false);
         setShowEditDistModal(false);
-        refreshEstoqueData();
+        void refreshInventory('distribuidores');
       } else {
         const err = await res.json();
         alert(err.detail || 'Erro ao salvar distribuidor.');
@@ -68,7 +68,7 @@ export function useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshEstoq
       });
       if (res.ok) {
         alert('Distribuidor excluído com sucesso!');
-        refreshEstoqueData();
+        void refreshInventory('distribuidores');
       } else {
         const err = await res.json();
         alert(err.detail || 'Erro ao excluir distribuidor.');

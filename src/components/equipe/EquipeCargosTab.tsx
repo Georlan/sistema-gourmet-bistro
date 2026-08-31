@@ -33,19 +33,10 @@ interface EquipeCargosTabProps {
   authHeaders: Record<string, string>;
 }
 
+import { canonicalRoleSlug, ROLE_META, ROLE_ORDER } from './teamRoles';
+
 type PermissionKey = keyof CargoPermissoesItem['permissoes'];
 
-const ROLE_ALIASES: Record<string, string> = { operador_caixa: 'caixa' };
-const ROLE_ORDER = ['admin', 'gerente', 'caixa', 'garcom', 'atendente', 'cozinha', 'motoboy'];
-const ROLE_DESCRIPTIONS: Record<string, string> = {
-  admin: 'Configura toda a operação e possui acesso completo.',
-  gerente: 'Acompanha resultados, caixa e gestão da equipe.',
-  caixa: 'Opera pedidos, recebimentos e rotinas do caixa.',
-  garcom: 'Registra pedidos e acompanha o atendimento do salão.',
-  atendente: 'Registra e acompanha pedidos da operação.',
-  cozinha: 'Visualiza somente o fluxo de preparo.',
-  motoboy: 'Acompanha as entregas atribuídas.',
-};
 
 const PERMISSIONS: { key: PermissionKey; label: string; icon: React.ElementType }[] = [
   { key: 'pedidos', label: 'Pedidos', icon: ShoppingCart },
@@ -78,7 +69,7 @@ async function loadRoles(apiBaseUrl: string, authorization: string | undefined, 
 function canonicalizeRoles(items: CargoPermissoesItem[]): CargoPermissoesItem[] {
   const roles = new Map<string, CargoPermissoesItem>();
   items.forEach((item) => {
-    const slug = ROLE_ALIASES[item.slug] || item.slug;
+    const slug = canonicalRoleSlug(item.slug);
     const current = roles.get(slug);
     if (!current) {
       roles.set(slug, { ...item, slug, label: slug === 'caixa' ? 'Operador de caixa' : item.label });
@@ -183,7 +174,7 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
                 <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3">
                   <div className="min-w-0">
                     <h2 className="font-serif text-sm font-bold text-koma-foreground">{cargo.label}</h2>
-                    <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">{ROLE_DESCRIPTIONS[cargo.slug] || 'Função personalizada da operação.'}</p>
+                    <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">{ROLE_META[cargo.slug]?.permissionDescription || 'Função personalizada da operação.'}</p>
                   </div>
                   <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 font-mono text-[9px] font-bold text-koma-foreground">
                     <Users size={11} /> {cargo.total_funcionarios}
