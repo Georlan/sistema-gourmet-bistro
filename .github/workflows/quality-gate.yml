@@ -92,7 +92,7 @@ jobs:
       - name: Validate deferred loading against production assets
         run: |
           npm run build
-          KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4285 npm run test:e2e -- e2e/cashier-loading.spec.ts e2e/cashier-boundaries.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+          KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4285 npm run test:e2e -- e2e/cashier-loading.spec.ts e2e/cashier-boundaries.spec.ts e2e/operational-app-owners.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
 
       - name: Upload browser diagnostics
         if: failure()

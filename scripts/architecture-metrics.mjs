@@ -61,6 +61,11 @@ const stats = file => {
   return { file, lines: (text.match(/\n/g) || []).length, bytes: Buffer.byteLength(text), calls };
 };
 const files = [root, 'src/App.tsx', 'src/domain.ts', 'AGENTS.md', '.agents/AGENTS.md',
+  'src/components/app/operationalContracts.ts',
+  'src/components/app/data/useOperationalTables.ts',
+  'src/components/app/data/useOperationalCatalog.ts',
+  'src/components/app/data/useOperationalOrders.ts',
+  'src/components/app/drafts/useOperationalDrafts.ts',
   ...ownerPaths, ...domainPaths].map(stats).filter(Boolean);
 const taskEntries = {
   checkout: read(ownerBase + 'checkout/useCheckoutController.ts') === null ? [root] : [

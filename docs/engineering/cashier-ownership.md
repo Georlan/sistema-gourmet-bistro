@@ -1,6 +1,7 @@
 # Caixa: ownership e medidas após o hardening
 
 Continuação atual: [fronteiras locais, navegação e rotas](cashier-boundaries.md).
+Dados compartilhados entre papéis: [owners operacionais do App](operational-app-owners.md).
 
 Evolução após `b4e1473`: [módulos administrativos, PDV e carregamento sob demanda](cashier-loading.md).
 As medidas abaixo registram o primeiro bloco de ownership; os limites e as medidas atuais estão no novo documento.

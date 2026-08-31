@@ -363,14 +363,17 @@ def test_smartpos_pending_state_opens_checkout_with_safe_recovery_instead_of_dea
 def test_waiter_cart_customization_edits_selected_quantity_without_appending_a_duplicate():
     menu = source("src/components/MenuPanel.tsx")
     app = source("src/App.tsx")
+    drafts = source("src/components/app/drafts/useOperationalDrafts.ts")
 
     assert "setEditingDraftItemIds(matchingDraftItems.map((item) => item.id))" in menu
     assert "matchingDraftItems.reduce((total, item) => total + (item.quantidade || 1), 0)" in menu
     assert "onEditDraftItems(editingDraftItemIds" in menu
     assert "editingDraftItemIds.length > 0 ? 'Salvar alterações' : 'Adicionar ao Pedido'" in menu
     assert "onUpdateDraftItem(compatibleDraftItem.id" in menu
-    assert "if (item.id !== primaryId) return []" in app
-    assert "quantidade: normalizedQuantity" in app
+    assert "useOperationalDrafts(" in app
+    assert "handleEditDraftItems(selectedTable.id, draftItemIds, fields)" in app
+    assert "if (item.id !== primaryId) return []" in drafts
+    assert "quantidade: normalizedQuantity" in drafts
 
 
 def test_cashier_low_desktop_height_compacts_non_operational_chrome():

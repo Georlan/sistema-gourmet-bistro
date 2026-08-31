@@ -3,36 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { KomaLogo } from './components/KomaLogo';
-import { OperationalLogin } from './components/auth/OperationalLogin';
-import { OperationalDrawer } from './components/app/OperationalDrawer';
-import { SlidersHorizontal } from 'lucide-react';
-import { Table, Order, DraftItem, AppSettings, AppRole, Product, CaixaTurnoResumo } from './types';
-import { RESTAURANT_CONFIG } from './data';
-import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalog';
-import { getTableTotal } from './domain';
-import { deriveTableOperationalState } from './domain/operationalState';
-import { readCheckLaunchIdentities } from './domain/orderIdentity';
-import { MesasView } from './components/mesas/MesasView';
-import { MesaDetailsModal } from './components/MesaDetailsModal';
 import clsx from 'clsx';
+import { SlidersHorizontal } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
+import { useOperationalOrders } from './components/app/data/useOperationalOrders';
+import { useOperationalTables } from './components/app/data/useOperationalTables';
+import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
 import { KitchenPanel } from './components/KitchenPanel';
+import { KomaLogo } from './components/KomaLogo';
+import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { AppRouteBoundary } from './components/app/AppRouteBoundary';
+import { OperationalDrawer } from './components/app/OperationalDrawer';
+import { OperationalLogin } from './components/auth/OperationalLogin';
+import { MesasView } from './components/mesas/MesasView';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
-import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
+import { RESTAURANT_CONFIG } from './data';
+import { deriveTableOperationalState } from './domain/operationalState';
+import { AppRole, AppSettings, CaixaTurnoResumo } from './types';
 import { authFetch, authRequestErrorMessage } from './utils/authRequest';
-import { parseBackendTimestamp } from './utils/dateTime';
-import {
-  clearPersistedOperationKey,
-  getOrCreatePersistedOperationKey,
-  operationalFetch,
-} from './utils/operationalRequest';
+import { getOperatorSession, saveOperatorSession } from './utils/authSession';
 import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
+import { operationalFetch } from './utils/operationalRequest';
 
 // Route modules have stable identities and are downloaded only when selected.
-// Authentication and all operational controllers remain in App.
+// Authentication stays in App; shared data and draft owners remain mounted here.
 const CardapioPage = React.lazy(() => import('./cardapio/CardapioPage'));
 const LandingPage = React.lazy(() => import('./landing/LandingPage'));
 const SuperAdminGate = React.lazy(() => import('./super-admin/SuperAdminGate').then(module => ({ default: module.SuperAdminGate })));
@@ -51,7 +47,6 @@ const CashierLoading = () => (
   </div>
 );
 
-const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
 const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
 const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
 const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
@@ -59,9 +54,6 @@ const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
 
-const parseBackendDateTime = (dateStr: any): number => {
-  return parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
-};
 
 const aplicarMascaraTelefoneInput = (valor: string) => {
   const apenasNumeros = valor.replace(/\D/g, '').slice(0, 11);
@@ -485,112 +477,19 @@ export default function App() {
   }, []);
 
   // 1.5. Dynamic Salon Tables State and Fetcher
-  const [salonTables, setSalonTables] = useState<Table[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const { salonTables, setSalonTables, fetchTables, handleCreateMesa, handleUpdateMesa, handleDeleteMesa } = useOperationalTables({ setFetchError, getAuthHeaders, handleLogout, showToast });
 
-  const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
-  const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
-  const targetedOrderRequestRef = useRef<Record<string, number>>({});
-  const optimisticItemStatusRef = useRef<Record<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>>({});
   // Prevents duplicate API calls when clicking Pronto/Entregar rapidly
   const inflightItemIdsRef = useRef<Set<string>>(new Set());
   // Prevents duplicate API calls for critical table operations (close, transfer, merge)
   const inflightTableOpsRef = useRef<Set<string>>(new Set());
 
-
-  const fetchTables = async () => {
-    if (fetchTablesAbortControllerRef.current) {
-      fetchTablesAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    fetchTablesAbortControllerRef.current = controller;
-
-    try {
-      setFetchError(null);
-      const res = await fetch(`${API_BASE_URL}/mesas/`, { 
-        headers: getAuthHeaders(),
-        signal: controller.signal
-      });
-      if (res.status === 401) {
-        handleLogout();
-        return;
-      }
-      if (res.ok) {
-        const data = await res.json();
-        setSalonTables(data);
-        setIsTablesLoaded(true);
-      } else {
-        setFetchError(`Erro HTTP mesas ${res.status}: ${res.statusText}`);
-      }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error("Error fetching tables", err);
-        setFetchError(err.message || String(err));
-      }
-    }
-  };
-
   // Create Mesa
-  const handleCreateMesa = async (id: number, capacidade: number, nome?: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/mesas/`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ id, capacidade, nome })
-      });
-      if (res.ok) {
-        await fetchTables();
-      } else {
-        const payload = await res.json().catch(() => null);
-        throw new Error(payload?.detail || res.statusText || 'Não foi possível criar a mesa.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      showToast(`Erro ao criar mesa: ${err.message || 'falha de conexão'}`, 'error');
-      throw err;
-    }
-  };
 
   // Update Mesa
-  const handleUpdateMesa = async (id: number, capacidade?: number, nome?: string) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/mesas/${id}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ capacidade, nome })
-      });
-      if (res.ok) {
-        await fetchTables();
-      } else {
-        const payload = await res.json().catch(() => null);
-        throw new Error(payload?.detail || res.statusText || 'Não foi possível atualizar a mesa.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      showToast(`Erro ao atualizar mesa: ${err.message || 'falha de conexão'}`, 'error');
-      throw err;
-    }
-  };
 
   // Delete Mesa
-  const handleDeleteMesa = async (id: number) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/mesas/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders()
-      });
-      if (res.ok) {
-        await fetchTables();
-      } else {
-        const payload = await res.json().catch(() => null);
-        throw new Error(payload?.detail || res.statusText || 'Não foi possível excluir a mesa.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      showToast(`Erro ao excluir mesa: ${err.message || 'falha de conexão'}`, 'error');
-      throw err;
-    }
-  };
 
   // Editable Restaurant Name State
   const [restaurantName, setRestaurantName] = useState<string>(() => {
@@ -602,121 +501,15 @@ export default function App() {
 
   // Pre-loading states for smooth intro transition
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
-  const [isProductsLoaded, setIsProductsLoaded] = useState(false);
-  const [isOrdersLoaded, setIsOrdersLoaded] = useState(false);
-  const [isTablesLoaded, setIsTablesLoaded] = useState(false);
+  const { isProductsLoaded, liveProdutos, liveCategorias, fetchLiveCatalog } = useOperationalCatalog({ portal, handleLogout, isAuthenticated, isWsConnected });
 
   // 2. Live products loaded from backend (includes ativo field for availability blocking)
-  const [liveProdutos, setLiveProdutos] = useState<Product[]>([]);
-  const [liveCategorias, setLiveCategorias] = useState<CatalogCategory[]>([]);
-  const catalogRequestRef = useRef(0);
-
-  const fetchLiveCatalog = useCallback(async () => {
-    const requestId = ++catalogRequestRef.current;
-    try {
-      const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
-      const token = localStorage.getItem(tokenKey);
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      let payload: unknown;
-      const catalogResponse = await fetch(`${API_BASE_URL}/produtos/catalogo`, {
-        headers,
-        cache: 'no-store',
-      });
-
-      if (catalogResponse.status === 401) {
-        handleLogout();
-        return;
-      }
-
-      if (catalogResponse.ok) {
-        payload = await catalogResponse.json();
-      } else if (catalogResponse.status === 404 || catalogResponse.status === 405) {
-        // Compatibilidade durante deploy gradual: o endpoint atômico pode
-        // chegar alguns segundos depois do frontend novo.
-        const [productsResponse, categoriesResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/produtos/`, { headers, cache: 'no-store' }),
-          fetch(`${API_BASE_URL}/produtos/categorias`, { headers, cache: 'no-store' }),
-        ]);
-        if (productsResponse.status === 401 || categoriesResponse.status === 401) {
-          handleLogout();
-          return;
-        }
-        if (!productsResponse.ok || !categoriesResponse.ok) {
-          throw new Error(`CATALOG_HTTP_${productsResponse.status}_${categoriesResponse.status}`);
-        }
-        payload = {
-          produtos: await productsResponse.json(),
-          categorias: await categoriesResponse.json(),
-        };
-      } else {
-        throw new Error(`CATALOG_HTTP_${catalogResponse.status}`);
-      }
-
-      if (requestId !== catalogRequestRef.current) return;
-      const catalog = normalizeCatalogSnapshot(payload);
-      setLiveProdutos(catalog.produtos);
-      setLiveCategorias(catalog.categorias);
-      setIsProductsLoaded(true);
-    } catch (err) {
-      if (requestId === catalogRequestRef.current) {
-        console.error("Error fetching live catalog", err);
-      }
-    }
-  }, [portal]);
-
-  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    fetchLiveCatalog();
-    if (isWsConnected) return;
-    const interval = setInterval(() => {
-      fetchLiveCatalog();
-    }, 40000); // refresh every 40s if not connected to WS
-    return () => clearInterval(interval);
-  }, [isAuthenticated, isWsConnected, fetchLiveCatalog]);
-
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      fetchLiveCatalog();
-      window.dispatchEvent(new Event('koma_orders_updated'));
-      window.dispatchEvent(new Event('koma_customers_updated'));
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [fetchLiveCatalog]);
 
   // 2b. Orders loaded from API
-  const [orders, setOrders] = useState<Order[]>([]);
-  const ordersRef = useRef<Order[]>(orders);
-  useEffect(() => {
-    ordersRef.current = orders;
-  }, [orders]);
 
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const isSubmittingRef = useRef<boolean>(false); // Synchronous guard against double-click race condition
+  const { orders, setOrders, ordersRef, fetchOrdersFromAPI, fetchOrderByIdFromAPI, handleOptimisticUpdateItemStatus, handleOptimisticAddOrder, handleTransferTableOptimistic } = useOperationalOrders({ liveProdutos, getAuthHeaders, handleLogout, setFetchError });
 
-  const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_DRAFTS_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading drafts from localStorage', e);
-      }
-    }
-    return {};
-  });
+   // Synchronous guard against double-click race condition
 
   // 3. App View Settings
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -764,6 +557,8 @@ export default function App() {
   }, [selectedTableId, portal]);
 
   // 5. Live clock tracker to update permanency timers automatically every 30 seconds (reduces re-renders)
+  const { isSubmitting, drafts, getDraftItems, handleAddToDraft, handleRemoveFromDraft, handleUpdateDraftItem, handleEditDraftItems, handleSubmitDraft } = useOperationalDrafts({ activeWaiterNome, orders, setOrders, activeWaiterId, setSelectedTableId, showToast, fetchOrdersFromAPI, getAuthHeaders });
+
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
   useEffect(() => {
@@ -1109,10 +904,6 @@ export default function App() {
   // Synchronized via polling instead of localStorage
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_DRAFTS_KEY, JSON.stringify(drafts));
-  }, [drafts]);
-
-  useEffect(() => {
     localStorage.setItem(LOCAL_STORAGE_SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
@@ -1150,230 +941,13 @@ export default function App() {
     };
   }, [selectedTableId]);
 
-
   // Waiter persistence managed by login state
 
   // Get draft items for a waiter at a specific table
-  const getDraftItems = (mesaId: number) => {
-    return drafts[mesaId] || [];
-  };
 
   // 7. Core Order Actions
-  const handleAddToDraft = (mesaId: number, product: Product, quantity = 1, observacao = '', clienteNome = '') => {
-    setDrafts(prev => {
-      const existing = prev[mesaId] || [];
-      const defaultClientName = clienteNome || (existing.length > 0 ? existing[0].clienteNome : '');
-
-      const newItem: DraftItem = {
-        id: `draft-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
-        produtoId: product.id,
-        nome: product.nome,
-        preco: product.preco,
-        observacao: observacao,
-        clienteNome: defaultClientName,
-        quantidade: quantity
-      };
-
-      return {
-        ...prev,
-        [mesaId]: [...existing, newItem]
-      };
-    });
-  };
-
-  const handleRemoveFromDraft = (mesaId: number, draftItemId: string) => {
-    setDrafts(prev => {
-      const existing = prev[mesaId] || [];
-      return {
-        ...prev,
-        [mesaId]: existing.filter(item => item.id !== draftItemId)
-      };
-    });
-  };
-
-  const handleUpdateDraftItem = (mesaId: number, draftItemId: string, fields: Partial<DraftItem>) => {
-    setDrafts(prev => {
-      const existing = prev[mesaId] || [];
-      return {
-        ...prev,
-        [mesaId]: existing.map(item => item.id === draftItemId ? { ...item, ...fields } : item)
-      };
-    });
-  };
-
-  const handleEditDraftItems = (
-    mesaId: number,
-    draftItemIds: string[],
-    fields: Pick<DraftItem, 'quantidade' | 'observacao' | 'clienteNome'>,
-  ) => {
-    const selectedIds = new Set(draftItemIds);
-    if (selectedIds.size === 0) return;
-
-    setDrafts((prev) => {
-      const existing = prev[mesaId] || [];
-      const primaryIndex = existing.findIndex((item) => selectedIds.has(item.id));
-      if (primaryIndex < 0) return prev;
-
-      const primaryId = existing[primaryIndex].id;
-      const normalizedQuantity = Math.max(1, Math.floor(fields.quantidade || 1));
-      const nextItems = existing.flatMap((item) => {
-        if (!selectedIds.has(item.id)) return [item];
-        if (item.id !== primaryId) return [];
-        return [{
-          ...item,
-          quantidade: normalizedQuantity,
-          observacao: fields.observacao,
-          clienteNome: fields.clienteNome,
-        }];
-      });
-
-      return {
-        ...prev,
-        [mesaId]: nextItems,
-      };
-    });
-  };
-
-  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
-    launchIdentities: readCheckLaunchIdentities(comanda),
-    id: comanda.id,
-    numeroPedido: Number.isFinite(Number(comanda.numero_pedido)) ? Number(comanda.numero_pedido) : undefined,
-    origemOperacional: (() => {
-      const origins = (Array.isArray(comanda.lancamentos) ? comanda.lancamentos : [])
-        .map((launch: any) => String(launch?.origem || '').toLowerCase());
-      if (origins.includes('smartpos')) return 'smartpos';
-      if (origins.includes('cardapio')) return 'cardapio';
-      if (origins.includes('caixa')) return 'caixa';
-      if (origins.includes('garcom')) return 'garcom';
-      return 'desconhecida';
-    })(),
-    clienteId: comanda.cliente_id || comanda.cliente?.id || null,
-    clientePhone: comanda.cliente?.telefone || comanda.delivery_telefone || comanda.telefone || null,
-    mesaId: comanda.mesa_id || 0,
-    garcomId: comanda.garcom_id,
-    garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
-    timestamp: parseBackendDateTime(comanda.criado_em),
-    tipo: comanda.tipo,
-    valorPago: comanda.valor_pago || 0,
-    identificador: comanda.identificador || null,
-    statusComanda: comanda.status_comanda || null,
-    deliveryStatus: comanda.delivery_status || null,
-    mesaOrigemId: comanda.mesa_origem_id || null,
-    mesaTransferidaDe: comanda.mesa_transferida_de || null,
-    itens: (comanda.itens || [])
-      .filter((item: any) => item.status !== 'cancelado')
-      .map((item: any) => {
-        const opt = optimisticItemStatusRef.current[item.id];
-        let effectiveStatus = item.status;
-        if (opt && (now - opt.ts < 8000)) {
-          if (opt.status === item.status) {
-            delete optimisticItemStatusRef.current[item.id];
-          } else {
-            effectiveStatus = opt.status;
-          }
-        }
-        return {
-          id: item.id,
-          produtoId: item.produto_id,
-          nome: item.produto?.nome || liveProdutos.find(p => p.id === item.produto_id)?.nome || `Item #${item.produto_id}`,
-          preco: item.preco_unit,
-          observacao: item.observacao || '',
-          clienteNome: item.cliente_nome || 'Consumo Geral',
-          status: effectiveStatus,
-          lancamentoId: item.lancamento_id
-        };
-      })
-  });
 
   // Load active orders from backend API
-  const fetchOrdersFromAPI = async () => {
-    if (fetchOrdersAbortControllerRef.current) {
-      fetchOrdersAbortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    fetchOrdersAbortControllerRef.current = controller;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/comandas/detalhes/todos?fechada=false`, { 
-        headers: getAuthHeaders(),
-        signal: controller.signal
-      });
-      if (response.status === 401) {
-        handleLogout();
-        return;
-      }
-      if (!response.ok) {
-        console.error("Failed to fetch comandas from backend");
-        setFetchError(`Erro HTTP comandas ${response.status}: ${response.statusText}`);
-        return;
-      }
-      const comandas = await response.json();
-      const now = Date.now();
-
-      const mappedOrders = comandas.map((comanda: any) => mapBackendComandaToOrder(comanda, now));
-
-      setOrders(prevOrders => {
-        const tempOrders = prevOrders.filter(p =>
-          String(p.id).startsWith('temp-') && !mappedOrders.some(m => m.mesaId > 0 && m.mesaId === p.mesaId)
-        );
-        return [...mappedOrders, ...tempOrders];
-      });
-      setIsOrdersLoaded(true);
-
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error("Connection error to backend:", err);
-        setFetchError(`Erro de conexão comandas: ${err.message || String(err)}`);
-      }
-    }
-  };
-
-  const fetchOrderByIdFromAPI = async (comandaId: string) => {
-    const normalizedId = String(comandaId || '').trim();
-    if (!normalizedId) {
-      fetchOrdersFromAPI();
-      return;
-    }
-
-    const requestVersion = (targetedOrderRequestRef.current[normalizedId] || 0) + 1;
-    targetedOrderRequestRef.current[normalizedId] = requestVersion;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(normalizedId)}`, {
-        headers: getAuthHeaders(),
-        cache: 'no-store'
-      });
-      if (response.status === 401) {
-        handleLogout();
-        return;
-      }
-      if (response.status === 404) {
-        if (targetedOrderRequestRef.current[normalizedId] === requestVersion) {
-          setOrders(prevOrders => prevOrders.filter(order => String(order.id) !== normalizedId));
-        }
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const mappedOrder = mapBackendComandaToOrder(await response.json());
-      if (targetedOrderRequestRef.current[normalizedId] !== requestVersion) return;
-
-      setOrders(prevOrders => {
-        const nextOrders = prevOrders.filter(order =>
-          String(order.id) !== String(mappedOrder.id)
-          && !(String(order.id).startsWith('temp-') && mappedOrder.mesaId > 0 && order.mesaId === mappedOrder.mesaId)
-        );
-        return [...nextOrders, mappedOrder].sort((a, b) => a.timestamp - b.timestamp);
-      });
-      setIsOrdersLoaded(true);
-      setFetchError(null);
-    } catch (err) {
-      console.warn('Falha no refresh direcionado da comanda; reconciliando snapshot completo.', err);
-      fetchOrdersFromAPI();
-    }
-  };
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -1511,172 +1085,6 @@ export default function App() {
       setLoginError(authRequestErrorMessage(err, "Erro ao conectar ao servidor do backend."));
     } finally {
       setIsLoggingIn(false);
-    }
-  };
-
-
-
-  const handleSubmitDraft = async (mesaId: number, orderType: 'Consumo no Local' | 'Retirada' | 'Entrega' = 'Consumo no Local') => {
-    if (isSubmittingRef.current) return; // Synchronous ref guard (faster than useState)
-    const items = drafts[mesaId] || [];
-    if (items.length === 0) return;
-
-    isSubmittingRef.current = true;
-    setIsSubmitting(true);
-
-    // ─────────────────────────────────────────────────────────────────
-    // 0ms OPTIMISTIC UPDATE: Limpar o carrinho e adicionar itens localmente
-    // ─────────────────────────────────────────────────────────────────
-    const optimisticItems: any[] = items.flatMap(item => {
-      const qty = item.quantidade || 1;
-      return Array.from({ length: qty }, (_, i) => ({
-        id: `opt_${Date.now()}_${i}_${item.produtoId}`,
-        produtoId: item.produtoId,
-        nome: item.nome,
-        preco: item.preco,
-        observacao: item.observacao,
-        clienteNome: item.clienteNome.trim() || 'Consumo Geral',
-        status: 'preparando' as const,
-        pago: false,
-        garcomNome: activeWaiterNome,
-      }));
-    });
-
-    const existingComanda = orders.find(o => o.mesaId === mesaId);
-    let optimisticComandaId = existingComanda?.id;
-
-    if (existingComanda) {
-      // Adiciona itens na comanda existente
-      setOrders(prev => prev.map(o =>
-        o.mesaId === mesaId
-          ? { ...o, itens: [...o.itens, ...optimisticItems] }
-          : o
-      ));
-    } else {
-      // Cria comanda nova otimista
-      optimisticComandaId = `opt_comanda_${Date.now()}`;
-      const optimisticOrder: Order = {
-        id: optimisticComandaId,
-        mesaId,
-        garcomId: activeWaiterId,
-        garcomNome: activeWaiterNome,
-        timestamp: Date.now(),
-        itens: optimisticItems,
-        tipo: orderType,
-        valorPago: 0,
-      };
-      setOrders(prev => [...prev, optimisticOrder]);
-    }
-
-    // Limpa carrinho e fecha modal da mesa imediatamente (0ms) para voltar ao mapa de mesas
-    setDrafts(prev => {
-      const copy = { ...prev };
-      delete copy[mesaId];
-      return copy;
-    });
-    setSelectedTableId(null);
-
-    // Exibe toast informativo inicial
-    showToast('Enviando pedido para a cozinha...', 'info');
-
-    const restoreDraftAndNotify = (errorMessage?: string) => {
-      // Restaura o rascunho da mesa no estado e no localStorage
-      setDrafts(prev => ({
-        ...prev,
-        [mesaId]: items
-      }));
-      // Reabre a mesa com o carrinho preservado para o garçom reenviar com 1 clique
-      setSelectedTableId(mesaId);
-      // Rollback dos itens otimistas na memória
-      fetchOrdersFromAPI();
-      // Notifica o garçom
-      showToast(
-        errorMessage
-          ? `${errorMessage}. Pedido preservado na mesa.`
-          : 'Falha de conexão. Pedido preservado na mesa para reenviar.',
-        'error'
-      );
-    };
-
-    try {
-      const activeComanda = orders.find(o => o.mesaId === mesaId);
-      let comandaId = activeComanda?.id;
-
-      if (!comandaId) {
-        const openRes = await operationalFetch(`${API_BASE_URL}/comandas/`, {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            mesa_id: mesaId,
-            garcom_id: activeWaiterId,
-            tipo: orderType
-          })
-        });
-        if (!openRes.ok) {
-          const errData = await openRes.json().catch(() => null);
-          restoreDraftAndNotify(errData?.detail || `Falha ao abrir comanda (${openRes.statusText})`);
-          setIsSubmitting(false);
-          return;
-        }
-        const newComanda = await openRes.json();
-        comandaId = newComanda.id;
-      }
-
-      const launchItems = items.flatMap(item => {
-        const expanded = [];
-        const qty = item.quantidade || 1;
-        for (let i = 0; i < qty; i++) {
-          expanded.push({
-            produto_id: item.produtoId,
-            observacao: item.observacao,
-            cliente_nome: item.clienteNome.trim() || 'Consumo Geral'
-          });
-        }
-        return expanded;
-      });
-      const launchStorageKey = `koma_pending_launch_${comandaId}`;
-      const launchFingerprint = JSON.stringify({
-        comandaId,
-        garcomId: activeWaiterId,
-        itens: launchItems,
-      });
-      const launchIdempotencyKey = getOrCreatePersistedOperationKey(
-        launchStorageKey,
-        launchFingerprint,
-        'table-launch',
-      );
-      const launchRes = await operationalFetch(`${API_BASE_URL}/comandas/${comandaId}/lancamentos`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          garcom_id: activeWaiterId,
-          idempotency_key: launchIdempotencyKey,
-          itens: launchItems,
-        })
-      });
-      if (!launchRes.ok) {
-        const errData = await launchRes.json().catch(() => null);
-        restoreDraftAndNotify(errData?.detail || `Falha ao lançar itens (${launchRes.statusText})`);
-        setIsSubmitting(false);
-        return;
-      }
-
-      const launchData = await launchRes.json();
-      clearPersistedOperationKey(launchStorageKey, launchIdempotencyKey);
-      if (launchData.dispensado_impressao) {
-        showToast('Pedido registrado (sem impressão física).', 'info');
-      } else {
-        showToast('Pedido lançado para a cozinha com sucesso.', 'success');
-      }
-
-      // Sync real com dados do servidor (substitui itens otimistas pelos reais com IDs corretos)
-      fetchOrdersFromAPI();
-    } catch (err) {
-      console.error(err);
-      restoreDraftAndNotify('Erro de conexão com o servidor.');
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
     }
   };
 
@@ -1861,27 +1269,8 @@ export default function App() {
   };
 
   // Optimistic Item Status Update (Instant 0ms UI response)
-  const handleOptimisticUpdateItemStatus = (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => {
-    const itemIds = Array.isArray(itemId) ? itemId : [itemId];
-    const now = Date.now();
-    itemIds.forEach(id => {
-      optimisticItemStatusRef.current[id] = { status: newStatus, ts: now };
-    });
-    setOrders(prevOrders =>
-      prevOrders.map(order => ({
-        ...order,
-        itens: order.itens.map(item =>
-          itemIds.includes(item.id) ? { ...item, status: newStatus } : item
-        )
-      }))
-    );
-  };
 
   // Optimistic Add Order (Instant 0ms UI response for PDV)
-  const handleOptimisticAddOrder = (newOrder: Order) => {
-    setOrders(prev => [newOrder, ...prev]);
-  };
-
 
   // Optimistic Payment Removal (Instant 0ms UI response)
   const handleRemovePendingPaymentOptimistic = (pagamentoId: string) => {
@@ -1889,11 +1278,6 @@ export default function App() {
   };
 
   // Optimistic Table Transfer (Instant 0ms UI response)
-  const handleTransferTableOptimistic = (sourceTableId: number, targetTableId: number) => {
-    setOrders(prev =>
-      prev.map(o => o.mesaId === sourceTableId ? { ...o, mesaId: targetTableId } : o)
-    );
-  };
 
   // 11. Delivery (Waiter serves a ready dish)
   const handleDeliverItem = async (orderId: string, itemId: string) => {
@@ -2108,8 +1492,6 @@ export default function App() {
     () => selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [],
     [orders, selectedTable],
   );
-
-
 
   if (!isAuthenticated) {
     return (
