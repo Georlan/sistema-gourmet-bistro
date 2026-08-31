@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { ArrowUpRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
@@ -143,14 +143,14 @@ export default function CashierReports({
       {activeSubTab === 'desempenho' && (
         <div className="space-y-6">
           {/* Header metrics boxes */}
-          <div className={clsx('grid', 'grid-cols-2', 'md:grid-cols-4', 'gap-4')}>
-            <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4', 'rounded-2xl')}>
+          <div className={"grid grid-cols-2 md:grid-cols-4 gap-4"}>
+            <div className={"bg-koma-card border border-koma-border p-4 rounded-2xl"}>
               <span
-                className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-koma-subtle', 'block')}
+                className={"text-[9px] uppercase tracking-wider font-bold text-koma-subtle block"}
               >
                 Líquido de Hoje
               </span>
-              <strong className={clsx('text-xl', 'text-koma-foreground', 'font-mono', 'block', 'mt-1')}>
+              <strong className={"text-xl text-koma-foreground font-mono block mt-1"}>
                 R$ $
                 {(generalStats?.faturamento_hoje ?? 0.0).toLocaleString('pt-BR', {
                   minimumFractionDigits: 2,
@@ -158,49 +158,49 @@ export default function CashierReports({
                 })}
               </strong>
             </div>
-            <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4', 'rounded-2xl')}>
+            <div className={"bg-koma-card border border-koma-border p-4 rounded-2xl"}>
               <span
-                className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-koma-subtle', 'block')}
+                className={"text-[9px] uppercase tracking-wider font-bold text-koma-subtle block"}
               >
                 Em análise agora
               </span>
-              <strong className={clsx('text-xl', 'text-amber-500', 'font-mono', 'block', 'mt-1')}>
+              <strong className={"text-xl text-amber-500 font-mono block mt-1"}>
                 {deliveryOrders.filter((o) => o.status === 'analise').length}
               </strong>
             </div>
-            <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4', 'rounded-2xl')}>
+            <div className={"bg-koma-card border border-koma-border p-4 rounded-2xl"}>
               <span
-                className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-koma-subtle', 'block')}
+                className={"text-[9px] uppercase tracking-wider font-bold text-koma-subtle block"}
               >
                 Em produção agora
               </span>
               <strong
-                className={clsx('text-xl', 'text-emerald-700 dark:text-emerald-400', 'font-mono', 'block', 'mt-1')}
+                className={"text-xl text-emerald-700 dark:text-emerald-400 font-mono block mt-1"}
               >
                 {deliveryOrders.filter((o) => o.status === 'producao').length +
                   activeKitchenItems.filter((i) => i.status === 'preparando').length}
               </strong>
             </div>
-            <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4', 'rounded-2xl')}>
+            <div className={"bg-koma-card border border-koma-border p-4 rounded-2xl"}>
               <span
-                className={clsx('text-[9px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-koma-subtle', 'block')}
+                className={"text-[9px] uppercase tracking-wider font-bold text-koma-subtle block"}
               >
                 Pronto para entrega
               </span>
-              <strong className={clsx('text-xl', 'text-emerald-500', 'font-mono', 'block', 'mt-1')}>
+              <strong className={"text-xl text-emerald-500 font-mono block mt-1"}>
                 {deliveryOrders.filter((o) => o.status === 'pronto').length}
               </strong>
             </div>
           </div>
 
           {/* Date Filters & Middle Metrics */}
-          <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'p-4', 'rounded-2xl', 'space-y-4')}>
-            <div className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-3')}>
-              <div className={clsx('flex', 'items-center', 'gap-2')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Relatório Consolidado</span>
+          <div className={"bg-koma-card border border-koma-border p-4 rounded-2xl space-y-4"}>
+            <div className={"flex justify-between items-center border-b border-koma-border pb-3"}>
+              <div className={"flex items-center gap-2"}>
+                <span className={"font-serif font-bold text-koma-secondary"}>Relatório Consolidado</span>
               </div>
               <div
-                className={clsx('flex', 'gap-1', 'bg-koma-page', 'p-1', 'rounded-xl', 'border', 'border-koma-border')}
+                className={"flex gap-1 bg-koma-page p-1 rounded-xl border border-koma-border"}
               >
                 {[
                   { id: '7', label: 'Últimos 7 dias' },
@@ -222,34 +222,17 @@ export default function CashierReports({
               </div>
             </div>
 
-            <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-3', 'gap-4', 'font-mono')}>
+            <div className={"grid grid-cols-1 md:grid-cols-3 gap-4 font-mono"}>
               <div
-                className={clsx(
-                  'bg-koma-panel',
-                  'p-3.5',
-                  'rounded-xl',
-                  'border',
-                  'border-koma-border/50',
-                  'flex',
-                  'justify-between',
-                  'items-center',
-                )}
+                className={"bg-koma-panel p-3.5 rounded-xl border border-koma-border/50 flex justify-between items-center"}
               >
                 <div>
                   <span
-                    className={clsx(
-                      'text-[8px]',
-                      'font-bold',
-                      'font-sans',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-widest',
-                      'block',
-                    )}
+                    className={"text-[8px] font-bold font-sans text-koma-subtle uppercase tracking-widest block"}
                   >
                     Receita Líquida
                   </span>
-                  <strong className={clsx('text-base', 'text-koma-foreground', 'mt-1', 'block')}>
+                  <strong className={"text-base text-koma-foreground mt-1 block"}>
                     R$ $
                     {(generalStats?.faturamento ?? 0.0).toLocaleString('pt-BR', {
                       minimumFractionDigits: 2,
@@ -258,98 +241,42 @@ export default function CashierReports({
                   </strong>
                 </div>
                 <span
-                  className={clsx(
-                    'text-[10px]',
-                    'text-emerald-400',
-                    'font-bold',
-                    'bg-emerald-500/10',
-                    'px-2',
-                    'py-0.5',
-                    'rounded',
-                    'flex',
-                    'items-center',
-                    'gap-0.5',
-                  )}
+                  className={"text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-0.5"}
                 >
                   <ArrowUpRight size={10} /> Real
                 </span>
               </div>
 
               <div
-                className={clsx(
-                  'bg-koma-panel',
-                  'p-3.5',
-                  'rounded-xl',
-                  'border',
-                  'border-koma-border/50',
-                  'flex',
-                  'justify-between',
-                  'items-center',
-                )}
+                className={"bg-koma-panel p-3.5 rounded-xl border border-koma-border/50 flex justify-between items-center"}
               >
                 <div>
                   <span
-                    className={clsx(
-                      'text-[8px]',
-                      'font-bold',
-                      'font-sans',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-widest',
-                      'block',
-                    )}
+                    className={"text-[8px] font-bold font-sans text-koma-subtle uppercase tracking-widest block"}
                   >
                     Pedidos
                   </span>
-                  <strong className={clsx('text-base', 'text-koma-foreground', 'mt-1', 'block')}>
+                  <strong className={"text-base text-koma-foreground mt-1 block"}>
                     {generalStats?.total_pedidos ?? 0}
                   </strong>
                 </div>
                 <span
-                  className={clsx(
-                    'text-[10px]',
-                    'text-emerald-400',
-                    'font-bold',
-                    'bg-emerald-500/10',
-                    'px-2',
-                    'py-0.5',
-                    'rounded',
-                    'flex',
-                    'items-center',
-                    'gap-0.5',
-                  )}
+                  className={"text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-0.5"}
                 >
                   <ArrowUpRight size={10} /> Real
                 </span>
               </div>
 
               <div
-                className={clsx(
-                  'bg-koma-panel',
-                  'p-3.5',
-                  'rounded-xl',
-                  'border',
-                  'border-koma-border/50',
-                  'flex',
-                  'justify-between',
-                  'items-center',
-                )}
+                className={"bg-koma-panel p-3.5 rounded-xl border border-koma-border/50 flex justify-between items-center"}
               >
                 <div>
                   <span
-                    className={clsx(
-                      'text-[8px]',
-                      'font-bold',
-                      'font-sans',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-widest',
-                      'block',
-                    )}
+                    className={"text-[8px] font-bold font-sans text-koma-subtle uppercase tracking-widest block"}
                   >
                     Ticket Médio
                   </span>
-                  <strong className={clsx('text-base', 'text-koma-foreground', 'mt-1', 'block')}>
+                  <strong className={"text-base text-koma-foreground mt-1 block"}>
                     R$ $
                     {(generalStats?.ticket_medio ?? 0.0).toLocaleString('pt-BR', {
                       minimumFractionDigits: 2,
@@ -358,18 +285,7 @@ export default function CashierReports({
                   </strong>
                 </div>
                 <span
-                  className={clsx(
-                    'text-[10px]',
-                    'text-emerald-400',
-                    'font-bold',
-                    'bg-emerald-500/10',
-                    'px-2',
-                    'py-0.5',
-                    'rounded',
-                    'flex',
-                    'items-center',
-                    'gap-0.5',
-                  )}
+                  className={"text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded flex items-center gap-0.5"}
                 >
                   <ArrowUpRight size={10} /> Real
                 </span>
@@ -378,41 +294,19 @@ export default function CashierReports({
           </div>
 
           {/* Bottom Gauges & Best Sellers List */}
-          <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5')}>
+          <div className={"grid grid-cols-1 lg:grid-cols-3 gap-5"}>
             {/* 1. Cardapio Quality Gauge */}
             <div
-              className={clsx(
-                'bg-koma-card/60',
-                'border',
-                'border-koma-border',
-                'rounded-3xl',
-                'p-5',
-                'flex',
-                'flex-col',
-                'items-center',
-                'justify-between',
-                'text-center',
-                'space-y-4',
-              )}
+              className={"bg-koma-card/60 border border-koma-border rounded-3xl p-5 flex flex-col items-center justify-between text-center space-y-4"}
             >
               <span
-                className={clsx(
-                  'font-serif',
-                  'font-bold',
-                  'text-koma-secondary',
-                  'block',
-                  'text-left',
-                  'w-full',
-                  'border-b',
-                  'border-koma-border',
-                  'pb-2',
-                )}
+                className={"font-serif font-bold text-koma-secondary block text-left w-full border-b border-koma-border pb-2"}
               >
                 Qualidade do Cardápio
               </span>
 
-              <div className={clsx('relative', 'h-28', 'w-28', 'flex', 'items-center', 'justify-center')}>
-                <svg className={clsx('absolute', 'inset-0', 'transform', '-rotate-90')} viewBox="0 0 100 100">
+              <div className={"relative h-28 w-28 flex items-center justify-center"}>
+                <svg className={"absolute inset-0 transform -rotate-90"} viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="42" stroke="#27272A" strokeWidth="8" fill="transparent" />
                   <circle
                     cx="50"
@@ -432,38 +326,30 @@ export default function CashierReports({
                     </linearGradient>
                   </defs>
                 </svg>
-                <span className={clsx('text-lg', 'font-bold', 'font-mono', 'text-koma-foreground')}>
+                <span className={"text-lg font-bold font-mono text-koma-foreground"}>
                   {generalStats?.qualidade_cardapio ?? 100}%
                 </span>
               </div>
 
               <div className="space-y-1">
-                <strong className={clsx('text-koma-foreground', 'font-medium', 'block', 'text-xs')}>
+                <strong className={"text-koma-foreground font-medium block text-xs"}>
                   Cardápio Otimizado
                 </strong>
-                <p className={clsx('text-[9px]', 'text-koma-muted')}>
+                <p className={"text-[9px] text-koma-muted"}>
                   Seu cardápio possui ótimas descrições e fotos de alta resolução cadastrados.
                 </p>
               </div>
             </div>
 
             {/* 2. Modality Split Gauges */}
-            <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-3')}>
+            <div className={"bg-koma-card/60 border border-koma-border rounded-3xl p-5 space-y-3"}>
               <span
-                className={clsx(
-                  'font-serif',
-                  'font-bold',
-                  'text-koma-secondary',
-                  'block',
-                  'border-b',
-                  'border-koma-border',
-                  'pb-2',
-                )}
+                className={"font-serif font-bold text-koma-secondary block border-b border-koma-border pb-2"}
               >
                 Pedidos por Modalidade
               </span>
 
-              <div className={clsx('space-y-2.5', 'pt-2')}>
+              <div className={"space-y-2.5 pt-2"}>
                 {[
                   {
                     name: 'Entrega (Delivery)',
@@ -485,11 +371,11 @@ export default function CashierReports({
                   },
                 ].map((mod, idx) => (
                   <div key={idx} className="space-y-1">
-                    <div className={clsx('flex', 'justify-between', 'text-[10px]')}>
+                    <div className={"flex justify-between text-[10px]"}>
                       <span className="text-koma-subtle">{mod.name}</span>
-                      <strong className={clsx('text-koma-foreground', 'font-mono')}>{mod.count} pedidos</strong>
+                      <strong className={"text-koma-foreground font-mono"}>{mod.count} pedidos</strong>
                     </div>
-                    <div className={clsx('h-1.5', 'w-full', 'bg-koma-panel', 'rounded-full', 'overflow-hidden')}>
+                    <div className={"h-1.5 w-full bg-koma-panel rounded-full overflow-hidden"}>
                       <div
                         className={`h-full ${mod.barColor} rounded-full`}
                         style={{ width: `${(mod.count / mod.max) * 100}%` }}
@@ -501,25 +387,17 @@ export default function CashierReports({
             </div>
 
             {/* 3. Top Items list */}
-            <div className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-3')}>
+            <div className={"bg-koma-card/60 border border-koma-border rounded-3xl p-5 space-y-3"}>
               <span
-                className={clsx(
-                  'font-serif',
-                  'font-bold',
-                  'text-koma-secondary',
-                  'block',
-                  'border-b',
-                  'border-koma-border',
-                  'pb-2',
-                )}
+                className={"font-serif font-bold text-koma-secondary block border-b border-koma-border pb-2"}
               >
                 Top 5 Itens Mais Pedidos
               </span>
 
-              <div className={clsx('divide-y', 'divide-koma-border')}>
+              <div className={"divide-y divide-koma-border"}>
                 {(generalStats?.top_itens ?? []).map((item: any, idx: number) => (
-                  <div key={idx} className={clsx('py-2', 'flex', 'justify-between', 'items-center')}>
-                    <div className={clsx('flex', 'items-center', 'gap-2.5')}>
+                  <div key={idx} className={"py-2 flex justify-between items-center"}>
+                    <div className={"flex items-center gap-2.5"}>
                       <span
                         className={`h-5 w-5 rounded-lg flex items-center justify-center text-[10px] font-mono font-bold ${
                           idx === 0
@@ -531,15 +409,15 @@ export default function CashierReports({
                       >
                         {item.rank}
                       </span>
-                      <span className={clsx('font-medium', 'text-koma-foreground', 'block')}>{item.name}</span>
+                      <span className={"font-medium text-koma-foreground block"}>{item.name}</span>
                     </div>
-                    <span className={clsx('text-[10px]', 'font-bold', 'text-koma-subtle', 'font-mono')}>
+                    <span className={"text-[10px] font-bold text-koma-subtle font-mono"}>
                       {item.count} saídas
                     </span>
                   </div>
                 ))}
                 {(generalStats?.top_itens ?? []).length === 0 && (
-                  <div className={clsx('py-8', 'text-center', 'text-koma-muted', 'italic', 'text-[10px]')}>
+                  <div className={"py-8 text-center text-koma-muted italic text-[10px]"}>
                     Nenhum item vendido no período
                   </div>
                 )}

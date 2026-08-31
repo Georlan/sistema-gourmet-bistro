@@ -21,7 +21,12 @@ const deferred = [
   'settings/CashierSettings', 'online-menu/CashierOnlineMenu', 'team/CashierTeam',
   'reports/CashierReports', 'pdv/CashierPdvView',
 ].map(file => 'src/components/caixa/' + file + '.tsx');
-for (const file of deferred) {
+const independentRoutes = [
+  'src/cardapio/CardapioPage.tsx', 'src/landing/LandingPage.tsx',
+  'src/super-admin/SuperAdminGate.tsx', 'src/components/CaixaAtivarPage.tsx',
+  'src/components/MotoboyPwaPage.tsx',
+];
+for (const file of [...deferred, ...independentRoutes]) {
   assert.ok(manifest[file]?.isDynamicEntry, 'Must remain a lazy production entry: ' + file);
   assert.ok(!visited.has(file), 'Administrative view returned to startup: ' + file);
 }
@@ -35,8 +40,11 @@ const initialBytes = initial.reduce((total, file) => total + file.bytes, 0);
 const initialGzipBytes = initial.reduce((total, file) => total + file.gzipBytes, 0);
 // Explicit headroom over the measured extraction, not a target to fill.
 assert.ok(measure(entry).bytes <= 400_000, 'Caixa entry exceeded its 400 kB budget');
-assert.ok(initialBytes <= 1_350_000, 'Caixa eager JS graph exceeded its 1.35 MB budget');
+assert.ok(initialBytes <= 950_000, 'Caixa eager JS graph exceeded its 950 kB budget');
+const appEntry = Object.keys(manifest).find(key => manifest[key].src === 'src/App.tsx' || manifest[key].name === 'App');
+assert.ok(appEntry, 'Missing App entry');
+assert.ok(measure(appEntry).bytes <= 250_000, 'App entry exceeded its 250 kB budget');
 console.log(JSON.stringify({
   method: 'Production JS eager dependency closure; gzip per file. Excludes CSS, images, API and browser timing.',
-  initialBytes, initialGzipBytes, initial, deferred: deferred.map(measure),
+  initialBytes, initialGzipBytes, initial, deferred: deferred.map(measure), independentRoutes: independentRoutes.map(measure),
 }, null, 2));

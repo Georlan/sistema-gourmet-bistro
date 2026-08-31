@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { deriveProductionState } from '../../../domain/operationalState';
+import { describeTableOrders } from '../../../domain/tableReadModel';
 import type { Order } from '../../../types';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
@@ -656,12 +657,14 @@ export function useCashierOrders({
     }
   };
 
-  const handleInspectSalonTable = (tableOrders: Order[]) =>
+  const handleInspectSalonTable = (tableOrders: Order[], focusTransfer = false) =>
     tableOrders[0] &&
     setSelectedKanbanOrder({
       ...tableOrders[0],
       projectionScope: 'table',
       contextoSalao: true,
+      focusTransfer,
+      tableContext: describeTableOrders(tableOrders),
       itens: tableOrders.flatMap((order) => order.itens || []),
       comandaIds: tableOrders.map((order) => order.id),
     });

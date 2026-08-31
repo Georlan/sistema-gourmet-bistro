@@ -7,7 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { Activity, CheckCircle2, Grid2X2, Utensils } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
-import { deriveTableOperationalState } from '../../domain/operationalState';
+import { countWaiterSalonTables, projectWaiterSalonTables, type WaiterSalonRow } from '../../domain/waiterSalonProjection';
 
 export interface MesasViewProps {
   salonTables: Table[];
@@ -22,6 +22,7 @@ export interface MesasViewProps {
   onFilterChange?: (filter: 'todos' | 'livres' | 'ocupadas' | 'prontas') => void;
   showOperationalStatus?: boolean;
   readOnly?: boolean;
+  rows?: readonly WaiterSalonRow[];
 }
 
 export function MesasView({
@@ -37,36 +38,24 @@ export function MesasView({
   onFilterChange,
   showOperationalStatus = true,
   readOnly = false,
+  rows,
 }: MesasViewProps) {
   const [internalFilter, setInternalFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
   const currentFilter = externalFilter ?? internalFilter;
 
-  const tableRows = useMemo(() => (salonTables || []).map((table) => {
-    const tableOrders = orders.filter((order) => order.mesaId === table.id);
-    const operationalState = deriveTableOperationalState({
-      table,
-      orders: tableOrders,
-      pendingPayments: pagamentosPendentes,
-      mergedIntoMesaId: orders.find((order) => order.mesaOrigemId === table.id)?.mesaId || null,
-      now: currentTime,
-    });
-    const isReady = showOperationalStatus && operationalState.production.hasReadyItems;
-    return { table, tableOrders, operationalState, isReady };
-  }), [orders, salonTables, pagamentosPendentes, currentTime, showOperationalStatus]);
+  const tableRows = useMemo(() =>
+    rows ?? projectWaiterSalonTables(salonTables, orders, pagamentosPendentes, currentTime),
+  [rows, orders, salonTables, pagamentosPendentes, currentTime]);
 
-  const counts = useMemo(() => ({
-    todos: tableRows.length,
-    livres: tableRows.filter(({ operationalState }) => operationalState.occupancy === 'FREE').length,
-    ocupadas: tableRows.filter(({ operationalState }) => operationalState.occupancy === 'IN_SERVICE').length,
-    prontas: tableRows.filter(({ isReady }) => isReady).length,
-  }), [tableRows]);
+  const counts = useMemo(() => countWaiterSalonTables(tableRows, showOperationalStatus),
+    [tableRows, showOperationalStatus]);
 
-  const filteredRows = useMemo(() => tableRows.filter(({ operationalState, isReady }) => {
+  const filteredRows = useMemo(() => tableRows.filter(({ operationalState }) => {
     if (currentFilter === 'livres') return operationalState.occupancy === 'FREE';
     if (currentFilter === 'ocupadas') return operationalState.occupancy === 'IN_SERVICE';
-    if (currentFilter === 'prontas') return isReady;
+    if (currentFilter === 'prontas') return showOperationalStatus && operationalState.production.hasReadyItems;
     return true;
-  }), [currentFilter, tableRows]);
+  }), [currentFilter, tableRows, showOperationalStatus]);
 
   const handleFilterSelect = (filter: typeof currentFilter) => {
     if (onFilterChange) onFilterChange(filter);
@@ -177,6 +166,7 @@ export function MesasView({
               key={table.id}
               table={table}
               orders={tableOrders}
+              operational={operationalState}
               draftCount={draftQtyCount}
               otherWaitersServing={otherWaitersServing}
               currentTime={tableOrders.length > 0 ? currentTime : 0}

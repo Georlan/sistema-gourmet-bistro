@@ -71,7 +71,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   return (
     <>
       {activeSubTab === 'balcao' && (
-        <div className={clsx('orders-workspace', 'h-full', 'min-h-0', 'flex', 'flex-col', 'gap-3', 'sm:gap-4')}>
+        <div className={"orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4"}>
           <OperationalBanner
             id="counter-heading"
             eyebrow="VENDA"
@@ -99,31 +99,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           />
 
           <div
-            className={clsx(
-              'min-h-0',
-              'flex-1',
-              'flex',
-              'flex-col',
-              'xl:flex-row',
-              'gap-3',
-              'sm:gap-4',
-              'overflow-hidden',
-              'relative',
-            )}
+            className={"min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
             {/* Mobile sub-tab toggle */}
             <div
-              className={clsx(
-                'flex',
-                'xl:hidden',
-                'gap-1',
-                'p-1',
-                'bg-white/[0.025]',
-                'border',
-                'border-koma-border',
-                'rounded-xl',
-                'shrink-0',
-              )}
+              className={"flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-koma-border rounded-xl shrink-0"}
             >
               <button
                 type="button"
@@ -156,21 +136,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               className={`min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
             >
               <div
-                className={clsx(
-                  'shrink-0',
-                  'rounded-2xl',
-                  'border',
-                  'border-koma-border',
-                  'bg-koma-panel',
-                  'p-2.5',
-                  'sm:p-3',
-                  'space-y-2.5',
-                )}
+                className={"shrink-0 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3 space-y-2.5"}
               >
                 <div className="relative">
                   <Search
                     size={15}
-                    className={clsx('absolute', 'left-3.5', 'top-1/2', '-translate-y-1/2', 'text-koma-muted')}
+                    className={"absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted"}
                   />
                   <input
                     id="pdv-product-search-input"
@@ -178,37 +149,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     placeholder="Buscar item, descrição ou código"
                     value={pdvSearch}
                     onChange={(e) => setPdvSearch(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'bg-koma-input',
-                      'border',
-                      'border-koma-border',
-                      'focus:border-emerald-500/60',
-                      'text-koma-foreground',
-                      'placeholder:text-koma-muted',
-                      'rounded-xl',
-                      'py-2.5',
-                      'pl-10',
-                      'pr-8',
-                      'text-xs',
-                      'outline-none',
-                      'transition-all',
-                    )}
+                    className={"w-full bg-koma-input border border-koma-border focus:border-emerald-500/60 text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-all"}
                   />
                   {pdvSearch && (
                     <button
                       type="button"
                       onClick={() => setPdvSearch('')}
-                      className={clsx(
-                        'absolute',
-                        'right-3',
-                        'top-1/2',
-                        '-translate-y-1/2',
-                        'text-koma-muted',
-                        'hover:text-koma-foreground',
-                        'p-1',
-                        'rounded-lg',
-                      )}
+                      className={"absolute right-3 top-1/2 -translate-y-1/2 text-koma-muted hover:text-koma-foreground p-1 rounded-lg"}
                       aria-label="Limpar busca de itens"
                     >
                       <X size={13} />
@@ -216,30 +163,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
                 </div>
 
-                <div className={clsx('flex', 'min-w-0', 'items-center', 'gap-1.5')}>
+                <div className={"flex min-w-0 items-center gap-1.5"}>
                   {pdvCategoryScrollState.hasOverflow && (
                     <button
                       type="button"
                       onClick={() => scrollPdvCategories(-1)}
                       disabled={!pdvCategoryScrollState.canScrollLeft}
                       aria-label="Ver categorias anteriores"
-                      className={clsx(
-                        'hidden',
-                        'size-8',
-                        'shrink-0',
-                        'items-center',
-                        'justify-center',
-                        'rounded-lg',
-                        'border',
-                        'border-koma-border',
-                        'bg-koma-panel',
-                        'text-koma-muted',
-                        'hover:text-koma-foreground',
-                        'hover:bg-koma-raised',
-                        'disabled:cursor-not-allowed',
-                        'disabled:opacity-25',
-                        'sm:flex',
-                      )}
+                      className={"hidden size-8 shrink-0 items-center justify-center rounded-lg border border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-25 sm:flex"}
                     >
                       <ChevronLeft size={15} />
                     </button>
@@ -258,20 +189,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       event.stopPropagation();
                       pdvCategorySuppressClickRef.current = false;
                     }}
-                    className={clsx(
-                      'flex',
-                      'min-w-0',
-                      'flex-1',
-                      'cursor-grab',
-                      'select-none',
-                      'items-center',
-                      'gap-1.5',
-                      'overflow-x-auto',
-                      'pb-0.5',
-                      'active:cursor-grabbing',
-                      '[scrollbar-width:none]',
-                      '[&::-webkit-scrollbar]:hidden',
-                    )}
+                    className={"flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 overflow-x-auto pb-0.5 active:cursor-grabbing [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}
                     aria-label="Filtrar por categoria"
                   >
                     <button
@@ -286,7 +204,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
                       }`}
                     >
-                      Todos <span className={clsx('ml-1', 'opacity-75')}>{sellableProducts.length}</span>
+                      Todos <span className={"ml-1 opacity-75"}>{sellableProducts.length}</span>
                     </button>
                     {pdvCategories.map((catObj) => (
                       <button
@@ -312,23 +230,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       onClick={() => scrollPdvCategories(1)}
                       disabled={!pdvCategoryScrollState.canScrollRight}
                       aria-label="Ver próximas categorias"
-                      className={clsx(
-                        'hidden',
-                        'size-8',
-                        'shrink-0',
-                        'items-center',
-                        'justify-center',
-                        'rounded-lg',
-                        'border',
-                        'border-koma-border',
-                        'bg-koma-panel',
-                        'text-koma-muted',
-                        'hover:text-koma-foreground',
-                        'hover:bg-koma-raised',
-                        'disabled:cursor-not-allowed',
-                        'disabled:opacity-25',
-                        'sm:flex',
-                      )}
+                      className={"hidden size-8 shrink-0 items-center justify-center rounded-lg border border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground hover:bg-koma-raised disabled:cursor-not-allowed disabled:opacity-25 sm:flex"}
                     >
                       <ChevronRight size={15} />
                     </button>
@@ -336,19 +238,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 </div>
               </div>
 
-              <div className={clsx('flex-1', 'min-h-0', 'overflow-y-auto', 'pr-1', 'overscroll-contain')}>
+              <div className={"flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain"}>
                 {filteredProducts.length > 0 ? (
                   <div
-                    className={clsx(
-                      'grid',
-                      'grid-cols-2',
-                      'sm:grid-cols-2',
-                      'md:grid-cols-3',
-                      '2xl:grid-cols-4',
-                      'gap-2',
-                      'sm:gap-2.5',
-                      'pb-2',
-                    )}
+                    className={"grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-2.5 pb-2"}
                   >
                     {filteredProducts.map((p) => {
                       const productLabel = splitProductLabel(p.nome);
@@ -357,20 +250,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       return (
                         <div
                           key={p.id}
-                          className={clsx(
-                            'group',
-                            'relative',
-                            'min-h-[96px]',
-                            'sm:min-h-[112px]',
-                            'bg-koma-panel',
-                            'border',
-                            'border-koma-border',
-                            'hover:border-emerald-500/60',
-                            'rounded-xl',
-                            'sm:rounded-2xl',
-                            'transition-colors',
-                            'shadow-sm',
-                          )}
+                          className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm"}
                         >
                           <button
                             type="button"
@@ -378,24 +258,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               setPdvProductDetailId(null);
                               handlePdvAddToCart(p);
                             }}
-                            className={clsx(
-                              'flex',
-                              'h-full',
-                              'w-full',
-                              'flex-col',
-                              'justify-between',
-                              'gap-2',
-                              'sm:gap-3',
-                              'p-2.5',
-                              'sm:p-3.5',
-                              'text-left',
-                              'cursor-pointer',
-                              'rounded-xl',
-                              'sm:rounded-2xl',
-                              'focus:outline-none',
-                              'focus-visible:ring-2',
-                              'focus-visible:ring-emerald-500/40',
-                            )}
+                            className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left cursor-pointer rounded-xl sm:rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
                             title={
                               hasProductDetails
                                 ? `Adicionar ${productLabel.name}. Use detalhes para ver ingredientes.`
@@ -407,60 +270,26 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                                 src={p.imagem}
                                 alt=""
                                 loading="lazy"
-                                className={clsx(
-                                  'w-full',
-                                  'h-16',
-                                  'sm:h-20',
-                                  'object-cover',
-                                  'rounded-lg',
-                                  'sm:rounded-xl',
-                                )}
+                                className={"w-full h-16 sm:h-20 object-cover rounded-lg sm:rounded-xl"}
                               />
                             )}
                             <div className="min-h-[28px] sm:min-h-[34px] pr-6">
                               <h4
-                                className={clsx(
-                                  'font-semibold',
-                                  'text-koma-foreground',
-                                  'text-xs',
-                                  'sm:text-[13px]',
-                                  'leading-snug',
-                                  'line-clamp-2',
-                                )}
+                                className={"font-semibold text-koma-foreground text-xs sm:text-[13px] leading-snug line-clamp-2"}
                               >
                                 {productLabel.name}
                               </h4>
                             </div>
                             <div
-                              className={clsx(
-                                'flex',
-                                'justify-between',
-                                'items-center',
-                                'border-t',
-                                'border-koma-border',
-                                'pt-2',
-                                'sm:pt-2.5',
-                              )}
+                              className={"flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5"}
                             >
                               <span
-                                className={clsx(
-                                  'font-bold',
-                                  'text-emerald-700 dark:text-emerald-400',
-                                  'font-mono',
-                                  'text-xs',
-                                )}
+                                className={"font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs"}
                               >
                                 R$ {p.preco.toFixed(2).replace('.', ',')}
                               </span>
                               <span
-                                className={clsx(
-                                  'inline-flex',
-                                  'items-center',
-                                  'gap-1',
-                                  'text-[9px]',
-                                  'font-bold',
-                                  'text-emerald-700 dark:text-[#4fe0bc]',
-                                )}
+                                className={"inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 dark:text-[#4fe0bc]"}
                               >
                                 <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
                               </span>
@@ -481,24 +310,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                                 aria-controls={`pdv-product-details-${productDetailKey}`}
                                 aria-label={`Ver ingredientes e detalhes de ${productLabel.name}`}
                                 title="Ver ingredientes e detalhes"
-                                className={clsx(
-                                  'absolute',
-                                  'right-2',
-                                  'top-2',
-                                  'z-20',
-                                  'flex',
-                                  'size-7',
-                                  'items-center',
-                                  'justify-center',
-                                  'rounded-lg',
-                                  'border',
-                                  'border-koma-border',
-                                  'bg-koma-card/95',
-                                  'text-koma-muted',
-                                  'hover:border-emerald-500/40',
-                                  'hover:text-emerald-700',
-                                  'dark:hover:text-emerald-300',
-                                )}
+                                className={"absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-lg border border-koma-border bg-koma-card/95 text-koma-muted hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-300"}
                               >
                                 <Info size={13} />
                               </button>
@@ -528,23 +340,16 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                                 )}
                               >
                                 <span
-                                  className={clsx(
-                                    'block',
-                                    'text-[8px]',
-                                    'font-bold',
-                                    'uppercase',
-                                    'tracking-wider',
-                                    'text-emerald-700 dark:text-emerald-300',
-                                  )}
+                                  className={"block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300"}
                                 >
                                   Ingredientes e detalhes
                                 </span>
                                 {productLabel.code && (
-                                  <span className={clsx('mt-1', 'block', 'font-mono', 'text-[8px]', 'text-koma-muted')}>
+                                  <span className={"mt-1 block font-mono text-[8px] text-koma-muted"}>
                                     Cód. {productLabel.code}
                                   </span>
                                 )}
-                                <p className={clsx('mt-1', 'text-[10px]', 'leading-relaxed', 'text-koma-secondary')}>
+                                <p className={"mt-1 text-[10px] leading-relaxed text-koma-secondary"}>
                                   {p.descricao || 'Sem descrição cadastrada.'}
                                 </p>
                               </div>
@@ -556,27 +361,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   </div>
                 ) : (
                   <div
-                    className={clsx(
-                      'h-full',
-                      'min-h-52',
-                      'rounded-2xl',
-                      'border',
-                      'border-dashed',
-                      'border-koma-border',
-                      'bg-white/[0.015]',
-                      'flex',
-                      'flex-col',
-                      'items-center',
-                      'justify-center',
-                      'text-center',
-                      'px-6',
-                    )}
+                    className={"h-full min-h-52 rounded-2xl border border-dashed border-koma-border bg-white/[0.015] flex flex-col items-center justify-center text-center px-6"}
                   >
-                    <Search size={22} className={clsx('text-koma-muted', 'mb-3')} />
-                    <strong className={clsx('text-sm', 'text-koma-secondary')}>
+                    <Search size={22} className={"text-koma-muted mb-3"} />
+                    <strong className={"text-sm text-koma-secondary"}>
                       {catalogReady ? 'Nenhum item encontrado' : 'Carregando cardápio…'}
                     </strong>
-                    <span className={clsx('mt-1', 'text-[10px]', 'text-koma-muted')}>
+                    <span className={"mt-1 text-[10px] text-koma-muted"}>
                       {catalogReady && pdvSearch
                         ? 'Tente buscar por outro nome ou escolha outra categoria.'
                         : catalogReady
@@ -593,145 +384,75 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               className={`w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
               <div
-                className={clsx(
-                  'bg-koma-raised',
-                  'px-4',
-                  'py-3.5',
-                  'border-b',
-                  'border-koma-border',
-                  'flex',
-                  'justify-between',
-                  'items-center',
-                  'shrink-0',
-                )}
+                className={"bg-koma-raised px-4 py-3.5 border-b border-koma-border flex justify-between items-center shrink-0"}
               >
-                <span className={clsx('font-semibold', 'text-koma-foreground', 'flex', 'items-center', 'gap-2')}>
+                <span className={"font-semibold text-koma-foreground flex items-center gap-2"}>
                   <span
-                    className={clsx(
-                      'w-8',
-                      'h-8',
-                      'rounded-xl',
-                      'bg-emerald-500/15',
-                      'border',
-                      'border-emerald-500/30',
-                      'inline-flex',
-                      'items-center',
-                      'justify-center',
-                    )}
+                    className={"w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 inline-flex items-center justify-center"}
                   >
                     <ShoppingCart size={15} className="text-emerald-700 dark:text-emerald-400" />
                   </span>
                   <span>Pedido atual</span>
                 </span>
                 <span
-                  className={clsx(
-                    'bg-emerald-500/15',
-                    'border',
-                    'border-emerald-500/30',
-                    'text-emerald-800 dark:text-emerald-300',
-                    'font-bold',
-                    'px-2.5',
-                    'py-1',
-                    'rounded-full',
-                    'font-mono',
-                    'text-[9px]',
-                  )}
+                  className={"bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full font-mono text-[9px]"}
                 >
                   {pdvCartItemCount} itens
                 </span>
               </div>
 
-              <div className={clsx('flex-1', 'overflow-y-auto', 'p-3', 'space-y-2')}>
+              <div className={"flex-1 overflow-y-auto p-3 space-y-2"}>
                 {pdvCart.length === 0 ? (
                   <div
-                    className={clsx(
-                      'h-full',
-                      'min-h-44',
-                      'flex',
-                      'flex-col',
-                      'items-center',
-                      'justify-center',
-                      'text-center',
-                      'px-6',
-                      'text-koma-muted',
-                    )}
+                    className={"h-full min-h-44 flex flex-col items-center justify-center text-center px-6 text-koma-muted"}
                   >
-                    <ShoppingCart size={22} className={clsx('mb-3', 'opacity-60')} />
-                    <p className={clsx('text-xs', 'font-semibold', 'text-koma-subtle')}>Comece escolhendo um item</p>
-                    <p className={clsx('text-[9px]', 'mt-1')}>Selecione um item para montar o pedido.</p>
+                    <ShoppingCart size={22} className={"mb-3 opacity-60"} />
+                    <p className={"text-xs font-semibold text-koma-subtle"}>Comece escolhendo um item</p>
+                    <p className={"text-[9px] mt-1"}>Selecione um item para montar o pedido.</p>
                   </div>
                 ) : (
                   pdvCart.map((item, idx) => (
                     <div
                       key={`${item.product.id}-${idx}`}
-                      className={clsx(
-                        'bg-white/[0.025]',
-                        'p-3',
-                        'rounded-xl',
-                        'border',
-                        'border-koma-border-subtle',
-                        'space-y-2.5',
-                      )}
+                      className={"bg-white/[0.025] p-3 rounded-xl border border-koma-border-subtle space-y-2.5"}
                     >
-                      <div className={clsx('flex', 'justify-between', 'items-start')}>
+                      <div className={"flex justify-between items-start"}>
                         <div className="space-y-0.5">
-                          <strong className={clsx('text-koma-foreground', 'text-xs', 'block', 'truncate', 'max-w-48')}>
+                          <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
                             {item.product.nome}
                           </strong>
-                          <span className={clsx('text-[9px]', 'text-[#4fe0bc]', 'font-mono')}>
+                          <span className={"text-[9px] text-[#4fe0bc] font-mono"}>
                             R$ {item.product.preco.toFixed(2).replace('.', ',')} / un.
                           </span>
                         </div>
                         <button
                           onClick={() => handlePdvRemoveCartItem(idx)}
-                          className={clsx('text-koma-muted', 'hover:text-rose-500', 'p-0.5', 'cursor-pointer')}
+                          className={"text-koma-muted hover:text-rose-500 p-0.5 cursor-pointer"}
                         >
                           <Trash2 size={12} />
                         </button>
                       </div>
 
-                      <div className={clsx('flex', 'justify-between', 'items-center')}>
+                      <div className={"flex justify-between items-center"}>
                         <div
-                          className={clsx(
-                            'flex',
-                            'items-center',
-                            'bg-koma-input',
-                            'border',
-                            'border-koma-border',
-                            'rounded-lg',
-                            'overflow-hidden',
-                          )}
+                          className={"flex items-center bg-koma-input border border-koma-border rounded-lg overflow-hidden"}
                         >
                           <button
                             type="button"
                             onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                            className={clsx(
-                              'px-2',
-                              'py-1',
-                              'text-koma-subtle',
-                              'hover:text-koma-foreground',
-                              'cursor-pointer',
-                              'hover:bg-koma-raised',
-                            )}
+                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
                           >
                             -
                           </button>
                           <span
-                            className={clsx('px-2', 'text-[10px]', 'font-bold', 'font-mono', 'text-koma-foreground')}
+                            className={"px-2 text-[10px] font-bold font-mono text-koma-foreground"}
                           >
                             {item.quantity}
                           </span>
                           <button
                             type="button"
                             onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                            className={clsx(
-                              'px-2',
-                              'py-1',
-                              'text-koma-subtle',
-                              'hover:text-koma-foreground',
-                              'cursor-pointer',
-                              'hover:bg-koma-raised',
-                            )}
+                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
                           >
                             +
                           </button>
@@ -748,19 +469,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               return c;
                             });
                           }}
-                          className={clsx(
-                            'w-24',
-                            'px-1.5',
-                            'py-1',
-                            'text-[9px]',
-                            'bg-koma-input',
-                            'border',
-                            'border-koma-border',
-                            'rounded',
-                            'focus:outline-none',
-                            'focus:border-[#10b981]',
-                            'text-koma-foreground',
-                          )}
+                          className={"w-24 px-1.5 py-1 text-[9px] bg-koma-input border border-koma-border rounded focus:outline-none focus:border-[#10b981] text-koma-foreground"}
                         />
                       </div>
 
@@ -770,7 +479,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         if (presets.length === 0) return null;
                         const parts = item.obs ? item.obs.split(',').map((p) => p.trim()) : [];
                         return (
-                          <div className={clsx('flex', 'flex-wrap', 'gap-1', 'mt-2', 'justify-end')}>
+                          <div className={"flex flex-wrap gap-1 mt-2 justify-end"}>
                             {presets.map((preset) => {
                               const isActive = parts.some((p) => p.toLowerCase() === preset.toLowerCase());
                               return (
@@ -812,32 +521,16 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               {/* Subtotal e formulário de dados do cliente / modalidade */}
               <form
                 onSubmit={handlePdvSubmitOrder}
-                className={clsx('p-3', 'border-t', 'border-koma-border', 'space-y-3', 'bg-koma-panel/40', 'shrink-0')}
+                className={"p-3 border-t border-koma-border space-y-3 bg-koma-panel/40 shrink-0"}
               >
                 <div className="space-y-1.5">
                   <label
-                    className={clsx(
-                      'text-[8px]',
-                      'text-koma-subtle',
-                      'font-bold',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
                   >
                     Modalidade:
                   </label>
                   <div
-                    className={clsx(
-                      'grid',
-                      'grid-cols-3',
-                      'gap-1',
-                      'bg-koma-input',
-                      'p-1',
-                      'rounded-xl',
-                      'border',
-                      'border-koma-border',
-                    )}
+                    className={"grid grid-cols-3 gap-1 bg-koma-input p-1 rounded-xl border border-koma-border"}
                   >
                     {[
                       { id: 'retirada', label: 'Retirada / Viagem' },
@@ -868,21 +561,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
                 {pdvOrderType === 'mesa' && (
                   <div className="space-y-2">
-                    <div className={clsx('flex', 'items-center', 'justify-between', 'gap-3')}>
+                    <div className={"flex items-center justify-between gap-3"}>
                       <label
                         htmlFor="pdv-target-table"
-                        className={clsx(
-                          'block',
-                          'text-[8px]',
-                          'font-bold',
-                          'uppercase',
-                          'tracking-wider',
-                          'text-koma-subtle',
-                        )}
+                        className={"block text-[8px] font-bold uppercase tracking-wider text-koma-subtle"}
                       >
                         Mesa de destino
                       </label>
-                      <span className={clsx('text-[8px]', 'text-koma-muted')}>
+                      <span className={"text-[8px] text-koma-muted"}>
                         {pdvOccupiedTableCount} em atendimento
                       </span>
                     </div>
@@ -957,7 +643,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               ? `${selectedPdvTableOption.label} já está em atendimento`
                               : `${selectedPdvTableOption.label} está livre`}
                         </strong>
-                        <span className={clsx('mt-0.5', 'block', 'text-[8px]', 'leading-relaxed', 'text-koma-muted')}>
+                        <span className={"mt-0.5 block text-[8px] leading-relaxed text-koma-muted"}>
                           {selectedPdvTableOption?.isOccupied
                             ? 'Você pode continuar: os novos itens serão adicionados ao atendimento da mesa.'
                             : selectedPdvTableOption
@@ -971,17 +657,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
                 {(pdvOrderType === 'retirada' || pdvOrderType === 'entrega') && (
                   <div className="space-y-2">
-                    <div className={clsx('grid', 'grid-cols-2', 'gap-2')}>
+                    <div className={"grid grid-cols-2 gap-2"}>
                       <div className="space-y-1">
                         <label
-                          className={clsx(
-                            'text-[8px]',
-                            'text-koma-subtle',
-                            'font-bold',
-                            'uppercase',
-                            'tracking-wider',
-                            'block',
-                          )}
+                          className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
                         >
                           Telefone:
                         </label>
@@ -997,30 +676,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
                             setPdvCustomerId(null);
                           }}
-                          className={clsx(
-                            'w-full',
-                            'px-2',
-                            'py-1.5',
-                            'bg-koma-input',
-                            'border',
-                            'border-koma-border',
-                            'rounded-lg',
-                            'focus:outline-none',
-                            'text-koma-foreground',
-                            'text-[10px]',
-                          )}
+                          className={"w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-lg focus:outline-none text-koma-foreground text-[10px]"}
                         />
                       </div>
                       <div className="space-y-1">
                         <label
-                          className={clsx(
-                            'text-[8px]',
-                            'text-koma-subtle',
-                            'font-bold',
-                            'uppercase',
-                            'tracking-wider',
-                            'block',
-                          )}
+                          className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
                         >
                           Nome Cliente:
                         </label>
@@ -1032,18 +693,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           required={pdvCart.length > 0}
                           value={pdvCustomerName}
                           onChange={(e) => setPdvCustomerName(e.target.value)}
-                          className={clsx(
-                            'w-full',
-                            'px-2',
-                            'py-1.5',
-                            'bg-koma-input',
-                            'border',
-                            'border-koma-border',
-                            'rounded-lg',
-                            'focus:outline-none',
-                            'text-koma-foreground',
-                            'text-[10px]',
-                          )}
+                          className={"w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-lg focus:outline-none text-koma-foreground text-[10px]"}
                         />
                       </div>
                     </div>
@@ -1064,14 +714,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     {pdvOrderType === 'entrega' && (
                       <div className="space-y-1">
                         <label
-                          className={clsx(
-                            'text-[8px]',
-                            'text-koma-subtle',
-                            'font-bold',
-                            'uppercase',
-                            'tracking-wider',
-                            'block',
-                          )}
+                          className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
                         >
                           Endereço:
                         </label>
@@ -1081,18 +724,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           required
                           value={pdvDeliveryAddress}
                           onChange={(e) => setPdvDeliveryAddress(e.target.value)}
-                          className={clsx(
-                            'w-full',
-                            'px-2',
-                            'py-1.5',
-                            'bg-koma-input',
-                            'border',
-                            'border-koma-border',
-                            'rounded-lg',
-                            'focus:outline-none',
-                            'text-koma-foreground',
-                            'text-[10px]',
-                          )}
+                          className={"w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-lg focus:outline-none text-koma-foreground text-[10px]"}
                         />
                       </div>
                     )}
@@ -1100,21 +732,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 )}
 
                 <div
-                  className={clsx(
-                    'flex',
-                    'justify-between',
-                    'items-center',
-                    'font-mono',
-                    'border-t',
-                    'border-koma-border',
-                    'pt-2',
-                    'text-[11px]',
-                    'font-bold',
-                    'text-koma-foreground',
-                  )}
+                  className={"flex justify-between items-center font-mono border-t border-koma-border pt-2 text-[11px] font-bold text-koma-foreground"}
                 >
                   <span>Total Pedido:</span>
-                  <span className={clsx('text-emerald-700 dark:text-emerald-400', 'text-sm')}>
+                  <span className={"text-emerald-700 dark:text-emerald-400 text-sm"}>
                     {formatCurrency(pdvCart.reduce((sum, item) => sum + item.product.preco * item.quantity, 0))}
                   </span>
                 </div>
@@ -1123,44 +744,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   id="pdv-submit-btn"
                   type="submit"
                   disabled={pdvCart.length === 0 || isLoading}
-                  className={clsx(
-                    'w-full',
-                    'min-h-11',
-                    'py-2',
-                    'bg-[#00b894]',
-                    'hover:bg-[#13c9a0]',
-                    'text-[#06110d]',
-                    'rounded-xl',
-                    'border',
-                    'border-transparent',
-                    'font-bold',
-                    'text-[10px]',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                    'flex',
-                    'flex-col',
-                    'items-center',
-                    'justify-center',
-                    'gap-0.5',
-                    'disabled:cursor-not-allowed',
-                    'disabled:border-[#272c29]',
-                    'disabled:bg-koma-card',
-                    'disabled:text-zinc-600',
-                  )}
+                  className={"w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"}
                 >
-                  <div className={clsx('flex', 'items-center', 'gap-1')}>
+                  <div className={"flex items-center gap-1"}>
                     <Check size={12} />
                     <span>Lançar Pedido</span>
                   </div>
                   <span
-                    className={clsx(
-                      'text-[7.5px]',
-                      'text-emerald-600 dark:text-emerald-300/80',
-                      'font-mono',
-                      'font-normal',
-                    )}
+                    className={"text-[7.5px] text-emerald-600 dark:text-emerald-300/80 font-mono font-normal"}
                   >
                     Pressione [F4] para finalizar
                   </span>
@@ -1173,44 +764,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('carrinho')}
-                className={clsx(
-                  'xl:hidden',
-                  'fixed',
-                  'bottom-4',
-                  'left-4',
-                  'right-4',
-                  'z-40',
-                  'py-3',
-                  'px-5',
-                  'bg-[#00b894]',
-                  'hover:bg-[#13c9a0]',
-                  'text-[#06110d]',
-                  'font-bold',
-                  'rounded-2xl',
-                  'shadow-2xl',
-                  'flex',
-                  'items-center',
-                  'justify-between',
-                  'border',
-                  'border-[#4fe0bc]/30',
-                  'animate-fade-in',
-                  'cursor-pointer',
-                )}
+                className={"xl:hidden fixed bottom-4 left-4 right-4 z-40 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"}
               >
-                <span className={clsx('text-xs', 'flex', 'items-center', 'gap-2')}>
+                <span className={"text-xs flex items-center gap-2"}>
                   <ShoppingCart size={16} />
                   <span>{pdvCartItemCount} itens no carrinho</span>
                 </span>
                 <span
-                  className={clsx(
-                    'text-xs',
-                    'font-mono',
-                    'font-extrabold',
-                    'bg-black/30',
-                    'px-3',
-                    'py-1',
-                    'rounded-xl',
-                  )}
+                  className={"text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl"}
                 >
                   {formatCurrency(pdvCart.reduce((sum, item) => sum + item.product.preco * item.quantity, 0))} →
                 </span>

@@ -63,86 +63,28 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
     selectedOrder &&
     showCheckoutModal && (
       <div
-        className={clsx(
-          'fixed',
-          'inset-0',
-          'bg-black/85',
-          'backdrop-blur-xs',
-          'z-50',
-          'flex',
-          'items-center',
-          'justify-center',
-          'p-4',
-          'overflow-y-auto'
-        )}
+        className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto"}
         onClick={() => setShowCheckoutModal(false)}
       >
         <div
-          className={clsx(
-            'bg-koma-input/95',
-            'backdrop-blur-xl',
-            'rounded-3xl',
-            'border',
-            'border-koma-accent/15',
-            'shadow-2xl',
-            'w-full',
-            'max-w-3xl',
-            'overflow-hidden',
-            'max-h-[90vh]',
-            'flex',
-            'flex-col',
-            'my-4'
-          )}
+          className={"bg-koma-input/95 backdrop-blur-xl rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col my-4"}
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            className={clsx(
-              'bg-koma-raised',
-              'text-koma-foreground',
-              'p-5',
-              'flex',
-              'justify-between',
-              'items-center',
-              'shrink-0',
-              'border-b',
-              'border-koma-border'
-            )}
+            className={"bg-koma-raised text-koma-foreground p-5 flex justify-between items-center shrink-0 border-b border-koma-border"}
           >
             <div>
               <span
-                className={clsx(
-                  'text-[10px]',
-                  'font-bold',
-                  'text-emerald-700 dark:text-emerald-400',
-                  'uppercase',
-                  'tracking-wider',
-                  'block'
-                )}
+                className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block"}
               >
                 Checkout / Caixa
               </span>
-              <h3 className={clsx('font-serif', 'text-lg', 'font-bold', 'text-koma-foreground')}>
+              <h3 className={"font-serif text-lg font-bold text-koma-foreground"}>
                 {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
               </h3>
               {selectedOrder.mesaOrigemId && Number(selectedOrder.mesaOrigemId) !== Number(selectedOrder.mesaId) && (
                 <span
-                  className={clsx(
-                    'inline-flex',
-                    'items-center',
-                    'gap-1',
-                    'mt-1',
-                    'px-2',
-                    'py-0.5',
-                    'text-[9px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'bg-emerald-500/10',
-                    'text-emerald-600 dark:text-emerald-300',
-                    'border',
-                    'border-emerald-500/25',
-                    'rounded-full'
-                  )}
+                  className={"inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-500/25 rounded-full"}
                 >
                   🔗 Mesclado de Mesa {selectedOrder.mesaOrigemId}
                 </span>
@@ -150,23 +92,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
               {selectedOrder.mesaTransferidaDe &&
                 Number(selectedOrder.mesaTransferidaDe) !== Number(selectedOrder.mesaId) && (
                   <span
-                    className={clsx(
-                      'inline-flex',
-                      'items-center',
-                      'gap-1',
-                      'mt-1',
-                      'px-2',
-                      'py-0.5',
-                      'text-[9px]',
-                      'font-bold',
-                      'uppercase',
-                      'tracking-wider',
-                      'bg-purple-500/10',
-                      'text-purple-300',
-                      'border',
-                      'border-purple-500/25',
-                      'rounded-full'
-                    )}
+                    className={"inline-flex items-center gap-1 mt-1 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-300 border border-purple-500/25 rounded-full"}
                   >
                     🔗 Transferido da Mesa {selectedOrder.mesaTransferidaDe}
                   </span>
@@ -175,17 +101,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
             <button
               type="button"
               onClick={() => setShowCheckoutModal(false)}
-              className={clsx(
-                'p-1.5',
-                'hover:bg-koma-raised',
-                'rounded-full',
-                'text-koma-subtle',
-                'hover:text-koma-foreground',
-                'transition-colors',
-                'cursor-pointer',
-                'border',
-                'border-transparent'
-              )}
+              className={"p-1.5 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               title="Fechar (o pedido permanece na fila)"
             >
               <X size={18} />
@@ -253,41 +169,22 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
           )}
 
           <div
-            className={clsx(
-              'p-5',
-              'overflow-y-auto',
-              'flex-1',
-              'bg-koma-raised',
-              'grid',
-              'grid-cols-1',
-              'md:grid-cols-2',
-              'gap-5'
-            )}
+            className={"p-5 overflow-y-auto flex-1 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-5"}
           >
             <div className="space-y-4">
               <div
-                className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-koma-border', 'pb-1.5')}
+                className={"flex items-center justify-between border-b border-koma-border pb-1.5"}
               >
                 <div>
-                  <h4 className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>Extrato Consumo</h4>
-                  <span className={clsx('text-[8px]', 'text-koma-muted')}>
+                  <h4 className={"font-serif font-bold text-koma-secondary"}>Extrato Consumo</h4>
+                  <span className={"text-[8px] text-koma-muted"}>
                     Itens prontos já podem ser recebidos. Itens em preparo ficam visíveis, mas bloqueados até avançarem
                     na cozinha.
                   </span>
                 </div>
                 {taxaServicoAtiva && (
                   <label
-                    className={clsx(
-                      'flex',
-                      'items-center',
-                      'gap-1.5',
-                      'text-[10px]',
-                      'text-koma-subtle',
-                      'font-bold',
-                      'uppercase',
-                      'tracking-wider',
-                      'cursor-pointer'
-                    )}
+                    className={"flex items-center gap-1.5 text-[10px] text-koma-subtle font-bold uppercase tracking-wider cursor-pointer"}
                   >
                     <input
                       type="checkbox"
@@ -301,22 +198,14 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                             : getCheckoutBalance(selectedOrder, includeServiceTax);
                         setPaymentValor(nextValue);
                       }}
-                      className={clsx(
-                        'rounded',
-                        'border-koma-border',
-                        'text-emerald-500',
-                        'focus:ring-emerald-500',
-                        'h-3.5',
-                        'w-3.5',
-                        'bg-koma-card'
-                      )}
+                      className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-3.5 w-3.5 bg-koma-card"}
                     />
                     <span>Taxa de {serviceTaxRate}%</span>
                   </label>
                 )}
               </div>
 
-              <div className={clsx('space-y-2.5', 'max-h-[40vh]', 'overflow-y-auto', 'pr-1')}>
+              <div className={"space-y-2.5 max-h-[40vh] overflow-y-auto pr-1"}>
                 {selectedOrder.itens.map((item) => {
                   const isPaid = item.pago;
                   const isCancelled = (item.status as string) === 'cancelado';
@@ -356,7 +245,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                                 : 'bg-koma-card/60 border-koma-border/50 hover:border-koma-border cursor-pointer'
                       }`}
                     >
-                      <div className={clsx('flex', 'gap-2', 'items-start', 'flex-1', 'min-w-0')}>
+                      <div className={"flex gap-2 items-start flex-1 min-w-0"}>
                         {canSelect && (
                           <div
                             className={`mt-0.5 h-3.5 w-3.5 rounded border border-koma-border flex items-center justify-center shrink-0 bg-koma-card ${
@@ -368,22 +257,16 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                             )}
                           </div>
                         )}
-                        <div className={clsx('min-w-0', 'space-y-0.5')}>
-                          <span className={clsx('font-semibold', 'text-koma-foreground', 'block', 'truncate')}>
+                        <div className={"min-w-0 space-y-0.5"}>
+                          <span className={"font-semibold text-koma-foreground block truncate"}>
                             {item.nome}
                           </span>
-                          <span className={clsx('text-[9px]', 'text-koma-subtle', 'block')}>
+                          <span className={"text-[9px] text-koma-subtle block"}>
                             Cliente: {item.clienteNome}
                           </span>
                           {!isPaid && !isCancelled && !isReadyForCheckout && (
                             <span
-                              className={clsx(
-                                'text-[8px]',
-                                'font-semibold',
-                                'text-amber-600',
-                                'dark:text-amber-300',
-                                'block'
-                              )}
+                              className={"text-[8px] font-semibold text-amber-600 dark:text-amber-300 block"}
                             >
                               Em preparo · avance na cozinha antes de baixar este item
                             </span>
@@ -391,53 +274,25 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                         </div>
                       </div>
 
-                      <div className={clsx('text-right', 'pl-3', 'shrink-0', 'font-mono')}>
-                        <span className={clsx('font-bold', 'text-koma-secondary')}>R$ {item.preco.toFixed(2)}</span>
+                      <div className={"text-right pl-3 shrink-0 font-mono"}>
+                        <span className={"font-bold text-koma-secondary"}>R$ {item.preco.toFixed(2)}</span>
                         {isPaid && (
                           <span
-                            className={clsx(
-                              'text-[8px]',
-                              'uppercase',
-                              'tracking-wider',
-                              'block',
-                              'font-bold',
-                              'text-emerald-500',
-                              'font-sans',
-                              'mt-0.5'
-                            )}
+                            className={"text-[8px] uppercase tracking-wider block font-bold text-emerald-500 font-sans mt-0.5"}
                           >
                             Pago
                           </span>
                         )}
                         {isCancelled && (
                           <span
-                            className={clsx(
-                              'text-[8px]',
-                              'uppercase',
-                              'tracking-wider',
-                              'block',
-                              'font-bold',
-                              'text-rose-500',
-                              'font-sans',
-                              'mt-0.5'
-                            )}
+                            className={"text-[8px] uppercase tracking-wider block font-bold text-rose-500 font-sans mt-0.5"}
                           >
                             Cancelado
                           </span>
                         )}
                         {!isPaid && !isCancelled && !isReadyForCheckout && (
                           <span
-                            className={clsx(
-                              'text-[8px]',
-                              'uppercase',
-                              'tracking-wider',
-                              'block',
-                              'font-bold',
-                              'text-amber-600',
-                              'dark:text-amber-300',
-                              'font-sans',
-                              'mt-0.5'
-                            )}
+                            className={"text-[8px] uppercase tracking-wider block font-bold text-amber-600 dark:text-amber-300 font-sans mt-0.5"}
                           >
                             Em preparo
                           </span>
@@ -456,62 +311,36 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 const projectedBalance = Math.max(0, currentBalance - selectedTotal);
                 return (
                   <div
-                    className={clsx(
-                      'bg-koma-card/60',
-                      'border',
-                      'border-koma-border',
-                      'p-4',
-                      'rounded-2xl',
-                      'font-mono',
-                      'text-[11px]',
-                      'space-y-2'
-                    )}
+                    className={"bg-koma-card/60 border border-koma-border p-4 rounded-2xl font-mono text-[11px] space-y-2"}
                   >
-                    <div className={clsx('flex', 'justify-between')}>
-                      <span className={clsx('font-sans', 'text-koma-subtle')}>
+                    <div className={"flex justify-between"}>
+                      <span className={"font-sans text-koma-subtle"}>
                         {isTableCheckoutOrder(selectedOrder) ? 'Consumo da Mesa:' : 'Total Itens em Aberto:'}
                       </span>
                       <span className="text-koma-secondary">R$ {subtotal.toFixed(2)}</span>
                     </div>
                     {taxaServicoAtiva && checkoutServiceTax && (
-                      <div className={clsx('flex', 'justify-between')}>
-                        <span className={clsx('font-sans', 'text-koma-subtle')}>Taxa Serviço ({serviceTaxRate}%):</span>
+                      <div className={"flex justify-between"}>
+                        <span className={"font-sans text-koma-subtle"}>Taxa Serviço ({serviceTaxRate}%):</span>
                         <span className="text-koma-secondary">R$ {taxa.toFixed(2)}</span>
                       </div>
                     )}
                     {selectedItemIds.length > 0 && (
                       <div
-                        className={clsx(
-                          'flex',
-                          'justify-between',
-                          'text-emerald-700 dark:text-emerald-400',
-                          'font-bold',
-                          'border-t',
-                          'border-koma-border/40',
-                          'pt-2'
-                        )}
+                        className={"flex justify-between text-emerald-700 dark:text-emerald-400 font-bold border-t border-koma-border/40 pt-2"}
                       >
                         <span className="font-sans">Total Selecionado:</span>
                         <span>R$ {selectedTotal.toFixed(2)}</span>
                       </div>
                     )}
                     {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
-                      <div className={clsx('flex', 'justify-between', 'text-emerald-400')}>
-                        <span className={clsx('font-sans', 'font-bold')}>Total Pago Parcial:</span>
+                      <div className={"flex justify-between text-emerald-400"}>
+                        <span className={"font-sans font-bold"}>Total Pago Parcial:</span>
                         <span className="font-bold">R$ {selectedOrder.valorPago.toFixed(2)}</span>
                       </div>
                     ) : null}
                     <div
-                      className={clsx(
-                        'flex',
-                        'justify-between',
-                        'border-t',
-                        'border-koma-border',
-                        'pt-2',
-                        'text-sm',
-                        'text-emerald-700 dark:text-emerald-400',
-                        'font-bold'
-                      )}
+                      className={"flex justify-between border-t border-koma-border pt-2 text-sm text-emerald-700 dark:text-emerald-400 font-bold"}
                     >
                       <span className="font-sans">
                         {selectedItemIds.length > 0 ? 'Restará após receber:' : 'Saldo restante:'}
@@ -524,47 +353,18 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
               {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
               <div
-                className={clsx(
-                  'bg-koma-card/40',
-                  'border',
-                  'border-koma-border/50',
-                  'p-4',
-                  'rounded-2xl',
-                  'space-y-3',
-                  'text-left'
-                )}
+                className={"bg-koma-card/40 border border-koma-border/50 p-4 rounded-2xl space-y-3 text-left"}
               >
                 <span
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block'
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Reimpressão de Extrato
                 </span>
-                <div className={clsx('flex', 'gap-2')}>
+                <div className={"flex gap-2"}>
                   <button
                     type="button"
                     onClick={printCheckoutReceipt}
-                    className={clsx(
-                      'flex-1',
-                      'py-2',
-                      'bg-koma-panel',
-                      'hover:bg-koma-raised',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-foreground',
-                      'transition-all',
-                      'cursor-pointer',
-                      'text-center'
-                    )}
+                    className={"flex-1 py-2 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"}
                     title="Imprime a via térmica completa com todos os itens consumidos"
                   >
                     Extrato Completo
@@ -572,21 +372,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                   <button
                     type="button"
                     onClick={printCheckoutValues}
-                    className={clsx(
-                      'flex-1',
-                      'py-2',
-                      'bg-koma-panel',
-                      'hover:bg-koma-raised',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-foreground',
-                      'transition-all',
-                      'cursor-pointer',
-                      'text-center'
-                    )}
+                    className={"flex-1 py-2 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"}
                     title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
                   >
                     Apenas Valores
@@ -597,69 +383,33 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
             <div className="space-y-4">
               <h4
-                className={clsx(
-                  'font-serif',
-                  'font-bold',
-                  'text-koma-secondary',
-                  'border-b',
-                  'border-koma-border',
-                  'pb-1.5'
-                )}
+                className={"font-serif font-bold text-koma-secondary border-b border-koma-border pb-1.5"}
               >
                 Divisão e Recebimento
               </h4>
 
               {selectedItemIds.length > 0 ? (
                 <div
-                  className={clsx(
-                    'grid',
-                    'grid-cols-2',
-                    'gap-3',
-                    'bg-koma-card',
-                    'p-3',
-                    'rounded-2xl',
-                    'border',
-                    'border-koma-border'
-                  )}
+                  className={"grid grid-cols-2 gap-3 bg-koma-card p-3 rounded-2xl border border-koma-border"}
                 >
                   <div>
                     <span
-                      className={clsx(
-                        'text-[9px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block'
-                      )}
+                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Itens prontos
                     </span>
-                    <strong className={clsx('mt-1', 'block', 'text-sm', 'text-koma-foreground', 'font-mono')}>
+                    <strong className={"mt-1 block text-sm text-koma-foreground font-mono"}>
                       {selectedItemIds.length}
                     </strong>
                   </div>
                   <div className="text-right">
                     <span
-                      className={clsx(
-                        'text-[9px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block'
-                      )}
+                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Recebendo agora
                     </span>
                     <strong
-                      className={clsx(
-                        'mt-1',
-                        'block',
-                        'text-sm',
-                        'text-emerald-700 dark:text-emerald-300',
-                        'font-mono'
-                      )}
+                      className={"mt-1 block text-sm text-emerald-700 dark:text-emerald-300 font-mono"}
                     >
                       R$ {getSelectedItemsTotal(selectedOrder, selectedItemIds).toFixed(2)}
                     </strong>
@@ -667,27 +417,11 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 </div>
               ) : (
                 <div
-                  className={clsx(
-                    'grid',
-                    'grid-cols-2',
-                    'gap-3',
-                    'bg-koma-card',
-                    'p-3',
-                    'rounded-2xl',
-                    'border',
-                    'border-koma-border'
-                  )}
+                  className={"grid grid-cols-2 gap-3 bg-koma-card p-3 rounded-2xl border border-koma-border"}
                 >
                   <div className="space-y-1">
                     <label
-                      className={clsx(
-                        'text-[9px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block'
-                      )}
+                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Pessoas:
                     </label>
@@ -701,37 +435,17 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                         const peopleNum = parseInt(val, 10) || 1;
                         setPaymentValor(getCheckoutBalance(selectedOrder) / peopleNum);
                       }}
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-1.5',
-                        'text-xs',
-                        'bg-koma-panel',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'focus:outline-none',
-                        'text-koma-foreground',
-                        'text-center',
-                        'font-mono'
-                      )}
+                      className={"w-full px-3 py-1.5 text-xs bg-koma-panel border border-koma-border rounded-xl focus:outline-none text-koma-foreground text-center font-mono"}
                     />
                   </div>
-                  <div className={clsx('space-y-1', 'flex', 'flex-col', 'justify-end', 'text-right')}>
+                  <div className={"space-y-1 flex flex-col justify-end text-right"}>
                     <span
-                      className={clsx(
-                        'text-[9px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block'
-                      )}
+                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Valor por pessoa:
                     </span>
                     <span
-                      className={clsx('text-sm', 'font-bold', 'text-koma-foreground', 'font-mono', 'leading-relaxed')}
+                      className={"text-sm font-bold text-koma-foreground font-mono leading-relaxed"}
                     >
                       R${' '}
                       {(() => {
@@ -745,53 +459,22 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
               <form
                 onSubmit={handleProcessPayment}
-                className={clsx(
-                  'space-y-4',
-                  'bg-koma-card/40',
-                  'p-4',
-                  'rounded-2xl',
-                  'border',
-                  'border-koma-border/50'
-                )}
+                className={"space-y-4 bg-koma-card/40 p-4 rounded-2xl border border-koma-border/50"}
               >
                 <span
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-emerald-700 dark:text-emerald-400',
-                    'uppercase',
-                    'tracking-wider',
-                    'block'
-                  )}
+                  className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block"}
                 >
                   Receber Pagamento
                 </span>
 
                 <div className="space-y-1.5">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-wider',
-                      'block'
-                    )}
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                   >
                     Método de Baixa:
                   </label>
                   <div
-                    className={clsx(
-                      'flex',
-                      'gap-1.5',
-                      'p-1',
-                      'bg-koma-card',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'shrink-0',
-                      'flex-wrap'
-                    )}
+                    className={"flex gap-1.5 p-1 bg-koma-card border border-koma-border rounded-xl shrink-0 flex-wrap"}
                   >
                     <button
                       type="button"
@@ -840,30 +523,16 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                   </div>
                 </div>
 
-                <div className={clsx('space-y-1.5', 'font-sans')}>
+                <div className={"space-y-1.5 font-sans"}>
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-wider',
-                      'block'
-                    )}
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                   >
                     Valor a Lançar (R$):
                   </label>
-                  <div className={clsx('flex', 'gap-2')}>
-                    <div className={clsx('relative', 'flex-1')}>
+                  <div className={"flex gap-2"}>
+                    <div className={"relative flex-1"}>
                       <span
-                        className={clsx(
-                          'absolute',
-                          'left-3.5',
-                          'top-2.5',
-                          'text-koma-subtle',
-                          'font-mono',
-                          'text-[11px]'
-                        )}
+                        className={"absolute left-3.5 top-2.5 text-koma-subtle font-mono text-[11px]"}
                       >
                         R$
                       </span>
@@ -907,26 +576,12 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                           setPaymentValor(getCheckoutBalance(selectedOrder));
                         }
                       }}
-                      className={clsx(
-                        'px-3.5',
-                        'py-2',
-                        'bg-emerald-500/15',
-                        'hover:bg-[#10b981]/25',
-                        'border',
-                        'border-emerald-500/30',
-                        'rounded-xl',
-                        'text-[10px]',
-                        'font-bold',
-                        'text-emerald-700 dark:text-emerald-400',
-                        'transition-all',
-                        'cursor-pointer',
-                        'whitespace-nowrap'
-                      )}
+                      className={"px-3.5 py-2 bg-emerald-500/15 hover:bg-[#10b981]/25 border border-emerald-500/30 rounded-xl text-[10px] font-bold text-emerald-700 dark:text-emerald-400 transition-all cursor-pointer whitespace-nowrap"}
                     >
                       {selectedItemIds.length > 0 ? 'Adiantar outro valor' : 'Usar saldo total'}
                     </button>
                   </div>
-                  <span className={clsx('text-[8px]', 'text-koma-muted', 'block', 'mt-1.5', 'leading-normal')}>
+                  <span className={"text-[8px] text-koma-muted block mt-1.5 leading-normal"}>
                     <strong>Dica:</strong>{' '}
                     {selectedItemIds.length > 0
                       ? 'Os itens prontos marcados serão baixados juntos. “Adiantar outro valor” limpa a seleção e libera um valor manual.'
@@ -939,18 +594,11 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 {/* BOTÕES DE ATALHO DE CÉDULAS (CASH SHORTCUTS) */}
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[8px]',
-                      'font-bold',
-                      'text-koma-muted',
-                      'uppercase',
-                      'tracking-wider',
-                      'block'
-                    )}
+                    className={"text-[8px] font-bold text-koma-muted uppercase tracking-wider block"}
                   >
                     Atalhos de Cédulas:
                   </label>
-                  <div className={clsx('flex', 'flex-wrap', 'gap-1')}>
+                  <div className={"flex flex-wrap gap-1"}>
                     {[2, 5, 10, 20, 50, 100, 200].map((val) => (
                       <button
                         key={val}
@@ -959,23 +607,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                           setSelectedItemIds([]);
                           setPaymentValor(val);
                         }}
-                        className={clsx(
-                          'px-2.5',
-                          'py-1',
-                          'bg-koma-panel',
-                          'hover:bg-koma-raised',
-                          'border',
-                          'border-koma-border',
-                          'rounded-lg',
-                          'text-[9px]',
-                          'font-bold',
-                          'text-koma-secondary',
-                          'font-mono',
-                          'transition-all',
-                          'cursor-pointer',
-                          'hover:border-gray-500',
-                          'hover:text-koma-foreground'
-                        )}
+                        className={"px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[9px] font-bold text-koma-secondary font-mono transition-all cursor-pointer hover:border-gray-500 hover:text-koma-foreground"}
                       >
                         R$ {val}
                       </button>
@@ -985,15 +617,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
                 {identifiedCustomer && identifiedCustomer.telefone ? (
                   <div
-                    className={clsx(
-                      'p-2.5',
-                      'rounded-xl',
-                      'border',
-                      'border-emerald-500/25',
-                      'bg-emerald-500/10',
-                      'text-koma-foreground',
-                      'space-y-1'
-                    )}
+                    className={"p-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-koma-foreground space-y-1"}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-400">
@@ -1018,16 +642,9 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                     </div>
                   </div>
                 ) : (
-                  <div className={clsx('space-y-1.5', 'font-sans')}>
+                  <div className={"space-y-1.5 font-sans"}>
                     <label
-                      className={clsx(
-                        'text-[10px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block'
-                      )}
+                      className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Celular do cliente (Opcional - Fidelidade):
                     </label>
@@ -1038,19 +655,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                       value={paymentCPF}
                       onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
                       placeholder="(00) 00000-0000"
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-2',
-                        'text-xs',
-                        'bg-koma-card',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'focus:outline-none',
-                        'focus:border-[#10b981]',
-                        'text-koma-foreground'
-                      )}
+                      className={"w-full px-3 py-2 text-xs bg-koma-card border border-koma-border rounded-xl focus:outline-none focus:border-[#10b981] text-koma-foreground"}
                     />
                   </div>
                 )}
@@ -1064,28 +669,14 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                     const troco = inputVal - restante;
                     return (
                       <div
-                        className={clsx(
-                          'bg-emerald-950/45',
-                          'border',
-                          'border-emerald-800/40',
-                          'text-emerald-600 dark:text-emerald-300',
-                          'p-3',
-                          'rounded-xl',
-                          'text-xs',
-                          'font-mono',
-                          'flex',
-                          'justify-between',
-                          'items-center',
-                          'shadow-md',
-                          'shadow-emerald-950/20'
-                        )}
+                        className={"bg-emerald-950/45 border border-emerald-800/40 text-emerald-600 dark:text-emerald-300 p-3 rounded-xl text-xs font-mono flex justify-between items-center shadow-md shadow-emerald-950/20"}
                       >
                         <span
-                          className={clsx('font-bold', 'uppercase', 'text-[9px]', 'tracking-wider', 'text-emerald-400')}
+                          className={"font-bold uppercase text-[9px] tracking-wider text-emerald-400"}
                         >
                           Troco devido:
                         </span>
-                        <span className={clsx('font-extrabold', 'text-sm', 'text-emerald-600 dark:text-emerald-300')}>
+                        <span className={"font-extrabold text-sm text-emerald-600 dark:text-emerald-300"}>
                           R$ {troco.toFixed(2)}
                         </span>
                       </div>
@@ -1096,19 +687,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
                 {selectedItemIds.length > 0 && (
                   <div
-                    className={clsx(
-                      'bg-emerald-500/15',
-                      'border',
-                      'border-emerald-500/30',
-                      'text-emerald-700 dark:text-emerald-400',
-                      'p-2.5',
-                      'rounded-xl',
-                      'text-[10px]',
-                      'flex',
-                      'items-center',
-                      'justify-between',
-                      'gap-2'
-                    )}
+                    className={"bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 p-2.5 rounded-xl text-[10px] flex items-center justify-between gap-2"}
                   >
                     <span>
                       Pagando <strong>{selectedItemIds.length} item(ns)</strong> selecionado(s).
@@ -1120,18 +699,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                         setSplitPeople('1');
                         setPaymentValor('');
                       }}
-                      className={clsx(
-                        'shrink-0',
-                        'rounded-lg',
-                        'border',
-                        'border-emerald-500/30',
-                        'px-2',
-                        'py-1',
-                        'text-[8px]',
-                        'font-bold',
-                        'uppercase',
-                        'hover:bg-emerald-500/15'
-                      )}
+                      className={"shrink-0 rounded-lg border border-emerald-500/30 px-2 py-1 text-[8px] font-bold uppercase hover:bg-emerald-500/15"}
                     >
                       Outro valor
                     </button>
@@ -1140,17 +708,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
                 {errorMsg && (
                   <div
-                    className={clsx(
-                      'bg-rose-500/10',
-                      'border',
-                      'border-rose-500/25',
-                      'text-rose-400',
-                      'p-2.5',
-                      'rounded-xl',
-                      'text-center',
-                      'font-medium',
-                      'block'
-                    )}
+                    className={"bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block"}
                   >
                     {errorMsg}
                   </div>
@@ -1159,27 +717,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 <button
                   type="submit"
                   disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
-                  className={clsx(
-                    'w-full',
-                    'py-3',
-                    'bg-emerald-600',
-                    'hover:bg-emerald-700',
-                    'text-white',
-                    'rounded-xl',
-                    'font-bold',
-                    'flex',
-                    'items-center',
-                    'justify-center',
-                    'gap-1.5',
-                    'shadow-md',
-                    'transition-all',
-                    'cursor-pointer',
-                    'uppercase',
-                    'tracking-wider',
-                    'text-[10px]',
-                    'disabled:cursor-not-allowed',
-                    'disabled:opacity-50'
-                  )}
+                  className={"w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wider text-[10px] disabled:cursor-not-allowed disabled:opacity-50"}
                 >
                   <Check size={14} />
                   <span>

@@ -24,13 +24,27 @@ const ownerPaths = [
   'catalog/useCashierCatalog.ts', 'catalog/CashierCatalog.tsx',
   'customers/useCashierCustomers.ts', 'customers/CashierCustomers.tsx',
   'settings/useCashierSettings.ts', 'settings/CashierSettings.tsx',
-  'inventory/CashierInventory.tsx', 'online-menu/CashierOnlineMenu.tsx',
+  'settings/useCashierTableSettings.ts', 'settings/CashierPrintingSettings.tsx',
+  'settings/CashierServiceTaxSettings.tsx', 'settings/CashierWaiterSettings.tsx',
+  'settings/CashierTableSettings.tsx', 'settings/CashierTableDialogs.tsx',
+  'inventory/CashierInventory.tsx', 'inventory/useCashierInventoryData.ts',
+  'inventory/useCashierInventoryOperations.ts', 'inventory/useCashierIngredientEditor.ts',
+  'inventory/useCashierSupplierEditor.ts', 'inventory/CashierIngredientDialogs.tsx',
+  'inventory/CashierStockAdjustmentDialog.tsx', 'inventory/CashierSupplierDialogs.tsx',
+  'navigation/useCashierNavigation.ts', 'navigation/useCashierPreferences.ts',
+  'navigation/cashierNavigation.ts', 'navigation/CashierDesktopSidebar.tsx',
+  'navigation/CashierMobileSidebar.tsx', 'navigation/CashierOperatorDrawer.tsx',
+  'salao/useCashierSalonProjection.ts', 'salao/CaixaSalonTab.tsx',
+  'salao/CashierSalonCard.tsx', 'salao/cashierSalonContracts.ts', 'kitchen/CashierKitchen.tsx',
+  'orders/CashierCouriers.tsx', 'orders/CashierCancelConsumptionDialog.tsx',
+  'shift/CashierOpenShiftDialog.tsx', 'online-menu/CashierOnlineMenu.tsx',
   'team/CashierTeam.tsx', 'reports/CashierReports.tsx',
   'pdv/useCashierPdv.ts', 'pdv/usePdvCategoryNavigation.ts', 'pdv/CashierPdvView.tsx',
   'loading/DeferredCashierSection.tsx', 'kitchen/KitchenTimer.tsx',
 ].map(file => ownerBase + file);
 const domainPaths = [
   'tableConsumption.ts', 'operationalTime.ts', 'catalogPresentation.ts', 'search.ts',
+  'tableReadModel.ts', 'cashierSalonProjection.ts', 'waiterSalonProjection.ts',
 ].map(file => 'src/domain/' + file);
 const stats = file => {
   const text = read(file);
@@ -49,8 +63,19 @@ const stats = file => {
   return { file, lines: (text.match(/\n/g) || []).length, bytes: Buffer.byteLength(text), calls };
 };
 const files = [root, 'src/App.tsx', 'src/domain.ts', 'AGENTS.md', '.agents/AGENTS.md',
+  'src/components/app/operationalContracts.ts',
+  'src/components/app/data/useOperationalTables.ts',
+  'src/components/app/data/useOperationalCatalog.ts',
+  'src/components/app/data/useOperationalOrders.ts',
+  'src/components/app/drafts/useOperationalDrafts.ts',
   ...ownerPaths, ...domainPaths].map(stats).filter(Boolean);
 const taskEntries = {
+  salon: [
+    'src/domain/tableReadModel.ts', 'src/domain/operationalState.ts',
+    'src/domain/cashierSalonProjection.ts', 'src/domain/waiterSalonProjection.ts',
+    'src/components/shared/SharedTableCard.tsx', 'src/components/shared/TableOrderContext.tsx',
+    ownerBase + 'salao/cashierSalonContracts.ts', ownerBase + 'salao/CashierSalonCard.tsx',
+  ],
   checkout: read(ownerBase + 'checkout/useCheckoutController.ts') === null ? [root] : [
     ownerBase + 'checkout/useCheckoutController.ts', ownerBase + 'checkout/CheckoutDialog.tsx',
     ownerBase + 'smartpos/useCashierSmartPos.ts', ownerBase + 'cashierContracts.ts',
@@ -67,6 +92,22 @@ const initialReadingPackages = Object.fromEntries(Object.entries(taskEntries).ma
     lines: measured.reduce((sum, file) => sum + file.lines, 0),
     bytes: measured.reduce((sum, file) => sum + file.bytes, 0) }];
 }));
+const listSources = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+  const file = directory + '/' + entry.name;
+  return entry.isDirectory() ? listSources(file) : /\.tsx?$/.test(file) ? [file] : [];
+});
+const sourcePaths = ref
+  ? execFileSync('git', ['ls-tree', '-r', '--name-only', revision, 'src'], { encoding: 'utf8' }).trim().split('\n').filter(file => /\.tsx?$/.test(file))
+  : listSources('src');
+const sourceTotals = sourcePaths.reduce((total, file) => {
+  const text = read(file);
+  if (text !== null) {
+    total.files++;
+    total.lines += (text.match(/\n/g) || []).length;
+    total.bytes += Buffer.byteLength(text);
+  }
+  return total;
+}, { files: 0, lines: 0, bytes: 0 });
 const assets = 'dist/assets';
 const bundle = !ref && existsSync(assets) ? readdirSync(assets).filter(file => file.endsWith('.js')).map(file => {
   const contents = readFileSync(path.join(assets, file));
@@ -75,7 +116,7 @@ const bundle = !ref && existsSync(assets) ? readdirSync(assets).filter(file => f
 console.log(JSON.stringify({
   revision, source: ref ? 'git snapshot' : 'working tree (may include uncommitted edits)',
   method: 'LOC = newline count (wc -l), bytes = UTF-8. Reading packages are entry points + contracts, not transitive closure or measured tokens.',
-  files, initialReadingPackages,
+  files, initialReadingPackages, sourceTotals,
   bundle: bundle ? { source: 'existing dist; run npm run build first', largest: bundle.slice(0, 8),
     over500kB: bundle.filter(file => file.minifiedBytes > 500_000) } : null,
 }, null, 2));

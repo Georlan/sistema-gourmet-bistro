@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import clsx from 'clsx';
+
 import { X, Search, Download, ShoppingBag } from 'lucide-react';
 import { formatBackendDateTime } from '../../utils/dateTime';
 
@@ -57,10 +57,10 @@ export const VendasDetalhesDrawer: React.FC<VendasDetalhesDrawerProps> = ({
 
   return (
     <div
-      className={clsx('fixed', 'inset-0', 'z-50', 'bg-koma-overlay', 'backdrop-blur-sm', 'flex', 'justify-end', 'animate-fade-in')}
+      className={"fixed inset-0 z-50 bg-koma-overlay backdrop-blur-sm flex justify-end animate-fade-in"}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={clsx('bg-koma-panel', 'border-l', 'border-koma-border', 'w-full', 'max-w-2xl', 'h-full', 'flex', 'flex-col', 'p-6', 'space-y-4', 'text-left')}>
+      <div className={"bg-koma-panel border-l border-koma-border w-full max-w-2xl h-full flex flex-col p-6 space-y-4 text-left"}>
         {/* Header */}
         <div className="flex justify-between items-center border-b border-koma-border pb-4">
           <div className="flex items-center gap-2.5">

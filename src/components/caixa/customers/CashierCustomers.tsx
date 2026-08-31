@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { Plus, Search, Users, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
@@ -197,17 +197,9 @@ export default function CashierCustomers({
               },
             ]}
           />
-          <div className={clsx('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-4', 'max-w-5xl')}>
+          <div className={"grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl"}>
             <div
-              className={clsx(
-                'bg-koma-card',
-                'border',
-                'border-koma-border',
-                'p-5',
-                'rounded-2xl',
-                'space-y-4',
-                'h-fit',
-              )}
+              className={"bg-koma-card border border-koma-border p-5 rounded-2xl space-y-4 h-fit"}
             >
               <div className="border-b border-koma-border pb-3">
                 <div>
@@ -219,54 +211,26 @@ export default function CashierCustomers({
               </div>
 
               <form onSubmit={handleSaveFidelidadeConfig} className="space-y-4">
-                <div className={clsx('flex', 'items-center', 'justify-between')}>
-                  <span className={clsx('text-[10px]', 'font-semibold', 'text-koma-secondary')}>
+                <div className={"flex items-center justify-between"}>
+                  <span className={"text-[10px] font-semibold text-koma-secondary"}>
                     {fidelidadeConfig.ativo ? 'Programa ativo' : 'Programa pausado'}
                   </span>
-                  <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer', 'shrink-0')}>
+                  <label className={"relative inline-flex items-center cursor-pointer shrink-0"}>
                     <input
                       type="checkbox"
                       checked={fidelidadeConfig.ativo}
                       onChange={(e) => setFidelidadeConfig((prev) => ({ ...prev, ativo: e.target.checked }))}
-                      className={clsx('sr-only', 'peer')}
+                      className={"sr-only peer"}
                     />
                     <div
-                      className={clsx(
-                        'w-8',
-                        'h-4.5',
-                        'bg-koma-raised',
-                        'peer-focus:outline-none',
-                        'rounded-full',
-                        'peer',
-                        'peer-checked:after:translate-x-full',
-                        'peer-checked:after:border-white',
-                        "after:content-['']",
-                        'after:absolute',
-                        'after:top-[2px]',
-                        'after:left-[2px]',
-                        'after:bg-white',
-                        'after:border-gray-300',
-                        'after:border',
-                        'after:rounded-full',
-                        'after:h-3.5',
-                        'after:w-3.5',
-                        'after:transition-all',
-                        'peer-checked:bg-emerald-600',
-                      )}
+                      className={"w-8 h-4.5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"}
                     ></div>
                   </label>
                 </div>
 
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[9px]',
-                      'font-bold',
-                      'text-koma-secondary',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[9px] font-bold text-koma-secondary uppercase tracking-wider block"}
                   >
                     Benefício oferecido
                   </label>
@@ -274,18 +238,7 @@ export default function CashierCustomers({
                     value={fidelidadeConfig.tipo_recompensa}
                     onChange={(e) => setFidelidadeConfig((prev) => ({ ...prev, tipo_recompensa: e.target.value }))}
                     disabled={!fidelidadeConfig.ativo}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-page',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'text-[10px]',
-                      'disabled:opacity-50',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-[10px] disabled:opacity-50"}
                   >
                     <option value="PONTOS">Pontos</option>
                     <option value="CASHBACK">Dinheiro de volta</option>
@@ -294,14 +247,7 @@ export default function CashierCustomers({
 
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[9px]',
-                      'font-bold',
-                      'text-koma-secondary',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[9px] font-bold text-koma-secondary uppercase tracking-wider block"}
                   >
                     {fidelidadeConfig.tipo_recompensa === 'PONTOS'
                       ? 'Pontos ganhos a cada R$ 1'
@@ -314,33 +260,14 @@ export default function CashierCustomers({
                       setFidelidadeConfig((prev) => ({ ...prev, taxa_conversao: Number(e.target.value) }))
                     }
                     disabled={!fidelidadeConfig.ativo}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-page',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'font-mono',
-                      'text-[10px]',
-                      'disabled:opacity-50',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] disabled:opacity-50"}
                   />
                 </div>
 
                 {fidelidadeConfig.tipo_recompensa === 'PONTOS' && (
                   <div className="space-y-1">
                     <label
-                      className={clsx(
-                        'text-[9px]',
-                        'font-bold',
-                        'text-koma-secondary',
-                        'uppercase',
-                        'tracking-wider',
-                        'block',
-                      )}
+                      className={"text-[9px] font-bold text-koma-secondary uppercase tracking-wider block"}
                     >
                       Valor de cada ponto
                     </label>
@@ -352,19 +279,7 @@ export default function CashierCustomers({
                         setFidelidadeConfig((prev) => ({ ...prev, valor_ponto_em_dinheiro: Number(e.target.value) }))
                       }
                       disabled={!fidelidadeConfig.ativo}
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-2',
-                        'bg-koma-page',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'font-mono',
-                        'text-[10px]',
-                        'disabled:opacity-50',
-                      )}
+                      className={"w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] disabled:opacity-50"}
                     />
                   </div>
                 )}
@@ -379,15 +294,7 @@ export default function CashierCustomers({
             </div>
 
             <div
-              className={clsx(
-                'bg-koma-panel',
-                'border',
-                'border-koma-border',
-                'rounded-2xl',
-                'p-5',
-                'space-y-4',
-                'h-fit',
-              )}
+              className={"bg-koma-panel border border-koma-border rounded-2xl p-5 space-y-4 h-fit"}
             >
               <div className="border-b border-koma-border pb-3">
                 <span className="block text-sm font-bold text-koma-foreground">Como funciona</span>
@@ -435,7 +342,7 @@ export default function CashierCustomers({
         </div>
       )}
       {activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab) && (
-        <div className={clsx('space-y-3.5', 'text-left', 'animate-fade-in')}>
+        <div className={"space-y-3.5 text-left animate-fade-in"}>
           <OperationalBanner
             id="customers-heading"
             eyebrow="RELACIONAMENTO"
@@ -491,59 +398,36 @@ export default function CashierCustomers({
           </section>
 
           <div
-            className={clsx(
-              'bg-koma-panel',
-              'border',
-              'border-koma-border',
-              'rounded-2xl',
-              'p-3',
-              'space-y-4',
-              'shadow-xs',
-            )}
+            className={"bg-koma-panel border border-koma-border rounded-2xl p-3 space-y-4 shadow-xs"}
           >
             {filteredLoyaltyUsers.length > 0 ? (
-              <div className={clsx('overflow-x-auto', 'border', 'border-koma-border', 'rounded-2xl')}>
-                <table className={clsx('w-full', 'text-left', 'text-xs')}>
+              <div className={"overflow-x-auto border border-koma-border rounded-2xl"}>
+                <table className={"w-full text-left text-xs"}>
                   <thead>
                     <tr
-                      className={clsx(
-                        'bg-koma-raised',
-                        'border-b',
-                        'border-koma-border',
-                        'text-koma-muted',
-                        'uppercase',
-                        'tracking-wider',
-                        'font-extrabold',
-                        'text-[9px]',
-                      )}
+                      className={"bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]"}
                     >
                       <th className="p-3.5">Nome do Cliente</th>
                       <th className="p-3.5">WhatsApp</th>
-                      <th className={clsx('p-3.5', 'font-mono')}>Pontos disponíveis</th>
-                      <th className={clsx('p-3.5', 'text-right')}>Ações</th>
+                      <th className={"p-3.5 font-mono"}>Pontos disponíveis</th>
+                      <th className={"p-3.5 text-right"}>Ações</th>
                     </tr>
                   </thead>
-                  <tbody className={clsx('divide-y', 'divide-koma-border')}>
+                  <tbody className={"divide-y divide-koma-border"}>
                     {filteredLoyaltyUsers.map((user) => (
-                      <tr key={user.id} className={clsx('hover:bg-koma-raised/50', 'transition-colors')}>
-                        <td className={clsx('p-3.5', 'font-bold', 'text-koma-foreground')}>{user.cliente}</td>
-                        <td className={clsx('p-3.5', 'font-mono', 'text-koma-muted', 'text-xs')}>
+                      <tr key={user.id} className={"hover:bg-koma-raised/50 transition-colors"}>
+                        <td className={"p-3.5 font-bold text-koma-foreground"}>{user.cliente}</td>
+                        <td className={"p-3.5 font-mono text-koma-muted text-xs"}>
                           {formatarTelefoneTabela(user.telefone)}
                         </td>
                         <td
-                          className={clsx(
-                            'p-3.5',
-                            'font-mono',
-                            'text-emerald-700 dark:text-emerald-400',
-                            'font-extrabold',
-                            'text-xs',
-                          )}
+                          className={"p-3.5 font-mono text-emerald-700 dark:text-emerald-400 font-extrabold text-xs"}
                         >
                           {fidelidadeConfig.tipo_recompensa === 'PONTOS'
                             ? `${user.pontos} pts`
                             : `R$ ${user.saldoCashback.toFixed(2)}`}
                         </td>
-                        <td className={clsx('p-3.5', 'text-right')}>
+                        <td className={"p-3.5 text-right"}>
                           <button
                             onClick={() => {
                               setEditingCrmUser(user);
@@ -552,16 +436,7 @@ export default function CashierCustomers({
                               setCrmFormPontos(user.pontos || 0);
                               setCrmFormCashback(user.saldoCashback || 0);
                             }}
-                            className={clsx(
-                              'px-3.5',
-                              'py-1.5',
-                              'koma-btn-secondary',
-                              'rounded-xl',
-                              'transition-all',
-                              'cursor-pointer',
-                              'font-bold',
-                              'text-xs',
-                            )}
+                            className={"px-3.5 py-1.5 koma-btn-secondary rounded-xl transition-all cursor-pointer font-bold text-xs"}
                           >
                             Editar
                           </button>
@@ -604,51 +479,17 @@ export default function CashierCustomers({
           onClick={(e) => {
             if (e.target === e.currentTarget) setEditingCrmUser(null);
           }}
-          className={clsx(
-            'fixed',
-            'inset-0',
-            'bg-black/85',
-            'backdrop-blur-xs',
-            'z-50',
-            'flex',
-            'items-center',
-            'justify-center',
-            'p-4',
-            'overflow-y-auto',
-            'cursor-pointer',
-          )}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"}
         >
           <div
-            className={clsx(
-              'w-full',
-              'max-w-md',
-              'bg-koma-card',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-6',
-              'space-y-4',
-              'text-left',
-              'shadow-2xl',
-              'relative',
-              'animate-scale-in',
-              'my-8',
-            )}
+            className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
           >
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
-              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>Editar Cliente CRM</h3>
+            <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
+              <h3 className={"font-serif text-sm font-bold text-koma-foreground"}>Editar Cliente CRM</h3>
               <button
                 type="button"
                 onClick={() => setEditingCrmUser(null)}
-                className={clsx(
-                  'p-1',
-                  'text-koma-subtle',
-                  'hover:text-koma-foreground',
-                  'transition-colors',
-                  'cursor-pointer',
-                  'border',
-                  'border-transparent',
-                )}
+                className={"p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
                 <X size={16} />
               </button>
@@ -669,14 +510,7 @@ export default function CashierCustomers({
             >
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Telefone / WhatsApp:
                 </label>
@@ -688,31 +522,13 @@ export default function CashierCustomers({
                   placeholder="(00) 00000-0000"
                   value={crmFormTelefone}
                   onChange={(e) => setCrmFormTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Nome:
                 </label>
@@ -721,34 +537,16 @@ export default function CashierCustomers({
                   required
                   value={crmFormNome}
                   onChange={(e) => setCrmFormNome(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
               {/* EDITABLE FIELDS */}
-              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
+              <div className={"grid grid-cols-2 gap-4"}>
                 {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? (
-                  <div className={clsx('space-y-1', 'col-span-2')}>
+                  <div className={"space-y-1 col-span-2"}>
                     <label
-                      className={clsx(
-                        'text-[10px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block',
-                      )}
+                      className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Saldo de Pontos (Ajuste):
                     </label>
@@ -757,33 +555,13 @@ export default function CashierCustomers({
                       required
                       value={crmFormPontos}
                       onChange={(e) => setCrmFormPontos(Number(e.target.value))}
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-2',
-                        'bg-koma-panel',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'focus:outline-none',
-                        'focus:border-[#10b981]',
-                        'font-mono',
-                        'text-xs',
-                      )}
+                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
                     />
                   </div>
                 ) : (
-                  <div className={clsx('space-y-1', 'col-span-2')}>
+                  <div className={"space-y-1 col-span-2"}>
                     <label
-                      className={clsx(
-                        'text-[10px]',
-                        'font-bold',
-                        'text-koma-subtle',
-                        'uppercase',
-                        'tracking-wider',
-                        'block',
-                      )}
+                      className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                     >
                       Saldo Cashback R$ (Ajuste):
                     </label>
@@ -791,58 +569,23 @@ export default function CashierCustomers({
                       required
                       value={crmFormCashback}
                       onValueChange={(value) => setCrmFormCashback(Number(value || 0))}
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-2',
-                        'bg-koma-panel',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'focus:outline-none',
-                        'focus:border-[#10b981]',
-                        'font-mono',
-                        'text-xs',
-                      )}
+                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
                     />
                   </div>
                 )}
               </div>
 
-              <div className={clsx('flex', 'gap-2', 'pt-2')}>
+              <div className={"flex gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={() => setEditingCrmUser(null)}
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-koma-card',
-                    'hover:bg-koma-raised',
-                    'border',
-                    'border-koma-border',
-                    'text-koma-foreground',
-                    'rounded-xl',
-                    'font-bold',
-                    'cursor-pointer',
-                    'transition-colors',
-                  )}
+                  className={"flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl font-bold cursor-pointer transition-colors"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-[#10b981]',
-                    'hover:bg-[#059669]',
-                    'text-[#121214]',
-                    'rounded-xl',
-                    'font-bold',
-                    'cursor-pointer',
-                    'transition-colors',
-                  )}
+                  className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors"}
                 >
                   Salvar Alterações
                 </button>
@@ -856,53 +599,19 @@ export default function CashierCustomers({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowNewCrmModal(false);
           }}
-          className={clsx(
-            'fixed',
-            'inset-0',
-            'bg-black/85',
-            'backdrop-blur-xs',
-            'z-50',
-            'flex',
-            'items-center',
-            'justify-center',
-            'p-4',
-            'overflow-y-auto',
-            'cursor-pointer',
-          )}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"}
         >
           <div
-            className={clsx(
-              'w-full',
-              'max-w-md',
-              'bg-koma-card',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-6',
-              'space-y-4',
-              'text-left',
-              'shadow-2xl',
-              'relative',
-              'animate-scale-in',
-              'my-8',
-            )}
+            className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
           >
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
-              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>
+            <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
+              <h3 className={"font-serif text-sm font-bold text-koma-foreground"}>
                 Cadastrar Novo Cliente
               </h3>
               <button
                 type="button"
                 onClick={() => setShowNewCrmModal(false)}
-                className={clsx(
-                  'p-1',
-                  'text-koma-subtle',
-                  'hover:text-koma-foreground',
-                  'transition-colors',
-                  'cursor-pointer',
-                  'border',
-                  'border-transparent',
-                )}
+                className={"p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
                 <X size={16} />
               </button>
@@ -922,14 +631,7 @@ export default function CashierCustomers({
             >
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Telefone / WhatsApp:
                 </label>
@@ -941,31 +643,13 @@ export default function CashierCustomers({
                   placeholder="(00) 00000-0000"
                   value={newCrmTelefone}
                   onChange={(e) => setNewCrmTelefone(aplicarMascaraTelefoneInput(e.target.value))}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Nome:
                 </label>
@@ -974,31 +658,13 @@ export default function CashierCustomers({
                   required
                   value={newCrmNome}
                   onChange={(e) => setNewCrmNome(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS' ? 'Pontos Iniciais:' : 'Cashback Inicial R$:'}
                 </label>
@@ -1008,83 +674,28 @@ export default function CashierCustomers({
                     step="1"
                     value={newCrmSaldo}
                     onChange={(e) => setNewCrmSaldo(e.target.value === '' ? '' : Number(e.target.value))}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                      'text-xs',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
                   />
                 ) : (
                   <MoneyInput
                     value={newCrmSaldo}
                     onValueChange={setNewCrmSaldo}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                      'text-xs',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
                   />
                 )}
               </div>
 
-              <div className={clsx('flex', 'gap-2', 'pt-2')}>
+              <div className={"flex gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={() => setShowNewCrmModal(false)}
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'border',
-                    'border-koma-border',
-                    'hover:border-koma-border',
-                    'bg-zinc-950',
-                    'text-koma-subtle',
-                    'hover:text-koma-foreground',
-                    'rounded-xl',
-                    'text-[10px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                  )}
+                  className={"flex-1 py-2 border border-koma-border hover:border-koma-border bg-zinc-950 text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-[#10b981]',
-                    'hover:bg-[#059669]',
-                    'text-[#121214]',
-                    'rounded-xl',
-                    'text-[10px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                  )}
+                  className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Salvar
                 </button>

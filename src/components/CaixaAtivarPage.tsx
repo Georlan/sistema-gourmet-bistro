@@ -88,8 +88,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   };
 
   return (
-    <div className={clsx('min-h-screen', 'bg-koma-page', 'text-koma-foreground', 'flex', 'items-center', 'justify-center', 'p-4', 'font-sans')}>
-      <div className={clsx('w-full', 'max-w-md', 'bg-koma-card', 'border', 'border-koma-border', 'rounded-3xl', 'p-8', 'shadow-2xl', 'space-y-6')}>
+    <div className={"min-h-screen bg-koma-page text-koma-foreground flex items-center justify-center p-4 font-sans"}>
+      <div className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-8 shadow-2xl space-y-6"}>
         
         {/* Brand Header */}
         <div className="text-center space-y-2">

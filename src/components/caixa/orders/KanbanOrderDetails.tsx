@@ -2,6 +2,8 @@ import React from 'react';
 import clsx from 'clsx';
 import { Smartphone, Users, ShoppingCart, X, Check, Printer, RefreshCw, ArrowUpRight, Trash2 } from 'lucide-react';
 import type { Table } from '../../../types';
+import type { TableOrderContext as Context } from '../../../domain/tableReadModel';
+import { TableOrderContext } from '../../shared/TableOrderContext';
 import {
   getCashierDeliveryStatusLabel as deliveryStatusLabel,
   getCashierHumanOrderNumber as humanOrderNumber,
@@ -44,6 +46,8 @@ export interface KanbanDetailOrder {
   readonly mesaOrigemId?: number;
   readonly mesaTransferidaDe?: number;
   readonly contextoSalao?: boolean;
+  readonly focusTransfer?: boolean;
+  readonly tableContext?: Context;
 }
 
 export interface KanbanOrderDetailsProps {
@@ -126,9 +130,9 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
   return (
     <div
       onClick={(e) => { if (e.target === e.currentTarget) actions.close(); }}
-      className={clsx('fixed', 'inset-0', 'bg-black/85', 'backdrop-blur-xs', 'z-50', 'flex', 'items-center', 'justify-center', 'p-4', 'cursor-pointer')}
+      className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={clsx('orders-detail-modal', 'w-full', 'max-w-md', 'rounded-3xl', 'p-5', 'space-y-4', 'text-left', 'relative', 'animate-scale-in')}>
+      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={"orders-detail-modal w-full max-w-md rounded-3xl p-5 space-y-4 text-left relative animate-scale-in"}>
         <div className="orders-detail-modal__hero">
           <div className={clsx('orders-detail-modal__number', selectedIsQuickSale && 'is-quick-sale')}>
             {selectedIsQuickSale ? <Smartphone size={18} /> : selectedKanbanOrder.mesaId > 0 ? <Users size={18} /> : <ShoppingCart size={18} />}
@@ -164,28 +168,29 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
           </div>
         </div>
         <div className="orders-detail-modal__metrics">
-          <div><span>Pedido</span><strong>#{selectedOrderNumber}</strong></div>
+          <div><span>{selectedKanbanOrder.tableContext ? 'Comandas' : 'Pedido'}</span><strong>{selectedKanbanOrder.tableContext ? selectedKanbanOrder.tableContext.checkCount : '#' + selectedOrderNumber}</strong></div>
           <div><span>Horário</span><strong>{selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</strong></div>
           <div><span>Itens</span><strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)}</strong></div>
         </div>
         {/* Itens e info extras */}
         <div className="space-y-3">
+          {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
           {selectedKanbanOrder.mesaOrigemId && Number(selectedKanbanOrder.mesaOrigemId) !== Number(selectedKanbanOrder.mesaId) && (
-            <div className={clsx('bg-emerald-950/20', 'p-3', 'rounded-2xl', 'border', 'border-emerald-900/40', 'text-xs', 'text-emerald-600 dark:text-emerald-300', 'flex', 'items-center', 'justify-between', 'shadow-sm', 'font-sans')}>
+            <div className={"bg-emerald-950/20 p-3 rounded-2xl border border-emerald-900/40 text-xs text-emerald-600 dark:text-emerald-300 flex items-center justify-between shadow-sm font-sans"}>
               <div>
-                <strong className={clsx('text-emerald-400', 'block', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold')}>Consumo Mesclado:</strong>
+                <strong className={"text-emerald-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Mesclado:</strong>
                 <span className="leading-relaxed">Este lote possui consumo mesclado da <strong>Mesa {selectedKanbanOrder.mesaOrigemId}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
               </div>
-              <span className={clsx('text-lg', 'shrink-0', 'pl-2')}>🔗</span>
+              <span className={"text-lg shrink-0 pl-2"}>🔗</span>
             </div>
           )}
           {selectedKanbanOrder.mesaTransferidaDe && Number(selectedKanbanOrder.mesaTransferidaDe) !== Number(selectedKanbanOrder.mesaId) && (
-            <div className={clsx('bg-purple-950/20', 'p-3', 'rounded-2xl', 'border', 'border-purple-900/40', 'text-xs', 'text-purple-300', 'flex', 'items-center', 'justify-between', 'shadow-sm', 'font-sans', 'animate-pulse-subtle')}>
+            <div className={"bg-purple-950/20 p-3 rounded-2xl border border-purple-900/40 text-xs text-purple-300 flex items-center justify-between shadow-sm font-sans animate-pulse-subtle"}>
               <div>
-                <strong className={clsx('text-purple-400', 'block', 'text-[9px]', 'uppercase', 'tracking-wider', 'font-bold')}>Consumo Transferido:</strong>
+                <strong className={"text-purple-400 block text-[9px] uppercase tracking-wider font-bold"}>Consumo Transferido:</strong>
                 <span className="leading-relaxed">Este lote foi transferido da <strong>Mesa {selectedKanbanOrder.mesaTransferidaDe}</strong> para a <strong>Mesa {selectedKanbanOrder.mesaId}</strong>.</span>
               </div>
-              <span className={clsx('text-lg', 'shrink-0', 'pl-2')}>🔄</span>
+              <span className={"text-lg shrink-0 pl-2"}>🔄</span>
             </div>
           )}
           {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
@@ -221,7 +226,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
             </div>
           </div>
           {/* Botões de impressão */}
-          <div className={clsx('flex', 'flex-col', 'gap-2', 'pt-1')}>
+          <div className={"flex flex-col gap-2 pt-1"}>
             {selectedCanAdvanceDigital && (
               <button
                 type="button"
@@ -241,12 +246,12 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
               <span>Reimprimir produção</span>
             </button>
             {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
-              <div className={clsx('space-y-2', 'w-full')}>
-                <div className={clsx('flex', 'gap-2', 'w-full')}>
+              <div className={"space-y-2 w-full"}>
+                <div className={"flex gap-2 w-full"}>
                   <button
                     type="button"
                     onClick={actions.printFullTable}
-                    className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-koma-raised', 'text-koma-secondary', 'hover:text-koma-foreground', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
+                    className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
                   >
                     <Printer size={13} />
                     <span>Comanda Inteira</span>
@@ -254,20 +259,21 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                   <button
                     type="button"
                     onClick={actions.printTableValues}
-                    className={clsx('flex-1', 'py-2.5', 'bg-koma-panel', 'hover:bg-koma-raised', 'text-koma-secondary', 'hover:text-koma-foreground', 'font-bold', 'text-xs', 'rounded-xl', 'transition-all', 'cursor-pointer', 'uppercase', 'tracking-wider', 'text-center', 'flex', 'items-center', 'justify-center', 'gap-1.5', 'border', 'border-koma-border', 'shadow-lg')}
+                    className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
                   >
                     <Printer size={13} />
                     <span>Só Valores</span>
                   </button>
                 </div>
                 {selectedKanbanOrder.contextoSalao && (
-                  <div className={clsx('flex', 'gap-2', 'w-full')}>
+                  <div className={"flex gap-2 w-full"}>
                     <select
                       aria-label="Mesa de destino"
+                      autoFocus={selectedKanbanOrder.focusTransfer}
                       value={tableTransferTargetId}
                       onChange={(event) => setTableTransferTargetId(event.target.value)}
                       disabled={isTransferringTable}
-                      className={clsx('min-h-10', 'min-w-0', 'flex-1', 'rounded-xl', 'border', 'border-koma-border', 'bg-koma-panel', 'px-3', 'text-xs', 'font-bold', 'text-koma-secondary', 'outline-none', 'focus:border-emerald-500/60')}
+                      className={"min-h-10 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary outline-none focus:border-emerald-500/60"}
                     >
                       <option value="">Transferir para…</option>
                       {salonTables
@@ -278,7 +284,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                       type="button"
                       onClick={actions.transferTable}
                       disabled={!tableTransferTargetId || isTransferringTable}
-                      className={clsx('flex', 'min-h-10', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-emerald-500/30', 'bg-emerald-500/10', 'px-3', 'text-[10px]', 'font-bold', 'text-emerald-700 dark:text-emerald-300', 'hover:bg-emerald-500/20', 'disabled:cursor-not-allowed', 'disabled:opacity-40')}
+                      className={"flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"}
                     >
                       {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <ArrowUpRight size={13} />}
                       Transferir
@@ -288,7 +294,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                 <button
                   type="button"
                   onClick={actions.cancelConsumption}
-                  className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
+                  className={"flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-300 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/40"}
                 >
                   <Trash2 size={13} />
                   {selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : 'Cancelar somente este pedido'}
@@ -299,7 +305,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
               <button
                 type="button"
                 onClick={actions.cancelOrder}
-                className={clsx('flex', 'min-h-10', 'w-full', 'items-center', 'justify-center', 'gap-2', 'rounded-xl', 'border', 'border-rose-300 dark:border-rose-900/40', 'bg-rose-50 dark:bg-rose-950/20', 'px-3', 'text-[10px]', 'font-bold', 'text-rose-700 dark:text-rose-300', 'transition-colors', 'hover:bg-rose-100 dark:hover:bg-rose-950/40')}
+                className={"flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-300 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/40"}
               >
                 <Trash2 size={13} />
                 Cancelar pedido

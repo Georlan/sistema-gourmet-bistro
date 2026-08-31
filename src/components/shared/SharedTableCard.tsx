@@ -2,6 +2,7 @@ import React from 'react';
 import { Clock3, FileText, GitMerge, UsersRound } from 'lucide-react';
 import type { Order, Table } from '../../types';
 import type { TableOperationalProjection } from '../../domain/operationalState';
+import { getTableCheckNumbers } from '../../domain/tableReadModel';
 
 /** Presentation only: financial evidence wins emphasis, never changes production. */
 export function tableCardPresentation(state: TableOperationalProjection, showProduction = true) {
@@ -46,9 +47,7 @@ export function SharedTableCard({
   otherWaitersServing = [], showOperationalStatus = true, onClick, filterStatus, note, children,
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
-  const checkNumbers = Array.from(new Set(orders
-    .flatMap(order => order.numeroPedidos?.length ? order.numeroPedidos : [order.numeroPedido])
-    .map(Number).filter(number => Number.isFinite(number) && number > 0)));
+  const checkNumbers = getTableCheckNumbers(orders);
   const numbersText = checkNumbers.map(number => `#${number}`).join(' + ');
   const customName = table.nome && table.nome !== `Mesa ${table.id}`;
   const Container = onClick ? 'button' : 'article';

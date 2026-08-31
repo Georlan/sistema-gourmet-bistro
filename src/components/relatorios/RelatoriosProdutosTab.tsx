@@ -147,7 +147,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   const chartTitle = chartMetric === 'quantidade' ? 'Produtos mais consumidos' : 'Maior valor de consumo';
 
   return (
-    <div className={clsx('space-y-5', 'text-left', 'animate-fade-in')}>
+    <div className={"space-y-5 text-left animate-fade-in"}>
       <OperationalBanner
         id="reports-products-heading"
         eyebrow="PRODUTOS"

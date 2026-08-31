@@ -82,6 +82,27 @@ Os módulos de Estoque e Configurações ainda têm cerca de duas mil linhas for
 agora concentram responsabilidades locais e podem ser subdivididos sem reabrir o shell operacional.
 Não houve reescrita dos tipos `any` herdados nem redesenho visual nesta etapa.
 
+## Bloco seguinte: composição, rotas e owners locais
+
+Na continuação sobre a `main` de #142, as fronteiras foram aprofundadas sem alterar permissões financeiras:
+
+- `CaixaPanel.tsx` passou de 3.640 para aproximadamente 1.540 linhas. Navegação, preferências,
+  projeção do salão, cozinha, entregadores e diálogos de turno/cancelamento agora têm owners nomeados.
+- Estoque separa snapshots, importação/operações, rascunhos de ingredientes e fornecedores das views.
+  Configurações separa impressão, mesas, permissões do garçom e taxa de serviço. Views derivam seus
+  contratos dos hooks; os formulários permanecem montados na área lazy já visitada.
+- Mobile e desktop usam um único catálogo de navegação. A apresentação continua diferente por viewport.
+- Cardápio público, landing, superadmin, ativação e entregador viraram entradas dinâmicas independentes.
+  O shell autenticado e seus controllers continuam em `App`.
+- `FeatureErrorBoundary` unifica a recuperação explícita de módulos e rotas. Nunca recarrega sozinho.
+
+No build local deste bloco, `App` caiu de cerca de 648 kB para 204 kB e o fechamento JS inicial do
+Caixa caiu de 1.164.956 para aproximadamente 858,6 kB. O audit exige `App <= 250 kB`, entrada Caixa
+`<= 400 kB` e grafo inicial `<= 950 kB`. Esses números continuam sendo bytes de build, não tempo de navegador.
+
+O aumento de poderes do Caixa não foi inferido nesta refatoração. Novas ações exigem uma decisão de produto
+sobre escopo e autorização; compartilhar contratos não concede permissões automaticamente.
+
 ## Verificação e manutenção
 
 ```sh
@@ -95,9 +116,10 @@ KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4285 npm run test:e2e -- e2e/cashier-loading
 ```
 
 O audit percorre `imports` reais do manifest Vite, inclui chunks compartilhados, verifica as oito
-entradas dinâmicas e rejeita seu retorno à carga inicial. Limites com margem: 400 kB para a entrada Caixa,
-1,35 MB para o conjunto inicial. Alterar esses limites exige evidência e decisão explícita.
-Os guards de fonte limitam a raiz a 16 estados, sete efeitos e nenhum HTTP direto.
+entradas dinâmicas e rejeita seu retorno à carga inicial. No bloco seguinte os limites ficaram em
+400 kB para a entrada Caixa, 950 kB para o conjunto inicial e 250 kB para App.
+Alterar esses limites exige evidência e decisão explícita.
+Os guards de fonte agora limitam a raiz a oito estados, dois efeitos e nenhum HTTP direto.
 
 O CI executa a matriz existente e os cenários de carregamento, além de repetir os cenários específicos
 contra os assets de produção em mobile e desktop. Artefatos incluem medidas de arquitetura e bundle.

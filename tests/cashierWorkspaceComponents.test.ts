@@ -6,6 +6,7 @@ import type { Order, OrderItem, Table } from '../src/types';
 import { getCashierTableOrderPresentation, projectCashierSalonTables, projectCashierTableSlices } from '../src/domain/cashierOrderProjection';
 import { CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
 import { CaixaSalonTab, type CaixaSalonTabProps } from '../src/components/caixa/salao/CaixaSalonTab';
+import { CashierSalonCard } from '../src/components/caixa/salao/CashierSalonCard';
 import { KanbanOrderDetails, type KanbanOrderDetailsProps } from '../src/components/caixa/orders/KanbanOrderDetails';
 import type { CashierTableCard, DeliveryOrderView } from '../src/components/caixa/orders/cashierWorkspaceTypes';
 
@@ -181,24 +182,31 @@ test('Salão renders its current visual priorities and delegates table-scoped ac
   const props: CaixaSalonTabProps = freeze({ cards, visibleCards: cards,
     counts: { all: 3, free: 1, occupied: 1, payment: 1 }, insights: { occupancy: 67, openValue: 320, oldestService: '2 min' },
     filter: 'all', onFilterChange: filter => calls.push(filter),
-    actions: { receiveTable: rows => calls.push(rows), inspectTable: rows => calls.push(rows), openTableOrder: id => calls.push(id) },
+    actions: { receiveTable: rows => calls.push(rows), inspectTable: rows => calls.push(rows),
+      prepareTransfer: rows => calls.push(['transfer', rows]), openTableOrder: id => calls.push(id) },
   });
   const view = CaixaSalonTab(props);
   const markup = renderToStaticMarkup(createElement(CaixaSalonTab, props));
   assert.match(markup, /data-table-status="occupied"/);
   assert.match(markup, /data-table-status="payment"/);
   assert.match(markup, /data-table-status="free"/);
-  invoke(button(view, 'Ver comanda'), 'onClick');
-  invoke(button(view, 'Receber'), 'onClick');
-  invoke(button(view, 'Abrir pedido'), 'onClick');
+  const cardElements = elements(view).filter(element => element.type === CashierSalonCard);
+  assert.equal(cardElements.length, 3);
+  const cardViews = cardElements.map(element => CashierSalonCard(element.props as unknown as Parameters<typeof CashierSalonCard>[0]));
+  invoke(button(cardViews[0], 'Ver comanda'), 'onClick');
+  invoke(button(cardViews[1], 'Receber'), 'onClick');
+  invoke(button(cardViews[2], 'Abrir pedido'), 'onClick');
   invoke(button(view, 'Para receber 1'), 'onClick');
   assert.deepEqual(calls, [cards[0].tableOrders, cards[1].tableOrders, 9, 'payment']);
+  invoke(button(cardViews[0], 'Adicionar consumo'), 'onClick');
+  invoke(button(cardViews[0], 'Transferir…'), 'onClick');
+  assert.deepEqual(calls.slice(-2), [7, ['transfer', cards[0].tableOrders]]);
 });
 
 test('Salão keeps empty, error and filtered-empty states separate', () => {
   const base: CaixaSalonTabProps = { cards: [], visibleCards: [], counts: { all: 0, free: 0, occupied: 0, payment: 0 },
     insights: { occupancy: 0, openValue: 0, oldestService: '—' }, filter: 'all', onFilterChange: noop,
-    actions: { receiveTable: noop, inspectTable: noop, openTableOrder: noop } };
+    actions: { receiveTable: noop, inspectTable: noop, prepareTransfer: noop, openTableOrder: noop } };
   assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, base)), /Nenhuma mesa cadastrada/);
   assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, { ...base, fetchError: 'Sem conexão' })), /Não foi possível carregar o salão/);
   const cards = projectCashierSalonTables([TABLE], [check()], [], NOW);
