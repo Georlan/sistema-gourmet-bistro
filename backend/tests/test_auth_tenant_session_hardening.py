@@ -67,7 +67,9 @@ def test_same_credentials_never_choose_an_arbitrary_tenant(auth_db):
         _select_login_identity(candidates, "senha-compartilhada")
 
     assert exc.value.status_code == 409
-    assert "mais de um restaurante" in exc.value.detail
+    assert exc.value.detail["code"] == "restaurant_selection_required"
+    assert exc.value.detail["restaurante_ids"] == [1, 2]
+    assert "mais de um restaurante" in exc.value.detail["message"]
 
 
 def test_explicit_tenant_disambiguates_login_without_exposing_other_account(auth_db):

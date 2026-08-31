@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Coins, KeyRound, Phone, RefreshCw, Sparkles, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
+import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
 import {
   CustomerProfile,
   formatBrazilianPhone,
@@ -53,7 +54,7 @@ export default function CardapioAuthModal({
     resend ? setIsResending(true) : setIsSubmitting(true);
     setErrorMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
+      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -68,7 +69,7 @@ export default function CardapioAuthModal({
       setStep("verify");
       setCode("");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Falha ao enviar o código.");
+      setErrorMessage(authRequestErrorMessage(error, "Falha ao enviar o código."));
     } finally {
       setIsSubmitting(false);
       setIsResending(false);
@@ -94,7 +95,7 @@ export default function CardapioAuthModal({
     setIsSubmitting(true);
     setErrorMessage("");
     try {
-      const response = await fetch(`${API_BASE_URL}/cardapio/clientes/otp/verificar`, {
+      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/verificar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -112,7 +113,7 @@ export default function CardapioAuthModal({
       onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
       onClose();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Não foi possível confirmar o código.");
+      setErrorMessage(authRequestErrorMessage(error, "Não foi possível confirmar o código."));
     } finally {
       setIsSubmitting(false);
     }
