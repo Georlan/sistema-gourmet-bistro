@@ -15,7 +15,8 @@ from ...services.printing import (
     get_print_preferences,
 )
 from ...timezone_utils import to_operational_local_time
-from .intent import PrintAction, PrintIntent, PrintSourceType
+from .engine import PrintEngineType, resolve_order_engine
+from .intent import PrintAction, PrintIntent, PrintSourceType, PrintTrigger
 
 
 class UniversalPrintingError(PrintingRequestError):
@@ -23,23 +24,48 @@ class UniversalPrintingError(PrintingRequestError):
 
 
 class PrintingApplicationService:
-    """Único orquestrador de intenção -> política -> documento -> PrintJob.
+    """Orquestrador canônico: intenção -> motor -> documento -> PrintJob.
 
-    Nesta primeira etapa, formatos financeiros de mesa/caixa permanecem nos
-    renderers validados existentes. Pedidos passam pelo domínio de impressão.
-    Assim podemos migrar consumidores sem trocar hardware nem quebrar contratos.
+    Nenhuma borda escolhe formatter, destino ou payload térmico. A entrada é
+    universal; o Core resolve o motor semântico pelo tipo real do pedido e só
+    então gera o documento e enfileira o trabalho físico.
     """
 
     @classmethod
     def request_print(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
         try:
-            if intent.source_type == PrintSourceType.ORDER:
-                return cls._request_order(db, intent)
-            if intent.source_type == PrintSourceType.TABLE:
-                return cls._request_table(db, intent)
-            if intent.source_type == PrintSourceType.CASH_SHIFT:
-                return cls._request_cash_shift(db, intent)
-            raise UniversalPrintingError("Origem de impressão inválida", status_code=422)
+            engine, order_context = cls._resolve_engine(db, intent)
+            if engine == PrintEngineType.TABLE_RECEIPT:
+                return cls._run_table_engine(db, intent)
+            if engine == PrintEngineType.CASH_CLOSING:
+                return cls._run_cash_engine(db, intent)
+            if order_context is None:
+                raise UniversalPrintingError(
+                    "Contexto de pedido não resolvido para impressão",
+                    status_code=500,
+                )
+
+            lancamento, comanda, source_items = order_context
+            if engine == PrintEngineType.DINE_IN_ORDER:
+                return cls._run_dine_in_order_engine(
+                    db,
+                    intent,
+                    lancamento,
+                    comanda,
+                    source_items,
+                )
+            if engine in {
+                PrintEngineType.PICKUP_ORDER,
+                PrintEngineType.DELIVERY_ORDER,
+            }:
+                return cls._run_remote_order_engine(
+                    db,
+                    intent,
+                    lancamento,
+                    comanda,
+                    source_items,
+                )
+            raise UniversalPrintingError("Motor de impressão inválido", status_code=422)
         except UniversalPrintingError:
             raise
         except PrintingRequestError as exc:
@@ -49,7 +75,32 @@ class PrintingApplicationService:
             ) from exc
 
     @classmethod
-    def _request_table(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
+    def _resolve_engine(
+        cls,
+        db: Session,
+        intent: PrintIntent,
+    ) -> tuple[
+        PrintEngineType,
+        Optional[tuple[Optional[Lancamento], Comanda, list[Item]]],
+    ]:
+        """Resolve o motor antes de qualquer geração de documento."""
+        if intent.source_type == PrintSourceType.TABLE:
+            return PrintEngineType.TABLE_RECEIPT, None
+        if intent.source_type == PrintSourceType.CASH_SHIFT:
+            return PrintEngineType.CASH_CLOSING, None
+        if intent.source_type != PrintSourceType.ORDER:
+            raise UniversalPrintingError("Origem de impressão inválida", status_code=422)
+
+        order_context = cls._load_order_source(
+            db,
+            intent.restaurant_id,
+            str(intent.source_id or "").strip(),
+        )
+        _lancamento, comanda, _items = order_context
+        return resolve_order_engine(comanda.tipo), order_context
+
+    @classmethod
+    def _run_table_engine(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
         try:
             mesa_id = int(intent.table_id or intent.source_id)
         except (TypeError, ValueError) as exc:
@@ -71,7 +122,7 @@ class PrintingApplicationService:
         return [job] if job is not None else []
 
     @classmethod
-    def _request_cash_shift(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
+    def _run_cash_engine(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
         try:
             turno_id = int(intent.source_id)
         except (TypeError, ValueError) as exc:
@@ -84,55 +135,82 @@ class PrintingApplicationService:
         return [job] if job is not None else []
 
     @classmethod
-    def _request_order(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
+    def _run_dine_in_order_engine(
+        cls,
+        db: Session,
+        intent: PrintIntent,
+        lancamento: Optional[Lancamento],
+        comanda: Comanda,
+        source_items: list[Item],
+    ) -> list[PrintJob]:
         requested_source_id = str(intent.source_id or "").strip()
         requested_is_launch = requested_source_id.startswith("l-")
-        lancamento, comanda, source_items = cls._load_order_source(
+        mesa_id = intent.table_id or comanda.mesa_id
+        if mesa_id is None:
+            raise UniversalPrintingError(
+                "Pedido local não possui mesa para impressão",
+                status_code=409,
+            )
+
+        active_items = cls._active_items(source_items)
+        if not active_items:
+            raise UniversalPrintingError(
+                "Não há itens ativos neste pedido para imprimir",
+                status_code=400,
+            )
+
+        # Regra de negócio: lançamento local automático somente com itens NENHUM
+        # permanece silencioso. Uma solicitação manual/reimpressão continua
+        # imprimível e usa exatamente o mesmo motor/documento da origem.
+        if (
+            intent.trigger == PrintTrigger.AUTOMATIC
+            and not any(cls._item_has_production_destination(item) for item in active_items)
+        ):
+            return []
+
+        source_id = (
+            lancamento.id
+            if requested_is_launch and lancamento is not None
+            else comanda.id
+        )
+        if intent.action == PrintAction.REPRINT:
+            source_type = "reimpressao"
+        elif requested_is_launch and lancamento is not None:
+            source_type = "lancamento"
+        else:
+            source_type = "pedido"
+
+        idempotency_key = intent.idempotency_key
+        if not idempotency_key and intent.trigger == PrintTrigger.AUTOMATIC:
+            idempotency_key = f"universal:auto:{source_id}:mesa:{int(mesa_id)}"
+
+        job = enqueue_table_receipt(
             db,
             intent.restaurant_id,
-            requested_source_id,
+            int(mesa_id),
+            apenas_valores=False,
+            source_type=source_type,
+            source_id=source_id,
+            idempotency_key=idempotency_key,
+            printed_by=intent.requested_by,
         )
+        jobs = [job] if job is not None else []
+        if jobs:
+            cls._mark_items_printed(active_items)
+        return jobs
 
-        # Consumo no local mantém o snapshot parcial/financeiro já validado.
-        # Se a borda pediu uma Comanda, não a convertemos silenciosamente no
-        # primeiro Lançamento: identidade e escopo da origem são preservados.
-        if cls._is_dine_in(comanda):
-            mesa_id = intent.table_id or comanda.mesa_id
-            if mesa_id is None:
-                raise UniversalPrintingError(
-                    "Pedido local não possui mesa para impressão",
-                    status_code=409,
-                )
-            source_id = (
-                lancamento.id
-                if requested_is_launch and lancamento is not None
-                else comanda.id
-            )
-            source_type = (
-                "reimpressao"
-                if intent.action == PrintAction.REPRINT
-                else (
-                    "lancamento"
-                    if requested_is_launch and lancamento is not None
-                    else "pedido"
-                )
-            )
-            job = enqueue_table_receipt(
-                db,
-                intent.restaurant_id,
-                int(mesa_id),
-                apenas_valores=False,
-                source_type=source_type,
-                source_id=source_id,
-                idempotency_key=intent.idempotency_key,
-            )
-            return [job] if job is not None else []
-
-        active_items = [
-            item
-            for item in source_items
-            if item.status != "cancelado" and item.produto is not None
-        ]
+    @classmethod
+    def _run_remote_order_engine(
+        cls,
+        db: Session,
+        intent: PrintIntent,
+        lancamento: Optional[Lancamento],
+        comanda: Comanda,
+        source_items: list[Item],
+    ) -> list[PrintJob]:
+        requested_source_id = str(intent.source_id or "").strip()
+        requested_is_launch = requested_source_id.startswith("l-")
+        active_items = cls._active_items(source_items)
         if not active_items:
             raise UniversalPrintingError(
                 "Não há itens ativos neste pedido para imprimir",
@@ -146,7 +224,6 @@ class PrintingApplicationService:
             else comanda.criado_em
         )
         local_time = to_operational_local_time(source_time)
-        garcom_nome = cls._operator_name(lancamento, comanda)
         print_items = [cls._to_print_item(item) for item in active_items]
 
         document = OrderPrintData(
@@ -155,7 +232,7 @@ class PrintingApplicationService:
             tipo_pedido=comanda.tipo,
             mesa=str(comanda.mesa_id) if comanda.mesa_id else "BALCAO",
             horario=(local_time.strftime("%H:%M") if local_time else ""),
-            garcom_nome=garcom_nome,
+            garcom_nome=cls._operator_name(lancamento, comanda),
             numero_lancamento=(
                 lancamento.id
                 if requested_is_launch and lancamento is not None
@@ -175,40 +252,54 @@ class PrintingApplicationService:
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d%H%M%S%f"
         )
-        # O histórico e as chaves mantêm exatamente a origem recebida pela borda.
-        # Isso evita que uma Comanda antiga (`c-*`) vire `l-*` só porque possui
-        # Lançamentos associados.
-        source_id = requested_source_id
         for destination, payload in documents.items():
             destination_key = str(destination).strip().upper() or "COZINHA"
-            if intent.idempotency_key:
-                idempotency_key = f"{intent.idempotency_key}:{destination_key.lower()}"
-            elif intent.action == PrintAction.REPRINT:
-                idempotency_key = (
-                    f"universal:reimpressao:{source_id}:{destination_key.lower()}:{stamp}"
-                )
+            idempotency_key = cls._job_idempotency_key(
+                intent,
+                source_id=requested_source_id,
+                destination=destination_key,
+                stamp=stamp,
+            )
+            if intent.action == PrintAction.REPRINT:
+                source_type = "reimpressao"
+            elif requested_is_launch:
+                source_type = "lancamento"
             else:
-                idempotency_key = (
-                    f"universal:pedido:{source_id}:{destination_key.lower()}"
-                )
+                source_type = "pedido"
 
             job = enqueue_print_job(
                 db,
                 restaurante_id=intent.restaurant_id,
                 document_type="producao",
                 destination=destination_key,
-                source_type=(
-                    "reimpressao"
-                    if intent.action == PrintAction.REPRINT
-                    else "pedido"
-                ),
-                source_id=source_id,
+                source_type=source_type,
+                source_id=requested_source_id,
                 payload_text=payload,
                 idempotency_key=idempotency_key,
             )
             if job is not None:
                 jobs.append(job)
+
+        if jobs:
+            cls._mark_items_printed(active_items)
         return jobs
+
+    @staticmethod
+    def _job_idempotency_key(
+        intent: PrintIntent,
+        *,
+        source_id: str,
+        destination: str,
+        stamp: str,
+    ) -> str:
+        destination_key = destination.strip().lower()
+        if intent.idempotency_key:
+            return f"{intent.idempotency_key}:{destination_key}"
+        if intent.action == PrintAction.REPRINT:
+            return f"universal:reimpressao:{source_id}:{destination_key}:{stamp}"
+        if intent.trigger == PrintTrigger.AUTOMATIC:
+            return f"universal:auto:{source_id}:{destination_key}"
+        return f"universal:pedido:{source_id}:{destination_key}"
 
     @staticmethod
     def _load_order_source(
@@ -269,6 +360,31 @@ class PrintingApplicationService:
         return lancamento, comanda, source_items
 
     @staticmethod
+    def _active_items(source_items: list[Item]) -> list[Item]:
+        return [
+            item
+            for item in source_items
+            if item.status != "cancelado" and item.produto is not None
+        ]
+
+    @staticmethod
+    def _item_has_production_destination(item: Item) -> bool:
+        produto = item.produto
+        categoria = produto.categoria if produto is not None else None
+        destination = (
+            categoria.destino_impressao
+            if categoria is not None and categoria.destino_impressao
+            else "COZINHA"
+        )
+        return str(destination or "").strip().upper() not in {"NENHUM", "NONE", ""}
+
+    @staticmethod
+    def _mark_items_printed(items: list[Item]) -> None:
+        printed_at = datetime.datetime.now(datetime.timezone.utc)
+        for item in items:
+            item.impresso_em = printed_at
+
+    @staticmethod
     def _operator_name(
         lancamento: Optional[Lancamento],
         comanda: Comanda,
@@ -302,13 +418,3 @@ class PrintingApplicationService:
             observacao=item.observacao or "",
             destino_impressao=str(destination),
         )
-
-    @staticmethod
-    def _is_dine_in(comanda: Comanda) -> bool:
-        normalized = str(comanda.tipo or "").strip().casefold()
-        return normalized not in {
-            "retirada",
-            "viagem",
-            "delivery",
-            "entrega",
-        }
