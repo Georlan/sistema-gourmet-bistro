@@ -90,6 +90,11 @@ class PrintingApplicationService:
                 str(exc),
                 status_code=exc.status_code,
             ) from exc
+        except Exception as exc:
+            raise UniversalPrintingError(
+                "Falha inesperada no motor de impressão",
+                status_code=500,
+            ) from exc
 
     @classmethod
     def _resolve_engine(
@@ -176,9 +181,6 @@ class PrintingApplicationService:
                 status_code=400,
             )
 
-        # Regra de negócio: lançamento local automático somente com itens NENHUM
-        # permanece silencioso. Uma solicitação manual/reimpressão continua
-        # imprimível e usa exatamente o mesmo motor/documento da origem.
         if (
             intent.trigger == PrintTrigger.AUTOMATIC
             and not any(cls._item_has_production_destination(item) for item in active_items)
@@ -308,12 +310,7 @@ class PrintingApplicationService:
         intent: PrintIntent,
         comanda: Comanda,
     ) -> list[PrintJob]:
-        """Centraliza as vias de despacho sem alterar o layout físico atual.
-
-        Os renderers legados de cozinha/motoboy continuam temporariamente atrás
-        do Core. Na etapa visual serão substituídos pelo modelo canônico único,
-        sem que a rota de pedidos volte a conhecer esses detalhes.
-        """
+        """Centraliza as vias de despacho sem alterar o layout físico atual."""
         courier_name = str(intent.courier_name or "").strip()
         if not courier_name:
             raise UniversalPrintingError(
