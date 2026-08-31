@@ -37,21 +37,26 @@ async function openShell(page: Page, session: ShellSession = 'garcom') {
 
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(({ session, settingsKey }) => {
-    localStorage.setItem('@koma:theme', 'dark');
-    localStorage.setItem(settingsKey, JSON.stringify({ exibirImagens: true, exibirDescricoes: true }));
-    localStorage.setItem('koma_restaurant_name_v3', 'Restaurante Shell E2E');
-    localStorage.setItem('shell-unrelated-data', 'preserve-me');
-    if (session === 'garcom') {
-      localStorage.setItem('koma_waiter_token', 'waiter-shell-fixture-token');
-      localStorage.setItem('koma_waiter_id', 'waiter-shell-e2e');
-      localStorage.setItem('koma_waiter_name', 'Garçom Shell E2E');
-      localStorage.setItem('koma_user_role', 'garcom');
-    } else if (session === 'cozinha') {
-      localStorage.setItem('koma_caixa_token', 'kitchen-shell-fixture-token');
-      localStorage.setItem('koma_caixa_id', 'kitchen-shell-e2e');
-      localStorage.setItem('koma_caixa_name', 'Cozinha Shell E2E');
-      localStorage.setItem('koma_caixa_role', 'cozinha');
+    const fixtureSeedKey = '__koma_shell_fixture_seeded_v1';
+    if (!sessionStorage.getItem(fixtureSeedKey)) {
+      localStorage.setItem('@koma:theme', 'dark');
+      localStorage.setItem(settingsKey, JSON.stringify({ exibirImagens: true, exibirDescricoes: true }));
+      localStorage.setItem('koma_restaurant_name_v3', 'Restaurante Shell E2E');
+      localStorage.setItem('shell-unrelated-data', 'preserve-me');
+      if (session === 'garcom') {
+        localStorage.setItem('koma_waiter_token', 'waiter-shell-fixture-token');
+        localStorage.setItem('koma_waiter_id', 'waiter-shell-e2e');
+        localStorage.setItem('koma_waiter_name', 'Garçom Shell E2E');
+        localStorage.setItem('koma_user_role', 'garcom');
+      } else if (session === 'cozinha') {
+        localStorage.setItem('koma_caixa_token', 'kitchen-shell-fixture-token');
+        localStorage.setItem('koma_caixa_id', 'kitchen-shell-e2e');
+        localStorage.setItem('koma_caixa_name', 'Cozinha Shell E2E');
+        localStorage.setItem('koma_caixa_role', 'cozinha');
+      }
+      sessionStorage.setItem(fixtureSeedKey, '1');
     }
+
     const events: string[] = [];
     (window as any).__shellShortcutEvents = events;
     for (const event of ['koma-open-impressoras', 'koma-open-suprimento', 'koma-open-sangria', 'koma-sync-all']) {
