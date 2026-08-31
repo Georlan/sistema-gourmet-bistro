@@ -3,6 +3,7 @@ import { Lock, Mail, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react'
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
 import { saveOperatorSession } from '../utils/authSession';
+import { authFetch, authRequestErrorMessage } from '../utils/authRequest';
 
 interface CaixaAtivarPageProps {
   token?: string | null;
@@ -45,7 +46,7 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/ativar`, {
+      const res = await authFetch(`${API_BASE_URL}/auth/ativar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,7 +81,7 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
       }, 1500);
 
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao ativar conta.');
+      setErrorMsg(authRequestErrorMessage(err, 'Erro ao ativar conta.'));
     } finally {
       setLoading(false);
     }

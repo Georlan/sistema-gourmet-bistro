@@ -27,6 +27,7 @@ import LandingPage from './landing/LandingPage';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
+import { authFetch, authRequestErrorMessage } from './utils/authRequest';
 import { parseBackendTimestamp } from './utils/dateTime';
 import {
   clearPersistedOperationKey,
@@ -414,6 +415,8 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginRestaurantOptions, setLoginRestaurantOptions] = useState<Array<{ id: number; nome: string }>>([]);
+  const [loginRestaurantId, setLoginRestaurantId] = useState("");
 
   // Logout handler
   const handleLogout = useCallback(() => {
@@ -1414,30 +1417,67 @@ export default function App() {
     setLoginError("");
     setIsLoggingIn(true);
     const usernameClean = loginUsername.trim().toLowerCase();
+    const requestPayload: Record<string, unknown> = {
+      username: usernameClean,
+      password: loginPassword,
+    };
+    if (loginRestaurantId) requestPayload.restaurante_id = Number(loginRestaurantId);
+
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await authFetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameClean, password: loginPassword })
+        body: JSON.stringify(requestPayload),
       });
       if (!response.ok) {
-        const err = await response.json();
-        setLoginError(err.detail || "Usuário ou senha incorretos.");
-        setIsLoggingIn(false);
+        const err = await response.json().catch(() => null);
+        const detail = err?.detail;
+        const detailRecord = detail && typeof detail === 'object'
+          ? detail as Record<string, any>
+          : null;
+        const restaurantOptions = response.status === 409
+          && detailRecord?.code === 'restaurant_selection_required'
+          && Array.isArray(detailRecord.restaurantes)
+          ? detailRecord.restaurantes
+              .map((item: any) => ({
+                id: Number(item?.id),
+                nome: String(item?.nome || `Restaurante ${item?.id || ''}`).trim(),
+              }))
+              .filter((item: { id: number; nome: string }) => Number.isInteger(item.id) && item.id > 0)
+          : [];
+
+        if (restaurantOptions.length > 0) {
+          setLoginRestaurantOptions(restaurantOptions);
+          setLoginRestaurantId("");
+          setLoginError(
+            typeof detailRecord?.message === 'string'
+              ? detailRecord.message
+              : 'Selecione o estabelecimento para continuar.',
+          );
+          return;
+        }
+
+        const detailMessage = typeof detail === 'string'
+          ? detail
+          : typeof detailRecord?.message === 'string'
+            ? detailRecord.message
+            : "Usuário ou senha incorretos.";
+        setLoginError(detailMessage);
         return;
       }
       const data = await response.json();
 
-      // Enforce portal-specific permissions
-      const role = data.usuario.role;
+      const role = String(data.usuario?.role || data.usuario?.cargo || '').trim().toLowerCase() as AppRole;
+      if (!role) {
+        setLoginError("A conta não possui um perfil de acesso válido. Procure o administrador do estabelecimento.");
+        return;
+      }
       if (portal === 'caixa' && !isManagementRole(role)) {
         setLoginError("Acesso negado. Use uma conta de caixa, gerente ou administrador.");
-        setIsLoggingIn(false);
         return;
       }
       if (portal === 'garcom' && role !== 'garcom' && role !== 'admin') {
         setLoginError("Acesso negado. Apenas garçons.");
-        setIsLoggingIn(false);
         return;
       }
 
@@ -1461,9 +1501,11 @@ export default function App() {
       setIsAuthenticated(true);
       setLoginUsername("");
       setLoginPassword("");
+      setLoginRestaurantOptions([]);
+      setLoginRestaurantId("");
     } catch (err) {
       console.error(err);
-      setLoginError("Erro ao conectar ao servidor do backend.");
+      setLoginError(authRequestErrorMessage(err, "Erro ao conectar ao servidor do backend."));
     } finally {
       setIsLoggingIn(false);
     }
@@ -2075,9 +2117,20 @@ export default function App() {
         password={loginPassword}
         error={loginError}
         isLoggingIn={isLoggingIn}
+        restaurantOptions={loginRestaurantOptions}
+        restaurantId={loginRestaurantId}
+        onRestaurantChange={setLoginRestaurantId}
         onToggleTheme={toggleTheme}
-        onUsernameChange={setLoginUsername}
-        onPasswordChange={setLoginPassword}
+        onUsernameChange={(value) => {
+          setLoginUsername(value);
+          setLoginRestaurantOptions([]);
+          setLoginRestaurantId("");
+        }}
+        onPasswordChange={(value) => {
+          setLoginPassword(value);
+          setLoginRestaurantOptions([]);
+          setLoginRestaurantId("");
+        }}
         onSubmit={handleLoginSubmit}
       />
     );

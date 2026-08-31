@@ -3,6 +3,11 @@ import { Sun, Moon } from 'lucide-react';
 import { KomaLogo } from '../KomaLogo';
 import type { KomaTheme } from '../../config/theme';
 
+export interface LoginRestaurantOption {
+  id: number;
+  nome: string;
+}
+
 export interface OperationalLoginProps {
   portal: 'garcom' | 'caixa';
   theme: KomaTheme;
@@ -10,6 +15,9 @@ export interface OperationalLoginProps {
   password: string;
   error: string;
   isLoggingIn: boolean;
+  restaurantOptions?: LoginRestaurantOption[];
+  restaurantId?: string;
+  onRestaurantChange?: (value: string) => void;
   onToggleTheme: () => void;
   onUsernameChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
@@ -19,6 +27,7 @@ export interface OperationalLoginProps {
 /** Controlled presentation; authentication, session and form state stay in App. */
 export function OperationalLogin({
   portal, theme, username, password, error, isLoggingIn,
+  restaurantOptions = [], restaurantId = '', onRestaurantChange,
   onToggleTheme, onUsernameChange, onPasswordChange, onSubmit,
 }: OperationalLoginProps) {
   return (
@@ -92,9 +101,32 @@ export function OperationalLogin({
               />
             </div>
 
+            {restaurantOptions.length > 0 && (
+              <div className="space-y-1.5">
+                <label htmlFor="login-restaurant" className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">
+                  Estabelecimento
+                </label>
+                <select
+                  id="login-restaurant"
+                  name="restaurante_id"
+                  required
+                  disabled={isLoggingIn}
+                  value={restaurantId}
+                  onChange={(event) => onRestaurantChange?.(event.target.value)}
+                  className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50"
+                >
+                  <option value="">Selecione o estabelecimento</option>
+                  {restaurantOptions.map((option) => (
+                    <option key={option.id} value={String(option.id)}>{option.nome}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-koma-subtle">Este e-mail está ativo em mais de um estabelecimento.</p>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={isLoggingIn}
+              disabled={isLoggingIn || (restaurantOptions.length > 0 && !restaurantId)}
               className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold uppercase tracking-wider shadow-lg cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 border border-emerald-500/20"
             >
               {isLoggingIn ? "Autenticando..." : "Entrar"}

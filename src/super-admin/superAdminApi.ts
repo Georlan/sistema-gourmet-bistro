@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../config/api";
+import { authFetch } from "../utils/authRequest";
 
 export const SUPER_ADMIN_TOKEN_KEY = "koma_super_admin_token";
 export const SUPER_ADMIN_AUTH_REQUIRED_EVENT = "koma:super-admin-auth-required";
@@ -103,11 +104,11 @@ function hasSimulationMarker(value: unknown): boolean {
 async function checkedFetch(
   url: string,
   init: RequestInit,
-  options: { rejectSimulated?: boolean } = {},
+  options: { rejectSimulated?: boolean; authTimeout?: boolean } = {},
 ): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch(url, init);
+    response = await (options.authTimeout ? authFetch(url, init) : fetch(url, init));
   } catch (error) {
     const reason = error instanceof Error ? error.message : "falha de rede";
     throw new SuperAdminApiError(`API indisponível: ${reason}`);
@@ -172,7 +173,7 @@ export async function publicApiFetch(path: string, init: RequestInit = {}): Prom
     ...init,
     cache: init.cache ?? "no-store",
     headers: requestHeaders(init.headers),
-  });
+  }, { authTimeout: true });
 }
 
 export async function loginSuperAdmin(username: string, password: string): Promise<void> {

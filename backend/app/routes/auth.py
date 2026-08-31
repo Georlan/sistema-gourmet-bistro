@@ -95,14 +95,45 @@ def _select_login_identity(candidates, password: str):
     if not matches:
         return None
     if len(matches) > 1:
+        restaurant_ids = sorted({
+            int(candidate["restaurante_id"])
+            for candidate in matches
+            if isinstance(candidate.get("restaurante_id"), int)
+            and candidate["restaurante_id"] > 0
+        })
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Este login está associado a mais de um restaurante. "
-                "Selecione o estabelecimento para continuar."
-            ),
+            detail={
+                "code": "restaurant_selection_required",
+                "message": (
+                    "Este login está associado a mais de um restaurante. "
+                    "Selecione o estabelecimento para continuar."
+                ),
+                "restaurante_ids": restaurant_ids,
+            },
         )
     return matches[0]
+
+
+def _login_restaurant_options(db: Session, restaurant_ids) -> list[dict]:
+    valid_ids = sorted({
+        int(value)
+        for value in restaurant_ids
+        if isinstance(value, int) and value > 0
+    })
+    if not valid_ids:
+        return []
+    rows = (
+        db.query(Restaurante.id, Restaurante.nome)
+        .filter(Restaurante.id.in_(valid_ids))
+        .order_by(Restaurante.id)
+        .all()
+    )
+    names = {int(row.id): str(row.nome or "").strip() for row in rows}
+    return [
+        {"id": restaurant_id, "nome": names.get(restaurant_id) or f"Restaurante {restaurant_id}"}
+        for restaurant_id in valid_ids
+    ]
 
 
 def _login_user_payload(usuario: Usuario) -> dict:
@@ -168,7 +199,19 @@ def login(
             detail="Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
         )
 
-    identity = _select_login_identity(candidates, login_data.password)
+    try:
+        identity = _select_login_identity(candidates, login_data.password)
+    except HTTPException as exc:
+        if (
+            exc.status_code == status.HTTP_409_CONFLICT
+            and isinstance(exc.detail, dict)
+            and exc.detail.get("code") == "restaurant_selection_required"
+        ):
+            exc.detail["restaurantes"] = _login_restaurant_options(
+                db,
+                exc.detail.get("restaurante_ids") or [],
+            )
+        raise
     if not identity:
         blocked = False
         if candidates:

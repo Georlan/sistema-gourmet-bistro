@@ -37,21 +37,26 @@ async function openShell(page: Page, session: ShellSession = 'garcom') {
 
   await page.clock.setFixedTime(NOW);
   await page.addInitScript(({ session, settingsKey }) => {
-    localStorage.setItem('@koma:theme', 'dark');
-    localStorage.setItem(settingsKey, JSON.stringify({ exibirImagens: true, exibirDescricoes: true }));
-    localStorage.setItem('koma_restaurant_name_v3', 'Restaurante Shell E2E');
-    localStorage.setItem('shell-unrelated-data', 'preserve-me');
-    if (session === 'garcom') {
-      localStorage.setItem('koma_waiter_token', 'waiter-shell-fixture-token');
-      localStorage.setItem('koma_waiter_id', 'waiter-shell-e2e');
-      localStorage.setItem('koma_waiter_name', 'Garçom Shell E2E');
-      localStorage.setItem('koma_user_role', 'garcom');
-    } else if (session === 'cozinha') {
-      localStorage.setItem('koma_caixa_token', 'kitchen-shell-fixture-token');
-      localStorage.setItem('koma_caixa_id', 'kitchen-shell-e2e');
-      localStorage.setItem('koma_caixa_name', 'Cozinha Shell E2E');
-      localStorage.setItem('koma_caixa_role', 'cozinha');
+    const fixtureSeedKey = '__koma_shell_fixture_seeded_v1';
+    if (!sessionStorage.getItem(fixtureSeedKey)) {
+      localStorage.setItem('@koma:theme', 'dark');
+      localStorage.setItem(settingsKey, JSON.stringify({ exibirImagens: true, exibirDescricoes: true }));
+      localStorage.setItem('koma_restaurant_name_v3', 'Restaurante Shell E2E');
+      localStorage.setItem('shell-unrelated-data', 'preserve-me');
+      if (session === 'garcom') {
+        localStorage.setItem('koma_waiter_token', 'waiter-shell-fixture-token');
+        localStorage.setItem('koma_waiter_id', 'waiter-shell-e2e');
+        localStorage.setItem('koma_waiter_name', 'Garçom Shell E2E');
+        localStorage.setItem('koma_user_role', 'garcom');
+      } else if (session === 'cozinha') {
+        localStorage.setItem('koma_caixa_token', 'kitchen-shell-fixture-token');
+        localStorage.setItem('koma_caixa_id', 'kitchen-shell-e2e');
+        localStorage.setItem('koma_caixa_name', 'Cozinha Shell E2E');
+        localStorage.setItem('koma_caixa_role', 'cozinha');
+      }
+      sessionStorage.setItem(fixtureSeedKey, '1');
     }
+
     const events: string[] = [];
     (window as any).__shellShortcutEvents = events;
     for (const event of ['koma-open-impressoras', 'koma-open-suprimento', 'koma-open-sangria', 'koma-sync-all']) {
@@ -182,6 +187,50 @@ test('login controlado mantém submit para autenticação real do App e tema ind
   await expect(page.locator('#mesa-card-7')).toBeVisible();
   expect(state.loginBodies).toEqual([{ username: 'garcom@koma.test', password: 'shell-password' }]);
   await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
+  expect(state.unexpectedRequests).toEqual([]);
+});
+
+test('logout seguido de novo login renova sessão, refaz fluxo de dados e persiste no reload', async ({ page }) => {
+  const state = await openShell(page);
+  const tablesBeforeLogout = state.requests.filter(value => value === 'GET /mesas/').length;
+  const ordersBeforeLogout = state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length;
+
+  await openDrawer(page);
+  await page.getByRole('button', { name: 'LOGOUT / SAIR', exact: true }).click();
+  await expect(page.getByLabel('E-MAIL')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => ({
+    token: localStorage.getItem('koma_waiter_token'),
+    user: localStorage.getItem('koma_waiter_id'),
+    name: localStorage.getItem('koma_waiter_name'),
+    role: localStorage.getItem('koma_user_role'),
+    unrelated: localStorage.getItem('shell-unrelated-data'),
+  }))).toEqual({ token: null, user: null, name: null, role: null, unrelated: 'preserve-me' });
+
+  await page.getByLabel('E-MAIL').fill('GARCOM@KOMA.TEST');
+  await page.getByLabel('Senha').fill('fresh-login-password');
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+
+  await expect(page.locator('#mesa-card-7')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => ({
+    token: localStorage.getItem('koma_waiter_token'),
+    user: localStorage.getItem('koma_waiter_id'),
+    name: localStorage.getItem('koma_waiter_name'),
+    role: localStorage.getItem('koma_user_role'),
+  }))).toEqual({
+    token: 'waiter-shell-login-fixture-token',
+    user: 'waiter-shell-e2e',
+    name: 'Garçom Shell E2E',
+    role: 'garcom',
+  });
+  expect(state.loginBodies).toEqual([{ username: 'garcom@koma.test', password: 'fresh-login-password' }]);
+  await expect.poll(() => state.requests.filter(value => value === 'GET /mesas/').length).toBeGreaterThan(tablesBeforeLogout);
+  await expect.poll(() => state.requests.filter(value => value === 'GET /comandas/detalhes/todos').length).toBeGreaterThan(ordersBeforeLogout);
+
+  await page.reload();
+  await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+  await expect(page.locator('#mesa-card-7')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-shell-login-fixture-token');
+  expect(await page.evaluate(() => localStorage.getItem('shell-unrelated-data'))).toBe('preserve-me');
   expect(state.unexpectedRequests).toEqual([]);
 });
 
