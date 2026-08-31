@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { Edit3, Plus, Users } from 'lucide-react';
 import { Table } from '../../../types';
 import { OperationalBanner } from '../../shared/OperationalBanner';
@@ -51,32 +51,14 @@ export function CashierTableSettings({
       )}
       {printingSettingsTab === 'mesas' && (
         <section
-          className={clsx(
-            'overflow-hidden',
-            'rounded-[22px]',
-            'border',
-            'border-koma-border',
-            'bg-koma-panel',
-          )}
+          className={"overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel"}
         >
           <header
-            className={clsx(
-              'flex',
-              'flex-col',
-              'gap-3',
-              'border-b',
-              'border-koma-border',
-              'px-4',
-              'py-4',
-              'sm:flex-row',
-              'sm:items-center',
-              'sm:justify-between',
-              'sm:px-5',
-            )}
+            className={"flex flex-col gap-3 border-b border-koma-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5"}
           >
             <div>
-              <h3 className={clsx('text-sm', 'font-bold', 'text-koma-foreground')}>Configuração das mesas</h3>
-              <p className={clsx('mt-1', 'text-[10px]', 'text-koma-muted')}>
+              <h3 className={"text-sm font-bold text-koma-foreground"}>Configuração das mesas</h3>
+              <p className={"mt-1 text-[10px] text-koma-muted"}>
                 Cadastre, nomeie e defina a capacidade. A ocupação continua sendo controlada pelas comandas.
               </p>
             </div>
@@ -86,23 +68,7 @@ export function CashierTableSettings({
                 setTableFormError('');
                 setShowAddMesaModal(true);
               }}
-              className={clsx(
-                'inline-flex',
-                'min-h-10',
-                'items-center',
-                'justify-center',
-                'gap-1.5',
-                'rounded-xl',
-                'bg-[#10b981]',
-                'px-4',
-                'text-[9px]',
-                'font-extrabold',
-                'uppercase',
-                'tracking-wider',
-                'text-[#07110e]',
-                'transition-colors',
-                'hover:bg-[#35c99a]',
-              )}
+              className={"inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#10b981] px-4 text-[9px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a]"}
             >
               <Plus size={13} /> Adicionar mesa
             </button>
@@ -110,73 +76,40 @@ export function CashierTableSettings({
 
           {salonTables.length === 0 ? (
             <div
-              className={clsx(
-                'flex',
-                'min-h-48',
-                'flex-col',
-                'items-center',
-                'justify-center',
-                'px-5',
-                'text-center',
-              )}
+              className={"flex min-h-48 flex-col items-center justify-center px-5 text-center"}
             >
               <Users size={22} className="text-koma-muted" />
-              <strong className={clsx('mt-3', 'text-xs', 'text-koma-secondary')}>
+              <strong className={"mt-3 text-xs text-koma-secondary"}>
                 Nenhuma mesa cadastrada
               </strong>
-              <span className={clsx('mt-1', 'text-[10px]', 'text-koma-muted')}>
+              <span className={"mt-1 text-[10px] text-koma-muted"}>
                 Adicione a primeira mesa para liberar a operação do salão.
               </span>
             </div>
           ) : (
             <div
-              className={clsx('grid', 'gap-2', 'p-4', 'sm:grid-cols-2', 'lg:grid-cols-3', '2xl:grid-cols-4')}
+              className={"grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"}
             >
               {[...salonTables]
                 .sort((a, b) => a.id - b.id)
                 .map((table) => (
                   <article
                     key={table.id}
-                    className={clsx(
-                      'flex',
-                      'items-center',
-                      'justify-between',
-                      'gap-3',
-                      'rounded-2xl',
-                      'border',
-                      'border-[#292e2c]',
-                      'bg-koma-card',
-                      'p-3.5',
-                    )}
+                    className={"flex items-center justify-between gap-3 rounded-2xl border border-[#292e2c] bg-koma-card p-3.5"}
                   >
                     <div className="min-w-0">
                       <span
-                        className={clsx(
-                          'block',
-                          'font-mono',
-                          'text-[8px]',
-                          'font-bold',
-                          'uppercase',
-                          'tracking-[0.18em]',
-                          'text-koma-muted',
-                        )}
+                        className={"block font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-koma-muted"}
                       >
                         Mesa {table.id}
                       </span>
                       <strong
-                        className={clsx('mt-0.5', 'block', 'truncate', 'text-xs', 'text-koma-foreground')}
+                        className={"mt-0.5 block truncate text-xs text-koma-foreground"}
                       >
                         {table.nome || `Mesa ${table.id}`}
                       </strong>
                       <span
-                        className={clsx(
-                          'mt-1',
-                          'flex',
-                          'items-center',
-                          'gap-1',
-                          'text-[9px]',
-                          'text-koma-muted',
-                        )}
+                        className={"mt-1 flex items-center gap-1 text-[9px] text-koma-muted"}
                       >
                         <Users size={10} /> {table.capacidade || 4} lugares
                       </span>
@@ -191,17 +124,7 @@ export function CashierTableSettings({
                         setTableFormError('');
                       }}
                       aria-label={`Editar Mesa ${table.id}`}
-                      className={clsx(
-                        'rounded-lg',
-                        'border',
-                        'border-koma-border-subtle',
-                        'bg-white/[0.025]',
-                        'p-2',
-                        'text-koma-muted',
-                        'transition-colors',
-                        'hover:border-emerald-500/30',
-                        'hover:text-emerald-800 dark:text-emerald-300',
-                      )}
+                      className={"rounded-lg border border-koma-border-subtle bg-white/[0.025] p-2 text-koma-muted transition-colors hover:border-emerald-500/30 hover:text-emerald-800 dark:text-emerald-300"}
                     >
                       <Edit3 size={13} />
                     </button>

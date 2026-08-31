@@ -41,9 +41,9 @@ export function CashierDesktopSidebar({
     <>
       <Sidebar
         collapsible="icon"
-        className={clsx('cashier-sidebar', 'hidden', 'lg:flex', 'flex-col', 'justify-between', 'shrink-0')}
+        className={"cashier-sidebar hidden lg:flex flex-col justify-between shrink-0"}
       >
-        <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3.5')}>
+        <SidebarHeader className={"cashier-sidebar__header p-3.5"}>
           <div className="cashier-sidebar__brand-row">
             <div className="cashier-sidebar__brand">
               <span className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--expanded">
@@ -83,7 +83,7 @@ export function CashierDesktopSidebar({
             {turno?.status !== 'aberto' && (
               <button
                 onClick={() => setShowAbrirModal(true)}
-                className={clsx('cashier-shift-card__action', 'is-open')}
+                className={"cashier-shift-card__action is-open"}
               >
                 Abrir caixa
               </button>
@@ -92,7 +92,7 @@ export function CashierDesktopSidebar({
         </SidebarHeader>
 
         {/* Sidebar Content */}
-        <SidebarContent className={clsx('cashier-sidebar__content', 'p-2')}>
+        <SidebarContent className={"cashier-sidebar__content p-2"}>
           {CASHIER_SIDEBAR_GROUPS.map((group) => (
             <SidebarGroup key={group.category}>
               <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
@@ -134,7 +134,7 @@ export function CashierDesktopSidebar({
         </SidebarContent>
 
         {/* Sidebar Footer */}
-        <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3', 'flex', 'flex-col', 'gap-2')}>
+        <SidebarFooter className={"cashier-sidebar__footer p-3 flex flex-col gap-2"}>
           <div className="cashier-sidebar__secondary">
             <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
             {CASHIER_SIDEBAR_SECONDARY_ITEMS.map((item) => {
@@ -196,7 +196,7 @@ export function CashierDesktopSidebar({
                   onClick={() => {
                     setTheme(persistKomaTheme(nextKomaTheme(theme)));
                   }}
-                  className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
+                  className={"cashier-font-control__button flex items-center justify-center py-1"}
                   aria-label="Alternar tema"
                   title="Alternar tema"
                 >

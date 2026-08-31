@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import clsx from 'clsx';
+
 import { Clock } from 'lucide-react';
 
 export const KitchenTimer: React.FC<{ itemTimestamp?: string; status: string }> = ({ itemTimestamp, status }) => {
@@ -24,18 +24,7 @@ export const KitchenTimer: React.FC<{ itemTimestamp?: string; status: string }> 
   if (status === 'pronto') {
     return (
       <span
-        className={clsx(
-          'px-2',
-          'py-0.5',
-          'text-[8px]',
-          'font-bold',
-          'rounded',
-          'font-mono',
-          'bg-emerald-500/15',
-          'text-emerald-400',
-          'border',
-          'border-emerald-500/30',
-        )}
+        className={"px-2 py-0.5 text-[8px] font-bold rounded font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"}
       >
         ✓ PRONTO
       </span>

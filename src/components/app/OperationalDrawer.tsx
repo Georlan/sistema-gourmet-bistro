@@ -44,18 +44,18 @@ export function OperationalDrawer({
             <div className="space-y-6">
 
               {/* Header inside drawer */}
-              <div className={clsx('flex', 'items-center', 'justify-between', 'pb-4', 'border-b', 'border-koma-border')}>
-                <div className={clsx('flex', 'items-center', 'gap-2.5')}>
+              <div className={"flex items-center justify-between pb-4 border-b border-koma-border"}>
+                <div className={"flex items-center gap-2.5"}>
                   <KomaLogo size="md" />
                   <div>
-                    <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'leading-none', 'block')}>{restaurantName}</span>
+                    <span className={"font-serif font-bold text-base text-koma-foreground leading-none block"}>{restaurantName}</span>
                     <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">Se você está com fome, Kôma</span>
                   </div>
                 </div>
                 <button
                   id="close-sidebar-btn"
                   onClick={() => onClose()}
-                  className={clsx('p-1.5', 'rounded-lg', 'hover:bg-koma-card', 'text-koma-muted', 'hover:text-koma-foreground', 'transition-colors', 'cursor-pointer')}
+                  className={"p-1.5 rounded-lg hover:bg-koma-card text-koma-muted hover:text-koma-foreground transition-colors cursor-pointer"}
                 >
                   <X size={18} />
                 </button>
@@ -329,8 +329,8 @@ export function OperationalDrawer({
 
               {/* SECTION 3: EXIBIÇÃO & PREFERÊNCIAS */}
               <div className="space-y-2.5">
-                <h3 className={clsx('text-[10px]', 'uppercase', 'tracking-wider', 'font-bold', 'text-emerald-700', 'dark:text-emerald-400', 'font-sans')}>Exibição e Preferências</h3>
-                <div className={clsx('bg-koma-card', 'border', 'border-koma-border', 'rounded-2xl', 'p-3.5', 'space-y-2.5')}>
+                <h3 className={"text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans"}>Exibição e Preferências</h3>
+                <div className={"bg-koma-card border border-koma-border rounded-2xl p-3.5 space-y-2.5"}>
                   <div className="flex items-center justify-between p-1 rounded">
                     <span className="text-xs text-koma-foreground font-medium">Tema Visual</span>
                     <button
@@ -344,25 +344,25 @@ export function OperationalDrawer({
                     </button>
                   </div>
 
-                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-koma-foreground', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-koma-raised/40')}>
+                  <label className={"flex items-center justify-between text-xs text-koma-foreground cursor-pointer p-1 rounded hover:bg-koma-raised/40"}>
                     <span>Exibir Imagens dos Pratos</span>
                     <input
                       id="sidebar-toggle-images"
                       type="checkbox"
                       checked={settings.exibirImagens}
                       onChange={(e) => onSettingsChange({ ...settings, exibirImagens: e.target.checked })}
-                      className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-koma-card')}
+                      className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-koma-card"}
                     />
                   </label>
 
-                  <label className={clsx('flex', 'items-center', 'justify-between', 'text-xs', 'text-koma-foreground', 'cursor-pointer', 'p-1', 'rounded', 'hover:bg-koma-raised/40')}>
+                  <label className={"flex items-center justify-between text-xs text-koma-foreground cursor-pointer p-1 rounded hover:bg-koma-raised/40"}>
                     <span>Exibir Descrição dos Pratos</span>
                     <input
                       id="sidebar-toggle-descriptions"
                       type="checkbox"
                       checked={settings.exibirDescricoes}
                       onChange={(e) => onSettingsChange({ ...settings, exibirDescricoes: e.target.checked })}
-                      className={clsx('rounded', 'border-koma-border', 'text-emerald-500', 'focus:ring-emerald-500', 'h-4', 'w-4', 'bg-koma-card')}
+                      className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-koma-card"}
                     />
                   </label>
                 </div>
@@ -370,9 +370,9 @@ export function OperationalDrawer({
 
             </div>
 
-            <div className={clsx('pt-4', 'border-t', 'border-koma-border', 'text-center', 'text-[10px]', 'text-koma-muted', 'font-sans')}>
+            <div className={"pt-4 border-t border-koma-border text-center text-[10px] text-koma-muted font-sans"}>
               <p>{restaurantName}</p>
-              <p className={clsx('mt-0.5', 'font-mono')}>v3.5 • Dark Engine</p>
+              <p className={"mt-0.5 font-mono"}>v3.5 • Dark Engine</p>
             </div>
           </div>
         </div>

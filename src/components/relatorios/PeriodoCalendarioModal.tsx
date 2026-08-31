@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import clsx from 'clsx';
+
 import { Calendar as CalendarIcon, X } from 'lucide-react';
 import { localCalendarDate } from '../../utils/dateTime';
 
@@ -40,10 +40,10 @@ export const PeriodoCalendarioModal: React.FC<PeriodoCalendarioModalProps> = ({
 
   return (
     <div
-      className={clsx('fixed', 'inset-0', 'z-50', 'bg-black/80', 'backdrop-blur-sm', 'flex', 'items-center', 'justify-center', 'p-4', 'animate-fade-in')}
+      className={"fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={clsx('bg-koma-dialog', 'border', 'border-koma-border', 'rounded-3xl', 'max-w-md', 'w-full', 'p-6', 'space-y-5', 'text-left')}>
+      <div className={"bg-koma-dialog border border-koma-border rounded-3xl max-w-md w-full p-6 space-y-5 text-left"}>
         <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
             <CalendarIcon size={18} className="text-emerald-700 dark:text-emerald-400" />

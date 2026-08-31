@@ -79,48 +79,19 @@ export function CashierWaiterSettings({
       )}
       {printingSettingsTab === 'garcom' && (
         <div
-          className={clsx(
-            'lg:col-span-2',
-            'bg-koma-card/60',
-            'border',
-            'border-koma-border',
-            'rounded-3xl',
-            'p-5',
-            'space-y-4',
-            'flex',
-            'flex-col',
-            'overflow-hidden',
-          )}
+          className={"lg:col-span-2 bg-koma-card/60 border border-koma-border rounded-3xl p-5 space-y-4 flex flex-col overflow-hidden"}
         >
           <div
-            className={clsx(
-              'border-b',
-              'border-koma-border',
-              'pb-3',
-              'flex',
-              'justify-between',
-              'items-center',
-              'shrink-0',
-            )}
+            className={"border-b border-koma-border pb-3 flex justify-between items-center shrink-0"}
           >
-            <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>
+            <span className={"font-serif font-bold text-koma-secondary"}>
               Configurações de Permissões do App do Garçom
             </span>
           </div>
 
           {/* Sub tabs inside configurations */}
           <div
-            className={clsx(
-              'flex',
-              'gap-1.5',
-              'bg-koma-page',
-              'p-1',
-              'rounded-xl',
-              'border',
-              'border-koma-border',
-              'w-fit',
-              'shrink-0',
-            )}
+            className={"flex gap-1.5 bg-koma-page p-1 rounded-xl border border-koma-border w-fit shrink-0"}
           >
             {[
               { id: 'pedido', label: '1. Pedido' },
@@ -142,9 +113,9 @@ export function CashierWaiterSettings({
           </div>
 
           {/* Switch list */}
-          <div className={clsx('flex-1', 'overflow-y-auto', 'pr-1', 'space-y-3.5', 'pt-2')}>
+          <div className={"flex-1 overflow-y-auto pr-1 space-y-3.5 pt-2"}>
             {configSalSubTab === 'pedido' && (
-              <div className={clsx('space-y-3.5', 'animate-scale-in')}>
+              <div className={"space-y-3.5 animate-scale-in"}>
                 {[
                   {
                     title: 'Permitir que garçom faça lançamentos de pedidos de delivery',
@@ -196,9 +167,9 @@ export function CashierWaiterSettings({
                     onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_print: val }),
                   },
                 ].map((item, idx) => (
-                  <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
+                  <div key={idx} className={"flex justify-between items-start gap-4"}>
                     <div className="space-y-0.5">
-                      <div className={clsx('flex', 'items-center', 'gap-2')}>
+                      <div className={"flex items-center gap-2"}>
                         <strong
                           className={clsx(
                             item.available ? 'text-koma-foreground' : 'text-koma-subtle',
@@ -210,25 +181,13 @@ export function CashierWaiterSettings({
                         </strong>
                         {!item.available && (
                           <span
-                            className={clsx(
-                              'rounded-full',
-                              'border',
-                              'border-amber-700/40',
-                              'bg-amber-900/20',
-                              'px-2',
-                              'py-0.5',
-                              'text-[8px]',
-                              'font-bold',
-                              'uppercase',
-                              'tracking-wide',
-                              'text-amber-400',
-                            )}
+                            className={"rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400"}
                           >
                             Integração pendente
                           </span>
                         )}
                       </div>
-                      <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'leading-relaxed')}>
+                      <span className={"text-[9px] text-koma-muted block leading-relaxed"}>
                         {item.desc}
                       </span>
                     </div>
@@ -247,31 +206,10 @@ export function CashierWaiterSettings({
                         checked={item.checked}
                         disabled={!item.available}
                         onChange={(e) => item.onChange(e.target.checked)}
-                        className={clsx('sr-only', 'peer')}
+                        className={"sr-only peer"}
                       />
                       <div
-                        className={clsx(
-                          'w-8',
-                          'h-4.5',
-                          'bg-koma-raised',
-                          'peer-focus:outline-none',
-                          'rounded-full',
-                          'peer',
-                          'peer-checked:after:translate-x-full',
-                          'peer-checked:after:border-white',
-                          "after:content-['']",
-                          'after:absolute',
-                          'after:top-[2px]',
-                          'after:left-[2px]',
-                          'after:bg-white',
-                          'after:border-gray-300',
-                          'after:border',
-                          'after:rounded-full',
-                          'after:h-3.5',
-                          'after:w-3.5',
-                          'after:transition-all',
-                          'peer-checked:bg-emerald-600',
-                        )}
+                        className={"w-8 h-4.5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"}
                       ></div>
                     </label>
                   </div>
@@ -280,7 +218,7 @@ export function CashierWaiterSettings({
             )}
 
             {configSalSubTab === 'fechamento' && (
-              <div className={clsx('space-y-3.5', 'animate-scale-in')}>
+              <div className={"space-y-3.5 animate-scale-in"}>
                 {[
                   {
                     title: 'Permitir que Garçom feche a conta',
@@ -304,9 +242,9 @@ export function CashierWaiterSettings({
                     onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_acrescimo: val }),
                   },
                 ].map((item, idx) => (
-                  <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
+                  <div key={idx} className={"flex justify-between items-start gap-4"}>
                     <div className="space-y-0.5">
-                      <div className={clsx('flex', 'items-center', 'gap-2')}>
+                      <div className={"flex items-center gap-2"}>
                         <strong
                           className={clsx(
                             item.available ? 'text-koma-foreground' : 'text-koma-subtle',
@@ -318,25 +256,13 @@ export function CashierWaiterSettings({
                         </strong>
                         {!item.available && (
                           <span
-                            className={clsx(
-                              'rounded-full',
-                              'border',
-                              'border-amber-700/40',
-                              'bg-amber-900/20',
-                              'px-2',
-                              'py-0.5',
-                              'text-[8px]',
-                              'font-bold',
-                              'uppercase',
-                              'tracking-wide',
-                              'text-amber-400',
-                            )}
+                            className={"rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400"}
                           >
                             Integração pendente
                           </span>
                         )}
                       </div>
-                      <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'leading-relaxed')}>
+                      <span className={"text-[9px] text-koma-muted block leading-relaxed"}>
                         {item.desc}
                       </span>
                     </div>
@@ -355,31 +281,10 @@ export function CashierWaiterSettings({
                         checked={item.checked}
                         disabled={!item.available}
                         onChange={(e) => item.onChange(e.target.checked)}
-                        className={clsx('sr-only', 'peer')}
+                        className={"sr-only peer"}
                       />
                       <div
-                        className={clsx(
-                          'w-8',
-                          'h-4.5',
-                          'bg-koma-raised',
-                          'peer-focus:outline-none',
-                          'rounded-full',
-                          'peer',
-                          'peer-checked:after:translate-x-full',
-                          'peer-checked:after:border-white',
-                          "after:content-['']",
-                          'after:absolute',
-                          'after:top-[2px]',
-                          'after:left-[2px]',
-                          'after:bg-white',
-                          'after:border-gray-300',
-                          'after:border',
-                          'after:rounded-full',
-                          'after:h-3.5',
-                          'after:w-3.5',
-                          'after:transition-all',
-                          'peer-checked:bg-emerald-600',
-                        )}
+                        className={"w-8 h-4.5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"}
                       ></div>
                     </label>
                   </div>
@@ -388,7 +293,7 @@ export function CashierWaiterSettings({
             )}
 
             {configSalSubTab === 'atendimento' && (
-              <div className={clsx('space-y-3.5', 'animate-scale-in')}>
+              <div className={"space-y-3.5 animate-scale-in"}>
                 {[
                   {
                     title: 'Permitir que o garçom informe quantas pessoas vão sentar à mesa',
@@ -426,9 +331,9 @@ export function CashierWaiterSettings({
                     onChange: (val: boolean) => updateConfiguracoes({ perm_garcom_ociosas: val }),
                   },
                 ].map((item, idx) => (
-                  <div key={idx} className={clsx('flex', 'justify-between', 'items-start', 'gap-4')}>
+                  <div key={idx} className={"flex justify-between items-start gap-4"}>
                     <div className="space-y-0.5">
-                      <div className={clsx('flex', 'items-center', 'gap-2')}>
+                      <div className={"flex items-center gap-2"}>
                         <strong
                           className={clsx(
                             item.available ? 'text-koma-foreground' : 'text-koma-subtle',
@@ -440,25 +345,13 @@ export function CashierWaiterSettings({
                         </strong>
                         {!item.available && (
                           <span
-                            className={clsx(
-                              'rounded-full',
-                              'border',
-                              'border-amber-700/40',
-                              'bg-amber-900/20',
-                              'px-2',
-                              'py-0.5',
-                              'text-[8px]',
-                              'font-bold',
-                              'uppercase',
-                              'tracking-wide',
-                              'text-amber-400',
-                            )}
+                            className={"rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400"}
                           >
                             Integração pendente
                           </span>
                         )}
                       </div>
-                      <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'leading-relaxed')}>
+                      <span className={"text-[9px] text-koma-muted block leading-relaxed"}>
                         {item.desc}
                       </span>
                     </div>
@@ -477,31 +370,10 @@ export function CashierWaiterSettings({
                         checked={item.checked}
                         disabled={!item.available}
                         onChange={(e) => item.onChange(e.target.checked)}
-                        className={clsx('sr-only', 'peer')}
+                        className={"sr-only peer"}
                       />
                       <div
-                        className={clsx(
-                          'w-8',
-                          'h-4.5',
-                          'bg-koma-raised',
-                          'peer-focus:outline-none',
-                          'rounded-full',
-                          'peer',
-                          'peer-checked:after:translate-x-full',
-                          'peer-checked:after:border-white',
-                          "after:content-['']",
-                          'after:absolute',
-                          'after:top-[2px]',
-                          'after:left-[2px]',
-                          'after:bg-white',
-                          'after:border-gray-300',
-                          'after:border',
-                          'after:rounded-full',
-                          'after:h-3.5',
-                          'after:w-3.5',
-                          'after:transition-all',
-                          'peer-checked:bg-emerald-600',
-                        )}
+                        className={"w-8 h-4.5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-600"}
                       ></div>
                     </label>
                   </div>

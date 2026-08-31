@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { Lock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CardapioAssetUploader } from '../../CardapioAssetUploader';
@@ -105,21 +105,11 @@ export default function CashierOnlineMenu({
     <>
       {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && !hasOnlineMenu && (
         <div
-          className={clsx(
-            'bg-koma-card',
-            'border',
-            'border-amber-500/20',
-            'rounded-3xl',
-            'p-8',
-            'text-center',
-            'max-w-xl',
-            'mx-auto',
-            'space-y-3',
-          )}
+          className={"bg-koma-card border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3"}
         >
-          <Lock size={24} className={clsx('text-amber-400', 'mx-auto')} />
-          <h3 className={clsx('text-koma-foreground', 'font-bold')}>Confira a ativação do cardápio digital</h3>
-          <p className={clsx('text-[10px]', 'text-koma-subtle')}>
+          <Lock size={24} className={"text-amber-400 mx-auto"} />
+          <h3 className={"text-koma-foreground font-bold"}>Confira a ativação do cardápio digital</h3>
+          <p className={"text-[10px] text-koma-subtle"}>
             Link, QR Code e aceite de pedidos já estão incluídos em todos os planos. Fale com o suporte para conferir a
             ativação.
           </p>
@@ -129,18 +119,7 @@ export default function CashierOnlineMenu({
               setActiveTab('assinatura_pix');
               setActiveSubTab('planos');
             }}
-            className={clsx(
-              'px-4',
-              'py-2',
-              'rounded-xl',
-              'bg-emerald-600',
-              'hover:bg-emerald-700',
-              'text-white',
-              'text-[10px]',
-              'font-bold',
-              'uppercase',
-              'cursor-pointer',
-            )}
+            className={"px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"}
           >
             Ver opções
           </button>
@@ -148,35 +127,17 @@ export default function CashierOnlineMenu({
       )}
       {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && hasOnlineMenu && (
         <div
-          className={clsx(
-            'grid',
-            'grid-cols-1',
-            'lg:grid-cols-12',
-            'gap-6',
-            'max-w-6xl',
-            'mx-auto',
-            'text-left',
-            'animate-fade-in',
-          )}
+          className={"grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-6xl mx-auto text-left animate-fade-in"}
         >
           {/* Coluna 1: Formulário de Configuração (7 cols) */}
           <div
-            className={clsx(
-              'lg:col-span-7',
-              'bg-koma-panel',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-6',
-              'space-y-6',
-              'shadow-xs',
-            )}
+            className={"lg:col-span-7 bg-koma-panel border border-koma-border rounded-3xl p-6 space-y-6 shadow-xs"}
           >
-            <div className={clsx('border-b', 'border-koma-border', 'pb-3')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-base', 'text-koma-foreground', 'block')}>
+            <div className={"border-b border-koma-border pb-3"}>
+              <span className={"font-serif font-bold text-base text-koma-foreground block"}>
                 Configurações do cardápio online
               </span>
-              <span className={clsx('text-[11px]', 'text-koma-muted', 'block', 'mt-1')}>
+              <span className={"text-[11px] text-koma-muted block mt-1"}>
                 Defina a aparência, as informações e o comportamento do cardápio que seus clientes acessam online.
               </span>
             </div>
@@ -185,34 +146,14 @@ export default function CashierOnlineMenu({
               {/* Status Override */}
               <div className="space-y-1.5">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-muted',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-muted uppercase tracking-wider block"}
                 >
                   Status de Funcionamento:
                 </label>
                 <select
                   value={cardapioStatusOverride}
                   onChange={(e) => setCardapioStatusOverride(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3.5',
-                    'py-2.5',
-                    'bg-koma-input',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'text-xs',
-                    'font-medium',
-                    'focus:outline-none',
-                    'focus:border-emerald-500/60',
-                  )}
+                  className={"w-full px-3.5 py-2.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-medium focus:outline-none focus:border-emerald-500/60"}
                 >
                   <option value="Automático">Automático (Segue horários de funcionamento)</option>
                   <option value="Forçado Aberto">Forçado Aberto (Sempre aberto para pedidos)</option>
@@ -221,105 +162,47 @@ export default function CashierOnlineMenu({
               </div>
 
               {/* Cores */}
-              <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-4')}>
+              <div className={"grid grid-cols-1 sm:grid-cols-2 gap-4"}>
                 <div className="space-y-1.5">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-muted',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[10px] font-bold text-koma-muted uppercase tracking-wider block"}
                   >
                     Cor Primária (Destaques):
                   </label>
-                  <div className={clsx('flex', 'gap-2')}>
+                  <div className={"flex gap-2"}>
                     <input
                       type="color"
                       value={cardapioCorPrimaria}
                       onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                      className={clsx(
-                        'w-10',
-                        'h-10',
-                        'p-0',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'bg-transparent',
-                        'cursor-pointer',
-                      )}
+                      className={"w-10 h-10 p-0 border border-koma-border rounded-xl bg-transparent cursor-pointer"}
                     />
                     <input
                       type="text"
                       value={cardapioCorPrimaria}
                       onChange={(e) => setCardapioCorPrimaria(e.target.value)}
-                      className={clsx(
-                        'flex-1',
-                        'px-3.5',
-                        'py-2',
-                        'bg-koma-input',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'text-xs',
-                        'font-mono',
-                        'focus:outline-none',
-                        'focus:border-emerald-500/60',
-                      )}
+                      className={"flex-1 px-3.5 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-mono focus:outline-none focus:border-emerald-500/60"}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-muted',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[10px] font-bold text-koma-muted uppercase tracking-wider block"}
                   >
                     Cor de Fundo:
                   </label>
-                  <div className={clsx('flex', 'gap-2')}>
+                  <div className={"flex gap-2"}>
                     <input
                       type="color"
                       value={cardapioCorFundo}
                       onChange={(e) => setCardapioCorFundo(e.target.value)}
-                      className={clsx(
-                        'w-10',
-                        'h-10',
-                        'p-0',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'bg-transparent',
-                        'cursor-pointer',
-                      )}
+                      className={"w-10 h-10 p-0 border border-koma-border rounded-xl bg-transparent cursor-pointer"}
                     />
                     <input
                       type="text"
                       value={cardapioCorFundo}
                       onChange={(e) => setCardapioCorFundo(e.target.value)}
-                      className={clsx(
-                        'flex-1',
-                        'px-3.5',
-                        'py-2',
-                        'bg-koma-input',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'text-xs',
-                        'font-mono',
-                        'focus:outline-none',
-                        'focus:border-emerald-500/60',
-                      )}
+                      className={"flex-1 px-3.5 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs font-mono focus:outline-none focus:border-emerald-500/60"}
                     />
                   </div>
                 </div>
@@ -349,14 +232,7 @@ export default function CashierOnlineMenu({
               {/* Sobre Nós */}
               <div className="space-y-1.5">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-muted',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-muted uppercase tracking-wider block"}
                 >
                   Sobre Nós:
                 </label>
@@ -365,33 +241,14 @@ export default function CashierOnlineMenu({
                   onChange={(e) => setCardapioSobreNos(e.target.value)}
                   rows={3}
                   placeholder="Breve história ou descrição do restaurante..."
-                  className={clsx(
-                    'w-full',
-                    'px-3.5',
-                    'py-2.5',
-                    'bg-koma-input',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'text-xs',
-                    'focus:outline-none',
-                    'focus:border-emerald-500/60',
-                  )}
+                  className={"w-full px-3.5 py-2.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500/60"}
                 />
               </div>
 
               {/* Endereço */}
               <div className="space-y-1.5">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-muted',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-muted uppercase tracking-wider block"}
                 >
                   Endereço Físico:
                 </label>
@@ -400,43 +257,18 @@ export default function CashierOnlineMenu({
                   value={cardapioEndereco}
                   onChange={(e) => setCardapioEndereco(e.target.value)}
                   placeholder="Rua Exemplo, 123 - Centro"
-                  className={clsx(
-                    'w-full',
-                    'px-3.5',
-                    'py-2.5',
-                    'bg-koma-input',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'text-xs',
-                    'focus:outline-none',
-                    'focus:border-emerald-500/60',
-                  )}
+                  className={"w-full px-3.5 py-2.5 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500/60"}
                 />
               </div>
             </div>
 
             {/* Botão de salvar */}
-            <div className={clsx('pt-4', 'border-t', 'border-koma-border', 'flex', 'justify-end')}>
+            <div className={"pt-4 border-t border-koma-border flex justify-end"}>
               <button
                 type="button"
                 disabled={isSavingCardapioConfig}
                 onClick={saveCardapioConfig}
-                className={clsx(
-                  'px-6',
-                  'py-2.5',
-                  'koma-btn-success',
-                  'rounded-xl',
-                  'text-xs',
-                  'font-bold',
-                  'uppercase',
-                  'tracking-wider',
-                  'transition-all',
-                  'cursor-pointer',
-                  'shadow-sm',
-                  'disabled:opacity-50',
-                )}
+                className={"px-6 py-2.5 koma-btn-success rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm disabled:opacity-50"}
               >
                 {isSavingCardapioConfig ? 'Salvando...' : 'Salvar configurações'}
               </button>

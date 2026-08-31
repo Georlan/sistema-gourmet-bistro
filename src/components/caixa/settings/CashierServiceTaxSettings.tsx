@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import React from 'react';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { useCashierSettings } from './useCashierSettings';
@@ -39,35 +39,19 @@ export function CashierServiceTaxSettings({
       )}
       {printingSettingsTab === 'taxa' && (
         <div
-          className={clsx(
-            'lg:col-span-3',
-            'bg-koma-card',
-            'border',
-            'border-koma-border',
-            'rounded-3xl',
-            'p-5',
-            'space-y-3',
-          )}
+          className={"lg:col-span-3 bg-koma-card border border-koma-border rounded-3xl p-5 space-y-3"}
         >
           <span
-            className={clsx(
-              'font-serif',
-              'font-bold',
-              'text-koma-secondary',
-              'block',
-              'pb-1',
-              'border-b',
-              'border-koma-border',
-            )}
+            className={"font-serif font-bold text-koma-secondary block pb-1 border-b border-koma-border"}
           >
             Taxa de Serviço do Salão
           </span>
 
-          <div className={clsx('flex', 'justify-between', 'items-center', 'pt-1')}>
-            <span className={clsx('text-[10px]', 'text-koma-secondary', 'font-semibold')}>
+          <div className={"flex justify-between items-center pt-1"}>
+            <span className={"text-[10px] text-koma-secondary font-semibold"}>
               Ativar Taxa de 10% de Serviço
             </span>
-            <label className={clsx('relative', 'inline-flex', 'items-center', 'cursor-pointer')}>
+            <label className={"relative inline-flex items-center cursor-pointer"}>
               <input
                 type="checkbox"
                 checked={taxaServicoAtiva}
@@ -76,46 +60,18 @@ export function CashierServiceTaxSettings({
                   setCheckoutServiceTax(e.target.checked);
                   updateConfiguracoes({ taxa_servico_ativa: e.target.checked });
                 }}
-                className={clsx('sr-only', 'peer')}
+                className={"sr-only peer"}
               />
               <div
-                className={clsx(
-                  'w-9',
-                  'h-5',
-                  'bg-koma-raised',
-                  'peer-focus:outline-none',
-                  'rounded-full',
-                  'peer',
-                  'peer-checked:after:translate-x-full',
-                  'peer-checked:after:border-white',
-                  "after:content-['']",
-                  'after:absolute',
-                  'after:top-[2px]',
-                  'after:left-[2px]',
-                  'after:bg-white',
-                  'after:border-gray-300',
-                  'after:border',
-                  'after:rounded-full',
-                  'after:h-4',
-                  'after:w-4',
-                  'after:transition-all',
-                  'peer-checked:bg-emerald-600',
-                )}
+                className={"w-9 h-5 bg-koma-raised peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"}
               ></div>
             </label>
           </div>
 
           {taxaServicoAtiva && (
-            <div className={clsx('space-y-1', 'pt-1.5', 'animate-scale-in', 'max-w-xs')}>
+            <div className={"space-y-1 pt-1.5 animate-scale-in max-w-xs"}>
               <label
-                className={clsx(
-                  'text-[8px]',
-                  'text-koma-subtle',
-                  'font-bold',
-                  'uppercase',
-                  'tracking-wider',
-                  'block',
-                )}
+                className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
               >
                 Porcentagem Customizada (%):
               </label>
@@ -129,18 +85,7 @@ export function CashierServiceTaxSettings({
                   setServiceTaxRate(val);
                   updateConfiguracoes({ taxa_servico_padrao: val });
                 }}
-                className={clsx(
-                  'w-full',
-                  'px-3',
-                  'py-1.5',
-                  'bg-koma-page',
-                  'border',
-                  'border-koma-border',
-                  'rounded-xl',
-                  'text-koma-foreground',
-                  'font-mono',
-                  'text-[10px]',
-                )}
+                className={"w-full px-3 py-1.5 bg-koma-page border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px]"}
               />
             </div>
           )}

@@ -42,33 +42,19 @@ export function CashierMobileSidebar({
   return (
     <>
       {isMobileSidebarOpen && (
-        <div className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'lg:hidden', 'animate-fade-in')}>
+        <div className={"fixed inset-0 z-50 flex lg:hidden animate-fade-in"}>
           <div
             onClick={() => setIsMobileSidebarOpen(false)}
-            className={clsx('fixed', 'inset-0', 'bg-black/80', 'backdrop-blur-sm')}
+            className={"fixed inset-0 bg-black/80 backdrop-blur-sm"}
           />
           <aside
             id="mobile-caixa-sidebar"
             role="dialog"
             aria-modal="true"
             aria-label="Menu principal"
-            className={clsx(
-              'cashier-sidebar',
-              'cashier-sidebar--mobile',
-              'relative',
-              'w-[17rem]',
-              'max-w-[88vw]',
-              'flex',
-              'flex-col',
-              'justify-between',
-              'shrink-0',
-              'h-full',
-              'z-10',
-              'shadow-2xl',
-              'overflow-y-auto',
-            )}
+            className={"cashier-sidebar cashier-sidebar--mobile relative w-[17rem] max-w-[88vw] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto"}
           >
-            <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3')}>
+            <SidebarHeader className={"cashier-sidebar__header p-3"}>
               <div className="cashier-sidebar__brand-row">
                 <div className="cashier-sidebar__brand">
                   <span className="cashier-sidebar__logo-wrap">
@@ -79,7 +65,7 @@ export function CashierMobileSidebar({
                     <small>Se você está com fome, Kôma</small>
                   </span>
                 </div>
-                <div className={clsx('flex', 'items-center', 'gap-1.5')}>
+                <div className={"flex items-center gap-1.5"}>
                   <button
                     type="button"
                     onClick={() => {
@@ -120,7 +106,7 @@ export function CashierMobileSidebar({
                       setShowAbrirModal(true);
                       setIsMobileSidebarOpen(false);
                     }}
-                    className={clsx('cashier-shift-card__action', 'is-open')}
+                    className={"cashier-shift-card__action is-open"}
                   >
                     Abrir caixa
                   </button>
@@ -128,7 +114,7 @@ export function CashierMobileSidebar({
               </div>
             </SidebarHeader>
 
-            <SidebarContent className={clsx('cashier-sidebar__content', 'p-2')}>
+            <SidebarContent className={"cashier-sidebar__content p-2"}>
               {CASHIER_SIDEBAR_GROUPS.map((group) => (
                 <SidebarGroup key={group.category}>
                   <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
@@ -169,7 +155,7 @@ export function CashierMobileSidebar({
               ))}
             </SidebarContent>
 
-            <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3', 'flex', 'flex-col', 'gap-2')}>
+            <SidebarFooter className={"cashier-sidebar__footer p-3 flex flex-col gap-2"}>
               <div className="cashier-sidebar__secondary">
                 <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
                 {CASHIER_SIDEBAR_SECONDARY_ITEMS.map((item) => {
@@ -230,10 +216,7 @@ export function CashierMobileSidebar({
                       onClick={() => {
                         setTheme(persistKomaTheme(nextKomaTheme(theme)));
                       }}
-                      className={clsx(
-                        'cashier-font-control__button',
-                        'flex items-center justify-center py-1',
-                      )}
+                      className={"cashier-font-control__button flex items-center justify-center py-1"}
                       aria-label="Alternar tema"
                       title="Alternar tema"
                     >

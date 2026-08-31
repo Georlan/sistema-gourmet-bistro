@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import React from 'react';
 import type { useCashierOrders } from './useCashierOrders';
 
@@ -38,43 +38,25 @@ export function CashierCouriers({
     <>
       {activeSubTab === 'entregadores' && (
         <div
-          className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}
+          className={"grid grid-cols-1 lg:grid-cols-3 gap-5 animate-fade-in text-left"}
         >
           {/* Painel de Entregas (Colunas da Esquerda) */}
           <div
-            className={clsx(
-              'lg:col-span-2',
-              'bg-koma-card/60',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-5',
-              'space-y-5',
-              'flex',
-              'flex-col',
-              'overflow-hidden',
-            )}
+            className={"lg:col-span-2 bg-koma-card/60 border border-koma-border rounded-3xl p-5 space-y-5 flex flex-col overflow-hidden"}
           >
-            <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'shrink-0')}>
-              <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'text-sm')}>
+            <div className={"border-b border-koma-border pb-3 shrink-0"}>
+              <span className={"font-serif font-bold text-koma-secondary block text-sm"}>
                 Controle de Despacho e Entregas
               </span>
-              <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>
+              <span className={"text-[9px] text-koma-muted block"}>
                 Gerencie o fluxo de saída e entrega de pedidos de Delivery.
               </span>
             </div>
 
             {/* Pedidos Pendentes de Envio */}
-            <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
+            <div className={"space-y-3 flex-1 overflow-y-auto"}>
               <span
-                className={clsx(
-                  'text-[10px]',
-                  'font-bold',
-                  'text-emerald-700 dark:text-emerald-400',
-                  'uppercase',
-                  'tracking-wider',
-                  'block',
-                )}
+                className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block"}
               >
                 Pedidos para Despachar
               </span>
@@ -82,17 +64,7 @@ export function CashierCouriers({
               {deliveryOrders.filter((o) => o.status === 'producao' || o.status === 'analise').length ===
               0 ? (
                 <div
-                  className={clsx(
-                    'py-8',
-                    'text-center',
-                    'text-koma-muted',
-                    'text-xs',
-                    'italic',
-                    'bg-koma-panel/20',
-                    'border',
-                    'border-koma-border/40',
-                    'rounded-2xl',
-                  )}
+                  className={"py-8 text-center text-koma-muted text-xs italic bg-koma-panel/20 border border-koma-border/40 rounded-2xl"}
                 >
                   Não há pedidos prontos ou em produção aguardando despacho no momento.
                 </div>
@@ -105,89 +77,48 @@ export function CashierCouriers({
                       return (
                         <div
                           key={order.id}
-                          className={clsx(
-                            'p-4',
-                            'bg-koma-panel',
-                            'border',
-                            'border-koma-border',
-                            'rounded-2xl',
-                            'flex',
-                            'flex-col',
-                            'sm:flex-row',
-                            'justify-between',
-                            'gap-3',
-                            'text-xs',
-                          )}
+                          className={"p-4 bg-koma-panel border border-koma-border rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs"}
                         >
-                          <div className={clsx('space-y-1.5', 'flex-1')}>
-                            <div className={clsx('flex', 'items-center', 'gap-2')}>
-                              <span className={clsx('font-bold', 'text-koma-foreground', 'text-[11px]')}>
+                          <div className={"space-y-1.5 flex-1"}>
+                            <div className={"flex items-center gap-2"}>
+                              <span className={"font-bold text-koma-foreground text-[11px]"}>
                                 Pedido {order.id}
                               </span>
                               <span
-                                className={clsx(
-                                  'bg-emerald-500/15',
-                                  'text-emerald-700 dark:text-emerald-400',
-                                  'text-[8px]',
-                                  'font-bold',
-                                  'px-1.5',
-                                  'py-0.5',
-                                  'rounded',
-                                  'border',
-                                  'border-emerald-500/30',
-                                  'uppercase',
-                                )}
+                                className={"bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase"}
                               >
                                 {order.canal}
                               </span>
                             </div>
-                            <span className={clsx('text-koma-secondary', 'font-bold', 'block')}>
+                            <span className={"text-koma-secondary font-bold block"}>
                               {order.cliente} • {order.telefone}
                             </span>
                             <span
-                              className={clsx('text-koma-subtle', 'text-[10px]', 'block', 'leading-relaxed')}
+                              className={"text-koma-subtle text-[10px] block leading-relaxed"}
                             >
                               {order.endereco}
                             </span>
-                            <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'font-mono')}>
+                            <span className={"text-[9px] text-koma-muted block font-mono"}>
                               Itens: {order.itens}
                             </span>
                           </div>
 
                           <div
-                            className={clsx(
-                              'flex',
-                              'flex-col',
-                              'sm:items-end',
-                              'justify-between',
-                              'gap-2',
-                              'shrink-0',
-                            )}
+                            className={"flex flex-col sm:items-end justify-between gap-2 shrink-0"}
                           >
                             <span
-                              className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}
+                              className={"font-mono font-bold text-emerald-400 text-[11px]"}
                             >
                               R$ {order.total.toFixed(2)}
                             </span>
 
-                            <div className={clsx('flex', 'items-center', 'gap-2')}>
+                            <div className={"flex items-center gap-2"}>
                               <select
                                 value={motoboyId}
                                 onChange={(e) =>
                                   setSelectedMotoboys((prev) => ({ ...prev, [order.id]: e.target.value }))
                                 }
-                                className={clsx(
-                                  'py-1.5',
-                                  'px-2',
-                                  'bg-koma-card',
-                                  'border',
-                                  'border-koma-border',
-                                  'text-koma-foreground',
-                                  'rounded-xl',
-                                  'text-[10px]',
-                                  'focus:outline-none',
-                                  'focus:border-[#10b981]',
-                                )}
+                                className={"py-1.5 px-2 bg-koma-card border border-koma-border text-koma-foreground rounded-xl text-[10px] focus:outline-none focus:border-[#10b981]"}
                               >
                                 <option value="">Selecione o Entregador...</option>
                                 {motoboys
@@ -202,21 +133,7 @@ export function CashierCouriers({
                                 type="button"
                                 disabled={!motoboyId}
                                 onClick={() => handleDespacharKanban(order.id, motoboyId)}
-                                className={clsx(
-                                  'py-1.5',
-                                  'px-3',
-                                  'bg-emerald-600',
-                                  'hover:bg-emerald-500',
-                                  'disabled:opacity-50',
-                                  'text-white',
-                                  'font-bold',
-                                  'rounded-xl',
-                                  'text-[10px]',
-                                  'uppercase',
-                                  'tracking-wider',
-                                  'transition-colors',
-                                  'cursor-pointer',
-                                )}
+                                className={"py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"}
                               >
                                 Despachar
                               </button>
@@ -224,26 +141,7 @@ export function CashierCouriers({
                                 type="button"
                                 disabled={!motoboyId}
                                 onClick={() => handleRevogarAcessoMotoboy(motoboyId)}
-                                className={clsx(
-                                  'py-1.5',
-                                  'px-2.5',
-                                  'bg-rose-500/20',
-                                  'hover:bg-rose-500/30',
-                                  'border',
-                                  'border-rose-500/40',
-                                  'disabled:opacity-40',
-                                  'text-rose-600 dark:text-rose-300',
-                                  'font-bold',
-                                  'rounded-xl',
-                                  'text-[10px]',
-                                  'uppercase',
-                                  'tracking-wider',
-                                  'transition-colors',
-                                  'cursor-pointer',
-                                  'flex',
-                                  'items-center',
-                                  'gap-1',
-                                )}
+                                className={"py-1.5 px-2.5 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 disabled:opacity-40 text-rose-600 dark:text-rose-300 font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1"}
                                 title="Revogar todos os links ativos do entregador selecionado"
                               >
                                 Revogar
@@ -258,32 +156,14 @@ export function CashierCouriers({
 
               {/* Pedidos Em Trânsito */}
               <span
-                className={clsx(
-                  'text-[10px]',
-                  'font-bold',
-                  'text-emerald-700 dark:text-emerald-400',
-                  'uppercase',
-                  'tracking-wider',
-                  'block',
-                  'pt-4',
-                )}
+                className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block pt-4"}
               >
                 Em Trânsito (Entregas Ativas)
               </span>
 
               {deliveryOrders.filter((o) => o.status === 'pronto').length === 0 ? (
                 <div
-                  className={clsx(
-                    'py-8',
-                    'text-center',
-                    'text-koma-muted',
-                    'text-xs',
-                    'italic',
-                    'bg-koma-panel/20',
-                    'border',
-                    'border-koma-border/40',
-                    'rounded-2xl',
-                  )}
+                  className={"py-8 text-center text-koma-muted text-xs italic bg-koma-panel/20 border border-koma-border/40 rounded-2xl"}
                 >
                   Nenhum pedido em trânsito no momento.
                 </div>
@@ -295,65 +175,34 @@ export function CashierCouriers({
                       return (
                         <div
                           key={order.id}
-                          className={clsx(
-                            'p-4',
-                            'bg-koma-panel/40',
-                            'border',
-                            'border-koma-border/40',
-                            'rounded-2xl',
-                            'flex',
-                            'flex-col',
-                            'sm:flex-row',
-                            'justify-between',
-                            'gap-3',
-                            'text-xs',
-                          )}
+                          className={"p-4 bg-koma-panel/40 border border-koma-border/40 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs"}
                         >
-                          <div className={clsx('space-y-1', 'flex-1')}>
-                            <div className={clsx('flex', 'items-center', 'gap-2')}>
-                              <span className={clsx('font-bold', 'text-koma-foreground', 'text-[11px]')}>
+                          <div className={"space-y-1 flex-1"}>
+                            <div className={"flex items-center gap-2"}>
+                              <span className={"font-bold text-koma-foreground text-[11px]"}>
                                 Pedido {order.id}
                               </span>
                               <span
-                                className={clsx(
-                                  'bg-emerald-500/10',
-                                  'text-emerald-400',
-                                  'text-[8px]',
-                                  'font-bold',
-                                  'px-1.5',
-                                  'py-0.5',
-                                  'rounded',
-                                  'border',
-                                  'border-emerald-500/20',
-                                  'uppercase',
-                                  'tracking-wider',
-                                )}
+                                className={"bg-emerald-500/10 text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider"}
                               >
                                 Em Trânsito
                               </span>
                             </div>
-                            <span className={clsx('text-koma-secondary', 'font-bold', 'block')}>
+                            <span className={"text-koma-secondary font-bold block"}>
                               {order.cliente} • {order.telefone}
                             </span>
                             <span
-                              className={clsx('text-koma-subtle', 'text-[10px]', 'block', 'leading-relaxed')}
+                              className={"text-koma-subtle text-[10px] block leading-relaxed"}
                             >
                               {order.endereco}
                             </span>
                           </div>
 
                           <div
-                            className={clsx(
-                              'flex',
-                              'flex-col',
-                              'sm:items-end',
-                              'justify-between',
-                              'gap-2',
-                              'shrink-0',
-                            )}
+                            className={"flex flex-col sm:items-end justify-between gap-2 shrink-0"}
                           >
                             <span
-                              className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}
+                              className={"font-mono font-bold text-emerald-400 text-[11px]"}
                             >
                               R$ {order.total.toFixed(2)}
                             </span>
@@ -361,20 +210,7 @@ export function CashierCouriers({
                             <button
                               type="button"
                               onClick={() => handleFinalizarPedido(order.id)}
-                              className={clsx(
-                                'py-1.5',
-                                'px-3',
-                                'bg-emerald-600',
-                                'hover:bg-emerald-700',
-                                'text-white',
-                                'font-bold',
-                                'rounded-xl',
-                                'text-[10px]',
-                                'uppercase',
-                                'tracking-wider',
-                                'transition-colors',
-                                'cursor-pointer',
-                              )}
+                              className={"py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"}
                             >
                               Concluir Entrega
                             </button>
@@ -389,53 +225,32 @@ export function CashierCouriers({
 
           {/* Gerenciamento de Fretistas (Coluna da Direita) */}
           <div
-            className={clsx(
-              'bg-koma-card/60',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-5',
-              'space-y-4',
-              'flex',
-              'flex-col',
-              'justify-between',
-              'overflow-hidden',
-            )}
+            className={"bg-koma-card/60 border border-koma-border rounded-3xl p-5 space-y-4 flex flex-col justify-between overflow-hidden"}
           >
-            <div className={clsx('space-y-4', 'flex-1', 'flex', 'flex-col', 'overflow-hidden')}>
-              <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'shrink-0')}>
-                <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'text-sm')}>
+            <div className={"space-y-4 flex-1 flex flex-col overflow-hidden"}>
+              <div className={"border-b border-koma-border pb-3 shrink-0"}>
+                <span className={"font-serif font-bold text-koma-secondary block text-sm"}>
                   Fretistas Cadastrados
                 </span>
-                <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>
+                <span className={"text-[9px] text-koma-muted block"}>
                   Lista de motoboys e entregadores de plantão.
                 </span>
               </div>
 
-              <div className={clsx('flex-1', 'overflow-y-auto', 'space-y-2.5')}>
+              <div className={"flex-1 overflow-y-auto space-y-2.5"}>
                 {motoboys.length === 0 ? (
-                  <span className={clsx('text-xs', 'text-koma-muted', 'italic')}>
+                  <span className={"text-xs text-koma-muted italic"}>
                     Nenhum fretista cadastrado.
                   </span>
                 ) : (
                   motoboys.map((m) => (
                     <div
                       key={m.id}
-                      className={clsx(
-                        'p-3',
-                        'bg-koma-panel',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'flex',
-                        'items-center',
-                        'justify-between',
-                        'gap-2',
-                      )}
+                      className={"p-3 bg-koma-panel border border-koma-border rounded-xl flex items-center justify-between gap-2"}
                     >
                       <div className="text-xs">
-                        <span className={clsx('font-bold', 'text-koma-foreground', 'block')}>{m.nome}</span>
-                        <span className={clsx('text-[10px]', 'text-koma-subtle', 'block', 'font-mono')}>
+                        <span className={"font-bold text-koma-foreground block"}>{m.nome}</span>
+                        <span className={"text-[10px] text-koma-subtle block font-mono"}>
                           {m.telefone}
                         </span>
                       </div>
@@ -457,17 +272,10 @@ export function CashierCouriers({
             {/* Cadastro de novo Motoboy */}
             <form
               onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}
-              className={clsx('pt-4', 'border-t', 'border-koma-border', 'space-y-3', 'shrink-0')}
+              className={"pt-4 border-t border-koma-border space-y-3 shrink-0"}
             >
               <span
-                className={clsx(
-                  'text-[10px]',
-                  'font-bold',
-                  'text-emerald-700 dark:text-emerald-400',
-                  'uppercase',
-                  'tracking-wider',
-                  'block',
-                )}
+                className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block"}
               >
                 Novo Fretista
               </span>
@@ -478,19 +286,7 @@ export function CashierCouriers({
                 placeholder="Nome do Entregador"
                 value={novoMotoboyNome}
                 onChange={(e) => setNewMotoboyNome(e.target.value)}
-                className={clsx(
-                  'w-full',
-                  'px-3',
-                  'py-2',
-                  'bg-koma-page',
-                  'border',
-                  'border-koma-border',
-                  'rounded-xl',
-                  'text-koma-foreground',
-                  'text-xs',
-                  'focus:outline-none',
-                  'focus:border-[#10b981]',
-                )}
+                className={"w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
               />
               <input
                 type="text"
@@ -498,37 +294,11 @@ export function CashierCouriers({
                 placeholder="Telefone (ex: 81 99999-8888)"
                 value={novoMotoboyTelefone}
                 onChange={(e) => setNewMotoboyTelefone(e.target.value)}
-                className={clsx(
-                  'w-full',
-                  'px-3',
-                  'py-2',
-                  'bg-koma-page',
-                  'border',
-                  'border-koma-border',
-                  'rounded-xl',
-                  'text-koma-foreground',
-                  'text-xs',
-                  'font-mono',
-                  'focus:outline-none',
-                  'focus:border-[#10b981]',
-                )}
+                className={"w-full px-3 py-2 bg-koma-page border border-koma-border rounded-xl text-koma-foreground text-xs font-mono focus:outline-none focus:border-[#10b981]"}
               />
               <button
                 type="submit"
-                className={clsx(
-                  'w-full',
-                  'py-2',
-                  'bg-emerald-600',
-                  'hover:bg-[#9d2b3c]',
-                  'text-white',
-                  'font-bold',
-                  'rounded-xl',
-                  'text-[10px]',
-                  'uppercase',
-                  'tracking-wider',
-                  'transition-colors',
-                  'cursor-pointer',
-                )}
+                className={"w-full py-2 bg-emerald-600 hover:bg-[#9d2b3c] text-white font-bold rounded-xl text-[10px] uppercase tracking-wider transition-colors cursor-pointer"}
               >
                 Adicionar Fretista
               </button>

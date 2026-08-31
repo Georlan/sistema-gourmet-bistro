@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { X } from 'lucide-react';
 import type { CashierNotice } from '../cashierContracts';
 import type { useCashierSupplierEditor } from './useCashierSupplierEditor';
@@ -47,62 +47,21 @@ export function CashierSupplierDialogs({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowNewDistModal(false);
           }}
-          className={clsx(
-            'fixed',
-            'inset-0',
-            'bg-black/85',
-            'backdrop-blur-xs',
-            'z-50',
-            'flex',
-            'items-center',
-            'justify-center',
-            'p-4',
-            'overflow-y-auto',
-            'cursor-pointer',
-          )}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"}
         >
           <div
-            className={clsx(
-              'w-full',
-              'max-w-md',
-              'bg-koma-card',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-6',
-              'space-y-4',
-              'text-left',
-              'shadow-2xl',
-              'relative',
-              'animate-scale-in',
-              'my-8',
-            )}
+            className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
           >
             <div
-              className={clsx(
-                'flex',
-                'justify-between',
-                'items-center',
-                'pb-2',
-                'border-b',
-                'border-koma-border',
-              )}
+              className={"flex justify-between items-center pb-2 border-b border-koma-border"}
             >
-              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>
+              <h3 className={"font-serif text-sm font-bold text-koma-foreground"}>
                 Cadastrar Novo Fornecedor
               </h3>
               <button
                 type="button"
                 onClick={() => setShowNewDistModal(false)}
-                className={clsx(
-                  'p-1',
-                  'text-koma-subtle',
-                  'hover:text-koma-foreground',
-                  'transition-colors',
-                  'cursor-pointer',
-                  'border',
-                  'border-transparent',
-                )}
+                className={"p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
                 <X size={16} />
               </button>
@@ -121,14 +80,7 @@ export function CashierSupplierDialogs({
             >
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Nome Fantasia:
                 </label>
@@ -138,31 +90,13 @@ export function CashierSupplierDialogs({
                   placeholder="ex: Ambev"
                   value={distFormNomeFantasia}
                   onChange={(e) => setDistFormNomeFantasia(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Razão Social:
                 </label>
@@ -171,32 +105,14 @@ export function CashierSupplierDialogs({
                   placeholder="ex: Companhia de Bebidas das Américas"
                   value={distFormRazaoSocial}
                   onChange={(e) => setDistFormRazaoSocial(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
-              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
+              <div className={"grid grid-cols-2 gap-4"}>
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                   >
                     CNPJ:
                   </label>
@@ -205,33 +121,13 @@ export function CashierSupplierDialogs({
                     placeholder="00.000.000/0000-00"
                     value={distFormCnpj}
                     onChange={(e) => setDistFormCnpj(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                      'text-xs',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                   >
                     Lead Time (dias):
                   </label>
@@ -240,63 +136,22 @@ export function CashierSupplierDialogs({
                     required
                     value={distFormLeadTime}
                     onChange={(e) => setDistFormLeadTime(Number(e.target.value))}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono"}
                   />
                 </div>
               </div>
 
-              <div className={clsx('flex', 'gap-2', 'pt-2')}>
+              <div className={"flex gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={() => setShowNewDistModal(false)}
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'border',
-                    'border-koma-border',
-                    'hover:border-koma-border',
-                    'bg-zinc-955',
-                    'text-koma-subtle',
-                    'hover:text-koma-foreground',
-                    'rounded-xl',
-                    'text-[10px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                  )}
+                  className={"flex-1 py-2 border border-koma-border hover:border-koma-border bg-zinc-955 text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-[#10b981]',
-                    'hover:bg-[#059669]',
-                    'text-[#121214]',
-                    'rounded-xl',
-                    'text-[10px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                  )}
+                  className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Salvar
                 </button>
@@ -310,62 +165,21 @@ export function CashierSupplierDialogs({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowEditDistModal(false);
           }}
-          className={clsx(
-            'fixed',
-            'inset-0',
-            'bg-black/85',
-            'backdrop-blur-xs',
-            'z-50',
-            'flex',
-            'items-center',
-            'justify-center',
-            'p-4',
-            'overflow-y-auto',
-            'cursor-pointer',
-          )}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"}
         >
           <div
-            className={clsx(
-              'w-full',
-              'max-w-md',
-              'bg-koma-card',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-6',
-              'space-y-4',
-              'text-left',
-              'shadow-2xl',
-              'relative',
-              'animate-scale-in',
-              'my-8',
-            )}
+            className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8"}
           >
             <div
-              className={clsx(
-                'flex',
-                'justify-between',
-                'items-center',
-                'pb-2',
-                'border-b',
-                'border-koma-border',
-              )}
+              className={"flex justify-between items-center pb-2 border-b border-koma-border"}
             >
-              <h3 className={clsx('font-serif', 'text-sm', 'font-bold', 'text-koma-foreground')}>
+              <h3 className={"font-serif text-sm font-bold text-koma-foreground"}>
                 Editar Fornecedor: {selectedDist.nome_fantasia}
               </h3>
               <button
                 type="button"
                 onClick={() => setShowEditDistModal(false)}
-                className={clsx(
-                  'p-1',
-                  'text-koma-subtle',
-                  'hover:text-koma-foreground',
-                  'transition-colors',
-                  'cursor-pointer',
-                  'border',
-                  'border-transparent',
-                )}
+                className={"p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
                 <X size={16} />
               </button>
@@ -384,14 +198,7 @@ export function CashierSupplierDialogs({
             >
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Nome Fantasia:
                 </label>
@@ -400,31 +207,13 @@ export function CashierSupplierDialogs({
                   required
                   value={distFormNomeFantasia}
                   onChange={(e) => setDistFormNomeFantasia(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
               <div className="space-y-1">
                 <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
+                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
                   Razão Social:
                 </label>
@@ -432,32 +221,14 @@ export function CashierSupplierDialogs({
                   type="text"
                   value={distFormRazaoSocial}
                   onChange={(e) => setDistFormRazaoSocial(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
-              <div className={clsx('grid', 'grid-cols-2', 'gap-4')}>
+              <div className={"grid grid-cols-2 gap-4"}>
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                   >
                     CNPJ:
                   </label>
@@ -465,33 +236,13 @@ export function CashierSupplierDialogs({
                     type="text"
                     value={distFormCnpj}
                     onChange={(e) => setDistFormCnpj(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                      'text-xs',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-xs"}
                   />
                 </div>
 
                 <div className="space-y-1">
                   <label
-                    className={clsx(
-                      'text-[10px]',
-                      'font-bold',
-                      'text-koma-subtle',
-                      'uppercase',
-                      'tracking-wider',
-                      'block',
-                    )}
+                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                   >
                     Lead Time (dias):
                   </label>
@@ -500,63 +251,22 @@ export function CashierSupplierDialogs({
                     required
                     value={distFormLeadTime}
                     onChange={(e) => setDistFormLeadTime(Number(e.target.value))}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono"}
                   />
                 </div>
               </div>
 
-              <div className={clsx('flex', 'gap-2', 'pt-2')}>
+              <div className={"flex gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={() => setShowEditDistModal(false)}
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'border',
-                    'border-koma-border',
-                    'hover:border-koma-border',
-                    'bg-zinc-950',
-                    'text-koma-subtle',
-                    'hover:text-koma-foreground',
-                    'rounded-xl',
-                    'text-[10px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                  )}
+                  className={"flex-1 py-2 border border-koma-border hover:border-koma-border bg-zinc-950 text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-[#10b981]',
-                    'hover:bg-[#059669]',
-                    'text-[#121214]',
-                    'rounded-xl',
-                    'text-[10px]',
-                    'font-bold',
-                    'uppercase',
-                    'tracking-wider',
-                    'transition-colors',
-                    'cursor-pointer',
-                  )}
+                  className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Salvar Alterações
                 </button>

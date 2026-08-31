@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { X } from 'lucide-react';
 import React from 'react';
 import MoneyInput from '../../MoneyInput';
@@ -25,61 +25,22 @@ export function CashierOpenShiftDialog({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowAbrirModal(false);
           }}
-          className={clsx(
-            'fixed',
-            'inset-0',
-            'bg-black/85',
-            'backdrop-blur-xs',
-            'z-50',
-            'flex',
-            'items-center',
-            'justify-center',
-            'p-4',
-            'cursor-pointer',
-          )}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"}
         >
           <form
             onSubmit={handleAbrirCaixa}
-            className={clsx(
-              'bg-koma-panel',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'w-full',
-              'max-w-sm',
-              'p-6',
-              'space-y-5',
-              'shadow-2xl',
-              'animate-scale-in',
-            )}
+            className={"bg-koma-panel border border-koma-border rounded-3xl w-full max-w-sm p-6 space-y-5 shadow-2xl animate-scale-in"}
           >
             <div
-              className={clsx(
-                'flex',
-                'justify-between',
-                'items-center',
-                'border-b',
-                'border-koma-border',
-                'pb-3',
-              )}
+              className={"flex justify-between items-center border-b border-koma-border pb-3"}
             >
-              <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-koma-foreground')}>
+              <h3 className={"font-serif font-bold text-lg text-koma-foreground"}>
                 Abertura de Caixa
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAbrirModal(false)}
-                className={clsx(
-                  'p-1',
-                  'hover:bg-koma-raised',
-                  'rounded-full',
-                  'text-koma-subtle',
-                  'hover:text-koma-foreground',
-                  'transition-colors',
-                  'cursor-pointer',
-                  'border',
-                  'border-transparent',
-                )}
+                className={"p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
                 <X size={16} />
               </button>
@@ -87,97 +48,42 @@ export function CashierOpenShiftDialog({
 
             <div className="space-y-1.5">
               <label
-                className={clsx(
-                  'text-[10px]',
-                  'font-bold',
-                  'text-koma-secondary',
-                  'uppercase',
-                  'tracking-wider',
-                  'block',
-                )}
+                className={"text-[10px] font-bold text-koma-secondary uppercase tracking-wider block"}
               >
                 Fundo de Troco Inicial (R$):
               </label>
               <div className="relative">
-                <span className={clsx('absolute', 'left-3.5', 'top-3', 'text-koma-subtle', 'font-mono')}>
+                <span className={"absolute left-3.5 top-3 text-koma-subtle font-mono"}>
                   R$
                 </span>
                 <MoneyInput
                   required
                   value={saldoInicial}
                   onValueChange={setSaldoInicial}
-                  className={clsx(
-                    'w-full',
-                    'pl-9',
-                    'pr-4',
-                    'py-2.5',
-                    'bg-koma-card',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'focus:outline-none',
-                    'focus:ring-2',
-                    'focus:ring-[#10b981]/20',
-                    'focus:border-[#10b981]',
-                    'text-koma-foreground',
-                    'font-mono',
-                  )}
+                  className={"w-full pl-9 pr-4 py-2.5 bg-koma-card border border-koma-border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] text-koma-foreground font-mono"}
                 />
               </div>
             </div>
 
             {errorMsg && (
               <div
-                className={clsx(
-                  'bg-rose-500/10',
-                  'border',
-                  'border-rose-500/25',
-                  'text-rose-400',
-                  'p-2.5',
-                  'rounded-xl',
-                  'text-center',
-                  'font-medium',
-                  'block',
-                )}
+                className={"bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block"}
               >
                 {errorMsg}
               </div>
             )}
 
-            <div className={clsx('flex', 'gap-2.5')}>
+            <div className={"flex gap-2.5"}>
               <button
                 type="button"
                 onClick={() => setShowAbrirModal(false)}
-                className={clsx(
-                  'flex-1',
-                  'py-2.5',
-                  'bg-koma-card',
-                  'hover:bg-koma-raised',
-                  'border',
-                  'border-koma-border',
-                  'text-koma-foreground',
-                  'rounded-xl',
-                  'transition-all',
-                  'cursor-pointer',
-                  'font-bold',
-                )}
+                className={"flex-1 py-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl transition-all cursor-pointer font-bold"}
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className={clsx(
-                  'flex-1',
-                  'py-2.5',
-                  'bg-emerald-600',
-                  'hover:bg-emerald-700',
-                  'text-white',
-                  'rounded-xl',
-                  'transition-all',
-                  'cursor-pointer',
-                  'font-bold',
-                  'shadow-md',
-                )}
+                className={"flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all cursor-pointer font-bold shadow-md"}
               >
                 Confirmar Abertura
               </button>

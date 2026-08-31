@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
@@ -246,46 +246,15 @@ export default function CashierCatalog({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowProductModal(false);
           }}
-          className={clsx(
-            'fixed',
-            'inset-0',
-            'bg-black/85',
-            'backdrop-blur-xs',
-            'z-50',
-            'flex',
-            'items-center',
-            'justify-center',
-            'p-2',
-            'sm:p-4',
-            'overflow-hidden',
-            'cursor-pointer',
-          )}
+          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 overflow-hidden cursor-pointer"}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="product-modal-title"
-            className={clsx(
-              'w-full',
-              'max-w-xl',
-              'max-h-[calc(100dvh-1rem)]',
-              'sm:max-h-[calc(100dvh-2rem)]',
-              'overflow-y-auto',
-              'bg-koma-card',
-              'border',
-              'border-koma-border',
-              'rounded-3xl',
-              'p-5',
-              'sm:p-6',
-              'space-y-4',
-              'text-left',
-              'shadow-2xl',
-              'relative',
-              'animate-scale-in',
-              'cursor-default',
-            )}
+            className={"w-full max-w-xl max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border border-koma-border rounded-3xl p-5 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
           >
-            <div className={clsx('flex', 'justify-between', 'items-center', 'pb-2', 'border-b', 'border-koma-border')}>
+            <div className={"flex justify-between items-center pb-2 border-b border-koma-border"}>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
@@ -305,15 +274,7 @@ export default function CashierCatalog({
                 type="button"
                 onClick={() => setShowProductModal(false)}
                 aria-label="Fechar"
-                className={clsx(
-                  'p-1',
-                  'text-koma-subtle',
-                  'hover:text-koma-foreground',
-                  'transition-colors',
-                  'cursor-pointer',
-                  'border',
-                  'border-transparent',
-                )}
+                className={"p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
                 <X size={16} />
               </button>
@@ -371,7 +332,7 @@ export default function CashierCatalog({
                   setIsLoading(false);
                 }
               }}
-              className={clsx('space-y-5', 'text-xs')}
+              className={"space-y-5 text-xs"}
             >
               {apiCategorias.length === 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
@@ -389,7 +350,7 @@ export default function CashierCatalog({
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-code"
-                    className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}
+                    className={"text-[10px] font-bold text-koma-secondary block"}
                   >
                     Código do produto
                   </label>
@@ -400,18 +361,7 @@ export default function CashierCatalog({
                     placeholder="Ex.: 001"
                     value={prodFormId}
                     onChange={(e) => setProdFormId(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                   />
                   <p className="text-[9px] leading-relaxed text-koma-muted">
                     Sugerimos o próximo código livre. Você pode trocar agora; depois de criado, ele não muda.
@@ -422,7 +372,7 @@ export default function CashierCatalog({
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-name"
-                  className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}
+                  className={"text-[10px] font-bold text-koma-secondary block"}
                 >
                   Nome do produto
                 </label>
@@ -433,26 +383,15 @@ export default function CashierCatalog({
                   placeholder="Ex: Cheeseburger Duplo"
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
               </div>
 
-              <div className={clsx('grid', 'grid-cols-1', 'sm:grid-cols-2', 'gap-3')}>
+              <div className={"grid grid-cols-1 sm:grid-cols-2 gap-3"}>
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-price"
-                    className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}
+                    className={"text-[10px] font-bold text-koma-secondary block"}
                   >
                     Preço de venda
                   </label>
@@ -462,47 +401,23 @@ export default function CashierCatalog({
                     placeholder="25.90"
                     value={prodFormPreco}
                     onValueChange={setProdFormPreco}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                      'font-mono',
-                      'text-[11px]',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-[11px]"}
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-category"
-                    className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}
+                    className={"text-[10px] font-bold text-koma-secondary block"}
                   >
                     Categoria
                   </label>
-                  <div className={clsx('flex', 'gap-1.5')}>
+                  <div className={"flex gap-1.5"}>
                     <select
                       id="product-category"
                       required
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
-                      className={clsx(
-                        'flex-1',
-                        'px-3',
-                        'py-2',
-                        'bg-koma-panel',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'focus:outline-none',
-                        'focus:border-[#10b981]',
-                      )}
+                      className={"flex-1 px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                     >
                       <option value="" disabled>
                         Selecione...
@@ -518,22 +433,7 @@ export default function CashierCatalog({
                       onClick={() => setShowCategoryModal(true)}
                       title="Criar nova categoria"
                       aria-label="Criar nova categoria"
-                      className={clsx(
-                        'inline-flex',
-                        'items-center',
-                        'gap-1',
-                        'px-2.5',
-                        'bg-emerald-500/15',
-                        'hover:bg-[#10b981]/20',
-                        'text-emerald-700 dark:text-emerald-400',
-                        'border',
-                        'border-emerald-500/30',
-                        'rounded-xl',
-                        'font-bold',
-                        'text-[9px]',
-                        'cursor-pointer',
-                        'transition-colors',
-                      )}
+                      className={"inline-flex items-center gap-1 px-2.5 bg-emerald-500/15 hover:bg-[#10b981]/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-[9px] cursor-pointer transition-colors"}
                     >
                       <Plus size={13} /> Nova
                     </button>
@@ -544,7 +444,7 @@ export default function CashierCatalog({
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-description"
-                  className={clsx('text-[10px]', 'font-bold', 'text-koma-secondary', 'block')}
+                  className={"text-[10px] font-bold text-koma-secondary block"}
                 >
                   Descrição para o cliente
                 </label>
@@ -554,18 +454,7 @@ export default function CashierCatalog({
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
-                  className={clsx(
-                    'w-full',
-                    'px-3',
-                    'py-2',
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'text-koma-foreground',
-                    'focus:outline-none',
-                    'focus:border-[#10b981]',
-                  )}
+                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
                 />
                 <p className="text-[9px] text-koma-muted">
                   Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.
@@ -598,75 +487,28 @@ export default function CashierCatalog({
                     placeholder="Foto principal: https://…"
                     value={prodFormImagem}
                     onChange={(e) => setProdFormImagem(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'text-xs',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
                   />
                   <input
                     type="text"
                     placeholder="Segunda foto: https://…"
                     value={prodFormImagem2}
                     onChange={(e) => setProdFormImagem2(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'text-xs',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
                   />
                   <input
                     type="text"
                     placeholder="Terceira foto: https://…"
                     value={prodFormImagem3}
                     onChange={(e) => setProdFormImagem3(e.target.value)}
-                    className={clsx(
-                      'w-full',
-                      'px-3',
-                      'py-2',
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'text-koma-foreground',
-                      'text-xs',
-                      'focus:outline-none',
-                      'focus:border-[#10b981]',
-                    )}
+                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
                   />
                 </div>
               </details>
 
               <label
                 htmlFor="prod-form-ativo"
-                className={clsx(
-                  'flex',
-                  'cursor-pointer',
-                  'items-center',
-                  'justify-between',
-                  'gap-3',
-                  'rounded-xl',
-                  'border',
-                  'border-koma-border',
-                  'bg-koma-panel',
-                  'p-3',
-                )}
+                className={"flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3"}
               >
                 <span>
                   <strong className="block text-[10px] text-koma-foreground">Disponível para venda</strong>
@@ -679,53 +521,22 @@ export default function CashierCatalog({
                   id="prod-form-ativo"
                   checked={prodFormAtivo}
                   onChange={(e) => setProdFormAtivo(e.target.checked)}
-                  className={clsx(
-                    'rounded',
-                    'border-koma-border',
-                    'text-emerald-500',
-                    'focus:ring-emerald-500',
-                    'h-4',
-                    'w-4',
-                    'bg-koma-card',
-                  )}
+                  className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-koma-card"}
                 />
               </label>
 
-              <div className={clsx('flex', 'gap-2', 'pt-2')}>
+              <div className={"flex gap-2 pt-2"}>
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-koma-card',
-                    'hover:bg-koma-raised',
-                    'border',
-                    'border-koma-border',
-                    'text-koma-foreground',
-                    'rounded-xl',
-                    'font-bold',
-                    'cursor-pointer',
-                    'transition-colors',
-                  )}
+                  className={"flex-1 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl font-bold cursor-pointer transition-colors"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading || apiCategorias.length === 0}
-                  className={clsx(
-                    'flex-1',
-                    'py-2',
-                    'bg-[#10b981]',
-                    'hover:bg-[#059669]',
-                    'text-[#121214]',
-                    'rounded-xl',
-                    'font-bold',
-                    'cursor-pointer',
-                    'transition-colors',
-                    'disabled:opacity-50',
-                  )}
+                  className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"}
                 >
                   {isLoading ? 'Salvando…' : editingProduct ? 'Salvar alterações' : 'Criar produto'}
                 </button>

@@ -212,7 +212,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   }, [data]);
 
   return (
-    <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
+    <div className={"space-y-6 text-left animate-fade-in"}>
       <OperationalBanner
         id="reports-overview-heading"
         eyebrow="VISÃO GERAL"

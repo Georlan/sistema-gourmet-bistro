@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+
 import { Lock, Percent, Printer, Smartphone, Users } from 'lucide-react';
 import React, { useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
@@ -124,17 +124,7 @@ export default function CashierSettings({
       {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
         <div className="space-y-5">
           <div
-            className={clsx(
-              'flex',
-              'flex-wrap',
-              'gap-1.5',
-              'rounded-xl',
-              'border',
-              'border-koma-border',
-              'bg-koma-page',
-              'p-1',
-              'w-fit',
-            )}
+            className={"flex flex-wrap gap-1.5 rounded-xl border border-koma-border bg-koma-page p-1 w-fit"}
           >
             {[
               { id: 'impressao', label: 'Impressão', icon: Printer },

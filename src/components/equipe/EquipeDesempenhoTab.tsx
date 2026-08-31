@@ -166,7 +166,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   }, [membros]);
 
   return (
-    <div className={clsx('space-y-6', 'text-left', 'animate-fade-in')}>
+    <div className={"space-y-6 text-left animate-fade-in"}>
       <OperationalBanner
         id="reports-team-heading"
         eyebrow="EQUIPE"

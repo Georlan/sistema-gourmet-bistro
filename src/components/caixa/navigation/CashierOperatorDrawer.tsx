@@ -50,71 +50,33 @@ export function CashierOperatorDrawer({
   return (
     <>
       {isOperatorDrawerOpen && (
-        <div className={clsx('fixed', 'inset-0', 'z-[9998]', 'flex', 'justify-start', 'animate-fade-in')}>
+        <div className={"fixed inset-0 z-[9998] flex justify-start animate-fade-in"}>
           {/* Backdrop escuro com clique para fechar */}
           <div
             onClick={() => setIsOperatorDrawerOpen(false)}
-            className={clsx(
-              'fixed',
-              'inset-0',
-              'bg-black/80',
-              'backdrop-blur-sm',
-              'transition-opacity',
-              'cursor-pointer',
-            )}
+            className={"fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity cursor-pointer"}
           />
 
           {/* Drawer Lateral - Modernized Shadcn Dark Theme */}
           <div
-            className={clsx(
-              'relative',
-              'w-80',
-              'max-w-[85vw]',
-              'h-full',
-              'bg-koma-card',
-              'border-r',
-              'border-koma-border',
-              'shadow-2xl',
-              'flex',
-              'flex-col',
-              'justify-between',
-              'z-10',
-              'overflow-y-auto',
-              'p-5',
-              'text-koma-foreground',
-              'font-sans',
-            )}
+            className={"relative w-80 max-w-[85vw] h-full bg-koma-card border-r border-koma-border shadow-2xl flex flex-col justify-between z-10 overflow-y-auto p-5 text-koma-foreground font-sans"}
           >
             <div className="space-y-5">
               {/* Header do Drawer */}
               <div
-                className={clsx(
-                  'flex',
-                  'items-center',
-                  'justify-between',
-                  'border-b',
-                  'border-koma-border',
-                  'pb-4',
-                )}
+                className={"flex items-center justify-between border-b border-koma-border pb-4"}
               >
-                <div className={clsx('flex', 'items-center', 'gap-2.5')}>
+                <div className={"flex items-center gap-2.5"}>
                   <div
-                    className={clsx(
-                      'p-2',
-                      'rounded-xl',
-                      'bg-emerald-500/10',
-                      'border',
-                      'border-emerald-500/30',
-                      'text-emerald-400',
-                    )}
+                    className={"p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"}
                   >
                     <SlidersHorizontal size={18} />
                   </div>
                   <div>
-                    <h3 className={clsx('font-bold', 'text-base', 'text-koma-foreground', 'font-serif')}>
+                    <h3 className={"font-bold text-base text-koma-foreground font-serif"}>
                       Opções do Caixa
                     </h3>
-                    <span className={clsx('text-xs', 'text-koma-subtle', 'block')}>
+                    <span className={"text-xs text-koma-subtle block"}>
                       Sessão e Preferências
                     </span>
                   </div>
@@ -122,18 +84,7 @@ export function CashierOperatorDrawer({
                 <button
                   type="button"
                   onClick={() => setIsOperatorDrawerOpen(false)}
-                  className={clsx(
-                    'p-1.5',
-                    'text-koma-subtle',
-                    'hover:text-koma-foreground',
-                    'bg-koma-panel',
-                    'hover:bg-koma-raised',
-                    'border',
-                    'border-koma-border',
-                    'rounded-xl',
-                    'cursor-pointer',
-                    'transition-all',
-                  )}
+                  className={"p-1.5 text-koma-subtle hover:text-koma-foreground bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl cursor-pointer transition-all"}
                   title="Fechar Menu"
                 >
                   <X size={16} />
@@ -142,59 +93,26 @@ export function CashierOperatorDrawer({
 
               {/* 1. SEÇÃO GARÇOM / OPERADOR EM ATENDIMENTO */}
               <div
-                className={clsx(
-                  'bg-koma-panel',
-                  'border',
-                  'border-koma-border',
-                  'rounded-2xl',
-                  'p-4',
-                  'space-y-3.5',
-                  'shadow-md',
-                )}
+                className={"bg-koma-panel border border-koma-border rounded-2xl p-4 space-y-3.5 shadow-md"}
               >
                 <span
-                  className={clsx(
-                    'text-[9px]',
-                    'uppercase',
-                    'tracking-wider',
-                    'text-koma-subtle',
-                    'font-extrabold',
-                    'block',
-                  )}
+                  className={"text-[9px] uppercase tracking-wider text-koma-subtle font-extrabold block"}
                 >
                   Garçom / Operador em Atendimento
                 </span>
-                <div className={clsx('flex', 'items-center', 'gap-3')}>
+                <div className={"flex items-center gap-3"}>
                   <div
-                    className={clsx(
-                      'h-12',
-                      'w-12',
-                      'rounded-2xl',
-                      'bg-gradient-to-br',
-                      'from-emerald-600',
-                      'to-teal-800',
-                      'flex',
-                      'items-center',
-                      'justify-center',
-                      'font-bold',
-                      'text-koma-foreground',
-                      'text-lg',
-                      'shadow-md',
-                      'shrink-0',
-                      'font-serif',
-                      'border',
-                      'border-emerald-500/30',
-                    )}
+                    className={"h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center font-bold text-koma-foreground text-lg shadow-md shrink-0 font-serif border border-emerald-500/30"}
                   >
                     {(activeWaiterNome || 'G').charAt(0).toUpperCase()}
                   </div>
-                  <div className={clsx('min-w-0', 'flex-1')}>
+                  <div className={"min-w-0 flex-1"}>
                     <strong
-                      className={clsx('font-bold', 'text-base', 'text-koma-foreground', 'block', 'truncate')}
+                      className={"font-bold text-base text-koma-foreground block truncate"}
                     >
                       {activeWaiterNome || 'Georlan'}
                     </strong>
-                    <span className={clsx('text-xs', 'text-emerald-400', 'font-medium', 'block')}>
+                    <span className={"text-xs text-emerald-400 font-medium block"}>
                       Operador de Caixa / Gerência
                     </span>
                   </div>
@@ -204,7 +122,7 @@ export function CashierOperatorDrawer({
                   variant="default"
                   iconType="logout"
                   onClick={handleLogoutOperator}
-                  className={clsx('w-full', 'font-bold', 'uppercase', 'tracking-wider', 'text-xs', 'py-2.5')}
+                  className={"w-full font-bold uppercase tracking-wider text-xs py-2.5"}
                 >
                   LOGOUT / TROCAR OPERADOR
                 </LoginButton>
@@ -240,105 +158,51 @@ export function CashierOperatorDrawer({
 
                 return (
                   <div
-                    className={clsx(
-                      'bg-koma-panel',
-                      'border',
-                      'border-koma-border',
-                      'rounded-2xl',
-                      'p-4',
-                      'space-y-3',
-                      'shadow-md',
-                    )}
+                    className={"bg-koma-panel border border-koma-border rounded-2xl p-4 space-y-3 shadow-md"}
                   >
-                    <div className={clsx('flex', 'items-center', 'justify-between')}>
+                    <div className={"flex items-center justify-between"}>
                       <span
-                        className={clsx(
-                          'text-[9px]',
-                          'uppercase',
-                          'tracking-wider',
-                          'text-koma-subtle',
-                          'font-extrabold',
-                          'block',
-                        )}
+                        className={"text-[9px] uppercase tracking-wider text-koma-subtle font-extrabold block"}
                       >
                         Status do Salão ao Vivo
                       </span>
                       <span
-                        className={clsx(
-                          'text-[9px]',
-                          'font-mono',
-                          'text-emerald-400',
-                          'bg-emerald-500/10',
-                          'border',
-                          'border-emerald-500/30',
-                          'px-2',
-                          'py-0.5',
-                          'rounded-full',
-                          'font-bold',
-                          'uppercase',
-                          'flex',
-                          'items-center',
-                          'gap-1',
-                        )}
+                        className={"text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold uppercase flex items-center gap-1"}
                       >
                         <span
-                          className={clsx('w-1.5', 'h-1.5', 'rounded-full', 'bg-emerald-400', 'animate-ping')}
+                          className={"w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"}
                         />
                         Tempo Real
                       </span>
                     </div>
-                    <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
+                    <div className={"grid grid-cols-3 gap-2"}>
                       <div
-                        className={clsx(
-                          'bg-koma-card',
-                          'border',
-                          'border-koma-border',
-                          'p-2.5',
-                          'rounded-xl',
-                          'text-center',
-                          'shadow-xs',
-                        )}
+                        className={"bg-koma-card border border-koma-border p-2.5 rounded-xl text-center shadow-xs"}
                       >
-                        <span className={clsx('text-[9px]', 'text-koma-subtle', 'block', 'font-medium')}>
+                        <span className={"text-[9px] text-koma-subtle block font-medium"}>
                           LIVRES
                         </span>
-                        <strong className={clsx('text-lg', 'font-bold', 'text-emerald-400', 'font-mono')}>
+                        <strong className={"text-lg font-bold text-emerald-400 font-mono"}>
                           {liveFreeTablesCount}
                         </strong>
                       </div>
                       <div
-                        className={clsx(
-                          'bg-koma-card',
-                          'border',
-                          'border-koma-border',
-                          'p-2.5',
-                          'rounded-xl',
-                          'text-center',
-                          'shadow-xs',
-                        )}
+                        className={"bg-koma-card border border-koma-border p-2.5 rounded-xl text-center shadow-xs"}
                       >
-                        <span className={clsx('text-[9px]', 'text-koma-subtle', 'block', 'font-medium')}>
+                        <span className={"text-[9px] text-koma-subtle block font-medium"}>
                           OCUPADAS
                         </span>
-                        <strong className={clsx('text-lg', 'font-bold', 'text-amber-400', 'font-mono')}>
+                        <strong className={"text-lg font-bold text-amber-400 font-mono"}>
                           {liveOccupiedTablesCount}
                         </strong>
                       </div>
                       <div
-                        className={clsx(
-                          'bg-koma-card',
-                          'border',
-                          'border-koma-border',
-                          'p-2.5',
-                          'rounded-xl',
-                          'text-center',
-                          'shadow-xs',
-                        )}
+                        className={"bg-koma-card border border-koma-border p-2.5 rounded-xl text-center shadow-xs"}
                       >
-                        <span className={clsx('text-[9px]', 'text-koma-subtle', 'block', 'font-medium')}>
+                        <span className={"text-[9px] text-koma-subtle block font-medium"}>
                           TOTAL
                         </span>
-                        <strong className={clsx('text-lg', 'font-bold', 'text-sky-400', 'font-mono')}>
+                        <strong className={"text-lg font-bold text-sky-400 font-mono"}>
                           {liveTotalTablesCount}
                         </strong>
                       </div>
@@ -349,25 +213,10 @@ export function CashierOperatorDrawer({
 
               {/* 3. SEÇÃO ATALHOS DE ATENDIMENTO */}
               <div
-                className={clsx(
-                  'bg-koma-panel',
-                  'border',
-                  'border-koma-border',
-                  'rounded-2xl',
-                  'p-4',
-                  'space-y-2.5',
-                  'shadow-md',
-                )}
+                className={"bg-koma-panel border border-koma-border rounded-2xl p-4 space-y-2.5 shadow-md"}
               >
                 <span
-                  className={clsx(
-                    'text-[9px]',
-                    'uppercase',
-                    'tracking-wider',
-                    'text-koma-subtle',
-                    'font-extrabold',
-                    'block',
-                  )}
+                  className={"text-[9px] uppercase tracking-wider text-koma-subtle font-extrabold block"}
                 >
                   Atalhos de Atendimento
                 </span>
@@ -377,42 +226,18 @@ export function CashierOperatorDrawer({
                     if (onRefreshOrders) onRefreshOrders();
                     showToast('Salão e pedidos sincronizados em tempo real!', 'success');
                   }}
-                  className={clsx(
-                    'w-full',
-                    'py-2.5',
-                    'px-3',
-                    'bg-koma-card',
-                    'hover:bg-koma-raised/50',
-                    'border',
-                    'border-koma-border',
-                    'text-koma-secondary',
-                    'hover:text-koma-foreground',
-                    'rounded-xl',
-                    'text-xs',
-                    'font-bold',
-                    'transition-all',
-                    'cursor-pointer',
-                    'flex',
-                    'items-center',
-                    'justify-between',
-                    'group',
-                  )}
+                  className={"w-full py-2.5 px-3 bg-koma-card hover:bg-koma-raised/50 border border-koma-border text-koma-secondary hover:text-koma-foreground rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"}
                 >
-                  <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <div className={"flex items-center gap-2"}>
                     <RefreshCw
                       size={14}
-                      className={clsx(
-                        'text-emerald-400',
-                        'group-hover:rotate-180',
-                        'transition-transform',
-                        'duration-500',
-                      )}
+                      className={"text-emerald-400 group-hover:rotate-180 transition-transform duration-500"}
                     />
                     <span>Sincronizar Salão e Pedidos</span>
                   </div>
                   <ChevronRight
                     size={14}
-                    className={clsx('text-koma-muted', 'group-hover:text-koma-foreground')}
+                    className={"text-koma-muted group-hover:text-koma-foreground"}
                   />
                 </button>
 
@@ -422,28 +247,9 @@ export function CashierOperatorDrawer({
                     toggleFullscreen();
                     setIsOperatorDrawerOpen(false);
                   }}
-                  className={clsx(
-                    'w-full',
-                    'py-2.5',
-                    'px-3',
-                    'bg-koma-card',
-                    'hover:bg-koma-raised/50',
-                    'border',
-                    'border-koma-border',
-                    'text-koma-secondary',
-                    'hover:text-koma-foreground',
-                    'rounded-xl',
-                    'text-xs',
-                    'font-bold',
-                    'transition-all',
-                    'cursor-pointer',
-                    'flex',
-                    'items-center',
-                    'justify-between',
-                    'group',
-                  )}
+                  className={"w-full py-2.5 px-3 bg-koma-card hover:bg-koma-raised/50 border border-koma-border text-koma-secondary hover:text-koma-foreground rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between group"}
                 >
-                  <div className={clsx('flex', 'items-center', 'gap-2')}>
+                  <div className={"flex items-center gap-2"}>
                     {isFullscreen ? (
                       <Minimize2 size={14} className="text-sky-400" />
                     ) : (
@@ -453,51 +259,27 @@ export function CashierOperatorDrawer({
                   </div>
                   <ChevronRight
                     size={14}
-                    className={clsx('text-koma-muted', 'group-hover:text-koma-foreground')}
+                    className={"text-koma-muted group-hover:text-koma-foreground"}
                   />
                 </button>
               </div>
 
               {/* 4. SEÇÃO EXIBIÇÃO E PREFERÊNCIAS */}
               <div
-                className={clsx(
-                  'bg-koma-panel',
-                  'border',
-                  'border-koma-border',
-                  'rounded-2xl',
-                  'p-4',
-                  'space-y-3',
-                  'shadow-md',
-                )}
+                className={"bg-koma-panel border border-koma-border rounded-2xl p-4 space-y-3 shadow-md"}
               >
                 <span
-                  className={clsx(
-                    'text-[9px]',
-                    'uppercase',
-                    'tracking-wider',
-                    'text-koma-subtle',
-                    'font-extrabold',
-                    'block',
-                  )}
+                  className={"text-[9px] uppercase tracking-wider text-koma-subtle font-extrabold block"}
                 >
                   Exibição e Preferências
                 </span>
 
                 <div className="space-y-1.5">
-                  <span className={clsx('text-xs', 'text-koma-secondary', 'font-medium', 'block')}>
+                  <span className={"text-xs text-koma-secondary font-medium block"}>
                     Tamanho da Fonte:
                   </span>
                   <div
-                    className={clsx(
-                      'grid',
-                      'grid-cols-3',
-                      'gap-1',
-                      'bg-koma-card',
-                      'p-1',
-                      'rounded-xl',
-                      'border',
-                      'border-koma-border',
-                    )}
+                    className={"grid grid-cols-3 gap-1 bg-koma-card p-1 rounded-xl border border-koma-border"}
                   >
                     {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
                       <button
@@ -557,11 +339,11 @@ export function CashierOperatorDrawer({
             </div>
 
             {/* RODAPÉ */}
-            <div className={clsx('pt-5', 'border-t', 'border-koma-border', 'text-center', 'space-y-1')}>
-              <span className={clsx('text-xs', 'font-bold', 'text-koma-subtle', 'block', 'font-mono')}>
+            <div className={"pt-5 border-t border-koma-border text-center space-y-1"}>
+              <span className={"text-xs font-bold text-koma-subtle block font-mono"}>
                 Kôma v3.5 • Dark Engine
               </span>
-              <span className={clsx('text-[10px]', 'text-koma-muted', 'block')}>
+              <span className={"text-[10px] text-koma-muted block"}>
                 Sistema PDV Gourmet Multi-Tenant
               </span>
             </div>
