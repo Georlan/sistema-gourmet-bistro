@@ -45,6 +45,18 @@ def _resolve_restaurant_name(current_name: str) -> str:
     return name or "KÔMA"
 
 
+def _is_off_premise(tipo_pedido: object) -> bool:
+    normalized = str(tipo_pedido or "").strip().casefold()
+    return any(
+        term in normalized
+        for term in ("retir", "viagem", "balc", "delivery", "entrega")
+    )
+
+
+def _has_no_production_destination(item: PrintItem) -> bool:
+    return not is_production_destination(item.destino_impressao)
+
+
 class PrintDocumentService:
     """Serviço central de geração dos documentos de impressão do Kôma."""
 
@@ -65,12 +77,43 @@ class PrintDocumentService:
         order: Union[OrderPrintData, dict],
         width: Union[PaperWidth, int] = PaperWidth.WIDTH_80MM
     ) -> Optional[Dict[str, str]]:
-        """Gera vias de produção por destino, descartando itens NENHUM."""
+        """Gera as vias operacionais conforme modalidade e destino de produção.
+
+        Consumo local conserva a regra histórica: item ``NENHUM`` não abre uma
+        via automática. Retirada/delivery são pedidos remotos/expedição e nunca
+        podem desaparecer apenas porque todos os itens são bebidas sem destino.
+        Nesse caso existe uma via operacional completa na COZINHA/padrão. Em um
+        pedido misto, itens ``NENHUM`` acompanham somente a via primária, sem
+        duplicação em cada setor.
+        """
         parsed_order = PrintDocumentService._parse_order_data(order)
         parsed_order.restaurante_nome = _resolve_restaurant_name(
             parsed_order.restaurante_nome
         )
-        destinations_map = group_items_by_print_destination(parsed_order.itens)
+        destinations_map = {
+            destination: list(items)
+            for destination, items in group_items_by_print_destination(
+                parsed_order.itens
+            ).items()
+        }
+
+        off_premise = _is_off_premise(parsed_order.tipo_pedido)
+        no_destination_items = [
+            item
+            for item in parsed_order.itens
+            if _has_no_production_destination(item)
+        ]
+        if off_premise and no_destination_items:
+            if destinations_map:
+                primary_destination = (
+                    "COZINHA"
+                    if "COZINHA" in destinations_map
+                    else next(iter(destinations_map))
+                )
+                destinations_map[primary_destination].extend(no_destination_items)
+            elif parsed_order.itens:
+                destinations_map["COZINHA"] = list(parsed_order.itens)
+
         if not destinations_map:
             return None
 
@@ -84,9 +127,14 @@ class PrintDocumentService:
                 horario=parsed_order.horario,
                 garcom_nome=parsed_order.garcom_nome,
                 numero_lancamento=parsed_order.numero_lancamento,
-                itens=dest_items
+                itens=dest_items,
+                is_reprint=parsed_order.is_reprint,
             )
-            result_docs[dest_name] = format_production_document(sub_order, width)
+            result_docs[dest_name] = format_production_document(
+                sub_order,
+                width,
+                include_all_items=True,
+            )
         return result_docs
 
     @staticmethod
@@ -149,7 +197,8 @@ class PrintDocumentService:
             horario=data.get("horario", ""),
             garcom_nome=data.get("garcom_nome", ""),
             numero_lancamento=data.get("numero_lancamento"),
-            itens=[PrintDocumentService._parse_item(i) for i in raw_items]
+            itens=[PrintDocumentService._parse_item(i) for i in raw_items],
+            is_reprint=bool(data.get("is_reprint", False)),
         )
 
     @staticmethod
