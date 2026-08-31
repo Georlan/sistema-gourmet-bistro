@@ -3,6 +3,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MesaCard } from '../src/components/MesaCard';
+import { CashierSalonCard } from '../src/components/caixa/salao/CashierSalonCard';
 import { CaixaSalonTab } from '../src/components/caixa/salao/CaixaSalonTab';
 import { tableCardPresentation } from '../src/components/shared/SharedTableCard';
 import { deriveTableOperationalState } from '../src/domain/operationalState';
@@ -41,7 +42,7 @@ for (const scenario of scenarios) {
     const cashier = renderToStaticMarkup(React.createElement(CaixaSalonTab, {
       cards, visibleCards: cards, counts: { all: 1, free: 0, occupied: 1, payment: 0 },
       insights: { occupancy: 100, openValue: 112, oldestService: '12m' }, filter: 'all',
-      onFilterChange() {}, actions: { receiveTable() {}, inspectTable() {}, prepareTransfer() {}, openTableOrder() {} },
+      onFilterChange() {}, actions: { inspectTable() {}, openTableOrder() {} },
     }));
     const presentation = tableCardPresentation(cards[0].operational);
     assert.equal(presentation.label, scenario.label);
@@ -51,7 +52,9 @@ for (const scenario of scenarios) {
       if (scenario.orders.length) assert.match(html, /12m/);
     }
     assert.doesNotMatch(waiter, />Receber<|>Ver comanda</);
-    if (scenario.pending || scenario.orders.some(order => order.statusComanda)) assert.match(cashier, /Receber/);
+    if (scenario.orders.length) assert.match(cashier, /Ver comanda/);
+    assert.match(cashier, /data-density="compact"/);
+    assert.match(waiter, /data-density="regular"/);
   });
 }
 
@@ -60,6 +63,18 @@ test('produção oculta respeita permissão sem inventar estado financeiro e mer
   assert.equal(tableCardPresentation(state, false).label, 'Em atendimento');
   assert.equal(state.financial, 'OPEN');
   assert.equal(tableCardPresentation({ ...state, mergedIntoMesaId: 8 }).label, 'Junto com mesa 8');
+});
+
+test('overview keeps empty-session consumption reachable and suppresses merged-table actions', () => {
+  const cards = projectCashierSalonTables([{ ...table, status: 'ocupada' }, { id: 8, capacidade: 2 }], [], [], now);
+  const actions = { inspectTable() {}, openTableOrder() {} };
+  const empty = renderToStaticMarkup(React.createElement(CashierSalonCard, { card: cards[0], actions }));
+  assert.match(empty, /Adicionar consumo/);
+  assert.doesNotMatch(empty, /Ver comanda|disabled/);
+  const merged = projectCashierSalonTables([table], [makeCheck([], { mesaId: 8, mesaOrigemId: 7 })], [], now)[0];
+  const markup = renderToStaticMarkup(React.createElement(CashierSalonCard, { card: merged, actions }));
+  assert.match(markup, /Junto com mesa 8/);
+  assert.doesNotMatch(markup, /<button/);
 });
 
 test('identidades dos DTOs chegam aos lotes e fatias sem rotular a conta agregada', () => {

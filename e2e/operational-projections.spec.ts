@@ -273,10 +273,12 @@ test('Mesa compartilhada mantém tempo, estado e ações do Caixa', async ({ pag
   await expect(card).toHaveAttribute('data-operational-state', 'ready');
   await expect(card).toContainText('12m');
   await expect(card).toContainText('2 itens');
-  // The approved context lists constituent orders; the Mesa itself is not named after one.
+  // Compact overview retains the full context in details; Mesa identity stays unchanged.
   await expect(card).not.toHaveAttribute('aria-label', /24-A/);
-  await expect(card.getByLabel('Contexto da mesa')).toContainText('24-A');
-  await expect(card.getByLabel('Contexto da mesa')).toContainText('24-B');
+  await expect(card.getByLabel('Contexto da mesa')).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Ver comanda' })).toBeVisible();
   if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('shared-table.png'), fullPage: true });
+  await card.getByRole('button', { name: 'Ver comanda' }).click();
+  await expect(page.getByLabel('Contexto da mesa')).toContainText('24-A');
+  await expect(page.getByLabel('Contexto da mesa')).toContainText('24-B');
 });

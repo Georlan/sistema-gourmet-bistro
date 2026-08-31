@@ -618,6 +618,9 @@ export function CaixaPanel({
   });
 
   const selectedCheckoutSmartPosState = selectedOrder ? getSmartPosCardState(selectedOrder) : null;
+  const selectedSalonCard = selectedKanbanOrder?.contextoSalao
+    ? salonTableCards.find(card => card.table.id === Number(selectedKanbanOrder.mesaId) && !card.isMerged)
+    : undefined;
 
   return (
     <div
@@ -1026,9 +1029,7 @@ export function CaixaPanel({
                 onFilterChange={setTableStatusFilter}
                 fetchError={fetchError}
                 actions={{
-                  receiveTable: handleReceiveSalonTable,
                   inspectTable: handleInspectSalonTable,
-                  prepareTransfer: tableOrders => handleInspectSalonTable(tableOrders, true),
                   openTableOrder: handleOpenSalonTableOrder,
                 }}
               />
@@ -1369,6 +1370,18 @@ export function CaixaPanel({
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
+            tableMovement={selectedKanbanOrder.contextoSalao ? getTableMovementContext(selectedKanbanOrder) : undefined}
+            salonActions={selectedSalonCard ? {
+              addConsumption: () => {
+                handleOpenSalonTableOrder(selectedSalonCard.table.id);
+                setSelectedKanbanOrder(null);
+              },
+              receive: () => {
+                handleReceiveSalonTable(selectedSalonCard.tableOrders);
+                setSelectedKanbanOrder(null);
+              },
+              canReceive: selectedSalonCard.tableOrders.length > 0,
+            } : undefined}
             transfer={{
               targetId: tableTransferTargetId,
               onTargetChange: setTableTransferTargetId,
