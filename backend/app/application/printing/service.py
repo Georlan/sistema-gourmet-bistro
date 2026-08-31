@@ -187,13 +187,24 @@ class PrintingApplicationService:
         ):
             return []
 
+        # O PDV historicamente identifica a via pela Comanda que acabou de criar;
+        # Garçom identifica pelo Lançamento incremental. O Core preserva essas
+        # identidades sem deixar a borda escolher formatter ou PrintJob.
+        is_pos_source = bool(
+            lancamento is not None
+            and str(lancamento.origem or "").strip().casefold() in {"caixa", "smartpos"}
+        )
         source_id = (
-            lancamento.id
+            comanda.id
+            if is_pos_source
+            else lancamento.id
             if requested_is_launch and lancamento is not None
             else comanda.id
         )
         if intent.action == PrintAction.REPRINT:
             source_type = "reimpressao"
+        elif is_pos_source:
+            source_type = "pedido"
         elif requested_is_launch and lancamento is not None:
             source_type = "lancamento"
         else:
