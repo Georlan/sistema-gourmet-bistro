@@ -29,19 +29,25 @@ from ..websocket_manager import manager
 from ..services.shifts import require_open_cash_shift
 from ..application.orders.service import OrderApplicationService
 from ..application.orders.commands import DispatchOrderCommand
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintTrigger,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 
-# Compatibilidade Python explícita para os adapters de atendimento e impressão.
+# Compatibilidade Python explícita para os adapters e callbacks ainda em migração.
 from .orders_core import (
     _criar_acesso_motoboy,
     _agendar_notificacao_whatsapp_status,
     criar_venda_direta,
-    enqueue_initial_production_for_order,
     gerar_novo_numero_pedido,
     lancar_itens,
     logger,
     print_in_background,
-    reimprimir_lancamento_cozinha,
     router,
 )
 
@@ -168,7 +174,29 @@ def atualizar_status_delivery(
                 item.status = "pronto"
 
     if transition.first_accept:
-        enqueue_initial_production_for_order(db, comanda)
+        # A state machine apenas declara a intenção. Regra NENHUM, modalidade,
+        # formatter, destino e PrintJob pertencem ao Core Universal de Impressão.
+        try:
+            PrintingApplicationService.request_print(
+                db,
+                PrintIntent(
+                    restaurant_id=rid,
+                    source_type=PrintSourceType.ORDER,
+                    source_id=comanda.id,
+                    action=PrintAction.PRINT,
+                    trigger=PrintTrigger.AUTOMATIC,
+                    requested_by=current_user.nome,
+                    idempotency_key=f"aceite:pedido:{comanda.id}:producao",
+                ),
+            )
+        except UniversalPrintingError as print_err:
+            # Impressão não participa da decisão de aceitar o pedido; falhas ficam
+            # observáveis na aplicação sem desfazer estoque/state machine.
+            logger.warning(
+                "Falha no Core Universal de Impressão ao aceitar pedido %s: %s",
+                comanda.id,
+                print_err,
+            )
 
     if target == "recusado":
         itens_cancelados = []
@@ -280,8 +308,9 @@ def despachar_delivery(
     except OrderValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    # Mantém a via operacional já existente, mas só a gera na primeira transição
-    # válida para trânsito; retries não reimprimem.
+    # TODO universal-printing: despacho ainda usa o renderer legado de entrega.
+    # É o último produtor operacional conhecido fora do Core e fica isolado até
+    # o motor de DELIVERY_DISPATCH preservar exatamente as duas vias atuais.
     try:
         from ..printer_service import printer_service
 
