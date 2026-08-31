@@ -172,6 +172,12 @@ def _jobs():
         db.close()
 
 
+def _without_reprint_marker(text: str) -> str:
+    return "\n".join(
+        line for line in text.splitlines() if line.strip() != "REIMPRESSÃO"
+    )
+
+
 def test_universal_route_prints_pickup_even_when_every_item_is_nenhum():
     response = client.post(
         "/impressao",
@@ -219,4 +225,4 @@ def test_legacy_reprint_alias_uses_same_model_and_only_adds_reprint_marker():
     assert response.status_code == 200, response.text
     reprint_payload = _jobs()[-1].payload_text
     assert "REIMPRESSÃO" in reprint_payload
-    assert reprint_payload.replace("REIMPRESSÃO\n", "") == original_payload
+    assert _without_reprint_marker(reprint_payload) == original_payload
