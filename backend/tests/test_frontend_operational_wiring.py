@@ -19,6 +19,7 @@ def test_production_kitchen_uses_real_finish_handler_and_marketing_stays_read_on
 
 def test_cashier_operational_forms_are_wired_to_real_handlers():
     panel = _source("src/components/CaixaPanel.tsx")
+    customers = _source("src/components/caixa/customers/CashierCustomers.tsx")
     orders = _source("src/components/caixa/orders/useCashierOrders.ts")
 
     for removed_stub in (
@@ -28,9 +29,10 @@ def test_cashier_operational_forms_are_wired_to_real_handlers():
     ):
         assert removed_stub not in panel
 
-    assert "onSubmit={handleSaveFidelidadeConfig}" in panel
-    assert "`${apiBaseUrl}/fidelidade/config`" in panel
-    assert "/fidelidade/configuracao" not in panel
+    assert "onSubmit={handleSaveFidelidadeConfig}" in customers
+    assert "`${apiBaseUrl}/fidelidade/config`" in customers
+    assert "/fidelidade/configuracao" not in customers
+    assert "load={loadCashierCustomers}" in panel
     assert "onClick={() => handleDespacharKanban(order.id, motoboyId)}" in panel
     assert "parseInt(motoboyId)" not in panel
     assert "onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}" in panel
@@ -80,6 +82,7 @@ def test_fabricated_ai_and_whatsapp_prototypes_are_not_shipped_in_the_ui():
         _source("src/components/caixa/checkout/CheckoutDialog.tsx"),
         _source("src/components/caixa/checkout/useCheckoutController.ts"),
         _source("src/components/caixa/orders/useCashierOrders.ts"),
+        *(path.read_text(encoding="utf-8") for path in (ROOT / "src/components/caixa").rglob("*.tsx")),
     ]
     menu = _source("src/cardapio/CardapioPage.tsx")
     plans = _source("src/config/subscriptionPlans.ts")

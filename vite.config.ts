@@ -17,6 +17,7 @@ export default defineConfig(() => {
       "import.meta.env.VITE_BUILD_SHA": JSON.stringify(buildSha || "não informado"),
     },
     plugins: [react(), tailwindcss()],
+    build: { manifest: true },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

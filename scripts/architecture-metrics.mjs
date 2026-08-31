@@ -21,6 +21,13 @@ const ownerPaths = [
   'cashierContracts.ts', 'checkout/useCheckoutController.ts', 'checkout/CheckoutDialog.tsx',
   'orders/useCashierOrders.ts', 'smartpos/useCashierSmartPos.ts', 'shift/useCashShift.ts',
   'realtime/useCashierAlerts.ts', 'realtime/useCashierClock.ts', 'realtime/useCashierRealtime.ts',
+  'catalog/useCashierCatalog.ts', 'catalog/CashierCatalog.tsx',
+  'customers/useCashierCustomers.ts', 'customers/CashierCustomers.tsx',
+  'settings/useCashierSettings.ts', 'settings/CashierSettings.tsx',
+  'inventory/CashierInventory.tsx', 'online-menu/CashierOnlineMenu.tsx',
+  'team/CashierTeam.tsx', 'reports/CashierReports.tsx',
+  'pdv/useCashierPdv.ts', 'pdv/usePdvCategoryNavigation.ts', 'pdv/CashierPdvView.tsx',
+  'loading/DeferredCashierSection.tsx', 'kitchen/KitchenTimer.tsx',
 ].map(file => ownerBase + file);
 const domainPaths = [
   'tableConsumption.ts', 'operationalTime.ts', 'catalogPresentation.ts', 'search.ts',

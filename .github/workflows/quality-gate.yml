@@ -50,6 +50,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Guard cashier deferred loading and startup budget
+        run: node scripts/audit-cashier-loading.mjs > cashier-loading.json
+
       - name: Measure source ownership and production chunks
         run: node scripts/architecture-metrics.mjs > architecture-metrics.json
 
@@ -57,13 +60,15 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: architecture-metrics-${{ github.run_id }}
-          path: architecture-metrics.json
+          path: |
+            architecture-metrics.json
+            cashier-loading.json
           retention-days: 30
 
   browser-e2e:
     name: Browser regression matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -83,6 +88,11 @@ jobs:
 
       - name: Run real browser regression matrix
         run: npm run test:e2e
+
+      - name: Validate deferred loading against production assets
+        run: |
+          npm run build
+          KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4285 npm run test:e2e -- e2e/cashier-loading.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
 
       - name: Upload browser diagnostics
         if: failure()
