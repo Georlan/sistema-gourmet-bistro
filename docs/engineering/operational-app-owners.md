@@ -25,12 +25,21 @@ Os pontos de chamada de sincronização continuam no App, com as mesmas dependê
 
 ## Evidência e limites
 
-Comparação estrutural de árvores TypeScript: 21 callbacks/funções movidos equivalentes
-à base, ignorando parênteses e formatação. Não é prova formal nem revisão independente.
+Na extração inicial (`311801b`), a comparação estrutural de árvores TypeScript encontrou
+21 callbacks/funções movidos equivalentes à base, ignorando parênteses e formatação.
+Não é prova formal nem revisão independente; a correção de segurança abaixo é posterior.
 Foram adicionados testes de rascunho após erro/recarga, mesma chave no reenvio, bloqueio
 de outro lançamento pendente, catálogo legado e 401 retornando ao login. O teste novo
 de recarga passou a aguardar o modal restaurado: DOM/trace mostraram que o próprio
 teste tentava clicar atrás dele; não houve alteração da tela para contornar a falha.
+
+CodeQL apontou o alerta #24 (`js/remote-property-injection`) no cache de versões do
+refresh direcionado. O padrão já existia no App da base; foi tratado como risco real,
+não suprimido. Ambos os caches privados de IDs agora usam Map, preservando a janela
+otimista de oito segundos e a precedência da resposta mais recente. Um teste de
+navegador com IDs adversariais de fixture (`__proto__`, `constructor`, `toString`)
+reproduziu a perda da atualização em `311801b`; também verifica resposta antiga e 404.
+Isso não comprova exploração em produção nem amplia os IDs aceitos pelo backend.
 
 O ganho desta etapa é manutenção: o grafo inicial fica em aproximadamente 860 kB,
 contra 859 kB na etapa anterior, dentro do orçamento de 950 kB. Não há ganho adicional

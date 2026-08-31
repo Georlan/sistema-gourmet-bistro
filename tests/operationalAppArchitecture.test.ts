@@ -57,3 +57,16 @@ test('catalog listeners and polling keep their cleanup next to their owner', () 
     assert.ok(connectivity.includes(`removeEventListener('${event}', ${callback})`));
   }
 });
+
+test('remote order and item IDs stay in private Map caches, never object properties', () => {
+  const orders = read('src/components/app/data/useOperationalOrders.ts');
+  for (const name of ['targetedOrderRequestRef', 'optimisticItemStatusRef']) {
+    const declaration = descendants(orders).filter(ts.isVariableDeclaration).find(node => node.name.getText() === name)!;
+    assert.match(declaration.initializer!.getText(), /new Map/);
+    for (const access of descendants(orders).filter(ts.isElementAccessExpression)) {
+      assert.notEqual(access.expression.getText(), name + '.current');
+    }
+    assert.ok(calls(orders).some(call => call.expression.getText() === name + '.current.get'));
+    assert.ok(calls(orders).some(call => call.expression.getText() === name + '.current.set'));
+  }
+});

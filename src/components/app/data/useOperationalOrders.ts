@@ -19,11 +19,12 @@ export function useOperationalOrders({
 }: BoundaryProps) {
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
 
-  const targetedOrderRequestRef = useRef<Record<string, number>>({});
+  // Protocol IDs are data, never property names on a prototype-bearing object.
+  const targetedOrderRequestRef = useRef(new Map<string, number>());
 
   const optimisticItemStatusRef = useRef<
-    Record<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>
-  >({});
+    Map<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>
+  >(new Map());
 
   const [isOrdersLoaded, setIsOrdersLoaded] = useState(false);
 
@@ -65,11 +66,11 @@ export function useOperationalOrders({
     itens: (comanda.itens || [])
       .filter((item: any) => item.status !== 'cancelado')
       .map((item: any) => {
-        const opt = optimisticItemStatusRef.current[item.id];
+        const opt = optimisticItemStatusRef.current.get(String(item.id));
         let effectiveStatus = item.status;
         if (opt && now - opt.ts < 8000) {
           if (opt.status === item.status) {
-            delete optimisticItemStatusRef.current[item.id];
+            optimisticItemStatusRef.current.delete(String(item.id));
           } else {
             effectiveStatus = opt.status;
           }
@@ -140,8 +141,8 @@ export function useOperationalOrders({
       return;
     }
 
-    const requestVersion = (targetedOrderRequestRef.current[normalizedId] || 0) + 1;
-    targetedOrderRequestRef.current[normalizedId] = requestVersion;
+    const requestVersion = (targetedOrderRequestRef.current.get(normalizedId) || 0) + 1;
+    targetedOrderRequestRef.current.set(normalizedId, requestVersion);
 
     try {
       const response = await fetch(`${API_BASE_URL}/comandas/${encodeURIComponent(normalizedId)}`, {
@@ -153,7 +154,7 @@ export function useOperationalOrders({
         return;
       }
       if (response.status === 404) {
-        if (targetedOrderRequestRef.current[normalizedId] === requestVersion) {
+        if (targetedOrderRequestRef.current.get(normalizedId) === requestVersion) {
           setOrders((prevOrders) => prevOrders.filter((order) => String(order.id) !== normalizedId));
         }
         return;
@@ -163,7 +164,7 @@ export function useOperationalOrders({
       }
 
       const mappedOrder = mapBackendComandaToOrder(await response.json());
-      if (targetedOrderRequestRef.current[normalizedId] !== requestVersion) return;
+      if (targetedOrderRequestRef.current.get(normalizedId) !== requestVersion) return;
 
       setOrders((prevOrders) => {
         const nextOrders = prevOrders.filter(
@@ -192,7 +193,7 @@ export function useOperationalOrders({
     const itemIds = Array.isArray(itemId) ? itemId : [itemId];
     const now = Date.now();
     itemIds.forEach((id) => {
-      optimisticItemStatusRef.current[id] = { status: newStatus, ts: now };
+      optimisticItemStatusRef.current.set(String(id), { status: newStatus, ts: now });
     });
     setOrders((prevOrders) =>
       prevOrders.map((order) => ({

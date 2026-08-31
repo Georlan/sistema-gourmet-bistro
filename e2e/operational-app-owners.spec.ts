@@ -1,9 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import { mockCashierBackend } from './fixtures/cashier';
 
-async function setup(page: Page, withDrafts = true) {
+async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocketRoute) => void) {
   await mockCashierBackend(page);
-  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.routeWebSocket(/\/ws\//, socket => {
+    socket.onMessage(() => {});
+    onSocket?.(socket);
+  });
   await page.addInitScript(({ withDrafts }) => {
     if (sessionStorage.getItem('app-owner-fixture')) return;
     sessionStorage.setItem('app-owner-fixture', '1');
@@ -23,6 +26,46 @@ async function reviewDraft(page: Page, id = 7) {
   await expect(page.getByRole('heading', { name: 'Revisar Pedido', exact: true })).toBeVisible();
 }
 const submit = (page: Page) => page.locator('[id^="submit-draft-order-btn"]:visible');
+
+test('refresh direcionado trata IDs como dados e descarta respostas antigas', async ({ page }) => {
+  let socket: WebSocketRoute | undefined;
+  await setup(page, false, connected => { socket = connected; });
+  await page.goto('/?view=garcom');
+  const table = page.locator('#mesa-card-10');
+  await expect(table).toContainText('Livre');
+  await expect.poll(() => Boolean(socket)).toBe(true);
+
+  // Adversarial protocol IDs are fixture-only; they must never address object prototypes.
+  for (const id of ['__proto__', 'constructor', 'toString']) {
+    let requests = 0;
+    let release!: () => void;
+    const pending = new Promise<void>(resolve => { release = resolve; });
+    const endpoint = `/comandas/${id}`;
+    await page.route(`**${endpoint}`, async route => {
+      const version = ++requests;
+      if (version === 1) await pending;
+      await route.fulfill(version === 3 ? { status: 404, json: {} } : { json: {
+        id, mesa_id: 10, tipo: 'Consumo no Local', criado_em: '2026-08-31T12:00:00Z',
+        itens: [{ id: `item-${id}`, produto_id: '101', preco_unit: version === 1 ? 81 : 42, status: 'preparando' }],
+      } });
+    });
+    const refresh = () => socket!.send(JSON.stringify({ event: 'tables_updated', detail: { type: 'lancamento_criado', comanda_id: id } }));
+    refresh();
+    await expect.poll(() => requests).toBe(1);
+    refresh();
+    await expect(table).toContainText(/R\$\s*42,00/);
+    const staleResponse = page.waitForResponse(response => new URL(response.url()).pathname === endpoint);
+    release();
+    await (await staleResponse).finished();
+    // Flush paint after the old response; no wall-clock sleeps or forced interactions.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(table).toContainText(/R\$\s*42,00/);
+    await expect(table).not.toContainText(/81,00/);
+    refresh();
+    await expect.poll(() => requests).toBe(3);
+    await expect(table).toContainText('Livre');
+  }
+});
 
 test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição', async ({ page }) => {
   await setup(page);
