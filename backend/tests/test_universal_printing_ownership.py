@@ -9,6 +9,7 @@ MIGRATED_PRINT_PRODUCERS = (
     "app/adapters/orders/pos_adapter.py",
     "app/adapters/orders/waiter_adapter.py",
     "app/routes/orders.py",
+    "app/routes/atendimentos.py",
     "app/routes/atendimento_printing.py",
     "app/routes/printing.py",
 )
