@@ -40,7 +40,9 @@ export default defineConfig({
   })),
   webServer: {
     env: { KOMA_E2E: 'true', DISABLE_HMR: 'true' },
-    command: `npm run dev:e2e -- --port=${port} --strictPort`,
+    command: process.env.KOMA_E2E_PREVIEW === 'true'
+      ? `npm run preview -- --host=127.0.0.1 --port=${port} --strictPort`
+      : `npm run dev:e2e -- --port=${port} --strictPort`,
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,

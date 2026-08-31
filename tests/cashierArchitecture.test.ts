@@ -18,6 +18,8 @@ const ownerFiles = [
   'checkout/useCheckoutController.ts', 'orders/useCashierOrders.ts',
   'smartpos/useCashierSmartPos.ts', 'shift/useCashShift.ts',
   'realtime/useCashierAlerts.ts', 'realtime/useCashierClock.ts', 'realtime/useCashierRealtime.ts',
+  'catalog/useCashierCatalog.ts', 'customers/useCashierCustomers.ts',
+  'settings/useCashierSettings.ts', 'pdv/useCashierPdv.ts',
 ].map(file => 'src/components/caixa/' + file);
 const root = source('src/components/CaixaPanel.tsx');
 
@@ -27,6 +29,9 @@ test('Caixa composition cannot reacquire payment, order, shift or SmartPOS actio
     'handleCancelTableConsumption', 'handleTransferTableFromSalon', 'handleUpdateItemStatus',
     'handleReconcileSmartPosPayment', 'handleAbrirCaixa', 'handleConfirmarFechamento',
     'handleRegistrarSangria', 'handleRegistrarSuprimento', 'buildTableCheckoutOrder',
+    'handlePdvSubmitOrder', 'handleSaveInsumo', 'handleSaveDistribuidor',
+    'handleUpdateClient', 'handleCreateClient', 'handleAddMesaSubmit',
+    'saveCardapioConfig', 'updateConfiguracoes', 'fetchProdutos',
   ]);
   for (const node of descendants(root).filter(ts.isVariableDeclaration)) {
     if (ts.isIdentifier(node.name) && ownedActions.has(node.name.text)) {
@@ -43,9 +48,9 @@ test('legacy root has an explicit non-growing state/effect/request budget', () =
   // Ratchet measured after ownership extraction; changing these budgets requires
   // an explicit architecture decision, not automatic snapshot regeneration.
   const names = calls(root).map(callName);
-  assert.ok(names.filter(name => name === 'useState').length <= 141);
-  assert.ok(names.filter(name => name === 'useEffect').length <= 17);
-  assert.ok(names.filter(name => ['fetch', 'operationalFetch'].includes(name)).length <= 61);
+  assert.ok(names.filter(name => name === 'useState').length <= 16);
+  assert.ok(names.filter(name => name === 'useEffect').length <= 7);
+  assert.equal(names.filter(name => ['fetch', 'operationalFetch'].includes(name)).length, 0);
 });
 
 test('checkout view is controlled and has no request, subscription or state authority', () => {
@@ -99,6 +104,6 @@ test('each owned listener and interval is paired with cleanup in its own effect'
       }
     }
   }
-  assert.ok(subscriptions >= 8, 'Do not accidentally stop scanning subscriptions');
+  assert.ok(subscriptions >= 11, 'Do not accidentally stop scanning subscriptions');
   assert.equal(intervals, 3);
 });

@@ -16,6 +16,7 @@ def cashier_rendered_sources() -> list[str]:
         source("src/components/caixa/salao/CaixaSalonTab.tsx"),
         source("src/components/caixa/checkout/CheckoutDialog.tsx"),
         source("src/components/shared/SharedTableCard.tsx"),
+        *(path.read_text(encoding="utf-8") for path in (ROOT / "src/components/caixa").rglob("*.tsx")),
     ]
 
 
@@ -148,8 +149,9 @@ def test_operational_copy_does_not_restore_legacy_lote_or_ambiguous_financial_la
         assert "import logoImg from '../assets/logo.png'" not in rendered_source
         assert "Faturamento Total;R$" not in rendered_source
         assert "Faturamento de Hoje;R$" not in rendered_source
-    assert "Vendas Líquidas;R$" in caixa
-    assert "Receita Líquida" in caixa
+    reports = source("src/components/caixa/reports/CashierReports.tsx")
+    assert "Vendas Líquidas;R$" in reports
+    assert "Receita Líquida" in reports
 
 
 def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():

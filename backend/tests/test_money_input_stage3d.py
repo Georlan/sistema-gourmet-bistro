@@ -11,7 +11,9 @@ def _source(relative_path: str) -> str:
 def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_parsers():
     panel = _source("src/components/CaixaPanel.tsx")
     checkout = _source("src/components/caixa/checkout/CheckoutDialog.tsx")
-    owners = checkout + _source("src/components/caixa/checkout/useCheckoutController.ts") + _source("src/components/caixa/shift/useCashShift.ts")
+    catalog = _source("src/components/caixa/catalog/CashierCatalog.tsx")
+    inventory = _source("src/components/caixa/inventory/CashierInventory.tsx")
+    owners = checkout + catalog + inventory + _source("src/components/caixa/checkout/useCheckoutController.ts") + _source("src/components/caixa/shift/useCashShift.ts") + _source("src/components/caixa/pdv/useCashierPdv.ts")
 
     assert "import MoneyInput from './MoneyInput';" in panel
     assert "import MoneyInput from '../../MoneyInput';" in checkout
@@ -32,14 +34,14 @@ def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_pars
 
     assert "onValueChange={setSaldoInicial}" in panel
     assert "onValueChange={setPaymentValor}" in checkout
-    assert "onValueChange={setProdFormPreco}" in panel
-    assert panel.count(
+    assert "onValueChange={setProdFormPreco}" in catalog
+    assert inventory.count(
         "onValueChange={(value) => setInsumoFormCusto(Number(value || 0))}"
     ) == 2
 
 
 def test_stage3d_hybrid_fields_distinguish_money_from_points_without_local_coupons():
-    panel = _source("src/components/CaixaPanel.tsx")
+    panel = _source("src/components/caixa/customers/CashierCustomers.tsx")
 
     # Novo cliente: pontos são quantidade inteira; cashback é dinheiro.
     assert "const [newCrmSaldo, setNewCrmSaldo] = useState<number | ''>(0);" in panel
