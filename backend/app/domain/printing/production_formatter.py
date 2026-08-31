@@ -31,13 +31,15 @@ def _format_curr(value: float) -> str:
 def format_production_document(
     data: OrderPrintData,
     width: PaperWidth = PaperWidth.WIDTH_80MM,
+    *,
+    include_all_items: bool = False,
 ) -> str:
-    """Gera uma ordem de produção estritamente a partir dos itens recebidos.
+    """Gera uma via operacional a partir do snapshot canônico recebido.
 
-    Este formatter não consulta mesa, não recompõe consumo anterior e não é
-    usado como Extrato Completo. A via financeira de Consumo no Local pertence
-    a ``services.printing.render_table_receipt``. Aqui ficam apenas documentos
-    incrementais destinados à operação de produção (cozinha/bar/delivery).
+    ``include_all_items`` é reservado ao plano de impressão: produção setorial
+    continua respeitando ``destino_impressao``; uma via operacional obrigatória
+    de retirada/delivery pode carregar itens ``NENHUM`` sem alterar o cadastro.
+    O formatter não consulta banco nem decide política.
     """
     w = width.value if isinstance(width, PaperWidth) else int(width)
     lines: List[str] = []
@@ -72,15 +74,22 @@ def format_production_document(
         lines.append(_justify(tipo_str, horario_str, w))
     elif tipo_str:
         lines.append(tipo_str)
+    if data.is_reprint:
+        lines.append(_center("REIMPRESSÃO", w))
     if data.garcom_nome:
         lines.append(_center(f"GARÇOM: {data.garcom_nome.upper()}", w))
     lines.append(_separator("-", w))
 
-    prod_items = [
-        item
-        for item in data.itens
-        if (item.destino_impressao or "COZINHA").upper() not in ("NENHUM", "NONE", "")
-    ]
+    prod_items = (
+        list(data.itens)
+        if include_all_items
+        else [
+            item
+            for item in data.itens
+            if (item.destino_impressao or "COZINHA").upper()
+            not in ("NENHUM", "NONE", "")
+        ]
+    )
     by_client = group_items_by_customer(prod_items)
     omit_client_header = len(by_client) == 1 and "GERAL" in by_client
 
