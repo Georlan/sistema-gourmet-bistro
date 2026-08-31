@@ -12,10 +12,13 @@ def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_pars
     panel = _source("src/components/CaixaPanel.tsx")
     checkout = _source("src/components/caixa/checkout/CheckoutDialog.tsx")
     catalog = _source("src/components/caixa/catalog/CashierCatalog.tsx")
-    inventory = _source("src/components/caixa/inventory/CashierInventory.tsx")
-    owners = checkout + catalog + inventory + _source("src/components/caixa/checkout/useCheckoutController.ts") + _source("src/components/caixa/shift/useCashShift.ts") + _source("src/components/caixa/pdv/useCashierPdv.ts")
+    inventory = _source("src/components/caixa/inventory/CashierIngredientDialogs.tsx")
+    opening = _source("src/components/caixa/shift/CashierOpenShiftDialog.tsx")
+    owners = checkout + catalog + inventory + opening + _source("src/components/caixa/checkout/useCheckoutController.ts") + _source("src/components/caixa/shift/useCashShift.ts") + _source("src/components/caixa/pdv/useCashierPdv.ts") + _source("src/components/caixa/inventory/useCashierIngredientEditor.ts")
 
-    assert "import MoneyInput from './MoneyInput';" in panel
+    assert "<CashierOpenShiftDialog" in panel
+    assert "setSaldoInicial={setSaldoInicial}" in panel
+    assert "import MoneyInput from '../../MoneyInput';" in opening
     assert "import MoneyInput from '../../MoneyInput';" in checkout
     assert "<CheckoutDialog" in panel
 
@@ -32,7 +35,7 @@ def test_stage3d_core_money_inputs_use_canonical_money_input_without_legacy_pars
         assert forbidden not in panel
         assert forbidden not in owners
 
-    assert "onValueChange={setSaldoInicial}" in panel
+    assert "onValueChange={setSaldoInicial}" in opening
     assert "onValueChange={setPaymentValor}" in checkout
     assert "onValueChange={setProdFormPreco}" in catalog
     assert inventory.count(

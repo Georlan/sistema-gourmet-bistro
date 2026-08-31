@@ -21,6 +21,7 @@ def test_cashier_operational_forms_are_wired_to_real_handlers():
     panel = _source("src/components/CaixaPanel.tsx")
     customers = _source("src/components/caixa/customers/CashierCustomers.tsx")
     orders = _source("src/components/caixa/orders/useCashierOrders.ts")
+    couriers = _source("src/components/caixa/orders/CashierCouriers.tsx")
 
     for removed_stub in (
         "handleSaveFidelityConfig",
@@ -33,9 +34,11 @@ def test_cashier_operational_forms_are_wired_to_real_handlers():
     assert "`${apiBaseUrl}/fidelidade/config`" in customers
     assert "/fidelidade/configuracao" not in customers
     assert "load={loadCashierCustomers}" in panel
-    assert "onClick={() => handleDespacharKanban(order.id, motoboyId)}" in panel
-    assert "parseInt(motoboyId)" not in panel
-    assert "onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}" in panel
+    assert "<CashierCouriers" in panel
+    assert "handleDespacharKanban={handleDespacharKanban}" in panel
+    assert "onClick={() => handleDespacharKanban(order.id, motoboyId)}" in couriers
+    assert "parseInt(motoboyId)" not in panel + couriers
+    assert "onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}" in couriers
     assert "useCashierOrders(" in panel
     assert "setNewMotoboyNome('');" in orders
     assert "setNewMotoboyTelefone('');" in orders

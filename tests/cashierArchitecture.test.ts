@@ -20,6 +20,8 @@ const ownerFiles = [
   'realtime/useCashierAlerts.ts', 'realtime/useCashierClock.ts', 'realtime/useCashierRealtime.ts',
   'catalog/useCashierCatalog.ts', 'customers/useCashierCustomers.ts',
   'settings/useCashierSettings.ts', 'pdv/useCashierPdv.ts',
+  'navigation/useCashierNavigation.ts', 'navigation/useCashierPreferences.ts',
+  'salao/useCashierSalonProjection.ts',
 ].map(file => 'src/components/caixa/' + file);
 const root = source('src/components/CaixaPanel.tsx');
 
@@ -48,8 +50,8 @@ test('legacy root has an explicit non-growing state/effect/request budget', () =
   // Ratchet measured after ownership extraction; changing these budgets requires
   // an explicit architecture decision, not automatic snapshot regeneration.
   const names = calls(root).map(callName);
-  assert.ok(names.filter(name => name === 'useState').length <= 16);
-  assert.ok(names.filter(name => name === 'useEffect').length <= 7);
+  assert.ok(names.filter(name => name === 'useState').length <= 8);
+  assert.ok(names.filter(name => name === 'useEffect').length <= 2);
   assert.equal(names.filter(name => ['fetch', 'operationalFetch'].includes(name)).length, 0);
 });
 
@@ -104,6 +106,40 @@ test('each owned listener and interval is paired with cleanup in its own effect'
       }
     }
   }
-  assert.ok(subscriptions >= 11, 'Do not accidentally stop scanning subscriptions');
+  assert.ok(subscriptions >= 19, 'Do not accidentally stop scanning subscriptions');
   assert.equal(intervals, 3);
+});
+
+test('settings and inventory compose persistent owners instead of acquiring HTTP or financial state', () => {
+  const modules = [
+    ['settings/CashierSettings.tsx', ['useCashierTableSettings']],
+    ['inventory/CashierInventory.tsx', ['useCashierInventoryData', 'useCashierInventoryOperations', 'useCashierIngredientEditor', 'useCashierSupplierEditor']],
+  ] as const;
+  for (const [file, hooks] of modules) {
+    const view = source('src/components/caixa/' + file);
+    const names = calls(view).map(callName);
+    assert.equal(names.filter(name => ['fetch', 'operationalFetch'].includes(name)).length, 0, file);
+    for (const hook of hooks) assert.ok(names.includes(hook), hook + ' must be wired');
+  }
+});
+
+test('mobile and desktop share a navigation catalog and settings views derive controller contracts', () => {
+  for (const file of ['CashierDesktopSidebar', 'CashierMobileSidebar']) {
+    const text = source('src/components/caixa/navigation/' + file + '.tsx').text;
+    assert.match(text, /from ['"]\.\/cashierNavigation['"]/);
+    assert.doesNotMatch(text, /const CASHIER_SIDEBAR_GROUPS/);
+  }
+  for (const file of ['CashierPrintingSettings', 'CashierServiceTaxSettings', 'CashierWaiterSettings']) {
+    assert.match(source('src/components/caixa/settings/' + file + '.tsx').text, /ReturnType<typeof useCashierSettings>/);
+  }
+  const dialogs = source('src/components/caixa/settings/CashierTableDialogs.tsx');
+  const names = calls(dialogs).map(callName);
+  for (const action of ['fetch', 'onCreateMesa', 'onUpdateMesa', 'onDeleteMesa']) assert.ok(!names.includes(action));
+  for (const file of ['orders/CashierCouriers', 'orders/CashierCancelConsumptionDialog', 'kitchen/CashierKitchen']) {
+    assert.match(source('src/components/caixa/' + file + '.tsx').text, /ReturnType<typeof useCashierOrders>/);
+  }
+  assert.match(source('src/components/caixa/shift/CashierOpenShiftDialog.tsx').text, /ReturnType<typeof useCashShift>/);
+  for (const file of ['CashierDesktopSidebar', 'CashierMobileSidebar']) {
+    assert.match(source('src/components/caixa/navigation/' + file + '.tsx').text, /from ['"]\.\/cashierNavigationContracts['"]/);
+  }
 });

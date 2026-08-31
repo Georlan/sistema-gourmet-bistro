@@ -62,21 +62,26 @@ def test_theme_is_bootstrapped_before_first_paint_and_react_for_every_route():
 
 def test_cashier_theme_toggle_uses_shared_realtime_theme_contract():
     caixa = source("src/components/CaixaPanel.tsx")
+    preferences = source("src/components/caixa/navigation/useCashierPreferences.ts")
+    sidebars = source("src/components/caixa/navigation/CashierDesktopSidebar.tsx") + source("src/components/caixa/navigation/CashierMobileSidebar.tsx")
     theme = source("src/config/theme.ts")
 
-    assert "KOMA_THEME_CHANGED_EVENT" in caixa
-    assert "nextKomaTheme" in caixa
-    assert "persistKomaTheme" in caixa
-    assert "readKomaTheme" in caixa
-    assert "type KomaTheme" in caixa
-    assert "useState<KomaTheme>(() => readKomaTheme())" in caixa
+    assert "useCashierPreferences(" in caixa
+    assert "theme={theme}" in caixa
+    assert "setTheme={setTheme}" in caixa
+    assert "KOMA_THEME_CHANGED_EVENT" in preferences
+    assert "nextKomaTheme" in sidebars
+    assert "persistKomaTheme" in sidebars
+    assert "readKomaTheme" in preferences
+    assert "type KomaTheme" in preferences
+    assert "useState<KomaTheme>(() => readKomaTheme())" in preferences
 
     # Desktop expandido, desktop recolhido e mobile usam a mesma operação, que
     # persiste e aplica o tema antes de sincronizar os outros shells.
-    assert caixa.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 3
-    assert 'className="cashier-sidebar__compact-theme"' in caixa
-    assert "localStorage.setItem('@koma:theme'" not in caixa
-    assert "new Event('koma_theme_changed')" not in caixa
+    assert sidebars.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 3
+    assert 'className="cashier-sidebar__compact-theme"' in sidebars
+    assert "localStorage.setItem('@koma:theme'" not in caixa + preferences + sidebars
+    assert "new Event('koma_theme_changed')" not in caixa + preferences + sidebars
 
     storage_index = theme.index("storage.setItem(KOMA_THEME_STORAGE_KEY, theme);")
     apply_index = theme.index("applyKomaTheme(theme);", storage_index)

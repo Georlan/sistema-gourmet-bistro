@@ -46,8 +46,9 @@ test("sem token o gate renderiza somente o login", () => {
 
 test("a rota principal usa o gate e não renderiza o painel diretamente", () => {
   const source = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
-  assert.match(source, /import \{ SuperAdminGate \} from '\.\/super-admin\/SuperAdminGate';/);
-  assert.match(source, /return <SuperAdminGate\s*\/>;/);
+  assert.match(source, /React\.lazy\(\(\) => import\('\.\/super-admin\/SuperAdminGate'\)/);
+  assert.match(source, /default: module\.SuperAdminGate/);
+  assert.match(source, /<AppRouteBoundary[^>]+><SuperAdminGate\s*\/><\/AppRouteBoundary>/);
   assert.doesNotMatch(source, /return <SuperAdminPanel\s*\/>;/);
 });
 

@@ -14,16 +14,11 @@ import { normalizeCatalogSnapshot, type CatalogCategory } from './catalog/catalo
 import { getTableTotal } from './domain';
 import { deriveTableOperationalState } from './domain/operationalState';
 import { readCheckLaunchIdentities } from './domain/orderIdentity';
-import { MesaCard } from './components/MesaCard';
 import { MesasView } from './components/mesas/MesasView';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import clsx from 'clsx';
-import CardapioPage from './cardapio/CardapioPage';
-import { SuperAdminGate } from './super-admin/SuperAdminGate';
-import { CaixaAtivarPage } from './components/CaixaAtivarPage';
-import { MotoboyPwaPage } from './components/MotoboyPwaPage';
 import { KitchenPanel } from './components/KitchenPanel';
-import LandingPage from './landing/LandingPage';
+import { AppRouteBoundary } from './components/app/AppRouteBoundary';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { saveOperatorSession, getOperatorSession, clearOperatorSession } from './utils/authSession';
@@ -35,6 +30,14 @@ import {
   operationalFetch,
 } from './utils/operationalRequest';
 import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
+
+// Route modules have stable identities and are downloaded only when selected.
+// Authentication and all operational controllers remain in App.
+const CardapioPage = React.lazy(() => import('./cardapio/CardapioPage'));
+const LandingPage = React.lazy(() => import('./landing/LandingPage'));
+const SuperAdminGate = React.lazy(() => import('./super-admin/SuperAdminGate').then(module => ({ default: module.SuperAdminGate })));
+const CaixaAtivarPage = React.lazy(() => import('./components/CaixaAtivarPage').then(module => ({ default: module.CaixaAtivarPage })));
+const MotoboyPwaPage = React.lazy(() => import('./components/MotoboyPwaPage').then(module => ({ default: module.MotoboyPwaPage })));
 
 const MemoizedCaixaPanel = React.lazy(() =>
   import('./components/CaixaPanel').then(module => ({
@@ -86,7 +89,7 @@ export default function App() {
   const isSuperAdmin = window.location.pathname.startsWith('/super-admin');
 
   if (isSuperAdmin) {
-    return <SuperAdminGate />;
+    return <AppRouteBoundary label="administração"><SuperAdminGate /></AppRouteBoundary>;
   }
 
   // Detect activation page (?view=ativar or /ativar)
@@ -94,21 +97,21 @@ export default function App() {
                    window.location.search.includes('view=ativar');
   if (isAtivar) {
     const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
-    return <CaixaAtivarPage token={tokenFromUrl} />;
+    return <AppRouteBoundary label="ativação"><CaixaAtivarPage token={tokenFromUrl} /></AppRouteBoundary>;
   }
 
   // Detect motoboy PWA page (/entregador or ?view=entregador)
   const isEntregador = window.location.pathname.startsWith('/entregador') ||
                        window.location.search.includes('view=entregador');
   if (isEntregador) {
-    return <MotoboyPwaPage />;
+    return <AppRouteBoundary label="entregador"><MotoboyPwaPage /></AppRouteBoundary>;
   }
 
   // Detect KÔMA Landing Page (/landing or ?view=landing)
   const isLanding = window.location.pathname.startsWith('/landing') ||
                     window.location.search.includes('view=landing');
   if (isLanding) {
-    return <LandingPage />;
+    return <AppRouteBoundary label="apresentação"><LandingPage /></AppRouteBoundary>;
   }
 
   // Detect if access is client cardapio (online menu)
@@ -122,7 +125,7 @@ export default function App() {
                       window.location.hostname.split('.')[0] !== 'www');
 
   if (isCardapio) {
-    return <CardapioPage />;
+    return <AppRouteBoundary label="cardápio"><CardapioPage /></AppRouteBoundary>;
   }
 
   // 1. Roles & Active user state (Strictly 'garcom')

@@ -1,62 +1,40 @@
 import clsx from 'clsx';
-import {
-  Bell,
-  ChevronRight,
-  ClipboardList,
-  CreditCard,
-  DollarSign,
-  Globe,
-  Lock,
-  Maximize2,
-  Menu,
-  Minimize2,
-  Moon,
-  Package,
-  RefreshCw,
-  ShieldCheck,
-  ShoppingCart,
-  SlidersHorizontal,
-  Sun,
-  Trash2,
-  TrendingUp,
-  Users,
-  Volume2,
-  VolumeX,
-  X,
-} from 'lucide-react';
+import { Lock, Maximize2, Menu, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { getSubscriptionPlan, isAddonIncludedInPlan, normalizeSubscriptionPlan } from '../config/subscriptionPlans';
 import {
-  KOMA_THEME_CHANGED_EVENT,
-  nextKomaTheme,
-  persistKomaTheme,
-  readKomaTheme,
-  type KomaTheme,
-} from '../config/theme';
+  getSubscriptionPlan,
+  isAddonIncludedInPlan,
+  normalizeSubscriptionPlan,
+} from '../config/subscriptionPlans';
 import {
   formatCashierOldestAge as formatOldestAge,
   getCashierTableOrderPresentation,
   getCashierOrderSlaData as getOrderSlaData,
   projectCashierDeliveryState,
-  projectCashierSalonTables,
   projectCashierTableSlices,
 } from '../domain/cashierOrderProjection';
 import { normalizeOperationalTimestamp } from '../domain/operationalTime';
 import { clearOperatorSession } from '../utils/authSession';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
-import { LoginButton } from './auth/LoginButton';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
 import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
-import type { CaixaPanelProps, CashierTab } from './caixa/cashierContracts';
+import type { CaixaPanelProps } from './caixa/cashierContracts';
 import { formatCompactCurrency } from './caixa/cashierPresentation';
 import { useCashierCatalog } from './caixa/catalog/useCashierCatalog';
 import { CheckoutDialog } from './caixa/checkout/CheckoutDialog';
 import { useCheckoutController } from './caixa/checkout/useCheckoutController';
 import { useCashierCustomers } from './caixa/customers/useCashierCustomers';
-import { KitchenTimer as KDSTimer } from './caixa/kitchen/KitchenTimer';
+import { CashierKitchen } from './caixa/kitchen/CashierKitchen';
 import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
+import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar';
+import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
+import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
+import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
+import { useCashierPreferences } from './caixa/navigation/useCashierPreferences';
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
+import { CashierCancelConsumptionDialog } from './caixa/orders/CashierCancelConsumptionDialog';
+import { CashierCouriers } from './caixa/orders/CashierCouriers';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
@@ -65,30 +43,15 @@ import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
 import { useCashierClock } from './caixa/realtime/useCashierClock';
 import { useCashierRealtime } from './caixa/realtime/useCashierRealtime';
 import { CaixaSalonTab } from './caixa/salao/CaixaSalonTab';
+import { useCashierSalonProjection } from './caixa/salao/useCashierSalonProjection';
 import { SangriaModal } from './caixa/SangriaModal';
 import { useCashierSettings } from './caixa/settings/useCashierSettings';
+import { CashierOpenShiftDialog } from './caixa/shift/CashierOpenShiftDialog';
 import { useCashShift } from './caixa/shift/useCashShift';
 import { useCashierSmartPos } from './caixa/smartpos/useCashierSmartPos';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
-import { KomaLogo } from './KomaLogo';
-import MoneyInput from './MoneyInput';
 import { OperationalBanner } from './shared/OperationalBanner';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-} from './ui/sidebar';
+import { SidebarProvider, SidebarTrigger } from './ui/sidebar';
 const loadCashierInventory = () => import('./caixa/inventory/CashierInventory');
 const loadCashierCatalog = () => import('./caixa/catalog/CashierCatalog');
 const loadCashierCustomers = () => import('./caixa/customers/CashierCustomers');
@@ -97,40 +60,6 @@ const loadCashierOnlineMenu = () => import('./caixa/online-menu/CashierOnlineMen
 const loadCashierTeam = () => import('./caixa/team/CashierTeam');
 const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
-
-const CASHIER_SIDEBAR_GROUPS = [
-  {
-    category: 'Operação',
-    items: [
-      { id: 'operacao', label: 'Vendas', icon: ShoppingCart },
-      { id: 'financeiro', label: 'Caixa', icon: DollarSign },
-    ],
-  },
-  {
-    category: 'Cadastros',
-    items: [
-      { id: 'cardapio', label: 'Cardápio', icon: ClipboardList },
-      { id: 'estoque', label: 'Estoque', icon: Package },
-      { id: 'clientes', label: 'Clientes', icon: Users },
-    ],
-  },
-  {
-    category: 'Gestão',
-    items: [
-      { id: 'relatorios', label: 'Relatórios', icon: TrendingUp },
-      { id: 'permissoes_cargos', label: 'Equipe', icon: ShieldCheck },
-    ],
-  },
-  {
-    category: 'Sistema',
-    items: [{ id: 'impressao_salao', label: 'Configurações', icon: SlidersHorizontal }],
-  },
-] as const;
-
-const CASHIER_SIDEBAR_SECONDARY_ITEMS = [
-  { id: 'cardapio_digital', label: 'Cardápio online', icon: Globe },
-  { id: 'assinatura_pix', label: 'Assinatura e planos', icon: CreditCard },
-] as const;
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -202,52 +131,22 @@ export function CaixaPanel({
   );
 
   // Fullscreen / Modo PDV state
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(
-    () => typeof document !== 'undefined' && !!document.fullscreenElement,
-  );
+  const {
+    isFullscreen,
+    setIsFullscreen,
+    toggleFullscreen,
+    fontSize,
+    setFontSize,
+    changeFontSize,
+    theme,
+    setTheme,
+  } = useCashierPreferences();
 
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
-
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
-      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
-    };
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      const docEl = document.documentElement as any;
-      if (docEl.requestFullscreen) {
-        docEl.requestFullscreen().catch(() => {});
-      } else if (docEl.webkitRequestFullscreen) {
-        docEl.webkitRequestFullscreen();
-      } else if (docEl.msRequestFullscreen) {
-        docEl.msRequestFullscreen();
-      }
-    } else {
-      const doc = document as any;
-      if (doc.exitFullscreen) {
-        doc.exitFullscreen().catch(() => {});
-      } else if (doc.webkitExitFullscreen) {
-        doc.webkitExitFullscreen();
-      } else if (doc.msExitFullscreen) {
-        doc.msExitFullscreen();
-      }
-    }
-  };
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(
+    null,
+  );
   const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -283,72 +182,19 @@ export function CaixaPanel({
     setIsLoading,
   });
 
-  const [activeTab, setActiveTab] = useState<CashierTab>(() => {
-    const saved = sessionStorage.getItem('koma_active_tab');
-    if (saved === 'config_cardapio' || saved === 'configuracoes_cardapio') return 'cardapio_digital';
-    if (saved === 'dashboard' || saved === 'indicadores') return 'relatorios';
-    if (saved === 'robo_ia' || saved === 'assistente_koma' || saved === 'chat_copiloto') return 'operacao';
-    return (saved as any) || 'operacao';
-  });
-
-  const [activeSubTab, setActiveSubTab] = useState<string>(() => {
-    const saved = sessionStorage.getItem('koma_active_subtab');
-    const savedTab = sessionStorage.getItem('koma_active_tab');
-    if (!saved) return 'pedidos';
-    if (saved === 'fila_pedidos') return 'pedidos';
-    if (saved === 'terminal_balcao' || saved === 'pdv') return 'balcao';
-    if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
-    if (['insumos', 'estoque_insumos'].includes(saved)) return 'insumos';
-    if (savedTab === 'estoque' && ['xml', 'notas', 'entradas', 'movimentacoes', 'historico'].includes(saved))
-      return 'historico';
-    if (savedTab === 'estoque' && ['contagem', 'inventario'].includes(saved)) return 'inventario';
-    // Caixa mappings
-    if (['fluxo', 'turno_atual'].includes(saved)) return 'turno_atual';
-    if (['ajustes', 'ajustes_caixa', 'movimentacoes', 'suprimento', 'sangria'].includes(saved)) return 'movimentacoes';
-    if (['conferencia', 'conferencia_cega', 'fechamento'].includes(saved)) return 'fechamento';
-    if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
-    // Relatórios mappings — 'equipe' is now a valid sub-tab in relatórios
-    if (
-      [
-        'visao_geral',
-        'metas',
-        'vendas',
-        'indicadores',
-        'dashboard',
-        'relatorio_garçons',
-        'faturamento_garcom',
-      ].includes(saved)
-    )
-      return 'visao_geral';
-    if (['equipe', 'desempenho_equipe', 'relatorio_garcons'].includes(saved)) return 'equipe';
-    if (['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(saved)) return 'produtos';
-    if (['financeiro', 'dre', 'demonstrativo_dre'].includes(saved)) return 'financeiro';
-    // Equipe lateral mappings
-    if (['pessoas', 'convites'].includes(saved)) return 'pessoas';
-    if (['cargos', 'cargos_permissoes', 'permissoes'].includes(saved)) return 'cargos_permissoes';
-    // Clientes mappings
-    if (['clientes', 'crm', 'banco_clientes'].includes(saved)) return 'clientes';
-    if (['fidelidade', 'programa_fidelidade'].includes(saved)) return 'fidelidade';
-    if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'clientes';
-    // Legacy assistant routes were prototypes; return users to the real order queue.
-    if (
-      [
-        'chat_copiloto',
-        'chat',
-        'robo_ia',
-        'prompt',
-        'prompt_atendente',
-        'configuracao',
-        'simulador',
-        'simulador_chat',
-      ].includes(saved)
-    )
-      return 'pedidos';
-    // Placeholders redirection
-    if (['fiscal', 'notas_fiscais'].includes(saved)) return 'turno_atual';
-    if (['recuperador', 'carrinhos_abandonados'].includes(saved)) return 'clientes';
-    return saved;
-  });
+  const {
+    activeTab,
+    setActiveTab,
+    activeSubTab,
+    setActiveSubTab,
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen,
+    mobileOrdersStage,
+    setMobileOrdersStage,
+    handleTabChange,
+    isSidebarTabActive,
+    handleSidebarNavigation,
+  } = useCashierNavigation({ hasOnlineMenu, showToast });
 
   const smartPos = useCashierSmartPos({
     apiBaseUrl,
@@ -418,52 +264,11 @@ export function CaixaPanel({
     isLoading,
     setIsLoading,
   });
-  const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({ orders, deliveryOrders, isDrawerOpen });
-
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
-
-  useEffect(() => {
-    if (!isMobileSidebarOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsMobileSidebarOpen(false);
-    };
-
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isMobileSidebarOpen]);
-
-  useEffect(() => {
-    sessionStorage.setItem('koma_active_tab', activeTab);
-  }, [activeTab]);
-
-  useEffect(() => {
-    let sanitized = activeSubTab;
-    if (activeTab === 'cardapio' && activeSubTab === 'disponibilidade') {
-      sanitized = 'produtos';
-      setActiveSubTab('produtos');
-    }
-    if (activeTab === 'relatorios' || activeTab === 'dashboard') {
-      if (['metas', 'vendas', 'indicadores', 'relatorio_geral', 'faturamento_garcom'].includes(activeSubTab)) {
-        sanitized = 'visao_geral';
-        setActiveSubTab('visao_geral');
-      } else if (['produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab)) {
-        sanitized = 'produtos';
-        setActiveSubTab('produtos');
-      } else if (['desempenho', 'relatorio_garcons', 'relatorio_garçons'].includes(activeSubTab)) {
-        sanitized = 'equipe';
-        setActiveSubTab('equipe');
-      }
-    }
-    sessionStorage.setItem('koma_active_subtab', sanitized);
-  }, [activeSubTab, activeTab]);
+  const { soundEnabled, toggleSound, playOrderAlert } = useCashierAlerts({
+    orders,
+    deliveryOrders,
+    isDrawerOpen,
+  });
 
   // Capture the fallback opening time once per received snapshot, not on each
   // presentation tick (an undated legacy card must not restart every 30s).
@@ -474,48 +279,9 @@ export function CaixaPanel({
     [orders, salonTables],
   );
 
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId as any);
-    switch (tabId) {
-      case 'dashboard':
-      case 'relatorios':
-        setActiveSubTab('visao_geral');
-        break;
-      case 'operacao':
-        setActiveSubTab('pedidos');
-        break;
-      case 'cardapio':
-        setActiveSubTab('produtos');
-        break;
-      case 'estoque':
-        setActiveSubTab('insumos');
-        break;
-      case 'financeiro':
-        setActiveSubTab('turno_atual');
-        break;
-      case 'clientes':
-        setActiveSubTab('clientes');
-        break;
-      case 'permissoes_cargos':
-        setActiveSubTab('pessoas');
-        break;
-      case 'impressao_salao':
-        setActiveSubTab('impressoras');
-        break;
-      case 'assinatura_pix':
-        setActiveSubTab('planos');
-        break;
-      case 'cardapio_digital':
-        setActiveSubTab('cardapio_digital');
-        break;
-      case 'configuracoes':
-        setActiveSubTab('equipe');
-        break;
-    }
-  };
-
   const catalog = useCashierCatalog({ apiBaseUrl, authHeaders, liveProdutos, liveCategorias });
-  const { apiProdutos, apiCategorias, dynamicMenu, suggestedProductCode, fetchProdutos, fetchCategorias } = catalog;
+  const { apiProdutos, apiCategorias, dynamicMenu, suggestedProductCode, fetchProdutos, fetchCategorias } =
+    catalog;
   const customers = useCashierCustomers({ apiBaseUrl, authHeaders });
   const { loyaltyUsers, refreshLoyaltyUsers } = customers;
 
@@ -523,70 +289,15 @@ export function CaixaPanel({
 
   // Table management states
 
-  const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'free' | 'occupied' | 'payment'>('all');
-
-  const salonTableCards = useMemo(
-    () => projectCashierSalonTables(salonTables, orders, pagamentosPendentes, nowTimestamp),
-    [orders, pagamentosPendentes, salonTables, nowTimestamp],
-  );
-
-  const tableStatusCounts = useMemo(
-    () => ({
-      all: salonTableCards.length,
-      free: salonTableCards.filter((card) => !card.isOccupied && !card.isMerged).length,
-      occupied: salonTableCards.filter((card) => card.isOccupied && !card.hasPendingPayment).length,
-      payment: salonTableCards.filter((card) => card.hasPendingPayment).length,
-    }),
-    [salonTableCards],
-  );
-
-  const salonInsights = useMemo(() => {
-    const activeCards = salonTableCards.filter((card) => card.isOccupied && !card.isMerged);
-    const openValue = activeCards.reduce((total, card) => total + card.total, 0);
-    const timestamps = activeCards.flatMap((card) =>
-      card.tableOrders.map(
-        (order) =>
-          (order as any).aberta_em ||
-          (order as any).data_abertura ||
-          (order as any).aberto_em ||
-          order.created_at ||
-          order.timestamp ||
-          (order as any).criadoEm,
-      ),
-    );
-    return {
-      occupancy: salonTableCards.length > 0 ? Math.round((activeCards.length / salonTableCards.length) * 100) : 0,
-      openValue,
-      oldestService: formatOldestAge(timestamps, nowTimestamp),
-    };
-  }, [salonTableCards, nowTimestamp]);
-
-  const pdvTableOptions = useMemo(
-    () =>
-      salonTableCards
-        .map((card) => {
-          const isOccupied = card.isOccupied || card.hasPendingPayment;
-
-          return {
-            ...card,
-            isOccupied,
-            label: card.table.nome?.trim() || `Mesa ${card.table.id}`,
-          };
-        })
-        .sort((left, right) => left.table.id - right.table.id),
-    [salonTableCards],
-  );
-
-  const visibleSalonTableCards = useMemo(
-    () =>
-      salonTableCards.filter((card) => {
-        if (tableStatusFilter === 'free') return !card.isOccupied && !card.isMerged;
-        if (tableStatusFilter === 'occupied') return card.isOccupied && !card.hasPendingPayment;
-        if (tableStatusFilter === 'payment') return card.hasPendingPayment;
-        return true;
-      }),
-    [salonTableCards, tableStatusFilter],
-  );
+  const {
+    tableStatusFilter,
+    setTableStatusFilter,
+    salonTableCards,
+    tableStatusCounts,
+    salonInsights,
+    pdvTableOptions,
+    visibleSalonTableCards,
+  } = useCashierSalonProjection({ salonTables, orders, pagamentosPendentes, nowTimestamp });
 
   const settings = useCashierSettings({
     apiBaseUrl,
@@ -697,37 +408,6 @@ export function CaixaPanel({
     smartPosState: getSmartPosCardState(order),
     presentation: getCashierTableOrderPresentation(order, salonTables),
   });
-
-  const [fontSize, setFontSize] = useState<'padrao' | 'grande' | 'gigante'>(() => {
-    return (localStorage.getItem('koma_font_size') as any) || 'padrao';
-  });
-
-  const changeFontSize = (size: 'padrao' | 'grande' | 'gigante') => {
-    localStorage.setItem('koma_font_size', size);
-    setFontSize(size);
-    window.dispatchEvent(new Event('koma_font_size_changed'));
-  };
-
-  const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
-
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setTheme(readKomaTheme());
-
-      const storedFontSize = localStorage.getItem('koma_font_size') as any;
-      if (storedFontSize && ['padrao', 'grande', 'gigante'].includes(storedFontSize)) {
-        setFontSize(storedFontSize);
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('koma_font_size_changed', handleStorageChange);
-    window.addEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('koma_font_size_changed', handleStorageChange);
-      window.removeEventListener(KOMA_THEME_CHANGED_EVENT, handleStorageChange);
-    };
-  }, []);
 
   // Fetch optimized statistics, stock, and reports
   useEffect(() => {
@@ -855,9 +535,12 @@ export function CaixaPanel({
       ),
     [deliveryOrders],
   );
-  const sidebarOrderCount = tableOrdersInProduction.length + activeDeliveryOrdersCount + tableOrdersReady.length;
+  const sidebarOrderCount =
+    tableOrdersInProduction.length + activeDeliveryOrdersCount + tableOrdersReady.length;
   const operationalOrderInsights = useMemo(() => {
-    const activeDigitalOrders = deliveryOrders.filter((order) => projectCashierDeliveryState(order.status).active);
+    const activeDigitalOrders = deliveryOrders.filter(
+      (order) => projectCashierDeliveryState(order.status).active,
+    );
 
     const activeTableList = [...tableOrdersInProduction, ...tableOrdersReady];
 
@@ -866,7 +549,9 @@ export function CaixaPanel({
       return (
         total +
         itens.reduce((itemTotal: number, item: any) => {
-          return itemTotal + (!item.pago && String(item.status) !== 'cancelado' ? Number(item.preco) || 0 : 0);
+          return (
+            itemTotal + (!item.pago && String(item.status) !== 'cancelado' ? Number(item.preco) || 0 : 0)
+          );
         }, 0)
       );
     }, 0);
@@ -916,49 +601,6 @@ export function CaixaPanel({
     };
   }, [deliveryOrders, nowTimestamp, pagamentosPendentes, tableOrdersInProduction, tableOrdersReady]);
 
-  const isSidebarTabActive = (tabId: string) =>
-    tabId === 'cardapio_digital'
-      ? activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'
-      : tabId === 'permissoes_cargos'
-        ? activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')
-        : tabId === 'impressao_salao'
-          ? activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')
-          : tabId === 'assinatura_pix'
-            ? activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')
-            : tabId === 'relatorios'
-              ? activeTab === 'relatorios' || activeTab === 'dashboard'
-              : activeTab === tabId;
-
-  const handleSidebarNavigation = (tabId: string, closeMobile = false) => {
-    if (closeMobile) setIsMobileSidebarOpen(false);
-
-    if (tabId === 'cardapio_digital' && !hasOnlineMenu) {
-      setActiveTab('assinatura_pix');
-      setActiveSubTab('planos');
-      showToast('O cardápio digital está incluído em todos os planos. Consulte a ativação com o suporte.', 'info');
-      return;
-    }
-
-    if (tabId === 'cardapio_digital') {
-      setActiveTab('cardapio_digital');
-      setActiveSubTab('cardapio_digital');
-    } else if (tabId === 'permissoes_cargos') {
-      setActiveTab('permissoes_cargos');
-      if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
-    } else if (tabId === 'impressao_salao') {
-      setActiveTab('impressao_salao');
-      setActiveSubTab('impressoras');
-    } else if (tabId === 'assinatura_pix') {
-      setActiveTab('assinatura_pix');
-      setActiveSubTab('planos');
-    } else if (tabId === 'relatorios') {
-      setActiveTab('relatorios');
-      if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
-    } else {
-      handleTabChange(tabId as any);
-    }
-  };
-
   const handleOpenSalonTableOrder = (tableId: number) => {
     setPdvOrderType('mesa');
     setPdvTargetMesaId(tableId);
@@ -1001,386 +643,38 @@ export function CaixaPanel({
       {/* SHADCN SIDEBAR INTEGRATION FOR KÔMA */}
       <SidebarProvider className="contents">
         {/* MOBILE SIDEBAR */}
-        {isMobileSidebarOpen && (
-          <div className={clsx('fixed', 'inset-0', 'z-50', 'flex', 'lg:hidden', 'animate-fade-in')}>
-            <div
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className={clsx('fixed', 'inset-0', 'bg-black/80', 'backdrop-blur-sm')}
-            />
-            <aside
-              id="mobile-caixa-sidebar"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Menu principal"
-              className={clsx(
-                'cashier-sidebar',
-                'cashier-sidebar--mobile',
-                'relative',
-                'w-[17rem]',
-                'max-w-[88vw]',
-                'flex',
-                'flex-col',
-                'justify-between',
-                'shrink-0',
-                'h-full',
-                'z-10',
-                'shadow-2xl',
-                'overflow-y-auto',
-              )}
-            >
-              <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3')}>
-                <div className="cashier-sidebar__brand-row">
-                  <div className="cashier-sidebar__brand">
-                    <span className="cashier-sidebar__logo-wrap">
-                      <KomaLogo size="md" />
-                    </span>
-                    <span className="cashier-sidebar__brand-copy">
-                      <strong>Kôma</strong>
-                      <small>Se você está com fome, Kôma</small>
-                    </span>
-                  </div>
-                  <div className={clsx('flex', 'items-center', 'gap-1.5')}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsOperatorDrawerOpen(true);
-                        setIsMobileSidebarOpen(false);
-                      }}
-                      className="cashier-sidebar__utility-button"
-                      title="Conta e preferências"
-                      aria-label="Abrir conta e preferências"
-                    >
-                      <SlidersHorizontal size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsMobileSidebarOpen(false)}
-                      className="cashier-sidebar__utility-button"
-                      aria-label="Fechar menu"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Status do Turno */}
-                <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
-                  <div className="cashier-shift-card__status">
-                    <span className="cashier-shift-card__dot" />
-                    <span className="cashier-shift-card__copy">
-                      <small>Turno atual</small>
-                      <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
-                    </span>
-                  </div>
-                  {turno?.status !== 'aberto' && (
-                    <button
-                      onClick={() => {
-                        setShowAbrirModal(true);
-                        setIsMobileSidebarOpen(false);
-                      }}
-                      className={clsx('cashier-shift-card__action', 'is-open')}
-                    >
-                      Abrir caixa
-                    </button>
-                  )}
-                </div>
-              </SidebarHeader>
-
-              <SidebarContent className={clsx('cashier-sidebar__content', 'p-2')}>
-                {CASHIER_SIDEBAR_GROUPS.map((group) => (
-                  <SidebarGroup key={group.category}>
-                    <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {group.items.map((tab) => {
-                          const Icon = tab.icon;
-                          const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
-                          const isActive = isSidebarTabActive(tab.id);
-                          const orderCount = tab.id === 'operacao' ? sidebarOrderCount : 0;
-
-                          return (
-                            <SidebarMenuItem key={tab.id}>
-                              <SidebarMenuButton
-                                isActive={isActive}
-                                onClick={() => handleSidebarNavigation(tab.id, true)}
-                                className="cashier-nav-item"
-                                title={tab.label}
-                              >
-                                <span className="cashier-nav-icon">
-                                  <Icon size={15} />
-                                </span>
-                                <span className="cashier-nav-label">{tab.label}</span>
-                                {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
-                                {isLocked && (
-                                  <span className="cashier-nav-plan">
-                                    <Lock size={9} />
-                                    <span>Plano</span>
-                                  </span>
-                                )}
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          );
-                        })}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                ))}
-              </SidebarContent>
-
-              <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3', 'flex', 'flex-col', 'gap-2')}>
-                <div className="cashier-sidebar__secondary">
-                  <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
-                  {CASHIER_SIDEBAR_SECONDARY_ITEMS.map((item) => {
-                    const Icon = item.icon;
-                    const isLocked = item.id === 'cardapio_digital' && !hasOnlineMenu;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleSidebarNavigation(item.id, true)}
-                        className="cashier-nav-item flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground"
-                      >
-                        <span className="cashier-nav-icon">
-                          <Icon size={14} />
-                        </span>
-                        <span className="cashier-nav-label">{item.label}</span>
-                        {isLocked && <Lock size={10} className="ml-auto text-amber-500" />}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="cashier-display-controls">
-                  <div className="cashier-font-control flex-1">
-                    <span className="cashier-font-control__label">Texto</span>
-                    <div className="cashier-font-control__options">
-                      {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => changeFontSize(sz)}
-                          className={clsx('cashier-font-control__button', fontSize === sz && 'is-active')}
-                          aria-label={
-                            sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'
-                          }
-                          title={
-                            sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'
-                          }
-                        >
-                          {sz === 'padrao' ? 'A' : sz === 'grande' ? 'A+' : 'A++'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="cashier-font-control">
-                    <span className="cashier-font-control__label">Tema</span>
-                    <div className="cashier-font-control__options">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTheme(persistKomaTheme(nextKomaTheme(theme)));
-                        }}
-                        className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
-                        aria-label="Alternar tema"
-                        title="Alternar tema"
-                      >
-                        {theme === 'dark' ? <Moon size={12} /> : <Sun size={12} />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="cashier-operator">
-                  <span className="cashier-operator__avatar">
-                    {activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}
-                  </span>
-                  <span className="cashier-operator__copy">
-                    <small>Operador</small>
-                    <strong>{activeWaiterNome}</strong>
-                  </span>
-                </div>
-              </SidebarFooter>
-            </aside>
-          </div>
-        )}
+        <CashierMobileSidebar
+          isMobileSidebarOpen={isMobileSidebarOpen}
+          setIsMobileSidebarOpen={setIsMobileSidebarOpen}
+          setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
+          turno={turno}
+          setShowAbrirModal={setShowAbrirModal}
+          hasOnlineMenu={hasOnlineMenu}
+          isSidebarTabActive={isSidebarTabActive}
+          sidebarOrderCount={sidebarOrderCount}
+          handleSidebarNavigation={handleSidebarNavigation}
+          changeFontSize={changeFontSize}
+          fontSize={fontSize}
+          setTheme={setTheme}
+          theme={theme}
+          activeWaiterNome={activeWaiterNome}
+        />
 
         {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
-        <Sidebar
-          collapsible="icon"
-          className={clsx('cashier-sidebar', 'hidden', 'lg:flex', 'flex-col', 'justify-between', 'shrink-0')}
-        >
-          <SidebarHeader className={clsx('cashier-sidebar__header', 'p-3.5')}>
-            <div className="cashier-sidebar__brand-row">
-              <div className="cashier-sidebar__brand">
-                <span className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--expanded">
-                  <KomaLogo size="md" />
-                </span>
-                <span className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--compact" aria-hidden="true">
-                  <KomaLogo size="md" contextualWordmark={false} alt="" />
-                </span>
-                <span className="cashier-sidebar__brand-copy">
-                  <strong>Kôma</strong>
-                  <small>Se você está com fome, Kôma</small>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsOperatorDrawerOpen(true)}
-                className="cashier-sidebar__utility-button"
-                title="Conta e preferências"
-                aria-label="Abrir conta e preferências"
-              >
-                <SlidersHorizontal size={15} />
-              </button>
-            </div>
-
-            {/* Quick status bar */}
-            <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
-              <div className="cashier-shift-card__status">
-                <span className="cashier-shift-card__dot" />
-                <span className="cashier-shift-card__copy">
-                  <small>Turno atual</small>
-                  <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
-                </span>
-              </div>
-              {turno?.status !== 'aberto' && (
-                <button
-                  onClick={() => setShowAbrirModal(true)}
-                  className={clsx('cashier-shift-card__action', 'is-open')}
-                >
-                  Abrir caixa
-                </button>
-              )}
-            </div>
-          </SidebarHeader>
-
-          {/* Sidebar Content */}
-          <SidebarContent className={clsx('cashier-sidebar__content', 'p-2')}>
-            {CASHIER_SIDEBAR_GROUPS.map((group) => (
-              <SidebarGroup key={group.category}>
-                <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((tab) => {
-                      const Icon = tab.icon;
-                      const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
-                      const isActive = isSidebarTabActive(tab.id);
-                      const orderCount = tab.id === 'operacao' ? sidebarOrderCount : 0;
-
-                      return (
-                        <SidebarMenuItem key={tab.id}>
-                          <SidebarMenuButton
-                            isActive={isActive}
-                            onClick={() => handleSidebarNavigation(tab.id)}
-                            className="cashier-nav-item"
-                            title={tab.label}
-                          >
-                            <span className="cashier-nav-icon">
-                              <Icon size={15} />
-                            </span>
-                            <span className="cashier-nav-label">{tab.label}</span>
-                            {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
-                            {isLocked && (
-                              <span className="cashier-nav-plan">
-                                <Lock size={9} />
-                                <span>Plano</span>
-                              </span>
-                            )}
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            ))}
-          </SidebarContent>
-
-          {/* Sidebar Footer */}
-          <SidebarFooter className={clsx('cashier-sidebar__footer', 'p-3', 'flex', 'flex-col', 'gap-2')}>
-            <div className="cashier-sidebar__secondary">
-              <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
-              {CASHIER_SIDEBAR_SECONDARY_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isLocked = item.id === 'cardapio_digital' && !hasOnlineMenu;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleSidebarNavigation(item.id)}
-                    className="cashier-nav-item flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground"
-                    title={item.label}
-                  >
-                    <span className="cashier-nav-icon">
-                      <Icon size={14} />
-                    </span>
-                    <span className="cashier-nav-label">{item.label}</span>
-                    {isLocked && <Lock size={10} className="ml-auto text-amber-500" />}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="cashier-display-controls">
-              <div className="cashier-font-control flex-1">
-                <span className="cashier-font-control__label">Texto</span>
-                <div className="cashier-font-control__options">
-                  {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
-                    <button
-                      key={sz}
-                      type="button"
-                      onClick={() => changeFontSize(sz)}
-                      className={clsx('cashier-font-control__button', fontSize === sz && 'is-active')}
-                      aria-label={
-                        sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'
-                      }
-                      title={sz === 'padrao' ? 'Texto padrão' : sz === 'grande' ? 'Texto grande' : 'Texto muito grande'}
-                    >
-                      {sz === 'padrao' ? 'A' : sz === 'grande' ? 'A+' : 'A++'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="cashier-font-control">
-                <span className="cashier-font-control__label">Tema</span>
-                <div className="cashier-font-control__options">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTheme(persistKomaTheme(nextKomaTheme(theme)));
-                    }}
-                    className={clsx('cashier-font-control__button', 'flex items-center justify-center py-1')}
-                    aria-label="Alternar tema"
-                    title="Alternar tema"
-                  >
-                    {theme === 'dark' ? <Moon size={12} /> : <Sun size={12} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}
-              className="cashier-sidebar__compact-theme"
-              aria-label="Alternar tema"
-              title="Alternar tema"
-            >
-              {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
-            </button>
-
-            <div className="cashier-operator">
-              <span className="cashier-operator__avatar">
-                {activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}
-              </span>
-              <span className="cashier-operator__copy">
-                <small>Operador</small>
-                <strong>{activeWaiterNome}</strong>
-              </span>
-            </div>
-          </SidebarFooter>
-          <SidebarRail />
-        </Sidebar>
+        <CashierDesktopSidebar
+          setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
+          turno={turno}
+          setShowAbrirModal={setShowAbrirModal}
+          hasOnlineMenu={hasOnlineMenu}
+          isSidebarTabActive={isSidebarTabActive}
+          sidebarOrderCount={sidebarOrderCount}
+          handleSidebarNavigation={handleSidebarNavigation}
+          changeFontSize={changeFontSize}
+          fontSize={fontSize}
+          setTheme={setTheme}
+          theme={theme}
+          activeWaiterNome={activeWaiterNome}
+        />
 
         {/* CONTENT AREA */}
         <main
@@ -1461,12 +755,14 @@ export function CaixaPanel({
                 {activeTab === 'estoque' && 'Estoque'}
                 {activeTab === 'financeiro' && 'Caixa'}
                 {activeTab === 'clientes' && 'Clientes'}
-                {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) &&
+                {(activeTab === 'permissoes_cargos' ||
+                  (activeTab === 'configuracoes' && activeSubTab === 'equipe')) &&
                   'Equipe'}
                 {(activeTab === 'impressao_salao' ||
                   (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) &&
                   'Configurações'}
-                {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) &&
+                {(activeTab === 'assinatura_pix' ||
+                  (activeTab === 'configuracoes' && activeSubTab === 'planos')) &&
                   'Planos de Assinatura e Recebimento Pix'}
                 {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') &&
                   'Configurações do cardápio online'}
@@ -1485,11 +781,15 @@ export function CaixaPanel({
                     : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground',
                 )}
                 title={isFullscreen ? 'Sair do Modo PDV Tela Cheia' : 'Entrar no Modo PDV Tela Cheia'}
-                aria-label={isFullscreen ? 'Sair do modo PDV em tela cheia' : 'Entrar no modo PDV em tela cheia'}
+                aria-label={
+                  isFullscreen ? 'Sair do modo PDV em tela cheia' : 'Entrar no modo PDV em tela cheia'
+                }
                 id="btn-modo-pdv-fullscreen"
               >
                 {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                <span className={clsx('hidden', 'sm:inline')}>{isFullscreen ? 'Sair da Tela Cheia' : 'Modo PDV'}</span>
+                <span className={clsx('hidden', 'sm:inline')}>
+                  {isFullscreen ? 'Sair da Tela Cheia' : 'Modo PDV'}
+                </span>
               </button>
             </div>
           </header>
@@ -1573,7 +873,9 @@ export function CaixaPanel({
               ].map((sub) => {
                 const isSubActive =
                   (sub.id === 'historico' &&
-                    ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(activeSubTab)) ||
+                    ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(
+                      activeSubTab,
+                    )) ||
                   (sub.id === 'inventario' && ['inventario', 'contagem'].includes(activeSubTab)) ||
                   (sub.id === 'fornecedores' && ['fornecedores', 'distribuidores'].includes(activeSubTab)) ||
                   activeSubTab === sub.id;
@@ -1597,7 +899,9 @@ export function CaixaPanel({
                 const isSubActive =
                   (sub.id === 'turno_atual' && ['turno_atual', 'fluxo'].includes(activeSubTab)) ||
                   (sub.id === 'movimentacoes' &&
-                    ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(activeSubTab)) ||
+                    ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(
+                      activeSubTab,
+                    )) ||
                   (sub.id === 'fechamento' &&
                     ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab)) ||
                   activeSubTab === sub.id;
@@ -1621,7 +925,8 @@ export function CaixaPanel({
                 const isSubActive =
                   (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
                   (sub.id === 'fidelidade' && ['fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
-                  (sub.id === 'cupons' && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) ||
+                  (sub.id === 'cupons' &&
+                    ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) ||
                   activeSubTab === sub.id;
                 return (
                   <button
@@ -1644,8 +949,10 @@ export function CaixaPanel({
                 const isSubActive =
                   (sub.id === 'visao_geral' &&
                     ['visao_geral', 'metas', 'vendas', 'indicadores'].includes(activeSubTab)) ||
-                  (sub.id === 'financeiro' && ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
-                  (sub.id === 'produtos' && ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
+                  (sub.id === 'financeiro' &&
+                    ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
+                  (sub.id === 'produtos' &&
+                    ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
                   (sub.id === 'equipe' && ['equipe', 'desempenho_equipe'].includes(activeSubTab)) ||
                   activeSubTab === sub.id;
                 return (
@@ -1719,8 +1026,8 @@ export function CaixaPanel({
                   Turno de Caixa Fechado
                 </h3>
                 <p className={clsx('max-w-md', 'text-[10px]', 'text-koma-subtle', 'leading-relaxed')}>
-                  Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as telas de
-                  vendas e comandas.
+                  Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as
+                  telas de vendas e comandas.
                 </p>
                 <button
                   onClick={() => setShowAbrirModal(true)}
@@ -1818,7 +1125,9 @@ export function CaixaPanel({
 
             {/* VIEW 4: MEU DESEMPENHO (Analytics) */}
             <DeferredCashierSection
-              active={activeTab === 'relatorios' || activeTab === 'dashboard' || activeSubTab === 'desempenho'}
+              active={
+                activeTab === 'relatorios' || activeTab === 'dashboard' || activeSubTab === 'desempenho'
+              }
               label="Relatórios"
               load={loadCashierReports}
               sectionProps={{
@@ -1835,155 +1144,11 @@ export function CaixaPanel({
             />
 
             {/* VIEW 5: COZINHA (KDS) */}
-            {activeSubTab === 'kds' && (
-              <div
-                className={clsx('bg-koma-card/60', 'border', 'border-koma-border', 'rounded-3xl', 'p-5', 'space-y-4')}
-              >
-                <div
-                  className={clsx('border-b', 'border-koma-border', 'pb-3', 'flex', 'items-center', 'justify-between')}
-                >
-                  <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary')}>
-                    Painel de Produção da Cozinha
-                  </span>
-                  <span
-                    className={clsx(
-                      'bg-emerald-500/15',
-                      'text-emerald-700 dark:text-emerald-400',
-                      'font-bold',
-                      'px-2',
-                      'py-0.5',
-                      'rounded-full',
-                      'font-mono',
-                      'text-[9px]',
-                    )}
-                  >
-                    {activeKitchenItems.length} pratos ativos
-                  </span>
-                </div>
-
-                {activeKitchenItems.length === 0 ? (
-                  <div className={clsx('py-32', 'text-center', 'text-koma-muted', 'italic', 'space-y-1')}>
-                    <p>Cozinha Limpa!</p>
-                    <p className={clsx('text-[9px]', 'text-gray-600')}>Nenhum pedido aguardando preparo no momento</p>
-                  </div>
-                ) : (
-                  <div
-                    className={clsx(
-                      'grid',
-                      'grid-cols-1',
-                      'sm:grid-cols-2',
-                      'md:grid-cols-3',
-                      'xl:grid-cols-4',
-                      'gap-4',
-                    )}
-                  >
-                    {activeKitchenItems.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`bg-koma-card border p-3 rounded-2xl space-y-3 flex flex-col justify-between ${
-                          item.status === 'pronto' ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-koma-border'
-                        }`}
-                      >
-                        <div className="space-y-2">
-                          {/* Header */}
-                          <div className={clsx('flex', 'justify-between', 'items-start')}>
-                            <div>
-                              <span className={clsx('text-[9px]', 'text-koma-subtle', 'font-bold', 'block')}>
-                                Mesa {item.mesaId > 0 ? item.mesaId : 'Balcão'}
-                              </span>
-                              <strong
-                                className={clsx(
-                                  'text-koma-foreground',
-                                  'text-xs',
-                                  'block',
-                                  'mt-0.5',
-                                  'truncate',
-                                  'w-32',
-                                )}
-                              >
-                                {item.nome}
-                              </strong>
-                            </div>
-                            <KDSTimer
-                              itemTimestamp={
-                                (item as any).created_at || (item as any).timestamp || (item as any).preparando_desde
-                              }
-                              status={item.status}
-                            />
-                          </div>
-
-                          {/* Observations / details */}
-                          {item.observacao && (
-                            <div
-                              className={clsx(
-                                'bg-koma-page',
-                                'border',
-                                'border-koma-border/50',
-                                'p-2',
-                                'rounded-lg',
-                                'text-rose-400',
-                                'font-bold',
-                                'text-[10px]',
-                                'leading-relaxed',
-                                'font-mono',
-                              )}
-                            >
-                              Obs: {item.observacao}
-                            </div>
-                          )}
-                          <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'truncate')}>
-                            Lançado por: {item.garcomNome}
-                          </span>
-                        </div>
-
-                        {/* Actions */}
-                        <div className={clsx('pt-2', 'border-t', 'border-koma-border', 'shrink-0')}>
-                          {item.status === 'preparando' ? (
-                            <button
-                              onClick={() => handleUpdateItemStatus(item.id, 'pronto')}
-                              className={clsx(
-                                'w-full',
-                                'py-1.5',
-                                'bg-[#10b981]',
-                                'hover:bg-[#059669]',
-                                'text-[#121214]',
-                                'font-bold',
-                                'rounded-lg',
-                                'text-[9px]',
-                                'uppercase',
-                                'tracking-wider',
-                                'cursor-pointer',
-                              )}
-                            >
-                              Marcar como Pronto
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleUpdateItemStatus(item.id, 'entregue')}
-                              className={clsx(
-                                'w-full',
-                                'py-1.5',
-                                'bg-emerald-600',
-                                'hover:bg-emerald-700',
-                                'text-white',
-                                'font-bold',
-                                'rounded-lg',
-                                'text-[9px]',
-                                'uppercase',
-                                'tracking-wider',
-                                'cursor-pointer',
-                              )}
-                            >
-                              Marcar como Entregue
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <CashierKitchen
+              activeSubTab={activeSubTab}
+              activeKitchenItems={activeKitchenItems}
+              handleUpdateItemStatus={handleUpdateItemStatus}
+            />
 
             {/* VIEW: EQUIPE — PESSOAS */}
             <DeferredCashierSection
@@ -2130,11 +1295,17 @@ export function CaixaPanel({
                   metrics={[
                     {
                       label: 'aberto há',
-                      value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—',
+                      value:
+                        turnoResumo?.status === 'aberto'
+                          ? formatDuration(turnoResumo.tempo_aberto_minutos)
+                          : '—',
                     },
                     {
                       label: 'ritmo de vendas',
-                      value: turnoResumo?.status === 'aberto' ? `${formatCompactCurrency(cashSalesPerHour)}/h` : '—',
+                      value:
+                        turnoResumo?.status === 'aberto'
+                          ? `${formatCompactCurrency(cashSalesPerHour)}/h`
+                          : '—',
                     },
                     {
                       label: 'situação do turno',
@@ -2175,542 +1346,72 @@ export function CaixaPanel({
                 />
               )}
 
-            {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
-              <div className={clsx('orders-workspace', 'space-y-4')}>
-                <OperationalBanner
-                  id="cash-closing-heading"
-                  eyebrow="CAIXA"
-                  title="Fechamento"
-                  accent="do seu jeito"
-                  description="Use a conferência rápida ou faça uma conferência totalmente cega."
-                  metrics={[
-                    {
-                      label: 'aberto há',
-                      value: turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—',
-                    },
-                    {
-                      label: 'pagamentos pendentes',
-                      value: pagamentosPendentes.length,
-                      valueClassName:
-                        pagamentosPendentes.length > 0
-                          ? 'text-amber-600 dark:text-amber-300'
-                          : 'text-emerald-600 dark:text-emerald-300',
-                    },
-                    { label: 'valor pendente', value: formatCompactCurrency(pendingPaymentsTotal) },
-                  ]}
-                />
-                <CaixaFechamentoTab
-                  isTurnoAberto={turnoResumo?.status === 'aberto'}
-                  fechamentoResult={fechamentoResult}
-                  turnoResumo={turnoResumo}
-                  pendingPaymentsCount={pagamentosPendentes.length}
-                  pendingPaymentsTotal={pendingPaymentsTotal}
-                  onConfirmFechamento={handleConfirmarFechamento}
-                  onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
-                  onNavigateToPendingPayments={() => {
-                    setActiveTab('operacao');
-                    setActiveSubTab('pedidos');
-                  }}
-                  onNavigateToOpenComandas={() => {
-                    setActiveTab('operacao');
-                    setActiveSubTab('pedidos');
-                  }}
-                />
-              </div>
-            )}
+            {activeTab === 'financeiro' &&
+              (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
+                <div className={clsx('orders-workspace', 'space-y-4')}>
+                  <OperationalBanner
+                    id="cash-closing-heading"
+                    eyebrow="CAIXA"
+                    title="Fechamento"
+                    accent="do seu jeito"
+                    description="Use a conferência rápida ou faça uma conferência totalmente cega."
+                    metrics={[
+                      {
+                        label: 'aberto há',
+                        value:
+                          turnoResumo?.status === 'aberto'
+                            ? formatDuration(turnoResumo.tempo_aberto_minutos)
+                            : '—',
+                      },
+                      {
+                        label: 'pagamentos pendentes',
+                        value: pagamentosPendentes.length,
+                        valueClassName:
+                          pagamentosPendentes.length > 0
+                            ? 'text-amber-600 dark:text-amber-300'
+                            : 'text-emerald-600 dark:text-emerald-300',
+                      },
+                      { label: 'valor pendente', value: formatCompactCurrency(pendingPaymentsTotal) },
+                    ]}
+                  />
+                  <CaixaFechamentoTab
+                    isTurnoAberto={turnoResumo?.status === 'aberto'}
+                    fechamentoResult={fechamentoResult}
+                    turnoResumo={turnoResumo}
+                    pendingPaymentsCount={pagamentosPendentes.length}
+                    pendingPaymentsTotal={pendingPaymentsTotal}
+                    onConfirmFechamento={handleConfirmarFechamento}
+                    onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
+                    onNavigateToPendingPayments={() => {
+                      setActiveTab('operacao');
+                      setActiveSubTab('pedidos');
+                    }}
+                    onNavigateToOpenComandas={() => {
+                      setActiveTab('operacao');
+                      setActiveSubTab('pedidos');
+                    }}
+                  />
+                </div>
+              )}
 
             {/* CRM CLIENTES — REAL DATA */}
 
             {/* VIEW: FRETISTAS & LOGÍSTICA */}
-            {activeSubTab === 'entregadores' && (
-              <div className={clsx('grid', 'grid-cols-1', 'lg:grid-cols-3', 'gap-5', 'animate-fade-in', 'text-left')}>
-                {/* Painel de Entregas (Colunas da Esquerda) */}
-                <div
-                  className={clsx(
-                    'lg:col-span-2',
-                    'bg-koma-card/60',
-                    'border',
-                    'border-koma-border',
-                    'rounded-3xl',
-                    'p-5',
-                    'space-y-5',
-                    'flex',
-                    'flex-col',
-                    'overflow-hidden',
-                  )}
-                >
-                  <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'shrink-0')}>
-                    <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'text-sm')}>
-                      Controle de Despacho e Entregas
-                    </span>
-                    <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>
-                      Gerencie o fluxo de saída e entrega de pedidos de Delivery.
-                    </span>
-                  </div>
-
-                  {/* Pedidos Pendentes de Envio */}
-                  <div className={clsx('space-y-3', 'flex-1', 'overflow-y-auto')}>
-                    <span
-                      className={clsx(
-                        'text-[10px]',
-                        'font-bold',
-                        'text-emerald-700 dark:text-emerald-400',
-                        'uppercase',
-                        'tracking-wider',
-                        'block',
-                      )}
-                    >
-                      Pedidos para Despachar
-                    </span>
-
-                    {deliveryOrders.filter((o) => o.status === 'producao' || o.status === 'analise').length === 0 ? (
-                      <div
-                        className={clsx(
-                          'py-8',
-                          'text-center',
-                          'text-koma-muted',
-                          'text-xs',
-                          'italic',
-                          'bg-koma-panel/20',
-                          'border',
-                          'border-koma-border/40',
-                          'rounded-2xl',
-                        )}
-                      >
-                        Não há pedidos prontos ou em produção aguardando despacho no momento.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {deliveryOrders
-                          .filter((o) => o.status === 'producao' || o.status === 'analise')
-                          .map((order) => {
-                            const motoboyId = selectedMotoboys[order.id] || '';
-                            return (
-                              <div
-                                key={order.id}
-                                className={clsx(
-                                  'p-4',
-                                  'bg-koma-panel',
-                                  'border',
-                                  'border-koma-border',
-                                  'rounded-2xl',
-                                  'flex',
-                                  'flex-col',
-                                  'sm:flex-row',
-                                  'justify-between',
-                                  'gap-3',
-                                  'text-xs',
-                                )}
-                              >
-                                <div className={clsx('space-y-1.5', 'flex-1')}>
-                                  <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                    <span className={clsx('font-bold', 'text-koma-foreground', 'text-[11px]')}>
-                                      Pedido {order.id}
-                                    </span>
-                                    <span
-                                      className={clsx(
-                                        'bg-emerald-500/15',
-                                        'text-emerald-700 dark:text-emerald-400',
-                                        'text-[8px]',
-                                        'font-bold',
-                                        'px-1.5',
-                                        'py-0.5',
-                                        'rounded',
-                                        'border',
-                                        'border-emerald-500/30',
-                                        'uppercase',
-                                      )}
-                                    >
-                                      {order.canal}
-                                    </span>
-                                  </div>
-                                  <span className={clsx('text-koma-secondary', 'font-bold', 'block')}>
-                                    {order.cliente} • {order.telefone}
-                                  </span>
-                                  <span className={clsx('text-koma-subtle', 'text-[10px]', 'block', 'leading-relaxed')}>
-                                    {order.endereco}
-                                  </span>
-                                  <span className={clsx('text-[9px]', 'text-koma-muted', 'block', 'font-mono')}>
-                                    Itens: {order.itens}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className={clsx(
-                                    'flex',
-                                    'flex-col',
-                                    'sm:items-end',
-                                    'justify-between',
-                                    'gap-2',
-                                    'shrink-0',
-                                  )}
-                                >
-                                  <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>
-                                    R$ {order.total.toFixed(2)}
-                                  </span>
-
-                                  <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                    <select
-                                      value={motoboyId}
-                                      onChange={(e) =>
-                                        setSelectedMotoboys((prev) => ({ ...prev, [order.id]: e.target.value }))
-                                      }
-                                      className={clsx(
-                                        'py-1.5',
-                                        'px-2',
-                                        'bg-koma-card',
-                                        'border',
-                                        'border-koma-border',
-                                        'text-koma-foreground',
-                                        'rounded-xl',
-                                        'text-[10px]',
-                                        'focus:outline-none',
-                                        'focus:border-[#10b981]',
-                                      )}
-                                    >
-                                      <option value="">Selecione o Entregador...</option>
-                                      {motoboys
-                                        .filter((m) => m.ativo)
-                                        .map((m) => (
-                                          <option key={m.id} value={m.id}>
-                                            {m.nome}
-                                          </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                      type="button"
-                                      disabled={!motoboyId}
-                                      onClick={() => handleDespacharKanban(order.id, motoboyId)}
-                                      className={clsx(
-                                        'py-1.5',
-                                        'px-3',
-                                        'bg-emerald-600',
-                                        'hover:bg-emerald-500',
-                                        'disabled:opacity-50',
-                                        'text-white',
-                                        'font-bold',
-                                        'rounded-xl',
-                                        'text-[10px]',
-                                        'uppercase',
-                                        'tracking-wider',
-                                        'transition-colors',
-                                        'cursor-pointer',
-                                      )}
-                                    >
-                                      Despachar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={!motoboyId}
-                                      onClick={() => handleRevogarAcessoMotoboy(motoboyId)}
-                                      className={clsx(
-                                        'py-1.5',
-                                        'px-2.5',
-                                        'bg-rose-500/20',
-                                        'hover:bg-rose-500/30',
-                                        'border',
-                                        'border-rose-500/40',
-                                        'disabled:opacity-40',
-                                        'text-rose-600 dark:text-rose-300',
-                                        'font-bold',
-                                        'rounded-xl',
-                                        'text-[10px]',
-                                        'uppercase',
-                                        'tracking-wider',
-                                        'transition-colors',
-                                        'cursor-pointer',
-                                        'flex',
-                                        'items-center',
-                                        'gap-1',
-                                      )}
-                                      title="Revogar todos os links ativos do entregador selecionado"
-                                    >
-                                      Revogar
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    )}
-
-                    {/* Pedidos Em Trânsito */}
-                    <span
-                      className={clsx(
-                        'text-[10px]',
-                        'font-bold',
-                        'text-emerald-700 dark:text-emerald-400',
-                        'uppercase',
-                        'tracking-wider',
-                        'block',
-                        'pt-4',
-                      )}
-                    >
-                      Em Trânsito (Entregas Ativas)
-                    </span>
-
-                    {deliveryOrders.filter((o) => o.status === 'pronto').length === 0 ? (
-                      <div
-                        className={clsx(
-                          'py-8',
-                          'text-center',
-                          'text-koma-muted',
-                          'text-xs',
-                          'italic',
-                          'bg-koma-panel/20',
-                          'border',
-                          'border-koma-border/40',
-                          'rounded-2xl',
-                        )}
-                      >
-                        Nenhum pedido em trânsito no momento.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {deliveryOrders
-                          .filter((o) => o.status === 'pronto')
-                          .map((order) => {
-                            return (
-                              <div
-                                key={order.id}
-                                className={clsx(
-                                  'p-4',
-                                  'bg-koma-panel/40',
-                                  'border',
-                                  'border-koma-border/40',
-                                  'rounded-2xl',
-                                  'flex',
-                                  'flex-col',
-                                  'sm:flex-row',
-                                  'justify-between',
-                                  'gap-3',
-                                  'text-xs',
-                                )}
-                              >
-                                <div className={clsx('space-y-1', 'flex-1')}>
-                                  <div className={clsx('flex', 'items-center', 'gap-2')}>
-                                    <span className={clsx('font-bold', 'text-koma-foreground', 'text-[11px]')}>
-                                      Pedido {order.id}
-                                    </span>
-                                    <span
-                                      className={clsx(
-                                        'bg-emerald-500/10',
-                                        'text-emerald-400',
-                                        'text-[8px]',
-                                        'font-bold',
-                                        'px-1.5',
-                                        'py-0.5',
-                                        'rounded',
-                                        'border',
-                                        'border-emerald-500/20',
-                                        'uppercase',
-                                        'tracking-wider',
-                                      )}
-                                    >
-                                      Em Trânsito
-                                    </span>
-                                  </div>
-                                  <span className={clsx('text-koma-secondary', 'font-bold', 'block')}>
-                                    {order.cliente} • {order.telefone}
-                                  </span>
-                                  <span className={clsx('text-koma-subtle', 'text-[10px]', 'block', 'leading-relaxed')}>
-                                    {order.endereco}
-                                  </span>
-                                </div>
-
-                                <div
-                                  className={clsx(
-                                    'flex',
-                                    'flex-col',
-                                    'sm:items-end',
-                                    'justify-between',
-                                    'gap-2',
-                                    'shrink-0',
-                                  )}
-                                >
-                                  <span className={clsx('font-mono', 'font-bold', 'text-emerald-400', 'text-[11px]')}>
-                                    R$ {order.total.toFixed(2)}
-                                  </span>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => handleFinalizarPedido(order.id)}
-                                    className={clsx(
-                                      'py-1.5',
-                                      'px-3',
-                                      'bg-emerald-600',
-                                      'hover:bg-emerald-700',
-                                      'text-white',
-                                      'font-bold',
-                                      'rounded-xl',
-                                      'text-[10px]',
-                                      'uppercase',
-                                      'tracking-wider',
-                                      'transition-colors',
-                                      'cursor-pointer',
-                                    )}
-                                  >
-                                    Concluir Entrega
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Gerenciamento de Fretistas (Coluna da Direita) */}
-                <div
-                  className={clsx(
-                    'bg-koma-card/60',
-                    'border',
-                    'border-koma-border',
-                    'rounded-3xl',
-                    'p-5',
-                    'space-y-4',
-                    'flex',
-                    'flex-col',
-                    'justify-between',
-                    'overflow-hidden',
-                  )}
-                >
-                  <div className={clsx('space-y-4', 'flex-1', 'flex', 'flex-col', 'overflow-hidden')}>
-                    <div className={clsx('border-b', 'border-koma-border', 'pb-3', 'shrink-0')}>
-                      <span className={clsx('font-serif', 'font-bold', 'text-koma-secondary', 'block', 'text-sm')}>
-                        Fretistas Cadastrados
-                      </span>
-                      <span className={clsx('text-[9px]', 'text-koma-muted', 'block')}>
-                        Lista de motoboys e entregadores de plantão.
-                      </span>
-                    </div>
-
-                    <div className={clsx('flex-1', 'overflow-y-auto', 'space-y-2.5')}>
-                      {motoboys.length === 0 ? (
-                        <span className={clsx('text-xs', 'text-koma-muted', 'italic')}>
-                          Nenhum fretista cadastrado.
-                        </span>
-                      ) : (
-                        motoboys.map((m) => (
-                          <div
-                            key={m.id}
-                            className={clsx(
-                              'p-3',
-                              'bg-koma-panel',
-                              'border',
-                              'border-koma-border',
-                              'rounded-xl',
-                              'flex',
-                              'items-center',
-                              'justify-between',
-                              'gap-2',
-                            )}
-                          >
-                            <div className="text-xs">
-                              <span className={clsx('font-bold', 'text-koma-foreground', 'block')}>{m.nome}</span>
-                              <span className={clsx('text-[10px]', 'text-koma-subtle', 'block', 'font-mono')}>
-                                {m.telefone}
-                              </span>
-                            </div>
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                                m.ativo
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                              }`}
-                            >
-                              {m.ativo ? 'Ativo' : 'Inativo'}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Cadastro de novo Motoboy */}
-                  <form
-                    onSubmit={(e) => handleAddMotoboy(e, novoMotoboyNome, novoMotoboyTelefone)}
-                    className={clsx('pt-4', 'border-t', 'border-koma-border', 'space-y-3', 'shrink-0')}
-                  >
-                    <span
-                      className={clsx(
-                        'text-[10px]',
-                        'font-bold',
-                        'text-emerald-700 dark:text-emerald-400',
-                        'uppercase',
-                        'tracking-wider',
-                        'block',
-                      )}
-                    >
-                      Novo Fretista
-                    </span>
-
-                    <input
-                      type="text"
-                      required
-                      placeholder="Nome do Entregador"
-                      value={novoMotoboyNome}
-                      onChange={(e) => setNewMotoboyNome(e.target.value)}
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-2',
-                        'bg-koma-page',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'text-xs',
-                        'focus:outline-none',
-                        'focus:border-[#10b981]',
-                      )}
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Telefone (ex: 81 99999-8888)"
-                      value={novoMotoboyTelefone}
-                      onChange={(e) => setNewMotoboyTelefone(e.target.value)}
-                      className={clsx(
-                        'w-full',
-                        'px-3',
-                        'py-2',
-                        'bg-koma-page',
-                        'border',
-                        'border-koma-border',
-                        'rounded-xl',
-                        'text-koma-foreground',
-                        'text-xs',
-                        'font-mono',
-                        'focus:outline-none',
-                        'focus:border-[#10b981]',
-                      )}
-                    />
-                    <button
-                      type="submit"
-                      className={clsx(
-                        'w-full',
-                        'py-2',
-                        'bg-emerald-600',
-                        'hover:bg-[#9d2b3c]',
-                        'text-white',
-                        'font-bold',
-                        'rounded-xl',
-                        'text-[10px]',
-                        'uppercase',
-                        'tracking-wider',
-                        'transition-colors',
-                        'cursor-pointer',
-                      )}
-                    >
-                      Adicionar Fretista
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
+            <CashierCouriers
+              activeSubTab={activeSubTab}
+              deliveryOrders={deliveryOrders}
+              selectedMotoboys={selectedMotoboys}
+              setSelectedMotoboys={setSelectedMotoboys}
+              motoboys={motoboys}
+              handleDespacharKanban={handleDespacharKanban}
+              handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
+              handleFinalizarPedido={handleFinalizarPedido}
+              handleAddMotoboy={handleAddMotoboy}
+              novoMotoboyNome={novoMotoboyNome}
+              novoMotoboyTelefone={novoMotoboyTelefone}
+              setNewMotoboyNome={setNewMotoboyNome}
+              setNewMotoboyTelefone={setNewMotoboyTelefone}
+            />
 
             {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
             <DeferredCashierSection
@@ -2732,162 +1433,14 @@ export function CaixaPanel({
         </main>
 
         {/* 1. MODAL: ABRIR CAIXA */}
-        {showAbrirModal && (
-          <div
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowAbrirModal(false);
-            }}
-            className={clsx(
-              'fixed',
-              'inset-0',
-              'bg-black/85',
-              'backdrop-blur-xs',
-              'z-50',
-              'flex',
-              'items-center',
-              'justify-center',
-              'p-4',
-              'cursor-pointer',
-            )}
-          >
-            <form
-              onSubmit={handleAbrirCaixa}
-              className={clsx(
-                'bg-koma-panel',
-                'border',
-                'border-koma-border',
-                'rounded-3xl',
-                'w-full',
-                'max-w-sm',
-                'p-6',
-                'space-y-5',
-                'shadow-2xl',
-                'animate-scale-in',
-              )}
-            >
-              <div
-                className={clsx('flex', 'justify-between', 'items-center', 'border-b', 'border-koma-border', 'pb-3')}
-              >
-                <h3 className={clsx('font-serif', 'font-bold', 'text-lg', 'text-koma-foreground')}>
-                  Abertura de Caixa
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowAbrirModal(false)}
-                  className={clsx(
-                    'p-1',
-                    'hover:bg-koma-raised',
-                    'rounded-full',
-                    'text-koma-subtle',
-                    'hover:text-koma-foreground',
-                    'transition-colors',
-                    'cursor-pointer',
-                    'border',
-                    'border-transparent',
-                  )}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="space-y-1.5">
-                <label
-                  className={clsx(
-                    'text-[10px]',
-                    'font-bold',
-                    'text-koma-secondary',
-                    'uppercase',
-                    'tracking-wider',
-                    'block',
-                  )}
-                >
-                  Fundo de Troco Inicial (R$):
-                </label>
-                <div className="relative">
-                  <span className={clsx('absolute', 'left-3.5', 'top-3', 'text-koma-subtle', 'font-mono')}>R$</span>
-                  <MoneyInput
-                    required
-                    value={saldoInicial}
-                    onValueChange={setSaldoInicial}
-                    className={clsx(
-                      'w-full',
-                      'pl-9',
-                      'pr-4',
-                      'py-2.5',
-                      'bg-koma-card',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'focus:outline-none',
-                      'focus:ring-2',
-                      'focus:ring-[#10b981]/20',
-                      'focus:border-[#10b981]',
-                      'text-koma-foreground',
-                      'font-mono',
-                    )}
-                  />
-                </div>
-              </div>
-
-              {errorMsg && (
-                <div
-                  className={clsx(
-                    'bg-rose-500/10',
-                    'border',
-                    'border-rose-500/25',
-                    'text-rose-400',
-                    'p-2.5',
-                    'rounded-xl',
-                    'text-center',
-                    'font-medium',
-                    'block',
-                  )}
-                >
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className={clsx('flex', 'gap-2.5')}>
-                <button
-                  type="button"
-                  onClick={() => setShowAbrirModal(false)}
-                  className={clsx(
-                    'flex-1',
-                    'py-2.5',
-                    'bg-koma-card',
-                    'hover:bg-koma-raised',
-                    'border',
-                    'border-koma-border',
-                    'text-koma-foreground',
-                    'rounded-xl',
-                    'transition-all',
-                    'cursor-pointer',
-                    'font-bold',
-                  )}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className={clsx(
-                    'flex-1',
-                    'py-2.5',
-                    'bg-emerald-600',
-                    'hover:bg-emerald-700',
-                    'text-white',
-                    'rounded-xl',
-                    'transition-all',
-                    'cursor-pointer',
-                    'font-bold',
-                    'shadow-md',
-                  )}
-                >
-                  Confirmar Abertura
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
+        <CashierOpenShiftDialog
+          showAbrirModal={showAbrirModal}
+          setShowAbrirModal={setShowAbrirModal}
+          handleAbrirCaixa={handleAbrirCaixa}
+          saldoInicial={saldoInicial}
+          setSaldoInicial={setSaldoInicial}
+          errorMsg={errorMsg}
+        />
 
         <CheckoutDialog
           controller={checkout}
@@ -2924,196 +1477,14 @@ export function CaixaPanel({
           />
         )}
 
-        {cancelConsumptionTarget && (
-          <div
-            className={clsx(
-              'fixed',
-              'inset-0',
-              'z-[60]',
-              'flex',
-              'items-center',
-              'justify-center',
-              'bg-black/90',
-              'p-4',
-              'backdrop-blur-sm',
-            )}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="cancel-table-title"
-              className={clsx(
-                'w-full',
-                'max-w-md',
-                'space-y-4',
-                'rounded-3xl',
-                'border',
-                'border-rose-900/50',
-                'bg-koma-card',
-                'p-5',
-                'shadow-2xl',
-              )}
-            >
-              <div
-                className={clsx(
-                  'flex',
-                  'items-start',
-                  'justify-between',
-                  'gap-3',
-                  'border-b',
-                  'border-koma-border-subtle',
-                  'pb-4',
-                )}
-              >
-                <div>
-                  <span
-                    className={clsx(
-                      'font-mono',
-                      'text-[9px]',
-                      'font-bold',
-                      'uppercase',
-                      'tracking-[0.18em]',
-                      'text-rose-400',
-                    )}
-                  >
-                    Ação irreversível
-                  </span>
-                  <h3 id="cancel-table-title" className={clsx('mt-1', 'text-lg', 'font-bold', 'text-koma-foreground')}>
-                    {cancelConsumptionTarget.scope === 'table'
-                      ? `Liberar Mesa ${cancelConsumptionTarget.mesaId} sem receber?`
-                      : cancelConsumptionTarget.scope === 'digital'
-                        ? 'Cancelar este pedido?'
-                        : 'Cancelar somente este pedido?'}
-                  </h3>
-                  <p className={clsx('mt-1', 'text-[11px]', 'leading-relaxed', 'text-koma-subtle')}>
-                    {cancelConsumptionTarget.scope === 'table'
-                      ? 'Todos os pedidos da mesa serão cancelados. Esta opção existe apenas no Salão.'
-                      : cancelConsumptionTarget.scope === 'digital'
-                        ? 'O pedido sairá da operação ativa.'
-                        : 'Somente os itens deste pedido serão cancelados; os demais pedidos da mesa serão preservados.'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCancelConsumptionTarget(null)}
-                  disabled={isCancellingTable}
-                  className={clsx(
-                    'rounded-lg',
-                    'p-2',
-                    'text-koma-muted',
-                    'hover:bg-white/[0.05]',
-                    'hover:text-koma-foreground',
-                    'disabled:opacity-40',
-                  )}
-                  aria-label="Fechar"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
-                <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}>
-                  <strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>
-                    {cancelConsumptionTarget.comandas}
-                  </strong>
-                  <span className={clsx('text-[9px]', 'text-koma-muted')}>comandas</span>
-                </div>
-                <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}>
-                  <strong className={clsx('block', 'font-mono', 'text-sm', 'text-koma-foreground')}>
-                    {cancelConsumptionTarget.itens}
-                  </strong>
-                  <span className={clsx('text-[9px]', 'text-koma-muted')}>itens</span>
-                </div>
-                <div className={clsx('rounded-xl', 'border', 'border-koma-border-subtle', 'bg-black/20', 'p-3')}>
-                  <strong className={clsx('block', 'font-mono', 'text-sm', 'text-rose-600 dark:text-rose-300')}>
-                    {cancelConsumptionTarget.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </strong>
-                  <span className={clsx('text-[9px]', 'text-koma-muted')}>cancelados</span>
-                </div>
-              </div>
-
-              <label className={clsx('block', 'space-y-1.5')}>
-                <span className={clsx('text-[9px]', 'font-bold', 'uppercase', 'tracking-wider', 'text-koma-subtle')}>
-                  Motivo obrigatório
-                </span>
-                <textarea
-                  autoFocus
-                  maxLength={300}
-                  rows={3}
-                  value={cancelTableReason}
-                  onChange={(event) => setCancelTableReason(event.target.value)}
-                  placeholder="Ex.: pedido lançado por engano"
-                  className={clsx(
-                    'w-full',
-                    'resize-none',
-                    'rounded-xl',
-                    'border',
-                    'border-[#343936]',
-                    'bg-koma-panel',
-                    'px-3',
-                    'py-2.5',
-                    'text-sm',
-                    'text-koma-foreground',
-                    'outline-none',
-                    'placeholder:text-zinc-700',
-                    'focus:border-rose-500/60',
-                  )}
-                />
-              </label>
-
-              <div className={clsx('flex', 'flex-col-reverse', 'gap-2', 'sm:flex-row')}>
-                <button
-                  type="button"
-                  onClick={() => setCancelConsumptionTarget(null)}
-                  disabled={isCancellingTable}
-                  className={clsx(
-                    'min-h-11',
-                    'flex-1',
-                    'rounded-xl',
-                    'border',
-                    'border-[#343936]',
-                    'text-xs',
-                    'font-bold',
-                    'text-koma-subtle',
-                    'hover:text-koma-foreground',
-                    'disabled:opacity-40',
-                  )}
-                >
-                  {cancelConsumptionTarget.scope === 'digital' ? 'Manter pedido' : 'Manter atendimento'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelTableConsumption}
-                  disabled={cancelTableReason.trim().length < 3 || isCancellingTable}
-                  className={clsx(
-                    'flex',
-                    'min-h-11',
-                    'flex-1',
-                    'items-center',
-                    'justify-center',
-                    'gap-2',
-                    'rounded-xl',
-                    'bg-rose-600',
-                    'px-3',
-                    'text-xs',
-                    'font-extrabold',
-                    'text-koma-foreground',
-                    'hover:bg-rose-500',
-                    'disabled:cursor-not-allowed',
-                    'disabled:opacity-40',
-                  )}
-                >
-                  {isCancellingTable ? <RefreshCw className="animate-spin" size={14} /> : <Trash2 size={14} />}
-                  {isCancellingTable
-                    ? 'Cancelando…'
-                    : cancelConsumptionTarget.scope === 'table'
-                      ? 'Cancelar e liberar'
-                      : 'Cancelar pedido'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <CashierCancelConsumptionDialog
+          cancelConsumptionTarget={cancelConsumptionTarget}
+          setCancelConsumptionTarget={setCancelConsumptionTarget}
+          isCancellingTable={isCancellingTable}
+          cancelTableReason={cancelTableReason}
+          setCancelTableReason={setCancelTableReason}
+          handleCancelTableConsumption={handleCancelTableConsumption}
+        />
 
         {/* 7. MODAL: ADICIONAR / EDITAR PRODUTO */}
 
@@ -3136,502 +1507,30 @@ export function CaixaPanel({
 
         {/* MODAL DE SUPRIMENTO */}
         {showSuprimentoModal && (
-          <SuprimentoModal onClose={() => setShowSuprimentoModal(false)} onSubmit={handleRegistrarSuprimento} />
+          <SuprimentoModal
+            onClose={() => setShowSuprimentoModal(false)}
+            onSubmit={handleRegistrarSuprimento}
+          />
         )}
 
         {/* OPERATOR MENU DRAWER OVERLAY */}
-        {isOperatorDrawerOpen && (
-          <div className={clsx('fixed', 'inset-0', 'z-[9998]', 'flex', 'justify-start', 'animate-fade-in')}>
-            {/* Backdrop escuro com clique para fechar */}
-            <div
-              onClick={() => setIsOperatorDrawerOpen(false)}
-              className={clsx(
-                'fixed',
-                'inset-0',
-                'bg-black/80',
-                'backdrop-blur-sm',
-                'transition-opacity',
-                'cursor-pointer',
-              )}
-            />
-
-            {/* Drawer Lateral - Modernized Shadcn Dark Theme */}
-            <div
-              className={clsx(
-                'relative',
-                'w-80',
-                'max-w-[85vw]',
-                'h-full',
-                'bg-koma-card',
-                'border-r',
-                'border-koma-border',
-                'shadow-2xl',
-                'flex',
-                'flex-col',
-                'justify-between',
-                'z-10',
-                'overflow-y-auto',
-                'p-5',
-                'text-koma-foreground',
-                'font-sans',
-              )}
-            >
-              <div className="space-y-5">
-                {/* Header do Drawer */}
-                <div
-                  className={clsx('flex', 'items-center', 'justify-between', 'border-b', 'border-koma-border', 'pb-4')}
-                >
-                  <div className={clsx('flex', 'items-center', 'gap-2.5')}>
-                    <div
-                      className={clsx(
-                        'p-2',
-                        'rounded-xl',
-                        'bg-emerald-500/10',
-                        'border',
-                        'border-emerald-500/30',
-                        'text-emerald-400',
-                      )}
-                    >
-                      <SlidersHorizontal size={18} />
-                    </div>
-                    <div>
-                      <h3 className={clsx('font-bold', 'text-base', 'text-koma-foreground', 'font-serif')}>
-                        Opções do Caixa
-                      </h3>
-                      <span className={clsx('text-xs', 'text-koma-subtle', 'block')}>Sessão e Preferências</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsOperatorDrawerOpen(false)}
-                    className={clsx(
-                      'p-1.5',
-                      'text-koma-subtle',
-                      'hover:text-koma-foreground',
-                      'bg-koma-panel',
-                      'hover:bg-koma-raised',
-                      'border',
-                      'border-koma-border',
-                      'rounded-xl',
-                      'cursor-pointer',
-                      'transition-all',
-                    )}
-                    title="Fechar Menu"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                {/* 1. SEÇÃO GARÇOM / OPERADOR EM ATENDIMENTO */}
-                <div
-                  className={clsx(
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-2xl',
-                    'p-4',
-                    'space-y-3.5',
-                    'shadow-md',
-                  )}
-                >
-                  <span
-                    className={clsx(
-                      'text-[9px]',
-                      'uppercase',
-                      'tracking-wider',
-                      'text-koma-subtle',
-                      'font-extrabold',
-                      'block',
-                    )}
-                  >
-                    Garçom / Operador em Atendimento
-                  </span>
-                  <div className={clsx('flex', 'items-center', 'gap-3')}>
-                    <div
-                      className={clsx(
-                        'h-12',
-                        'w-12',
-                        'rounded-2xl',
-                        'bg-gradient-to-br',
-                        'from-emerald-600',
-                        'to-teal-800',
-                        'flex',
-                        'items-center',
-                        'justify-center',
-                        'font-bold',
-                        'text-koma-foreground',
-                        'text-lg',
-                        'shadow-md',
-                        'shrink-0',
-                        'font-serif',
-                        'border',
-                        'border-emerald-500/30',
-                      )}
-                    >
-                      {(activeWaiterNome || 'G').charAt(0).toUpperCase()}
-                    </div>
-                    <div className={clsx('min-w-0', 'flex-1')}>
-                      <strong className={clsx('font-bold', 'text-base', 'text-koma-foreground', 'block', 'truncate')}>
-                        {activeWaiterNome || 'Georlan'}
-                      </strong>
-                      <span className={clsx('text-xs', 'text-emerald-400', 'font-medium', 'block')}>
-                        Operador de Caixa / Gerência
-                      </span>
-                    </div>
-                  </div>
-
-                  <LoginButton
-                    variant="default"
-                    iconType="logout"
-                    onClick={handleLogoutOperator}
-                    className={clsx('w-full', 'font-bold', 'uppercase', 'tracking-wider', 'text-xs', 'py-2.5')}
-                  >
-                    LOGOUT / TROCAR OPERADOR
-                  </LoginButton>
-                </div>
-
-                {/* 2. SEÇÃO STATUS DO SALÃO AO VIVO */}
-                {(() => {
-                  const liveOccupiedMesaIds = new Set(
-                    orders
-                      .filter(
-                        (o) => o.mesaId && Number(o.mesaId) > 0 && o.status !== 'fechada' && o.status !== 'cancelado',
-                      )
-                      .map((o) => Number(o.mesaId)),
-                  );
-                  const liveTotalTablesCount = salonTables && salonTables.length > 0 ? salonTables.length : 30;
-                  const liveOccupiedTablesCount =
-                    salonTables && salonTables.length > 0
-                      ? salonTables.filter((t) => {
-                          const tableNum = Number(t.id || t.numero);
-                          return (
-                            liveOccupiedMesaIds.has(tableNum) ||
-                            t.status === 'ocupada' ||
-                            t.status === 'occupied' ||
-                            t.status === 'fechamento'
-                          );
-                        }).length
-                      : liveOccupiedMesaIds.size;
-                  const liveFreeTablesCount = Math.max(0, liveTotalTablesCount - liveOccupiedTablesCount);
-
-                  return (
-                    <div
-                      className={clsx(
-                        'bg-koma-panel',
-                        'border',
-                        'border-koma-border',
-                        'rounded-2xl',
-                        'p-4',
-                        'space-y-3',
-                        'shadow-md',
-                      )}
-                    >
-                      <div className={clsx('flex', 'items-center', 'justify-between')}>
-                        <span
-                          className={clsx(
-                            'text-[9px]',
-                            'uppercase',
-                            'tracking-wider',
-                            'text-koma-subtle',
-                            'font-extrabold',
-                            'block',
-                          )}
-                        >
-                          Status do Salão ao Vivo
-                        </span>
-                        <span
-                          className={clsx(
-                            'text-[9px]',
-                            'font-mono',
-                            'text-emerald-400',
-                            'bg-emerald-500/10',
-                            'border',
-                            'border-emerald-500/30',
-                            'px-2',
-                            'py-0.5',
-                            'rounded-full',
-                            'font-bold',
-                            'uppercase',
-                            'flex',
-                            'items-center',
-                            'gap-1',
-                          )}
-                        >
-                          <span className={clsx('w-1.5', 'h-1.5', 'rounded-full', 'bg-emerald-400', 'animate-ping')} />
-                          Tempo Real
-                        </span>
-                      </div>
-                      <div className={clsx('grid', 'grid-cols-3', 'gap-2')}>
-                        <div
-                          className={clsx(
-                            'bg-koma-card',
-                            'border',
-                            'border-koma-border',
-                            'p-2.5',
-                            'rounded-xl',
-                            'text-center',
-                            'shadow-xs',
-                          )}
-                        >
-                          <span className={clsx('text-[9px]', 'text-koma-subtle', 'block', 'font-medium')}>LIVRES</span>
-                          <strong className={clsx('text-lg', 'font-bold', 'text-emerald-400', 'font-mono')}>
-                            {liveFreeTablesCount}
-                          </strong>
-                        </div>
-                        <div
-                          className={clsx(
-                            'bg-koma-card',
-                            'border',
-                            'border-koma-border',
-                            'p-2.5',
-                            'rounded-xl',
-                            'text-center',
-                            'shadow-xs',
-                          )}
-                        >
-                          <span className={clsx('text-[9px]', 'text-koma-subtle', 'block', 'font-medium')}>
-                            OCUPADAS
-                          </span>
-                          <strong className={clsx('text-lg', 'font-bold', 'text-amber-400', 'font-mono')}>
-                            {liveOccupiedTablesCount}
-                          </strong>
-                        </div>
-                        <div
-                          className={clsx(
-                            'bg-koma-card',
-                            'border',
-                            'border-koma-border',
-                            'p-2.5',
-                            'rounded-xl',
-                            'text-center',
-                            'shadow-xs',
-                          )}
-                        >
-                          <span className={clsx('text-[9px]', 'text-koma-subtle', 'block', 'font-medium')}>TOTAL</span>
-                          <strong className={clsx('text-lg', 'font-bold', 'text-sky-400', 'font-mono')}>
-                            {liveTotalTablesCount}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* 3. SEÇÃO ATALHOS DE ATENDIMENTO */}
-                <div
-                  className={clsx(
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-2xl',
-                    'p-4',
-                    'space-y-2.5',
-                    'shadow-md',
-                  )}
-                >
-                  <span
-                    className={clsx(
-                      'text-[9px]',
-                      'uppercase',
-                      'tracking-wider',
-                      'text-koma-subtle',
-                      'font-extrabold',
-                      'block',
-                    )}
-                  >
-                    Atalhos de Atendimento
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onRefreshOrders) onRefreshOrders();
-                      showToast('Salão e pedidos sincronizados em tempo real!', 'success');
-                    }}
-                    className={clsx(
-                      'w-full',
-                      'py-2.5',
-                      'px-3',
-                      'bg-koma-card',
-                      'hover:bg-koma-raised/50',
-                      'border',
-                      'border-koma-border',
-                      'text-koma-secondary',
-                      'hover:text-koma-foreground',
-                      'rounded-xl',
-                      'text-xs',
-                      'font-bold',
-                      'transition-all',
-                      'cursor-pointer',
-                      'flex',
-                      'items-center',
-                      'justify-between',
-                      'group',
-                    )}
-                  >
-                    <div className={clsx('flex', 'items-center', 'gap-2')}>
-                      <RefreshCw
-                        size={14}
-                        className={clsx(
-                          'text-emerald-400',
-                          'group-hover:rotate-180',
-                          'transition-transform',
-                          'duration-500',
-                        )}
-                      />
-                      <span>Sincronizar Salão e Pedidos</span>
-                    </div>
-                    <ChevronRight size={14} className={clsx('text-koma-muted', 'group-hover:text-koma-foreground')} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      toggleFullscreen();
-                      setIsOperatorDrawerOpen(false);
-                    }}
-                    className={clsx(
-                      'w-full',
-                      'py-2.5',
-                      'px-3',
-                      'bg-koma-card',
-                      'hover:bg-koma-raised/50',
-                      'border',
-                      'border-koma-border',
-                      'text-koma-secondary',
-                      'hover:text-koma-foreground',
-                      'rounded-xl',
-                      'text-xs',
-                      'font-bold',
-                      'transition-all',
-                      'cursor-pointer',
-                      'flex',
-                      'items-center',
-                      'justify-between',
-                      'group',
-                    )}
-                  >
-                    <div className={clsx('flex', 'items-center', 'gap-2')}>
-                      {isFullscreen ? (
-                        <Minimize2 size={14} className="text-sky-400" />
-                      ) : (
-                        <Maximize2 size={14} className="text-sky-400" />
-                      )}
-                      <span>{isFullscreen ? 'Sair do Modo PDV' : 'Modo PDV Imersivo'}</span>
-                    </div>
-                    <ChevronRight size={14} className={clsx('text-koma-muted', 'group-hover:text-koma-foreground')} />
-                  </button>
-                </div>
-
-                {/* 4. SEÇÃO EXIBIÇÃO E PREFERÊNCIAS */}
-                <div
-                  className={clsx(
-                    'bg-koma-panel',
-                    'border',
-                    'border-koma-border',
-                    'rounded-2xl',
-                    'p-4',
-                    'space-y-3',
-                    'shadow-md',
-                  )}
-                >
-                  <span
-                    className={clsx(
-                      'text-[9px]',
-                      'uppercase',
-                      'tracking-wider',
-                      'text-koma-subtle',
-                      'font-extrabold',
-                      'block',
-                    )}
-                  >
-                    Exibição e Preferências
-                  </span>
-
-                  <div className="space-y-1.5">
-                    <span className={clsx('text-xs', 'text-koma-secondary', 'font-medium', 'block')}>
-                      Tamanho da Fonte:
-                    </span>
-                    <div
-                      className={clsx(
-                        'grid',
-                        'grid-cols-3',
-                        'gap-1',
-                        'bg-koma-card',
-                        'p-1',
-                        'rounded-xl',
-                        'border',
-                        'border-koma-border',
-                      )}
-                    >
-                      {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
-                        <button
-                          key={sz}
-                          type="button"
-                          onClick={() => changeFontSize(sz)}
-                          className={`py-1 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${
-                            fontSize === sz
-                              ? 'bg-emerald-500 text-zinc-950 shadow-md font-extrabold'
-                              : 'text-koma-subtle hover:text-koma-foreground'
-                          }`}
-                        >
-                          {sz === 'padrao' ? 'Padrão' : sz === 'grande' ? 'Grande' : 'Gigante'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Alertas Sonoros do Caixa */}
-                  <div className="pt-2 border-t border-koma-border space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        {soundEnabled ? (
-                          <Volume2 size={15} className="text-emerald-400" />
-                        ) : (
-                          <VolumeX size={15} className="text-rose-400" />
-                        )}
-                        <span className="text-xs text-koma-secondary font-medium">Sons e Alertas do Caixa</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={toggleSound}
-                        className={clsx(
-                          'px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border',
-                          soundEnabled
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                            : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20',
-                        )}
-                      >
-                        {soundEnabled ? 'Ativado' : 'Mudo'}
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playOrderAlert('test');
-                        showToast('🔊 Teste de som emitido na saída do computador!', 'info');
-                      }}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-koma-card hover:bg-koma-raised border border-koma-border text-xs font-bold text-koma-foreground rounded-xl transition-all cursor-pointer"
-                    >
-                      <Bell size={13} className="text-amber-400" />
-                      <span>Testar Caixa de Som (Bip)</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* RODAPÉ */}
-              <div className={clsx('pt-5', 'border-t', 'border-koma-border', 'text-center', 'space-y-1')}>
-                <span className={clsx('text-xs', 'font-bold', 'text-koma-subtle', 'block', 'font-mono')}>
-                  Kôma v3.5 • Dark Engine
-                </span>
-                <span className={clsx('text-[10px]', 'text-koma-muted', 'block')}>
-                  Sistema PDV Gourmet Multi-Tenant
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        <CashierOperatorDrawer
+          isOperatorDrawerOpen={isOperatorDrawerOpen}
+          setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
+          activeWaiterNome={activeWaiterNome}
+          handleLogoutOperator={handleLogoutOperator}
+          orders={orders}
+          salonTables={salonTables}
+          onRefreshOrders={onRefreshOrders}
+          showToast={showToast}
+          toggleFullscreen={toggleFullscreen}
+          isFullscreen={isFullscreen}
+          changeFontSize={changeFontSize}
+          fontSize={fontSize}
+          soundEnabled={soundEnabled}
+          toggleSound={toggleSound}
+          playOrderAlert={playOrderAlert}
+        />
       </SidebarProvider>
     </div>
   );
