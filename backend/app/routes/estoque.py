@@ -21,6 +21,7 @@ from ..schemas import (
     SessaoContagemEstoqueCreate, SessaoContagemEstoqueResponse
 )
 from ..security import ensure_permission, get_current_garcom_optional
+from ..services.inventory_count import apply_inventory_count
 
 router = APIRouter(
     prefix="/estoque",
@@ -926,26 +927,11 @@ def create_sessao_contagem(
         qtd_contada = item_in.quantidade_contada
         diferenca = qtd_contada - qtd_sistema
 
-        ajustado = False
-        if data.status == "confirmada" and diferenca != 0:
-            insumo.estoque_atual = qtd_contada
-            ajustado = True
-
-            mov = MovimentacaoEstoque(
-                restaurante_id=rest_id,
-                insumo_id=insumo.id,
-                tipo="contagem",
-                quantidade=abs(diferenca),
-                saldo_anterior=qtd_sistema,
-                saldo_posterior=qtd_contada,
-                custo_unitario=insumo.preco_medio_custo or 0.0,
-                motivo=f"Ajuste por inventário físico (Sessão {sessao.id[:8]})",
-                observacao=data.observacao,
-                origem="contagem",
-                referencia_id=sessao.id,
-                usuario_id=current_user.id if current_user else None
-            )
-            db.add(mov)
+        ajustado = data.status == "confirmada" and apply_inventory_count(
+            db, insumo=insumo, counted=qtd_contada, session=sessao,
+            restaurant_id=rest_id, observation=data.observacao,
+            user_id=current_user.id if current_user else None,
+        )
 
         item_db = ItemContagemEstoque(
             restaurante_id=rest_id,
@@ -1029,26 +1015,11 @@ def update_sessao_contagem(
         qtd_contada = item_in.quantidade_contada
         diferenca = qtd_contada - qtd_sistema
 
-        ajustado = False
-        if sessao.status == "confirmada" and diferenca != 0:
-            insumo.estoque_atual = qtd_contada
-            ajustado = True
-
-            mov = MovimentacaoEstoque(
-                restaurante_id=rest_id,
-                insumo_id=insumo.id,
-                tipo="contagem",
-                quantidade=abs(diferenca),
-                saldo_anterior=qtd_sistema,
-                saldo_posterior=qtd_contada,
-                custo_unitario=insumo.preco_medio_custo or 0.0,
-                motivo=f"Ajuste por inventário físico (Sessão {sessao.id[:8]})",
-                observacao=data.observacao,
-                origem="contagem",
-                referencia_id=sessao.id,
-                usuario_id=current_user.id if current_user else None
-            )
-            db.add(mov)
+        ajustado = sessao.status == "confirmada" and apply_inventory_count(
+            db, insumo=insumo, counted=qtd_contada, session=sessao,
+            restaurant_id=rest_id, observation=data.observacao,
+            user_id=current_user.id if current_user else None,
+        )
 
         item_db = ItemContagemEstoque(
             restaurante_id=rest_id,
@@ -1094,29 +1065,12 @@ def confirmar_sessao_contagem(
         if not insumo:
             continue
 
-        qtd_sistema = insumo.estoque_atual or 0.0
-        qtd_contada = item.quantidade_contada
-        diferenca = qtd_contada - qtd_sistema
-
-        if diferenca != 0:
-            insumo.estoque_atual = qtd_contada
+        if apply_inventory_count(
+            db, insumo=insumo, counted=item.quantidade_contada, session=sessao,
+            restaurant_id=rest_id, observation=sessao.observacao or "",
+            user_id=current_user.id if current_user else None,
+        ):
             item.ajustado = True
-
-            mov = MovimentacaoEstoque(
-                restaurante_id=rest_id,
-                insumo_id=insumo.id,
-                tipo="contagem",
-                quantidade=abs(diferenca),
-                saldo_anterior=qtd_sistema,
-                saldo_posterior=qtd_contada,
-                custo_unitario=insumo.preco_medio_custo or 0.0,
-                motivo=f"Ajuste por inventário físico (Sessão {sessao.id[:8]})",
-                observacao=sessao.observacao or "",
-                origem="contagem",
-                referencia_id=sessao.id,
-                usuario_id=current_user.id if current_user else None
-            )
-            db.add(mov)
 
     db.commit()
     return db.query(SessaoContagemEstoque).options(

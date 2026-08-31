@@ -211,10 +211,16 @@ def test_checkout_persiste_tentativa_e_reutiliza_chave_apos_timeout():
     assert "reutiliza a mesma tentativa sem duplicar o pedido" in source
 
 
-def test_configuracao_visual_usa_uploader_compacto():
+def test_configuracao_visual_usa_o_uploader_do_painel_canonico():
     source = Path("src/components/CardapioAssetUploader.tsx").read_text(encoding="utf-8")
+    panel = Path("src/components/cardapio/CardapioDigitalSettingsPanel.tsx").read_text(encoding="utf-8")
 
-    assert "Marca exibida no topo do cardápio." in source
-    assert "Capa horizontal exibida no cabeçalho." in source
-    assert "h-20 w-24" in source
+    # The old compact uploader belonged to the hidden legacy form. Preserve the
+    # already-visible canonical AssetEditor layout now extracted to this file.
+    assert panel.count("<CardapioAssetUploader") == 2
+    assert "h-28 w-28" in source
+    assert "h-28 w-full sm:w-48" in source
+    assert "object-contain p-2" in source
+    assert "object-cover" in source
+    assert "createPortal" not in source
     assert "p-6 text-center" not in source

@@ -279,7 +279,7 @@ export function CaixaPanel({
     [orders, salonTables],
   );
 
-  const catalog = useCashierCatalog({ apiBaseUrl, authHeaders, liveProdutos, liveCategorias });
+  const catalog = useCashierCatalog({ liveProdutos, liveCategorias, onRefreshCategorias });
   const { apiProdutos, apiCategorias, dynamicMenu, suggestedProductCode, fetchProdutos, fetchCategorias } =
     catalog;
   const customers = useCashierCustomers({ apiBaseUrl, authHeaders });
@@ -359,7 +359,6 @@ export function CaixaPanel({
     const handleSyncAll = () => {
       fetchTurno();
       fetchProdutos();
-      fetchCategorias();
       if (onRefreshOrders) onRefreshOrders();
     };
     const handleOpenImpressoras = () => {
@@ -377,7 +376,7 @@ export function CaixaPanel({
       window.removeEventListener('koma-sync-all', handleSyncAll);
       window.removeEventListener('koma-open-impressoras', handleOpenImpressoras);
     };
-  }, [onRefreshOrders]);
+  }, [onRefreshOrders, fetchProdutos]);
 
   // Date filters for Meu Desempenho
 
@@ -609,7 +608,6 @@ export function CaixaPanel({
   };
   useCashierRealtime({
     isWsConnected,
-    onRefreshOrders,
     activeTab,
     fetchTurno,
     fetchDeliveryOrders,
@@ -1333,10 +1331,7 @@ export function CaixaPanel({
               sectionProps={{
                 apiBaseUrl,
                 authHeaders,
-                activeTab,
-                activeSubTab,
                 setActiveSubTab,
-                showToast,
                 setActiveTab,
                 hasOnlineMenu,
               }}

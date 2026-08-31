@@ -55,21 +55,7 @@ export default function CashierSettings({
     unificarViasDelivery,
     setUnificarViasDelivery,
     updateConfiguracoes,
-    permDelivery,
-    permEdit,
-    permAddCharges,
-    permCancel,
-    permShowStatus,
-    permOpenEmpty,
-    permAutoPrint,
-    permCloseAccount,
-    permDiscount,
-    permSurcharge,
-    permPeopleCount,
-    permTransferTables,
-    permTransferItems,
-    permClientCall,
-    permShowIdleTables,
+    waiterPermissions,
     printHeader,
     setPrintHeader,
     printFooter,
@@ -189,24 +175,10 @@ export default function CashierSettings({
 
           <CashierWaiterSettings
             printingSettingsTab={printingSettingsTab}
-            permDelivery={permDelivery}
-            permEdit={permEdit}
-            permCancel={permCancel}
-            permShowStatus={permShowStatus}
-            permAutoPrint={permAutoPrint}
-            permCloseAccount={permCloseAccount}
-            permTransferTables={permTransferTables}
-            permTransferItems={permTransferItems}
             setConfigSalSubTab={setConfigSalSubTab}
             configSalSubTab={configSalSubTab}
+            waiterPermissions={waiterPermissions}
             updateConfiguracoes={updateConfiguracoes}
-            permAddCharges={permAddCharges}
-            permOpenEmpty={permOpenEmpty}
-            permDiscount={permDiscount}
-            permSurcharge={permSurcharge}
-            permPeopleCount={permPeopleCount}
-            permClientCall={permClientCall}
-            permShowIdleTables={permShowIdleTables}
           />
 
           <CashierServiceTaxSettings

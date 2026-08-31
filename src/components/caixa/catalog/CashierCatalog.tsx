@@ -1,6 +1,6 @@
 
 import { Plus, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { Product } from '../../../types';
 import { CardapioCategoriasTab } from '../../cardapio/CardapioCategoriasTab';
@@ -72,11 +72,6 @@ export default function CashierCatalog({
 
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  useEffect(() => {
-    if (activeTab === 'cardapio') {
-      fetchProdutos();
-    }
-  }, [activeTab, activeSubTab]);
   return (
     <>
       {activeTab === 'cardapio' && activeSubTab === 'produtos' && (

@@ -108,6 +108,13 @@ consumidores TSX também receberam a migração funcional descrita acima.
 
 ## Próximas fronteiras, em ordem
 
+Atualização de 31/08/2026 sobre `826e549`: catálogo, configuração online,
+leituras de estoque, contagem física, metadados e preferências receberam
+consolidações descritas em [responsáveis compartilhados](shared-resource-owners.md).
+O documento registra os 12 pontos da auditoria, os consumidores migrados e as
+separações mantidas deliberadamente. A lista abaixo é o roteiro histórico,
+não uma declaração de que cada item continua integralmente pendente.
+
 1. Consolidar este bloco com testes completos e integração autorizada.
 2. Catálogo: adaptar leituras administrativas/operacionais ao contrato comum já existente,
    preservando produtos inativos no administrativo e a política de vendáveis.

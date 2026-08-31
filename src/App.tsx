@@ -26,6 +26,7 @@ import { authFetch, authRequestErrorMessage } from './utils/authRequest';
 import { getOperatorSession, saveOperatorSession } from './utils/authSession';
 import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
 import { operationalFetch } from './utils/operationalRequest';
+import { aplicarMascaraTelefoneInput } from './utils/phonePresentation';
 
 // Route modules have stable identities and are downloaded only when selected.
 // Authentication stays in App; shared data and draft owners remain mounted here.
@@ -54,15 +55,6 @@ const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
 
-
-const aplicarMascaraTelefoneInput = (valor: string) => {
-  const apenasNumeros = valor.replace(/\D/g, '').slice(0, 11);
-  if (apenasNumeros.length === 0) return '';
-  if (apenasNumeros.length <= 2) return `(${apenasNumeros}`;
-  if (apenasNumeros.length <= 6) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
-  if (apenasNumeros.length <= 10) return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 6)}-${apenasNumeros.slice(6)}`;
-  return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7)}`;
-};
 
 const readJwtSubject = (token: string): string => {
   try {
@@ -865,7 +857,7 @@ export default function App() {
       }
       if (wsRef.current === activeSocket) wsRef.current = null;
     };
-  }, [isAuthenticated, activeWaiterId, activeRole, portal]);
+  }, [isAuthenticated, activeWaiterId, activeRole, portal, fetchLiveCatalog]);
 
   // Sync local draft changes to WebSocket
   useEffect(() => {

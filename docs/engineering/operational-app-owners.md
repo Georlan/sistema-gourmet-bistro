@@ -23,6 +23,12 @@ continuam no App; a camada de dados recebe callbacks, não cria uma sessão para
 Travas e versões de requisição não são expostas para os componentes de apresentação.
 Os pontos de chamada de sincronização continuam no App, com as mesmas dependências.
 
+Na continuação de 31/08/2026, o catálogo passou a ter snapshot vinculado à
+sessão e cancelamento de leituras. Cadastro e PDV reutilizam esse snapshot;
+atalhos e WebSocket acompanham seu callback atual. O timer do Caixa deixou
+de recarregar pedidos, que permanecem sob o App. Ver
+[responsáveis compartilhados](shared-resource-owners.md).
+
 ## Evidência e limites
 
 Na extração inicial (`311801b`), a comparação estrutural de árvores TypeScript encontrou

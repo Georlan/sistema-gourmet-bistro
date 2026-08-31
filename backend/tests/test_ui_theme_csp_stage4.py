@@ -64,24 +64,29 @@ def test_cashier_theme_toggle_uses_shared_realtime_theme_contract():
     caixa = source("src/components/CaixaPanel.tsx")
     preferences = source("src/components/caixa/navigation/useCashierPreferences.ts")
     sidebars = source("src/components/caixa/navigation/CashierDesktopSidebar.tsx") + source("src/components/caixa/navigation/CashierMobileSidebar.tsx")
+    footer = source("src/components/caixa/navigation/CashierSidebarFooter.tsx")
     theme = source("src/config/theme.ts")
 
     assert "useCashierPreferences(" in caixa
     assert "theme={theme}" in caixa
     assert "setTheme={setTheme}" in caixa
     assert "KOMA_THEME_CHANGED_EVENT" in preferences
-    assert "nextKomaTheme" in sidebars
-    assert "persistKomaTheme" in sidebars
+    assert sidebars.count("<CashierSidebarFooter") == 2
+    assert "nextKomaTheme" in footer
+    assert "persistKomaTheme" in footer
     assert "readKomaTheme" in preferences
     assert "type KomaTheme" in preferences
     assert "useState<KomaTheme>(() => readKomaTheme())" in preferences
 
     # Desktop expandido, desktop recolhido e mobile usam a mesma operação, que
     # persiste e aplica o tema antes de sincronizar os outros shells.
-    assert sidebars.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 3
-    assert 'className="cashier-sidebar__compact-theme"' in sidebars
-    assert "localStorage.setItem('@koma:theme'" not in caixa + preferences + sidebars
-    assert "new Event('koma_theme_changed')" not in caixa + preferences + sidebars
+    # Expanded desktop and mobile share one rendered control; compact desktop
+    # has its own presentation, still using the exact same theme operation.
+    assert footer.count("setTheme(persistKomaTheme(nextKomaTheme(theme)))") == 2
+    assert "!mobile &&" in footer
+    assert 'className="cashier-sidebar__compact-theme"' in footer
+    assert "localStorage.setItem('@koma:theme'" not in caixa + preferences + sidebars + footer
+    assert "new Event('koma_theme_changed')" not in caixa + preferences + sidebars + footer
 
     storage_index = theme.index("storage.setItem(KOMA_THEME_STORAGE_KEY, theme);")
     apply_index = theme.index("applyKomaTheme(theme);", storage_index)

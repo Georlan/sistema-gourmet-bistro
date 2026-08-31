@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Distribuidor,
   EntradaEstoque,
@@ -7,6 +7,8 @@ import {
   MovimentacaoEstoque,
   SessaoContagemEstoque,
 } from '../../../types';
+
+import { inventoryResources, inventoryResourcesForTab, type InventoryResource } from './inventoryResources';
 
 type BoundaryProps = {
   apiBaseUrl: string;
@@ -57,97 +59,48 @@ export function useCashierInventoryData({ apiBaseUrl, authHeaders, activeTab, ac
     return { low, negative, activeProducts, linkedProducts, inventoryValue, drafts };
   }, [estoqueInsumos, fichasTecnicas, sessoesContagemEstoque]);
 
-  const refreshEstoqueData = () => {
-    fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setEstoqueInsumos(data);
-      })
-      .catch((err) => console.error('Error fetching insumos:', err));
+  const setters = useMemo(() => ({
+    insumos: setEstoqueInsumos,
+    notas: setNotasEntrada,
+    distribuidores: setDistribuidores,
+    entradas: setEntradasEstoque,
+    movimentacoes: setMovimentacoesEstoque,
+    contagens: setSessoesContagemEstoque,
+    fichas: setFichasTecnicas,
+  }), []);
+  const requests = useRef(new Map<InventoryResource, AbortController>());
 
-    fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setDistribuidores(data);
-      })
-      .catch((err) => console.error('Error fetching distribuidores:', err));
-
-    fetch(`${apiBaseUrl}/estoque/fichas-tecnicas`, { headers: authHeaders })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setFichasTecnicas(data);
-      })
-      .catch((err) => console.error('Error fetching fichas tecnicas:', err));
-  };
+  const refreshInventory = useCallback(async (...resources: InventoryResource[]) => {
+    await Promise.all([...new Set(resources)].map(async (resource) => {
+      requests.current.get(resource)?.abort();
+      const controller = new AbortController();
+      requests.current.set(resource, controller);
+      try {
+        const response = await fetch(`${apiBaseUrl}/estoque/${inventoryResources[resource]}`, {
+          headers: authHeaders, signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`INVENTORY_HTTP_${response.status}`);
+        const data = await response.json();
+        if (!controller.signal.aborted && Array.isArray(data)) setters[resource](data);
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Error fetching inventory:', resource, error);
+      } finally {
+        if (requests.current.get(resource) === controller) requests.current.delete(resource);
+      }
+    }));
+  }, [apiBaseUrl, authHeaders, setters]);
 
   useEffect(() => {
-    if (activeTab === 'estoque') {
-      fetch(`${apiBaseUrl}/estoque/insumos`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setEstoqueInsumos(data);
-        })
-        .catch((err) => console.error('Error fetching insumos:', err));
+    if (activeTab === 'estoque') void refreshInventory(...inventoryResourcesForTab(activeSubTab));
+    return () => {
+      for (const controller of requests.current.values()) controller.abort();
+      requests.current.clear();
+    };
+  }, [activeTab, activeSubTab, refreshInventory]);
 
-      fetch(`${apiBaseUrl}/estoque/notas`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setNotasEntrada(data);
-        })
-        .catch((err) => console.error('Error fetching notas:', err));
-
-      fetch(`${apiBaseUrl}/estoque/distribuidores`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setDistribuidores(data);
-        })
-        .catch((err) => console.error('Error fetching distribuidores:', err));
-
-      fetch(`${apiBaseUrl}/estoque/entradas`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setEntradasEstoque(data);
-        })
-        .catch((err) => console.error('Error fetching entradas:', err));
-
-      fetch(`${apiBaseUrl}/estoque/movimentacoes`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setMovimentacoesEstoque(data);
-        })
-        .catch((err) => console.error('Error fetching movimentacoes:', err));
-
-      fetch(`${apiBaseUrl}/estoque/contagens`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setSessoesContagemEstoque(data);
-        })
-        .catch((err) => console.error('Error fetching contagens:', err));
-
-      fetch(`${apiBaseUrl}/estoque/fichas-tecnicas`, { headers: authHeaders })
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) setFichasTecnicas(data);
-        })
-        .catch((err) => console.error('Error fetching fichas tecnicas:', err));
-    }
-  }, [activeTab, activeSubTab, apiBaseUrl, authHeaders.Authorization]);
   return {
-    estoqueInsumos,
-    setEstoqueInsumos,
-    notasEntrada,
-    setNotasEntrada,
-    distribuidores,
-    setDistribuidores,
-    entradasEstoque,
-    setEntradasEstoque,
-    movimentacoesEstoque,
-    setMovimentacoesEstoque,
-    sessoesContagemEstoque,
-    setSessoesContagemEstoque,
-    fichasTecnicas,
-    setFichasTecnicas,
-    estoqueInsights,
-    refreshEstoqueData,
+    estoqueInsumos, notasEntrada, distribuidores, entradasEstoque,
+    movimentacoesEstoque, sessoesContagemEstoque, fichasTecnicas,
+    setFichasTecnicas, estoqueInsights, refreshInventory,
   };
 }

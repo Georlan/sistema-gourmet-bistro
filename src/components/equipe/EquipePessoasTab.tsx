@@ -16,6 +16,8 @@ import type { SystemUser } from '../../types';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { KomaEmptyState } from '../shared/KomaEmptyState';
 
+import { canonicalRoleSlug, ROLE_META } from './teamRoles';
+
 type TeamFilter = 'todos' | 'ativos' | 'convites';
 
 interface EquipePessoasTabProps {
@@ -25,25 +27,12 @@ interface EquipePessoasTabProps {
   onRemove: (userId: string) => Promise<void>;
 }
 
-const ROLE_ALIASES: Record<string, string> = {
-  operador_caixa: 'caixa',
-};
-
-const ROLE_META: Record<string, { label: string; description: string }> = {
-  admin: { label: 'Administrador', description: 'Acesso completo à gestão do restaurante.' },
-  gerente: { label: 'Gerente', description: 'Acompanha operação, caixa, relatórios e equipe.' },
-  caixa: { label: 'Operador de caixa', description: 'Opera vendas, recebimentos e rotinas do caixa.' },
-  garcom: { label: 'Garçom', description: 'Abre pedidos e acompanha o atendimento do salão.' },
-  atendente: { label: 'Atendente', description: 'Registra e acompanha pedidos da operação.' },
-  cozinha: { label: 'Cozinha', description: 'Acompanha o preparo dos itens.' },
-  motoboy: { label: 'Entregador', description: 'Acompanha somente as entregas atribuídas.' },
-};
 
 const INVITABLE_ROLES = ['garcom', 'caixa', 'gerente', 'motoboy'] as const;
 
 function normalizeRole(user: SystemUser): string {
   const rawRole = String(user.role || user.cargo || 'garcom').trim().toLowerCase();
-  return ROLE_ALIASES[rawRole] || rawRole;
+  return canonicalRoleSlug(rawRole);
 }
 
 function formatPhone(value?: string): string {

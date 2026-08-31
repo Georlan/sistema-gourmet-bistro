@@ -1,13 +1,13 @@
 import { useState } from 'react';
+import type { useCashierInventoryData } from './useCashierInventoryData';
 
-type BoundaryProps = {
+type BoundaryProps = Pick<ReturnType<typeof useCashierInventoryData>, 'refreshInventory'> & {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
-  refreshEstoqueData: () => void;
 };
 
 /** Owns ingredient drafts and save/adjust actions; retained across inventory navigation. */
-export function useCashierIngredientEditor({ apiBaseUrl, authHeaders, refreshEstoqueData }: BoundaryProps) {
+export function useCashierIngredientEditor({ apiBaseUrl, authHeaders, refreshInventory }: BoundaryProps) {
   const [showNewInsumoModal, setShowNewInsumoModal] = useState(false);
 
   const [showEditInsumoModal, setShowEditInsumoModal] = useState(false);
@@ -59,7 +59,7 @@ export function useCashierIngredientEditor({ apiBaseUrl, authHeaders, refreshEst
         alert(isNew ? 'Ingrediente cadastrado com sucesso!' : 'Ingrediente atualizado com sucesso!');
         setShowNewInsumoModal(false);
         setShowEditInsumoModal(false);
-        refreshEstoqueData();
+        void refreshInventory('insumos', 'fichas');
       } else {
         const err = await res.json();
         alert(err.detail || 'Erro ao salvar ingrediente.');
@@ -88,7 +88,7 @@ export function useCashierIngredientEditor({ apiBaseUrl, authHeaders, refreshEst
       if (res.ok) {
         alert('Ajuste de estoque realizado com sucesso!');
         setShowAjusteInsumoModal(false);
-        refreshEstoqueData();
+        void refreshInventory('insumos', 'fichas', 'movimentacoes');
       } else {
         const err = await res.json();
         alert(err.detail || 'Erro ao ajustar estoque.');

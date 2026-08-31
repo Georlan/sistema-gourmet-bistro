@@ -20,7 +20,7 @@ export interface CaixaPanelProps {
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
   catalogReady?: boolean;
-  onRefreshCategorias?: () => Promise<void>;
+  onRefreshCategorias: () => Promise<void>;
   restauranteConfig?: any;
   fetchError?: string | null;
   onOptimisticUpdateItemStatus?: (itemId: string | string[], newStatus: 'preparando' | 'pronto' | 'entregue') => void;
