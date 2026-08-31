@@ -62,5 +62,5 @@ KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4293 npm run test:e2e -- e2e/operational-app
   etapa própria, sem usar a ausência de um novo teste físico como bloqueio desta fase.
 - Maquininha: integração iniciada no repositório e ainda em desenvolvimento pelo
   usuário. Não terminar, habilitar ou redirecionar essa integração nesta refatoração.
-- Ampliação funcional do caixa: definir informações e ações desejadas em escopo
-  próprio; não confundir universalização do código com liberação de novas permissões.
+- Ampliação funcional do caixa: escopo de contexto e atalhos aprovado posteriormente,
+  junto da [universalização de mesas](koma-universalization.md). Não libera novas permissões.

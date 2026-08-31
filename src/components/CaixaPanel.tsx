@@ -678,53 +678,17 @@ export function CaixaPanel({
 
         {/* CONTENT AREA */}
         <main
-          className={clsx(
-            'cashier-main',
-            'min-w-0',
-            'min-h-0',
-            'flex-1',
-            'bg-koma-canvas',
-            'flex',
-            'flex-col',
-            'w-full',
-          )}
+          className={"cashier-main min-w-0 min-h-0 flex-1 bg-koma-canvas flex flex-col w-full"}
         >
           {/* Top header bar */}
           <header
-            className={clsx(
-              'cashier-topbar',
-              'h-14',
-              'border-b',
-              'border-koma-border',
-              'bg-koma-panel',
-              'px-4',
-              'sm:px-6',
-              'flex',
-              'items-center',
-              'justify-between',
-              'shrink-0',
-            )}
+            className={"cashier-topbar h-14 border-b border-koma-border bg-koma-panel px-4 sm:px-6 flex items-center justify-between shrink-0"}
           >
-            <div className={clsx('flex', 'items-center', 'gap-2', 'truncate')}>
+            <div className={"flex items-center gap-2 truncate"}>
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className={clsx(
-                  'lg:hidden',
-                  'p-1.5',
-                  'bg-koma-raised',
-                  'hover:bg-koma-card',
-                  'text-emerald-700',
-                  'dark:text-emerald-400',
-                  'rounded-xl',
-                  'border',
-                  'border-koma-border',
-                  'flex',
-                  'items-center',
-                  'justify-center',
-                  'cursor-pointer',
-                  'shrink-0',
-                )}
+                className={"lg:hidden p-1.5 bg-koma-raised hover:bg-koma-card text-emerald-700 dark:text-emerald-400 rounded-xl border border-koma-border flex items-center justify-center cursor-pointer shrink-0"}
                 title="Abrir Menu do Caixa"
                 aria-label="Abrir menu principal"
                 aria-controls="mobile-caixa-sidebar"
@@ -739,15 +703,7 @@ export function CaixaPanel({
                 aria-label="Recolher ou expandir menu"
               />
               <h2
-                className={clsx(
-                  'font-serif',
-                  'font-bold',
-                  'text-xs',
-                  'sm:text-sm',
-                  'tracking-tight',
-                  'text-koma-foreground',
-                  'truncate',
-                )}
+                className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}
               >
                 {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
                 {activeTab === 'operacao' && 'Vendas'}
@@ -770,7 +726,7 @@ export function CaixaPanel({
             </div>
 
             {/* Botão MODO PDV / FULLSCREEN */}
-            <div className={clsx('flex', 'items-center', 'gap-2', 'shrink-0')}>
+            <div className={"flex items-center gap-2 shrink-0"}>
               <button
                 type="button"
                 onClick={toggleFullscreen}
@@ -787,7 +743,7 @@ export function CaixaPanel({
                 id="btn-modo-pdv-fullscreen"
               >
                 {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                <span className={clsx('hidden', 'sm:inline')}>
+                <span className={"hidden sm:inline"}>
                   {isFullscreen ? 'Sair da Tela Cheia' : 'Modo PDV'}
                 </span>
               </button>
@@ -796,20 +752,7 @@ export function CaixaPanel({
 
           {/* Sub-tabs Navigation Bar */}
           <div
-            className={clsx(
-              'cashier-subnav',
-              'bg-koma-panel/80',
-              'backdrop-blur-md',
-              'border-b',
-              'border-koma-border',
-              'px-6',
-              'py-1.5',
-              'flex',
-              'gap-2',
-              'shrink-0',
-              'overflow-x-auto',
-              'scrollbar-none',
-            )}
+            className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}
           >
             {activeTab === 'operacao' &&
               [
@@ -991,60 +934,27 @@ export function CaixaPanel({
           </div>
 
           {/* Dynamic Inner views */}
-          <div className={clsx('cashier-content', 'min-w-0', 'min-h-0', 'flex-1', 'p-5', 'relative')}>
+          <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
             {/* CASHIER CLOSED WARNING BANNER */}
             {turno?.status !== 'aberto' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div
-                className={clsx(
-                  'absolute',
-                  'inset-0',
-                  'bg-black/80',
-                  'backdrop-blur-xs',
-                  'z-30',
-                  'flex',
-                  'flex-col',
-                  'items-center',
-                  'justify-center',
-                  'text-center',
-                  'p-8',
-                  'space-y-4',
-                )}
+                className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}
               >
                 <div
-                  className={clsx(
-                    'p-4',
-                    'bg-koma-panel',
-                    'rounded-full',
-                    'border',
-                    'border-amber-500/20',
-                    'text-amber-500',
-                  )}
+                  className={"p-4 bg-koma-panel rounded-full border border-amber-500/20 text-amber-500"}
                 >
                   <Lock size={32} />
                 </div>
-                <h3 className={clsx('font-serif', 'text-base', 'font-bold', 'text-koma-foreground')}>
+                <h3 className={"font-serif text-base font-bold text-koma-foreground"}>
                   Turno de Caixa Fechado
                 </h3>
-                <p className={clsx('max-w-md', 'text-[10px]', 'text-koma-subtle', 'leading-relaxed')}>
+                <p className={"max-w-md text-[10px] text-koma-subtle leading-relaxed"}>
                   Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as
                   telas de vendas e comandas.
                 </p>
                 <button
                   onClick={() => setShowAbrirModal(true)}
-                  className={clsx(
-                    'px-5',
-                    'py-2.5',
-                    'bg-emerald-600',
-                    'hover:bg-emerald-700',
-                    'text-white',
-                    'font-bold',
-                    'rounded-xl',
-                    'transition-all',
-                    'cursor-pointer',
-                    'text-[10px]',
-                    'uppercase',
-                    'tracking-wider',
-                  )}
+                  className={"px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"}
                 >
                   Abrir Caixa Agora
                 </button>
@@ -1118,6 +1028,7 @@ export function CaixaPanel({
                 actions={{
                   receiveTable: handleReceiveSalonTable,
                   inspectTable: handleInspectSalonTable,
+                  prepareTransfer: tableOrders => handleInspectSalonTable(tableOrders, true),
                   openTableOrder: handleOpenSalonTableOrder,
                 }}
               />
@@ -1275,7 +1186,7 @@ export function CaixaPanel({
 
             {/* MÓDULO CAIXA REORGANIZADO */}
             {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
-              <div className={clsx('orders-workspace', 'space-y-4')}>
+              <div className={"orders-workspace space-y-4"}>
                 <OperationalBanner
                   id="cash-heading"
                   eyebrow="CAIXA"
@@ -1348,7 +1259,7 @@ export function CaixaPanel({
 
             {activeTab === 'financeiro' &&
               (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
-                <div className={clsx('orders-workspace', 'space-y-4')}>
+                <div className={"orders-workspace space-y-4"}>
                   <OperationalBanner
                     id="cash-closing-heading"
                     eyebrow="CAIXA"

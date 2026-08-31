@@ -2,10 +2,10 @@ import type { Order, OrderItem, Table } from '../types';
 import { normalizeOperationalTimestamp } from './operationalTime';
 import {
   deriveFinancialState, deriveOperationalElapsedTime, deriveProductionState,
-  deriveTableOperationalState, getOrderItems, isActiveOperationalOrder,
-  type OperationalTimestampSource, type PendingPaymentReference,
+  getOrderItems, type OperationalTimestampSource,
 } from './operationalState';
 import { getOrderDisplayNumber } from './orderIdentity';
+export { projectCashierSalonTables } from './cashierSalonProjection';
 /** Cashier delivery column membership, not a payment or item-status inference. */
 export function projectCashierDeliveryState(status?: string, modalidade?: string) {
   return {
@@ -68,38 +68,6 @@ export function projectCashierTableSlices(orders: Order[], salonTables: Table[],
     tableOrdersInProduction: projectTableProduction(orders, salonTables, now),
     tableOrdersReady: projectTableClosing(orders, salonTables, now),
   };
-}
-
-/** Salon card scope/visibility and display consumption are distinct from slices. */
-export function projectCashierSalonTables(
-  salonTables: Table[],
-  orders: Order[],
-  pendingPayments: readonly PendingPaymentReference[],
-  now: number,
-) {
-  return salonTables.map(table => {
-    const mergedIntoMesaId = orders.find(order => order.mesaOrigemId === table.id)?.mesaId || null;
-    const isMerged = mergedIntoMesaId !== null;
-    const displayMesaId = isMerged ? mergedIntoMesaId : table.id;
-    const tableOrders = orders.filter(order => order.mesaId === displayMesaId && isActiveOperationalOrder(order));
-    const operational = deriveTableOperationalState({
-      table, orders: tableOrders, pendingPayments, mergedIntoMesaId, now,
-    });
-    // Preserve existing Salão display consumption, not a new financial balance.
-    const total = tableOrders.reduce((sum, order) => (
-      sum + (order.itens || []).reduce((itemsTotal, item) => itemsTotal + Number(item.preco || 0), 0)
-    ), 0);
-    return {
-      table,
-      displayMesaId,
-      tableOrders,
-      isMerged,
-      isOccupied: operational.occupancy === 'IN_SERVICE',
-      hasPendingPayment: operational.hasPendingPayment,
-      operational,
-      total,
-    };
-  });
 }
 
 export function getCashierHumanOrderNumber(order?: CashierNumberSource | null): string {

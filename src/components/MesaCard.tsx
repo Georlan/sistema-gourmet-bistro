@@ -5,7 +5,7 @@
 import React from 'react';
 import type { Table, Order } from '../types';
 import { getTableTotal } from '../domain';
-import { deriveTableOperationalState } from '../domain/operationalState';
+import { deriveTableOperationalState, type TableOperationalProjection } from '../domain/operationalState';
 import { SharedTableCard } from './shared/SharedTableCard';
 
 interface MesaCardProps {
@@ -20,13 +20,15 @@ interface MesaCardProps {
   mergedSources?: number[];
   mergedIntoMesaId?: number | null;
   showOperationalStatus?: boolean;
+  operational?: TableOperationalProjection;
 }
 
 /** Waiter variant owns only its navigation callback, not cashier actions. */
 export const MesaCard = React.memo<MesaCardProps>(({
-  table, orders, currentTime, onClick, hasPendingPayment = false, mergedIntoMesaId = null, ...view
+  table, orders, currentTime, onClick, hasPendingPayment = false, mergedIntoMesaId = null,
+  operational: projectedState, ...view
 }) => {
-  const operational = deriveTableOperationalState({
+  const operational = projectedState ?? deriveTableOperationalState({
     table, orders, hasPendingPayment, mergedIntoMesaId, now: currentTime,
   });
   return <SharedTableCard

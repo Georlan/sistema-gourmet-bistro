@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
   formatCashierOldestAge as formatOldestAge,
-  projectCashierSalonTables,
 } from '../../../domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import type { Order, Table } from '../../../types';
 
 type BoundaryProps = {

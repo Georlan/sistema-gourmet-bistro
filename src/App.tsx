@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import clsx from 'clsx';
+
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
@@ -20,7 +20,7 @@ import { MesasView } from './components/mesas/MesasView';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { RESTAURANT_CONFIG } from './data';
-import { deriveTableOperationalState } from './domain/operationalState';
+import { countWaiterSalonTables, projectWaiterSalonTables } from './domain/waiterSalonProjection';
 import { AppRole, AppSettings, CaixaTurnoResumo } from './types';
 import { authFetch, authRequestErrorMessage } from './utils/authRequest';
 import { getOperatorSession, saveOperatorSession } from './utils/authSession';
@@ -1464,28 +1464,15 @@ export default function App() {
     }
   };
 
-  // Count active tables by state
+  const waiterTableRows = useMemo(
+    () => projectWaiterSalonTables(salonTables, orders, pagamentosPendentes, currentTime),
+    [salonTables, orders, pagamentosPendentes, currentTime],
+  );
+  // Drawer keeps its historical exclusive counts; the salon filters may overlap.
   const tableCounts = React.useMemo(() => {
-    let libre = 0;
-    let ocupada = 0;
-    let pronto = 0;
-
-    (salonTables || []).forEach(table => {
-      const tableOrders = (orders || []).filter(o => o.mesaId === table.id);
-      const operationalState = deriveTableOperationalState({ table, orders: tableOrders, now: currentTime });
-      if (operationalState.occupancy === 'FREE') {
-        libre++;
-      } else {
-        if (operationalState.production.hasReadyItems) {
-          pronto++;
-        } else {
-          ocupada++;
-        }
-      }
-    });
-
-    return { libre, ocupada, pronto };
-  }, [orders, salonTables, currentTime]);
+    const counts = countWaiterSalonTables(waiterTableRows);
+    return { libre: counts.livres, ocupada: counts.ocupadas - counts.prontas, pronto: counts.prontas };
+  }, [waiterTableRows]);
 
   const selectedTable = useMemo(() => salonTables.find(t => t.id === selectedTableId), [salonTables, selectedTableId]);
   const selectedTableOrders = useMemo(
@@ -1660,6 +1647,7 @@ export default function App() {
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
           <MesasView
+            rows={waiterTableRows}
             salonTables={salonTables}
             orders={orders}
             draftItemsMap={drafts}
@@ -1677,9 +1665,9 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className={clsx('bg-koma-page', 'text-koma-muted', 'border-t', 'border-white/[0.06]', 'py-4', 'text-center', 'text-xs', 'shrink-0', 'font-sans')}>
-        <div className={clsx('max-w-[1680px]', 'mx-auto', 'px-4', 'flex', 'items-center', 'justify-center', 'gap-2')}>
-          <p className={clsx('font-serif', 'text-sm', 'text-emerald-700 dark:text-emerald-400', 'font-medium')}>{restaurantName}</p>
+      <footer className={"bg-koma-page text-koma-muted border-t border-white/[0.06] py-4 text-center text-xs shrink-0 font-sans"}>
+        <div className={"max-w-[1680px] mx-auto px-4 flex items-center justify-center gap-2"}>
+          <p className={"font-serif text-sm text-emerald-700 dark:text-emerald-400 font-medium"}>{restaurantName}</p>
           <span className="h-1 w-1 rounded-full bg-zinc-700" />
           <p className="text-[10px]">Operação do salão</p>
         </div>
