@@ -92,6 +92,7 @@ def test_reprint_uses_same_canonical_layout_with_explicit_marker():
         numero_pedido="205",
         tipo_pedido="Retirada",
         mesa="BALCAO",
+        horario="18:56",
         garcom_nome="Admin",
         itens=[_item("010", "Água de coco", "NENHUM")],
     )
@@ -100,6 +101,7 @@ def test_reprint_uses_same_canonical_layout_with_explicit_marker():
         numero_pedido=base.numero_pedido,
         tipo_pedido=base.tipo_pedido,
         mesa=base.mesa,
+        horario=base.horario,
         garcom_nome=base.garcom_nome,
         itens=base.itens,
         is_reprint=True,
