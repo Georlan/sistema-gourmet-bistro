@@ -6,7 +6,8 @@ from typing import Optional
 from sqlalchemy.orm import Session, joinedload
 
 from ...domain.printing import OrderPrintData, PrintDocumentService, PrintItem
-from ...models import Comanda, Item, Lancamento, PrintJob
+from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
+from ...printer_service import printer_service
 from ...services.printing import (
     PrintingRequestError,
     enqueue_cash_closing_receipt,
@@ -47,6 +48,11 @@ class PrintingApplicationService:
 
             lancamento, comanda, source_items = order_context
             if engine == PrintEngineType.DINE_IN_ORDER:
+                if intent.action == PrintAction.DISPATCH:
+                    raise UniversalPrintingError(
+                        "Pedido local não possui impressão de despacho",
+                        status_code=422,
+                    )
                 return cls._run_dine_in_order_engine(
                     db,
                     intent,
@@ -58,6 +64,17 @@ class PrintingApplicationService:
                 PrintEngineType.PICKUP_ORDER,
                 PrintEngineType.DELIVERY_ORDER,
             }:
+                if intent.action == PrintAction.DISPATCH:
+                    if engine != PrintEngineType.DELIVERY_ORDER:
+                        raise UniversalPrintingError(
+                            "Somente delivery possui impressão de despacho",
+                            status_code=422,
+                        )
+                    return cls._run_delivery_dispatch_engine(
+                        db,
+                        intent,
+                        comanda,
+                    )
                 return cls._run_remote_order_engine(
                     db,
                     intent,
@@ -282,6 +299,74 @@ class PrintingApplicationService:
 
         if jobs:
             cls._mark_items_printed(active_items)
+        return jobs
+
+    @classmethod
+    def _run_delivery_dispatch_engine(
+        cls,
+        db: Session,
+        intent: PrintIntent,
+        comanda: Comanda,
+    ) -> list[PrintJob]:
+        """Centraliza as vias de despacho sem alterar o layout físico atual.
+
+        Os renderers legados de cozinha/motoboy continuam temporariamente atrás
+        do Core. Na etapa visual serão substituídos pelo modelo canônico único,
+        sem que a rota de pedidos volte a conhecer esses detalhes.
+        """
+        courier_name = str(intent.courier_name or "").strip()
+        if not courier_name:
+            raise UniversalPrintingError(
+                "Nome do motoboy é obrigatório para impressão de despacho",
+                status_code=422,
+            )
+
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == intent.restaurant_id,
+        ).first()
+        unified = bool(config.unificar_vias_delivery) if config else False
+
+        payloads: list[tuple[str, str]]
+        if unified:
+            payloads = [
+                (
+                    "unico",
+                    printer_service.generate_delivery_unified_ticket(
+                        comanda,
+                        courier_name,
+                    ),
+                )
+            ]
+        else:
+            payloads = [
+                (
+                    "cozinha",
+                    printer_service.generate_delivery_kitchen_ticket(comanda),
+                ),
+                (
+                    "motoboy",
+                    printer_service.generate_delivery_motoboy_ticket(
+                        comanda,
+                        courier_name,
+                    ),
+                ),
+            ]
+
+        jobs: list[PrintJob] = []
+        for part, payload in payloads:
+            base_key = intent.idempotency_key or f"universal:despacho:{comanda.id}"
+            job = enqueue_print_job(
+                db,
+                restaurante_id=intent.restaurant_id,
+                document_type="entrega",
+                destination="ENTREGA",
+                source_type="despacho",
+                source_id=comanda.id,
+                payload_text=payload,
+                idempotency_key=f"{base_key}:{part}",
+            )
+            if job is not None:
+                jobs.append(job)
         return jobs
 
     @staticmethod
