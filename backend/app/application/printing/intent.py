@@ -18,11 +18,18 @@ class PrintAction(str, Enum):
     CLOSING = "fechamento"
 
 
+class PrintTrigger(str, Enum):
+    """Distingue política automática da solicitação explícita do operador."""
+
+    MANUAL = "manual"
+    AUTOMATIC = "automatico"
+
+
 @dataclass(frozen=True)
 class PrintIntent:
-    """Pedido canônico de impressão independente da rota que o originou.
+    """Comando canônico de impressão independente da borda que o originou.
 
-    A borda informa somente a origem e a intenção. Política, snapshot,
+    A borda informa apenas origem, ação e gatilho. Motor, política, snapshot,
     formatter, destino físico e PrintJob pertencem ao Core de Impressão.
     """
 
@@ -30,6 +37,7 @@ class PrintIntent:
     source_type: PrintSourceType
     source_id: str
     action: PrintAction = PrintAction.PRINT
+    trigger: PrintTrigger = PrintTrigger.MANUAL
     table_id: Optional[int] = None
     values_only: bool = False
     requested_by: Optional[str] = None
