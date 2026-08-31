@@ -13,7 +13,7 @@ from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ..database import current_restaurante_id, get_db, require_tenant_id
-from ..models import Comanda, ConfiguracaoRestaurante, Motoboy, Restaurante, Usuario
+from ..models import Comanda, Motoboy, Restaurante, Usuario
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
@@ -47,7 +47,6 @@ from .orders_core import (
     gerar_novo_numero_pedido,
     lancar_itens,
     logger,
-    print_in_background,
     router,
 )
 
@@ -174,8 +173,6 @@ def atualizar_status_delivery(
                 item.status = "pronto"
 
     if transition.first_accept:
-        # A state machine apenas declara a intenção. Regra NENHUM, modalidade,
-        # formatter, destino e PrintJob pertencem ao Core Universal de Impressão.
         try:
             PrintingApplicationService.request_print(
                 db,
@@ -190,8 +187,6 @@ def atualizar_status_delivery(
                 ),
             )
         except UniversalPrintingError as print_err:
-            # Impressão não participa da decisão de aceitar o pedido; falhas ficam
-            # observáveis na aplicação sem desfazer estoque/state machine.
             logger.warning(
                 "Falha no Core Universal de Impressão ao aceitar pedido %s: %s",
                 comanda.id,
@@ -205,8 +200,6 @@ def atualizar_status_delivery(
                 item.status = "cancelado"
                 item.cancelado_por = current_user.id
                 itens_cancelados.append(item)
-        # Compatibilidade de rollout: pedidos pendentes antigos podem ter sido
-        # baixados antes da 2B. O helper só estorna movimentos que realmente existem.
         estornar_estoque_dos_itens(
             db,
             itens_cancelados,
@@ -291,7 +284,6 @@ def despachar_delivery(
     status_anterior = normalize_order_status(comanda.delivery_status)
     acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid)
 
-    # Executa a transição canônica, vinculação de motoboy e emissão na Outbox atomicamente
     try:
         OrderApplicationService.dispatch_order(
             db=db,
@@ -308,49 +300,26 @@ def despachar_delivery(
     except OrderValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    # TODO universal-printing: despacho ainda usa o renderer legado de entrega.
-    # É o último produtor operacional conhecido fora do Core e fica isolado até
-    # o motor de DELIVERY_DISPATCH preservar exatamente as duas vias atuais.
     try:
-        from ..printer_service import printer_service
-
-        config = db.query(ConfiguracaoRestaurante).filter(
-            ConfiguracaoRestaurante.restaurante_id == rid,
-        ).first()
-        unificar = bool(config.unificar_vias_delivery) if config else False
-        if unificar:
-            unified_text = printer_service.generate_delivery_unified_ticket(
-                comanda,
-                motoboy.nome,
-            )
-            background_tasks.add_task(
-                print_in_background,
-                "delivery_unico",
-                unified_text,
-                restaurante_id=rid,
-            )
-        else:
-            kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
-            motoboy_text = printer_service.generate_delivery_motoboy_ticket(
-                comanda,
-                motoboy.nome,
-            )
-            background_tasks.add_task(
-                print_in_background,
-                "delivery_cozinha",
-                kitchen_text,
-                restaurante_id=rid,
-            )
-            background_tasks.add_task(
-                print_in_background,
-                "delivery_motoboy",
-                motoboy_text,
-                restaurante_id=rid,
-            )
-    except Exception:
-        # Impressão de despacho é acessória: a transição operacional continua
-        # registrada e o sistema de PrintJob/reimpressão pode recuperar a via.
-        logger.exception("Falha ao preparar via de despacho do pedido %s", comanda.id)
+        PrintingApplicationService.request_print(
+            db,
+            PrintIntent(
+                restaurant_id=rid,
+                source_type=PrintSourceType.ORDER,
+                source_id=comanda.id,
+                action=PrintAction.DISPATCH,
+                trigger=PrintTrigger.AUTOMATIC,
+                requested_by=current_user.nome,
+                courier_name=motoboy.nome,
+                idempotency_key=f"despacho:pedido:{comanda.id}",
+            ),
+        )
+    except UniversalPrintingError as print_err:
+        logger.warning(
+            "Falha no Core Universal de Impressão ao despachar pedido %s: %s",
+            comanda.id,
+            print_err,
+        )
 
     db.commit()
     db.refresh(comanda)
