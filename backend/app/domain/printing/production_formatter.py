@@ -28,6 +28,36 @@ def _format_curr(value: float) -> str:
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _item_left_text(item, right: str, width: int) -> str:
+    """Prioriza nome legível; código só entra quando não rouba o nome do produto."""
+    quantity = f"{item.quantidade} x "
+    name = str(item.nome or "ITEM").strip().upper()
+    code = str(item.codigo or "").strip()
+    max_left = max(width - len(right.strip()) - 1, 1)
+
+    # Alguns cadastros antigos já guardam o código no começo do próprio nome.
+    # Não repetir `006 - 006 - BURGUER...` no papel.
+    normalized_name = name.casefold()
+    code_prefixes = (
+        f"{code} -".casefold(),
+        f"{code}-".casefold(),
+        f"{code} ".casefold(),
+    ) if code else ()
+    code_already_in_name = bool(
+        code and any(normalized_name.startswith(prefix) for prefix in code_prefixes)
+    )
+
+    code_part = "" if code_already_in_name or not code else f"{code} - "
+    with_code = f"{quantity}{code_part}{name}".strip()
+    without_code = f"{quantity}{name}".strip()
+
+    if len(with_code) <= max_left:
+        return with_code
+    if len(without_code) <= max_left:
+        return without_code
+    return without_code
+
+
 def format_production_document(
     data: OrderPrintData,
     width: PaperWidth = PaperWidth.WIDTH_80MM,
@@ -104,9 +134,8 @@ def format_production_document(
             lines.append(client_name)
 
         for item in group_equivalent_items(client_items, match_observations=True):
-            code_str = f"{item.codigo} - " if item.codigo else ""
-            left = f"{item.quantidade} x {code_str}{item.nome.upper()}".strip()
             right = f"R$ {_format_curr(item.total)}"
+            left = _item_left_text(item, right, w)
             lines.append(_justify(left, right, w))
             observation = normalize_observation(item.observacao)
             if observation:
