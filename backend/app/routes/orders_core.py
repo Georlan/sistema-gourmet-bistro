@@ -3,7 +3,6 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Any
 import logging
 
@@ -14,7 +13,6 @@ from ..models import (
     Comanda,
     Mesa,
     Usuario,
-    Produto,
     Lancamento,
     Item,
     ActivityLog,
@@ -22,11 +20,10 @@ from ..models import (
     MotoboyTokenAtivo,
     ConfiguracaoRestaurante,
     Restaurante,
-    CaixaTurno,
 )
 from ..schemas import (
     ComandaResponse, ComandaDetail, ComandaCreate,
-    LancamentoResponse, LancamentoCreate, ItemResponse, ItemUpdate,
+    LancamentoCreate, ItemResponse, ItemUpdate,
     MotoboyCreate, MotoboyResponse, VendaDiretaCreate
 )
 from ..security import (
@@ -38,27 +35,15 @@ from ..security import (
     motoboy_rate_limiter,
 )
 from ..websocket_manager import manager
-from ..services.whatsapp import enviar_notificacao_whatsapp_task
-from ..services.clientes import (
-    buscar_cliente_por_id,
-    cadastrar_ou_atualizar_cliente,
-    normalizar_telefone_cliente,
-)
-from ..application.orders.service import OrderApplicationService
-from ..application.orders.commands import DispatchOrderCommand
 from ..services.order_read_projection import project_check_details
-from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..services.printing import PrintingRequestError, enqueue_table_receipt
-from ..services.capabilities import has_capability
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ..services.atendimentos import (
     ensure_atendimento_for_comanda,
-    ensure_launch_identity,
 )
 from ..subscription import subscription_has_printing
 from ..waiter_permissions import (
     require_waiter_permission,
-    waiter_permission_enabled,
 )
 from ..adapters.orders.pos_adapter import PosAdapter
 
@@ -587,7 +572,6 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     return nova_comanda
 
 
-@router.post("/venda-direta", response_model=ComandaDetail, status_code=status.HTTP_201_CREATED)
 async def criar_venda_direta(
     venda_in: VendaDiretaCreate,
     background_tasks: BackgroundTasks,
@@ -630,7 +614,6 @@ def pedir_conta(
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
-@router.post("/{comanda_id}/lancamentos", response_model=LancamentoResponse, status_code=status.HTTP_201_CREATED)
 async def lancar_itens(
     comanda_id: str,
     lancamento_in: LancamentoCreate,
@@ -731,49 +714,6 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return [comanda_origem, nova_comanda]
 
-@router.post("/{comanda_id}/transferir/{nova_mesa_id}", response_model=ComandaResponse)
-def transferir_comanda(comanda_id: str, nova_mesa_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    """
-    Transfere uma comanda inteira para outra mesa.
-    """
-    require_waiter_permission(
-        db,
-        current_user,
-        "perm_garcom_transferir_mesa",
-    )
-
-    # 1. Validar comanda
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
-    if not comanda:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Comanda não encontrada"
-        )
-    if comanda.fechada:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível transferir uma comanda fechada"
-        )
-
-    # 2. Validar mesa de destino
-    nova_mesa = db.query(Mesa).filter(Mesa.id == nova_mesa_id).first()
-    if not nova_mesa:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Mesa de destino {nova_mesa_id} não encontrada"
-        )
-
-    # 3. Atualizar mesa_id, salvar a mesa anterior em mesa_transferida_de e limpar a mesclagem
-    comanda.mesa_transferida_de = comanda.mesa_id
-    comanda.mesa_id = nova_mesa_id
-    comanda.mesa_origem_id = None  # Libera a mesclagem!
-    db.commit()
-    db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    return comanda
-
-
-
 @router.put("/{comanda_id}/fechar", response_model=ComandaResponse)
 def fechar_comanda(
     comanda_id: str,
@@ -864,43 +804,6 @@ def fechar_comanda(
             }, rest_id)
     return comanda
 
-@router.put("/{comanda_id}/reabrir", response_model=ComandaResponse)
-def reabrir_comanda(
-    comanda_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(require_permission("comandas:reabrir"))
-):
-    """
-    Reabre uma comanda fechada (requer autenticação do garçom).
-    """
-
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
-    if not comanda:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Comanda não encontrada"
-        )
-
-    if not comanda.fechada:
-        return comanda
-
-    comanda.fechada = False
-    comanda.fechado_em = None
-    
-    # Audit log
-    audit = ActivityLog(
-        restaurante_id=current_restaurante_id.get(),
-        garcom_id=current_garcom.id,
-        action="REOPEN_COMANDA",
-        details=f"Comanda ID {comanda_id} reaberta."
-    )
-    db.add(audit)
-    db.commit()
-    db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    return comanda
-
 # ----------------- ITEM CANCELLATION ENDPOINT -----------------
 
 @router.put("/itens/{item_id}/cancelar", response_model=ItemResponse)
@@ -961,79 +864,6 @@ def cancelar_item(
         details=f"Item ID {item_id} (Produto {item.produto_id}) cancelado na comanda {item.comanda_id}."
     )
     db.add(audit)
-    db.commit()
-    db.refresh(item)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    return item
-
-@router.post("/itens/{item_id}/transferir/{nova_mesa_id}", response_model=ItemResponse)
-def transferir_item(
-    item_id: str,
-    nova_mesa_id: int,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
-):
-    """
-    Transfere um item individual para outra mesa.
-    Se a mesa de destino já possuir uma comanda aberta, associa o item a ela.
-    Caso contrário, abre uma nova comanda na mesa de destino e associa o item a ela.
-    """
-    require_waiter_permission(
-        db,
-        current_user,
-        "perm_garcom_transferir_item",
-    )
-
-    # 1. Buscar item
-    item = db.query(Item).filter(Item.id == item_id).first()
-    if not item:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Item não encontrado"
-        )
-    if item.status == "cancelado":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Não é possível transferir um item cancelado"
-        )
-
-    # 2. Validar mesa de destino
-    nova_mesa = db.query(Mesa).filter(Mesa.id == nova_mesa_id).first()
-    if not nova_mesa:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Mesa de destino {nova_mesa_id} não encontrada"
-        )
-
-    # 3. Buscar ou criar comanda aberta na mesa de destino
-    comanda_destino = db.query(Comanda).filter(
-        Comanda.mesa_id == nova_mesa_id,
-        Comanda.fechada == False
-    ).first()
-
-    if not comanda_destino:
-        comanda_origem = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
-        garcom_id = comanda_origem.garcom_id if comanda_origem else "g-01"
-        
-        numero_pedido = gerar_novo_numero_pedido(db)
-        
-        comanda_destino = Comanda(
-            id=f"c-{uuid.uuid4().hex[:8]}",
-            restaurante_id=current_restaurante_id.get(),
-            mesa_id=nova_mesa_id,
-            garcom_id=garcom_id,
-            tipo=comanda_origem.tipo if comanda_origem else "Consumo no Local",
-            identificador=None,
-            numero_pedido=numero_pedido,
-            fechada=False,
-            criado_em=datetime.datetime.now(datetime.timezone.utc)
-        )
-        db.add(comanda_destino)
-        db.flush()
-
-    # 4. Atualizar comanda_id
-    item.comanda_id = comanda_destino.id
     db.commit()
     db.refresh(item)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
@@ -1187,7 +1017,6 @@ def update_item_status(
 
 
 
-@router.post("/lancamentos/{lancamento_id}/reimprimir", status_code=status.HTTP_200_OK)
 def reimprimir_lancamento_cozinha(
     lancamento_id: str,
     background_tasks: BackgroundTasks,
@@ -1402,187 +1231,6 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
     ).all()
 
 
-@router.put("/{comanda_id}/delivery/status", response_model=ComandaResponse)
-def atualizar_status_delivery(
-    comanda_id: str,
-    status_novo: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status"))
-):
-    """
-    Atualiza o status de entrega do delivery.
-    """
-    status_normalizado = status_novo.strip().lower()
-    status_validos = {"pendente", "producao", "pronto", "transito", "finalizado", "recusado"}
-    if status_normalizado not in status_validos:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Status inválido. Use um de: {', '.join(sorted(status_validos))}"
-        )
-
-    rid = require_tenant_id()
-    comanda = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == rid,
-            Comanda.id == comanda_id,
-        )
-        .with_for_update()
-        .first()
-    )
-    if not comanda:
-        raise HTTPException(status_code=404, detail="Comanda não encontrada")
-
-    if comanda.tipo not in {"Delivery", "Entrega", "Retirada"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A comanda informada não é um pedido online de delivery ou retirada."
-        )
-
-    status_anterior = comanda.delivery_status
-    if status_normalizado == "producao" and status_anterior != "producao":
-        require_open_cash_shift(db, rid)
-    comanda.delivery_status = status_normalizado
-    for lanc in (comanda.lancamentos or []):
-        if status_normalizado in {"pendente", "producao", "pronto", "finalizado", "recusado", "cancelado"}:
-            lanc.status = status_normalizado
-        elif status_normalizado == "transito":
-            lanc.status = "pronto"
-    if status_normalizado in {"pronto", "transito", "finalizado"}:
-        for item in comanda.itens:
-            if item.status == "preparando":
-                item.status = "pronto"
-    if status_normalizado == "producao" and status_anterior != "producao":
-        enqueue_initial_production_for_order(db, comanda)
-
-    if status_normalizado == "recusado":
-        itens_cancelados = []
-        for item in comanda.itens:
-            if item.status != "cancelado":
-                item.status = "cancelado"
-                item.cancelado_por = current_user.id
-                itens_cancelados.append(item)
-        estornar_estoque_dos_itens(db, itens_cancelados, usuario_id=current_user.id)
-        comanda.fechada = True
-        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-
-    db.commit()
-    db.refresh(comanda)
-    _agendar_notificacao_whatsapp_status(
-        background_tasks,
-        db,
-        comanda,
-        status_anterior,
-        status_normalizado,
-    )
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    return comanda
-
-
-@router.post("/{comanda_id}/delivery/despachar", response_model=ComandaResponse)
-def despachar_delivery(
-    comanda_id: str,
-    payload: dict,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status"))
-):
-    """
-    Vincula um motoboy à comanda e altera o status para 'transito'.
-    """
-    rid = require_tenant_id()
-    comanda = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == rid,
-            Comanda.id == comanda_id,
-        )
-        .with_for_update()
-        .first()
-    )
-    if not comanda:
-        raise HTTPException(status_code=404, detail="Comanda não encontrada")
-    
-    motoboy_id = payload.get("motoboy_id")
-    if not motoboy_id:
-        raise HTTPException(status_code=400, detail="motoboy_id obrigatório")
-        
-    motoboy = db.query(Motoboy).filter(
-        Motoboy.restaurante_id == rid,
-        Motoboy.id == motoboy_id,
-        Motoboy.ativo.is_(True),
-    ).first()
-    if not motoboy:
-        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
-        
-    status_anterior = comanda.delivery_status
-
-    # Executa a transição canônica, vinculação de motoboy e emissão na Outbox atomicamente
-    try:
-        OrderApplicationService.dispatch_order(
-            db=db,
-            cmd=DispatchOrderCommand(
-                restaurant_id=rid,
-                order_id=comanda.id,
-                courier_id=motoboy_id,
-                operator_user_id=getattr(current_user, "id", None),
-            ),
-            commit=False,
-        )
-    except InvalidOrderTransitionError as exc:
-        raise HTTPException(status_code=409, detail=str(exc))
-    except OrderValidationError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    
-    # Trigger printing based on configurations
-    try:
-        from ..printer_service import printer_service
-        from ..models import ConfiguracaoRestaurante
-        config = db.query(ConfiguracaoRestaurante).filter(
-            ConfiguracaoRestaurante.restaurante_id == comanda.restaurante_id
-        ).first()
-        unificar = config.unificar_vias_delivery if config else False
-        
-        if unificar:
-            unified_text = printer_service.generate_delivery_unified_ticket(comanda, motoboy.nome)
-            background_tasks.add_task(
-                print_in_background,
-                "delivery_unico",
-                unified_text,
-                restaurante_id=require_tenant_id(),
-            )
-        else:
-            kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
-            motoboy_text = printer_service.generate_delivery_motoboy_ticket(comanda, motoboy.nome)
-            background_tasks.add_task(
-                print_in_background,
-                "delivery_cozinha",
-                kitchen_text,
-                restaurante_id=require_tenant_id(),
-            )
-            background_tasks.add_task(
-                print_in_background,
-                "delivery_motoboy",
-                motoboy_text,
-                restaurante_id=require_tenant_id(),
-            )
-    except Exception as print_err:
-        print(f"Error printing delivery tickets: {print_err}")
-        
-    db.commit()
-    db.refresh(comanda)
-    _agendar_notificacao_whatsapp_status(
-        background_tasks,
-        db,
-        comanda,
-        status_anterior,
-        "transito",
-    )
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
-    return comanda
-
-
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
 def listar_motoboys(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
@@ -1762,210 +1410,3 @@ def painel_entregador(
         },
         "entregas": entregas
     }
-
-
-@router.post("/motoboys/pedidos/{comanda_id}/confirmar-entrega")
-def confirmar_entrega_motoboy(
-    comanda_id: str,
-    token: str,
-    request: Request,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """
-    Permite ao entregador (com token válido) confirmar a entrega de um pedido.
-    """
-    motoboy_rate_limiter.check(request)
-    token_data = verify_motoboy_token(token, db)
-    motoboy_id = token_data["motoboy_id"]
-    rest_id = token_data["restaurante_id"]
-    
-    current_restaurante_id.set(rest_id)
-    
-    comanda = db.query(Comanda).filter(
-        Comanda.id == comanda_id,
-        Comanda.restaurante_id == rest_id
-    ).first()
-    if not comanda:
-        raise HTTPException(status_code=404, detail="Pedido não encontrado")
-    
-    status_anterior = comanda.delivery_status
-    comanda.delivery_status = "finalizado"
-    comanda.motoboy_id = motoboy_id
-    comanda.fechada = True
-    comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-    
-    db.commit()
-    db.refresh(comanda)
-
-    _agendar_notificacao_whatsapp_status(
-        background_tasks,
-        db,
-        comanda,
-        status_anterior,
-        "entregue",
-    )
-    
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
-    return {"status": "sucesso", "mensagem": "Entrega confirmada com sucesso!"}
-
-
-
-
-@router.post("/mesclar", response_model=ComandaResponse)
-def mesclar_comandas(
-    mesa_origem_id: int,
-    mesa_destino_id: int,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
-):
-    """
-    Mescla o consumo da mesa de origem na mesa de destino.
-    """
-    require_waiter_permission(
-        db,
-        current_user,
-        "perm_garcom_transferir_mesa",
-    )
-    rest_id = require_tenant_id()
-    if mesa_origem_id == mesa_destino_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Escolha duas mesas diferentes para realizar a mesclagem."
-        )
-
-    mesas_existentes = db.query(Mesa.id).filter(
-        Mesa.restaurante_id == rest_id,
-        Mesa.id.in_([mesa_origem_id, mesa_destino_id]),
-    ).all()
-    if len({mesa_id for (mesa_id,) in mesas_existentes}) != 2:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mesa de origem ou destino não encontrada neste salão."
-        )
-
-    # 1. Localizar comanda ativa da mesa de origem
-    comanda_origem = db.query(Comanda).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.mesa_id == mesa_origem_id,
-        Comanda.fechada == False
-    ).first()
-    
-    if not comanda_origem:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Nenhuma comanda ativa encontrada na mesa {mesa_origem_id}"
-        )
-
-    # 1.5. Validar limite de 2 mesas mescladas juntas
-    if comanda_origem.mesa_origem_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A mesa de origem já faz parte de outra mesclagem ativa."
-        )
-
-    # Verificar se a mesa de destino já possui alguma comanda mesclada nela
-    mesclas_destino = db.query(Comanda).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.mesa_id == mesa_destino_id,
-        Comanda.mesa_origem_id != None,
-        Comanda.fechada == False
-    ).first()
-    if mesclas_destino:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A mesa de destino já possui outra comanda mesclada. Limite de mesclagem atingido (máximo de 2 mesas)."
-        )
-
-    # Verificar se a mesa destino está mesclada em outra mesa (ou seja, seu consumo foi mesclado em uma terceira mesa)
-    comanda_destino_ativa = db.query(Comanda).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.mesa_id == mesa_destino_id,
-        Comanda.fechada == False
-    ).first()
-    if comanda_destino_ativa and comanda_destino_ativa.mesa_origem_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A mesa de destino está mesclada em outra mesa."
-        )
-        
-    # 2. Atualizar a comanda para apontar para a mesa de destino e gravar a origem
-    comanda_origem.mesa_id = mesa_destino_id
-    comanda_origem.mesa_origem_id = mesa_origem_id
-    
-    db.commit()
-    db.refresh(comanda_origem)
-    
-    # 3. Notificar via WebSocket
-    background_tasks.add_task(manager.broadcast, {
-        "event": "tables_updated",
-        "detail": {
-            "type": "mesclar_mesas",
-            "mesa_origem": mesa_origem_id,
-            "mesa_destino": mesa_destino_id
-        }
-    }, rest_id)
-    
-    return comanda_origem
-
-
-@router.post("/desmesclar", response_model=ComandaResponse)
-def desmesclar_comanda(
-    comanda_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user)
-):
-    """
-    Desmembra uma comanda mesclada de volta para a sua mesa de origem.
-    """
-    require_waiter_permission(
-        db,
-        current_user,
-        "perm_garcom_transferir_mesa",
-    )
-    rest_id = require_tenant_id()
-    comanda = db.query(Comanda).filter(
-        Comanda.restaurante_id == rest_id,
-        Comanda.id == comanda_id,
-    ).first()
-    if not comanda:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Comanda não encontrada"
-        )
-        
-    if comanda.mesa_origem_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta comanda não está mesclada em outra mesa."
-        )
-        
-    mesa_origem = comanda.mesa_origem_id
-    mesa_origem_existe = db.query(Mesa.id).filter(
-        Mesa.restaurante_id == rest_id,
-        Mesa.id == mesa_origem,
-    ).first()
-    if not mesa_origem_existe:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A mesa de origem não existe mais no salão."
-        )
-
-    comanda.mesa_id = comanda.mesa_origem_id
-    comanda.mesa_origem_id = None
-    
-    db.commit()
-    db.refresh(comanda)
-    
-    background_tasks.add_task(manager.broadcast, {
-        "event": "tables_updated",
-        "detail": {
-            "type": "desmesclar_mesa",
-            "comanda_id": comanda_id,
-            "mesa_origem": mesa_origem
-        }
-    }, rest_id)
-    
-    return comanda

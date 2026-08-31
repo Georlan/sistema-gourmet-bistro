@@ -18,6 +18,8 @@ from ..services.public_orders import (
     resolve_restaurant_id,
 )
 from ..adapters.orders.web_adapter import CardapioWebAdapter
+# Stable Python compatibility export; order creation already uses the Core.
+from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
 
 logger = logging.getLogger("koma.cardapio")
 router = APIRouter(

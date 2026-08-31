@@ -15,7 +15,7 @@ from ..financial_refund_models import (
     PagamentoEstornoAlocacao,
     PagamentoEstornoLiquidacao,
 )
-from ..models import CaixaMovimentacao, CaixaTurno, Pagamento
+from ..models import CaixaMovimentacao, CaixaTurno, Comanda, Pagamento
 from ..operational_models import AtendimentoComanda
 from .financeiro import CARD_METHODS, money
 
@@ -189,6 +189,20 @@ def cash_shift_totals(
     )
 
 
+def count_open_commands(db: Session, restaurante_id: int) -> int:
+    return int(db.query(func.count(Comanda.id)).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.fechada == False,
+    ).scalar() or 0)
+
+
+def remaining_refund_allocations(db: Session, restaurante_id: int, payment: Pagamento) -> list[dict[str, object]]:
+    # Lazy import breaks the guard -> transaction service dependency explicitly.
+    # Previously the routes package replaced this symbol globally at import time.
+    from .refund_guard import remaining_refund_allocations_guarded
+    return remaining_refund_allocations_guarded(db, restaurante_id, payment)
+
+
 def _fallback_attendance(
     db: Session,
     restaurante_id: int,
@@ -201,7 +215,7 @@ def _fallback_attendance(
     return str(row[0]) if row and row[0] else None
 
 
-def remaining_refund_allocations(
+def base_remaining_refund_allocations(
     db: Session,
     restaurante_id: int,
     payment: Pagamento,

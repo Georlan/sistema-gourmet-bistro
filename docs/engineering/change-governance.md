@@ -27,6 +27,13 @@ de alertas: triar novas descobertas e registrar falsos positivos com justificati
 
 ## E2E e diagnóstico
 
+Backend: `backend/conftest.py` recria `.pytest_koma.db` dentro do checkout e
+sobrescreve `DATABASE_URL` no modo SQLite. Não executar duas suítes pytest de
+backend simultâneas no mesmo worktree, mesmo passando URLs diferentes: uma pode
+apagar o banco da outra. Serializar essas execuções ou usar checkouts isolados.
+O modo externo tem validação própria de host/nome e não deve ser usado para
+contornar a proteção do banco de testes.
+
 Executar com fontes congeladas e porta exclusiva (`KOMA_E2E_PORT`). O runner falha se a porta estiver ocupada.
 Nunca reaproveitar um servidor de outro worktree. Registrar SHA, teste, viewport e DOM/trace antes de mudar seletor.
 O runner desliga HMR e usa cache de otimização em `.vite/e2e` dentro do worktree,

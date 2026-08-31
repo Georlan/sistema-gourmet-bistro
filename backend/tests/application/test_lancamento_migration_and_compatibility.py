@@ -96,7 +96,7 @@ class TestLancamentoMigrationAndCompatibility:
     def test_multi_tenant_scoping_in_delivery_dispatch(self, char_setup):
         """Garante que motoboy de outro restaurante não pode ser vinculado a entrega de tenant diferente."""
         from fastapi import HTTPException
-        from app.routes.orders_core import despachar_delivery
+        from app.routes.orders import despachar_delivery
         from fastapi import BackgroundTasks
 
         db: Session = SessionLocal()
@@ -142,7 +142,7 @@ class TestLancamentoMigrationAndCompatibility:
                         current_user=None,
                     )
                 assert exc_info.value.status_code == 404
-                assert "Motoboy não encontrado" in exc_info.value.detail
+                assert "Motoboy ativo não encontrado" in exc_info.value.detail
             finally:
                 current_restaurante_id.reset(token)
         finally:

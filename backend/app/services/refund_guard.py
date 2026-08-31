@@ -13,7 +13,7 @@ from ..smartpos_models import SmartPosPaymentIntent
 from .cash_reconciliation import (
     RefundDomainError,
     create_refund,
-    remaining_refund_allocations as _base_remaining_refund_allocations,
+    base_remaining_refund_allocations as _base_remaining_refund_allocations,
 )
 from .financeiro import money
 

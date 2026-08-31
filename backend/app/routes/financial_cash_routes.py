@@ -4,24 +4,24 @@ import datetime
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..financial_models import PagamentoEstorno
-from ..models import CaixaTurno, Comanda, Pagamento, Usuario
+from ..models import CaixaTurno, Pagamento, Usuario
 from ..security import require_permission
 from ..services.cash_reconciliation import (
     RefundDomainError,
     cash_shift_totals,
-    create_refund,
+    count_open_commands,
     money,
     refund_payload,
-    remaining_refund_allocations,
 )
-from . import caixa as legacy_cash
+from ..services.refund_guard import create_refund_guarded as create_refund
+from ..services.refund_ui import refundable_payment_payload_human as _refundable_payment_payload
 from .websocket import manager
 
 
@@ -64,31 +64,6 @@ class ReconciledCloseRequest(BaseModel):
         return money(value)
 
 
-def _remove_route(full_path: str, method: str) -> None:
-    method = method.upper()
-    legacy_cash.router.routes[:] = [
-        route
-        for route in legacy_cash.router.routes
-        if not (
-            getattr(route, "path", None) == full_path
-            and method in (getattr(route, "methods", set()) or set())
-        )
-    ]
-
-
-def _turn_totals_adapter(
-    db: Session,
-    restaurante_id: int,
-    turno: CaixaTurno,
-) -> dict[str, Decimal | int]:
-    return cash_shift_totals(db, restaurante_id, turno).as_legacy_dict()
-
-
-# Sangria, suprimento, resumo, turno atual e fechamento legados consultam este
-# símbolo em runtime. Substituir uma única fonte evita fórmulas paralelas.
-legacy_cash._totais_financeiros_turno = _turn_totals_adapter
-
-
 def _open_shift(db: Session, restaurante_id: int) -> CaixaTurno | None:
     return db.query(CaixaTurno).filter(
         CaixaTurno.restaurante_id == restaurante_id,
@@ -96,80 +71,6 @@ def _open_shift(db: Session, restaurante_id: int) -> CaixaTurno | None:
     ).order_by(CaixaTurno.id.desc()).first()
 
 
-def _payment_origin_label(command: Comanda | None) -> str:
-    if command is None:
-        return "Pagamento"
-    tipo = str(command.tipo or "").lower().strip()
-    if command.mesa_id:
-        return f"Mesa {command.mesa_id}"
-    if "retirada" in tipo:
-        return f"Retirada #{command.numero_pedido}"
-    if tipo in {"delivery", "entrega"}:
-        return f"Delivery #{command.numero_pedido}"
-    return f"Pedido #{command.numero_pedido}"
-
-
-def _refundable_payment_payload(
-    db: Session,
-    restaurante_id: int,
-    payment: Pagamento,
-) -> dict[str, object]:
-    origins = remaining_refund_allocations(db, restaurante_id, payment)
-    available = money(sum(
-        (money(row["disponivel"]) for row in origins),
-        Decimal("0.00"),
-    ))
-    command = db.query(Comanda).filter(
-        Comanda.restaurante_id == restaurante_id,
-        Comanda.id == payment.comanda_id,
-    ).first()
-    return {
-        "id": payment.id,
-        "comanda_id": payment.comanda_id,
-        "turno_id": payment.turno_id,
-        "valor_original": float(money(payment.valor)),
-        "saldo_estornavel": float(available),
-        "metodo_original": payment.metodo,
-        "status": payment.status,
-        "criado_em": payment.criado_em,
-        "origem": _payment_origin_label(command),
-        "numero_pedido": getattr(command, "numero_pedido", None) if command else None,
-        "mesa_id": getattr(command, "mesa_id", None) if command else None,
-        "origens_financeiras": [
-            {
-                "comanda_id": row["comanda_id"],
-                "atendimento_id": row["atendimento_id"],
-                "valor_original": float(money(row["original"])),
-                "valor_estornado": float(money(row["estornado"])),
-                "saldo_estornavel": float(money(row["disponivel"])),
-            }
-            for row in origins
-        ],
-    }
-
-
-@legacy_cash.router.get("/pagamentos/estornaveis")
-def listar_pagamentos_estornaveis(
-    limite: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("caixa:operar")),
-):
-    rest_id = require_tenant_id()
-    payments = db.query(Pagamento).filter(
-        Pagamento.restaurante_id == rest_id,
-        Pagamento.status == "aprovado",
-    ).order_by(Pagamento.criado_em.desc(), Pagamento.id.desc()).limit(limite * 2).all()
-    result = []
-    for payment in payments:
-        payload = _refundable_payment_payload(db, rest_id, payment)
-        if payload["saldo_estornavel"] > 0:
-            result.append(payload)
-        if len(result) >= limite:
-            break
-    return result
-
-
-@legacy_cash.router.get("/pagamentos/{pagamento_id}/estornavel")
 def obter_pagamento_estornavel(
     pagamento_id: str,
     db: Session = Depends(get_db),
@@ -190,7 +91,6 @@ def obter_pagamento_estornavel(
     return payload
 
 
-@legacy_cash.router.get("/pagamentos/{pagamento_id}/estornos")
 def listar_estornos_pagamento(
     pagamento_id: str,
     db: Session = Depends(get_db),
@@ -210,7 +110,6 @@ def listar_estornos_pagamento(
     return [refund_payload(db, rest_id, refund) for refund in refunds]
 
 
-@legacy_cash.router.post("/pagamentos/{pagamento_id}/estornar", status_code=201)
 def estornar_pagamento(
     pagamento_id: str,
     req: RefundRequest,
@@ -277,7 +176,6 @@ def estornar_pagamento(
     return payload
 
 
-@legacy_cash.router.get("/turno-atual/reconciliacao")
 def obter_reconciliacao_turno(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("caixa:operar")),
@@ -345,7 +243,7 @@ def fechar_turno_reconciliado(
         Pagamento.turno_id == shift.id,
         Pagamento.status == "pendente",
     ).count())
-    open_commands = legacy_cash._comandas_abertas_count(db, rest_id)
+    open_commands = count_open_commands(db, rest_id)
     if pending or open_commands:
         parts = []
         if pending:
@@ -426,21 +324,3 @@ def fechar_turno_reconciliado(
         "total_suprimentos": float(totals.total_suprimentos),
         "total_sangrias": float(totals.total_sangrias),
     }
-
-
-# O fechamento precisa aceitar líquido digital negativo e usar estornos pelo
-# método de devolução. As duas URLs históricas continuam válidas.
-_remove_route("/caixa/fechamento", "POST")
-_remove_route("/caixa/turno/fechar", "POST")
-legacy_cash.router.add_api_route(
-    "/fechamento",
-    fechar_turno_reconciliado,
-    methods=["POST"],
-    name="fechar_turno_reconciliado",
-)
-legacy_cash.router.add_api_route(
-    "/turno/fechar",
-    fechar_turno_reconciliado,
-    methods=["POST"],
-    name="fechar_turno_reconciliado_alias",
-)

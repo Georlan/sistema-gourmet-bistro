@@ -1,5 +1,8 @@
 # Responsáveis compartilhados — 31/08/2026
 
+Continuação de R06: [rotas com responsáveis explícitos](route-ownership.md).
+As observações abaixo sobre overlays descrevem a etapa anterior.
+
 Implementação sobre `826e549`, na branch `codex/shared-resource-owners`.
 Este documento descreve o código local; não comprova publicação em produção.
 Critério: extrair somente responsabilidades equivalentes com consumidores reais.

@@ -27,21 +27,8 @@ from ..services.financial_read import (
     load_financial_snapshot,
     peak_hour_rows,
 )
-from ..timezone_utils import to_operational_local_time
-from . import optimization as legacy_optimization
-from . import relatorios as legacy_reports
 
-
-def _remove_route(router, full_path: str, method: str = "GET") -> None:
-    method = method.upper()
-    router.routes[:] = [
-        route
-        for route in router.routes
-        if not (
-            getattr(route, "path", None) == full_path
-            and method in (getattr(route, "methods", set()) or set())
-        )
-    ]
+COMMERCIAL_ROLES = {"garcom", "caixa", "atendente", "operador_caixa"}
 
 
 def _snapshot_or_400(
@@ -468,7 +455,7 @@ def get_equipe_desempenho_financeiro(
         elif role_filter:
             if member_role != role_filter:
                 continue
-        elif member_role not in legacy_reports.COMMERCIAL_ROLES:
+        elif member_role not in COMMERCIAL_ROLES:
             continue
 
         member_id = str(member.id)
@@ -496,36 +483,3 @@ def get_equipe_desempenho_financeiro(
         "fonte_financeira": "pagamentos_aprovados_alocados_por_turno",
         "membros": result,
     }
-
-
-# Substitui somente as leituras financeiras problemáticas. As demais rotas
-# legadas (produtos, metas etc.) continuam no mesmo router/API.
-_remove_route(legacy_reports.router, "/relatorios/visao-geral")
-_remove_route(legacy_reports.router, "/relatorios/vendas-detalhes")
-_remove_route(legacy_reports.router, "/relatorios/equipe/desempenho")
-_remove_route(legacy_optimization.router, "/comandas/estatisticas/geral")
-
-legacy_reports.router.add_api_route(
-    "/visao-geral",
-    get_relatorio_visao_geral_financeiro,
-    methods=["GET"],
-    name="get_relatorio_visao_geral_financeiro",
-)
-legacy_reports.router.add_api_route(
-    "/vendas-detalhes",
-    get_vendas_detalhes_financeiro,
-    methods=["GET"],
-    name="get_vendas_detalhes_financeiro",
-)
-legacy_reports.router.add_api_route(
-    "/equipe/desempenho",
-    get_equipe_desempenho_financeiro,
-    methods=["GET"],
-    name="get_equipe_desempenho_financeiro",
-)
-legacy_optimization.router.add_api_route(
-    "/comandas/estatisticas/geral",
-    get_dashboard_financeiro,
-    methods=["GET"],
-    name="get_dashboard_financeiro",
-)

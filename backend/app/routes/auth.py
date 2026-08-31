@@ -615,3 +615,11 @@ def reenviar_convite_usuario(
         "message": f"Convite para {usuario.nome} agendado no WhatsApp.",
         "convite_agendado": True,
     }
+
+
+# SmartPOS is part of this authenticated namespace, not a package import side effect.
+from . import smartpos, smartpos_provider, smartpos_cash_projection
+
+router.include_router(smartpos.router)
+router.include_router(smartpos_provider.router)
+router.include_router(smartpos_cash_projection.router)

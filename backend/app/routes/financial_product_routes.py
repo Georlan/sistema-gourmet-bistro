@@ -11,18 +11,6 @@ from ..models import Categoria, Item as ComandaItem, Produto, ProdutoInsumo, Usu
 from ..security import require_permission
 from ..services.financeiro import money
 from ..services.financial_read import load_financial_snapshot
-from . import relatorios as legacy_reports
-
-
-def _remove_product_route() -> None:
-    legacy_reports.router.routes[:] = [
-        route
-        for route in legacy_reports.router.routes
-        if not (
-            getattr(route, "path", None) == "/relatorios/produtos"
-            and "GET" in (getattr(route, "methods", set()) or set())
-        )
-    ]
 
 
 def get_relatorio_produtos_operacional(
@@ -152,12 +140,3 @@ def get_relatorio_produtos_operacional(
     for index, row in enumerate(result, start=1):
         row["ranking"] = index
     return result
-
-
-_remove_product_route()
-legacy_reports.router.add_api_route(
-    "/produtos",
-    get_relatorio_produtos_operacional,
-    methods=["GET"],
-    name="get_relatorio_produtos_operacional",
-)

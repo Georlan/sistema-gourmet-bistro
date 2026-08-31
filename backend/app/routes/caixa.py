@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy import and_, case, func
+from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional, Union
@@ -9,19 +9,20 @@ import datetime
 import logging
 
 import re
-from ..database import get_db, current_restaurante_id, require_tenant_id
+from ..database import get_db, require_tenant_id
 from ..services.restaurant_profile import apply_restaurant_profile_update
+from ..services.cash_reconciliation import cash_shift_totals, count_open_commands as _comandas_abertas_count
+from ..services.cash_activity import recent_cash_activities as _atividades_recentes_turno
 from ..models import (
     Usuario, Comanda, Item, CaixaTurno, CaixaMovimentacao, Pagamento,
     ConfiguracaoRestaurante, ConfigFidelizacao, HistoricoFidelidade, Cliente,
     Restaurante,
 )
 from ..schemas import (
-    CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoFechar, CaixaTurnoDetalhe,
-    CaixaMovimentacaoCreate, CaixaMovimentacaoResponse, PagamentoRequest,
+    CaixaTurnoCreate, CaixaTurnoResponse, CaixaTurnoDetalhe,
+    CaixaMovimentacaoResponse, PagamentoRequest,
     PagamentoMesaRequest, PagamentoResponse,
     UsuarioResponse, UsuarioInviteResponse, UsuarioCreate, SangriaCreate, SuprimentoCreate, CaixaTurnoResumoResponse,
-    FechamentoCaixaRequest, FechamentoCaixaResponse
 )
 from ..security import (
     ensure_permission,
@@ -42,7 +43,7 @@ from ..services.clientes import (
 )
 from ..services.capabilities import has_capability
 from ..services.notificacoes import agendar_convite_equipe_task
-from ..timezone_utils import elapsed_minutes_since, to_utc
+from ..timezone_utils import elapsed_minutes_since
 
 logger = logging.getLogger("koma.caixa")
 
@@ -65,175 +66,8 @@ def _valor_monetario(valor: object) -> Decimal:
     return Decimal(str(valor or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
-def _totais_financeiros_turno(
-    db: Session,
-    restaurante_id: int,
-    turno: CaixaTurno,
-) -> dict[str, Union[Decimal, int]]:
-    """Uma única regra para resumo, sangria, suprimento e fechamento."""
-    pagamentos = db.query(
-        func.coalesce(func.sum(Pagamento.valor), 0).label("total_vendas"),
-        func.coalesce(func.sum(case(
-            (Pagamento.metodo == "dinheiro", Pagamento.valor),
-            else_=0,
-        )), 0).label("total_dinheiro"),
-        func.coalesce(func.sum(case(
-            (Pagamento.metodo == "pix", Pagamento.valor),
-            else_=0,
-        )), 0).label("total_pix"),
-        func.coalesce(func.sum(case(
-            (Pagamento.metodo.in_(("cartao", "cartao_debito", "cartao_credito")), Pagamento.valor),
-            else_=0,
-        )), 0).label("total_cartao"),
-        func.count(func.distinct(Pagamento.comanda_id)).label("total_pedidos_pagos"),
-    ).filter(
-        Pagamento.restaurante_id == restaurante_id,
-        Pagamento.turno_id == turno.id,
-        Pagamento.status == "aprovado",
-    ).one()
-
-    movimentacoes = db.query(
-        func.coalesce(func.sum(case(
-            (CaixaMovimentacao.tipo == "suprimento", CaixaMovimentacao.valor),
-            else_=0,
-        )), 0).label("total_suprimentos"),
-        func.coalesce(func.sum(case(
-            (CaixaMovimentacao.tipo == "sangria", CaixaMovimentacao.valor),
-            else_=0,
-        )), 0).label("total_sangrias"),
-    ).filter(
-        CaixaMovimentacao.restaurante_id == restaurante_id,
-        CaixaMovimentacao.turno_id == turno.id,
-    ).one()
-
-    saldo_inicial = _valor_monetario(turno.saldo_inicial)
-    total_dinheiro = _valor_monetario(pagamentos.total_dinheiro)
-    total_suprimentos = _valor_monetario(movimentacoes.total_suprimentos)
-    total_sangrias = _valor_monetario(movimentacoes.total_sangrias)
-
-    return {
-        "total_vendas": _valor_monetario(pagamentos.total_vendas),
-        "total_dinheiro": total_dinheiro,
-        "total_pix": _valor_monetario(pagamentos.total_pix),
-        "total_cartao": _valor_monetario(pagamentos.total_cartao),
-        "total_pedidos_pagos": int(pagamentos.total_pedidos_pagos or 0),
-        "total_suprimentos": total_suprimentos,
-        "total_sangrias": total_sangrias,
-        "saldo_esperado_dinheiro": _valor_monetario(
-            saldo_inicial + total_dinheiro + total_suprimentos - total_sangrias
-        ),
-    }
-
-
-def _comandas_abertas_count(db: Session, restaurante_id: int) -> int:
-    """Conta contas ainda operacionais usando a mesma fonte de verdade do PDV."""
-    return int(db.query(func.count(Comanda.id)).filter(
-        Comanda.restaurante_id == restaurante_id,
-        Comanda.fechada == False,
-    ).scalar() or 0)
-
-
-def _atividades_recentes_turno(
-    db: Session,
-    restaurante_id: int,
-    turno: CaixaTurno,
-    limite: int = 10,
-) -> tuple[list[dict], Optional[dict]]:
-    """Combina os últimos recebimentos e ajustes sem carregar o histórico inteiro."""
-    limite_seguro = max(1, min(limite, 20))
-
-    pagamentos = db.query(Pagamento, Comanda).join(
-        Comanda,
-        and_(
-            Pagamento.restaurante_id == Comanda.restaurante_id,
-            Pagamento.comanda_id == Comanda.id,
-        ),
-    ).filter(
-        Pagamento.restaurante_id == restaurante_id,
-        Pagamento.turno_id == turno.id,
-        Pagamento.status == "aprovado",
-    ).order_by(
-        Pagamento.criado_em.desc(),
-        Pagamento.id.desc(),
-    ).limit(limite_seguro).all()
-
-    movimentacoes = db.query(CaixaMovimentacao, Usuario).outerjoin(
-        Usuario,
-        and_(
-            CaixaMovimentacao.usuario_id == Usuario.id,
-            CaixaMovimentacao.restaurante_id == Usuario.restaurante_id,
-        ),
-    ).filter(
-        CaixaMovimentacao.restaurante_id == restaurante_id,
-        CaixaMovimentacao.turno_id == turno.id,
-    ).order_by(
-        CaixaMovimentacao.criado_em.desc(),
-        CaixaMovimentacao.id.desc(),
-    ).limit(limite_seguro).all()
-
-    atividades: list[dict] = []
-    for pagamento, comanda in pagamentos:
-        tipo_comanda = (comanda.tipo or "").strip().lower()
-        if comanda.mesa_id:
-            origem = f"Mesa {comanda.mesa_id}"
-        elif "retirada" in tipo_comanda:
-            origem = f"Retirada #{comanda.numero_pedido}"
-        elif tipo_comanda in {"entrega", "delivery"}:
-            origem = f"Delivery #{comanda.numero_pedido}"
-        else:
-            origem = f"Pedido #{comanda.numero_pedido}"
-
-        atividades.append({
-            "id": f"pagamento:{pagamento.id}",
-            "tipo": "recebimento",
-            "valor": pagamento.valor,
-            "metodo": pagamento.metodo,
-            "origem": origem,
-            "descricao": "Venda recebida",
-            "operador_nome": None,
-            "criado_em": pagamento.criado_em,
-        })
-
-    for movimentacao, usuario in movimentacoes:
-        atividades.append({
-            "id": f"movimentacao:{movimentacao.id}",
-            "tipo": movimentacao.tipo,
-            "valor": movimentacao.valor,
-            "metodo": "dinheiro",
-            "origem": "Caixa",
-            "descricao": movimentacao.descricao or movimentacao.observacao or "Movimentação manual",
-            "operador_nome": usuario.nome if usuario else None,
-            "criado_em": movimentacao.criado_em,
-        })
-
-    def timestamp_utc(atividade: dict) -> float:
-        criado_em = atividade.get("criado_em")
-        if not criado_em:
-            return 0.0
-        if isinstance(criado_em, (int, float)):
-            return float(criado_em)
-        if isinstance(criado_em, datetime.datetime):
-            normalized = to_utc(criado_em)
-            return normalized.timestamp() if normalized else 0.0
-        if isinstance(criado_em, str):
-            try:
-                dt = datetime.datetime.fromisoformat(criado_em.replace("Z", "+00:00"))
-                normalized = to_utc(dt)
-                return normalized.timestamp() if normalized else 0.0
-            except Exception:
-                return 0.0
-        return 0.0
-
-    ultima_movimentacao = next(
-        (
-            atividade
-            for atividade in atividades
-            if atividade["tipo"] in {"suprimento", "sangria"}
-        ),
-        None,
-    )
-    atividades.sort(key=timestamp_utc, reverse=True)
-    return atividades[:limite_seguro], ultima_movimentacao
+def _totais_financeiros_turno(db: Session, restaurante_id: int, turno: CaixaTurno) -> dict:
+    return cash_shift_totals(db, restaurante_id, turno).as_legacy_dict()
 
 
 def check_caixa_permission(
@@ -742,114 +576,6 @@ def registrar_suprimento(
         descricao=nova_mov.descricao,
         observacao=nova_mov.observacao,
         criado_em=nova_mov.criado_em
-    )
-
-
-@router.post("/fechamento", response_model=FechamentoCaixaResponse)
-@router.post("/turno/fechar", response_model=FechamentoCaixaResponse)
-def fechar_turno_caixa(
-    req: FechamentoCaixaRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_garcom_optional)
-):
-    """Encerra o turno de caixa ativo via conferência cega e calcula sobra ou falta."""
-    check_caixa_permission(current_user)
-    rest_id = require_tenant_id()
-
-    turno = db.query(CaixaTurno).with_for_update().filter_by(
-        restaurante_id=rest_id,
-        status="aberto",
-    ).first()
-    if not turno:
-        raise HTTPException(status_code=400, detail="Não há nenhum turno de caixa aberto para ser fechado.")
-
-    if req.declarado_dinheiro < 0 or req.declarado_cartao < 0 or req.declarado_pix < 0:
-        raise HTTPException(status_code=400, detail="Os valores declarados não podem ser negativos.")
-
-    pagamentos_pendentes = int(db.query(func.count(Pagamento.id)).filter(
-        Pagamento.restaurante_id == rest_id,
-        Pagamento.turno_id == turno.id,
-        Pagamento.status == "pendente",
-    ).scalar() or 0)
-    comandas_abertas = _comandas_abertas_count(db, rest_id)
-    if pagamentos_pendentes or comandas_abertas:
-        pendencias = []
-        if pagamentos_pendentes:
-            pendencias.append(f"{pagamentos_pendentes} pagamento(s) aguardando confirmação")
-        if comandas_abertas:
-            pendencias.append(f"{comandas_abertas} comanda(s) ainda aberta(s)")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Resolva as pendências antes de fechar o caixa: "
-                + " e ".join(pendencias)
-                + "."
-            ),
-        )
-
-    totals = _totais_financeiros_turno(db, rest_id, turno)
-    esperado_dinheiro = totals["saldo_esperado_dinheiro"]
-    esperado_pix = totals["total_pix"]
-    esperado_cartao = totals["total_cartao"]
-
-    declarado_dinheiro = _valor_monetario(req.declarado_dinheiro)
-    declarado_cartao = _valor_monetario(req.declarado_cartao)
-    declarado_pix = _valor_monetario(req.declarado_pix)
-    diferenca_dinheiro = _valor_monetario(declarado_dinheiro - esperado_dinheiro)
-    diferenca_cartao = _valor_monetario(declarado_cartao - esperado_cartao)
-    diferenca_pix = _valor_monetario(declarado_pix - esperado_pix)
-
-    total_declarado = _valor_monetario(declarado_dinheiro + declarado_cartao + declarado_pix)
-    total_esperado = _valor_monetario(esperado_dinheiro + esperado_cartao + esperado_pix)
-    diferenca_total = _valor_monetario(total_declarado - total_esperado)
-
-    # Proteção Backend: Justificativa obrigatória em caso de divergência/quebra de caixa
-    tem_divergencia = any([
-        abs(diferenca_dinheiro) >= 0.01,
-        abs(diferenca_cartao) >= 0.01,
-        abs(diferenca_pix) >= 0.01,
-        abs(diferenca_total) >= 0.01,
-    ])
-    if tem_divergencia and not (req.observacao and req.observacao.strip()):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Diferença de caixa identificada. É obrigatório informar o motivo na observação para auditoria gerencial."
-        )
-
-    fechado_em = datetime.datetime.now(datetime.timezone.utc)
-    turno.fechado_em = fechado_em
-    turno.fechado_por_id = current_user.id if current_user else None
-    turno.declarado_dinheiro = declarado_dinheiro
-    turno.declarado_cartao = declarado_cartao
-    turno.declarado_pix = declarado_pix
-    turno.observacao = req.observacao.strip() if req.observacao else None
-    turno.status = "fechado"
-
-    db.commit()
-    background_tasks.add_task(
-        manager.broadcast,
-        {"event": "cash_updated", "detail": {"type": "turno_fechado"}},
-        rest_id,
-    )
-
-    return FechamentoCaixaResponse(
-        turno_id=turno.id,
-        status="fechado",
-        fechado_em=fechado_em,
-        fechado_por_nome=current_user.nome if current_user else "Operador",
-        declarado_dinheiro=declarado_dinheiro,
-        esperado_dinheiro=esperado_dinheiro,
-        diferenca_dinheiro=diferenca_dinheiro,
-        declarado_cartao=declarado_cartao,
-        esperado_cartao=esperado_cartao,
-        diferenca_cartao=diferenca_cartao,
-        declarado_pix=declarado_pix,
-        esperado_pix=esperado_pix,
-        diferenca_pix=diferenca_pix,
-        total_declarado=total_declarado,
-        total_esperado=total_esperado,
-        diferenca_total=diferenca_total
     )
 
 
@@ -1917,7 +1643,6 @@ from ..models import Restaurante
 from ..schemas import RestauranteConfigResponse, RestauranteConfigUpdate
 
 @router.get("/restaurante/config", response_model=RestauranteConfigResponse)
-@router.get("/config-cardapio", response_model=RestauranteConfigResponse)
 @router.get("/config-cardapio/{tenant_id}", response_model=RestauranteConfigResponse)
 def obter_configuracao_restaurante(
     tenant_id: Optional[Union[int, str]] = None,
@@ -2013,13 +1738,19 @@ def atualizar_configuracao_restaurante(
     return restaurante
 
 
-@router.put("/config-cardapio", response_model=RestauranteConfigResponse)
-@router.post("/config-cardapio", response_model=RestauranteConfigResponse)
-def atualizar_config_cardapio(
-    config_in: RestauranteConfigUpdate,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
-):
-    """Atualiza as configurações whitelabel de personalização do restaurante ativo via config-cardapio."""
-    return atualizar_configuracao_restaurante(config_in, background_tasks, None, db, current_user)
+
+
+# Canonical financial handlers; aliases share a function, never a second route owner.
+from .financial_cash_routes import (
+    obter_pagamento_estornavel, listar_estornos_pagamento, estornar_pagamento,
+    obter_reconciliacao_turno, fechar_turno_reconciliado,
+)
+from .financial_refund_listing import listar_pagamentos_estornaveis_paginado
+
+router.add_api_route("/pagamentos/estornaveis", listar_pagamentos_estornaveis_paginado, methods=["GET"])
+router.add_api_route("/pagamentos/{pagamento_id}/estornavel", obter_pagamento_estornavel, methods=["GET"])
+router.add_api_route("/pagamentos/{pagamento_id}/estornos", listar_estornos_pagamento, methods=["GET"])
+router.add_api_route("/pagamentos/{pagamento_id}/estornar", estornar_pagamento, methods=["POST"], status_code=201)
+router.add_api_route("/turno-atual/reconciliacao", obter_reconciliacao_turno, methods=["GET"])
+router.add_api_route("/fechamento", fechar_turno_reconciliado, methods=["POST"])
+router.add_api_route("/turno/fechar", fechar_turno_reconciliado, methods=["POST"], name="fechar_turno_reconciliado_alias")
