@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Lock, Maximize2, Menu, Minimize2 } from 'lucide-react';
+import { Activity, Lock, Maximize2, Menu, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getSubscriptionPlan,
@@ -194,6 +194,7 @@ export function CaixaPanel({
     handleTabChange,
     isSidebarTabActive,
     handleSidebarNavigation,
+    isGestaoExpanded,
   } = useCashierNavigation({ hasOnlineMenu, showToast });
 
   const smartPos = useCashierSmartPos({
@@ -659,6 +660,7 @@ export function CaixaPanel({
           setTheme={setTheme}
           theme={theme}
           activeWaiterNome={activeWaiterNome}
+          isGestaoExpanded={isGestaoExpanded}
         />
 
         {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
@@ -675,6 +677,7 @@ export function CaixaPanel({
           setTheme={setTheme}
           theme={theme}
           activeWaiterNome={activeWaiterNome}
+          isGestaoExpanded={isGestaoExpanded}
         />
 
         {/* CONTENT AREA */}
@@ -706,8 +709,9 @@ export function CaixaPanel({
               <h2
                 className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}
               >
-                {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
-                {activeTab === 'operacao' && 'Vendas'}
+                {activeTab === 'agora' && 'Agora'}
+                {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Resultados'}
+                {activeTab === 'operacao' && 'Vender'}
                 {activeTab === 'cardapio' && 'Cardápio'}
                 {activeTab === 'estoque' && 'Estoque'}
                 {activeTab === 'financeiro' && 'Caixa'}
@@ -752,6 +756,7 @@ export function CaixaPanel({
           </header>
 
           {/* Sub-tabs Navigation Bar */}
+          {['operacao', 'cardapio', 'estoque', 'financeiro', 'clientes', 'relatorios', 'dashboard', 'permissoes_cargos'].includes(activeTab) && (
           <div
             className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}
           >
@@ -933,9 +938,27 @@ export function CaixaPanel({
                 );
               })}
           </div>
+          )}
 
           {/* Dynamic Inner views */}
           <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
+            {/* VIEW: AGORA (Dashboard operacional - Estrutura compatível para PR 2) */}
+            {activeTab === 'agora' && (
+              <div className="flex flex-col items-center justify-center h-full text-center gap-6 animate-fade-in py-12" id="agora-panel-container">
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-sky-500/10 border border-emerald-500/20">
+                  <Activity size={40} className="text-emerald-500" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="font-serif text-xl font-bold text-koma-foreground">
+                    Painel Agora
+                  </h2>
+                  <p className="text-xs text-koma-muted max-w-sm leading-relaxed">
+                    Visão operacional do restaurante em tempo real. Os alertas e indicadores consolidados serão carregados aqui na próxima etapa.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* CASHIER CLOSED WARNING BANNER */}
             {turno?.status !== 'aberto' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div

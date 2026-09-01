@@ -219,6 +219,7 @@ async function mockCashierBackend(page: Page) {
       || pathname === '/comandas/motoboys/lista'
       || pathname === '/auth/smartpos/caixa/operacao'
       || pathname === '/auth/usuarios'
+      || pathname === '/cardapio/modificadores/grupos'
     ) {
       body = [];
     }

@@ -43,6 +43,6 @@ export interface LoyaltyCustomer {
 
 export type CashierNotice = (message: string, type?: 'success' | 'error' | 'info') => void;
 
-export type CashierTab = 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes'
+export type CashierTab = 'agora' | 'operacao' | 'cardapio' | 'estoque' | 'financeiro' | 'clientes'
   | 'relatorios' | 'configuracoes' | 'permissoes_cargos' | 'impressao_salao'
-  | 'assinatura_pix' | 'cardapio_digital' | 'dashboard';
+  | 'assinatura_pix' | 'cardapio_digital' | 'dashboard' | 'gestao_hub';

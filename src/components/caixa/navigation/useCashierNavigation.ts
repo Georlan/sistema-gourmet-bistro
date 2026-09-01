@@ -6,6 +6,14 @@ type BoundaryProps = {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 };
 
+/**
+ * Tabs that belong inside the "Gestão" hub in the sidebar.
+ * When any of these is active, the Gestão hub item is highlighted.
+ */
+const GESTAO_MEMBER_TABS = new Set<CashierTab>([
+  'financeiro', 'estoque', 'clientes', 'permissoes_cargos',
+]);
+
 /** Owns persisted navigation and mobile drawer lifecycle, independent of operational controllers. */
 export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps) {
   const [activeTab, setActiveTab] = useState<CashierTab>(() => {
@@ -13,7 +21,10 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (saved === 'config_cardapio' || saved === 'configuracoes_cardapio') return 'cardapio_digital';
     if (saved === 'dashboard' || saved === 'indicadores') return 'relatorios';
     if (saved === 'robo_ia' || saved === 'assistente_koma' || saved === 'chat_copiloto') return 'operacao';
-    return (saved as any) || 'operacao';
+    // Legacy alias: 'gestao_hub' is never persisted as a real tab — it's a navigation trigger.
+    // If someone stored it, resolve to the first Gestão member.
+    if (saved === 'gestao_hub') return 'financeiro';
+    return (saved as any) || 'agora';
   });
 
   const [activeSubTab, setActiveSubTab] = useState<string>(() => {
@@ -127,6 +138,9 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId as any);
     switch (tabId) {
+      case 'agora':
+        setActiveSubTab('agora');
+        break;
       case 'dashboard':
       case 'relatorios':
         setActiveSubTab('visao_geral');
@@ -164,19 +178,32 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     }
   };
 
-  const isSidebarTabActive = (tabId: string) =>
-    tabId === 'cardapio_digital'
-      ? activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'
-      : tabId === 'permissoes_cargos'
-        ? activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')
-        : tabId === 'impressao_salao'
-          ? activeTab === 'impressao_salao' ||
-            (activeTab === 'configuracoes' && activeSubTab === 'impressoras')
-          : tabId === 'assinatura_pix'
-            ? activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')
-            : tabId === 'relatorios'
-              ? activeTab === 'relatorios' || activeTab === 'dashboard'
-              : activeTab === tabId;
+  const isSidebarTabActive = (tabId: string) => {
+    // "Gestão" hub is active when any of its member tabs is active
+    if (tabId === 'gestao_hub') {
+      return GESTAO_MEMBER_TABS.has(activeTab);
+    }
+    if (tabId === 'cardapio_digital')
+      return activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital';
+    if (tabId === 'permissoes_cargos')
+      return activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe');
+    if (tabId === 'impressao_salao')
+      return activeTab === 'impressao_salao' ||
+        (activeTab === 'configuracoes' && activeSubTab === 'impressoras');
+    if (tabId === 'assinatura_pix')
+      return activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos');
+    if (tabId === 'relatorios')
+      return activeTab === 'relatorios' || activeTab === 'dashboard';
+    if (tabId === 'agora')
+      return activeTab === 'agora';
+    return activeTab === tabId;
+  };
+
+  /** Tracks whether the Gestão hub is expanded in the sidebar. */
+  const [isGestaoExpanded, setIsGestaoExpanded] = useState(() => {
+    const saved = sessionStorage.getItem('koma_active_tab');
+    return !!saved && GESTAO_MEMBER_TABS.has(saved as CashierTab);
+  });
 
   const handleSidebarNavigation = (tabId: string, closeMobile = false) => {
     if (closeMobile) setIsMobileSidebarOpen(false);
@@ -189,6 +216,26 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
         'info',
       );
       return;
+    }
+
+    // "Gestão" hub click toggles expand/collapse without navigating
+    if (tabId === 'gestao_hub') {
+      setIsGestaoExpanded((prev) => !prev);
+      // If not currently in a Gestão member, navigate to the first one
+      if (!GESTAO_MEMBER_TABS.has(activeTab)) {
+        setActiveTab('financeiro');
+        setActiveSubTab('turno_atual');
+        setIsGestaoExpanded(true);
+      }
+      return;
+    }
+
+    // Clicking a Gestão sub-item
+    if (GESTAO_MEMBER_TABS.has(tabId as CashierTab)) {
+      setIsGestaoExpanded(true);
+    } else {
+      // Collapse Gestão when navigating away
+      setIsGestaoExpanded(false);
     }
 
     if (tabId === 'cardapio_digital') {
@@ -222,5 +269,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     handleTabChange,
     isSidebarTabActive,
     handleSidebarNavigation,
+    isGestaoExpanded,
+    setIsGestaoExpanded,
   };
 }

@@ -2,8 +2,24 @@ import { expect, type Page, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
 async function navigate(page: Page, label: string) {
-  const button = page.getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) });
-  if (!await button.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  const targetLabel = label === 'Vendas' ? 'Vender' : label === 'Relatórios' ? 'Resultados' : label;
+  const gestaoItems = ['Caixa', 'Estoque', 'Clientes', 'Equipe'];
+
+  if (gestaoItems.includes(label)) {
+    const subButton = page.getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) });
+    if (!await subButton.isVisible()) {
+      const openMenu = page.getByRole('button', { name: 'Abrir menu principal' });
+      if (await openMenu.isVisible()) await openMenu.click();
+      const gestaoButton = page.getByRole('button', { name: 'Gestão' });
+      if (await gestaoButton.isVisible()) await gestaoButton.click();
+    }
+  }
+
+  const button = page.getByRole('button', { name: new RegExp(`^(?:${targetLabel}|${label})(?: \\d+)?$`) });
+  if (!await button.isVisible()) {
+    const openMenu = page.getByRole('button', { name: 'Abrir menu principal' });
+    if (await openMenu.isVisible()) await openMenu.click();
+  }
   await button.click();
 }
 

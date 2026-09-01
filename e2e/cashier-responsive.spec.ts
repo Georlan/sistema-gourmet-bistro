@@ -243,6 +243,7 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toBeVisible();
   await expect(page.getByText('cat-pratos', { exact: true })).toHaveCount(0);
 
+  await page.getByRole('button', { name: 'Gestão', exact: true }).click();
   await page.getByRole('button', { name: 'Estoque', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Ingredientes', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Histórico', exact: true })).toBeVisible();

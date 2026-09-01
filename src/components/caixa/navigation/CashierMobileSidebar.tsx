@@ -1,7 +1,7 @@
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import type { useCashierNavigation } from './useCashierNavigation';
 import clsx from 'clsx';
-import { Lock, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, SlidersHorizontal, X } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
 import {
@@ -9,14 +9,13 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from '../../ui/sidebar';
-import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
+import { CASHIER_SIDEBAR_GROUPS, GESTAO_HUB_ITEMS } from './cashierNavigation';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 type BoundaryProps = CashierSidebarProps &
   Pick<ReturnType<typeof useCashierNavigation>, 'isMobileSidebarOpen' | 'setIsMobileSidebarOpen'>;
@@ -37,6 +36,7 @@ export function CashierMobileSidebar({
   setTheme,
   theme,
   activeWaiterNome,
+  isGestaoExpanded,
 }: BoundaryProps) {
   return (
     <>
@@ -115,37 +115,69 @@ export function CashierMobileSidebar({
 
             <SidebarContent className={"cashier-sidebar__content p-2"}>
               {CASHIER_SIDEBAR_GROUPS.map((group) => (
-                <SidebarGroup key={group.category}>
-                  <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
+                <SidebarGroup key={group.category || '__main'}>
+                  {group.category && (
+                    <span className="cashier-nav-group-label">{group.category}</span>
+                  )}
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {group.items.map((tab) => {
                         const Icon = tab.icon;
-                        const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
                         const isActive = isSidebarTabActive(tab.id);
                         const orderCount = tab.id === 'operacao' ? sidebarOrderCount : 0;
+                        const isHub = tab.id === 'gestao_hub';
 
                         return (
-                          <SidebarMenuItem key={tab.id}>
-                            <SidebarMenuButton
-                              isActive={isActive}
-                              onClick={() => handleSidebarNavigation(tab.id, true)}
-                              className="cashier-nav-item"
-                              title={tab.label}
-                            >
-                              <span className="cashier-nav-icon">
-                                <Icon size={15} />
-                              </span>
-                              <span className="cashier-nav-label">{tab.label}</span>
-                              {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
-                              {isLocked && (
-                                <span className="cashier-nav-plan">
-                                  <Lock size={9} />
-                                  <span>Plano</span>
+                          <React.Fragment key={tab.id}>
+                            <SidebarMenuItem>
+                              <SidebarMenuButton
+                                isActive={isActive}
+                                onClick={() => handleSidebarNavigation(tab.id, !isHub)}
+                                className="cashier-nav-item"
+                                title={tab.label}
+                              >
+                                <span className="cashier-nav-icon">
+                                  <Icon size={15} />
                                 </span>
-                              )}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
+                                <span className="cashier-nav-label">{tab.label}</span>
+                                {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
+                                {isHub && (
+                                  <ChevronDown
+                                    size={12}
+                                    className={clsx(
+                                      'ml-auto transition-transform duration-200 text-koma-muted',
+                                      isGestaoExpanded && 'rotate-180',
+                                    )}
+                                  />
+                                )}
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+
+                            {/* Gestão hub sub-items */}
+                            {isHub && isGestaoExpanded && (
+                              <div className="pl-4 flex flex-col gap-0.5">
+                                {GESTAO_HUB_ITEMS.map((sub) => {
+                                  const SubIcon = sub.icon;
+                                  const isSubActive = isSidebarTabActive(sub.id);
+                                  return (
+                                    <SidebarMenuItem key={sub.id}>
+                                      <SidebarMenuButton
+                                        isActive={isSubActive}
+                                        onClick={() => handleSidebarNavigation(sub.id, true)}
+                                        className="cashier-nav-item"
+                                        title={sub.label}
+                                      >
+                                        <span className="cashier-nav-icon">
+                                          <SubIcon size={13} />
+                                        </span>
+                                        <span className="cashier-nav-label text-xs">{sub.label}</span>
+                                      </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </SidebarMenu>
