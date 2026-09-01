@@ -148,29 +148,31 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const originIds = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
   const originStr = originIds.length > 0 ? ` + ${originIds.join(' + ')}` : '';
 
-  // Print invoice helper
-  const handlePrintPreview = () => {
-    setShowPrintPreview(true);
-  };
+  // One direct-print path for both closing summary and full receipt.
+  // The legacy preview remains only as a safe fallback when no real print handler is wired.
+  const handleDirectReceiptPrint = async (apenasValores: boolean) => {
+    if (!onPrintReceipt) {
+      setShowPrintPreview(true);
+      return;
+    }
 
-  // Feedback remains with the modal so changing tabs never resets pending timers.
-  const handleDirectPrint = async () => {
-    if (onPrintReceipt) {
-      setIsPrintingDirect(true);
-      try {
-        await onPrintReceipt(true);
-        setDirectPrintToast('Impressão enviada com sucesso.');
-        setTimeout(() => setDirectPrintToast(''), 3000);
-      } catch (e) {
-        console.error(e);
-        alert('Erro ao enviar impressão de fechamento');
-      } finally {
-        setIsPrintingDirect(false);
-      }
-    } else {
-      handlePrintPreview();
+    setIsPrintingDirect(true);
+    try {
+      await onPrintReceipt(apenasValores);
+      setDirectPrintToast('Impressão enviada com sucesso.');
+      setTimeout(() => setDirectPrintToast(''), 3000);
+    } catch (e) {
+      console.error(e);
+      alert(apenasValores
+        ? 'Erro ao enviar impressão de fechamento'
+        : 'Erro ao enviar impressão do recibo completo');
+    } finally {
+      setIsPrintingDirect(false);
     }
   };
+
+  const handleDirectPrint = () => handleDirectReceiptPrint(true);
+  const handleDirectFullPrint = () => handleDirectReceiptPrint(false);
 
   const handleCloseTableConfirmation = () => {
     if (confirmClear) {
@@ -388,7 +390,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               setTransferType={setTransferType}
               setSelectedOrderToPrint={setSelectedOrderToPrint}
               setEditingItem={setEditingItem}
-              onPrintPreview={handlePrintPreview}
+              onPrintPreview={handleDirectFullPrint}
               onPrintValues={handleDirectPrint}
               onCloseTable={onCloseTable ? handleCloseTableConfirmation : undefined}
               onMergeTables={onMergeTables}
