@@ -22,6 +22,14 @@ from ...application.orders.commands import (
     OrderItemInput,
 )
 from ...application.orders.service import OrderApplicationService
+from ...application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintTrigger,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 from ...database import require_tenant_id
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
@@ -46,10 +54,6 @@ from ...services.atendimentos import (
     ensure_launch_identity,
 )
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
-from ...services.printing import (
-    PrintingRequestError,
-    enqueue_table_receipt,
-)
 from ...services.shifts import require_open_cash_shift
 from ...waiter_permissions import (
     require_waiter_permission,
@@ -258,86 +262,38 @@ class WaiterAdapter:
                 ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
                 ensure_launch_identity(db, novo_lancamento)
 
-            # 7. Impressão de Produção
-            itens_cozinha = [
-                it for it in novo_lancamento.itens
-                if it.status != "cancelado"
-            ]
-            should_print = any(
-                (
-                    it.produto.categoria.destino_impressao
-                    if (it.produto and it.produto.categoria)
-                    else getattr(it.produto, "local_impressao", getattr(it.produto, "destino", "COZINHA"))
-                ) not in ("NENHUM", "NONE", "")
-                for it in itens_cozinha
-            )
-
-            novo_lancamento.dispensado_impressao = False
-            if should_print and waiter_permission_enabled(
+            # 7. Impressão: a borda declara somente intenção. O Core resolve
+            # motor (local/retirada/delivery), política, documento e PrintJob.
+            novo_lancamento.dispensado_impressao = True
+            if waiter_permission_enabled(
                 db,
                 current_user,
                 "perm_garcom_print",
             ):
                 try:
-                    if comanda.tipo == "Consumo no Local" and comanda.mesa_id is not None:
-                        enqueue_table_receipt(
-                            db,
-                            rid,
-                            int(comanda.mesa_id),
-                            apenas_valores=False,
-                            source_type="lancamento",
+                    jobs = PrintingApplicationService.request_print(
+                        db,
+                        PrintIntent(
+                            restaurant_id=rid,
+                            source_type=PrintSourceType.ORDER,
                             source_id=novo_lancamento.id,
-                            idempotency_key=f"mesa:auto:lancamento:{novo_lancamento.id}",
-                        )
-                    else:
-                        from ...domain.printing import PrintDocumentService
-                        from ...domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
-                        from ...domain.printing.time import get_operational_now
-                        from ...printing_background import print_in_background
+                            action=PrintAction.PRINT,
+                            trigger=PrintTrigger.AUTOMATIC,
+                            table_id=comanda.mesa_id,
+                            requested_by=garcom.nome,
+                            idempotency_key=f"universal:auto:lancamento:{novo_lancamento.id}",
+                        ),
+                    )
+                    novo_lancamento.dispensado_impressao = not bool(jobs)
+                except UniversalPrintingError as print_err:
+                    novo_lancamento.dispensado_impressao = True
+                    logger.warning(
+                        "Falha no Core Universal de Impressão do lançamento %s: %s",
+                        novo_lancamento.id,
+                        print_err,
+                    )
 
-                        p_items = [
-                            DomainPrintItem(
-                                codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
-                                nome=it.produto.nome,
-                                quantidade=1,
-                                preco_unit=it.preco_unit,
-                                observacao=it.observacao,
-                                cliente_nome=it.cliente_nome,
-                                destino_impressao=(
-                                    it.produto.categoria.destino_impressao
-                                    if (it.produto and it.produto.categoria)
-                                    else getattr(it.produto, "local_impressao", getattr(it.produto, "destino", "COZINHA"))
-                                ),
-                            )
-                            for it in itens_cozinha
-                        ]
-                        doc_data = OrderPrintData(
-                            numero_pedido=str(comanda.numero_pedido),
-                            mesa="BALCAO",
-                            tipo_pedido=comanda.tipo,
-                            garcom_nome=garcom.nome if garcom else "GARCOM",
-                            horario=get_operational_now().strftime("%H:%M"),
-                            itens=p_items,
-                            restaurante_nome="KÔMA",
-                        )
-                        docs = PrintDocumentService.generate_production(doc_data)
-                        for dest_name, ticket_text in docs.items():
-                            background_tasks.add_task(
-                                print_in_background,
-                                printer_name=dest_name,
-                                ticket_text=ticket_text,
-                                document_type="producao",
-                                source_type="pedido",
-                                source_id=comanda.id,
-                                restaurante_id=rid,
-                            )
-                except PrintingRequestError as print_err:
-                    logger.warning("Falha ao gerar via canônica do lançamento: %s", print_err)
-                except Exception as print_err:
-                    logger.warning("Falha ao gerar impressões do lançamento do garçom: %s", print_err)
-            else:
-                novo_lancamento.dispensado_impressao = True
-
+            # Pedido e PrintJob são persistidos na mesma transação.
             db.commit()
             db.refresh(novo_lancamento)
 

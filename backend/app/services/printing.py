@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from ..models import (
@@ -473,7 +474,18 @@ def enqueue_print_job(
         status="pending",
         idempotency_key=idempotency_key,
     )
-    db.add(job)
+    try:
+        with db.begin_nested():
+            db.add(job)
+            db.flush()
+    except IntegrityError:
+        existing = db.query(PrintJob).filter(
+            PrintJob.restaurante_id == restaurante_id,
+            PrintJob.idempotency_key == idempotency_key,
+        ).first()
+        if existing:
+            return existing
+        raise
     return job
 
 

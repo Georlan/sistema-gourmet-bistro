@@ -18,6 +18,7 @@
 | Mesa / estado operacional | `docs/architecture/table_projections_memory.md` | `src/domain/operationalState.ts` |
 | Caixa / Kanban | `docs/engineering/cashier-ownership.md` | Owners em `src/components/caixa/`; `src/domain/cashierOrderProjection.ts` |
 | Integrações / outbox | `backend/app/adapters/orders/` e busca por `IntegrationOutbox` | adapter do canal e serviço de outbox existente |
+| Impressão | `docs/engineering/universal-printing.md` | `backend/app/application/printing/`; bordas só declaram `PrintIntent` |
 | Intenção de produto / backlog | `docs/architecture/product_intent_protection.md` | `docs/architecture/phase7_backlog.md` |
 | Cardápio público | `src/cardapio/` | `docs/architecture/cardapio_delivery_presentation.md` e `cardapio_addons_direction.md` |
 | Landing / dispositivos | `.cursor/rules/landing-device-mockups.mdc` | `docs/landing-*-mockup.md`; preservar visual 3D, alpha real e tela substituível |
@@ -32,6 +33,7 @@
 - Preservar fatias Kanban: R$112 em preparo + R$48 prontos = R$160, sem duplicar R$160 nos dois cards.
 - Uma Mesa agregada pode conter vários Pedidos; não identificá-la pelo primeiro lançamento.
 - Compartilhar apresentação não unifica ações de Caixa/Garçom nem muda regras financeiras.
+- Compartilhar impressão não autoriza bordas a montar texto térmico; política, documento e `PrintJob` pertencem ao Core de Impressão.
 - Extrair responsabilidade com estado, efeitos e contratos, não fragmentar JSX apenas para reduzir linhas.
 - Preservar autenticação, idempotência, cleanup de subscriptions/timers e regras de SmartPOS/pagamento.
 - Histórico e decisões extensas ficam nos documentos apontados, não no contexto obrigatório.

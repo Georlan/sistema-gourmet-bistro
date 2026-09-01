@@ -2,16 +2,15 @@
 
 Recebe requisições de criação de pedidos presenciais e balcão, executa validações
 de turno e permissões de operador, mapeia para CreateOrderCommand (channel=POS),
-delega ao OrderApplicationService canônico, processa impressões de produção e
-emite broadcasts via WebSocket.
+delega ao OrderApplicationService canônico, declara a intenção de impressão ao
+Core Universal e emite broadcasts via WebSocket.
 """
 
 from __future__ import annotations
 
-import datetime
 from decimal import Decimal
 import logging
-from typing import Any, Optional
+
 from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -23,7 +22,15 @@ from ...application.orders.commands import (
     OrderItemInput,
 )
 from ...application.orders.service import OrderApplicationService
-from ...database import current_restaurante_id, require_tenant_id
+from ...application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintTrigger,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
+from ...database import require_tenant_id
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
     InvalidFulfillmentDetailsError,
@@ -61,13 +68,7 @@ from ...services.clientes import (
     cadastrar_ou_atualizar_cliente,
     normalizar_telefone_cliente,
 )
-from ...services.printing import (
-    PrintingRequestError,
-    enqueue_table_receipt,
-)
 from ...services.shifts import require_open_cash_shift
-from ...subscription import subscription_has_printing
-from ...timezone_utils import get_operational_now
 from ...waiter_permissions import (
     require_waiter_permission,
     waiter_permission_enabled,
@@ -75,55 +76,6 @@ from ...waiter_permissions import (
 from ...websocket_manager import manager
 
 logger = logging.getLogger("koma.adapters.pos")
-
-
-def print_in_background(
-    printer_name: str,
-    ticket_text: str,
-    document_type: str = "producao",
-    source_type: str = "pedido",
-    source_id: str = "",
-    restaurante_id: int | None = None,
-):
-    try:
-        from ...database import SessionLocal
-        from ...models import PrintJob, Restaurante
-
-        if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
-            raise ValueError("Background de impressão exige restaurante_id explícito")
-        tenant_context = current_restaurante_id.set(restaurante_id)
-        db = None
-        try:
-            db = SessionLocal(restaurante_id=restaurante_id)
-            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if restaurante and not subscription_has_printing(
-                restaurante_id,
-                restaurante.plano,
-            ):
-                logger.info(
-                    "Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.",
-                    restaurante_id,
-                )
-                return
-
-            pj = PrintJob(
-                restaurante_id=restaurante_id,
-                document_type=document_type,
-                destination=printer_name.upper(),
-                source_type=source_type,
-                source_id=source_id,
-                payload_text=ticket_text,
-                status="pending",
-                idempotency_key=f"bg:{source_id}:{printer_name}:{ticket_text[:20]}",
-            )
-            db.add(pj)
-            db.commit()
-        finally:
-            if db is not None:
-                db.close()
-            current_restaurante_id.reset(tenant_context)
-    except Exception as exc:
-        logger.error(f"[PRINT BACKGROUND ERROR] Falha ao enfileirar job: {exc}")
 
 
 class PosAdapter:
@@ -331,7 +283,7 @@ class PosAdapter:
             table_id=str(venda_in.mesa_id) if venda_in.mesa_id is not None else None,
         )
 
-        # 4. Delegação ao OrderApplicationService
+        # 4. Delegação ao OrderApplicationService + intenção universal de impressão
         try:
             order_dto = OrderApplicationService.create_order(db, cmd, commit=False)
 
@@ -356,26 +308,67 @@ class PosAdapter:
                     if lanc.id == order_dto.order_id:
                         lanc.origem = "smartpos"
 
+            lanc_rec = next(
+                (lanc for lanc in comanda.lancamentos if lanc.id == order_dto.order_id),
+                None,
+            )
+
             # Identificador em consumo local
             if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is not None:
                 ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
-                lanc_rec = next((l for l in comanda.lancamentos if l.id == order_dto.order_id), None)
                 if lanc_rec:
                     ensure_launch_identity(db, lanc_rec)
 
+            # A borda não filtra NENHUM, não escolhe formatter e não cria PrintJob.
+            # O motor universal preserva silêncio automático local, mas garante via
+            # operacional para retirada/delivery, inclusive somente bebidas.
+            if lanc_rec is not None:
+                lanc_rec.dispensado_impressao = True
+            if waiter_permission_enabled(
+                db,
+                current_user,
+                "perm_garcom_print",
+            ):
+                try:
+                    jobs = PrintingApplicationService.request_print(
+                        db,
+                        PrintIntent(
+                            restaurant_id=rid,
+                            source_type=PrintSourceType.ORDER,
+                            source_id=order_dto.order_id,
+                            action=PrintAction.PRINT,
+                            trigger=PrintTrigger.AUTOMATIC,
+                            table_id=venda_in.mesa_id,
+                            requested_by=garcom.nome if garcom else current_user.nome,
+                            idempotency_key=f"universal:auto:lancamento:{order_dto.order_id}",
+                        ),
+                    )
+                    if lanc_rec is not None:
+                        lanc_rec.dispensado_impressao = not bool(jobs)
+                except UniversalPrintingError as print_err:
+                    if lanc_rec is not None:
+                        lanc_rec.dispensado_impressao = True
+                    logger.warning(
+                        "Falha no Core Universal de Impressão do PDV %s: %s",
+                        order_dto.order_id,
+                        print_err,
+                    )
+
+            # Pedido e PrintJob são persistidos juntos; não há background paralelo
+            # criando uma segunda semântica de impressão.
             db.commit()
             db.refresh(comanda)
 
         except HTTPException:
             db.rollback()
             raise
-        except (ProductNotFoundError, ProductInactiveError, ProductTenantMismatchError) as err:
+        except (ProductNotFoundError, ProductInactiveError, ProductTenantMismatchError):
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Um produto do pedido não está mais disponível.",
             )
-        except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError) as err:
+        except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError):
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -432,81 +425,6 @@ class PosAdapter:
                 },
                 tenant_id=current_user.tenant_id,
             )
-
-        # 6. Impressão de Produção
-        itens_cozinha = []
-        for it in comanda.itens:
-            if it.lancamento_id == order_dto.order_id and it.status != "cancelado":
-                dest_val = (
-                    it.produto.categoria.destino_impressao
-                    if (it.produto and it.produto.categoria)
-                    else getattr(it.produto, "local_impressao", getattr(it.produto, "destino", "COZINHA"))
-                )
-                dest = (dest_val or "COZINHA").upper()
-                if dest not in ("NENHUM", "NONE", ""):
-                    itens_cozinha.append(it)
-
-        if itens_cozinha and waiter_permission_enabled(
-            db,
-            current_user,
-            "perm_garcom_print",
-        ):
-            try:
-                if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is not None:
-                    enqueue_table_receipt(
-                        db,
-                        rid,
-                        venda_in.mesa_id,
-                        apenas_valores=False,
-                        source_type="pedido",
-                        source_id=comanda.id,
-                        idempotency_key=f"mesa:auto:comanda:{comanda.id}",
-                    )
-                    db.commit()
-                else:
-                    from ...domain.printing import PrintDocumentService
-                    from ...domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
-
-                    p_items = [
-                        DomainPrintItem(
-                            codigo=it.produto.codigo if hasattr(it.produto, "codigo") else "",
-                            nome=it.produto.nome,
-                            quantidade=1,
-                            preco_unit=it.preco_unit,
-                            observacao=it.observacao,
-                            cliente_nome=it.cliente_nome,
-                            destino_impressao=(
-                                it.produto.categoria.destino_impressao
-                                if (it.produto and it.produto.categoria)
-                                else getattr(it.produto, "local_impressao", getattr(it.produto, "destino", "COZINHA"))
-                            ),
-                        )
-                        for it in itens_cozinha
-                    ]
-                    doc_data = OrderPrintData(
-                        numero_pedido=str(comanda.numero_pedido),
-                        mesa="BALCAO",
-                        tipo_pedido=tipo_pedido,
-                        garcom_nome=garcom.nome if garcom else "CAIXA",
-                        horario=get_operational_now().strftime("%H:%M"),
-                        itens=p_items,
-                        restaurante_nome="KÔMA",
-                    )
-                    docs = PrintDocumentService.generate_production(doc_data)
-                    for dest_name, ticket_text in docs.items():
-                        background_tasks.add_task(
-                            print_in_background,
-                            printer_name=dest_name,
-                            ticket_text=ticket_text,
-                            document_type="producao",
-                            source_type="pedido",
-                            source_id=comanda.id,
-                            restaurante_id=rid,
-                        )
-            except PrintingRequestError as print_err:
-                logger.warning("Falha ao gerar via canônica da mesa: %s", print_err)
-            except Exception as print_err:
-                logger.warning("Falha ao gerar impressões de venda direta: %s", print_err)
 
         background_tasks.add_task(
             manager.broadcast,

@@ -28,16 +28,48 @@ def _format_curr(value: float) -> str:
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _item_left_text(item, right: str, width: int) -> str:
+    """Prioriza nome legível; código só entra quando não rouba o nome do produto."""
+    quantity = f"{item.quantidade} x "
+    name = str(item.nome or "ITEM").strip().upper()
+    code = str(item.codigo or "").strip()
+    max_left = max(width - len(right.strip()) - 1, 1)
+
+    # Alguns cadastros antigos já guardam o código no começo do próprio nome.
+    # Não repetir `006 - 006 - BURGUER...` no papel.
+    normalized_name = name.casefold()
+    code_prefixes = (
+        f"{code} -".casefold(),
+        f"{code}-".casefold(),
+        f"{code} ".casefold(),
+    ) if code else ()
+    code_already_in_name = bool(
+        code and any(normalized_name.startswith(prefix) for prefix in code_prefixes)
+    )
+
+    code_part = "" if code_already_in_name or not code else f"{code} - "
+    with_code = f"{quantity}{code_part}{name}".strip()
+    without_code = f"{quantity}{name}".strip()
+
+    if len(with_code) <= max_left:
+        return with_code
+    if len(without_code) <= max_left:
+        return without_code
+    return without_code
+
+
 def format_production_document(
     data: OrderPrintData,
     width: PaperWidth = PaperWidth.WIDTH_80MM,
+    *,
+    include_all_items: bool = False,
 ) -> str:
-    """Gera uma ordem de produção estritamente a partir dos itens recebidos.
+    """Gera uma via operacional a partir do snapshot canônico recebido.
 
-    Este formatter não consulta mesa, não recompõe consumo anterior e não é
-    usado como Extrato Completo. A via financeira de Consumo no Local pertence
-    a ``services.printing.render_table_receipt``. Aqui ficam apenas documentos
-    incrementais destinados à operação de produção (cozinha/bar/delivery).
+    ``include_all_items`` é reservado ao plano de impressão: produção setorial
+    continua respeitando ``destino_impressao``; uma via operacional obrigatória
+    de retirada/delivery pode carregar itens ``NENHUM`` sem alterar o cadastro.
+    O formatter não consulta banco nem decide política.
     """
     w = width.value if isinstance(width, PaperWidth) else int(width)
     lines: List[str] = []
@@ -72,15 +104,22 @@ def format_production_document(
         lines.append(_justify(tipo_str, horario_str, w))
     elif tipo_str:
         lines.append(tipo_str)
+    if data.is_reprint:
+        lines.append(_center("REIMPRESSÃO", w))
     if data.garcom_nome:
         lines.append(_center(f"GARÇOM: {data.garcom_nome.upper()}", w))
     lines.append(_separator("-", w))
 
-    prod_items = [
-        item
-        for item in data.itens
-        if (item.destino_impressao or "COZINHA").upper() not in ("NENHUM", "NONE", "")
-    ]
+    prod_items = (
+        list(data.itens)
+        if include_all_items
+        else [
+            item
+            for item in data.itens
+            if (item.destino_impressao or "COZINHA").upper()
+            not in ("NENHUM", "NONE", "")
+        ]
+    )
     by_client = group_items_by_customer(prod_items)
     omit_client_header = len(by_client) == 1 and "GERAL" in by_client
 
@@ -95,9 +134,8 @@ def format_production_document(
             lines.append(client_name)
 
         for item in group_equivalent_items(client_items, match_observations=True):
-            code_str = f"{item.codigo} - " if item.codigo else ""
-            left = f"{item.quantidade} x {code_str}{item.nome.upper()}".strip()
             right = f"R$ {_format_curr(item.total)}"
+            left = _item_left_text(item, right, w)
             lines.append(_justify(left, right, w))
             observation = normalize_observation(item.observacao)
             if observation:
