@@ -1,0 +1,111 @@
+name: Baseline lockfile minimize
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/baseline-lockfile-minimize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  minimize-lockfile:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Reset lockfile to main baseline
+        run: |
+          git fetch origin main --depth=1
+          git checkout origin/main -- package-lock.json
+
+      - name: Apply only the Browserslist security graph
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'package-lock.json'
+          const lock = JSON.parse(fs.readFileSync(path, 'utf8'))
+          const p = lock.packages
+
+          Object.assign(p['node_modules/baseline-browser-mapping'], {
+            version: '2.11.20',
+            resolved: 'https://registry.npmjs.org/baseline-browser-mapping/-/baseline-browser-mapping-2.11.20.tgz',
+            integrity: 'sha512-H0ulySigv6icDJ1F7SjtdCD6PrhTpdYCmP0CactWy1+ekh0AFd0o1Wn5T8b+hnTmdBx19u9yhL6wvCylXMY7zw=='
+          })
+
+          Object.assign(p['node_modules/browserslist'], {
+            version: '4.28.8',
+            resolved: 'https://registry.npmjs.org/browserslist/-/browserslist-4.28.8.tgz',
+            integrity: 'sha512-V2NpofLblG64mfOtSgDhOJESZEGogzDMBv/q+W6oc4LXWP/q75eOXoOaaOu1EOadB9U4Bwx/e0yzbvwKH8zalA=='
+          })
+          p['node_modules/browserslist'].dependencies = {
+            'baseline-browser-mapping': '^2.11.12',
+            'caniuse-lite': '^1.0.30001809',
+            'electron-to-chromium': '^1.5.402',
+            'node-releases': '^2.0.53',
+            'update-browserslist-db': '^1.3.0'
+          }
+
+          Object.assign(p['node_modules/caniuse-lite'], {
+            version: '1.0.30001810',
+            resolved: 'https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001810.tgz',
+            integrity: 'sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg=='
+          })
+
+          Object.assign(p['node_modules/electron-to-chromium'], {
+            version: '1.5.418',
+            resolved: 'https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.418.tgz',
+            integrity: 'sha512-UzS26r3AEbG5wSoGVpJKqwHIU9zwQN7LHdVIThDrJpS0I5KdlXFMEb8543fhc9dVnIIAST6ar8rhwa00AL5MlA=='
+          })
+
+          Object.assign(p['node_modules/node-releases'], {
+            version: '2.0.54',
+            resolved: 'https://registry.npmjs.org/node-releases/-/node-releases-2.0.54.tgz',
+            integrity: 'sha512-YHs7BmmcsdAI5Ozuf8JZo6PT0mv2GIWC9vMfvUC3dp65M8hn7Ux8CPL+2oBI7juNuj9d0ndhTcznq2ODBps9cQ=='
+          })
+
+          Object.assign(p['node_modules/update-browserslist-db'], {
+            version: '1.3.2',
+            resolved: 'https://registry.npmjs.org/update-browserslist-db/-/update-browserslist-db-1.3.2.tgz',
+            integrity: 'sha512-UQ+MSxlhRm1bzjhU+DcuXfjFO1FzNtqhK5+9Yvlp90ItDLk5vT932A0rFu619nf7RVS+Y/VeaUW1jaRDqZ8VJw=='
+          })
+
+          fs.writeFileSync(path, JSON.stringify(lock, null, 2) + '\n')
+          NODE
+
+      - name: Verify lockfile installs exactly
+        run: npm ci
+
+      - name: Verify dependency graph
+        run: npm ls browserslist baseline-browser-mapping caniuse-lite electron-to-chromium node-releases update-browserslist-db
+
+      - name: Verify high severity audit is clean
+        run: npm audit --audit-level=high
+
+      - name: Verify package manifest was not changed
+        run: git diff --exit-code origin/main -- package.json
+
+      - name: Remove temporary minimizer workflow
+        run: rm .github/workflows/baseline-lockfile-minimize.yml
+
+      - name: Commit minimal lockfile repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json .github/workflows/baseline-lockfile-minimize.yml
+          git diff --cached --check
+          git commit -m "chore(security): minimize browserslist lockfile repair"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
