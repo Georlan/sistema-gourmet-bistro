@@ -48,6 +48,9 @@ export function isRejectedStatus(status: string | undefined): boolean {
 
 export function orderStatusLabel(status: string | undefined): string {
   const normalized = normalizeOrderStatus(status);
+  if (normalized.includes("aguardando_pagamento")) {
+    return "Aguardando pagamento";
+  }
   if (normalized.includes("recus") || normalized.includes("cancel")) {
     return "Pedido não aceito";
   }

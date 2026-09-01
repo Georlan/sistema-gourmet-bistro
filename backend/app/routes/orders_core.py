@@ -2,7 +2,7 @@ import uuid
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List, Optional, Any
 import logging
 
@@ -375,7 +375,10 @@ def get_comandas(
     Retorna a lista de comandas, com filtros opcionais por mesa e status (aberta/fechada).
     """
     rest_id = require_tenant_id()
-    query = db.query(Comanda).filter(Comanda.restaurante_id == rest_id)
+    query = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+    )
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
@@ -396,7 +399,10 @@ def get_comandas_detalhes(
         joinedload(Comanda.itens).joinedload(Item.produto),
         joinedload(Comanda.criada_por),
         selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
-    ).filter(Comanda.restaurante_id == require_tenant_id())
+    ).filter(
+        Comanda.restaurante_id == require_tenant_id(),
+        or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+    )
     if mesa_id is not None:
         query = query.filter(Comanda.mesa_id == mesa_id)
     if fechada is not None:
@@ -419,6 +425,7 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
         .filter(
             Comanda.restaurante_id == require_tenant_id(),
             Comanda.id == comanda_id,
+            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
         )
         .first()
     )
@@ -1227,7 +1234,8 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
     return db.query(Comanda).filter(
         Comanda.restaurante_id == require_tenant_id(),
         Comanda.tipo.in_(["Delivery", "Entrega", "Retirada"]),
-        Comanda.fechada == False
+        Comanda.fechada == False,
+        or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
     ).all()
 
 

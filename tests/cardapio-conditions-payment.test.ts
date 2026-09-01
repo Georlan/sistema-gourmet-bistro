@@ -63,8 +63,14 @@ test('revisão apresenta a forma realmente escolhida e momento do pagamento', ()
   for (const [method, label] of Object.entries(PAYMENT_LABELS)) {
     const html = render(createElement(CardapioPaymentSummary, { method: method as keyof typeof PAYMENT_LABELS, fulfillment: 'delivery' }));
     assert.ok(html.includes(label));
-    assert.match(html, /na entrega/);
-    assert.match(html, /Não há cobrança online/);
+    if (method === 'pix') {
+      assert.match(html, /online agora/);
+      assert.match(html, /só aparece para o restaurante após a confirmação automática/);
+      assert.doesNotMatch(html, /na entrega|Não há cobrança online/);
+    } else {
+      assert.match(html, /na entrega/);
+      assert.match(html, /Não há cobrança online/);
+    }
   }
 });
 

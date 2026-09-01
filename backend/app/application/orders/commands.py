@@ -96,6 +96,9 @@ class CreateOrderCommand:
     idempotency_key: Optional[str] = None
     external_reference: Optional[ExternalOrderReference] = None
     operator_user_id: Optional[str | int] = None
+    # Pedidos com pagamento online existem antes da autorização, mas ainda não
+    # podem ser publicados para cozinha/caixa. O webhook publica após aprovar.
+    defer_operational_publish: bool = False
 
     def __post_init__(self) -> None:
         if self.restaurant_id <= 0:

@@ -534,29 +534,31 @@ class OrderApplicationService:
             # 10. Consumo de Estoque (pedidos em produção baixam imediatamente, pendentes aguardam aceite)
             consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id, liberar_pendente=False)
 
-            # 11. Transactional Outbox (mesma sessão ACID)
-            eid = cls._event_identity_kwargs(db, novo_lancamento, comanda)
-            event = OrderCreated(
-                restaurant_id=cmd.restaurant_id,
-                order_id=eid["order_id"],
-                check_id=eid["check_id"],
-                display_number=display_number or eid["display_number"],
-                check_number=eid["check_number"],
-                channel=cmd.channel,
-                fulfillment=cmd.fulfillment,
-                total=quote.total,
-                items_count=len(cmd.items),
-                table_id=cmd.table_id,
-                customer_name=cmd.customer.name if cmd.customer else None,
-                customer_phone=cmd.customer.phone if cmd.customer else None,
-                idempotency_key=cmd.idempotency_key,
-            )
-            enqueue_outbox_event_in_session(
-                db,
-                event,
-                aggregate_type="order",
-                aggregate_id=str(novo_lancamento.id),
-            )
+            # 11. Transactional Outbox (mesma sessão ACID). Pagamentos online
+            # só liberam este evento após confirmação autoritativa do provedor.
+            if not cmd.defer_operational_publish:
+                eid = cls._event_identity_kwargs(db, novo_lancamento, comanda)
+                event = OrderCreated(
+                    restaurant_id=cmd.restaurant_id,
+                    order_id=eid["order_id"],
+                    check_id=eid["check_id"],
+                    display_number=display_number or eid["display_number"],
+                    check_number=eid["check_number"],
+                    channel=cmd.channel,
+                    fulfillment=cmd.fulfillment,
+                    total=quote.total,
+                    items_count=len(cmd.items),
+                    table_id=cmd.table_id,
+                    customer_name=cmd.customer.name if cmd.customer else None,
+                    customer_phone=cmd.customer.phone if cmd.customer else None,
+                    idempotency_key=cmd.idempotency_key,
+                )
+                enqueue_outbox_event_in_session(
+                    db,
+                    event,
+                    aggregate_type="order",
+                    aggregate_id=str(novo_lancamento.id),
+                )
 
             if commit:
                 db.commit()

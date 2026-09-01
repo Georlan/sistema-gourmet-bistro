@@ -750,6 +750,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     socials: Optional[Any] = None
     horarios_funcionamento: Optional[Any] = None
     formas_pagamento_aceitas: Optional[Any] = None
+    pagamento_online_ativo: bool = False
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
     pedido_minimo: Optional[float] = 0.0
@@ -867,8 +868,9 @@ class CardapioPedidoCreate(BaseModel):
     cliente_telefone: str = Field(min_length=10, max_length=20)
     endereco_entrega: str = Field(default="", max_length=300)
     taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
-    forma_pagamento: Literal["na_entrega"] = "na_entrega"
+    forma_pagamento: Literal["na_entrega", "online"] = "na_entrega"
     forma_pagamento_detalhe: Optional[str] = Field(default="dinheiro", max_length=50)
+    cliente_email: Optional[str] = Field(default=None, max_length=254)
     troco_para: Optional[float] = Field(default=None, ge=0)
     bairro: Optional[str] = Field(default=None, max_length=100)
     cupom_codigo: Optional[str] = Field(default=None, max_length=50)
@@ -896,6 +898,16 @@ class CardapioPedidoCreate(BaseModel):
     @classmethod
     def normalize_delivery_address(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("cliente_email")
+    @classmethod
+    def normalize_customer_email(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        email = value.strip().lower()
+        if not email or email.count("@") != 1 or "." not in email.split("@", 1)[1]:
+            raise ValueError("E-mail do cliente inválido.")
+        return email
 
     model_config = ConfigDict(extra="forbid")
 

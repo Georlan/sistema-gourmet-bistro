@@ -19,6 +19,7 @@ import {
   Coins,
   DollarSign,
   MapPin,
+  Mail,
   Minus,
   Percent,
   Phone,
@@ -51,6 +52,7 @@ export interface CardapioCheckoutRequest {
   deliveryFee: number;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   paymentMethodDetail?: "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
   trocoPara?: number;
   bairro?: string;
@@ -106,10 +108,17 @@ export default function CardapioCartDrawer({
   const [selectedBairro, setSelectedBairro] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   // Payment detail & Change (Troco)
-  const availablePayments = useMemo(() => getAvailablePaymentMethods(brandConfig?.paymentMethods), [brandConfig?.paymentMethods]);
+  const availablePayments = useMemo(() => {
+    const configured = getAvailablePaymentMethods(brandConfig?.paymentMethods);
+    if (brandConfig?.onlinePaymentEnabled === undefined) return configured;
+    return configured.filter((method) => (
+      method === "dinheiro" || (method === "pix" && brandConfig.onlinePaymentEnabled)
+    ));
+  }, [brandConfig?.onlinePaymentEnabled, brandConfig?.paymentMethods]);
   const [paymentSelection, setPaymentSelection] = useState<{ restaurantId: string; method: PaymentMethod | null }>(() => ({
     restaurantId: String(restaurantId),
     method: availablePayments[0] ?? null,
@@ -160,9 +169,10 @@ export default function CardapioCartDrawer({
     try {
       const raw = localStorage.getItem(guestContactKey(restaurantId));
       if (!raw) return;
-      const parsed = JSON.parse(raw) as { name?: string; phone?: string; address?: string };
+      const parsed = JSON.parse(raw) as { name?: string; phone?: string; email?: string; address?: string };
       setGuestName(String(parsed.name || ""));
       setGuestPhone(formatBrazilianPhone(String(parsed.phone || "")));
+      setGuestEmail(String(parsed.email || ""));
       setAddress(String(parsed.address || ""));
     } catch {
       // Ignore
@@ -175,12 +185,13 @@ export default function CardapioCartDrawer({
       localStorage.setItem(guestContactKey(restaurantId), JSON.stringify({
         name: guestName.trim(),
         phone: normalizeBrazilianPhone(guestPhone),
+        email: guestEmail.trim().toLowerCase(),
         address: address.trim(),
       }));
     } catch {
       // Ignore
     }
-  }, [address, guestName, guestPhone, restaurantId, user]);
+  }, [address, guestEmail, guestName, guestPhone, restaurantId, user]);
 
   // Subtotal calculation
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
@@ -313,6 +324,15 @@ export default function CardapioCartDrawer({
       return;
     }
 
+    if (paymentDetail !== "dinheiro" && paymentDetail !== "pix") {
+      setErrorMessage("Pagamento online por cartão será liberado após a etapa segura de tokenização. Use Pix ou dinheiro.");
+      return;
+    }
+    if (paymentDetail === "pix" && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
+      setErrorMessage("Informe um e-mail válido para gerar o pagamento Pix.");
+      return;
+    }
+
     if (paymentDetail === "dinheiro" && precisaTroco && trocoValorNum < total) {
       setErrorMessage(`O valor para troco deve ser maior que o total do pedido (${formatPrice(total)}).`);
       return;
@@ -326,6 +346,7 @@ export default function CardapioCartDrawer({
         : "Retirada no Balcão",
       customerName: customerName.trim(),
       customerPhone: normalizeBrazilianPhone(customerPhone),
+      customerEmail: paymentDetail === "pix" ? guestEmail.trim().toLowerCase() : undefined,
       paymentMethodDetail: paymentDetail,
       trocoPara: paymentDetail === "dinheiro" && precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
       bairro: selectedBairro || undefined,
@@ -705,7 +726,7 @@ export default function CardapioCartDrawer({
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-koma-border pt-5">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">4. Como quer pagar?</h3>
-                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pagamento direto ao restaurante, {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}. Sem cobrança online agora.</p>
+                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pix é pago agora e só libera o pedido após confirmação. Dinheiro é pago pessoalmente {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}.</p>
                 
                 <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
 
@@ -802,6 +823,12 @@ export default function CardapioCartDrawer({
                     </label>
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-[10px] font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-500">Quer acumular pontos de fidelidade? <strong className="text-emerald-500">Identifique-se aqui.</strong></button>}
                   </div>
+                )}
+                {paymentDetail === "pix" && (
+                  <label className="mt-3 block">
+                    <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">E-mail para o Pix</span>
+                    <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); if (errorMessage) setErrorMessage(""); }} className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-customer-email" /></span>
+                  </label>
                 )}
               </section>
 

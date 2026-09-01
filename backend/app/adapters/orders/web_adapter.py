@@ -42,12 +42,19 @@ from ...domain.orders.types import FulfillmentType, OrderChannel
 from ...models import (
     Comanda,
     ConfiguracaoRestaurante,
+    OnlinePaymentIntent,
     Restaurante,
     Usuario,
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
 from ...services.online_order_policy import evaluate_online_order_policy
+from ...services.online_payments import (
+    OnlinePaymentConfigurationError,
+    OnlinePaymentService,
+    OnlinePaymentValidationError,
+)
+from ...services.online_payments.mercado_pago import MercadoPagoError
 from ...services.public_orders import (
     MAX_PUBLIC_ORDERS_PER_IP,
     MAX_PUBLIC_ORDERS_PER_PHONE,
@@ -74,7 +81,11 @@ def _order_total(comanda: Comanda) -> float:
     return round(max(0.0, itens_total + taxa - desconto_cupom - desconto_cashback), 2)
 
 
-def _existing_order_response(comanda: Comanda) -> dict[str, Any]:
+def _existing_order_response(db: Session, comanda: Comanda) -> dict[str, Any]:
+    intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == comanda.restaurante_id,
+        OnlinePaymentIntent.comanda_id == comanda.id,
+    ).first()
     return {
         "status": "success",
         "comanda_id": comanda.id,
@@ -84,10 +95,10 @@ def _existing_order_response(comanda: Comanda) -> dict[str, Any]:
         "cliente_id": comanda.cliente_id,
         "total": _order_total(comanda),
         "mensagem": "Pedido já cadastrado com sucesso!",
-        "pagamento": {
-            "status": "pendente_no_atendimento",
-            "cobranca_online": False,
-        },
+        "pagamento": (
+            OnlinePaymentService.public_payload(intent)
+            if intent else {"status": "pendente_no_atendimento", "cobranca_online": False}
+        ),
     }
 
 
@@ -173,6 +184,30 @@ class CardapioWebAdapter:
                 detail="A chave idempotente deve possuir entre 8 e 128 caracteres.",
             )
 
+        online_payment = payload.forma_pagamento == "online"
+        payment_method = (payload.forma_pagamento_detalhe or "").strip().lower()
+        if online_payment:
+            if payment_method != "pix":
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Neste momento o pagamento online disponível é Pix.",
+                )
+            if not payload.cliente_email:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Informe o e-mail para gerar o pagamento Pix.",
+                )
+            if not idempotency_key:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="A chave idempotente é obrigatória no pagamento online.",
+                )
+        elif payment_method != "dinheiro":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Pedidos sem pagamento online só podem usar dinheiro no atendimento.",
+            )
+
         tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
         endereco_comanda = None if modalidade == "retirada" else endereco_entrega
 
@@ -194,7 +229,17 @@ class CardapioWebAdapter:
             existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
             if existing_comanda:
                 logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
-                return _existing_order_response(existing_comanda)
+                existing_intent = db.query(OnlinePaymentIntent).filter(
+                    OnlinePaymentIntent.restaurante_id == rest_id,
+                    OnlinePaymentIntent.comanda_id == existing_comanda.id,
+                ).first()
+                if online_payment and existing_intent and not existing_intent.external_payment_id:
+                    OnlinePaymentService.ensure_pix_created(
+                        db,
+                        intent=existing_intent,
+                        payer_email=payload.cliente_email or "",
+                    )
+                return _existing_order_response(db, existing_comanda)
 
             # Autenticação de cliente
             if customer_token:
@@ -249,7 +294,7 @@ class CardapioWebAdapter:
                 rec_items_sig = sorted([f"{item.produto_id}:{item.observacao}" for item in rec.itens])
                 if payload_items_sig == rec_items_sig:
                     logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
-                    return _existing_order_response(rec)
+                    return _existing_order_response(db, rec)
 
             # Resolução de usuário operador elegível
             garcom = db.query(Usuario).filter(
@@ -265,6 +310,12 @@ class CardapioWebAdapter:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Restaurante ainda não está pronto para receber pedidos online.",
                 )
+
+            payment_account = None
+            payment_shift = None
+            if online_payment:
+                payment_account = OnlinePaymentService.active_account(db, rest_id)
+                payment_shift = OnlinePaymentService.open_shift(db, rest_id)
 
             # 2. Mapeamento para CreateOrderCommand
             fulfillment = FulfillmentType.DELIVERY if modalidade == "delivery" else FulfillmentType.PICKUP
@@ -303,10 +354,11 @@ class CardapioWebAdapter:
                 change_for=str(payload.troco_para) if payload.troco_para is not None else None,
                 idempotency_key=idempotency_key or None,
                 operator_user_id=garcom.id,
+                defer_operational_publish=online_payment,
             )
 
             # 3. Delegação ao OrderApplicationService
-            order_dto = OrderApplicationService.create_order(db, cmd, commit=True)
+            order_dto = OrderApplicationService.create_order(db, cmd, commit=not online_payment)
 
             # Obter o comanda correspondente para response completa
             comanda = (
@@ -319,6 +371,25 @@ class CardapioWebAdapter:
             )
             numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
             cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
+            payment_intent = None
+            if online_payment:
+                if comanda is None or payment_shift is None or payment_account is None:
+                    raise OnlinePaymentConfigurationError("Não foi possível preparar o pagamento do pedido.")
+                payment_intent = OnlinePaymentService.create_intent_in_session(
+                    db,
+                    comanda=comanda,
+                    turno=payment_shift,
+                    amount=order_dto.total,
+                    idempotency_key=idempotency_key,
+                )
+                db.commit()
+                db.refresh(payment_intent)
+                payment_intent = OnlinePaymentService.ensure_pix_created(
+                    db,
+                    intent=payment_intent,
+                    payer_email=payload.cliente_email or "",
+                    account=payment_account,
+                )
 
         except HTTPException:
             db.rollback()
@@ -347,6 +418,15 @@ class CardapioWebAdapter:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),
             )
+        except OnlinePaymentConfigurationError as err:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err))
+        except (MercadoPagoError, OnlinePaymentValidationError):
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Não foi possível gerar o Pix agora. Tente novamente sem alterar a sacola.",
+            )
         except EmptyOrderItemsError:
             db.rollback()
             raise HTTPException(
@@ -373,7 +453,7 @@ class CardapioWebAdapter:
                     "Corrida idempotente resolvida para pedido público: %s",
                     idempotency_key,
                 )
-                return _existing_order_response(concurrent_order)
+                return _existing_order_response(db, concurrent_order)
             logger.exception(
                 "Conflito de integridade ao processar pedido público do restaurante %s.",
                 rest_id,
@@ -395,20 +475,14 @@ class CardapioWebAdapter:
         finally:
             current_restaurante_id.reset(token_context)
 
-        # 4. Background tasks
-        background_tasks.add_task(
-            manager.broadcast,
-            {"event": "tables_updated"},
-            rest_id,
-        )
-        background_tasks.add_task(
-            manager.broadcast,
-            {
-                "event": "new_delivery_order",
-                "message": f"Novo pedido online de {cliente_nome} recebido!",
-            },
-            rest_id,
-        )
+        # 4. O pedido online permanece invisível até o webhook aprovar.
+        if not online_payment:
+            background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+            background_tasks.add_task(
+                manager.broadcast,
+                {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
+                rest_id,
+            )
         if cliente is not None:
             background_tasks.add_task(
                 manager.broadcast,
@@ -426,14 +500,18 @@ class CardapioWebAdapter:
         # 5. Mapeamento da Resposta HTTP Padronizada
         return {
             "status": "success",
-            "message": "Pedido enviado e integrado ao caixa com sucesso!",
+            "message": (
+                "Pix gerado. O pedido será enviado ao restaurante após a confirmação do pagamento."
+                if online_payment else "Pedido enviado e integrado ao caixa com sucesso!"
+            ),
             "id": order_dto.comanda_id,
             "comanda_id": order_dto.comanda_id,
             "numero_pedido": numero_pedido,
             "cliente_id": cliente_id,
             "total": float(order_dto.total),
-            "pagamento": {
-                "status": "pendente_no_atendimento",
-                "cobranca_online": False,
-            },
+            "pagamento": (
+                OnlinePaymentService.public_payload(payment_intent)
+                if online_payment and payment_intent is not None
+                else {"status": "pendente_no_atendimento", "cobranca_online": False}
+            ),
         }
