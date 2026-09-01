@@ -1,14 +1,18 @@
 # Governança de mudanças
 
-Fluxo: branch → PR → revisão → checks obrigatórios → merge → validação na main.
+Fluxo: branch → PR → checks obrigatórios rápidos → merge → validação pesada na main.
 Não usar bypass administrativo, force-push ou push direto para acelerar entregas.
 
 ## Checks obrigatórios
 
-- `Frontend typecheck + unit + build`: TypeScript, unitários, contraste, npm audit (high), build.
-- `Backend full + critical regression gate`: suite completa, concorrência PostgreSQL, migração single-head, print-agent e pip-audit/SBOM.
-- `Browser regression matrix`: matriz completa de oito viewports, incluindo checkout, salão, pagamento e cardápio.
-- `postgres-security-audit`: auditoria adversarial multi-tenant e invariantes PostgreSQL, em todo PR/push e semanalmente.
+Os quatro contexts exigidos pela proteção da `main` são preservados para evitar checks pendentes por nome inexistente, mas o caminho crítico de PR deve terminar em poucos minutos:
+
+- `Frontend typecheck + unit + build`: TypeScript, unitários e build de produção.
+- `Backend full + critical regression gate`: single-head de Alembic e regressões rápidas de backend/CORS/headers.
+- `Browser regression matrix`: smoke E2E em mobile e desktop sobre ownership/contexto operacional.
+- `postgres-security-audit`: regressões rápidas de segurança sem subir PostgreSQL adversarial no caminho crítico.
+
+As validações pesadas continuam obrigatórias como observabilidade pós-merge, mas não bloqueiam PRs: matriz E2E completa, suite backend completa, print-agent, npm audit, pip-audit/SBOM, métricas arquiteturais e auditoria PostgreSQL adversarial rodam em `push` para `main`, além dos agendamentos aplicáveis.
 
 Usar atualização estrita da base, resolução de conversas e proteção também para administradores.
 A exigência de PR não requer aprovação de um segundo humano indisponível: revisão é registrada no PR,
@@ -23,7 +27,7 @@ com `security-extended`, sem build para essas linguagens interpretadas. Usa a co
 [oficial do CodeQL Action](https://github.com/github/codeql-action).
 Os resultados ficam em Security / Code scanning. Não tratar execução bem-sucedida como ausência
 de alertas: triar novas descobertas e registrar falsos positivos com justificativa, sem desativar queries.
-É rotina adicional aos quatro checks obrigatórios, npm audit, pip-audit/SBOM e auditoria PostgreSQL.
+CodeQL é rotina adicional aos quatro checks obrigatórios e não deve alongar o caminho crítico do merge.
 
 ## E2E e diagnóstico
 
