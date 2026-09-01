@@ -15,7 +15,38 @@ permissions:
 jobs:
   postgres-security-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 8
+
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: security-audit-secret-key-2026-only-for-ci
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+
+      - name: Run fast security regression gate
+        run: >-
+          python -m pytest
+          backend/tests/test_cors_and_security_headers.py
+          backend/tests/test_cardapio_public_cors_railway.py
+          backend/tests/test_super_admin_contract.py
+          -q -ra
+
+  postgres-security-audit-full:
+    name: Post-merge PostgreSQL adversarial audit
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     services:
       postgres:
