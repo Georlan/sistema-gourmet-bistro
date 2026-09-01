@@ -423,10 +423,12 @@ for (const movement of ['transferir', 'mesclar'] as const) {
   });
 }
 
-test('impressão direta mantém estado entre abas e só confirma após resposta do servidor', async ({ page }) => {
+test('fechamento imprime direto, mantém estado entre abas e só confirma após resposta do servidor', async ({ page }) => {
   const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferPrinting: true });
   await page.locator('#mesa-card-7').click();
   const printButton = page.locator('#quick-print-values-btn');
+  await expect(printButton).toContainText('Fechamento');
+  await expect(printButton).not.toHaveClass(/bg-emerald-500/);
   await printButton.click();
   await expect.poll(() => state.writes).toEqual([
     { method: 'POST', path: '/mesas/7/imprimir-recibo', status: null, tableId: '7', valuesOnly: 'true' },
@@ -445,20 +447,22 @@ test('impressão direta mantém estado entre abas e só confirma após resposta 
   expect(state.unexpectedApiRequests).toEqual([]);
 });
 
-test('extrato completo preserva prévia, mesa e confirmação de impressão do servidor', async ({ page }) => {
+test('extrato completo imprime direto sem abrir modal intermediário', async ({ page }) => {
   const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferPrinting: true });
   await page.locator('#mesa-card-7').click();
-  await page.locator('#print-invoice-preview-btn').click();
-  const printButton = page.locator('#finalize-physical-print-btn');
-  await expect(page.getByText('Extrato de Mesa', { exact: true })).toBeVisible();
+  const printButton = page.locator('#print-invoice-preview-btn');
   await printButton.click();
+  await expect(page.getByText('Extrato de Mesa', { exact: true })).toHaveCount(0);
+  await expect(page.locator('#finalize-physical-print-btn')).toHaveCount(0);
   await expect.poll(() => state.writes).toEqual([
     { method: 'POST', path: '/mesas/7/imprimir-recibo', status: null, tableId: '7', valuesOnly: 'false' },
   ]);
+  await expect(printButton).toBeDisabled();
   await expect(page.getByText('Impressão enviada com sucesso.', { exact: true })).toHaveCount(0);
   state.releasePrint();
   await expect(page.getByText('Impressão enviada com sucesso.', { exact: true })).toBeVisible();
-  await expect(printButton).toHaveCount(0);
+  await expect(printButton).toBeEnabled();
+  await expect(page.getByText('Extrato de Mesa', { exact: true })).toHaveCount(0);
   await expect(page.locator('#modal-outer-overlay')).toBeVisible();
   expect(state.check.fechada).toBe(false);
   expect(state.unexpectedApiRequests).toEqual([]);
@@ -473,16 +477,18 @@ for (const printKind of ['direta', 'extrato', 'cozinha'] as const) {
       await dialog.accept();
     });
     await page.locator('#mesa-card-7').click();
-    if (printKind === 'extrato') await page.locator('#print-invoice-preview-btn').click();
     if (printKind === 'cozinha') {
       await page.locator('[id^="placed-order-"]').filter({ hasText: 'Prato da segunda rodada' })
         .getByRole('button', { name: 'Reimprimir', exact: true }).click();
       await expect(page.getByText('LOTE: #24-B', { exact: true })).toBeVisible();
     }
     const printButton = printKind === 'direta' ? page.locator('#quick-print-values-btn')
-      : printKind === 'extrato' ? page.locator('#finalize-physical-print-btn')
+      : printKind === 'extrato' ? page.locator('#print-invoice-preview-btn')
         : page.getByRole('button', { name: 'Imprimir Via Cozinha', exact: true });
     await printButton.click();
+    if (printKind === 'extrato') {
+      await expect(page.getByText('Extrato de Mesa', { exact: true })).toHaveCount(0);
+    }
     await expect.poll(() => state.writes.length).toBe(1);
     expect(state.writes[0]).toEqual(printKind === 'cozinha'
       ? { method: 'POST', path: `/comandas/lancamentos/${LAUNCH_B}/reimprimir`, status: null, tableId: '7' }
