@@ -48,12 +48,14 @@ test('plan choices are buttons connected to the shared demo, and savings stay co
   assert.equal((html.match(/class="koma-plan-addons"/g) ?? []).length, 3);
 });
 
-test('FAQ starts closed and explains delivery, internet and support without new promises', () => {
+test('FAQ starts closed and explains delivery, pricing, internet and support without new promises', () => {
   const html = renderToStaticMarkup(createElement(FAQ));
-  assert.equal((html.match(/<details>/g) ?? []).length, 5);
+  assert.equal((html.match(/<details>/g) ?? []).length, 6);
   assert.equal(html.includes('<details open'), false);
   assert.ok(html.includes('inclusive no Pocket'));
-  assert.ok(html.includes('O app do entregador é opcional'));
+  assert.ok(html.includes('O app do entregador faz parte do Premium'));
+  assert.ok(html.includes('não cobra taxa de implantação'));
+  assert.ok(html.includes('não vende add-ons'));
   assert.ok(html.includes('não é plantão 24 horas'));
 });
 

@@ -15,8 +15,10 @@ from ...models import (
     Lancamento,
     OnlinePaymentIntent,
     Pagamento,
+    Restaurante,
     RestaurantPaymentAccount,
 )
+from ...subscription import subscription_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoProvider
@@ -80,8 +82,10 @@ class OnlinePaymentService:
         return shift
 
     @staticmethod
-    def marketplace_fee(amount: Decimal) -> Decimal:
-        rate = Decimal(str(settings.ONLINE_PAYMENT_MARKETPLACE_RATE))
+    def marketplace_fee(amount: Decimal, stored_plan: str | None) -> Decimal:
+        if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
+            return Decimal("0.00")
+        rate = subscription_marketplace_rate(stored_plan)
         return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
 
     @classmethod
@@ -94,6 +98,13 @@ class OnlinePaymentService:
         amount: Decimal,
         idempotency_key: str,
     ) -> OnlinePaymentIntent:
+        restaurant = db.query(Restaurante).filter(
+            Restaurante.id == comanda.restaurante_id,
+        ).first()
+        if restaurant is None:
+            raise OnlinePaymentConfigurationError("Restaurante não encontrado para calcular o pagamento online.")
+
+        normalized_amount = _money(amount)
         intent = OnlinePaymentIntent(
             restaurante_id=comanda.restaurante_id,
             comanda_id=comanda.id,
@@ -101,8 +112,8 @@ class OnlinePaymentService:
             provider="mercado_pago",
             method="pix",
             status="created",
-            amount=float(_money(amount)),
-            marketplace_fee=float(cls.marketplace_fee(_money(amount))),
+            amount=float(normalized_amount),
+            marketplace_fee=float(cls.marketplace_fee(normalized_amount, restaurant.plano)),
             idempotency_key=idempotency_key,
         )
         comanda.online_payment_status = "pending"

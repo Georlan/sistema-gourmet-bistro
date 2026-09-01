@@ -4,7 +4,7 @@ export interface SubscriptionPlan {
   id: SubscriptionPlanId;
   name: string;
   price: number;
-  implementationFee: number;
+  splitFeeRate: number;
   tagline: string;
   recommended?: boolean;
   features: string[];
@@ -12,74 +12,6 @@ export interface SubscriptionPlan {
 }
 
 export const ANNUAL_DISCOUNT_RATE = 0.1;
-export const IMPLEMENTATION_FEE = 199;
-
-export interface SubscriptionAddon {
-  id: 'online_menu' | 'delivery_app' | 'loyalty';
-  name: string;
-  price: number;
-  description: string;
-  includedIn: readonly SubscriptionPlanId[];
-}
-
-export const ONLINE_MENU_ADDON = {
-  id: 'online_menu',
-  name: 'Cardápio Digital Kôma',
-  // Mantém o identificador legado, mas não é mais um adicional pago.
-  price: 0,
-  description: 'O cliente escolhe os itens pelo link ou QR Code e envia o pedido ao Kôma.',
-  includedIn: ['pocket', 'pro', 'premium'],
-} as const satisfies SubscriptionAddon;
-
-export const DELIVERY_APP_ADDON = {
-  id: 'delivery_app',
-  name: 'App do entregador',
-  price: 59,
-  description: 'Pedidos, endereço, valor a cobrar e confirmação de entrega. Sem rastreamento GPS ao vivo.',
-  includedIn: ['premium'],
-} as const satisfies SubscriptionAddon;
-
-export const LOYALTY_ADDON = {
-  id: 'loyalty',
-  name: 'Fidelidade e cupons',
-  price: 59,
-  description: 'Pontos, cashback e cupons para incentivar a próxima compra.',
-  includedIn: ['premium'],
-} as const satisfies SubscriptionAddon;
-
-export const SUBSCRIPTION_ADDONS: readonly SubscriptionAddon[] = [
-  ONLINE_MENU_ADDON,
-  DELIVERY_APP_ADDON,
-  LOYALTY_ADDON,
-];
-
-export function getPlanAddons(planId: SubscriptionPlanId) {
-  return SUBSCRIPTION_ADDONS.map(addon => ({
-    ...addon,
-    included: addon.includedIn.includes(planId),
-  }));
-}
-
-export function isAddonIncludedInPlan(planId: SubscriptionPlanId, addonId: SubscriptionAddon['id']) {
-  return getPlanAddons(planId).some(addon => addon.id === addonId && addon.included);
-}
-
-/** Compara o mesmo ciclo; adicionais avulsos continuam mensais no anual. */
-export function getPremiumBundleComparison(isYearly = false) {
-  const pro = getSubscriptionPricing(getSubscriptionPlan('pro').price);
-  const premium = getSubscriptionPricing(getSubscriptionPlan('premium').price);
-  const extras = getPlanAddons('pro').filter(addon =>
-    !addon.included && addon.includedIn.includes('premium'),
-  );
-  const separatePrice = (isYearly ? pro.annualMonthlyEquivalent : pro.monthly)
-    + extras.reduce((sum, addon) => sum + addon.price, 0);
-  const bundlePrice = isYearly ? premium.annualMonthlyEquivalent : premium.monthly;
-  return {
-    separatePrice: Math.round(separatePrice * 100) / 100,
-    bundlePrice,
-    monthlySavings: Math.round((separatePrice - bundlePrice) * 100) / 100,
-  };
-}
 
 export function getSubscriptionPricing(monthlyPrice: number) {
   const monthlyPriceInCents = Math.round(monthlyPrice * 100);
@@ -102,13 +34,21 @@ export function formatCurrency(value: number, options?: { showCurrency?: boolean
   }).format(value);
 }
 
+export function formatPercentage(rate: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'percent',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(rate);
+}
+
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pocket',
     name: 'Kôma Pocket',
-    price: 99,
-    implementationFee: IMPLEMENTATION_FEE,
-    tagline: 'Venda pelo link, nas mesas e no balcão, sem precisar de impressora.',
+    price: 89,
+    splitFeeRate: 0.0179,
+    tagline: 'Venda no salão e online sem complicação.',
     features: [
       'Mesas, comandas e balcão',
       'Cardápio digital e QR Code com pedidos no PDV',
@@ -118,16 +58,17 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Clientes e histórico de pedidos',
     ],
     limitations: [
-      'Sem impressão automática de cozinha',
-      'App do entregador e fidelidade opcionais',
+      'Sem KDS e impressão automática',
+      'Sem estoque, fichas técnicas e financeiro completo',
+      'Sem app do entregador e fidelidade',
     ]
   },
   {
     id: 'pro',
     name: 'Kôma Pro',
-    price: 189,
-    implementationFee: IMPLEMENTATION_FEE,
-    tagline: 'Conecte atendimento, cozinha, estoque e financeiro.',
+    price: 179,
+    splitFeeRate: 0.0089,
+    tagline: 'Controle operação, equipe, estoque e financeiro.',
     recommended: true,
     features: [
       'Tudo do Pocket',
@@ -137,15 +78,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Relatórios completos para acompanhar o negócio',
     ],
     limitations: [
-      'App do entregador e fidelidade opcionais',
+      'Sem app do entregador e fidelidade',
     ]
   },
   {
     id: 'premium',
     name: 'Kôma Premium',
-    price: 279,
-    implementationFee: IMPLEMENTATION_FEE,
-    tagline: 'Gestão, entregas e fidelização no mesmo pacote.',
+    price: 269,
+    splitFeeRate: 0.0039,
+    tagline: 'Menor taxa, entregas e fidelização para escalar.',
     features: [
       'Tudo do Pro',
       'App do entregador incluído',
@@ -175,9 +116,10 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: true, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: true, pro: true, premium: true },
-  { category: 'Entrega', feature: 'App do Entregador', pocket: `${formatCurrency(DELIVERY_APP_ADDON.price)}/mês`, pro: `${formatCurrency(DELIVERY_APP_ADDON.price)}/mês`, premium: true },
+  { category: 'Pagamento Online', feature: 'Taxa KÔMA por pedido online pago', pocket: '1,79%', pro: '0,89%', premium: '0,39%' },
+  { category: 'Entrega', feature: 'App do Entregador', pocket: false, pro: false, premium: true },
   { category: 'Clientes', feature: 'Cadastro e Histórico de Clientes', pocket: true, pro: true, premium: true },
-  { category: 'Clientes', feature: 'Pontos, Cashback e Cupons', pocket: `${formatCurrency(LOYALTY_ADDON.price)}/mês`, pro: `${formatCurrency(LOYALTY_ADDON.price)}/mês`, premium: true },
+  { category: 'Clientes', feature: 'Pontos, Cashback e Cupons', pocket: false, pro: false, premium: true },
   { category: 'Suporte', feature: 'Atendimento Prioritário', pocket: false, pro: false, premium: true },
 ];
 
@@ -188,7 +130,7 @@ export function normalizeSubscriptionPlan(plan?: string | null): SubscriptionPla
   if (normalized === 'pro') return 'pro';
   if (normalized === 'premium') return 'premium';
 
-  // Planos legados preservados como Premium para não desativar funcionalidades
+  // Planos legados preservados como Premium para não desativar funcionalidades.
   if (normalized === 'bistro' || normalized === 'delivery' || normalized === 'gold' || normalized === 'platinum') {
     return 'premium';
   }
@@ -199,4 +141,12 @@ export function normalizeSubscriptionPlan(plan?: string | null): SubscriptionPla
 export function getSubscriptionPlan(plan?: string | null): SubscriptionPlan {
   const normalized = normalizeSubscriptionPlan(plan);
   return SUBSCRIPTION_PLANS.find(item => item.id === normalized) ?? SUBSCRIPTION_PLANS[0];
+}
+
+/**
+ * Compatibilidade temporária com o CaixaPanel legado.
+ * O cardápio online deixou de ser um add-on comercial e está incluído em todos os planos.
+ */
+export function isAddonIncludedInPlan(_planId: SubscriptionPlanId, featureId: 'online_menu') {
+  return featureId === 'online_menu';
 }

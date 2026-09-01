@@ -7,19 +7,23 @@ const QUESTIONS = [
   },
   {
     question: 'Posso atender mesas e delivery juntos?',
-    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam ao Kôma; pedidos de WhatsApp ou telefone são lançados por você. O app do entregador é opcional e não é necessário para fazer delivery.',
+    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam ao Kôma; pedidos de WhatsApp ou telefone são lançados por você. O delivery com endereço, taxa e status funciona em todos os planos. O app do entregador faz parte do Premium.',
+  },
+  {
+    question: 'Tem taxa de implantação ou módulos extras?',
+    answer: 'Não. A oferta atual não cobra taxa de implantação e não vende add-ons. Se você precisar de recursos avançados que não estão no seu plano, o caminho é subir de plano.',
   },
   {
     question: 'Precisa de internet?',
-    answer: 'Sim. A conexão mantém caixa, salão e cozinha sincronizados. Na implantação, avaliamos a conexão e os equipamentos para orientar o uso.',
+    answer: 'Sim. A conexão mantém caixa, salão e cozinha sincronizados. Na configuração inicial, avaliamos a conexão e os equipamentos para orientar o uso.',
   },
   {
     question: 'Quanto tempo leva para começar?',
-    answer: 'Depende do cardápio, da equipe e dos equipamentos. Combinamos o prazo e o escopo da implantação antes de contratar.',
+    answer: 'Depende do cardápio, da equipe e dos equipamentos. Combinamos o prazo e o escopo da configuração inicial antes da ativação.',
   },
   {
     question: 'Como funciona o suporte?',
-    answer: 'Você recebe orientação na implantação e no uso do sistema. Os canais e horários são combinados na contratação. O suporte prioritário do Premium não é plantão 24 horas.',
+    answer: 'Você recebe orientação na configuração inicial e no uso do sistema. Os canais e horários são combinados na contratação. O suporte prioritário do Premium não é plantão 24 horas.',
   },
 ];
 

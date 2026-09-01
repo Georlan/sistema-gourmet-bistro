@@ -13,6 +13,7 @@ from app.application.orders.commands import (
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
+from app.config import settings
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import (
@@ -99,11 +100,29 @@ def test_mercado_pago_signature_rejects_tamper_and_stale_timestamp():
     )
 
 
+def test_marketplace_fee_is_zero_until_plan_fees_are_explicitly_enabled(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
+    for plan in ("pocket", "pro", "premium", "gold"):
+        assert OnlinePaymentService.marketplace_fee(Decimal("100.00"), plan) == Decimal("0.00")
+
+
+def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    amount = Decimal("100.00")
+
+    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.79")
+    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.89")
+    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.39")
+    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.39")
+    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.79")
+
+
 def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch):
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANT_ID)
     db = SessionLocal()
     try:
+        monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
         db.add(Restaurante(id=RESTAURANT_ID, nome="Gate Payment Test", plano="pro"))
         db.flush()
         db.add(Usuario(
@@ -165,6 +184,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
             amount=dto.total,
             idempotency_key="payment-gate-order-key",
         )
+        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.0")
         intent.external_payment_id = "mp-payment-9917"
         intent.status = "pending"
         db.commit()

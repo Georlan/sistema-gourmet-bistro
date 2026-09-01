@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from typing import Optional
 
 from .config import settings
@@ -9,6 +10,14 @@ logger = logging.getLogger("koma.subscription")
 VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 
+# Fonte de verdade financeira no servidor para a comissão KÔMA sobre pedidos
+# online pagos. Valores são frações decimais: 0.0179 = 1,79%.
+SUBSCRIPTION_MARKETPLACE_RATES: dict[str, Decimal] = {
+    "pocket": Decimal("0.0179"),
+    "pro": Decimal("0.0089"),
+    "premium": Decimal("0.0039"),
+}
+
 
 def normalize_subscription_plan(plan: Optional[str]) -> str:
     normalized = (plan or "pocket").strip().lower()
@@ -17,6 +26,11 @@ def normalize_subscription_plan(plan: Optional[str]) -> str:
     if normalized in LEGACY_PREMIUM_PLANS:
         return "premium"
     return "pocket"
+
+
+def subscription_marketplace_rate(stored_plan: Optional[str]) -> Decimal:
+    """Retorna a taxa comercial do plano contratado, sem aplicar override de teste."""
+    return SUBSCRIPTION_MARKETPLACE_RATES[normalize_subscription_plan(stored_plan)]
 
 
 def _test_premium_restaurant_ids() -> frozenset[int]:
