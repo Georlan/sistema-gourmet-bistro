@@ -36,7 +36,7 @@ interface MesaConsumptionPanelProps {
   setTransferType: React.Dispatch<React.SetStateAction<'total' | 'parcial' | 'mesclar'>>;
   setSelectedOrderToPrint: (order: Order) => void;
   setEditingItem: (item: Pick<OrderItem, 'id' | 'produtoId' | 'nome' | 'observacao' | 'clienteNome'> & { orderId: string; quantidade: number }) => void;
-  onPrintPreview: () => void;
+  onPrintPreview: () => void | Promise<void>;
   onPrintValues: () => void | Promise<void>;
   onCloseTable?: () => void;
   onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
@@ -135,25 +135,27 @@ export function MesaConsumptionPanel({
                 </div>
               )}
 
-              {/* Action Row 1: Direct Print Values (1-Touch) + Extrato Completo */}
+              {/* Action Row 1: Fechamento + Extrato Completo com impressão direta */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   id="quick-print-values-btn"
                   type="button"
                   disabled={isPrintingDirect}
                   onClick={onPrintValues}
-                  className="py-2.5 px-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 border border-emerald-400 rounded-xl font-extrabold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shadow-emerald-950/20 active:scale-95 disabled:opacity-50"
-                  title="Imprimir direto recibo de fechamento apenas com valores"
+                  className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Imprimir fechamento apenas com valores"
                 >
-                  <Zap size={14} className="shrink-0 text-zinc-950" />
-                  <span>{isPrintingDirect ? 'Imprimindo...' : 'Apenas Valores'}</span>
+                  <Zap size={14} className="shrink-0 text-koma-subtle" />
+                  <span>Fechamento</span>
                 </button>
 
                 <button
                   id="print-invoice-preview-btn"
+                  type="button"
+                  disabled={isPrintingDirect}
                   onClick={onPrintPreview}
-                  className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                  title="Ver prévia e imprimir extrato detalhado com itens"
+                  className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border hover:border-emerald-500/30 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Imprimir direto extrato detalhado com itens"
                 >
                   <Printer size={14} className="text-emerald-400 shrink-0" />
                   <span>Extrato Completo</span>
@@ -340,7 +342,6 @@ export function MesaConsumptionPanel({
                             )}
                           </div>
 
-                          {/* Item Unit Observation */}
                           {item.observacao ? (
                             <p className="text-[11px] text-koma-subtle italic bg-koma-panel px-2 py-0.5 rounded border border-dashed border-koma-border inline-block">
                               Obs: "{item.observacao}"
@@ -348,7 +349,6 @@ export function MesaConsumptionPanel({
                           ) : null}
                         </div>
 
-                        {/* Status Badge & Waiter Delivery Control */}
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-koma-foreground text-xs sm:text-sm">R$ {(item.preco ?? 0).toFixed(2)}</span>
 
@@ -381,7 +381,6 @@ export function MesaConsumptionPanel({
                             </span>
                           )}
 
-                          {/* Ações de Cancelamento e Transferência Individual de Item */}
                           <div className="flex items-center gap-1 border-l border-koma-border pl-1.5 ml-1">
                             {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_editar)) && (
                               <button
