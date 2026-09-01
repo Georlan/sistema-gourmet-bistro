@@ -4,9 +4,8 @@ import {
   ANNUAL_DISCOUNT_RATE,
   SUBSCRIPTION_PLANS,
   formatCurrency,
+  formatPercentage,
   getSubscriptionPricing,
-  getPlanAddons,
-  getPremiumBundleComparison,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
 import { useLeadCapture } from '../components/LeadCaptureProvider';
@@ -18,40 +17,39 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   note: string;
 }> = {
   pocket: {
-    stage: 'PARA COMEÇAR',
-    action: 'ORGANIZAR',
-    fit: 'Para quem atende mesas, faz entregas ou os dois, com uma operação enxuta.',
-    note: 'Pelo link, o cliente envia o pedido ao Kôma. Por WhatsApp ou telefone, você lança manualmente. Não precisa contratar o app do entregador.',
+    stage: 'ENTRADA SIMPLES',
+    action: 'COMEÇAR',
+    fit: 'Para quem quer vender no salão, balcão e delivery com uma operação enxuta.',
+    note: 'Tudo o que é essencial para começar: cardápio digital, pedidos, caixa, clientes e fila de preparo na tela.',
   },
   pro: {
-    stage: 'MELHOR ESCOLHA',
-    action: 'CONECTAR',
-    fit: 'Para quem quer a equipe conectada e mais controle do estoque e do dinheiro.',
-    note: 'O cardápio já vem incluído. Adicione entregadores ou fidelidade apenas se precisar.',
+    stage: 'MAIS RECOMENDADO',
+    action: 'ORGANIZAR',
+    fit: 'Para quem quer conectar equipe, cozinha, estoque e financeiro em uma operação mais profissional.',
+    note: 'É o melhor equilíbrio entre recursos de gestão e uma taxa menor nos pedidos pagos online.',
   },
   premium: {
-    stage: 'PACOTE COMPLETO',
-    action: 'EXPANDIR',
-    fit: 'Para reunir gestão, entregadores e fidelização, com suporte prioritário.',
-    note: 'Cardápio, app do entregador e fidelidade já incluídos. Sem pagar esses módulos à parte.',
+    stage: 'MENOR TAXA',
+    action: 'ESCALAR',
+    fit: 'Para quem quer gestão completa, entregadores e fidelização com a menor taxa KÔMA.',
+    note: 'App do entregador, pontos, cashback e cupons já fazem parte do plano. Não existem módulos pagos à parte.',
   },
 };
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
   const openDemo = useLeadCapture();
-  const bundle = getPremiumBundleComparison(isYearly);
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
       <div className="koma-plans-simple-heading">
         <div>
           <span>05 / PLANOS</span>
-          <h2 id="plans-title">COMECE CERTO.<br />CRESÇA SEM TROCAR.</h2>
+          <h2 id="plans-title">COMECE LEVE.<br />CRESÇA PAGANDO MENOS.</h2>
         </div>
         <div>
-          <p><strong>POCKET</strong> começa vendendo. <strong>PRO</strong> conecta a equipe e a gestão. <strong>PREMIUM</strong> inclui entregadores e fidelidade.</p>
-          <small>Cardápio digital, mesas e delivery em todos os planos. Uma assinatura por estabelecimento.</small>
+          <p><strong>SEM TAXA DE IMPLANTAÇÃO.</strong> Sem add-ons. Você escolhe o plano e já sabe o que está incluído.</p>
+          <small>Quanto mais completo o plano, menor a taxa KÔMA nos pedidos online pagos. Cardápio digital, mesas e delivery já começam no Pocket.</small>
         </div>
       </div>
 
@@ -74,7 +72,7 @@ export function Plans() {
             Anual <span>{ANNUAL_DISCOUNT_RATE * 100}% OFF</span>
           </button>
         </div>
-        <p>{isYearly ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto. Cobrança anual.` : 'Pague mês a mês'}</p>
+        <p>{isYearly ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. Cobrança anual.` : 'Pague mês a mês, sem taxa de implantação'}</p>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -99,16 +97,16 @@ export function Plans() {
                 <span>R$</span>
                 <strong>
                   {displayPrice.toLocaleString('pt-BR', {
-                      minimumFractionDigits: isYearly ? 2 : 0,
-                      maximumFractionDigits: 2,
+                    minimumFractionDigits: isYearly ? 2 : 0,
+                    maximumFractionDigits: 2,
                   })}
                 </strong>
                 <small>/mês</small>
               </div>
               <p className="koma-plan-billing-note">
                 {isYearly
-                  ? `${formatCurrency(pricing.annualTotal)} por ano · Implantação: ${formatCurrency(plan.implementationFee)}`
-                  : `Implantação: ${formatCurrency(plan.implementationFee)}`}
+                  ? `${formatCurrency(pricing.annualTotal)} por ano · sem taxa de implantação`
+                  : 'Sem taxa de implantação'}
               </p>
               {isYearly && (
                 <p className="koma-plan-savings is-active">
@@ -123,23 +121,19 @@ export function Plans() {
               </ul>
               <p className="koma-plan-extra">{presentation.note}</p>
 
-              <div className="koma-plan-addons" aria-label={`Adicionais do ${plan.name}`}>
-                <h4>{plan.id === 'premium' ? 'JÁ INCLUÍDOS NO PACOTE' : 'INCLUÍDO + OPCIONAIS'}</h4>
+              <div className="koma-plan-addons" aria-label={`Taxa de pagamentos online do ${plan.name}`}>
+                <h4>PAGAMENTOS ONLINE</h4>
                 <dl>
-                  {getPlanAddons(plan.id).map(addon => (
-                    <div className={addon.included ? 'is-included' : ''} key={addon.id}>
-                      <dt>{addon.name}</dt>
-                      <dd>{addon.included ? <><Check size={13} aria-hidden="true" /> Incluído</> : <>{formatCurrency(addon.price)}<small>/mês</small></>}</dd>
-                    </div>
-                  ))}
+                  <div className="is-included">
+                    <dt>Taxa KÔMA por pedido online pago</dt>
+                    <dd>{formatPercentage(plan.splitFeeRate)}</dd>
+                  </div>
                 </dl>
-                <p>{plan.id === 'premium' ? 'Sem cobrança extra por esses adicionais.' : 'Opcionais, cobrados à parte por mês, inclusive no plano anual.'}</p>
-                {plan.id === 'premium' && (
-                  <p className="koma-plan-bundle-comparison">
-                    Pro + entregador + fidelidade: {formatCurrency(bundle.separatePrice)}/mês{isYearly ? ' equivalentes' : ''}.
-                    {' '}No Premium, você paga {formatCurrency(bundle.monthlySavings)} a menos por mês.
-                  </p>
-                )}
+                <p>
+                  {plan.id === 'premium'
+                    ? 'A menor taxa KÔMA entre os planos. Você só paga essa taxa quando recebe um pedido online pago pelo sistema.'
+                    : 'Você só paga essa taxa quando recebe um pedido online pago pelo sistema.'}
+                </p>
               </div>
 
               <button type="button" onClick={() => openDemo({ plan: plan.name, billing: isYearly ? 'anual' : 'mensal' })} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
@@ -149,7 +143,7 @@ export function Plans() {
           );
         })}
       </div>
-      <p className="koma-plans-note">Implantação paga uma única vez: configuração inicial e orientação de uso, com escopo combinado antes da contratação. O desconto anual vale para o plano, sem incluir implantação ou adicionais. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal, pagamento online e integração com marketplaces não fazem parte desta oferta.</p>
+      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. A disponibilidade do pagamento online depende da ativação da conta do provedor. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
     </section>
   );
 }
