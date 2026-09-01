@@ -142,6 +142,8 @@ class OnlinePaymentService:
             OnlinePaymentIntent.provider == "mercado_pago",
         ).with_for_update().one()
 
+        if not (payment.external_id or "").strip():
+            raise OnlinePaymentValidationError("Resposta inválida do provedor de pagamento.")
         if payment.external_reference != locked_intent.id:
             raise OnlinePaymentValidationError("Pagamento não corresponde ao pedido registrado.")
         if _money(payment.amount) != _money(locked_intent.amount):
