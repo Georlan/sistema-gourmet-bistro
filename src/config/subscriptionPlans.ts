@@ -142,3 +142,11 @@ export function getSubscriptionPlan(plan?: string | null): SubscriptionPlan {
   const normalized = normalizeSubscriptionPlan(plan);
   return SUBSCRIPTION_PLANS.find(item => item.id === normalized) ?? SUBSCRIPTION_PLANS[0];
 }
+
+/**
+ * Compatibilidade temporária com o CaixaPanel legado.
+ * O cardápio online deixou de ser um add-on comercial e está incluído em todos os planos.
+ */
+export function isAddonIncludedInPlan(_planId: SubscriptionPlanId, featureId: 'online_menu') {
+  return featureId === 'online_menu';
+}
