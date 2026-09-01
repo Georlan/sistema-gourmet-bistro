@@ -209,9 +209,10 @@ class Settings:
         int(os.getenv("SMARTPOS_INTENT_TTL_MINUTES", "15")),
     )
     KOMA_PUBLIC_API_URL: str = os.getenv("KOMA_PUBLIC_API_URL", "").strip().rstrip("/")
-    ONLINE_PAYMENT_MARKETPLACE_RATE: float = max(
-        0.0,
-        min(float(os.getenv("ONLINE_PAYMENT_MARKETPLACE_RATE", "0")), 1.0),
+    # Trava operacional: as taxas por plano existem no catálogo e no backend,
+    # mas só são enviadas ao provedor quando este flag é habilitado explicitamente.
+    ONLINE_PAYMENT_PLAN_FEES_ENABLED: bool = (
+        os.getenv("ONLINE_PAYMENT_PLAN_FEES_ENABLED", "false").lower() == "true"
     )
     ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES: int = max(
         5,
