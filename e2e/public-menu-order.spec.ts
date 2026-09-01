@@ -47,6 +47,8 @@ type CapturedOrder = {
   cliente_telefone?: string;
   tipo_pedido?: string;
   taxa_entrega?: number;
+  forma_pagamento?: string;
+  forma_pagamento_detalhe?: string;
   endereco_entrega?: string;
   itens?: Array<{ produto_id?: string | number; quantidade?: number }>;
 };
@@ -163,12 +165,13 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
   await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
   await page.getByRole('button', { name: /Retirada/ }).click();
+  await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Revise e confirme', exact: true })).toBeVisible();
   const paymentSummary = page.getByRole('heading', { name: 'Pagamento escolhido', exact: true }).locator('..');
   await expect(paymentSummary.getByText('Você paga diretamente ao restaurante. Não há cobrança online nesta etapa.', { exact: true })).toBeVisible();
-  await expect(paymentSummary.getByText(/^Pix\s*· na retirada$/)).toBeVisible();
+  await expect(paymentSummary.getByText(/^Dinheiro\s*· na retirada$/)).toBeVisible();
   await expect(page.getByText('Ana Teste', { exact: true })).toBeVisible();
   await expect(page.getByText(/R\$\s*48,00/).last()).toBeVisible();
 
@@ -187,6 +190,8 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
     cliente_telefone: '85999999999',
     tipo_pedido: 'retirada',
     taxa_entrega: 0,
+    forma_pagamento: 'na_entrega',
+    forma_pagamento_detalhe: 'dinheiro',
   });
   expect(capturedOrders[0].itens).toEqual([
     expect.objectContaining({ produto_id: '101', quantidade: 1 }),
