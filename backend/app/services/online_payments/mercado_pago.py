@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import re
 from decimal import Decimal
 
 import httpx
@@ -11,6 +12,9 @@ from .base import ProviderPayment
 
 class MercadoPagoError(RuntimeError):
     pass
+
+
+_PAYMENT_ID_PATTERN = re.compile(r"[0-9]{1,30}\Z")
 
 
 def _parse_datetime(value: object) -> datetime.datetime | None:
@@ -81,7 +85,12 @@ class MercadoPagoProvider:
         return self._map(response.json())
 
     def get_payment(self, external_payment_id: str) -> ProviderPayment:
-        response = self._client.get(f"/v1/payments/{external_payment_id}")
+        if not _PAYMENT_ID_PATTERN.fullmatch(external_payment_id):
+            raise MercadoPagoError("Identificador de pagamento inválido.")
+        payment_id = int(external_payment_id, 10)
+        if payment_id <= 0:
+            raise MercadoPagoError("Identificador de pagamento inválido.")
+        response = self._client.get(f"/v1/payments/{payment_id:d}")
         if response.status_code >= 400:
             raise MercadoPagoError(f"Mercado Pago não confirmou o pagamento ({response.status_code}).")
         return self._map(response.json())

@@ -3,6 +3,9 @@ import hmac
 import time
 from decimal import Decimal
 
+import httpx
+import pytest
+
 from app.application.orders.commands import (
     CreateOrderCommand,
     CustomerInput,
@@ -27,11 +30,44 @@ from app.models import (
     Usuario,
 )
 from app.services.online_payments.base import ProviderPayment
+from app.services.online_payments.mercado_pago import MercadoPagoError, MercadoPagoProvider
 from app.services.online_payments.service import OnlinePaymentService
 from app.services.online_payments.signature import verify_mercado_pago_signature
 
 
 RESTAURANT_ID = 9917
+
+
+def test_mercado_pago_payment_lookup_rejects_untrusted_url_parts():
+    requested_urls: list[httpx.URL] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_urls.append(request.url)
+        return httpx.Response(
+            200,
+            json={
+                "id": 123,
+                "status": "approved",
+                "transaction_amount": 25,
+                "external_reference": "order-123",
+            },
+        )
+
+    provider = MercadoPagoProvider("test-token")
+    provider._client = httpx.Client(
+        base_url=provider.API_URL,
+        transport=httpx.MockTransport(handler),
+    )
+
+    payment = provider.get_payment("000123")
+    assert payment.external_id == "123"
+    assert requested_urls == [httpx.URL("https://api.mercadopago.com/v1/payments/123")]
+
+    for unsafe_id in ("//attacker.example/payment", "../123", "123?redirect=evil", "", "0"):
+        with pytest.raises(MercadoPagoError, match="Identificador de pagamento inválido"):
+            provider.get_payment(unsafe_id)
+
+    assert len(requested_urls) == 1
 
 
 def test_mercado_pago_signature_rejects_tamper_and_stale_timestamp():
