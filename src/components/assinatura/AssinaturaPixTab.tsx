@@ -17,21 +17,16 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
-  Briefcase,
-  Database,
-  Server
 } from 'lucide-react';
 import {
   SUBSCRIPTION_PLANS,
-  SUBSCRIPTION_ADDONS,
-  IMPLEMENTATION_FEE,
-  getPlanAddons,
   PLAN_COMPARISON_MATRIX,
   SubscriptionPlanId,
   getSubscriptionPlan,
   FeatureComparisonRow,
   ANNUAL_DISCOUNT_RATE,
   formatCurrency,
+  formatPercentage,
   getSubscriptionPricing
 } from '../../config/subscriptionPlans';
 import { KOMA_LANDING_CONFIG } from '../../landing/config/landingConfig';
@@ -216,6 +211,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                 <span className="text-emerald-700 dark:text-emerald-400 font-extrabold text-lg">{formatCurrency(currentPlan.price)}</span>
                 <span className="text-koma-muted text-[10px]">/mês</span>
                 <span className="block text-koma-muted text-[10px]">Preço de tabela</span>
+                <span className="block text-koma-muted text-[10px]">+ {formatPercentage(currentPlan.splitFeeRate)} por pedido online pago</span>
               </div>
             </div>
 
@@ -244,7 +240,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             </div>
 
             <div className="pt-2">
-              <p className="mb-3 text-[10px] text-koma-muted">Sua cobrança segue as condições contratadas. Os preços abaixo são da oferta atual.</p>
+              <p className="mb-3 text-[10px] text-koma-muted">Sua cobrança segue as condições contratadas. Os preços e taxas abaixo são da oferta atual.</p>
               <button
                 type="button"
                 onClick={() => setActiveSubTab('planos_upgrade')}
@@ -289,7 +285,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               customVariants={revealVariants}
               className="text-xs text-koma-subtle"
             >
-              Escolha o plano ideal para o momento da sua operação.
+              Sem taxa de implantação e sem add-ons. Quanto mais completo o plano, menor a taxa KÔMA nos pedidos online pagos.
             </TimelineContent>
 
             {/* CHAVEADOR ANIMADO DE PERÍODO (MENSAL / ANUAL) */}
@@ -301,7 +297,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             >
               <PricingSwitch isYearly={isYearly} onSwitch={setIsYearly} />
               <p className="min-h-4 text-[10px] text-koma-muted">
-                {isYearly ? '10% de desconto no pagamento anual' : 'Valores cobrados mensalmente'}
+                {isYearly ? '10% de desconto na assinatura; a taxa por pedido não muda' : 'Valores da assinatura cobrados mensalmente'}
               </p>
             </TimelineContent>
           </div>
@@ -336,11 +332,11 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                         : 'bg-koma-panel border-koma-border hover:border-koma-border-strong'
                     )}
                   >
-                    {/* Badge Mais Popular */}
+                    {/* Badge do plano recomendado */}
                     {isPopular && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 sm:px-3.5 sm:py-1 rounded-full bg-emerald-600 text-white text-[8px] sm:text-[9px] font-extrabold uppercase tracking-widest shadow-md flex items-center gap-1 z-20">
                         <Sparkles size={11} />
-                        <span>Mais Popular</span>
+                        <span>Mais recomendado</span>
                       </div>
                     )}
 
@@ -362,10 +358,12 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                         <p className="mt-0.5 sm:mt-1 min-h-4 text-[10px] leading-4 text-koma-muted font-medium">
                           {isYearly
                             ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
-                            : 'Cobrança mensal'}
+                            : 'Cobrança mensal · sem taxa de implantação'}
                         </p>
-                        <p className="mt-1 text-[10px] leading-4 text-koma-muted">Implantação: {formatCurrency(plan.implementationFee)}</p>
-                        {isYearly && <p className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Economize {formatCurrency(pricing.annualSavings)} por ano</p>}
+                        <p className="mt-1 text-[10px] leading-4 text-koma-muted">
+                          Taxa KÔMA: <strong className="text-emerald-700 dark:text-emerald-400">{formatPercentage(plan.splitFeeRate)}</strong> por pedido online pago
+                        </p>
+                        {isYearly && <p className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Economize {formatCurrency(pricing.annualSavings)} por ano na assinatura</p>}
                       </div>
                     </CardHeader>
 
@@ -412,19 +410,16 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                           ))}
                         </ul>
                       </div>
-                      <div className="border-t border-koma-border pt-3" aria-label={`Adicionais do ${plan.name}`}>
-                        <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider">Adicionais e inclusões</span>
-                        <dl className="mt-2 space-y-2">
-                          {getPlanAddons(plan.id).map(addon => (
-                            <div key={addon.id} className="flex flex-wrap justify-between gap-2 text-xs">
-                              <dt>{addon.name}</dt>
-                              <dd className={clsx('font-semibold', addon.included && 'text-emerald-700 dark:text-emerald-400')}>
-                                {addon.included ? 'Incluído' : `${formatCurrency(addon.price)}/mês`}
-                              </dd>
-                            </div>
-                          ))}
-                        </dl>
-                        <p className="mt-3 text-[10px] leading-4 text-koma-muted">{plan.id === 'premium' ? 'Esses módulos já estão incluídos, sem cobrança extra.' : 'Adicionais opcionais cobrados por mês, sem desconto anual.'}</p>
+
+                      <div className="border-t border-koma-border pt-3" aria-label={`Pagamento online do ${plan.name}`}>
+                        <span className="text-[9px] font-bold text-koma-muted uppercase tracking-wider">Pagamentos online</span>
+                        <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs">
+                          <span>Taxa KÔMA por pedido online pago</span>
+                          <strong className="text-emerald-700 dark:text-emerald-400">{formatPercentage(plan.splitFeeRate)}</strong>
+                        </div>
+                        <p className="mt-3 text-[10px] leading-4 text-koma-muted">
+                          Sem implantação e sem add-ons. Custos do provedor de pagamento são separados.
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -433,28 +428,24 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             })}
           </div>
 
-          {/* Adicionais do catálogo comercial, sem alterar a assinatura atual. */}
+          {/* Regras comerciais simples e transparentes. */}
           <div className="p-5 bg-koma-panel border border-koma-border rounded-3xl text-left space-y-3 shadow-sm">
-            {SUBSCRIPTION_ADDONS.map(addon => <div key={addon.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-koma-border pb-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <div className="flex items-center gap-2">
-                  <strong className="text-koma-foreground font-serif text-sm block">{addon.name}</strong>
-                </div>
-                <p className="text-xs text-koma-muted mt-1">{addon.description}</p>
+                <strong className="text-koma-foreground font-serif text-sm block">Sem taxa de implantação</strong>
+                <p className="text-xs text-koma-muted mt-1">A entrada não tem cobrança separada de implantação.</p>
               </div>
-
-              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
-                {addon.includedIn.length < SUBSCRIPTION_PLANS.length && <span className="px-2.5 py-1 bg-koma-raised text-koma-foreground border border-koma-border text-[9px] font-bold rounded-full whitespace-nowrap">
-                  {formatCurrency(addon.price)}/mês no Pocket e Pro
-                </span>}
-                <span className="px-2.5 py-1 koma-badge-success text-[9px] font-bold uppercase rounded-full whitespace-nowrap">
-                  {addon.includedIn.length === SUBSCRIPTION_PLANS.length ? 'Incluído em todos os planos' : 'Incluído no Premium'}
-                </span>
+              <div>
+                <strong className="text-koma-foreground font-serif text-sm block">Sem add-ons</strong>
+                <p className="text-xs text-koma-muted mt-1">Recursos avançados são liberados ao subir de plano, sem módulos avulsos.</p>
               </div>
-            </div>)}
-
-            <p className="text-[10px] text-koma-muted leading-relaxed">
-              Implantação: {formatCurrency(IMPLEMENTATION_FEE)} em todos os planos. Adicionais cobrados por mês, sem desconto anual.
+              <div>
+                <strong className="text-koma-foreground font-serif text-sm block">Taxa só quando vende online</strong>
+                <p className="text-xs text-koma-muted mt-1">A taxa KÔMA é aplicada somente ao pedido online efetivamente pago.</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-koma-muted leading-relaxed border-t border-koma-border pt-3">
+              O desconto anual reduz somente a assinatura fixa; a taxa por pedido permanece a mesma. Custos do provedor de pagamento seguem as condições do provedor e não estão incluídos na taxa KÔMA.
             </p>
           </div>
 
