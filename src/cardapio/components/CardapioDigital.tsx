@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -29,6 +29,17 @@ interface CreatedOrder {
   comanda_id: string;
   numero_pedido: string | number;
   total?: number;
+  pagamento?: OnlinePaymentResponse;
+}
+
+interface OnlinePaymentResponse {
+  status: string;
+  cobranca_online: boolean;
+  metodo?: string;
+  qr_code?: string | null;
+  qr_code_base64?: string | null;
+  ticket_url?: string | null;
+  expira_em?: string | null;
 }
 
 interface CardapioDigitalProps {
@@ -39,6 +50,7 @@ interface CardapioDigitalProps {
   address: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   customerToken?: string | null;
   paymentMethodDetail?: "dinheiro" | "pix" | "cartao_credito" | "cartao_debito";
   trocoPara?: number;
@@ -81,6 +93,7 @@ export default function CardapioDigital({
   address,
   customerName,
   customerPhone,
+  customerEmail,
   customerToken,
   paymentMethodDetail,
   trocoPara,
@@ -227,8 +240,9 @@ export default function CardapioDigital({
           cliente_telefone: normalizedPhone,
           endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
           taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
-          forma_pagamento: "na_entrega",
+          forma_pagamento: paymentMethodDetail === "dinheiro" ? "na_entrega" : "online",
           forma_pagamento_detalhe: paymentMethodDetail,
+          cliente_email: paymentMethodDetail === "pix" ? customerEmail : undefined,
           troco_para: paymentMethodDetail === "dinheiro" ? trocoPara : undefined,
           bairro: bairro,
           cupom_codigo: cupomCodigo,
@@ -265,7 +279,9 @@ export default function CardapioDigital({
         tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
         total: orderTotal,
         idempotency_key: idempotencyKey,
-        status: "pendente",
+        status: data.pagamento?.cobranca_online && data.pagamento?.status !== "approved"
+          ? "aguardando_pagamento"
+          : "pendente",
         itens: cart.map((item) => ({
           id: item.product.id,
           nome: item.product.name,
@@ -284,6 +300,7 @@ export default function CardapioDigital({
         comanda_id: comandaId,
         numero_pedido: numeroPedido,
         total: orderTotal,
+        pagamento: data.pagamento,
       });
     } catch (error) {
       console.warn("Falha ao registrar pedido no backend:", error);
@@ -300,6 +317,37 @@ export default function CardapioDigital({
       setIsSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (
+      !createdOrder?.pagamento?.cobranca_online
+      || !["created", "pending", "in_process"].includes(createdOrder.pagamento.status)
+    ) return;
+    let cancelled = false;
+    const checkPayment = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/cardapio/pedidos/${encodeURIComponent(createdOrder.comanda_id)}/status?key=${encodeURIComponent(idempotencyKeyRef.current)}`,
+          { cache: "no-store" },
+        );
+        if (!response.ok || cancelled) return;
+        const payload = await response.json();
+        const nextStatus = String(payload?.pagamento?.status || "pending");
+        setCreatedOrder((current) => current ? {
+          ...current,
+          pagamento: current.pagamento ? { ...current.pagamento, status: nextStatus } : current.pagamento,
+        } : current);
+      } catch {
+        // O webhook é a autoridade; uma falha de consulta só adia a atualização visual.
+      }
+    };
+    void checkPayment();
+    const interval = window.setInterval(() => void checkPayment(), 3_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [createdOrder?.comanda_id, createdOrder?.pagamento?.cobranca_online, createdOrder?.pagamento?.status]);
 
   const handleFinish = () => {
     if (createdOrder) onOrderSuccess(createdOrder);
@@ -333,9 +381,18 @@ export default function CardapioDigital({
           {createdOrder ? (
             <div className="flex flex-col items-center justify-center py-7 text-center sm:py-10 animate-scale-up">
               <div className="grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-500"><CheckCircle2 className="h-9 w-9" /></div>
-              <span className="mt-5 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">Pedido recebido</span>
+              <span className="mt-5 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">{createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" ? "Aguardando pagamento" : "Pedido recebido"}</span>
               <h3 className="mt-1.5 font-display text-2xl font-black tracking-tight text-koma-foreground">Pedido #{createdOrder.numero_pedido}</h3>
-              <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">Seu pedido entrou no painel do restaurante e está aguardando aceite. Você pode acompanhar o andamento neste mesmo cardápio.</p>
+              <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">{createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" ? "Pague o Pix abaixo. O pedido só aparecerá para o restaurante depois da confirmação automática." : "Seu pedido entrou no painel do restaurante e está aguardando aceite. Você pode acompanhar o andamento neste mesmo cardápio."}</p>
+
+              {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" && (
+                <div className="mt-5 w-full max-w-md rounded-2xl border border-emerald-500/25 bg-koma-card p-4">
+                  {createdOrder.pagamento.qr_code_base64 && <img className="mx-auto h-52 w-52 rounded-xl bg-white p-2" src={`data:image/png;base64,${createdOrder.pagamento.qr_code_base64}`} alt="QR Code Pix do pedido" />}
+                  {createdOrder.pagamento.qr_code && <button type="button" onClick={() => void navigator.clipboard.writeText(createdOrder.pagamento?.qr_code || "")} className="mt-3 h-11 w-full rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Copiar código Pix</button>}
+                  {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground">Abrir pagamento</a>}
+                  <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">A confirmação é automática. Não feche esta tela até concluir o pagamento.</p>
+                </div>
+              )}
 
               <div className="mt-5 grid w-full max-w-md gap-2 text-left sm:grid-cols-2">
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? `Entrega · ${address}` : "Retirada no balcão"}</p></div>
@@ -388,7 +445,7 @@ export default function CardapioDigital({
         {!createdOrder && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6 sm:py-5">
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">Ao confirmar, o pedido entra no painel do restaurante para aceite. A cozinha só começa depois que o restaurante aceitar.</p>
+            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">Pix só entra no painel após o pagamento. Dinheiro entra direto e é cobrado pessoalmente.</p>
           </footer>
         )}
       </div>

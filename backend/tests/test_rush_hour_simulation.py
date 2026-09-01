@@ -419,7 +419,9 @@ def test_full_rush_hour_blitz():
                 "tipo_pedido": "delivery" if is_delivery else "retirada",
                 "endereco_entrega": "Rua Centro, 20" if is_delivery else "",
                 "bairro": "Centro" if is_delivery else None,
-                "forma_pagamento_detalhe": "pix" if is_delivery else "dinheiro",
+                # Pedidos que entram direto no PDV usam apenas dinheiro físico.
+                # Pix percorre a barreira online e é coberto na suíte específica.
+                "forma_pagamento_detalhe": "dinheiro",
                 "troco_para": 50.0 if not is_delivery else None,
                 "itens": [{"produto_id": "prod-pizza", "quantidade": 1}],
                 "idempotency_key": f"blitz-online-{idx}-{uuid.uuid4().hex[:6]}"

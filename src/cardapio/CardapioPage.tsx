@@ -294,6 +294,7 @@ export default function CardapioPage() {
         socials,
         about: String(restaurant.sobre_nos || ""),
         paymentMethods,
+        onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
         operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         pedidoMinimo: Number(restaurant.pedido_minimo || 0),
@@ -860,6 +861,7 @@ export default function CardapioPage() {
           address={checkoutRequest.address}
           customerName={checkoutRequest.customerName}
           customerPhone={checkoutRequest.customerPhone}
+          customerEmail={checkoutRequest.customerEmail}
           customerToken={customerToken}
           paymentMethodDetail={checkoutRequest.paymentMethodDetail}
           trocoPara={checkoutRequest.trocoPara}

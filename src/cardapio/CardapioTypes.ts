@@ -90,6 +90,7 @@ export interface BrandConfig {
   socials?: SocialNetwork[];
   about?: string;
   paymentMethods?: PaymentMethodGroup[];
+  onlinePaymentEnabled?: boolean;
   operatingHours?: OperatingHours[];
   googleMapsUrl?: string;
   storeStatus?: "open" | "closed" | "automatic";

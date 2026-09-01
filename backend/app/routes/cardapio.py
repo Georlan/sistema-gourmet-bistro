@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id, tenant_session_scope
-from ..models import Comanda
+from ..models import Comanda, OnlinePaymentIntent
 from ..schemas import CardapioPedidoCreate
 from ..services.public_orders import (
     MAX_PUBLIC_ORDERS_PER_IP,
@@ -180,6 +180,13 @@ def consultar_status_pedido_publico(
         if comanda.fechada and status_retorno != "recusado":
             status_retorno = "finalizado"
 
+        payment_intent = db.query(OnlinePaymentIntent).filter(
+            OnlinePaymentIntent.restaurante_id == int(rest_id),
+            OnlinePaymentIntent.comanda_id == comanda.id,
+        ).first()
+        if payment_intent is not None and payment_intent.status != "approved":
+            status_retorno = "aguardando_pagamento"
+
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
@@ -189,4 +196,14 @@ def consultar_status_pedido_publico(
             "fechada": comanda.fechada,
             "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
             "itens": itens_payload,
+            "pagamento": (
+                {
+                    "status": payment_intent.status,
+                    "cobranca_online": True,
+                    "metodo": payment_intent.method,
+                    "expira_em": payment_intent.expires_at.isoformat() if payment_intent.expires_at else None,
+                }
+                if payment_intent is not None
+                else {"status": "pendente_no_atendimento", "cobranca_online": False}
+            ),
         }

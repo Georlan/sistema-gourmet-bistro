@@ -335,6 +335,11 @@ class Comanda(Base):
             "status_comanda IS NULL OR status_comanda = 'aguardando_pagamento'",
             name="ck_comandas_status_comanda",
         ),
+        CheckConstraint(
+            "online_payment_status IS NULL OR online_payment_status IN "
+            "('pending', 'approved', 'rejected', 'cancelled', 'expired', 'error')",
+            name="ck_comandas_online_payment_status",
+        ),
         Index(
             "ix_comandas_tenant_mesa_fk",
             "restaurante_id",
@@ -352,6 +357,12 @@ class Comanda(Base):
             "id",
             postgresql_where=text("fechada = false"),
         ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_comandas_online_payment_gate",
+            "restaurante_id",
+            "online_payment_status",
+            "criado_em",
+        ),
     )
     
     id = Column(String, primary_key=True, index=True)
@@ -395,6 +406,9 @@ class Comanda(Base):
 
     # Cashier flow field
     status_comanda = Column(String, nullable=True)  # null (normal) | aguardando_pagamento (table requested bill)
+    # Pedidos públicos online só entram nas projeções operacionais após aprovação.
+    # NULL preserva todos os fluxos presenciais/legados; pending é uma barreira.
+    online_payment_status = Column(String(20), nullable=True)
 
     @hybrid_property
     def delivery_telefone(self):
@@ -671,6 +685,226 @@ class Pagamento(Base):
     # Relationships
     comanda = relationship("Comanda")
     cliente = relationship("Cliente", back_populates="pagamentos")
+
+
+class RestaurantPaymentAccount(Base):
+    """Credenciais de um recebedor conectado a um provedor de pagamentos.
+
+    Tokens nunca são expostos por schemas públicos e permanecem criptografados
+    em repouso. O cadastro será preenchido pelo fluxo OAuth do provedor.
+    """
+
+    __tablename__ = "restaurant_payment_accounts"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    provider = Column(String(32), nullable=False)
+    provider_user_id = Column(String(128), nullable=True)
+    status = Column(String(20), nullable=False, default="active")
+    _access_token = Column("access_token", Text, nullable=False)
+    _refresh_token = Column("refresh_token", Text, nullable=True)
+    _webhook_secret = Column("webhook_secret", Text, nullable=False)
+    public_key = Column(String(255), nullable=True)
+    token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "provider IN ('mercado_pago')",
+            name="ck_payment_accounts_provider",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'disconnected', 'error')",
+            name="ck_payment_accounts_status",
+        ),
+        UniqueConstraint(
+            "restaurante_id",
+            "provider",
+            name="uq_payment_accounts_tenant_provider",
+        ),
+        UniqueConstraint(
+            "provider",
+            "provider_user_id",
+            name="uq_payment_accounts_provider_user",
+        ),
+    )
+
+    @hybrid_property
+    def access_token(self):
+        return decrypt_field(self._access_token)
+
+    @access_token.setter
+    def access_token(self, value):
+        self._access_token = encrypt_field(value)
+
+    @hybrid_property
+    def refresh_token(self):
+        return decrypt_field(self._refresh_token)
+
+    @refresh_token.setter
+    def refresh_token(self, value):
+        self._refresh_token = encrypt_field(value)
+
+    @hybrid_property
+    def webhook_secret(self):
+        return decrypt_field(self._webhook_secret)
+
+    @webhook_secret.setter
+    def webhook_secret(self, value):
+        self._webhook_secret = encrypt_field(value)
+
+
+class OnlinePaymentIntent(Base):
+    """Barreira financeira entre um pedido público e a operação do restaurante."""
+
+    __tablename__ = "online_payment_intents"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    comanda_id = Column(
+        String,
+        ForeignKey("comandas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    turno_id = Column(Integer, ForeignKey("caixa_turnos.id"), nullable=False)
+    pagamento_id = Column(String, ForeignKey("pagamentos.id"), nullable=True)
+    provider = Column(String(32), nullable=False)
+    method = Column(String(32), nullable=False)
+    status = Column(String(20), nullable=False, default="created")
+    amount = Column(Numeric(14, 2, asdecimal=False), nullable=False)
+    marketplace_fee = Column(Numeric(14, 2, asdecimal=False), nullable=False, default=0)
+    idempotency_key = Column(String(128), nullable=False)
+    external_payment_id = Column(String(128), nullable=True)
+    qr_code = Column(Text, nullable=True)
+    qr_code_base64 = Column(Text, nullable=True)
+    ticket_url = Column(Text, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    last_error = Column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "provider IN ('mercado_pago')",
+            name="ck_online_payment_intents_provider",
+        ),
+        CheckConstraint(
+            "method IN ('pix', 'cartao_credito', 'cartao_debito')",
+            name="ck_online_payment_intents_method",
+        ),
+        CheckConstraint(
+            "status IN ('created', 'pending', 'approved', 'rejected', "
+            "'cancelled', 'expired', 'error')",
+            name="ck_online_payment_intents_status",
+        ),
+        CheckConstraint("amount > 0", name="ck_online_payment_intents_amount"),
+        CheckConstraint(
+            "marketplace_fee >= 0 AND marketplace_fee <= amount",
+            name="ck_online_payment_intents_marketplace_fee",
+        ),
+        UniqueConstraint(
+            "restaurante_id",
+            "comanda_id",
+            name="uq_online_payment_intents_tenant_order",
+        ),
+        UniqueConstraint(
+            "restaurante_id",
+            "idempotency_key",
+            name="uq_online_payment_intents_tenant_idempotency",
+        ),
+        UniqueConstraint(
+            "provider",
+            "external_payment_id",
+            name="uq_online_payment_intents_provider_payment",
+        ),
+        Index(
+            "ix_online_payment_intents_tenant_status",
+            "restaurante_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+
+class OnlinePaymentWebhookEvent(Base):
+    """Deduplicação persistente das notificações recebidas do provedor."""
+
+    __tablename__ = "online_payment_webhook_events"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    provider = Column(String(32), nullable=False)
+    request_id = Column(String(128), nullable=False)
+    external_payment_id = Column(String(128), nullable=False)
+    status = Column(String(20), nullable=False, default="received")
+    raw_payload = Column(JSON, nullable=True)
+    received_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    processed_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "provider IN ('mercado_pago')",
+            name="ck_online_payment_webhook_events_provider",
+        ),
+        CheckConstraint(
+            "status IN ('received', 'processed', 'ignored', 'failed')",
+            name="ck_online_payment_webhook_events_status",
+        ),
+        UniqueConstraint(
+            "provider",
+            "request_id",
+            name="uq_online_payment_webhook_events_request",
+        ),
+        Index(
+            "ix_online_payment_webhook_tenant_payment",
+            "restaurante_id",
+            "external_payment_id",
+        ),
+    )
 
 # Alias compatibility
 Garcom = Usuario

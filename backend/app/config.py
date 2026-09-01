@@ -208,6 +208,19 @@ class Settings:
         1,
         int(os.getenv("SMARTPOS_INTENT_TTL_MINUTES", "15")),
     )
+    KOMA_PUBLIC_API_URL: str = os.getenv("KOMA_PUBLIC_API_URL", "").strip().rstrip("/")
+    ONLINE_PAYMENT_MARKETPLACE_RATE: float = max(
+        0.0,
+        min(float(os.getenv("ONLINE_PAYMENT_MARKETPLACE_RATE", "0")), 1.0),
+    )
+    ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES: int = max(
+        5,
+        min(int(os.getenv("ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", "30")), 1440),
+    )
+    ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS: float = max(
+        2.0,
+        min(float(os.getenv("ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS", "12")), 30.0),
+    )
 
     # WhatsApp Automation Toggle (MVP: Default = False)
     KOMA_WHATSAPP_AUTOMATION_ENABLED: bool = (

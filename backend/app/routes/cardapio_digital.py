@@ -24,6 +24,7 @@ from ..models import (
     Produto,
     ProdutoGrupoModificador,
     Restaurante,
+    RestaurantPaymentAccount,
     Usuario,
 )
 from ..security import require_permission, get_current_garcom_optional
@@ -161,6 +162,7 @@ def public_tenant_scope(
 def _public_restaurant_payload(
     restaurante: Restaurante,
     configuracao: Optional[ConfiguracaoRestaurante] = None,
+    pagamento_online_ativo: bool = False,
 ) -> dict:
     return {
         "id": restaurante.id,
@@ -176,6 +178,7 @@ def _public_restaurant_payload(
         "socials": restaurante.socials,
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,
+        "pagamento_online_ativo": pagamento_online_ativo,
         "cor_primaria": restaurante.cor_primaria,
         "cor_fundo": restaurante.cor_fundo,
         "pedido_minimo": float(configuracao.pedido_minimo or 0.0) if configuracao and configuracao.pedido_minimo is not None else 0.0,
@@ -230,7 +233,12 @@ def obter_config_cardapio_digital(
         configuracao = db.query(ConfiguracaoRestaurante).filter(
             ConfiguracaoRestaurante.restaurante_id == rest_id
         ).first()
-        return _public_restaurant_payload(restaurante, configuracao)
+        pagamento_online_ativo = db.query(RestaurantPaymentAccount.id).filter(
+            RestaurantPaymentAccount.restaurante_id == rest_id,
+            RestaurantPaymentAccount.provider == "mercado_pago",
+            RestaurantPaymentAccount.status == "active",
+        ).first() is not None
+        return _public_restaurant_payload(restaurante, configuracao, pagamento_online_ativo)
 
 
 @router.get("/categorias")
@@ -291,6 +299,11 @@ def obter_cardapio_publico(
         configuracao = db.query(ConfiguracaoRestaurante).filter(
             ConfiguracaoRestaurante.restaurante_id == rest_id
         ).first()
+        pagamento_online_ativo = db.query(RestaurantPaymentAccount.id).filter(
+            RestaurantPaymentAccount.restaurante_id == rest_id,
+            RestaurantPaymentAccount.provider == "mercado_pago",
+            RestaurantPaymentAccount.status == "active",
+        ).first() is not None
 
         categorias = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id
@@ -342,7 +355,11 @@ def obter_cardapio_publico(
             produtos_payload.append(prod_dict)
 
         return {
-            "restaurante": _public_restaurant_payload(restaurante, configuracao),
+            "restaurante": _public_restaurant_payload(
+                restaurante,
+                configuracao,
+                pagamento_online_ativo,
+            ),
             "categorias": [
                 _public_category_payload(category)
                 for category in _ordered_categories(categorias)

@@ -26,6 +26,7 @@ from .routes import (
     estoque,
     modificadores,
     optimization,
+    online_payments,
     orders,
     print_agents,
     printing,
@@ -365,6 +366,7 @@ app.include_router(websocket.router)
 app.include_router(cardapio_config_bridge.router)
 app.include_router(caixa.router)
 app.include_router(optimization.router)
+app.include_router(online_payments.router)
 app.include_router(estoque.router)
 app.include_router(cardapio.router)
 app.include_router(cardapio_clientes.router)
