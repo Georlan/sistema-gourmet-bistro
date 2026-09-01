@@ -174,8 +174,8 @@ def _jobs():
 
 def _without_reprint_marker(text: str) -> str:
     return "\n".join(
-        line for line in text.splitlines() if line.strip() != "REIMPRESSÃO"
-    )
+        line for line in text.splitlines() if "REIMPRESSÃO" not in line
+    ).rstrip()
 
 
 def test_universal_route_prints_pickup_even_when_every_item_is_nenhum():
@@ -196,10 +196,12 @@ def test_universal_route_prints_pickup_even_when_every_item_is_nenhum():
     job = jobs[0]
     assert job.destination == "COZINHA"
     assert job.document_type == "producao"
-    assert "PED #901" in job.payload_text
-    assert "MESA BALCAO" in job.payload_text
+    assert "PEDIDO: #901" in job.payload_text
+    assert "BALCÃO" in job.payload_text
     assert "RETIRADA" in job.payload_text
+    assert "ORIGEM: CARDÁPIO ONLINE" in job.payload_text
     assert "ÁGUA DE COCO" in job.payload_text
+    assert "TOTAL DO PEDIDO:" in job.payload_text
     assert "REIMPRESSÃO" not in job.payload_text
 
 
@@ -225,4 +227,4 @@ def test_legacy_reprint_alias_uses_same_model_and_only_adds_reprint_marker():
     assert response.status_code == 200, response.text
     reprint_payload = _jobs()[-1].payload_text
     assert "REIMPRESSÃO" in reprint_payload
-    assert _without_reprint_marker(reprint_payload) == original_payload
+    assert _without_reprint_marker(reprint_payload) == original_payload.rstrip()

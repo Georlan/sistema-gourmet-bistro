@@ -5,7 +5,10 @@ from typing import Optional
 
 from sqlalchemy.orm import Session, joinedload
 
-from ...domain.printing import OrderPrintData, PrintDocumentService, PrintItem
+from ...domain.printing import (
+    PrintItem,
+    group_items_by_print_destination,
+)
 from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
 from ...printer_service import printer_service
 from ...services.printing import (
@@ -15,7 +18,7 @@ from ...services.printing import (
     enqueue_table_receipt,
     get_print_preferences,
 )
-from ...timezone_utils import to_operational_local_time
+from .comanda_renderer import ComandaVariant, render_canonical_comanda
 from .engine import PrintEngineType, resolve_order_engine
 from .intent import PrintAction, PrintIntent, PrintSourceType, PrintTrigger
 
@@ -238,6 +241,12 @@ class PrintingApplicationService:
         comanda: Comanda,
         source_items: list[Item],
     ) -> list[PrintJob]:
+        """Gera pedido remoto sobre a mesma base visual usada pelo salão.
+
+        A via primária sempre contém o pedido remoto completo. Destinos
+        adicionais (BAR etc.) continuam recebendo suas vias setoriais, mas todos
+        os papéis passam pelo mesmo modelo canônico de comanda.
+        """
         requested_source_id = str(intent.source_id or "").strip()
         requested_is_launch = requested_source_id.startswith("l-")
         active_items = cls._active_items(source_items)
@@ -253,37 +262,69 @@ class PrintingApplicationService:
             if requested_is_launch and lancamento is not None
             else comanda.criado_em
         )
-        local_time = to_operational_local_time(source_time)
         print_items = [cls._to_print_item(item) for item in active_items]
 
-        document = OrderPrintData(
-            restaurante_nome=preferences.restaurant_name,
-            numero_pedido=str(comanda.numero_pedido or ""),
-            tipo_pedido=comanda.tipo,
-            mesa=str(comanda.mesa_id) if comanda.mesa_id else "BALCAO",
-            horario=(local_time.strftime("%H:%M") if local_time else ""),
-            garcom_nome=cls._operator_name(lancamento, comanda),
-            numero_lancamento=(
-                lancamento.id
-                if requested_is_launch and lancamento is not None
-                else None
-            ),
-            itens=print_items,
-            is_reprint=(intent.action == PrintAction.REPRINT),
+        routed_items = {
+            destination: list(items)
+            for destination, items in group_items_by_print_destination(print_items).items()
+        }
+        primary_destination = (
+            "COZINHA"
+            if "COZINHA" in routed_items
+            else next(iter(routed_items), "COZINHA")
         )
-        documents = PrintDocumentService.generate_production(document) or {}
-        if not documents:
-            raise UniversalPrintingError(
-                "A política de impressão não gerou documento para este pedido",
-                status_code=409,
-            )
+        # Pedido remoto nunca pode desaparecer nem perder bebida/NENHUM da via
+        # operacional. A via primária funciona também como expedição do pedido.
+        routed_items[primary_destination] = list(print_items)
+
+        origin_label = cls._origin_label(lancamento)
+        customer_name = str(comanda.identificador or "").strip() or None
+        is_delivery = cls._is_delivery_type(comanda.tipo)
+        operator_name = cls._operator_name(lancamento, comanda)
 
         jobs: list[PrintJob] = []
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d%H%M%S%f"
         )
-        for destination, payload in documents.items():
+        for destination, destination_items in routed_items.items():
             destination_key = str(destination).strip().upper() or "COZINHA"
+            is_primary = destination_key == str(primary_destination).strip().upper()
+            variant = ComandaVariant(
+                origin_label=origin_label,
+                location_label="ENTREGA" if is_delivery else "BALCÃO",
+                operator_label="OPERADOR",
+                customer_name=customer_name if is_primary else None,
+                is_reprint=(intent.action == PrintAction.REPRINT),
+                event_at=source_time,
+                via_label=None if is_primary else destination_key,
+                delivery_phone=(comanda.delivery_telefone if is_delivery and is_primary else None),
+                delivery_address=(comanda.delivery_endereco if is_delivery and is_primary else None),
+                delivery_neighborhood=(comanda.delivery_bairro if is_delivery and is_primary else None),
+                payment_method=(comanda.delivery_forma_pagamento if is_delivery and is_primary else None),
+                change_for=(
+                    float(comanda.delivery_troco_para)
+                    if is_delivery
+                    and is_primary
+                    and comanda.delivery_troco_para is not None
+                    else None
+                ),
+                delivery_fee=(
+                    float(comanda.delivery_taxa or 0.0)
+                    if is_delivery and is_primary
+                    else 0.0
+                ),
+            )
+            payload = render_canonical_comanda(
+                restaurant_name=preferences.restaurant_name,
+                restaurant_name_position=preferences.restaurant_name_position,
+                print_footer=preferences.print_footer,
+                order_number=comanda.numero_pedido,
+                order_type=comanda.tipo,
+                operator_name=operator_name,
+                items=destination_items,
+                variant=variant,
+            )
+
             idempotency_key = cls._job_idempotency_key(
                 intent,
                 source_id=requested_source_id,
@@ -487,6 +528,21 @@ class PrintingApplicationService:
         if comanda.criada_por is not None:
             return comanda.criada_por.nome
         return "OPERADOR"
+
+    @staticmethod
+    def _origin_label(lancamento: Optional[Lancamento]) -> str:
+        origin = str(lancamento.origem if lancamento is not None else "").strip().casefold()
+        return {
+            "cardapio": "CARDÁPIO ONLINE",
+            "caixa": "CAIXA / PDV",
+            "smartpos": "SMARTPOS",
+            "garcom": "GARÇOM",
+        }.get(origin, "PEDIDO")
+
+    @staticmethod
+    def _is_delivery_type(tipo: object) -> bool:
+        normalized = str(tipo or "").strip().casefold()
+        return any(term in normalized for term in ("delivery", "entrega"))
 
     @staticmethod
     def _to_print_item(item: Item) -> PrintItem:
