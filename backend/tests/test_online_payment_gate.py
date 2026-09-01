@@ -37,6 +37,7 @@ from app.services.online_payments.signature import verify_mercado_pago_signature
 
 
 RESTAURANT_ID = 9917
+IMMEDIATE_APPROVAL_RESTAURANT_ID = 9918
 
 
 def test_mercado_pago_payment_lookup_rejects_untrusted_url_parts():
@@ -242,6 +243,150 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == RESTAURANT_ID).delete(synchronize_session=False)
+        db.commit()
+        db.close()
+        current_restaurante_id.reset(token)
+
+
+def test_pix_creation_approved_immediately_applies_financial_effects_once(monkeypatch):
+    Base.metadata.create_all(bind=engine)
+    rid = IMMEDIATE_APPROVAL_RESTAURANT_ID
+    token = current_restaurante_id.set(rid)
+    db = SessionLocal()
+    try:
+        monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
+        db.add(Restaurante(id=rid, nome="Immediate Approval Test", plano="pro"))
+        db.flush()
+        db.add(Usuario(
+            id="immediate-payment-user",
+            restaurante_id=rid,
+            nome="Operador",
+            email="immediate-payment@koma.test",
+            senha_hash="unused",
+            role="admin",
+            cargo="admin",
+            status="ativo",
+        ))
+        db.add(Categoria(id="immediate-payment-category", restaurante_id=rid, nome="Teste"))
+        db.flush()
+        db.add(Produto(
+            id="immediate-payment-product",
+            restaurante_id=rid,
+            categoria_id="immediate-payment-category",
+            nome="Produto",
+            preco=30,
+            ativo=True,
+        ))
+        shift = CaixaTurno(
+            restaurante_id=rid,
+            aberto_por_id="immediate-payment-user",
+            saldo_inicial=0,
+            status="aberto",
+        )
+        account = RestaurantPaymentAccount(
+            id="immediate-payment-account",
+            restaurante_id=rid,
+            provider="mercado_pago",
+            provider_user_id="seller-9918",
+            status="active",
+        )
+        account.access_token = "seller-access-token"
+        account.webhook_secret = "webhook-secret"
+        db.add_all([shift, account])
+        db.commit()
+
+        command = CreateOrderCommand(
+            restaurant_id=rid,
+            channel=OrderChannel.WEB_CARDAPIO,
+            fulfillment=FulfillmentType.DELIVERY,
+            items=(OrderItemInput(product_id="immediate-payment-product", quantity=Decimal("1")),),
+            customer=CustomerInput(name="Cliente Imediato", phone="85988888888"),
+            delivery=DeliveryInput(address="Rua Teste, 20"),
+            payment_method="pix",
+            idempotency_key="immediate-payment-order-key",
+            operator_user_id="immediate-payment-user",
+            defer_operational_publish=True,
+        )
+        dto = OrderApplicationService.create_order(db, command, commit=False)
+        comanda = db.query(Comanda).filter(Comanda.id == dto.comanda_id).one()
+        intent = OnlinePaymentService.create_intent_in_session(
+            db,
+            comanda=comanda,
+            turno=shift,
+            amount=dto.total,
+            idempotency_key="immediate-payment-order-key",
+        )
+        db.commit()
+
+        assert comanda.online_payment_status == "pending"
+        assert db.query(Pagamento).filter(Pagamento.restaurante_id == rid).count() == 0
+        assert db.query(IntegrationOutbox).filter(
+            IntegrationOutbox.restaurante_id == rid,
+            IntegrationOutbox.event_name == "koma.order.created",
+        ).count() == 0
+
+        class ImmediateApprovedProvider:
+            def __init__(self, _access_token):
+                pass
+
+            def create_pix(self, **kwargs):
+                return ProviderPayment(
+                    external_id="mp-payment-9918",
+                    status="approved",
+                    amount=kwargs["amount"],
+                    external_reference=kwargs["external_reference"],
+                    qr_code="000201-immediate",
+                )
+
+            def get_payment(self, external_payment_id):
+                return ProviderPayment(
+                    external_id=external_payment_id,
+                    status="approved",
+                    amount=Decimal(str(intent.amount)),
+                    external_reference=intent.id,
+                )
+
+        monkeypatch.setattr(
+            "app.services.online_payments.service.MercadoPagoProvider",
+            ImmediateApprovedProvider,
+        )
+
+        settled = OnlinePaymentService.ensure_pix_created(
+            db,
+            intent=intent,
+            payer_email="cliente@koma.test",
+            account=account,
+        )
+
+        assert settled.status == "approved"
+        assert settled.external_payment_id == "mp-payment-9918"
+        assert settled.pagamento_id is not None
+        db.refresh(comanda)
+        assert comanda.online_payment_status == "approved"
+        assert comanda.valor_pago == intent.amount
+        assert all(item.pago for item in comanda.itens)
+        assert db.query(Pagamento).filter(Pagamento.restaurante_id == rid).count() == 1
+        assert db.query(IntegrationOutbox).filter(
+            IntegrationOutbox.restaurante_id == rid,
+            IntegrationOutbox.event_name == "koma.order.created",
+        ).count() == 1
+
+        _, applied_again = OnlinePaymentService.reconcile_provider_payment(
+            db,
+            account=account,
+            external_payment_id="mp-payment-9918",
+        )
+        assert applied_again is False
+        assert db.query(Pagamento).filter(Pagamento.restaurante_id == rid).count() == 1
+        assert db.query(IntegrationOutbox).filter(
+            IntegrationOutbox.restaurante_id == rid,
+            IntegrationOutbox.event_name == "koma.order.created",
+        ).count() == 1
+    finally:
+        db.rollback()
+        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+            db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
+        db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()
         db.close()
         current_restaurante_id.reset(token)
