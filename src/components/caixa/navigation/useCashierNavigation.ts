@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { CashierTab } from '../cashierContracts';
+import {
+  getCashierNavigationAction,
+  getCashierNavigationParentId,
+  getCashierNavigationTarget,
+} from './cashierNavigation';
 
 type BoundaryProps = {
   hasOnlineMenu: boolean;
@@ -13,7 +18,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (saved === 'config_cardapio' || saved === 'configuracoes_cardapio') return 'cardapio_digital';
     if (saved === 'dashboard' || saved === 'indicadores') return 'relatorios';
     if (saved === 'robo_ia' || saved === 'assistente_koma' || saved === 'chat_copiloto') return 'operacao';
-    return (saved as any) || 'operacao';
+    return (saved as CashierTab) || 'operacao';
   });
 
   const [activeSubTab, setActiveSubTab] = useState<string>(() => {
@@ -24,38 +29,35 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (saved === 'terminal_balcao' || saved === 'pdv') return 'balcao';
     if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
     if (['insumos', 'estoque_insumos'].includes(saved)) return 'insumos';
-    if (savedTab === 'estoque' && ['xml', 'notas', 'entradas', 'movimentacoes', 'historico'].includes(saved))
+    if (
+      savedTab === 'estoque' &&
+      ['xml', 'notas', 'notas_entrada', 'entradas', 'movimentacoes', 'historico'].includes(saved)
+    )
       return 'historico';
     if (savedTab === 'estoque' && ['contagem', 'inventario'].includes(saved)) return 'inventario';
+    if (savedTab === 'estoque' && ['fornecedores', 'distribuidores'].includes(saved)) return 'fornecedores';
     // Caixa mappings
     if (['fluxo', 'turno_atual'].includes(saved)) return 'turno_atual';
     if (['ajustes', 'ajustes_caixa', 'movimentacoes', 'suprimento', 'sangria'].includes(saved))
       return 'movimentacoes';
     if (['conferencia', 'conferencia_cega', 'fechamento'].includes(saved)) return 'fechamento';
     if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
-    // Relatórios mappings — 'equipe' is now a valid sub-tab in relatórios
+    // Relatórios mappings
     if (
-      [
-        'visao_geral',
-        'metas',
-        'vendas',
-        'indicadores',
-        'dashboard',
-        'relatorio_garçons',
-        'faturamento_garcom',
-      ].includes(saved)
+      ['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard', 'relatorio_geral', 'faturamento_garcom'].includes(saved)
     )
       return 'visao_geral';
-    if (['equipe', 'desempenho_equipe', 'relatorio_garcons'].includes(saved)) return 'equipe';
+    if (['equipe', 'desempenho_equipe', 'desempenho', 'relatorio_garcons', 'relatorio_garçons'].includes(saved))
+      return 'equipe';
     if (['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(saved)) return 'produtos';
     if (['financeiro', 'dre', 'demonstrativo_dre'].includes(saved)) return 'financeiro';
     // Equipe lateral mappings
-    if (['pessoas', 'convites'].includes(saved)) return 'pessoas';
+    if (['pessoas', 'equipe', 'convites'].includes(saved)) return 'pessoas';
     if (['cargos', 'cargos_permissoes', 'permissoes'].includes(saved)) return 'cargos_permissoes';
     // Clientes mappings
     if (['clientes', 'crm', 'banco_clientes'].includes(saved)) return 'clientes';
     if (['fidelidade', 'programa_fidelidade'].includes(saved)) return 'fidelidade';
-    if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'clientes';
+    if (['cupons', 'cupom', 'promocoes', 'descontos', 'cupons_desconto'].includes(saved)) return 'cupons';
     // Legacy assistant routes were prototypes; return users to the real order queue.
     if (
       [
@@ -77,7 +79,6 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
   });
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
 
   useEffect(() => {
@@ -124,48 +125,79 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     sessionStorage.setItem('koma_active_subtab', sanitized);
   }, [activeSubTab, activeTab]);
 
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId as any);
-    switch (tabId) {
-      case 'dashboard':
-      case 'relatorios':
-        setActiveSubTab('visao_geral');
-        break;
-      case 'operacao':
-        setActiveSubTab('pedidos');
-        break;
-      case 'cardapio':
-        setActiveSubTab('produtos');
-        break;
-      case 'estoque':
-        setActiveSubTab('insumos');
-        break;
-      case 'financeiro':
-        setActiveSubTab('turno_atual');
-        break;
-      case 'clientes':
-        setActiveSubTab('clientes');
-        break;
-      case 'permissoes_cargos':
-        setActiveSubTab('pessoas');
-        break;
-      case 'impressao_salao':
-        setActiveSubTab('impressoras');
-        break;
-      case 'assinatura_pix':
-        setActiveSubTab('planos');
-        break;
-      case 'cardapio_digital':
-        setActiveSubTab('cardapio_digital');
-        break;
-      case 'configuracoes':
-        setActiveSubTab('equipe');
-        break;
+  const applyNavigationTarget = (navigationId: string) => {
+    const target = getCashierNavigationTarget(navigationId);
+    if (target) {
+      setActiveTab(target.tab);
+      setActiveSubTab(target.subTab);
+      return true;
     }
+
+    // Persisted aliases that are intentionally not visible in Navigation Tree v2.
+    if (navigationId === 'dashboard') {
+      setActiveTab('relatorios');
+      setActiveSubTab('visao_geral');
+      return true;
+    }
+    if (navigationId === 'configuracoes') {
+      setActiveTab('configuracoes');
+      setActiveSubTab('equipe');
+      return true;
+    }
+    return false;
   };
 
-  const isSidebarTabActive = (tabId: string) =>
-    tabId === 'cardapio_digital'
+  const handleTabChange = (tabId: string) => {
+    if (!applyNavigationTarget(tabId)) setActiveTab(tabId as CashierTab);
+  };
+
+  const isExactChildActive = (navigationId: string) => {
+    const parentId = getCashierNavigationParentId(navigationId);
+    const target = getCashierNavigationTarget(navigationId);
+    if (!parentId || !target || activeTab !== target.tab) return false;
+
+    if (navigationId === 'caixa_turno_atual') return ['turno_atual', 'fluxo'].includes(activeSubTab);
+    if (navigationId === 'caixa_movimentacoes') {
+      return ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(activeSubTab);
+    }
+    if (navigationId === 'caixa_fechamento') {
+      return ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab);
+    }
+    if (navigationId === 'estoque_ingredientes') return ['insumos', 'estoque_insumos'].includes(activeSubTab);
+    if (navigationId === 'estoque_historico') {
+      return ['historico', 'entradas', 'xml', 'notas', 'notas_entrada', 'movimentacoes'].includes(activeSubTab);
+    }
+    if (navigationId === 'estoque_inventario') return ['inventario', 'contagem'].includes(activeSubTab);
+    if (navigationId === 'estoque_fornecedores') return ['fornecedores', 'distribuidores'].includes(activeSubTab);
+    if (navigationId === 'clientes_cadastro') return ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab);
+    if (navigationId === 'clientes_fidelidade') return ['fidelidade', 'programa_fidelidade'].includes(activeSubTab);
+    if (navigationId === 'clientes_cupons') {
+      return ['cupons', 'cupom', 'promocoes', 'descontos', 'cupons_desconto'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_visao_geral') {
+      return ['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard', 'relatorio_geral', 'faturamento_garcom'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_financeiro') {
+      return ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_produtos') {
+      return ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_equipe') {
+      return ['equipe', 'desempenho_equipe', 'desempenho', 'relatorio_garcons', 'relatorio_garçons'].includes(activeSubTab);
+    }
+    if (navigationId === 'equipe_pessoas') return ['pessoas', 'equipe', 'convites'].includes(activeSubTab);
+    if (navigationId === 'equipe_funcoes_acessos') {
+      return ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab);
+    }
+
+    return activeSubTab === target.subTab;
+  };
+
+  const isSidebarTabActive = (tabId: string) => {
+    if (getCashierNavigationParentId(tabId)) return isExactChildActive(tabId);
+
+    return tabId === 'cardapio_digital'
       ? activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'
       : tabId === 'permissoes_cargos'
         ? activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')
@@ -177,13 +209,17 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
             : tabId === 'relatorios'
               ? activeTab === 'relatorios' || activeTab === 'dashboard'
               : activeTab === tabId;
+  };
 
-  const handleSidebarNavigation = (tabId: string, closeMobile = false) => {
+  const handleSidebarNavigation = (navigationId: string, closeMobile = false) => {
     if (closeMobile) setIsMobileSidebarOpen(false);
 
-    if (tabId === 'cardapio_digital' && !hasOnlineMenu) {
-      setActiveTab('assinatura_pix');
-      setActiveSubTab('planos');
+    if (navigationId === 'cardapio_digital' && !hasOnlineMenu) {
+      const subscription = getCashierNavigationTarget('assinatura_pix');
+      if (subscription) {
+        setActiveTab(subscription.tab);
+        setActiveSubTab(subscription.subTab);
+      }
       showToast(
         'O cardápio digital está incluído em todos os planos. Consulte a ativação com o suporte.',
         'info',
@@ -191,25 +227,25 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
       return;
     }
 
-    if (tabId === 'cardapio_digital') {
-      setActiveTab('cardapio_digital');
-      setActiveSubTab('cardapio_digital');
-    } else if (tabId === 'permissoes_cargos') {
-      setActiveTab('permissoes_cargos');
-      if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
-    } else if (tabId === 'impressao_salao') {
-      setActiveTab('impressao_salao');
-      setActiveSubTab('impressoras');
-    } else if (tabId === 'assinatura_pix') {
-      setActiveTab('assinatura_pix');
-      setActiveSubTab('planos');
-    } else if (tabId === 'relatorios') {
+    // Clicking an already active parent keeps its meaningful child instead of
+    // unexpectedly returning the operator to the parent's default view.
+    if (navigationId === 'operacao' && activeTab === 'operacao') return;
+    if (navigationId === 'financeiro' && activeTab === 'financeiro') return;
+    if (navigationId === 'cardapio' && activeTab === 'cardapio') return;
+    if (navigationId === 'estoque' && activeTab === 'estoque') return;
+    if (navigationId === 'clientes' && activeTab === 'clientes') return;
+    if (navigationId === 'relatorios' && (activeTab === 'relatorios' || activeTab === 'dashboard')) {
       setActiveTab('relatorios');
-      if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
-    } else {
-      handleTabChange(tabId as any);
+      return;
     }
+    if (navigationId === 'permissoes_cargos' && activeTab === 'permissoes_cargos') return;
+
+    if (getCashierNavigationAction(navigationId) === 'open-counter') {
+      window.dispatchEvent(new Event('koma-navigation-open-counter'));
+    }
+    applyNavigationTarget(navigationId);
   };
+
   return {
     activeTab,
     setActiveTab,
