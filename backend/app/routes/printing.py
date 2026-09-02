@@ -29,6 +29,7 @@ class UniversalPrintRequest(BaseModel):
     table_id: Optional[int] = Field(default=None, gt=0)
     values_only: bool = False
     courier_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    quantity_added: int = Field(default=0, ge=0, le=999)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=180)
 
 
@@ -62,6 +63,7 @@ def _execute_print(
                 values_only=payload.values_only,
                 requested_by=current_user.nome,
                 courier_name=payload.courier_name,
+                quantity_added=payload.quantity_added,
                 idempotency_key=payload.idempotency_key,
             ),
         )
