@@ -6,6 +6,7 @@ import {
   Eye,
   GlassWater,
   ImageIcon,
+  Images,
   MoreHorizontal,
   PackageOpen,
   PauseCircle,
@@ -37,6 +38,7 @@ interface CardapioProdutosTabProps {
 }
 
 type AvailabilityFilter = 'TODOS' | 'DISPONIVEIS' | 'PAUSADOS';
+type MediaFilter = 'TODAS' | 'SEM_FOTO' | 'UMA_FOTO' | 'GALERIA';
 
 const availabilityOptions: { value: AvailabilityFilter; label: string }[] = [
   { value: 'TODOS', label: 'Todos' },
@@ -44,11 +46,25 @@ const availabilityOptions: { value: AvailabilityFilter; label: string }[] = [
   { value: 'PAUSADOS', label: 'Pausados' },
 ];
 
+const mediaOptions: { value: MediaFilter; label: string }[] = [
+  { value: 'TODAS', label: 'Todas' },
+  { value: 'SEM_FOTO', label: 'Sem foto' },
+  { value: 'UMA_FOTO', label: '1 foto' },
+  { value: 'GALERIA', label: '2–3 fotos' },
+];
+
 const routeMeta: Record<string, { label: string; icon: typeof ChefHat }> = {
   COZINHA: { label: 'Imprime na cozinha', icon: ChefHat },
   BAR: { label: 'Imprime no bar', icon: GlassWater },
   NENHUM: { label: 'Sem impressão', icon: Ban },
 };
+
+function productMediaCount(product: Product): number {
+  const urls = [product.imagem, ...(product.imagens_galeria || [])]
+    .map((url) => String(url || '').trim())
+    .filter(Boolean);
+  return new Set(urls).size;
+}
 
 export function CardapioProdutosTab({
   produtos,
@@ -67,6 +83,7 @@ export function CardapioProdutosTab({
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('TODAS');
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('TODOS');
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>('TODAS');
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [pendingBatchAction, setPendingBatchAction] = useState(false);
   const [pendingCategoryAction, setPendingCategoryAction] = useState(false);
@@ -76,6 +93,7 @@ export function CardapioProdutosTab({
     if (!focusCategoryId) return;
     setSearch('');
     setAvailabilityFilter('TODOS');
+    setMediaFilter('TODAS');
     setCategoryFilter(focusCategoryId);
     onFocusCategoryHandled?.();
   }, [focusCategoryId, onFocusCategoryHandled]);
@@ -95,11 +113,26 @@ export function CardapioProdutosTab({
     return stats;
   }, [categorias, produtos]);
 
+  const mediaStats = useMemo(() => {
+    return produtos.reduce(
+      (stats, product) => {
+        const count = productMediaCount(product);
+        if (count === 0) stats.missing += 1;
+        else if (count === 1) stats.single += 1;
+        else stats.gallery += 1;
+        return stats;
+      },
+      { missing: 0, single: 0, gallery: 0 },
+    );
+  }, [produtos]);
+
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim();
     return produtos
       .filter((product) => {
-        const categoryName = categorias.find((category) => String(category.id) === String(product.categoria_id))?.nome || product.categoria || '';
+        const categoryName = categorias.find(
+          (category) => String(category.id) === String(product.categoria_id),
+        )?.nome || product.categoria || '';
         const matchesSearch = !normalizedSearch
           || smartSearchMatch(product.nome, normalizedSearch)
           || smartSearchMatch(product.descricao || '', normalizedSearch)
@@ -111,10 +144,21 @@ export function CardapioProdutosTab({
         const matchesAvailability = availabilityFilter === 'TODOS'
           || (availabilityFilter === 'DISPONIVEIS' && isAvailable)
           || (availabilityFilter === 'PAUSADOS' && !isAvailable);
-        return matchesSearch && matchesCategory && matchesAvailability;
+        const mediaCount = productMediaCount(product);
+        const matchesMedia = mediaFilter === 'TODAS'
+          || (mediaFilter === 'SEM_FOTO' && mediaCount === 0)
+          || (mediaFilter === 'UMA_FOTO' && mediaCount === 1)
+          || (mediaFilter === 'GALERIA' && mediaCount >= 2);
+        return matchesSearch && matchesCategory && matchesAvailability && matchesMedia;
       })
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  }, [availabilityFilter, categorias, categoryFilter, produtos, search]);
+      .sort((a, b) => {
+        if (mediaFilter !== 'TODAS') {
+          const mediaDifference = productMediaCount(a) - productMediaCount(b);
+          if (mediaDifference !== 0) return mediaDifference;
+        }
+        return a.nome.localeCompare(b.nome, 'pt-BR');
+      });
+  }, [availabilityFilter, categorias, categoryFilter, mediaFilter, produtos, search]);
 
   const selectedCategory = categoryFilter === 'TODAS'
     ? null
@@ -129,6 +173,10 @@ export function CardapioProdutosTab({
   const visibleIds = filteredProducts.map((product) => product.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.has(id));
   const selectedCount = selectedProductIds.size;
+  const activeCount = produtos.filter((product) => product.ativo !== false).length;
+  const pausedCount = produtos.length - activeCount;
+  const productsWithMedia = mediaStats.single + mediaStats.gallery;
+  const mediaCoverage = produtos.length > 0 ? Math.round((productsWithMedia / produtos.length) * 100) : 100;
 
   useEffect(() => {
     const validProductIds = new Set(produtos.map((product) => String(product.id)));
@@ -179,9 +227,6 @@ export function CardapioProdutosTab({
       setPendingCategoryAction(false);
     }
   };
-
-  const activeCount = produtos.filter((product) => product.ativo !== false).length;
-  const pausedCount = produtos.length - activeCount;
 
   const handleProductAvailability = async (product: Product) => {
     if (pendingProductId) return;
@@ -275,9 +320,36 @@ export function CardapioProdutosTab({
             )}
           </label>
           <div className="flex flex-wrap items-center gap-2">
+            {previewUrl && (
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-800 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:text-white dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
+              >
+                <Eye size={16} /> Ver cardápio
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onCreateProduct}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400"
+            >
+              <Plus size={17} /> Novo produto
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-slate-200 pt-3 dark:border-white/10 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Venda</span>
             <div className="inline-flex rounded-xl border border-slate-300 bg-slate-100 p-1 dark:border-white/15 dark:bg-black/20" aria-label="Filtrar por disponibilidade">
               {availabilityOptions.map((option) => {
-                const count = option.value === 'TODOS' ? produtos.length : option.value === 'DISPONIVEIS' ? activeCount : pausedCount;
+                const count = option.value === 'TODOS'
+                  ? produtos.length
+                  : option.value === 'DISPONIVEIS'
+                    ? activeCount
+                    : pausedCount;
                 return (
                   <button
                     key={option.value}
@@ -296,23 +368,49 @@ export function CardapioProdutosTab({
                 );
               })}
             </div>
-            {previewUrl && (
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-800 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:text-white dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
-              >
-                <Eye size={16} /> Ver cardápio
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={onCreateProduct}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400"
-            >
-              <Plus size={17} /> Novo produto
-            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <Images size={13} /> Fotos
+            </span>
+            <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-slate-300 bg-slate-100 p-1 dark:border-white/15 dark:bg-black/20" aria-label="Filtrar por fotos do produto">
+              {mediaOptions.map((option) => {
+                const count = option.value === 'TODAS'
+                  ? produtos.length
+                  : option.value === 'SEM_FOTO'
+                    ? mediaStats.missing
+                    : option.value === 'UMA_FOTO'
+                      ? mediaStats.single
+                      : mediaStats.gallery;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setMediaFilter(option.value)}
+                    aria-pressed={mediaFilter === option.value}
+                    className={clsx(
+                      'shrink-0 rounded-lg px-3 py-2 text-xs font-black transition-colors',
+                      mediaFilter === option.value
+                        ? option.value === 'SEM_FOTO' && mediaStats.missing > 0
+                          ? 'bg-amber-100 text-amber-900 shadow-sm dark:bg-amber-500/15 dark:text-amber-200'
+                          : 'bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-200'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                    )}
+                  >
+                    {option.label} <span className="ml-1 font-mono opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className={clsx(
+              'rounded-full border px-2.5 py-1 text-[10px] font-black',
+              mediaStats.missing > 0
+                ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
+                : 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200',
+            )}>
+              {mediaCoverage}% com foto
+            </span>
           </div>
         </div>
       </section>
@@ -358,7 +456,9 @@ export function CardapioProdutosTab({
       {selectedCount > 0 && (
         <section className="flex flex-col gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-500/[0.08] md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="font-black text-slate-950 dark:text-white">{selectedCount} produto{selectedCount === 1 ? '' : 's'} selecionado{selectedCount === 1 ? '' : 's'}</p>
+            <p className="font-black text-slate-950 dark:text-white">
+              {selectedCount} produto{selectedCount === 1 ? '' : 's'} selecionado{selectedCount === 1 ? '' : 's'}
+            </p>
             <p className="text-xs text-slate-600 dark:text-slate-400">A alteração será aplicada de uma vez.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -396,7 +496,9 @@ export function CardapioProdutosTab({
               <PackageOpen size={24} />
             </div>
             <h3 className="text-lg font-black text-slate-950 dark:text-white">Nenhum produto encontrado</h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Ajuste a busca, escolha outra categoria ou limpe o filtro de disponibilidade.</p>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              Ajuste a busca, a categoria, a disponibilidade ou o filtro de fotos.
+            </p>
           </div>
         </section>
       ) : (
@@ -412,13 +514,16 @@ export function CardapioProdutosTab({
               Selecionar os {filteredProducts.length} exibidos
             </label>
             <p className="text-xs font-bold text-slate-500 dark:text-slate-500">
-              Clique em “Pausar venda” para retirar um item imediatamente.
+              {mediaFilter === 'SEM_FOTO'
+                ? 'Edite um produto para adicionar até três fotos; a primeira vira a capa.'
+                : 'Disponibilidade e fotos ficam no mesmo cadastro, sem telas duplicadas.'}
             </p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredProducts.map((product) => {
               const isAvailable = product.ativo !== false;
               const isSelected = selectedProductIds.has(product.id);
+              const mediaCount = productMediaCount(product);
               return (
                 <article
                   key={product.id}
@@ -438,7 +543,7 @@ export function CardapioProdutosTab({
                       aria-label={`Selecionar ${product.nome}`}
                       className="mt-1 h-4 w-4 shrink-0 rounded border-slate-400 accent-emerald-500"
                     />
-                    <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                    <div className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
                       {product.imagem ? (
                         <img src={product.imagem} alt="" className="h-full w-full object-cover" />
                       ) : (
@@ -487,6 +592,20 @@ export function CardapioProdutosTab({
                       <span className={clsx('h-1.5 w-1.5 rounded-full', isAvailable ? 'bg-emerald-500' : 'bg-rose-500')} />
                       {isAvailable ? 'À venda' : 'Pausado'}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => onEditProduct(product)}
+                      className={clsx(
+                        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black transition-colors',
+                        mediaCount === 0
+                          ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/35 dark:bg-amber-500/10 dark:text-amber-200'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:text-emerald-300',
+                      )}
+                      title="Editar fotos deste produto"
+                    >
+                      <Images size={12} />
+                      {mediaCount === 0 ? 'Sem foto' : `${mediaCount} foto${mediaCount === 1 ? '' : 's'}`}
+                    </button>
                   </div>
 
                   <div className="mt-auto pt-4">
