@@ -4,10 +4,13 @@ import test from 'node:test';
 
 import {
   CASHIER_SIDEBAR_GROUPS,
+  getCashierNavigationAction,
+  getCashierNavigationParentId,
   getCashierNavigationTarget,
 } from '../src/components/caixa/navigation/cashierNavigation';
 
-const flatten = () => CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
+const parents = () => CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
+const children = () => parents().flatMap((parent) => parent.children ?? []);
 
 test('navigation tree v2 has the intended product information architecture', () => {
   assert.deepEqual(
@@ -15,8 +18,9 @@ test('navigation tree v2 has the intended product information architecture', () 
     ['Operação', 'Cadastros', 'Vendas online', 'Gestão', 'Sistema'],
   );
 
-  const items = flatten();
-  assert.equal(new Set(items.map((item) => item.id)).size, items.length, 'navigation ids must be unique');
+  const items = parents();
+  const allIds = [...items.map((item) => item.id), ...children().map((item) => item.id)];
+  assert.equal(new Set(allIds).size, allIds.length, 'navigation ids must be unique across the whole tree');
   assert.deepEqual(
     items.map((item) => [item.id, item.label]),
     [
@@ -34,6 +38,36 @@ test('navigation tree v2 has the intended product information architecture', () 
   );
 });
 
+test('vendas and caixa expose existing operational views as children', () => {
+  const vendas = parents().find((item) => item.id === 'operacao');
+  const caixa = parents().find((item) => item.id === 'financeiro');
+
+  assert.deepEqual(vendas?.children?.map((child) => child.label), [
+    'Pedidos',
+    'Novo pedido',
+    'Salão',
+    'Cozinha',
+    'Entregas',
+  ]);
+  assert.deepEqual(caixa?.children?.map((child) => child.label), [
+    'Turno atual',
+    'Movimentações',
+    'Fechamento',
+  ]);
+
+  assert.deepEqual(getCashierNavigationTarget('vendas_cozinha'), { tab: 'operacao', subTab: 'kds' });
+  assert.deepEqual(getCashierNavigationTarget('vendas_entregas'), {
+    tab: 'operacao',
+    subTab: 'entregadores',
+  });
+  assert.deepEqual(getCashierNavigationTarget('caixa_fechamento'), {
+    tab: 'financeiro',
+    subTab: 'fechamento',
+  });
+  assert.equal(getCashierNavigationParentId('vendas_salao'), 'operacao');
+  assert.equal(getCashierNavigationParentId('caixa_movimentacoes'), 'financeiro');
+});
+
 test('navigation tree owns default tab and subtab destinations', () => {
   assert.deepEqual(getCashierNavigationTarget('operacao'), { tab: 'operacao', subTab: 'pedidos' });
   assert.deepEqual(getCashierNavigationTarget('financeiro'), { tab: 'financeiro', subTab: 'turno_atual' });
@@ -49,6 +83,26 @@ test('navigation tree owns default tab and subtab destinations', () => {
   assert.equal(getCashierNavigationTarget('nao-existe'), undefined);
 });
 
+test('novo pedido keeps PDV openCounter as the owner of counter initialization', () => {
+  assert.equal(getCashierNavigationAction('vendas_novo_pedido'), 'open-counter');
+  assert.deepEqual(getCashierNavigationTarget('vendas_novo_pedido'), {
+    tab: 'operacao',
+    subTab: 'balcao',
+  });
+
+  const navigationController = readFileSync(
+    new URL('../src/components/caixa/navigation/useCashierNavigation.ts', import.meta.url),
+    'utf8',
+  );
+  const pdvController = readFileSync(
+    new URL('../src/components/caixa/pdv/useCashierPdv.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(navigationController, /koma-navigation-open-counter/);
+  assert.match(pdvController, /addEventListener\('koma-navigation-open-counter'/);
+  assert.match(pdvController, /handleNavigationOpenCounter = \(\) => openCounter\(\)/);
+});
+
 test('online menu and subscription are primary navigation, not duplicated footer shortcuts', () => {
   const footer = readFileSync(
     new URL('../src/components/caixa/navigation/CashierSidebarFooter.tsx', import.meta.url),
@@ -56,4 +110,20 @@ test('online menu and subscription are primary navigation, not duplicated footer
   );
   assert.doesNotMatch(footer, /CASHIER_SIDEBAR_SECONDARY_ITEMS/);
   assert.doesNotMatch(footer, /Acesso rápido/);
+});
+
+test('desktop and mobile delegate nested rendering to the same component', () => {
+  const desktop = readFileSync(
+    new URL('../src/components/caixa/navigation/CashierDesktopSidebar.tsx', import.meta.url),
+    'utf8',
+  );
+  const mobile = readFileSync(
+    new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url),
+    'utf8',
+  );
+  for (const source of [desktop, mobile]) {
+    assert.match(source, /CashierSidebarNavigation/);
+    assert.match(source, /groups=\{CASHIER_SIDEBAR_GROUPS\}/);
+    assert.doesNotMatch(source, /group\.items\.map/);
+  }
 });
