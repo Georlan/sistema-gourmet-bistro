@@ -18,12 +18,23 @@ export type CashierNavigationTarget = {
   subTab: string;
 };
 
+export type CashierNavigationAction = 'open-counter';
+
+export type CashierNavigationChild = {
+  id: string;
+  label: string;
+  target: CashierNavigationTarget;
+  action?: CashierNavigationAction;
+  badge?: 'orders';
+};
+
 export type CashierNavigationItem = {
   id: string;
   label: string;
   icon: LucideIcon;
   target: CashierNavigationTarget;
   capability?: 'online-menu';
+  children?: readonly CashierNavigationChild[];
 };
 
 export type CashierNavigationGroup = {
@@ -34,13 +45,13 @@ export type CashierNavigationGroup = {
 /**
  * Navigation Tree v2.
  *
- * This catalog owns information architecture and default destinations. Desktop,
- * mobile and future command-palette/breadcrumb presentations must consume the
- * same tree instead of rebuilding route decisions locally.
+ * This catalog owns information architecture, default destinations and the
+ * semantic action required before a route transition. Desktop, mobile and
+ * future command-palette/breadcrumb presentations consume the same tree.
  *
- * Keep these IDs compatible with the existing CashierTab contract while the
- * internal views migrate independently. A menu reorganization must not rename
- * persisted routes or create a second screen owner.
+ * Keep parent IDs compatible with the existing CashierTab contract while the
+ * internal views migrate independently. Child IDs are stable navigation IDs;
+ * their targets continue to use the existing tab/subtab screen owners.
  */
 export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
   {
@@ -51,12 +62,58 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Vendas',
         icon: ShoppingCart,
         target: { tab: 'operacao', subTab: 'pedidos' },
+        children: [
+          {
+            id: 'vendas_pedidos',
+            label: 'Pedidos',
+            target: { tab: 'operacao', subTab: 'pedidos' },
+            badge: 'orders',
+          },
+          {
+            id: 'vendas_novo_pedido',
+            label: 'Novo pedido',
+            target: { tab: 'operacao', subTab: 'balcao' },
+            action: 'open-counter',
+          },
+          {
+            id: 'vendas_salao',
+            label: 'Salão',
+            target: { tab: 'operacao', subTab: 'mesas' },
+          },
+          {
+            id: 'vendas_cozinha',
+            label: 'Cozinha',
+            target: { tab: 'operacao', subTab: 'kds' },
+          },
+          {
+            id: 'vendas_entregas',
+            label: 'Entregas',
+            target: { tab: 'operacao', subTab: 'entregadores' },
+          },
+        ],
       },
       {
         id: 'financeiro',
         label: 'Caixa',
         icon: DollarSign,
         target: { tab: 'financeiro', subTab: 'turno_atual' },
+        children: [
+          {
+            id: 'caixa_turno_atual',
+            label: 'Turno atual',
+            target: { tab: 'financeiro', subTab: 'turno_atual' },
+          },
+          {
+            id: 'caixa_movimentacoes',
+            label: 'Movimentações',
+            target: { tab: 'financeiro', subTab: 'movimentacoes' },
+          },
+          {
+            id: 'caixa_fechamento',
+            label: 'Fechamento',
+            target: { tab: 'financeiro', subTab: 'fechamento' },
+          },
+        ],
       },
     ],
   },
@@ -131,12 +188,27 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
   },
 ] as const;
 
-const CASHIER_NAVIGATION_ITEMS = CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
+const CASHIER_PARENT_ITEMS = CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
+const CASHIER_CHILD_ITEMS = CASHIER_PARENT_ITEMS.flatMap((parent) =>
+  (parent.children ?? []).map((child) => ({ parentId: parent.id, child })),
+);
 
 export function getCashierNavigationItem(id: string): CashierNavigationItem | undefined {
-  return CASHIER_NAVIGATION_ITEMS.find((item) => item.id === id);
+  return CASHIER_PARENT_ITEMS.find((item) => item.id === id);
+}
+
+export function getCashierNavigationChild(id: string): CashierNavigationChild | undefined {
+  return CASHIER_CHILD_ITEMS.find((entry) => entry.child.id === id)?.child;
+}
+
+export function getCashierNavigationParentId(id: string): string | undefined {
+  return CASHIER_CHILD_ITEMS.find((entry) => entry.child.id === id)?.parentId;
 }
 
 export function getCashierNavigationTarget(id: string): CashierNavigationTarget | undefined {
-  return getCashierNavigationItem(id)?.target;
+  return getCashierNavigationItem(id)?.target ?? getCashierNavigationChild(id)?.target;
+}
+
+export function getCashierNavigationAction(id: string): CashierNavigationAction | undefined {
+  return getCashierNavigationChild(id)?.action;
 }
