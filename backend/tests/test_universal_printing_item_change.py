@@ -9,7 +9,7 @@ from app.application.printing import (
 )
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
-from app.models import Categoria, Comanda, Item, Lancamento, PrintJob, Produto, Restaurante, Usuario
+from app.models import Categoria, Comanda, Item, Lancamento, Mesa, PrintJob, Produto, Restaurante, Usuario
 from app.security import create_access_token
 
 
@@ -23,6 +23,7 @@ COMMAND_ID = "c-item-change"
 LAUNCH_ID = "l-item-change"
 ITEM_BAR_ID = "i-item-change-bar"
 ITEM_SILENT_ID = "i-item-change-silent"
+TABLE_ID = 12
 
 client = TestClient(app)
 
@@ -37,6 +38,7 @@ def setup_item_change_printing():
         db.query(Item).filter(Item.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(Lancamento).filter(Lancamento.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(Comanda).filter(Comanda.restaurante_id == TENANT_ID).delete(synchronize_session=False)
+        db.query(Mesa).filter(Mesa.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(Produto).filter(Produto.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(Categoria).filter(Categoria.restaurante_id == TENANT_ID).delete(synchronize_session=False)
         db.query(Usuario).filter(Usuario.restaurante_id == TENANT_ID).delete(synchronize_session=False)
@@ -55,6 +57,7 @@ def setup_item_change_printing():
                 status="ativo",
             )
         )
+        db.add(Mesa(id=TABLE_ID, restaurante_id=TENANT_ID, capacidade=4, nome="Mesa Delta"))
         db.add_all(
             [
                 Categoria(
@@ -97,7 +100,7 @@ def setup_item_change_printing():
                 id=COMMAND_ID,
                 restaurante_id=TENANT_ID,
                 garcom_id=USER_ID,
-                mesa_id=12,
+                mesa_id=TABLE_ID,
                 tipo="Consumo no Local",
                 identificador="Mesa Delta",
                 numero_pedido=912,
@@ -192,7 +195,7 @@ def test_update_item_uses_universal_delta_and_routes_to_category_destination():
     assert job.source_type == "item"
     assert job.source_id == ITEM_BAR_ID
     assert "ITEM ALTERADO/ADICIONADO" in job.payload_text
-    assert "MESA: 12" in job.payload_text
+    assert f"MESA: {TABLE_ID}" in job.payload_text
     assert "PRODUTO: Suco Verde" in job.payload_text
     assert "OBS (EDITADO): Sem gelo" in job.payload_text
     assert "CLIENTE: Ana" in job.payload_text
