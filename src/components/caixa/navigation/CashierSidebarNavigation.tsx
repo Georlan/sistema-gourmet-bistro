@@ -10,22 +10,19 @@ import {
   SidebarMenuItem,
 } from '../../ui/sidebar';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
-import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
+import type { CashierNavigationGroup } from './cashierNavigation';
 
 type Props = Pick<
   CashierSidebarProps,
   'hasOnlineMenu' | 'isSidebarTabActive' | 'sidebarOrderCount' | 'handleSidebarNavigation'
 > & {
+  groups: readonly CashierNavigationGroup[];
   closeMobile?: boolean;
 };
 
-/**
- * Shared Navigation Tree v2 renderer.
- *
- * Responsive shells own overlay/collapse behavior; information architecture,
- * active-state rules and navigation commands stay identical on desktop/mobile.
- */
+/** Shared renderer; responsive shells still consume the same Navigation Tree v2 catalog. */
 export function CashierSidebarNavigation({
+  groups,
   hasOnlineMenu,
   isSidebarTabActive,
   sidebarOrderCount,
@@ -34,7 +31,7 @@ export function CashierSidebarNavigation({
 }: Props) {
   return (
     <>
-      {CASHIER_SIDEBAR_GROUPS.map((group) => (
+      {groups.map((group) => (
         <SidebarGroup key={group.category}>
           <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -43,8 +40,6 @@ export function CashierSidebarNavigation({
                 const Icon = item.icon;
                 const isLocked = item.capability === 'online-menu' && !hasOnlineMenu;
                 const isActive = isSidebarTabActive(item.id);
-                const hasChildren = Boolean(item.children?.length);
-
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
@@ -53,30 +48,24 @@ export function CashierSidebarNavigation({
                       className="cashier-nav-item"
                       title={item.label}
                     >
-                      <span className="cashier-nav-icon">
-                        <Icon size={15} />
-                      </span>
+                      <span className="cashier-nav-icon"><Icon size={15} /></span>
                       <span className="cashier-nav-label">{item.label}</span>
                       {item.id === 'operacao' && sidebarOrderCount > 0 && (
                         <SidebarMenuBadge>{sidebarOrderCount}</SidebarMenuBadge>
                       )}
                       {isLocked && (
-                        <span className="cashier-nav-plan">
-                          <Lock size={9} />
-                          <span>Plano</span>
-                        </span>
+                        <span className="cashier-nav-plan"><Lock size={9} /><span>Plano</span></span>
                       )}
                     </SidebarMenuButton>
 
-                    {hasChildren && isActive && (
+                    {item.children?.length && isActive ? (
                       <div
                         className="cashier-nav-children ml-6 mt-1 space-y-0.5 border-l border-koma-border pl-2 group-data-[collapsible=icon]:hidden"
                         aria-label={`Atalhos de ${item.label}`}
                       >
-                        {item.children?.map((child) => {
+                        {item.children.map((child) => {
                           const childActive = isSidebarTabActive(child.id);
                           const childCount = child.badge === 'orders' ? sidebarOrderCount : 0;
-
                           return (
                             <button
                               key={child.id}
@@ -101,7 +90,7 @@ export function CashierSidebarNavigation({
                           );
                         })}
                       </div>
-                    )}
+                    ) : null}
                   </SidebarMenuItem>
                 );
               })}
