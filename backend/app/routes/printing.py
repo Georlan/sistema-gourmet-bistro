@@ -79,6 +79,11 @@ def _execute_print(
         ) from exc
 
     if not jobs:
+        if (
+            payload.source_type == PrintSourceType.ITEM
+            and payload.action == PrintAction.ITEM_CHANGE
+        ):
+            return []
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="A impressão física não está disponível no plano atual.",
@@ -102,7 +107,7 @@ def imprimir_universal(
     jobs = _execute_print(db, current_user, payload)
     return {
         "status": "success",
-        "detail": "Impressão enviada para a fila.",
+        "detail": "Impressão enviada para a fila." if jobs else "Nenhuma via necessária para esta intenção.",
         "job_ids": [job.id for job in jobs],
         "jobs": [
             {
