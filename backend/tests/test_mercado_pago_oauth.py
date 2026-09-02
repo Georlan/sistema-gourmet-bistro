@@ -31,7 +31,7 @@ def oauth_env(monkeypatch):
     monkeypatch.setenv("MERCADO_PAGO_OAUTH_STATE_TTL_SECONDS", "600")
 
 
-def test_authorization_url_uses_pkce_and_encrypted_state():
+def test_authorization_url_uses_marketplace_pkce_and_encrypted_state():
     url = build_authorization_url(restaurant_id=17, user_id="operator-9")
     parsed = urlparse(url)
     params = parse_qs(parsed.query)
@@ -40,6 +40,7 @@ def test_authorization_url_uses_pkce_and_encrypted_state():
     assert parsed.netloc == "auth.mercadopago.com"
     assert params["response_type"] == ["code"]
     assert params["client_id"] == ["app-test-123"]
+    assert params["platform_id"] == ["mp"]
     assert params["code_challenge_method"] == ["S256"]
     assert params["redirect_uri"] == [
         "https://api.example.test/payments/mercado-pago/oauth/callback"
