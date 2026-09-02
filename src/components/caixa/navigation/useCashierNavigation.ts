@@ -44,22 +44,15 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
     // Relatórios mappings
     if (
-      [
-        'visao_geral',
-        'metas',
-        'vendas',
-        'indicadores',
-        'dashboard',
-        'relatorio_garçons',
-        'faturamento_garcom',
-      ].includes(saved)
+      ['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard', 'relatorio_geral', 'faturamento_garcom'].includes(saved)
     )
       return 'visao_geral';
-    if (['equipe', 'desempenho_equipe', 'relatorio_garcons'].includes(saved)) return 'equipe';
+    if (['equipe', 'desempenho_equipe', 'desempenho', 'relatorio_garcons', 'relatorio_garçons'].includes(saved))
+      return 'equipe';
     if (['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(saved)) return 'produtos';
     if (['financeiro', 'dre', 'demonstrativo_dre'].includes(saved)) return 'financeiro';
     // Equipe lateral mappings
-    if (['pessoas', 'convites'].includes(saved)) return 'pessoas';
+    if (['pessoas', 'equipe', 'convites'].includes(saved)) return 'pessoas';
     if (['cargos', 'cargos_permissoes', 'permissoes'].includes(saved)) return 'cargos_permissoes';
     // Clientes mappings
     if (['clientes', 'crm', 'banco_clientes'].includes(saved)) return 'clientes';
@@ -181,6 +174,22 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (navigationId === 'clientes_cupons') {
       return ['cupons', 'cupom', 'promocoes', 'descontos', 'cupons_desconto'].includes(activeSubTab);
     }
+    if (navigationId === 'relatorios_visao_geral') {
+      return ['visao_geral', 'metas', 'vendas', 'indicadores', 'dashboard', 'relatorio_geral', 'faturamento_garcom'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_financeiro') {
+      return ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_produtos') {
+      return ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab);
+    }
+    if (navigationId === 'relatorios_equipe') {
+      return ['equipe', 'desempenho_equipe', 'desempenho', 'relatorio_garcons', 'relatorio_garçons'].includes(activeSubTab);
+    }
+    if (navigationId === 'equipe_pessoas') return ['pessoas', 'equipe', 'convites'].includes(activeSubTab);
+    if (navigationId === 'equipe_funcoes_acessos') {
+      return ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab);
+    }
 
     return activeSubTab === target.subTab;
   };
@@ -225,14 +234,11 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (navigationId === 'cardapio' && activeTab === 'cardapio') return;
     if (navigationId === 'estoque' && activeTab === 'estoque') return;
     if (navigationId === 'clientes' && activeTab === 'clientes') return;
-    if (navigationId === 'permissoes_cargos' && ['pessoas', 'desempenho'].includes(activeSubTab)) {
-      setActiveTab('permissoes_cargos');
-      return;
-    }
-    if (navigationId === 'relatorios' && ['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
+    if (navigationId === 'relatorios' && (activeTab === 'relatorios' || activeTab === 'dashboard')) {
       setActiveTab('relatorios');
       return;
     }
+    if (navigationId === 'permissoes_cargos' && activeTab === 'permissoes_cargos') return;
 
     if (getCashierNavigationAction(navigationId) === 'open-counter') {
       window.dispatchEvent(new Event('koma-navigation-open-counter'));
