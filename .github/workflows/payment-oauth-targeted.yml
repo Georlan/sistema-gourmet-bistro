@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".env.example"
+      - "backend/alembic/versions/1c2d3e4f5a6b_resolve_mercado_pago_webhook_account.py"
       - "backend/app/routes/online_payments.py"
       - "backend/app/services/online_payments/**"
       - "backend/tests/test_mercado_pago_*.py"
@@ -53,6 +54,13 @@ jobs:
           python -m py_compile backend/app/routes/online_payments.py
           python -m py_compile backend/app/services/online_payments/oauth.py
           python -m py_compile backend/app/services/online_payments/account_connection.py
+          python -m py_compile backend/alembic/versions/1c2d3e4f5a6b_resolve_mercado_pago_webhook_account.py
+
+      - name: Validate Alembic payment webhook head
+        working-directory: backend
+        run: |
+          python -m alembic heads | tee /tmp/alembic-heads.txt
+          grep -q "1c2d3e4f5a6b" /tmp/alembic-heads.txt
 
       - name: Run targeted backend payment tests
         working-directory: backend
@@ -61,6 +69,7 @@ jobs:
             tests/test_mercado_pago_oauth.py \
             tests/test_mercado_pago_account_connection.py \
             tests/test_mercado_pago_oauth_routes.py \
+            tests/test_mercado_pago_application_webhook.py \
             tests/test_online_payment_gate.py
 
       - name: Setup Node
