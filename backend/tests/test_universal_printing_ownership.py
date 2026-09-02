@@ -9,6 +9,7 @@ MIGRATED_PRINT_PRODUCERS = (
     "app/adapters/orders/pos_adapter.py",
     "app/adapters/orders/waiter_adapter.py",
     "app/routes/orders.py",
+    "app/routes/orders_core.py",
     "app/routes/atendimentos.py",
     "app/routes/atendimento_printing.py",
     "app/routes/printing.py",
@@ -17,6 +18,7 @@ MIGRATED_PRINT_PRODUCERS = (
 FORBIDDEN_OUTSIDE_PRINT_CORE = (
     "PrintJob(",
     "PrintDocumentService",
+    "enqueue_print_job(",
     "enqueue_table_receipt(",
     "generate_kitchen_ticket",
     "generate_delivery_unified_ticket",
@@ -33,6 +35,8 @@ SUPERSEDED_ORDERS_CORE_PRINT_PATHS = (
     "enqueue_print_job_in_session",
     "enqueue_initial_production_for_order",
     "reimprimir_lancamento_cozinha",
+    "print_in_background",
+    "=== ITEM ALTERADO/ADICIONADO ===",
 )
 
 SUPERSEDED_DOMAIN_PRINTING_FILES = (
@@ -63,16 +67,19 @@ def test_orders_core_does_not_restore_superseded_printing_paths():
     assert found == []
 
 
-def test_item_edit_is_the_only_contained_orders_core_legacy_print_path():
-    source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
+def test_item_edit_declares_only_the_canonical_delta_intent():
+    route_source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
+    core_source = (BACKEND_ROOT / "app/application/printing/item_change.py").read_text(encoding="utf-8")
 
-    # Item edit emits a delta ticket (only the edited/added item). The current
-    # PrintIntent contract prints an order/table snapshot and cannot preserve
-    # this physical behavior yet, so keep the legacy helper contained instead
-    # of silently changing it to a full-order print.
-    assert source.count("def print_in_background(") == 1
-    assert source.count("print_in_background,") == 1
-    assert "=== ITEM ALTERADO/ADICIONADO ===" in source
+    assert "PrintSourceType.ITEM" in route_source
+    assert "PrintAction.ITEM_CHANGE" in route_source
+    assert "quantity_added=added_count" in route_source
+    assert "=== ITEM ALTERADO/ADICIONADO ===" not in route_source
+    assert "enqueue_print_job(" not in route_source
+
+    assert "=== ITEM ALTERADO/ADICIONADO ===" in core_source
+    assert "is_production_destination" in core_source
+    assert "enqueue_print_job(" in core_source
 
 
 def test_superseded_domain_printing_stack_stays_removed():
