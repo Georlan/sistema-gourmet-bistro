@@ -30,6 +30,7 @@ import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
 import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
+import { getCashierNavigationItem } from './caixa/navigation/cashierNavigation';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
 import { useCashierPreferences } from './caixa/navigation/useCashierPreferences';
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
@@ -60,6 +61,7 @@ const loadCashierOnlineMenu = () => import('./caixa/online-menu/CashierOnlineMen
 const loadCashierTeam = () => import('./caixa/team/CashierTeam');
 const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
+const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -477,7 +479,6 @@ export function CaixaPanel({
     ).toLowerCase();
 
     const mesaNum = String(card.mesa_numero || card.mesa_id || card.mesa?.numero || card.mesaId || '');
-
     const telefone = (card.telefone || card.celular || '').toLowerCase();
 
     let itensStr = '';
@@ -756,20 +757,11 @@ export function CaixaPanel({
             className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}
           >
             {activeTab === 'operacao' &&
-              [
-                { id: 'pedidos', label: 'Pedidos' },
-                { id: 'balcao', label: 'Novo pedido' },
-                { id: 'mesas', label: 'Salão' },
-              ].map((sub) => (
+              operationSubnavItems.map((sub) => (
                 <button
                   key={sub.id}
-                  onClick={() => {
-                    if (sub.id === 'balcao') {
-                      pdv.openCounter();
-                    }
-                    setActiveSubTab(sub.id);
-                  }}
-                  className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}
+                  onClick={() => handleSidebarNavigation(sub.id)}
+                  className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
                 >
                   {sub.label}
                 </button>
