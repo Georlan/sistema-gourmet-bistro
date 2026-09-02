@@ -8,7 +8,6 @@ from .fixtures import char_client, char_setup, capture_order_snapshot, CHAR_REST
 
 
 @patch("app.services.printing.enqueue_table_receipt", lambda *args, **kwargs: None)
-@patch("app.routes.orders_core.subscription_has_printing", lambda *args, **kwargs: False)
 class TestLegacyTableOrders:
     def test_table_order_multiple_launches_on_same_check(self, char_client, char_setup):
         """[OBSERVADO] Uma comanda de mesa suporta múltiplos lançamentos sequenciais sem quebrar a conta."""
