@@ -22,9 +22,9 @@ O KÔMA separa a criação técnica do pedido da sua liberação operacional.
 
 A fonte de verdade financeira fica em `backend/app/subscription.py`:
 
-- Pocket: `0.0179` = 1,79% por pedido online pago.
-- Pro: `0.0089` = 0,89% por pedido online pago.
-- Premium: `0.0039` = 0,39% por pedido online pago.
+- Pocket: `0.0149` = 1,49% por pedido online pago.
+- Pro: `0.0069` = 0,69% por pedido online pago.
+- Premium: `0.0029` = 0,29% por pedido online pago.
 
 O valor da comissão é calculado e gravado na `OnlinePaymentIntent` no momento da criação do pagamento. Assim, uma mudança posterior de plano não altera retroativamente uma intenção já criada.
 
