@@ -72,6 +72,56 @@ def test_mercado_pago_payment_lookup_rejects_untrusted_url_parts():
     assert len(requested_urls) == 1
 
 
+def test_mercado_pago_create_pix_date_of_expiration_format():
+    import datetime
+    import json
+    import re
+
+    captured_requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_requests.append(request)
+        return httpx.Response(
+            201,
+            json={
+                "id": 999888,
+                "status": "pending",
+                "transaction_amount": 48.0,
+                "external_reference": "ref-exp-test",
+                "date_of_expiration": "2026-09-02T03:40:00.000+00:00",
+                "point_of_interaction": {
+                    "transaction_data": {
+                        "qr_code": "pix-code-123",
+                        "qr_code_base64": "base64-qr",
+                    }
+                },
+            },
+        )
+
+    provider = MercadoPagoProvider("test-token")
+    provider._client = httpx.Client(
+        base_url=provider.API_URL,
+        transport=httpx.MockTransport(handler),
+    )
+
+    expires_at = datetime.datetime(2026, 9, 2, 3, 40, 0, tzinfo=datetime.timezone.utc)
+    payment = provider.create_pix(
+        amount=Decimal("48.00"),
+        marketplace_fee=Decimal("0.00"),
+        payer_email="cliente@example.com",
+        external_reference="ref-exp-test",
+        idempotency_key="idemp-exp-1",
+        notification_url="https://api.example.com/notification",
+        expires_at=expires_at,
+    )
+
+    assert payment.external_id == "999888"
+    assert len(captured_requests) == 1
+    payload = json.loads(captured_requests[0].content)
+    assert payload["date_of_expiration"] == "2026-09-02T03:40:00.000+00:00"
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$", payload["date_of_expiration"])
+
+
 def test_mercado_pago_signature_rejects_tamper_and_stale_timestamp():
     secret = "webhook-secret"
     request_id = "req-123"
