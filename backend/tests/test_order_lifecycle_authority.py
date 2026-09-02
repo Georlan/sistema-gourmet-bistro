@@ -3,7 +3,11 @@ from unittest.mock import patch
 
 from app.database import SessionLocal
 from app.models import Comanda, IntegrationOutbox, Lancamento
-from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID
+from tests.characterization.orders.fixtures import (
+    CHAR_RESTAURANT_ID,
+    char_client,
+    char_setup,
+)
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +30,7 @@ def test_delivery_routes_do_not_write_order_lifecycle_directly():
     assert "OrderLifecycleCoordinator.transition_check_status" in source
     assert "OrderApplicationService." not in source
     assert "validate_order_transition(" not in source
+    assert "services.order_state_machine" not in source
 
 
 def _clear_outbox() -> None:
@@ -57,17 +62,13 @@ def _event_names_for_check(comanda_id: str) -> list[str]:
         db.close()
 
 
-@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
-@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
-def test_http_status_route_emits_canonical_lifecycle_events(char_client, char_setup):
-    _clear_outbox()
-    headers = char_setup["headers"]
+def _create_pickup(char_client, *, phone: str, customer_name: str) -> str:
     created = char_client.post(
         "/cardapio/pedidos",
         json={
             "restaurante_id": CHAR_RESTAURANT_ID,
-            "cliente_nome": "Lifecycle Authority",
-            "cliente_telefone": "11977770001",
+            "cliente_nome": customer_name,
+            "cliente_telefone": phone,
             "tipo_pedido": "retirada",
             "itens": [
                 {
@@ -79,7 +80,19 @@ def test_http_status_route_emits_canonical_lifecycle_events(char_client, char_se
         },
     )
     assert created.status_code in {200, 201}, created.text
-    comanda_id = created.json()["comanda_id"]
+    return created.json()["comanda_id"]
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_http_status_route_emits_canonical_lifecycle_events(char_client, char_setup):
+    _clear_outbox()
+    headers = char_setup["headers"]
+    comanda_id = _create_pickup(
+        char_client,
+        phone="11977770001",
+        customer_name="Lifecycle Authority",
+    )
 
     accepted = char_client.put(
         f"/comandas/{comanda_id}/delivery/status",
@@ -132,27 +145,38 @@ def test_http_status_route_emits_canonical_lifecycle_events(char_client, char_se
 
 @patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
 @patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_pending_rejection_uses_rejected_event(char_client, char_setup):
+    _clear_outbox()
+    comanda_id = _create_pickup(
+        char_client,
+        phone="11977770003",
+        customer_name="Lifecycle Reject",
+    )
+
+    rejected = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "recusado"},
+        headers=char_setup["headers"],
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert rejected.json()["delivery_status"] == "recusado"
+    assert rejected.json()["fechada"] is True
+    assert _event_names_for_check(comanda_id) == [
+        "koma.order.created",
+        "koma.order.rejected",
+    ]
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
 def test_operational_rejection_after_acceptance_uses_cancel_event(char_client, char_setup):
     _clear_outbox()
     headers = char_setup["headers"]
-    created = char_client.post(
-        "/cardapio/pedidos",
-        json={
-            "restaurante_id": CHAR_RESTAURANT_ID,
-            "cliente_nome": "Lifecycle Cancel",
-            "cliente_telefone": "11977770002",
-            "tipo_pedido": "retirada",
-            "itens": [
-                {
-                    "produto_id": "prod-char-simples",
-                    "quantidade": 1,
-                    "modificador_ids": [],
-                }
-            ],
-        },
+    comanda_id = _create_pickup(
+        char_client,
+        phone="11977770002",
+        customer_name="Lifecycle Cancel",
     )
-    assert created.status_code in {200, 201}, created.text
-    comanda_id = created.json()["comanda_id"]
 
     accepted = char_client.put(
         f"/comandas/{comanda_id}/delivery/status",
