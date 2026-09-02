@@ -66,7 +66,7 @@ test('cashier fallback cannot poll the order snapshot owned by App', () => {
 
 test('inventory resource plans load what each screen and its dialogs use', () => {
   assert.deepEqual(inventoryResourcesForTab('insumos'), ['insumos', 'fichas']);
-  assert.deepEqual(inventoryResourcesForTab('fornecedores'), ['distribuidores']);
+  assert.deepEqual(inventoryResourcesForTab('fornecedores'), ['insumos', 'distribuidores']);
   for (const tab of ['inventario', 'contagem'])
     assert.deepEqual(inventoryResourcesForTab(tab), ['insumos', 'contagens']);
   for (const tab of ['historico', 'entradas', 'movimentacoes']) {
