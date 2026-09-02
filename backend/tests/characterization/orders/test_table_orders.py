@@ -1,10 +1,8 @@
 """Testes de caracterização: Congelamento da estrutura de pedidos de salão/mesa e múltiplos lançamentos."""
 
-import pytest
 from unittest.mock import patch
 from app.database import SessionLocal
-from app.models import Comanda, Item, Lancamento
-from .fixtures import char_client, char_setup, capture_order_snapshot, CHAR_RESTAURANT_ID
+from .fixtures import char_client, char_setup, capture_order_snapshot
 
 
 @patch("app.services.printing.enqueue_table_receipt", lambda *args, **kwargs: None)
