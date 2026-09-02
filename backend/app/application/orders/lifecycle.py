@@ -115,21 +115,31 @@ class OrderLifecycleCoordinator:
                 "Pedido de delivery precisa de motoboy antes da transição para trânsito."
             )
 
-        order_ids = cls._active_order_ids(comanda)
-        if not order_ids:
+        active_orders = cls._active_orders(comanda)
+        if not active_orders:
             if comanda.lancamentos:
                 raise OrderValidationError(
                     "A Comanda possui apenas pedidos terminais e não pode avançar de status."
                 )
             # Compatibilidade com comandas legadas sem Lancamento persistido.
-            order_ids = [comanda.id]
+            active_orders = [(comanda.id, current)]
 
-        for order_id in order_ids:
+        # Uma Comanda pode conter mais de um Lancamento e o KDS pode deixá-los em
+        # estágios diferentes. Validar cada lançamento evita dois problemas do
+        # antigo writer agregado: saltos silenciosos e eventos duplicados para um
+        # lançamento que já atingiu o estado solicitado.
+        pending_transitions = cls._pending_order_transitions(
+            active_orders,
+            target_status=target,
+            fulfillment=fulfillment,
+        )
+
+        for order_id, order_current in pending_transitions:
             cls._apply_single_transition(
                 db,
                 restaurant_id=restaurant_id,
                 order_id=order_id,
-                current_status=current,
+                current_status=order_current,
                 target_status=target,
                 operator_user_id=operator_user_id,
                 courier_id=courier_id,
@@ -158,16 +168,46 @@ class OrderLifecycleCoordinator:
         )
 
     @staticmethod
-    def _active_order_ids(comanda: Comanda) -> list[str]:
+    def _active_orders(comanda: Comanda) -> list[tuple[str, OrderStatus]]:
+        """Retorna lançamentos não terminais preservando o status individual."""
+
         launches = sorted(
             list(comanda.lancamentos or []),
             key=lambda launch: (str(launch.timestamp or ""), str(launch.id)),
         )
-        return [
-            str(launch.id)
-            for launch in launches
-            if normalize_to_order_status(launch.status) not in _TERMINAL_ORDER_STATUSES
-        ]
+        active: list[tuple[str, OrderStatus]] = []
+        for launch in launches:
+            launch_status = normalize_to_order_status(launch.status)
+            if launch_status in _TERMINAL_ORDER_STATUSES:
+                continue
+            active.append((str(launch.id), launch_status))
+        return active
+
+    @staticmethod
+    def _pending_order_transitions(
+        active_orders: list[tuple[str, OrderStatus]],
+        *,
+        target_status: OrderStatus,
+        fulfillment: FulfillmentType,
+    ) -> list[tuple[str, OrderStatus]]:
+        """Valida cada lançamento e elimina apenas transições já aplicadas.
+
+        Os serviços de aplicação emitem eventos de domínio quando chamados; por
+        isso não devemos chamá-los novamente para um lançamento que já está no
+        alvo. Ao mesmo tempo, qualquer lançamento atrasado que não possa alcançar
+        o alvo faz a transação falhar antes de qualquer escrita parcial.
+        """
+
+        pending: list[tuple[str, OrderStatus]] = []
+        for order_id, current_status in active_orders:
+            transition = OrderStateMachine.validate_transition(
+                current_status=current_status,
+                target_status=target_status,
+                fulfillment=fulfillment,
+            )
+            if transition.changed:
+                pending.append((order_id, current_status))
+        return pending
 
     @staticmethod
     def _apply_single_transition(
