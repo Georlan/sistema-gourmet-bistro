@@ -3,6 +3,7 @@ name: Payment OAuth Targeted
 on:
   pull_request:
     paths:
+      - ".env.example"
       - "backend/app/routes/online_payments.py"
       - "backend/app/services/online_payments/**"
       - "backend/tests/test_mercado_pago_*.py"
@@ -17,7 +18,7 @@ permissions:
 jobs:
   targeted-oauth:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       ENVIRONMENT: test
       SECRET_KEY: oauth-targeted-ci-secret-key
@@ -76,3 +77,6 @@ jobs:
 
       - name: Run Mercado Pago UI contract test
         run: npx tsx --test tests/mercadoPagoConnection.test.ts
+
+      - name: Build production frontend
+        run: npm run build
