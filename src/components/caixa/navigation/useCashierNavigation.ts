@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CashierTab } from '../cashierContracts';
+import { getCashierNavigationTarget } from './cashierNavigation';
 
 type BoundaryProps = {
   hasOnlineMenu: boolean;
@@ -13,7 +14,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (saved === 'config_cardapio' || saved === 'configuracoes_cardapio') return 'cardapio_digital';
     if (saved === 'dashboard' || saved === 'indicadores') return 'relatorios';
     if (saved === 'robo_ia' || saved === 'assistente_koma' || saved === 'chat_copiloto') return 'operacao';
-    return (saved as any) || 'operacao';
+    return (saved as CashierTab) || 'operacao';
   });
 
   const [activeSubTab, setActiveSubTab] = useState<string>(() => {
@@ -77,7 +78,6 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
   });
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
 
   useEffect(() => {
@@ -124,44 +124,30 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     sessionStorage.setItem('koma_active_subtab', sanitized);
   }, [activeSubTab, activeTab]);
 
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId as any);
-    switch (tabId) {
-      case 'dashboard':
-      case 'relatorios':
-        setActiveSubTab('visao_geral');
-        break;
-      case 'operacao':
-        setActiveSubTab('pedidos');
-        break;
-      case 'cardapio':
-        setActiveSubTab('produtos');
-        break;
-      case 'estoque':
-        setActiveSubTab('insumos');
-        break;
-      case 'financeiro':
-        setActiveSubTab('turno_atual');
-        break;
-      case 'clientes':
-        setActiveSubTab('clientes');
-        break;
-      case 'permissoes_cargos':
-        setActiveSubTab('pessoas');
-        break;
-      case 'impressao_salao':
-        setActiveSubTab('impressoras');
-        break;
-      case 'assinatura_pix':
-        setActiveSubTab('planos');
-        break;
-      case 'cardapio_digital':
-        setActiveSubTab('cardapio_digital');
-        break;
-      case 'configuracoes':
-        setActiveSubTab('equipe');
-        break;
+  const applyNavigationTarget = (tabId: string) => {
+    const target = getCashierNavigationTarget(tabId);
+    if (target) {
+      setActiveTab(target.tab);
+      setActiveSubTab(target.subTab);
+      return true;
     }
+
+    // Persisted aliases that are intentionally not visible in Navigation Tree v2.
+    if (tabId === 'dashboard') {
+      setActiveTab('relatorios');
+      setActiveSubTab('visao_geral');
+      return true;
+    }
+    if (tabId === 'configuracoes') {
+      setActiveTab('configuracoes');
+      setActiveSubTab('equipe');
+      return true;
+    }
+    return false;
+  };
+
+  const handleTabChange = (tabId: string) => {
+    if (!applyNavigationTarget(tabId)) setActiveTab(tabId as CashierTab);
   };
 
   const isSidebarTabActive = (tabId: string) =>
@@ -182,8 +168,11 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (closeMobile) setIsMobileSidebarOpen(false);
 
     if (tabId === 'cardapio_digital' && !hasOnlineMenu) {
-      setActiveTab('assinatura_pix');
-      setActiveSubTab('planos');
+      const subscription = getCashierNavigationTarget('assinatura_pix');
+      if (subscription) {
+        setActiveTab(subscription.tab);
+        setActiveSubTab(subscription.subTab);
+      }
       showToast(
         'O cardápio digital está incluído em todos os planos. Consulte a ativação com o suporte.',
         'info',
@@ -191,25 +180,19 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
       return;
     }
 
-    if (tabId === 'cardapio_digital') {
-      setActiveTab('cardapio_digital');
-      setActiveSubTab('cardapio_digital');
-    } else if (tabId === 'permissoes_cargos') {
+    // Preserve the current meaningful child view when the user clicks its parent.
+    if (tabId === 'permissoes_cargos' && ['pessoas', 'desempenho'].includes(activeSubTab)) {
       setActiveTab('permissoes_cargos');
-      if (!['pessoas', 'desempenho'].includes(activeSubTab)) setActiveSubTab('pessoas');
-    } else if (tabId === 'impressao_salao') {
-      setActiveTab('impressao_salao');
-      setActiveSubTab('impressoras');
-    } else if (tabId === 'assinatura_pix') {
-      setActiveTab('assinatura_pix');
-      setActiveSubTab('planos');
-    } else if (tabId === 'relatorios') {
-      setActiveTab('relatorios');
-      if (!['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) setActiveSubTab('visao_geral');
-    } else {
-      handleTabChange(tabId as any);
+      return;
     }
+    if (tabId === 'relatorios' && ['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
+      setActiveTab('relatorios');
+      return;
+    }
+
+    applyNavigationTarget(tabId);
   };
+
   return {
     activeTab,
     setActiveTab,
