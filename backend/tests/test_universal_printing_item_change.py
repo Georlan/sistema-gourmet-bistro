@@ -237,3 +237,45 @@ def test_item_without_production_destination_stays_silent():
         assert db.query(PrintJob).filter(PrintJob.restaurante_id == TENANT_ID).count() == 0
     finally:
         db.close()
+
+
+def test_http_item_without_destination_is_successful_noop_not_plan_error():
+    response = client.post(
+        "/impressao",
+        headers=_headers(),
+        json={
+            "source_type": "item",
+            "source_id": ITEM_SILENT_ID,
+            "action": "alteracao_item",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["job_ids"] == []
+    assert payload["jobs"] == []
+    assert "Nenhuma via necessária" in payload["detail"]
+
+
+def test_item_with_destination_and_plan_without_printing_returns_403():
+    db = SessionLocal(restaurante_id=TENANT_ID)
+    try:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == TENANT_ID).one()
+        restaurante.plano = "pocket"
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/impressao",
+        headers=_headers(),
+        json={
+            "source_type": "item",
+            "source_id": ITEM_BAR_ID,
+            "action": "alteracao_item",
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    assert "plano atual" in response.json()["detail"]
+    assert _jobs() == []
