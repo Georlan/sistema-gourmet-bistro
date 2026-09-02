@@ -8,6 +8,8 @@ import { KomaEmptyState } from '../../shared/KomaEmptyState';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
 import { CustomerRelationshipPanel } from './CustomerRelationshipPanel';
+import { CustomerSatisfactionPanel } from './CustomerSatisfactionPanel';
+import { useCustomerSatisfaction } from './useCustomerSatisfaction';
 
 const formatarTelefoneTabela = (tel?: string) => {
   if (!tel) return '-';
@@ -103,6 +105,50 @@ export default function CashierCustomers({
   const [newCrmTelefone, setNewCrmTelefone] = useState('');
 
   const [newCrmSaldo, setNewCrmSaldo] = useState<number | ''>(0);
+  const isClientesTabActive = activeTab === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab);
+  const {
+    data: satisfactionData,
+    isLoading: isSatisfactionLoading,
+    submitSatisfaction,
+  } = useCustomerSatisfaction({
+    apiBaseUrl,
+    authHeaders,
+    enabled: isClientesTabActive,
+  });
+
+  const [showSatisfactionModal, setShowSatisfactionModal] = useState(false);
+  const [satisfactionClienteId, setSatisfactionClienteId] = useState('');
+  const [satisfactionNota, setSatisfactionNota] = useState<number>(5);
+  const [satisfactionComentario, setSatisfactionComentario] = useState('');
+  const [isSubmittingSatisfaction, setIsSubmittingSatisfaction] = useState(false);
+
+  const handleOpenSatisfactionModal = () => {
+    setSatisfactionClienteId(loyaltyUsers[0]?.id || '');
+    setSatisfactionNota(5);
+    setSatisfactionComentario('');
+    setShowSatisfactionModal(true);
+  };
+
+  const handleRegisterSatisfaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!satisfactionClienteId) {
+      showToast('Selecione um cliente para a avaliação.', 'info');
+      return;
+    }
+    setIsSubmittingSatisfaction(true);
+    const result = await submitSatisfaction({
+      cliente_id: satisfactionClienteId,
+      nota: satisfactionNota,
+      comentario: satisfactionComentario.trim() || undefined,
+    });
+    setIsSubmittingSatisfaction(false);
+    if (result.success) {
+      showToast('Avaliação registrada com sucesso!');
+      setShowSatisfactionModal(false);
+    } else {
+      showToast(result.error || 'Falha ao registrar avaliação.', 'error');
+    }
+  };
 
   const handleUpdateClient = async (clienteId: string, newNome: string, newPhone: string, newSaldo?: number) => {
     try {
@@ -384,6 +430,13 @@ export default function CashierCustomers({
           />
 
           <CustomerRelationshipPanel customers={loyaltyUsers} />
+
+          <CustomerSatisfactionPanel
+            resumo={satisfactionData.resumo}
+            recentes={satisfactionData.recentes}
+            isLoading={isSatisfactionLoading}
+            onOpenRegisterModal={handleOpenSatisfactionModal}
+          />
 
           <section className="koma-toolbar">
             <div className="koma-toolbar__search">
@@ -737,6 +790,117 @@ export default function CashierCustomers({
                   className={"flex-1 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"}
                 >
                   Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showSatisfactionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-koma-border bg-koma-panel p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-koma-border-subtle">
+              <div>
+                <p className="orders-eyebrow"><span /> SATISFAÇÃO</p>
+                <h3 className="text-sm font-black text-koma-foreground">Registrar avaliação de cliente</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSatisfactionModal(false)}
+                className="text-koma-muted hover:text-koma-foreground transition-colors p-1"
+                aria-label="Fechar"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleRegisterSatisfaction} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                  Cliente cadastrado:
+                </label>
+                {loyaltyUsers.length === 0 ? (
+                  <p className="text-xs text-amber-500 py-1">
+                    Nenhum cliente cadastrado no restaurante.
+                  </p>
+                ) : (
+                  <select
+                    value={satisfactionClienteId}
+                    onChange={(e) => setSatisfactionClienteId(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] text-xs"
+                  >
+                    <option value="" disabled>Selecione um cliente…</option>
+                    {loyaltyUsers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome || c.cliente} {c.telefone ? `(${formatarTelefoneTabela(c.telefone)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                  Nota (1 a 5 estrelas):
+                </label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setSatisfactionNota(n)}
+                      className={`flex-1 py-2 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-1 cursor-pointer ${
+                        satisfactionNota === n
+                          ? n >= 4
+                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30'
+                            : n === 3
+                            ? 'border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400 ring-1 ring-amber-500/30'
+                            : 'border-rose-500 bg-rose-500/10 text-rose-600 dark:text-rose-400 ring-1 ring-rose-500/30'
+                          : 'border-koma-border bg-koma-canvas/50 text-koma-muted hover:border-koma-border/80'
+                      }`}
+                    >
+                      <span className="text-sm font-black">{n}</span>
+                      <span className="text-[9px] font-medium text-koma-subtle">
+                        {n >= 4 ? 'Positiva' : n === 3 ? 'Neutra' : 'Insat.'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                  Comentário opcional (máx. 1000 caracteres):
+                </label>
+                <textarea
+                  rows={3}
+                  maxLength={1000}
+                  value={satisfactionComentario}
+                  onChange={(e) => setSatisfactionComentario(e.target.value)}
+                  placeholder="Ex.: Elogiou a velocidade da entrega e o atendimento…"
+                  className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] text-xs resize-none"
+                />
+                <span className="text-[9px] text-koma-subtle block text-right font-mono">
+                  {satisfactionComentario.length}/1000
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSatisfactionModal(false)}
+                  className="flex-1 py-2 border border-koma-border bg-zinc-950 text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingSatisfaction || loyaltyUsers.length === 0}
+                  className="flex-1 py-2 bg-[#10b981] hover:bg-[#059669] disabled:opacity-50 text-[#121214] rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                >
+                  {isSubmittingSatisfaction ? 'Salvando…' : 'Salvar avaliação'}
                 </button>
               </div>
             </form>
