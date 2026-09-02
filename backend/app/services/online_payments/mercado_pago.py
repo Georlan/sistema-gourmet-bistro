@@ -64,6 +64,13 @@ class MercadoPagoProvider:
         notification_url: str,
         expires_at: datetime.datetime,
     ) -> ProviderPayment:
+        if expires_at.tzinfo is None:
+            formatted_expiration = expires_at.replace(
+                tzinfo=datetime.timezone.utc
+            ).isoformat(timespec="milliseconds")
+        else:
+            formatted_expiration = expires_at.isoformat(timespec="milliseconds")
+
         body = {
             "transaction_amount": float(amount),
             "description": "Pedido KOMA",
@@ -71,7 +78,7 @@ class MercadoPagoProvider:
             "payer": {"email": payer_email},
             "external_reference": external_reference,
             "notification_url": notification_url,
-            "date_of_expiration": expires_at.isoformat(),
+            "date_of_expiration": formatted_expiration,
         }
         if marketplace_fee > 0:
             body["application_fee"] = float(marketplace_fee)
