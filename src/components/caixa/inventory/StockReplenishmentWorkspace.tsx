@@ -19,7 +19,7 @@ type ReplenishmentRow = {
 export function StockReplenishmentWorkspace({ insumos, fornecedores, onRegisterEntry, onImportXml }: Props) {
   const rows: ReplenishmentRow[] = insumos
     .filter((insumo) => Number(insumo.estoque_atual || 0) <= Number(insumo.estoque_minimo || 0))
-    .map((insumo) => {
+    .map<ReplenishmentRow>((insumo) => {
       const current = Number(insumo.estoque_atual || 0);
       const minimum = Number(insumo.estoque_minimo || 0);
       const maximum = Math.max(minimum, Number(insumo.estoque_maximo || minimum));
