@@ -1,20 +1,47 @@
 from __future__ import annotations
 
 import datetime
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..database import get_db, tenant_session_scope
-from ..models import OnlinePaymentWebhookEvent, RestaurantPaymentAccount
+from ..config import settings
+from ..database import get_db, require_tenant_id, tenant_session_scope
+from ..models import OnlinePaymentWebhookEvent, RestaurantPaymentAccount, Usuario
+from ..security import ensure_permission, require_permission
 from ..services.online_payments import OnlinePaymentService, OnlinePaymentValidationError
+from ..services.online_payments.account_connection import (
+    MercadoPagoAccountConnectionError,
+    payment_account_status,
+    upsert_mercado_pago_account,
+)
+from ..services.online_payments.oauth import (
+    MercadoPagoOAuthConfigurationError,
+    MercadoPagoOAuthError,
+    MercadoPagoOAuthStateError,
+    build_authorization_url,
+    exchange_authorization_code,
+)
 from ..services.online_payments.signature import verify_mercado_pago_signature
 from ..websocket_manager import manager
 
 
 router = APIRouter(prefix="/payments", tags=["Pagamentos online"])
+
+
+def _frontend_oauth_result(result: str) -> str:
+    query = urlencode(
+        {
+            "view": "caixa",
+            "tab": "cardapio_digital",
+            "mercado_pago": result,
+        }
+    )
+    return f"{settings.KOMA_PUBLIC_APP_URL}/?{query}"
 
 
 def _resolve_account_tenant(db: Session, account_id: str) -> int | None:
@@ -30,6 +57,113 @@ def _resolve_account_tenant(db: Session, account_id: str) -> int | None:
         ),
         {"account_id": account_id},
     ).scalar_one_or_none()
+
+
+@router.get("/mercado-pago/status")
+def mercado_pago_connection_status(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id = require_tenant_id()
+    account = (
+        db.query(RestaurantPaymentAccount)
+        .filter(
+            RestaurantPaymentAccount.restaurante_id == rest_id,
+            RestaurantPaymentAccount.provider == "mercado_pago",
+        )
+        .first()
+    )
+    return payment_account_status(account)
+
+
+@router.get("/mercado-pago/connect")
+def mercado_pago_connect(
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    rest_id = require_tenant_id()
+    try:
+        authorization_url = build_authorization_url(
+            restaurant_id=rest_id,
+            user_id=current_user.id,
+        )
+    except MercadoPagoOAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    return {"authorization_url": authorization_url}
+
+
+@router.get("/mercado-pago/oauth/callback")
+def mercado_pago_oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if error:
+        return RedirectResponse(
+            url=_frontend_oauth_result("cancelled"),
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Retorno OAuth incompleto.")
+
+    try:
+        oauth_state, tokens = exchange_authorization_code(code=code, state=state)
+    except MercadoPagoOAuthStateError as exc:
+        raise HTTPException(status_code=400, detail="Estado OAuth inválido ou expirado.") from exc
+    except MercadoPagoOAuthConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except MercadoPagoOAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível concluir a autorização do Mercado Pago.",
+        ) from exc
+
+    try:
+        with tenant_session_scope(db, oauth_state.restaurant_id):
+            initiator = (
+                db.query(Usuario)
+                .filter(
+                    Usuario.restaurante_id == oauth_state.restaurant_id,
+                    Usuario.id == oauth_state.user_id,
+                )
+                .first()
+            )
+            if initiator is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Usuário que iniciou a autorização não está mais disponível.",
+                )
+            ensure_permission(initiator, "configuracoes:administrar")
+
+            upsert_mercado_pago_account(
+                db,
+                restaurant_id=oauth_state.restaurant_id,
+                tokens=tokens,
+            )
+            db.commit()
+    except MercadoPagoAccountConnectionError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Esta conta Mercado Pago já está vinculada a outro restaurante.",
+        ) from exc
+
+    return RedirectResponse(
+        url=_frontend_oauth_result("connected"),
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
 
 
 @router.post("/webhooks/mercado-pago/{account_id}")
