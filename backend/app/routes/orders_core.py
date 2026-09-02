@@ -38,7 +38,13 @@ from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_do
 from ..services.atendimentos import (
     ensure_atendimento_for_comanda,
 )
-from ..subscription import subscription_has_printing
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 from ..waiter_permissions import (
     require_waiter_permission,
 )
@@ -111,69 +117,6 @@ def _agendar_notificacao_whatsapp_status(
         numero_pedido=comanda.numero_pedido,
         modalidade=comanda.tipo,
     )
-
-
-def print_in_background(
-    printer_name: str,
-    ticket_text: str,
-    document_type: str = "producao",
-    source_type: str = "pedido",
-    source_id: str = "",
-    restaurante_id: int | None = None,
-):
-    try:
-        import datetime
-        from ..database import SessionLocal
-        from ..models import PrintJob, Restaurante
-        if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
-            raise ValueError("Background de impressão exige restaurante_id explícito")
-        tenant_context = current_restaurante_id.set(restaurante_id)
-        db = None
-        try:
-            db = SessionLocal(restaurante_id=restaurante_id)
-            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if restaurante and not subscription_has_printing(
-                restaurante_id,
-                restaurante.plano,
-            ):
-                logger.info(
-                    "Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.",
-                    restaurante_id,
-                )
-                return
-
-            dest_clean = "COZINHA"
-            p_upper = (printer_name or "").upper()
-            if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
-                dest_clean = "FECHAMENTO"
-            elif "DELIVERY" in p_upper or "MOTOBOY" in p_upper or "ENTREGA" in p_upper:
-                dest_clean = "ENTREGA"
-            elif "BAR" in p_upper:
-                dest_clean = "BAR"
-
-            doc_type_clean = "entrega" if "delivery" in p_upper or "motoboy" in p_upper else document_type.lower()
-            ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
-            ikey = f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
-
-            job = PrintJob(
-                restaurante_id=restaurante_id,
-                document_type=doc_type_clean,
-                destination=dest_clean,
-                source_type=source_type.lower(),
-                source_id=str(source_id),
-                payload_text=ticket_text.replace("\x00", "\\x00"),
-                status="pending",
-                idempotency_key=ikey
-            )
-            db.add(job)
-            db.commit()
-            print(f"[PRINT JOB ENQUEUED] Job ID {job.id} enfileirado para o Kôma Print Agent!")
-        finally:
-            if db is not None:
-                db.close()
-            current_restaurante_id.reset(tenant_context)
-    except Exception as e:
-        print(f"[PRINT JOB ERROR] Falha ao enfileirar PrintJob: {e}")
 
 # ----------------- READ ENDPOINTS -----------------
 
@@ -729,11 +672,11 @@ def update_item_details(
         added_count = 0
         novos_itens = []
         if update_data.quantidade_adicional and update_data.quantidade_adicional > 1:
-            import uuid
             additional_qty = update_data.quantidade_adicional - 1
             for _ in range(additional_qty):
                 new_item = Item(
                     id=f"i-{uuid.uuid4().hex[:8]}",
+                    restaurante_id=require_tenant_id(),
                     comanda_id=item.comanda_id,
                     lancamento_id=item.lancamento_id,
                     produto_id=item.produto_id,
@@ -764,30 +707,35 @@ def update_item_details(
         )
     db.refresh(item)
 
-    # Imprimir via de comanda indicando edição/alteração
+    # A mutação já foi confirmada. A impressão é best-effort, como antes, mas
+    # agora a rota declara somente a intenção; snapshot, texto e destino pertencem
+    # ao Core Universal de Impressão.
     try:
-        dest = item.produto.categoria.destino_impressao if (item.produto and item.produto.categoria) else "COZINHA"
-        if dest != "NENHUM":
-            header = "=== ITEM ALTERADO/ADICIONADO ==="
-            lines = [
-                header.center(32),
-                f"MESA: {comanda.mesa_id if comanda.mesa_id else 'BALCAO'}",
-                f"PRODUTO: {item.produto.nome}",
-                f"OBS (EDITADO): {item.observacao}",
-                f"CLIENTE: {item.cliente_nome}",
-            ]
-            if added_count > 0:
-                lines.append(f"QTD ADICIONADA: +{added_count}")
-            lines.append("="*32)
-            ticket_text = "\n".join(lines) + "\n\n\n"
-            background_tasks.add_task(
-                print_in_background,
-                "cozinha",
-                ticket_text,
-                restaurante_id=require_tenant_id(),
-            )
-    except Exception as e:
-        print(f"Error printing edited item ticket: {e}")
+        PrintingApplicationService.request_print(
+            db,
+            PrintIntent(
+                restaurant_id=require_tenant_id(),
+                source_type=PrintSourceType.ITEM,
+                source_id=item.id,
+                action=PrintAction.ITEM_CHANGE,
+                requested_by=current_garcom.nome,
+                quantity_added=added_count,
+            ),
+        )
+        db.commit()
+    except UniversalPrintingError as exc:
+        db.rollback()
+        logger.warning(
+            "Impressão de alteração do item %s ignorada após mutação confirmada: %s",
+            item.id,
+            exc,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Falha inesperada ao enfileirar impressão de alteração do item %s",
+            item.id,
+        )
 
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
