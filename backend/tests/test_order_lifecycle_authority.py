@@ -1,7 +1,10 @@
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from app.application.orders.lifecycle import OrderLifecycleCoordinator
 from app.database import SessionLocal
+from app.domain.orders.types import FulfillmentType, OrderStatus
 from app.models import Comanda, IntegrationOutbox, Lancamento
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
@@ -31,6 +34,67 @@ def test_delivery_routes_do_not_write_order_lifecycle_directly():
     assert "OrderApplicationService." not in source
     assert "validate_order_transition(" not in source
     assert "services.order_state_machine" not in source
+
+
+def test_aggregate_lifecycle_preserves_each_launch_status_and_skips_replays():
+    comanda = SimpleNamespace(
+        lancamentos=[
+            SimpleNamespace(id="launch-preparing", status="producao", timestamp=1),
+            SimpleNamespace(id="launch-ready", status="pronto", timestamp=2),
+            SimpleNamespace(id="launch-completed", status="finalizado", timestamp=3),
+        ]
+    )
+
+    active = OrderLifecycleCoordinator._active_orders(comanda)
+    assert active == [
+        ("launch-preparing", OrderStatus.PREPARING),
+        ("launch-ready", OrderStatus.READY),
+    ]
+
+    pending = OrderLifecycleCoordinator._pending_order_transitions(
+        active,
+        target_status=OrderStatus.READY,
+        fulfillment=FulfillmentType.PICKUP,
+    )
+
+    # O lançamento já pronto não pode gerar um segundo OrderReady; o finalizado
+    # nem participa mais do lote ativo.
+    assert pending == [("launch-preparing", OrderStatus.PREPARING)]
+
+
+def test_aggregate_rejection_chooses_reject_or_cancel_per_launch_status():
+    active = [
+        ("launch-pending", OrderStatus.PENDING),
+        ("launch-preparing", OrderStatus.PREPARING),
+    ]
+    pending = OrderLifecycleCoordinator._pending_order_transitions(
+        active,
+        target_status=OrderStatus.REJECTED,
+        fulfillment=FulfillmentType.DELIVERY,
+    )
+    assert pending == active
+
+    with patch(
+        "app.application.orders.lifecycle.OrderApplicationService.reject_order"
+    ) as reject_order, patch(
+        "app.application.orders.lifecycle.OrderApplicationService.cancel_order"
+    ) as cancel_order:
+        for order_id, current_status in pending:
+            OrderLifecycleCoordinator._apply_single_transition(
+                object(),
+                restaurant_id=CHAR_RESTAURANT_ID,
+                order_id=order_id,
+                current_status=current_status,
+                target_status=OrderStatus.REJECTED,
+                operator_user_id="operator-test",
+                courier_id=None,
+                reason="indisponibilidade",
+            )
+
+    assert reject_order.call_count == 1
+    assert cancel_order.call_count == 1
+    assert reject_order.call_args.args[1].order_id == "launch-pending"
+    assert cancel_order.call_args.args[1].order_id == "launch-preparing"
 
 
 def _clear_outbox() -> None:
