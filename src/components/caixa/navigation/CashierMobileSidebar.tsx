@@ -4,6 +4,7 @@ import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
 import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
+import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
 import type { useCashierNavigation } from './useCashierNavigation';
@@ -46,9 +47,7 @@ export function CashierMobileSidebar({
             <SidebarHeader className="cashier-sidebar__header p-3">
               <div className="cashier-sidebar__brand-row">
                 <div className="cashier-sidebar__brand">
-                  <span className="cashier-sidebar__logo-wrap">
-                    <KomaLogo size="md" />
-                  </span>
+                  <span className="cashier-sidebar__logo-wrap"><KomaLogo size="md" /></span>
                   <span className="cashier-sidebar__brand-copy">
                     <strong>Kôma</strong>
                     <small>Se você está com fome, Kôma</small>
@@ -78,9 +77,7 @@ export function CashierMobileSidebar({
                 </div>
               </div>
 
-              <div
-                className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}
-              >
+              <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
                 <div className="cashier-shift-card__status">
                   <span className="cashier-shift-card__dot" />
                   <span className="cashier-shift-card__copy">
@@ -104,6 +101,7 @@ export function CashierMobileSidebar({
 
             <SidebarContent className="cashier-sidebar__content p-2">
               <CashierSidebarNavigation
+                groups={CASHIER_SIDEBAR_GROUPS}
                 closeMobile
                 hasOnlineMenu={hasOnlineMenu}
                 isSidebarTabActive={isSidebarTabActive}
