@@ -52,16 +52,6 @@ export interface RefundResult {
   }>;
 }
 
-export const getFuncionarios = async (): Promise<SystemUser[]> => {
-  const res = await fetch(`${API_BASE_URL}/caixa/funcionarios`, {
-    headers: getAuthHeaders()
-  });
-  if (!res.ok) {
-    throw new Error('Falha ao buscar funcionários');
-  }
-  return res.json();
-};
-
 export const cadastrarFuncionario = async (payload: { nome: string; telefone: string; cargo: string }): Promise<SystemUser> => {
   const res = await fetch(`${API_BASE_URL}/caixa/funcionarios`, {
     method: 'POST',
@@ -150,7 +140,6 @@ export const estornarPagamento = async (
 };
 
 export const API = {
-  getFuncionarios,
   cadastrarFuncionario,
   imprimirComprovanteFechamento,
   obterPagamentoEstornavel,
