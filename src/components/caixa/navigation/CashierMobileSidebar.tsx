@@ -1,27 +1,17 @@
-import type { CashierSidebarProps } from './cashierNavigationContracts';
-import type { useCashierNavigation } from './useCashierNavigation';
 import clsx from 'clsx';
-import { Lock, SlidersHorizontal, X } from 'lucide-react';
+import { SlidersHorizontal, X } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
-import {
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from '../../ui/sidebar';
-import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
+import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
+import type { CashierSidebarProps } from './cashierNavigationContracts';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
+import { CashierSidebarNavigation } from './CashierSidebarNavigation';
+import type { useCashierNavigation } from './useCashierNavigation';
+
 type BoundaryProps = CashierSidebarProps &
   Pick<ReturnType<typeof useCashierNavigation>, 'isMobileSidebarOpen' | 'setIsMobileSidebarOpen'>;
 
-/** Mobile navigation using the persistent navigation controller. */
+/** Mobile shell; Navigation Tree v2 owns the actual information architecture. */
 export function CashierMobileSidebar({
   isMobileSidebarOpen,
   setIsMobileSidebarOpen,
@@ -41,19 +31,19 @@ export function CashierMobileSidebar({
   return (
     <>
       {isMobileSidebarOpen && (
-        <div className={"fixed inset-0 z-50 flex lg:hidden animate-fade-in"}>
+        <div className="fixed inset-0 z-50 flex lg:hidden animate-fade-in">
           <div
             onClick={() => setIsMobileSidebarOpen(false)}
-            className={"fixed inset-0 bg-black/80 backdrop-blur-sm"}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
           />
           <aside
             id="mobile-caixa-sidebar"
             role="dialog"
             aria-modal="true"
             aria-label="Menu principal"
-            className={"cashier-sidebar cashier-sidebar--mobile relative w-[17rem] max-w-[88vw] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto"}
+            className="cashier-sidebar cashier-sidebar--mobile relative w-[17rem] max-w-[88vw] flex flex-col justify-between shrink-0 h-full z-10 shadow-2xl overflow-y-auto"
           >
-            <SidebarHeader className={"cashier-sidebar__header p-3"}>
+            <SidebarHeader className="cashier-sidebar__header p-3">
               <div className="cashier-sidebar__brand-row">
                 <div className="cashier-sidebar__brand">
                   <span className="cashier-sidebar__logo-wrap">
@@ -64,7 +54,7 @@ export function CashierMobileSidebar({
                     <small>Se você está com fome, Kôma</small>
                   </span>
                 </div>
-                <div className={"flex items-center gap-1.5"}>
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -88,7 +78,6 @@ export function CashierMobileSidebar({
                 </div>
               </div>
 
-              {/* Status do Turno */}
               <div
                 className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}
               >
@@ -105,7 +94,7 @@ export function CashierMobileSidebar({
                       setShowAbrirModal(true);
                       setIsMobileSidebarOpen(false);
                     }}
-                    className={"cashier-shift-card__action is-open"}
+                    className="cashier-shift-card__action is-open"
                   >
                     Abrir caixa
                   </button>
@@ -113,56 +102,28 @@ export function CashierMobileSidebar({
               </div>
             </SidebarHeader>
 
-            <SidebarContent className={"cashier-sidebar__content p-2"}>
-              {CASHIER_SIDEBAR_GROUPS.map((group) => (
-                <SidebarGroup key={group.category}>
-                  <SidebarGroupLabel className="cashier-nav-group-label">{group.category}</SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {group.items.map((tab) => {
-                        const Icon = tab.icon;
-                        const isLocked = tab.id === 'cardapio_digital' && !hasOnlineMenu;
-                        const isActive = isSidebarTabActive(tab.id);
-                        const orderCount = tab.id === 'operacao' ? sidebarOrderCount : 0;
-
-                        return (
-                          <SidebarMenuItem key={tab.id}>
-                            <SidebarMenuButton
-                              isActive={isActive}
-                              onClick={() => handleSidebarNavigation(tab.id, true)}
-                              className="cashier-nav-item"
-                              title={tab.label}
-                            >
-                              <span className="cashier-nav-icon">
-                                <Icon size={15} />
-                              </span>
-                              <span className="cashier-nav-label">{tab.label}</span>
-                              {orderCount > 0 && <SidebarMenuBadge>{orderCount}</SidebarMenuBadge>}
-                              {isLocked && (
-                                <span className="cashier-nav-plan">
-                                  <Lock size={9} />
-                                  <span>Plano</span>
-                                </span>
-                              )}
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        );
-                      })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              ))}
+            <SidebarContent className="cashier-sidebar__content p-2">
+              <CashierSidebarNavigation
+                closeMobile
+                hasOnlineMenu={hasOnlineMenu}
+                isSidebarTabActive={isSidebarTabActive}
+                sidebarOrderCount={sidebarOrderCount}
+                handleSidebarNavigation={handleSidebarNavigation}
+              />
             </SidebarContent>
 
-            <SidebarFooter className={"cashier-sidebar__footer p-3 flex flex-col gap-2"}>
-            <CashierSidebarFooter
-              mobile
-              hasOnlineMenu={hasOnlineMenu}
-              handleSidebarNavigation={handleSidebarNavigation}
-              changeFontSize={changeFontSize} fontSize={fontSize}
-              setTheme={setTheme} theme={theme} activeWaiterNome={activeWaiterNome}
-            />
-          </SidebarFooter>
+            <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
+              <CashierSidebarFooter
+                mobile
+                hasOnlineMenu={hasOnlineMenu}
+                handleSidebarNavigation={handleSidebarNavigation}
+                changeFontSize={changeFontSize}
+                fontSize={fontSize}
+                setTheme={setTheme}
+                theme={theme}
+                activeWaiterNome={activeWaiterNome}
+              />
+            </SidebarFooter>
           </aside>
         </div>
       )}
