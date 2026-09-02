@@ -161,11 +161,11 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     amount = Decimal("100.00")
 
-    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.79")
-    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.89")
-    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.39")
-    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.39")
-    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.79")
+    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.49")
+    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.69")
+    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.29")
+    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.29")
+    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.49")
 
 
 def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch):
@@ -520,7 +520,7 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
             amount=dto.total,
             idempotency_key="webhook-order-key-9919",
         )
-        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.19")
+        assert Decimal(str(intent.marketplace_fee)) == Decimal("0.14")
         intent.external_payment_id = "mp-payment-9919"
         intent.status = "pending"
         db.commit()
@@ -849,4 +849,3 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
         db.commit()
         db.close()
         current_restaurante_id.reset(token)
-

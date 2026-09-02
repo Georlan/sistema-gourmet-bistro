@@ -13,20 +13,20 @@ import { Plans } from '../src/landing/sections/Plans';
 
 test('plan prices and split fees match the commercial catalog', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => [plan.id, plan.price, plan.splitFeeRate]), [
-    ['pocket', 89, 0.0179],
-    ['pro', 179, 0.0089],
-    ['premium', 269, 0.0039],
+    ['pocket', 109, 0.0149],
+    ['pro', 209, 0.0069],
+    ['premium', 309, 0.0029],
   ]);
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => formatPercentage(plan.splitFeeRate)), [
-    '1,79%', '0,89%', '0,39%',
+    '1,49%', '0,69%', '0,29%',
   ]);
 });
 
 test('annual totals and savings apply ten percent only to the fixed subscription', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => getSubscriptionPricing(plan.price)), [
-    { monthly: 89, annualMonthlyEquivalent: 80.1, annualTotal: 961.2, annualSavings: 106.8 },
-    { monthly: 179, annualMonthlyEquivalent: 161.1, annualTotal: 1933.2, annualSavings: 214.8 },
-    { monthly: 269, annualMonthlyEquivalent: 242.1, annualTotal: 2905.2, annualSavings: 322.8 },
+    { monthly: 109, annualMonthlyEquivalent: 98.1, annualTotal: 1177.2, annualSavings: 130.8 },
+    { monthly: 209, annualMonthlyEquivalent: 188.1, annualTotal: 2257.2, annualSavings: 250.8 },
+    { monthly: 309, annualMonthlyEquivalent: 278.1, annualTotal: 3337.2, annualSavings: 370.8 },
   ]);
 });
 
@@ -47,13 +47,15 @@ test('essential delivery stays in every plan while advanced modules require upgr
 test('comparison matrix publishes the exact KOMA online-payment fee by plan', () => {
   const fee = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'Taxa KÔMA por pedido online pago');
   assert.ok(fee);
-  assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['1,79%', '0,89%', '0,39%']);
+  assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['1,49%', '0,69%', '0,29%']);
 });
 
-test('landing starts monthly, has no setup fee or addons, and shows all split fees', () => {
+test('landing starts monthly, has no setup fee or addons, and shows all current prices and split fees', () => {
   const html = renderToStaticMarkup(createElement(Plans));
   assert.equal(html.includes('koma-plan-savings'), false);
-  assert.equal(html.includes('R$ 199'), false);
+  assert.equal(html.includes('89,00 por mês'), false);
+  assert.equal(html.includes('179,00 por mês'), false);
+  assert.equal(html.includes('269,00 por mês'), false);
   assert.equal(html.includes('Adicionais do'), false);
   assert.ok(html.includes('SEM TAXA DE IMPLANTAÇÃO'));
   assert.ok(html.includes('Sem add-ons'));

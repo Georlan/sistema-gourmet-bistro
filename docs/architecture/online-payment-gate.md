@@ -22,9 +22,9 @@ O KÔMA separa a criação técnica do pedido da sua liberação operacional.
 
 A fonte de verdade financeira fica em `backend/app/subscription.py`:
 
-- Pocket: `0.0179` = 1,79% por pedido online pago.
-- Pro: `0.0089` = 0,89% por pedido online pago.
-- Premium: `0.0039` = 0,39% por pedido online pago.
+- Pocket: `0.0149` = 1,49% por pedido online pago.
+- Pro: `0.0069` = 0,69% por pedido online pago.
+- Premium: `0.0029` = 0,29% por pedido online pago.
 
 O valor da comissão é calculado e gravado na `OnlinePaymentIntent` no momento da criação do pagamento. Assim, uma mudança posterior de plano não altera retroativamente uma intenção já criada.
 
@@ -42,4 +42,4 @@ A trava existe para impedir que um merge de código passe a cobrar comissão em 
 
 Cada restaurante precisa de uma linha ativa em `restaurant_payment_accounts`, criada pelo fluxo OAuth do marketplace. Access token, refresh token e segredo do webhook são criptografados em repouso. O cardápio só oferece Pix quando essa conta está ativa.
 
-Ainda é necessário concluir/homologar a tela e o fluxo OAuth “Conectar Mercado Pago” com credenciais de teste antes da ativação comercial. Nenhum segredo deve ser digitado ou armazenado no frontend.
+O fluxo OAuth e a cobrança real já foram homologados em produção com tenant separado, Pix aprovado, webhook assinado, idempotência e `application_fee`. Nenhum segredo deve ser digitado ou armazenado no frontend.
