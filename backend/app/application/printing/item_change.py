@@ -93,7 +93,12 @@ class ItemChangePrintingService:
             payload_text=payload,
             idempotency_key=idempotency_key,
         )
-        return [job] if job is not None else []
+        if job is None:
+            raise UniversalPrintingError(
+                "A impressão física não está disponível no plano atual.",
+                status_code=403,
+            )
+        return [job]
 
     @staticmethod
     def _render_item_change(item: Item, *, quantity_added: int) -> str:
