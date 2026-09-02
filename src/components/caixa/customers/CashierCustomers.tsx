@@ -7,6 +7,7 @@ import MoneyInput from '../../MoneyInput';
 import { KomaEmptyState } from '../../shared/KomaEmptyState';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CashierNotice, LoyaltyCustomer } from '../cashierContracts';
+import { CustomerRelationshipPanel } from './CustomerRelationshipPanel';
 
 const formatarTelefoneTabela = (tel?: string) => {
   if (!tel) return '-';
@@ -46,6 +47,19 @@ export default function CashierCustomers({
     if (!term) return loyaltyUsers;
     return loyaltyUsers.filter((user) => `${user.cliente} ${user.telefone}`.toLocaleLowerCase('pt-BR').includes(term));
   }, [clientesSearch, loyaltyUsers]);
+
+  const relationshipSummary = useMemo(() => {
+    let ativos = 0;
+    let atencao = 0;
+    let reativar = 0;
+    for (const u of loyaltyUsers) {
+      const seg = u.segmento_relacionamento || 'SEM_COMPRA';
+      if (seg === 'ATIVO') ativos++;
+      else if (seg === 'ATENCAO') atencao++;
+      else if (seg === 'REATIVAR') reativar++;
+    }
+    return { ativos, atencao, reativar };
+  }, [loyaltyUsers]);
 
   const handleSaveFidelidadeConfig = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,16 +364,27 @@ export default function CashierCustomers({
             accent="em uma única lista"
             description="Encontre contatos rapidamente e acompanhe os benefícios sem repetir cadastros."
             metrics={[
-              { label: loyaltyUsers.length === 1 ? 'cliente' : 'clientes', value: loyaltyUsers.length },
+              { label: loyaltyUsers.length === 1 ? 'total' : 'totais', value: loyaltyUsers.length },
               {
-                label: 'programa de fidelidade',
-                value: fidelidadeConfig.ativo ? 'Ativo' : 'Pausado',
-                valueClassName: fidelidadeConfig.ativo
-                  ? 'text-emerald-600 dark:text-emerald-300'
-                  : 'text-amber-600 dark:text-amber-300',
+                label: 'ativos',
+                value: relationshipSummary.ativos,
+                valueClassName: 'text-emerald-600 dark:text-emerald-300',
+              },
+              {
+                label: 'atenção',
+                value: relationshipSummary.atencao,
+                valueClassName: 'text-amber-600 dark:text-amber-300',
+              },
+              {
+                label: 'reativar',
+                value: relationshipSummary.reativar,
+                valueClassName: 'text-rose-600 dark:text-rose-400',
               },
             ]}
           />
+
+          <CustomerRelationshipPanel customers={loyaltyUsers} />
+
           <section className="koma-toolbar">
             <div className="koma-toolbar__search">
               <Search size={14} aria-hidden="true" />
@@ -407,9 +432,11 @@ export default function CashierCustomers({
                     <tr
                       className={"bg-koma-raised border-b border-koma-border text-koma-muted uppercase tracking-wider font-extrabold text-[9px]"}
                     >
-                      <th className="p-3.5">Nome do Cliente</th>
+                      <th className="p-3.5">Cliente</th>
                       <th className="p-3.5">WhatsApp</th>
-                      <th className={"p-3.5 font-mono"}>Pontos disponíveis</th>
+                      <th className="p-3.5">Última compra</th>
+                      <th className="p-3.5">Pedidos</th>
+                      <th className={"p-3.5 font-mono"}>Benefício atual</th>
                       <th className={"p-3.5 text-right"}>Ações</th>
                     </tr>
                   </thead>
@@ -419,6 +446,18 @@ export default function CashierCustomers({
                         <td className={"p-3.5 font-bold text-koma-foreground"}>{user.cliente}</td>
                         <td className={"p-3.5 font-mono text-koma-muted text-xs"}>
                           {formatarTelefoneTabela(user.telefone)}
+                        </td>
+                        <td className={"p-3.5 font-mono text-xs text-koma-muted"}>
+                          {user.dias_sem_comprar === null || user.dias_sem_comprar === undefined
+                            ? 'Nunca'
+                            : user.dias_sem_comprar === 0
+                            ? 'Hoje'
+                            : user.dias_sem_comprar === 1
+                            ? 'Ontem'
+                            : `há ${user.dias_sem_comprar} dias`}
+                        </td>
+                        <td className={"p-3.5 font-mono text-xs text-koma-foreground"}>
+                          {user.pedidos_concluidos ?? 0}
                         </td>
                         <td
                           className={"p-3.5 font-mono text-emerald-700 dark:text-emerald-400 font-extrabold text-xs"}
