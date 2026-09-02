@@ -76,6 +76,30 @@ test('cadastros expose existing catalog inventory and customer views without cre
   assert.deepEqual(getCashierNavigationTarget('clientes_cupons'), { tab: 'clientes', subTab: 'cupons' });
 });
 
+test('gestao exposes existing report and team views without duplicating owners', () => {
+  const relatorios = parents().find((item) => item.id === 'relatorios');
+  const equipe = parents().find((item) => item.id === 'permissoes_cargos');
+
+  assert.deepEqual(relatorios?.children?.map((child) => child.label), [
+    'Visão geral', 'Financeiro', 'Produtos', 'Equipe',
+  ]);
+  assert.deepEqual(equipe?.children?.map((child) => child.label), [
+    'Pessoas', 'Funções e acessos',
+  ]);
+
+  assert.deepEqual(getCashierNavigationTarget('relatorios_financeiro'), {
+    tab: 'relatorios', subTab: 'financeiro',
+  });
+  assert.deepEqual(getCashierNavigationTarget('relatorios_equipe'), {
+    tab: 'relatorios', subTab: 'equipe',
+  });
+  assert.deepEqual(getCashierNavigationTarget('equipe_funcoes_acessos'), {
+    tab: 'permissoes_cargos', subTab: 'cargos_permissoes',
+  });
+  assert.equal(getCashierNavigationParentId('relatorios_produtos'), 'relatorios');
+  assert.equal(getCashierNavigationParentId('equipe_pessoas'), 'permissoes_cargos');
+});
+
 test('navigation tree owns default tab and subtab destinations', () => {
   assert.deepEqual(getCashierNavigationTarget('operacao'), { tab: 'operacao', subTab: 'pedidos' });
   assert.deepEqual(getCashierNavigationTarget('financeiro'), { tab: 'financeiro', subTab: 'turno_atual' });
@@ -102,13 +126,15 @@ test('novo pedido keeps PDV openCounter as the owner of counter initialization',
   assert.match(pdvController, /handleNavigationOpenCounter = \(\) => openCounter\(\)/);
 });
 
-test('persisted cadastro aliases normalize to visible child owners', () => {
+test('persisted aliases normalize to their visible child owners', () => {
   const navigationController = readFileSync(
     new URL('../src/components/caixa/navigation/useCashierNavigation.ts', import.meta.url), 'utf8',
   );
   assert.match(navigationController, /'cupons_desconto'\]\.includes\(saved\)\) return 'cupons'/);
   assert.match(navigationController, /\['fornecedores', 'distribuidores'\]\.includes\(saved\)\) return 'fornecedores'/);
   assert.match(navigationController, /'notas_entrada'/);
+  assert.match(navigationController, /'relatorio_garcons', 'relatorio_garçons'\]\.includes\(saved\)\)\s*return 'equipe'/);
+  assert.match(navigationController, /\['pessoas', 'equipe', 'convites'\]\.includes\(saved\)\) return 'pessoas'/);
 });
 
 test('online menu and subscription are primary navigation, not duplicated footer shortcuts', () => {
