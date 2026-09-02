@@ -59,6 +59,41 @@ def _resolve_account_tenant(db: Session, account_id: str) -> int | None:
     ).scalar_one_or_none()
 
 
+def _resolve_mercado_pago_account_id(
+    db: Session,
+    provider_user_id: str,
+) -> str | None:
+    normalized_user_id = str(provider_user_id or "").strip()
+    if not normalized_user_id:
+        return None
+    if db.get_bind().dialect.name == "postgresql":
+        return db.execute(
+            text(
+                "SELECT koma_internal.resolve_mercado_pago_account_id("
+                ":provider_user_id)"
+            ),
+            {"provider_user_id": normalized_user_id},
+        ).scalar_one_or_none()
+    return db.execute(
+        text(
+            "SELECT id FROM restaurant_payment_accounts "
+            "WHERE provider = 'mercado_pago' "
+            "AND provider_user_id = :provider_user_id "
+            "AND status = 'active' LIMIT 1"
+        ),
+        {"provider_user_id": normalized_user_id},
+    ).scalar_one_or_none()
+
+
+def _mercado_pago_webhook_provider_user_id(payload: object) -> str:
+    if not isinstance(payload, dict):
+        return ""
+    raw_user_id = payload.get("user_id")
+    if raw_user_id is None:
+        return ""
+    return str(raw_user_id).strip()
+
+
 @router.get("/mercado-pago/status")
 def mercado_pago_connection_status(
     db: Session = Depends(get_db),
@@ -163,6 +198,34 @@ def mercado_pago_oauth_callback(
     return RedirectResponse(
         url=_frontend_oauth_result("connected"),
         status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/webhooks/mercado-pago")
+async def mercado_pago_application_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """Recebe o Webhook fixo da aplicação e roteia pelo vendedor OAuth."""
+    payload = await request.json()
+    if not isinstance(payload, dict) or str(payload.get("type") or "").strip() != "payment":
+        raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
+
+    provider_user_id = _mercado_pago_webhook_provider_user_id(payload)
+    if not provider_user_id:
+        raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
+
+    account_id = _resolve_mercado_pago_account_id(db, provider_user_id)
+    if not account_id:
+        # Não revelar se um seller_id existe ou não antes de validar a assinatura.
+        raise HTTPException(status_code=401, detail="Assinatura de pagamento inválida.")
+
+    return await mercado_pago_webhook(
+        account_id=str(account_id),
+        request=request,
+        background_tasks=background_tasks,
+        db=db,
     )
 
 
