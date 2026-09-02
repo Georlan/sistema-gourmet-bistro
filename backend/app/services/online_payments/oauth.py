@@ -175,6 +175,7 @@ def build_authorization_url(*, restaurant_id: int, user_id: str) -> str:
         {
             "response_type": "code",
             "client_id": _client_id(),
+            "platform_id": "mp",
             "redirect_uri": oauth_redirect_uri(),
             "state": state,
             "code_challenge": _code_challenge(verifier),
