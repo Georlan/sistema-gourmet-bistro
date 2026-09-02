@@ -10,9 +10,9 @@ A fonte de preços e recursos exibidos no frontend é `src/config/subscriptionPl
 
 | Plano | Assinatura mensal | Taxa KÔMA por pedido online pago | Posicionamento |
 | --- | ---: | ---: | --- |
-| Pocket | R$ 89/mês | 1,79% | Entrada simples |
-| Pro | R$ 179/mês | 0,89% | Mais recomendado |
-| Premium | R$ 269/mês | 0,39% | Menor taxa |
+| Pocket | R$ 109/mês | 1,49% | Entrada simples |
+| Pro | R$ 209/mês | 0,69% | Mais recomendado |
+| Premium | R$ 309/mês | 0,29% | Menor taxa |
 
 Regras:
 
@@ -60,18 +60,18 @@ Com 10% de desconto sobre a mensalidade fixa:
 
 | Plano | Equivalente mensal | Total anual | Economia anual |
 | --- | ---: | ---: | ---: |
-| Pocket | R$ 80,10 | R$ 961,20 | R$ 106,80 |
-| Pro | R$ 161,10 | R$ 1.933,20 | R$ 214,80 |
-| Premium | R$ 242,10 | R$ 2.905,20 | R$ 322,80 |
+| Pocket | R$ 98,10 | R$ 1.177,20 | R$ 130,80 |
+| Pro | R$ 188,10 | R$ 2.257,20 | R$ 250,80 |
+| Premium | R$ 278,10 | R$ 3.337,20 | R$ 370,80 |
 
-A comissão por pedido continua em 1,79% / 0,89% / 0,39% independentemente do ciclo mensal ou anual.
+A comissão por pedido continua em 1,49% / 0,69% / 0,29% independentemente do ciclo mensal ou anual.
 
 ## Pontos econômicos de upgrade
 
 Considerando apenas mensalidade + taxa KÔMA e o mesmo volume de pagamentos online:
 
-- Pocket e Pro se igualam em **R$ 10.000/mês** de GMV online: ambos geram/custam R$ 268 antes dos custos do provedor.
-- Pro e Premium se igualam em **R$ 18.000/mês** de GMV online: ambos geram/custam R$ 339,20 antes dos custos do provedor.
+- Pocket e Pro se igualam em **R$ 12.500/mês** de GMV online: ambos geram/custam R$ 295,25 antes dos custos do provedor.
+- Pro e Premium se igualam em **R$ 25.000/mês** de GMV online: ambos geram/custam R$ 381,50 antes dos custos do provedor.
 
 Isso cria a escada econômica pretendida: Pocket para menor volume, Pro como faixa intermediária e Premium para operações com maior volume online. O upgrade também libera funcionalidades, então a decisão não depende apenas da matemática da taxa.
 
