@@ -13,6 +13,8 @@ import { formatCompactCurrency } from '../cashierPresentation';
 import { CashierIngredientDialogs } from './CashierIngredientDialogs';
 import { CashierStockAdjustmentDialog } from './CashierStockAdjustmentDialog';
 import { CashierSupplierDialogs } from './CashierSupplierDialogs';
+import { StockRecipeCoveragePanel } from './StockRecipeCoveragePanel';
+import { StockReplenishmentWorkspace } from './StockReplenishmentWorkspace';
 import { useCashierIngredientEditor } from './useCashierIngredientEditor';
 import { useCashierInventoryData } from './useCashierInventoryData';
 import { useCashierInventoryOperations } from './useCashierInventoryOperations';
@@ -176,6 +178,12 @@ export default function CashierInventory({
                   ]
             }
           />
+          <StockRecipeCoveragePanel
+            products={apiProdutos}
+            fichas={fichasTecnicas}
+            insumos={estoqueInsumos}
+            onEdit={() => setShowFichaTecnicaModal(true)}
+          />
           <EstoqueIngredientesTab
             insumos={estoqueInsumos}
             fichasTecnicas={fichasTecnicas}
@@ -319,6 +327,15 @@ export default function CashierInventory({
                       : []),
                   ]
             }
+          />
+          <StockReplenishmentWorkspace
+            insumos={estoqueInsumos}
+            fornecedores={distribuidores}
+            onRegisterEntry={() => setShowEntradaManualModal(true)}
+            onImportXml={() => {
+              setActiveSubTab('historico');
+              window.setTimeout(() => xmlFileInputRef.current?.click(), 0);
+            }}
           />
           <EstoqueFornecedoresTab
             fornecedores={distribuidores}
