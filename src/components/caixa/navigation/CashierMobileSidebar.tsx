@@ -113,8 +113,6 @@ export function CashierMobileSidebar({
             <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
               <CashierSidebarFooter
                 mobile
-                hasOnlineMenu={hasOnlineMenu}
-                handleSidebarNavigation={handleSidebarNavigation}
                 changeFontSize={changeFontSize}
                 fontSize={fontSize}
                 setTheme={setTheme}
