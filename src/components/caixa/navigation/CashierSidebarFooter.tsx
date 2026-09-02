@@ -3,9 +3,9 @@ import { Moon, Sun } from 'lucide-react';
 import { nextKomaTheme, persistKomaTheme } from '../../../config/theme';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 
-type Props = Pick<CashierSidebarProps,
-  'hasOnlineMenu' | 'handleSidebarNavigation' | 'changeFontSize' | 'fontSize' |
-  'setTheme' | 'theme' | 'activeWaiterNome'
+type Props = Pick<
+  CashierSidebarProps,
+  'changeFontSize' | 'fontSize' | 'setTheme' | 'theme' | 'activeWaiterNome'
 > & { mobile?: boolean };
 
 /** Shared footer content; navigation destinations belong to Navigation Tree v2. */
@@ -52,7 +52,7 @@ export function CashierSidebarFooter({
             onClick={() => {
               setTheme(persistKomaTheme(nextKomaTheme(theme)));
             }}
-            className={"cashier-font-control__button flex items-center justify-center py-1"}
+            className="cashier-font-control__button flex items-center justify-center py-1"
             aria-label="Alternar tema"
             title="Alternar tema"
           >
@@ -63,15 +63,15 @@ export function CashierSidebarFooter({
     </div>
 
     {!mobile && (
-    <button
-      type="button"
-      onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}
-      className="cashier-sidebar__compact-theme"
-      aria-label="Alternar tema"
-      title="Alternar tema"
-    >
-      {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
-    </button>
+      <button
+        type="button"
+        onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}
+        className="cashier-sidebar__compact-theme"
+        aria-label="Alternar tema"
+        title="Alternar tema"
+      >
+        {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
+      </button>
     )}
 
     <div className="cashier-operator">
