@@ -1,6 +1,7 @@
 import { Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
+import { MercadoPagoConnectionCard } from './MercadoPagoConnectionCard';
 
 interface Props {
   apiBaseUrl: string;
@@ -55,10 +56,15 @@ export default function CashierOnlineMenu({
         </div>
   );
   const restaurantId = readRestaurantIdFromAuthorization(authHeaders.Authorization || authHeaders.authorization);
-  return <CardapioDigitalSettingsPanel
-    key={authHeaders.Authorization || authHeaders.authorization}
-    apiBaseUrl={apiBaseUrl}
-    authHeaders={authHeaders}
-    publicMenuUrl={restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null}
-  />;
+  return (
+    <div className="space-y-4">
+      <MercadoPagoConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+      <CardapioDigitalSettingsPanel
+        key={authHeaders.Authorization || authHeaders.authorization}
+        apiBaseUrl={apiBaseUrl}
+        authHeaders={authHeaders}
+        publicMenuUrl={restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null}
+      />
+    </div>
+  );
 }
