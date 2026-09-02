@@ -63,6 +63,18 @@ def test_orders_core_does_not_restore_superseded_printing_paths():
     assert found == []
 
 
+def test_item_edit_is_the_only_contained_orders_core_legacy_print_path():
+    source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
+
+    # Item edit emits a delta ticket (only the edited/added item). The current
+    # PrintIntent contract prints an order/table snapshot and cannot preserve
+    # this physical behavior yet, so keep the legacy helper contained instead
+    # of silently changing it to a full-order print.
+    assert source.count("def print_in_background(") == 1
+    assert source.count("print_in_background,") == 1
+    assert "=== ITEM ALTERADO/ADICIONADO ===" in source
+
+
 def test_superseded_domain_printing_stack_stays_removed():
     restored = [
         relative_path
