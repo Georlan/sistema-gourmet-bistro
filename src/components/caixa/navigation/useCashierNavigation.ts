@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { CashierTab } from '../cashierContracts';
 import {
+  getCashierNavigationAction,
   getCashierNavigationParentId,
   getCashierNavigationTarget,
 } from './cashierNavigation';
@@ -215,6 +216,9 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
       return;
     }
 
+    if (getCashierNavigationAction(navigationId) === 'open-counter') {
+      window.dispatchEvent(new Event('koma-navigation-open-counter'));
+    }
     applyNavigationTarget(navigationId);
   };
 
