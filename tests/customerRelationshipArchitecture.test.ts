@@ -16,7 +16,7 @@ test('CustomerRelationshipPanel is pure presentation without network requests or
   assert.ok(!fileContent.includes('useEffect'), 'CustomerRelationshipPanel should not trigger side effects');
 });
 
-test('useCashierCustomers only fetches canonical /fidelidade/clientes and does not create parallel routes', () => {
+test('useCashierCustomers keeps Cliente.id canonical and only fetches /fidelidade/clientes', () => {
   const fileContent = readFileSync(
     new URL('../src/components/caixa/customers/useCashierCustomers.ts', import.meta.url),
     'utf8',
@@ -25,6 +25,8 @@ test('useCashierCustomers only fetches canonical /fidelidade/clientes and does n
   assert.ok(fileContent.includes('/fidelidade/clientes'), 'Must fetch canonical /fidelidade/clientes');
   assert.ok(!fileContent.includes('/crm/clientes'), 'Must not fetch /crm/clientes');
   assert.ok(!fileContent.includes('/relacionamento/clientes'), 'Must not fetch /relacionamento/clientes');
+  assert.ok(fileContent.includes('id: String(c.id)'), 'Cliente.id must remain the frontend identity');
+  assert.ok(!fileContent.includes('c.id || c.telefone'), 'Phone must never be a fallback identity');
 });
 
 test('Backend customer_relationship service enforces tenant isolation and canonical Comanda.cliente_id FK', () => {
