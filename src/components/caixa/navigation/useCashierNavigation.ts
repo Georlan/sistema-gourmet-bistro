@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { CashierTab } from '../cashierContracts';
-import { getCashierNavigationTarget } from './cashierNavigation';
+import {
+  getCashierNavigationParentId,
+  getCashierNavigationTarget,
+} from './cashierNavigation';
 
 type BoundaryProps = {
   hasOnlineMenu: boolean;
@@ -124,8 +127,8 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     sessionStorage.setItem('koma_active_subtab', sanitized);
   }, [activeSubTab, activeTab]);
 
-  const applyNavigationTarget = (tabId: string) => {
-    const target = getCashierNavigationTarget(tabId);
+  const applyNavigationTarget = (navigationId: string) => {
+    const target = getCashierNavigationTarget(navigationId);
     if (target) {
       setActiveTab(target.tab);
       setActiveSubTab(target.subTab);
@@ -133,12 +136,12 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     }
 
     // Persisted aliases that are intentionally not visible in Navigation Tree v2.
-    if (tabId === 'dashboard') {
+    if (navigationId === 'dashboard') {
       setActiveTab('relatorios');
       setActiveSubTab('visao_geral');
       return true;
     }
-    if (tabId === 'configuracoes') {
+    if (navigationId === 'configuracoes') {
       setActiveTab('configuracoes');
       setActiveSubTab('equipe');
       return true;
@@ -150,8 +153,26 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (!applyNavigationTarget(tabId)) setActiveTab(tabId as CashierTab);
   };
 
-  const isSidebarTabActive = (tabId: string) =>
-    tabId === 'cardapio_digital'
+  const isExactChildActive = (navigationId: string) => {
+    const parentId = getCashierNavigationParentId(navigationId);
+    const target = getCashierNavigationTarget(navigationId);
+    if (!parentId || !target || activeTab !== target.tab) return false;
+
+    if (navigationId === 'caixa_turno_atual') return ['turno_atual', 'fluxo'].includes(activeSubTab);
+    if (navigationId === 'caixa_movimentacoes') {
+      return ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(activeSubTab);
+    }
+    if (navigationId === 'caixa_fechamento') {
+      return ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab);
+    }
+
+    return activeSubTab === target.subTab;
+  };
+
+  const isSidebarTabActive = (tabId: string) => {
+    if (getCashierNavigationParentId(tabId)) return isExactChildActive(tabId);
+
+    return tabId === 'cardapio_digital'
       ? activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'
       : tabId === 'permissoes_cargos'
         ? activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')
@@ -163,11 +184,12 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
             : tabId === 'relatorios'
               ? activeTab === 'relatorios' || activeTab === 'dashboard'
               : activeTab === tabId;
+  };
 
-  const handleSidebarNavigation = (tabId: string, closeMobile = false) => {
+  const handleSidebarNavigation = (navigationId: string, closeMobile = false) => {
     if (closeMobile) setIsMobileSidebarOpen(false);
 
-    if (tabId === 'cardapio_digital' && !hasOnlineMenu) {
+    if (navigationId === 'cardapio_digital' && !hasOnlineMenu) {
       const subscription = getCashierNavigationTarget('assinatura_pix');
       if (subscription) {
         setActiveTab(subscription.tab);
@@ -180,17 +202,20 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
       return;
     }
 
-    // Preserve the current meaningful child view when the user clicks its parent.
-    if (tabId === 'permissoes_cargos' && ['pessoas', 'desempenho'].includes(activeSubTab)) {
+    // Clicking an already active parent keeps its meaningful child instead of
+    // unexpectedly returning the operator to the parent's default view.
+    if (navigationId === 'operacao' && activeTab === 'operacao') return;
+    if (navigationId === 'financeiro' && activeTab === 'financeiro') return;
+    if (navigationId === 'permissoes_cargos' && ['pessoas', 'desempenho'].includes(activeSubTab)) {
       setActiveTab('permissoes_cargos');
       return;
     }
-    if (tabId === 'relatorios' && ['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
+    if (navigationId === 'relatorios' && ['visao_geral', 'financeiro', 'produtos'].includes(activeSubTab)) {
       setActiveTab('relatorios');
       return;
     }
 
-    applyNavigationTarget(tabId);
+    applyNavigationTarget(navigationId);
   };
 
   return {
