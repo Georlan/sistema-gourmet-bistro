@@ -1,42 +1,18 @@
 import clsx from 'clsx';
-import { Lock, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import { nextKomaTheme, persistKomaTheme } from '../../../config/theme';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
-import { CASHIER_SIDEBAR_SECONDARY_ITEMS } from './cashierNavigation';
 
 type Props = Pick<CashierSidebarProps,
   'hasOnlineMenu' | 'handleSidebarNavigation' | 'changeFontSize' | 'fontSize' |
   'setTheme' | 'theme' | 'activeWaiterNome'
 > & { mobile?: boolean };
 
-/** Shared footer content; each sidebar keeps its own container, focus and close behavior. */
+/** Shared footer content; navigation destinations belong to Navigation Tree v2. */
 export function CashierSidebarFooter({
-  hasOnlineMenu, handleSidebarNavigation, changeFontSize, fontSize,
-  setTheme, theme, activeWaiterNome, mobile = false,
+  changeFontSize, fontSize, setTheme, theme, activeWaiterNome, mobile = false,
 }: Props) {
   return <>
-    <div className="cashier-sidebar__secondary">
-      <span className="cashier-sidebar__secondary-label">Acesso rápido</span>
-      {CASHIER_SIDEBAR_SECONDARY_ITEMS.map((item) => {
-        const Icon = item.icon;
-        const isLocked = item.id === 'cardapio_digital' && !hasOnlineMenu;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => handleSidebarNavigation(item.id, mobile)}
-            className="cashier-nav-item flex min-h-8 items-center gap-2 rounded-lg px-2 text-left text-[11px] font-semibold text-koma-subtle hover:bg-koma-raised hover:text-koma-foreground"
-            title={mobile ? undefined : item.label}
-          >
-            <span className="cashier-nav-icon">
-              <Icon size={14} />
-            </span>
-            <span className="cashier-nav-label">{item.label}</span>
-            {isLocked && <Lock size={10} className="ml-auto text-amber-500" />}
-          </button>
-        );
-      })}
-    </div>
     <div className="cashier-display-controls">
       <div className="cashier-font-control flex-1">
         <span className="cashier-font-control__label">Texto</span>
@@ -107,6 +83,5 @@ export function CashierSidebarFooter({
         <strong>{activeWaiterNome}</strong>
       </span>
     </div>
-
   </>;
 }
