@@ -99,6 +99,10 @@ def _state_ttl_seconds() -> int:
     return max(120, min(value, 900))
 
 
+def _is_test_token_enabled() -> bool:
+    return _env("MERCADO_PAGO_OAUTH_TEST_TOKEN").lower() in ("true", "1", "yes")
+
+
 def _generate_code_verifier() -> str:
     # token_urlsafe uses only RFC 3986 unreserved URL-safe characters.
     # 64 random bytes produce an 86-character verifier, inside PKCE's 43–128 range.
@@ -255,17 +259,18 @@ def exchange_authorization_code(
         raise MercadoPagoOAuthError("Código OAuth ausente.")
 
     decoded = decode_state(state)
-    tokens = _post_token(
-        {
-            "client_id": _client_id(),
-            "client_secret": _client_secret(),
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": oauth_redirect_uri(),
-            "code_verifier": decoded.code_verifier,
-        },
-        client=client,
-    )
+    payload: dict[str, Any] = {
+        "client_id": _client_id(),
+        "client_secret": _client_secret(),
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": oauth_redirect_uri(),
+        "code_verifier": decoded.code_verifier,
+    }
+    if _is_test_token_enabled():
+        payload["test_token"] = True
+
+    tokens = _post_token(payload, client=client)
     return decoded, tokens
 
 
@@ -276,12 +281,13 @@ def refresh_access_token(
 ) -> MercadoPagoOAuthTokens:
     if not refresh_token or not isinstance(refresh_token, str):
         raise MercadoPagoOAuthError("Refresh token OAuth ausente.")
-    return _post_token(
-        {
-            "client_id": _client_id(),
-            "client_secret": _client_secret(),
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-        },
-        client=client,
-    )
+    payload: dict[str, Any] = {
+        "client_id": _client_id(),
+        "client_secret": _client_secret(),
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+    if _is_test_token_enabled():
+        payload["test_token"] = True
+
+    return _post_token(payload, client=client)

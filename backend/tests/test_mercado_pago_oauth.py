@@ -60,8 +60,9 @@ def test_state_rejects_tampering_and_expiration(monkeypatch):
     url = build_authorization_url(restaurant_id=2, user_id="u-1")
     state = parse_qs(urlparse(url).query)["state"][0]
 
+    tampered = f"{state[:-1]}y" if state[-1] == "x" else f"{state[:-1]}x"
     with pytest.raises(MercadoPagoOAuthStateError):
-        decode_state(f"{state[:-1]}x")
+        decode_state(tampered)
 
     expired = encrypt_field(
         json.dumps(
@@ -175,3 +176,82 @@ def test_provider_errors_do_not_echo_sensitive_body():
     message = str(exc_info.value)
     assert "HTTP 400" in message
     assert "must-not-leak" not in message
+
+
+def test_exchange_authorization_code_with_test_token_flag(monkeypatch):
+    monkeypatch.setenv("MERCADO_PAGO_OAUTH_TEST_TOKEN", "true")
+    authorization_url = build_authorization_url(
+        restaurant_id=22,
+        user_id="cashier-1",
+    )
+    state = parse_qs(urlparse(authorization_url).query)["state"][0]
+    decoded = decode_state(state)
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == MERCADO_PAGO_TOKEN_URL
+        captured.update(json.loads(request.content.decode("utf-8")))
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "TEST-1733-seller-token",
+                "refresh_token": "TEST-1733-refresh-token",
+                "public_key": "TEST-public",
+                "user_id": 998877,
+                "expires_in": 15552000,
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        returned_state, tokens = exchange_authorization_code(
+            code="TG-test-code",
+            state=state,
+            client=client,
+        )
+    finally:
+        client.close()
+
+    assert returned_state.restaurant_id == 22
+    assert captured == {
+        "client_id": "app-test-123",
+        "client_secret": "secret-test-456",
+        "grant_type": "authorization_code",
+        "code": "TG-test-code",
+        "redirect_uri": "https://api.example.test/payments/mercado-pago/oauth/callback",
+        "code_verifier": decoded.code_verifier,
+        "test_token": True,
+    }
+    assert tokens.access_token == "TEST-1733-seller-token"
+
+
+def test_refresh_access_token_with_test_token_flag(monkeypatch):
+    monkeypatch.setenv("MERCADO_PAGO_OAUTH_TEST_TOKEN", "true")
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content.decode("utf-8")))
+        return httpx.Response(
+            200,
+            json={
+                "access_token": "new-test-access",
+                "refresh_token": "new-test-refresh",
+                "user_id": "seller-42",
+                "expires_in": 3600,
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        tokens = refresh_access_token("old-test-refresh", client=client)
+    finally:
+        client.close()
+
+    assert captured == {
+        "client_id": "app-test-123",
+        "client_secret": "secret-test-456",
+        "grant_type": "refresh_token",
+        "refresh_token": "old-test-refresh",
+        "test_token": True,
+    }
+    assert tokens.access_token == "new-test-access"
