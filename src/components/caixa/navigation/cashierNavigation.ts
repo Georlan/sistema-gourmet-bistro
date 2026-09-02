@@ -147,12 +147,26 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Relatórios',
         icon: TrendingUp,
         target: { tab: 'relatorios', subTab: 'visao_geral' },
+        children: [
+          { id: 'relatorios_visao_geral', label: 'Visão geral', target: { tab: 'relatorios', subTab: 'visao_geral' } },
+          { id: 'relatorios_financeiro', label: 'Financeiro', target: { tab: 'relatorios', subTab: 'financeiro' } },
+          { id: 'relatorios_produtos', label: 'Produtos', target: { tab: 'relatorios', subTab: 'produtos' } },
+          { id: 'relatorios_equipe', label: 'Equipe', target: { tab: 'relatorios', subTab: 'equipe' } },
+        ],
       },
       {
         id: 'permissoes_cargos',
         label: 'Equipe',
         icon: ShieldCheck,
         target: { tab: 'permissoes_cargos', subTab: 'pessoas' },
+        children: [
+          { id: 'equipe_pessoas', label: 'Pessoas', target: { tab: 'permissoes_cargos', subTab: 'pessoas' } },
+          {
+            id: 'equipe_funcoes_acessos',
+            label: 'Funções e acessos',
+            target: { tab: 'permissoes_cargos', subTab: 'cargos_permissoes' },
+          },
+        ],
       },
     ],
   },
