@@ -25,6 +25,16 @@ FORBIDDEN_OUTSIDE_PRINT_CORE = (
     "print_in_background",
 )
 
+SUPERSEDED_ORDERS_CORE_PRINT_PATHS = (
+    "MENSAGEM_WHATSAPP_PRONTO_RETIRADA",
+    "MENSAGEM_WHATSAPP_SAIU_ENTREGA",
+    "MENSAGEM_WHATSAPP_RECUSADO",
+    "_get_print_preferences",
+    "enqueue_print_job_in_session",
+    "enqueue_initial_production_for_order",
+    "reimprimir_lancamento_cozinha",
+)
+
 
 def test_migrated_producers_only_declare_print_intent():
     violations: dict[str, list[str]] = {}
@@ -36,6 +46,12 @@ def test_migrated_producers_only_declare_print_intent():
         assert "PrintingApplicationService" in source
 
     assert violations == {}
+
+
+def test_orders_core_does_not_restore_superseded_printing_paths():
+    source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
+    found = [token for token in SUPERSEDED_ORDERS_CORE_PRINT_PATHS if token in source]
+    assert found == []
 
 
 def test_order_engine_resolver_is_semantic_not_channel_based():
