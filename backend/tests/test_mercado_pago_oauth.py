@@ -60,8 +60,9 @@ def test_state_rejects_tampering_and_expiration(monkeypatch):
     url = build_authorization_url(restaurant_id=2, user_id="u-1")
     state = parse_qs(urlparse(url).query)["state"][0]
 
+    tampered = f"{state[:-1]}y" if state[-1] == "x" else f"{state[:-1]}x"
     with pytest.raises(MercadoPagoOAuthStateError):
-        decode_state(f"{state[:-1]}x")
+        decode_state(tampered)
 
     expired = encrypt_field(
         json.dumps(
