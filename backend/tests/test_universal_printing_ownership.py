@@ -35,6 +35,15 @@ SUPERSEDED_ORDERS_CORE_PRINT_PATHS = (
     "reimprimir_lancamento_cozinha",
 )
 
+SUPERSEDED_DOMAIN_PRINTING_FILES = (
+    "app/domain/printing/service.py",
+    "app/domain/printing/grouping.py",
+    "app/domain/printing/production_formatter.py",
+    "app/domain/printing/closing_formatter.py",
+    "app/domain/printing/delivery_formatter.py",
+    "app/domain/printing/types.py",
+)
+
 
 def test_migrated_producers_only_declare_print_intent():
     violations: dict[str, list[str]] = {}
@@ -52,6 +61,15 @@ def test_orders_core_does_not_restore_superseded_printing_paths():
     source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
     found = [token for token in SUPERSEDED_ORDERS_CORE_PRINT_PATHS if token in source]
     assert found == []
+
+
+def test_superseded_domain_printing_stack_stays_removed():
+    restored = [
+        relative_path
+        for relative_path in SUPERSEDED_DOMAIN_PRINTING_FILES
+        if (BACKEND_ROOT / relative_path).exists()
+    ]
+    assert restored == []
 
 
 def test_order_engine_resolver_is_semantic_not_channel_based():
