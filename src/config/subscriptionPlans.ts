@@ -46,8 +46,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pocket',
     name: 'Kôma Pocket',
-    price: 89,
-    splitFeeRate: 0.0179,
+    price: 109,
+    splitFeeRate: 0.0149,
     tagline: 'Venda no salão e online sem complicação.',
     features: [
       'Mesas, comandas e balcão',
@@ -66,8 +66,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pro',
     name: 'Kôma Pro',
-    price: 179,
-    splitFeeRate: 0.0089,
+    price: 209,
+    splitFeeRate: 0.0069,
     tagline: 'Controle operação, equipe, estoque e financeiro.',
     recommended: true,
     features: [
@@ -84,8 +84,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'premium',
     name: 'Kôma Premium',
-    price: 269,
-    splitFeeRate: 0.0039,
+    price: 309,
+    splitFeeRate: 0.0029,
     tagline: 'Menor taxa, entregas e fidelização para escalar.',
     features: [
       'Tudo do Pro',
@@ -116,7 +116,7 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: true, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: true, pro: true, premium: true },
-  { category: 'Pagamento Online', feature: 'Taxa KÔMA por pedido online pago', pocket: '1,79%', pro: '0,89%', premium: '0,39%' },
+  { category: 'Pagamento Online', feature: 'Taxa KÔMA por pedido online pago', pocket: '1,49%', pro: '0,69%', premium: '0,29%' },
   { category: 'Entrega', feature: 'App do Entregador', pocket: false, pro: false, premium: true },
   { category: 'Clientes', feature: 'Cadastro e Histórico de Clientes', pocket: true, pro: true, premium: true },
   { category: 'Clientes', feature: 'Pontos, Cashback e Cupons', pocket: false, pro: false, premium: true },
