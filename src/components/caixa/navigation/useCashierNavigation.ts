@@ -29,16 +29,20 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (saved === 'terminal_balcao' || saved === 'pdv') return 'balcao';
     if (saved === 'layout_salao' || saved === 'salon') return 'mesas';
     if (['insumos', 'estoque_insumos'].includes(saved)) return 'insumos';
-    if (savedTab === 'estoque' && ['xml', 'notas', 'entradas', 'movimentacoes', 'historico'].includes(saved))
+    if (
+      savedTab === 'estoque' &&
+      ['xml', 'notas', 'notas_entrada', 'entradas', 'movimentacoes', 'historico'].includes(saved)
+    )
       return 'historico';
     if (savedTab === 'estoque' && ['contagem', 'inventario'].includes(saved)) return 'inventario';
+    if (savedTab === 'estoque' && ['fornecedores', 'distribuidores'].includes(saved)) return 'fornecedores';
     // Caixa mappings
     if (['fluxo', 'turno_atual'].includes(saved)) return 'turno_atual';
     if (['ajustes', 'ajustes_caixa', 'movimentacoes', 'suprimento', 'sangria'].includes(saved))
       return 'movimentacoes';
     if (['conferencia', 'conferencia_cega', 'fechamento'].includes(saved)) return 'fechamento';
     if (['demonstrativo_dre', 'dre', 'fluxo_caixa', 'financeiro'].includes(saved)) return 'financeiro';
-    // Relatórios mappings — 'equipe' is now a valid sub-tab in relatórios
+    // Relatórios mappings
     if (
       [
         'visao_geral',
@@ -60,7 +64,7 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     // Clientes mappings
     if (['clientes', 'crm', 'banco_clientes'].includes(saved)) return 'clientes';
     if (['fidelidade', 'programa_fidelidade'].includes(saved)) return 'fidelidade';
-    if (['cupons', 'cupom', 'descontos', 'cupons_desconto'].includes(saved)) return 'clientes';
+    if (['cupons', 'cupom', 'promocoes', 'descontos', 'cupons_desconto'].includes(saved)) return 'cupons';
     // Legacy assistant routes were prototypes; return users to the real order queue.
     if (
       [
@@ -166,6 +170,17 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     if (navigationId === 'caixa_fechamento') {
       return ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab);
     }
+    if (navigationId === 'estoque_ingredientes') return ['insumos', 'estoque_insumos'].includes(activeSubTab);
+    if (navigationId === 'estoque_historico') {
+      return ['historico', 'entradas', 'xml', 'notas', 'notas_entrada', 'movimentacoes'].includes(activeSubTab);
+    }
+    if (navigationId === 'estoque_inventario') return ['inventario', 'contagem'].includes(activeSubTab);
+    if (navigationId === 'estoque_fornecedores') return ['fornecedores', 'distribuidores'].includes(activeSubTab);
+    if (navigationId === 'clientes_cadastro') return ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab);
+    if (navigationId === 'clientes_fidelidade') return ['fidelidade', 'programa_fidelidade'].includes(activeSubTab);
+    if (navigationId === 'clientes_cupons') {
+      return ['cupons', 'cupom', 'promocoes', 'descontos', 'cupons_desconto'].includes(activeSubTab);
+    }
 
     return activeSubTab === target.subTab;
   };
@@ -207,6 +222,9 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
     // unexpectedly returning the operator to the parent's default view.
     if (navigationId === 'operacao' && activeTab === 'operacao') return;
     if (navigationId === 'financeiro' && activeTab === 'financeiro') return;
+    if (navigationId === 'cardapio' && activeTab === 'cardapio') return;
+    if (navigationId === 'estoque' && activeTab === 'estoque') return;
+    if (navigationId === 'clientes' && activeTab === 'clientes') return;
     if (navigationId === 'permissoes_cargos' && ['pessoas', 'desempenho'].includes(activeSubTab)) {
       setActiveTab('permissoes_cargos');
       return;
