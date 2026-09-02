@@ -11,11 +11,11 @@ VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 
 # Fonte de verdade financeira no servidor para a comissão KÔMA sobre pedidos
-# online pagos. Valores são frações decimais: 0.0179 = 1,79%.
+# online pagos. Valores são frações decimais: 0.0149 = 1,49%.
 SUBSCRIPTION_MARKETPLACE_RATES: dict[str, Decimal] = {
-    "pocket": Decimal("0.0179"),
-    "pro": Decimal("0.0089"),
-    "premium": Decimal("0.0039"),
+    "pocket": Decimal("0.0149"),
+    "pro": Decimal("0.0069"),
+    "premium": Decimal("0.0029"),
 }
 
 
