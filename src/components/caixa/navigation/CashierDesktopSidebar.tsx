@@ -10,6 +10,7 @@ import {
   SidebarRail,
 } from '../../ui/sidebar';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
+import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
 
@@ -81,6 +82,7 @@ export function CashierDesktopSidebar({
 
       <SidebarContent className="cashier-sidebar__content p-2">
         <CashierSidebarNavigation
+          groups={CASHIER_SIDEBAR_GROUPS}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
           sidebarOrderCount={sidebarOrderCount}
