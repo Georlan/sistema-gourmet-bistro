@@ -7,6 +7,8 @@ on:
       - "backend/app/services/online_payments/**"
       - "backend/tests/test_mercado_pago_*.py"
       - "backend/tests/test_online_payment_gate.py"
+      - "src/components/caixa/online-menu/**"
+      - "tests/mercadoPagoConnection.test.ts"
       - ".github/workflows/payment-oauth-targeted.yml"
 
 permissions:
@@ -15,7 +17,7 @@ permissions:
 jobs:
   targeted-oauth:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       ENVIRONMENT: test
       SECRET_KEY: oauth-targeted-ci-secret-key
@@ -51,7 +53,7 @@ jobs:
           python -m py_compile backend/app/services/online_payments/oauth.py
           python -m py_compile backend/app/services/online_payments/account_connection.py
 
-      - name: Run targeted payment tests
+      - name: Run targeted backend payment tests
         working-directory: backend
         run: |
           python -m pytest -q \
@@ -59,3 +61,18 @@ jobs:
             tests/test_mercado_pago_account_connection.py \
             tests/test_mercado_pago_oauth_routes.py \
             tests/test_online_payment_gate.py
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck frontend
+        run: npm run lint
+
+      - name: Run Mercado Pago UI contract test
+        run: npx tsx --test tests/mercadoPagoConnection.test.ts
