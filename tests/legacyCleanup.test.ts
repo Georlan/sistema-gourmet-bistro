@@ -15,6 +15,7 @@ test('cashier salon projection is imported from its canonical owner without comp
   const orderProjection = source('src/domain/cashierOrderProjection.ts');
   assert.doesNotMatch(orderProjection, /export\s*\{\s*projectCashierSalonTables\s*\}/);
 
+  const obsoleteImport = /import\s*\{[^}]*projectCashierSalonTables[^}]*\}\s*from\s*['"][^'"]*cashierOrderProjection['"]/s;
   for (const path of [
     'src/components/caixa/settings/useCashierTableSettings.ts',
     'src/components/caixa/settings/CashierSettings.tsx',
@@ -26,6 +27,6 @@ test('cashier salon projection is imported from its canonical owner without comp
   ]) {
     const content = source(path);
     assert.match(content, /cashierSalonProjection/);
-    assert.doesNotMatch(content, /projectCashierSalonTables[^\n]*cashierOrderProjection/);
+    assert.doesNotMatch(content, obsoleteImport);
   }
 });
