@@ -63,33 +63,16 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         icon: ShoppingCart,
         target: { tab: 'operacao', subTab: 'pedidos' },
         children: [
-          {
-            id: 'vendas_pedidos',
-            label: 'Pedidos',
-            target: { tab: 'operacao', subTab: 'pedidos' },
-            badge: 'orders',
-          },
+          { id: 'vendas_pedidos', label: 'Pedidos', target: { tab: 'operacao', subTab: 'pedidos' }, badge: 'orders' },
           {
             id: 'vendas_novo_pedido',
             label: 'Novo pedido',
             target: { tab: 'operacao', subTab: 'balcao' },
             action: 'open-counter',
           },
-          {
-            id: 'vendas_salao',
-            label: 'Salão',
-            target: { tab: 'operacao', subTab: 'mesas' },
-          },
-          {
-            id: 'vendas_cozinha',
-            label: 'Cozinha',
-            target: { tab: 'operacao', subTab: 'kds' },
-          },
-          {
-            id: 'vendas_entregas',
-            label: 'Entregas',
-            target: { tab: 'operacao', subTab: 'entregadores' },
-          },
+          { id: 'vendas_salao', label: 'Salão', target: { tab: 'operacao', subTab: 'mesas' } },
+          { id: 'vendas_cozinha', label: 'Cozinha', target: { tab: 'operacao', subTab: 'kds' } },
+          { id: 'vendas_entregas', label: 'Entregas', target: { tab: 'operacao', subTab: 'entregadores' } },
         ],
       },
       {
@@ -98,21 +81,9 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         icon: DollarSign,
         target: { tab: 'financeiro', subTab: 'turno_atual' },
         children: [
-          {
-            id: 'caixa_turno_atual',
-            label: 'Turno atual',
-            target: { tab: 'financeiro', subTab: 'turno_atual' },
-          },
-          {
-            id: 'caixa_movimentacoes',
-            label: 'Movimentações',
-            target: { tab: 'financeiro', subTab: 'movimentacoes' },
-          },
-          {
-            id: 'caixa_fechamento',
-            label: 'Fechamento',
-            target: { tab: 'financeiro', subTab: 'fechamento' },
-          },
+          { id: 'caixa_turno_atual', label: 'Turno atual', target: { tab: 'financeiro', subTab: 'turno_atual' } },
+          { id: 'caixa_movimentacoes', label: 'Movimentações', target: { tab: 'financeiro', subTab: 'movimentacoes' } },
+          { id: 'caixa_fechamento', label: 'Fechamento', target: { tab: 'financeiro', subTab: 'fechamento' } },
         ],
       },
     ],
@@ -125,18 +96,34 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Cardápio',
         icon: ClipboardList,
         target: { tab: 'cardapio', subTab: 'produtos' },
+        children: [
+          { id: 'cardapio_produtos', label: 'Produtos', target: { tab: 'cardapio', subTab: 'produtos' } },
+          { id: 'cardapio_complementos', label: 'Complementos', target: { tab: 'cardapio', subTab: 'complementos' } },
+          { id: 'cardapio_preparo', label: 'Preparo e impressão', target: { tab: 'cardapio', subTab: 'categorias' } },
+        ],
       },
       {
         id: 'estoque',
         label: 'Estoque & compras',
         icon: Package,
         target: { tab: 'estoque', subTab: 'insumos' },
+        children: [
+          { id: 'estoque_ingredientes', label: 'Ingredientes', target: { tab: 'estoque', subTab: 'insumos' } },
+          { id: 'estoque_historico', label: 'Histórico', target: { tab: 'estoque', subTab: 'historico' } },
+          { id: 'estoque_inventario', label: 'Inventário', target: { tab: 'estoque', subTab: 'inventario' } },
+          { id: 'estoque_fornecedores', label: 'Fornecedores', target: { tab: 'estoque', subTab: 'fornecedores' } },
+        ],
       },
       {
         id: 'clientes',
         label: 'Clientes',
         icon: Users,
         target: { tab: 'clientes', subTab: 'clientes' },
+        children: [
+          { id: 'clientes_cadastro', label: 'Clientes', target: { tab: 'clientes', subTab: 'clientes' } },
+          { id: 'clientes_fidelidade', label: 'Fidelidade', target: { tab: 'clientes', subTab: 'fidelidade' } },
+          { id: 'clientes_cupons', label: 'Cupons & promoções', target: { tab: 'clientes', subTab: 'cupons' } },
+        ],
       },
     ],
   },
