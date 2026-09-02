@@ -20,7 +20,7 @@ documento, destino e `PrintJob` pertencem ao Core de Impressão.
 7. Migração é Strangler: URLs antigas podem permanecer como aliases, mas devem
    delegar ao Core antes de serem removidas.
 
-## Fluxo alvo
+## Fluxo atual
 
 ```text
 Garçom / Caixa / Cardápio / SmartPOS / Reimpressão / Fechamento
@@ -32,8 +32,13 @@ Garçom / Caixa / Cardápio / SmartPOS / Reimpressão / Fechamento
                 PrintingApplicationService
                  (resolve origem + política)
                               |
-                              v
-                    documento canônico
+              +---------------+----------------+
+              |                                |
+              v                                v
+      render_canonical_comanda           renderers validados
+       (pedidos operacionais)          (mesa/caixa/despacho)
+              |                                |
+              +---------------+----------------+
                               |
                               v
                          PrintJob
@@ -57,25 +62,46 @@ A entrada HTTP canônica é `POST /impressao`:
 O cliente não envia texto, preço, destino de impressora ou nome de formatter.
 Esses dados são reconstruídos do banco e da configuração do restaurante.
 
-## Etapa 1 — ponte segura (esta PR)
+## Estado atual — 02/09/2026
 
-- cria `PrintIntent` e `PrintingApplicationService`;
-- cria `POST /impressao` sem remover contratos existentes;
-- transforma o comprovante de fechamento em alias da entrada universal;
-- transforma a reimpressão de pedido em alias do Core;
-- Retirada/Delivery com todos os itens `NENHUM` passam a gerar uma via operacional;
-- em pedido remoto misto, itens `NENHUM` acompanham somente a via setorial primária,
-  sem duplicação em todas as impressoras;
-- primeira via automática de Retirada/Delivery continua usando
-  `PrintDocumentService.generate_production`, portanto recebe a mesma política;
-- reimpressão de Retirada/Delivery passa a usar o mesmo `OrderPrintData` e formatter
-  da primeira via, com `REIMPRESSÃO` como único marcador visual adicional;
-- consumo local, extrato de mesa, fechamento financeiro e hardware permanecem com
-  os renderers validados existentes atrás da nova camada.
+Os produtores migrados declaram `PrintIntent` e delegam ao
+`PrintingApplicationService`. Pedidos remotos são renderizados pelo modelo
+canônico de comanda; `PrintItem` e `group_items_by_print_destination` permanecem
+como primitivas de domínio para roteamento setorial. Extrato de mesa, fechamento
+de caixa e despacho continuam atrás do mesmo serviço de aplicação usando os
+renderers já validados para cada documento.
 
-## Etapa 2 — migrar produtores restantes
+A limpeza pós-migração removeu o antigo `PrintDocumentService`, seus DTOs
+`OrderPrintData`/`CommandPrintData`/`DeliveryOrderPrintData` e os formatters de
+produção/fechamento/delivery que já não tinham consumidor de produção. Também
+foram removidos de `orders_core.py` os helpers antigos que criavam `PrintJob` ou
+faziam reimpressão fora do Core Universal. Testes arquiteturais impedem que esses
+caminhos sejam restaurados silenciosamente.
 
-Migrar um consumidor por vez, preservando URL e resposta:
+`print_in_background` ainda existe em `orders_core.py` porque a edição de item
+continua emitindo uma via de alteração por esse caminho. Ele é dívida explícita:
+deve ser migrado para uma intenção adequada antes de ser apagado. O Print Agent e
+suas rotas de diagnóstico permanecem fora desta limpeza.
+
+## Histórico da migração
+
+### Etapa 1 — ponte segura
+
+A primeira etapa criou `PrintIntent`, `PrintingApplicationService` e `POST
+/impressao`, preservando contratos existentes. Comprovante de fechamento e
+reimpressão ganharam aliases para a entrada universal. A política de pedidos
+remotos foi caracterizada para garantir que Retirada/Delivery com itens
+`NENHUM` ainda produzam uma via operacional e que itens sem destino não sejam
+duplicados entre setores.
+
+Naquela etapa, partes da geração ainda passavam pelo antigo
+`PrintDocumentService`. Esse detalhe é histórico e não descreve mais a base
+atual; o serviço e seus formatters foram removidos após os consumidores de
+produção migrarem para o renderer canônico.
+
+### Etapa 2 — migração dos produtores
+
+Os produtores foram migrados incrementalmente, preservando URL e resposta:
 
 1. criação/aceite de pedido remoto;
 2. PDV/SmartPOS;
@@ -84,20 +110,16 @@ Migrar um consumidor por vez, preservando URL e resposta:
 5. expedição/motoboy;
 6. fechamento de caixa e documentos auxiliares.
 
-Após cada migração, adicionar proteção arquitetural para impedir que aquele
-consumidor volte a criar `PrintJob` ou chamar formatter diretamente.
+A proteção arquitetural atual impede que os produtores já migrados voltem a
+criar `PrintJob`, escolher formatter ou chamar os geradores antigos diretamente.
 
-## Etapa 3 — modelo visual único
+### Etapa 3 — convergência visual
 
-Depois que todos os produtores estiverem atrás do Core, consolidar os modelos
-visuais. O objetivo não é um formatter monolítico cheio de condicionais, mas um
-único contrato canônico de documento com seções opcionais. Cabeçalho, identidade,
-itens, valores, observações, rodapé e metadados são compartilhados; cada tipo de
-documento habilita somente as seções necessárias.
-
-Mudança de layout só começa depois da Etapa 2 para separar risco visual de risco de
-roteamento. Assim uma alteração de modelo não precisa tocar Garçom, Caixa,
-Cardápio ou SmartPOS individualmente.
+O modelo canônico de comanda concentra o layout de pedidos operacionais sem criar
+um formatter monolítico para documentos semanticamente diferentes. Cabeçalho,
+identidade, itens, valores, observações, rodapé e metadados são compostos pelo
+Core; extratos financeiros e documentos de despacho preservam seus contratos
+específicos quando a semântica é diferente.
 
 ## Validação obrigatória
 
