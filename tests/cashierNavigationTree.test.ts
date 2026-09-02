@@ -110,6 +110,7 @@ test('online menu and subscription are primary navigation, not duplicated footer
   );
   assert.doesNotMatch(footer, /CASHIER_SIDEBAR_SECONDARY_ITEMS/);
   assert.doesNotMatch(footer, /Acesso rápido/);
+  assert.doesNotMatch(footer, /hasOnlineMenu|handleSidebarNavigation/);
 });
 
 test('desktop and mobile delegate nested rendering to the same component', () => {
