@@ -1241,6 +1241,52 @@ class Cliente(Base):
         "HistoricoFidelidade",
         back_populates="cliente",
     )
+    avaliacoes = relationship(
+        "AvaliacaoCliente",
+        back_populates="cliente",
+        cascade="all, delete-orphan",
+    )
+
+
+class AvaliacaoCliente(Base):
+    __tablename__ = "avaliacoes_clientes"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    cliente_id = Column(String, nullable=False, index=True)
+    comanda_id = Column(String, ForeignKey("comandas.id", ondelete="SET NULL"), nullable=True, index=True)
+    nota = Column(Integer, nullable=False)
+    comentario = Column(String(1000), nullable=True)
+    criado_em = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['restaurante_id', 'cliente_id'],
+            ['clientes.restaurante_id', 'clientes.id'],
+            name='fk_avaliacoes_clientes_cliente_tenant',
+            ondelete='CASCADE',
+        ),
+        CheckConstraint(
+            "nota >= 1 AND nota <= 5",
+            name="ck_avaliacoes_clientes_nota_range",
+        ),
+        UniqueConstraint('restaurante_id', 'comanda_id', name='uq_avaliacoes_clientes_tenant_comanda'),
+        Index(
+            "ix_avaliacoes_clientes_tenant_criado",
+            "restaurante_id",
+            "criado_em",
+        ),
+    )
+
+    cliente = relationship("Cliente", back_populates="avaliacoes")
+    comanda = relationship("Comanda")
+
 
 
 class Motoboy(Base):
