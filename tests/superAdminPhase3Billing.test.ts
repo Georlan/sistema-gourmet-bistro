@@ -22,15 +22,29 @@ test("gestão contratual exige motivo e usa endpoint administrativo dedicado", (
   assert.match(billing, /needs_review/);
 });
 
-test("tela mantém valores no catálogo compartilhado e não reintroduz preços antigos", () => {
+test("tela mantém valores no catálogo compartilhado sem duplicar números comerciais", () => {
   assert.match(billing, /SUBSCRIPTION_PLANS/);
   assert.match(billing, /getSubscriptionPricing/);
   assert.match(pricing, /price:\s*109/);
   assert.match(pricing, /price:\s*209/);
   assert.match(pricing, /price:\s*309/);
 
-  for (const stale of ["R$ 89", "R$ 179", "R$ 269", "1,79%", "0,89%", "0,39%"] ) {
-    assert.equal(billing.includes(stale), false, `valor comercial antigo encontrado: ${stale}`);
+  for (const duplicated of [
+    "R$ 109",
+    "R$ 209",
+    "R$ 309",
+    "R$ 89",
+    "R$ 179",
+    "R$ 269",
+    "1,79%",
+    "0,89%",
+    "0,39%",
+  ]) {
+    assert.equal(
+      billing.includes(duplicated),
+      false,
+      `valor comercial duplicado ou antigo encontrado: ${duplicated}`,
+    );
   }
 });
 
