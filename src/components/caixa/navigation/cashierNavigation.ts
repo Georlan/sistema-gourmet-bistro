@@ -118,11 +118,6 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Clientes',
         icon: Users,
         target: { tab: 'clientes', subTab: 'clientes' },
-        children: [
-          { id: 'clientes_cadastro', label: 'Clientes', target: { tab: 'clientes', subTab: 'clientes' } },
-          { id: 'clientes_fidelidade', label: 'Fidelidade', target: { tab: 'clientes', subTab: 'fidelidade' } },
-          { id: 'clientes_cupons', label: 'Cupons & promoções', target: { tab: 'clientes', subTab: 'cupons' } },
-        ],
       },
     ],
   },
