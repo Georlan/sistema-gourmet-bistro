@@ -9,6 +9,7 @@ import {
   Clock3,
   Package,
   RefreshCw,
+  RotateCcw,
   Trash2,
   X,
   XCircle,
@@ -30,6 +31,7 @@ interface CardapioOrdersDrawerProps {
   onSelectOrder: (orderId: string) => void;
   onRefresh: () => void;
   onRemoveOrder: (orderId: string) => void;
+  onRepeatOrder: (order: StoredOrder) => void;
   isRefreshing?: boolean;
 }
 
@@ -41,6 +43,7 @@ export default function CardapioOrdersDrawer({
   onSelectOrder,
   onRefresh,
   onRemoveOrder,
+  onRepeatOrder,
   isRefreshing = false,
 }: CardapioOrdersDrawerProps) {
   if (!isOpen) return null;
@@ -69,7 +72,6 @@ export default function CardapioOrdersDrawer({
         aria-label="Meus Pedidos"
         id="orders-drawer-panel"
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-koma-border p-4 sm:p-5">
           <div className="flex items-center gap-2.5">
             <Package className="h-5 w-5 text-emerald-400" />
@@ -105,7 +107,6 @@ export default function CardapioOrdersDrawer({
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           {orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -119,7 +120,6 @@ export default function CardapioOrdersDrawer({
             </div>
           ) : (
             <>
-              {/* Pedidos em andamento */}
               {activeOrders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -177,7 +177,6 @@ export default function CardapioOrdersDrawer({
                           </div>
                         </div>
 
-                        {/* Itens resumo */}
                         {Array.isArray(order.itens) && order.itens.length > 0 && (
                           <div className="mt-2.5 space-y-0.5 border-t border-koma-border/60 pt-2 text-[10px] text-koma-muted">
                             {order.itens.slice(0, 3).map((item, idx) => (
@@ -193,7 +192,6 @@ export default function CardapioOrdersDrawer({
                           </div>
                         )}
 
-                        {/* Barra de progresso */}
                         {!rejected && (
                           <div className="mt-3 grid grid-cols-4 gap-1 border-t border-koma-border/60 pt-2.5">
                             {steps.map((label, idx) => {
@@ -210,7 +208,6 @@ export default function CardapioOrdersDrawer({
                           </div>
                         )}
 
-                        {/* Ação rápida */}
                         <div className="mt-3 flex items-center justify-between border-t border-koma-border/60 pt-2.5">
                           <button
                             type="button"
@@ -234,7 +231,6 @@ export default function CardapioOrdersDrawer({
                 </div>
               )}
 
-              {/* Histórico / Concluídos */}
               {finishedOrders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -246,6 +242,7 @@ export default function CardapioOrdersDrawer({
                   {finishedOrders.map((order) => {
                     const rejected = isRejectedStatus(order.status);
                     const isDelivery = String(order.tipo || "").toLocaleLowerCase("pt-BR").includes("delivery");
+                    const canRepeat = Array.isArray(order.itens) && order.itens.length > 0;
 
                     return (
                       <div
@@ -285,7 +282,7 @@ export default function CardapioOrdersDrawer({
                           </div>
                         </div>
 
-                        <div className="mt-2.5 flex items-center justify-between border-t border-koma-border/40 pt-2 text-[10px]">
+                        <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-koma-border/40 pt-2 text-[10px]">
                           <button
                             type="button"
                             onClick={() => {
@@ -296,15 +293,27 @@ export default function CardapioOrdersDrawer({
                           >
                             Ver detalhes
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => onRemoveOrder(order.id)}
-                            className="flex items-center gap-1 text-koma-subtle hover:text-rose-400"
-                            title="Remover do histórico local"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            <span>Remover</span>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {canRepeat && (
+                              <button
+                                type="button"
+                                onClick={() => onRepeatOrder(order)}
+                                className="flex items-center gap-1 rounded-lg bg-emerald-500/10 px-2.5 py-1.5 font-black text-emerald-400 transition hover:bg-emerald-500/20"
+                              >
+                                <RotateCcw className="h-3 w-3" />
+                                Pedir novamente
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onRemoveOrder(order.id)}
+                              className="flex items-center gap-1 text-koma-subtle hover:text-rose-400"
+                              title="Remover do histórico local"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              <span>Remover</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
