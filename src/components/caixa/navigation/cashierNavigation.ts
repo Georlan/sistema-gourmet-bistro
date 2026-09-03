@@ -157,14 +157,6 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Equipe',
         icon: ShieldCheck,
         target: { tab: 'permissoes_cargos', subTab: 'pessoas' },
-        children: [
-          { id: 'equipe_pessoas', label: 'Pessoas', target: { tab: 'permissoes_cargos', subTab: 'pessoas' } },
-          {
-            id: 'equipe_funcoes_acessos',
-            label: 'Funções e acessos',
-            target: { tab: 'permissoes_cargos', subTab: 'cargos_permissoes' },
-          },
-        ],
       },
     ],
   },
