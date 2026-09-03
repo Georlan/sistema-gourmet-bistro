@@ -5,10 +5,12 @@ from typing import Any, Union, Optional
 import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
 from .models import Restaurante, Usuario
+from .session_models import UserSessionVersion
 
 # Password context configuration
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -27,7 +29,7 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
-RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role"}
+RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role", "tv"}
 
 # Matriz central de autorização do backoffice. As rotas devem depender de uma
 # permissão de negócio, em vez de repetir listas de cargos localmente.
@@ -50,12 +52,69 @@ PERMISSION_ROLES = MappingProxyType({
     "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa"}),
 })
 
+
+def get_user_token_version(db: Session, *, user_id: str, restaurante_id: int) -> int:
+    """Retorna a geração atual dos JWTs do usuário; ausência de linha equivale a 1."""
+    version = (
+        db.query(UserSessionVersion.token_version)
+        .filter(
+            UserSessionVersion.user_id == str(user_id),
+            UserSessionVersion.restaurante_id == restaurante_id,
+        )
+        .scalar()
+    )
+    return int(version or 1)
+
+
+def revoke_user_sessions(db: Session, *, user_id: str, restaurante_id: int) -> int:
+    """Invalida todos os JWTs operacionais já emitidos para um usuário.
+
+    O lock da identidade serializa inclusive a primeira revogação, quando ainda
+    não existe linha em ``user_session_versions``. O caller controla o commit
+    para manter revogação e ação administrativa na mesma transação.
+    """
+    locked_user = (
+        db.query(Usuario.id)
+        .filter(
+            Usuario.id == str(user_id),
+            Usuario.restaurante_id == restaurante_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if locked_user is None:
+        raise ValueError("Usuário não encontrado no restaurante informado.")
+
+    session_version = (
+        db.query(UserSessionVersion)
+        .filter(
+            UserSessionVersion.user_id == str(user_id),
+            UserSessionVersion.restaurante_id == restaurante_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if session_version is None:
+        session_version = UserSessionVersion(
+            user_id=str(user_id),
+            restaurante_id=restaurante_id,
+            token_version=2,
+        )
+        db.add(session_version)
+    else:
+        session_version.token_version = int(session_version.token_version or 1) + 1
+
+    db.flush()
+    return int(session_version.token_version)
+
+
 def create_access_token(
     subject: Union[str, Any],
     restaurante_id: int,
     expires_delta: Optional[timedelta] = None,
     role: Optional[str] = None,
-    extra_claims: Optional[dict] = None
+    extra_claims: Optional[dict] = None,
+    token_version: Optional[int] = None,
 ) -> str:
     """Creates a JWT access token for persistent login session."""
     if extra_claims:
@@ -72,6 +131,13 @@ def create_access_token(
     if subject is None or str(subject).strip() == "":
         raise ValueError("subject é obrigatório.")
 
+    if token_version is not None and (
+        not isinstance(token_version, int)
+        or isinstance(token_version, bool)
+        or token_version <= 0
+    ):
+        raise ValueError("token_version deve ser um inteiro positivo válido.")
+
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
@@ -86,6 +152,8 @@ def create_access_token(
     to_encode["restaurante_id"] = restaurante_id
     if role is not None:
         to_encode["role"] = role
+    if token_version is not None:
+        to_encode["tv"] = token_version
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -96,13 +164,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
-    """Valida assinatura, tenant e estado atual da conta no banco.
+    """Valida assinatura, tenant, geração de sessão e estado atual da conta.
 
     O JWT seleciona o escopo RLS da requisição, mas nunca é a fonte final de
-    cargo ou status. Esses atributos são sempre recarregados da conta atual.
+    cargo, status ou geração de sessão. Esses atributos são sempre recarregados
+    do banco. Tokens legados sem ``tv`` continuam válidos somente enquanto o
+    usuário nunca tiver passado por uma revogação (geração persistida = 1).
     Depois da validação, a entidade é destacada e a transação somente-leitura é
-    encerrada para devolver a conexão ao pool antes da execução da rota. Isso
-    evita starvation quando muitas autenticações chegam em paralelo.
+    encerrada para devolver a conexão ao pool antes da execução da rota.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -117,6 +186,7 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
         )
         user_id = payload.get("sub")
         restaurante_id = payload.get("restaurante_id")
+        token_version = payload.get("tv")
         if (
             user_id is None
             or not isinstance(restaurante_id, int)
@@ -124,11 +194,43 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
             or restaurante_id <= 0
         ):
             raise credentials_exception
+        if token_version is not None and (
+            not isinstance(token_version, int)
+            or isinstance(token_version, bool)
+            or token_version <= 0
+        ):
+            raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
 
-    user = db.query(Usuario).filter(Usuario.id == str(user_id)).first()
-    if user is None or user.restaurante_id != restaurante_id:
+    row = (
+        db.query(Usuario, UserSessionVersion.token_version)
+        .outerjoin(
+            UserSessionVersion,
+            and_(
+                UserSessionVersion.user_id == Usuario.id,
+                UserSessionVersion.restaurante_id == restaurante_id,
+            ),
+        )
+        .filter(Usuario.id == str(user_id))
+        .first()
+    )
+    if row is None:
+        if db.in_transaction():
+            db.rollback()
+        raise credentials_exception
+
+    user, stored_token_version = row
+    if user.restaurante_id != restaurante_id:
+        if db.in_transaction():
+            db.rollback()
+        raise credentials_exception
+
+    current_token_version = int(stored_token_version or 1)
+    if (
+        (token_version is None and current_token_version != 1)
+        or (token_version is not None and token_version != current_token_version)
+    ):
         if db.in_transaction():
             db.rollback()
         raise credentials_exception
