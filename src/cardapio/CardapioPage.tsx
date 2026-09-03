@@ -306,7 +306,7 @@ export default function CardapioPage() {
               taxa: Number(b.taxa || 0),
             }))
           : [],
-        taxaEntregaPadrao: Number(restaurant.taxa_entrega_padrao || 7),
+        taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
         storeStatus: statusOverride.includes("fech")
           ? "closed"
           : statusOverride.includes("abert")

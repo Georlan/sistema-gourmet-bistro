@@ -34,6 +34,7 @@ from ...domain.orders.errors import (
     ModifierInactiveError,
     ModifierNotFoundError,
     OrderDomainError,
+    OrderValidationError,
     ProductInactiveError,
     ProductNotFoundError,
     ProductTenantMismatchError,
@@ -463,7 +464,7 @@ class CardapioWebAdapter:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),
             )
-        except (InvalidFulfillmentDetailsError,) as err:
+        except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

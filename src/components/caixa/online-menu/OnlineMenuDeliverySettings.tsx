@@ -16,6 +16,7 @@ type DeliveryConfig = {
   pedido_minimo: number;
   frete_gratis_valor: number;
   tipo_taxa_entrega: DeliveryFeeMode;
+  taxa_entrega_fixa: number;
   tabela_taxas_bairros: BairroTaxaRow[];
 };
 
@@ -45,6 +46,7 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
     pedido_minimo: Number(data.pedido_minimo) || 0,
     frete_gratis_valor: Number(data.frete_gratis_valor) || 0,
     tipo_taxa_entrega: data.tipo_taxa_entrega === 'bairro' ? 'bairro' : 'fixa',
+    taxa_entrega_fixa: Number(data.taxa_entrega_fixa ?? 0),
     tabela_taxas_bairros: normalizeNeighborhoods(data.tabela_taxas_bairros),
   };
 }
@@ -58,7 +60,8 @@ function persistedPayload(config: DeliveryConfig) {
     pedido_minimo: Math.max(0, Number(config.pedido_minimo) || 0),
     frete_gratis_valor: Math.max(0, Number(config.frete_gratis_valor) || 0),
     tipo_taxa_entrega: config.tipo_taxa_entrega,
-    tabela_taxas_bairros: config.tipo_taxa_entrega === 'bairro' ? neighborhoods : [],
+    taxa_entrega_fixa: Math.max(0, Number(config.taxa_entrega_fixa) || 0),
+    tabela_taxas_bairros: neighborhoods,
   };
 }
 
@@ -76,6 +79,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
     pedido_minimo: 0,
     frete_gratis_valor: 0,
     tipo_taxa_entrega: 'fixa',
+    taxa_entrega_fixa: 7,
     tabela_taxas_bairros: [],
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');
@@ -115,18 +119,13 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
 
   const chooseFeeMode = (mode: DeliveryFeeMode) => {
     if (mode === config.tipo_taxa_entrega) return;
-    if (mode === 'fixa' && config.tabela_taxas_bairros.length > 0) {
-      const confirmed = window.confirm('Usar taxa única vai remover as taxas por bairro salvas nesta tela. Continuar?');
-      if (!confirmed) return;
-      setConfig((current) => ({ ...current, tipo_taxa_entrega: 'fixa', tabela_taxas_bairros: [] }));
-      return;
-    }
     setConfig((current) => ({
       ...current,
       tipo_taxa_entrega: mode,
-      tabela_taxas_bairros: mode === 'bairro' && current.tabela_taxas_bairros.length === 0
-        ? [{ id: `bairro-${Date.now()}`, bairro: '', taxa: 0 }]
-        : current.tabela_taxas_bairros,
+      tabela_taxas_bairros:
+        mode === 'bairro' && current.tabela_taxas_bairros.length === 0
+          ? [{ id: `bairro-${Date.now()}`, bairro: '', taxa: 0 }]
+          : current.tabela_taxas_bairros,
     }));
   };
 
@@ -176,7 +175,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
         description="Defina quando aceitar delivery, o valor mínimo, frete grátis e como cobrar a entrega."
         metrics={[
           { label: 'delivery', value: config.delivery_ativo ? 'Ativo' : 'Pausado' },
-          { label: config.tipo_taxa_entrega === 'bairro' ? 'bairros' : 'cobrança', value: config.tipo_taxa_entrega === 'bairro' ? areasCount : 'Única' },
+          { label: config.tipo_taxa_entrega === 'bairro' ? 'bairros' : 'taxa única', value: config.tipo_taxa_entrega === 'bairro' ? areasCount : `R$ ${(Number(config.taxa_entrega_fixa) || 0).toFixed(2)}` },
           { label: 'pedido mínimo', value: payload.pedido_minimo > 0 ? `R$ ${payload.pedido_minimo.toFixed(2)}` : 'Livre' },
         ]}
       />
@@ -288,8 +287,27 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
         </div>
 
         {config.tipo_taxa_entrega === 'fixa' ? (
-          <div className="mt-4 rounded-xl border border-dashed border-koma-border bg-koma-card p-4 text-[10px] leading-relaxed text-koma-muted">
-            O cardápio usa a taxa padrão atual do restaurante. O valor editável da taxa única será tratado separadamente para não criar uma regra duplicada no sistema.
+          <div className="mt-4 rounded-xl border border-koma-border bg-koma-card p-4">
+            <label className="block max-w-xs">
+              <FieldLabel>Valor da taxa única (R$)</FieldLabel>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={config.taxa_entrega_fixa || ''}
+                onChange={(event) =>
+                  setConfig((current) => ({
+                    ...current,
+                    taxa_entrega_fixa: Number(event.target.value) || 0,
+                  }))
+                }
+                className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+                placeholder="0,00"
+              />
+              <span className="mt-1 block text-[9px] text-koma-muted">
+                Este valor será cobrado em todas as entregas dentro da área de atendimento.
+              </span>
+            </label>
           </div>
         ) : (
           <div className="mt-4 border-t border-koma-border pt-4">
