@@ -178,6 +178,10 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Configurações',
         icon: SlidersHorizontal,
         target: { tab: 'impressao_salao', subTab: 'impressoras' },
+        children: [
+          { id: 'config_operacao', label: 'Salão e impressão', target: { tab: 'impressao_salao', subTab: 'impressoras' } },
+          { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },
+        ],
       },
       {
         id: 'assinatura_pix',
