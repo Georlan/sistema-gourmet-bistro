@@ -62,7 +62,6 @@ export function SuperAdminSupportModal({
 
       const data = await response.json();
 
-      // Grava a sessão de suporte localmente para exibição do banner
       const sessionData: StoredSupportSession = {
         sessionId: data.session_id,
         restaurantId: data.restaurant_id,
@@ -76,7 +75,6 @@ export function SuperAdminSupportModal({
         JSON.stringify(sessionData)
       );
 
-      // Aplica as credenciais operacionais temporárias da sessão de suporte
       saveOperatorSession(data.access_token, {
         id: `support:${data.operator}`,
         nome: `Suporte KÔMA (${data.operator})`,
@@ -87,7 +85,6 @@ export function SuperAdminSupportModal({
         onSessionStarted(tenant.id);
       }
 
-      // Redireciona imediatamente para o caixa operacional com indicador de suporte
       window.location.href = `/?view=caixa&support=1`;
     } catch (err: any) {
       setError(err?.message || "Erro inesperado ao criar sessão de suporte.");
@@ -124,8 +121,8 @@ export function SuperAdminSupportModal({
               <p className="text-amber-200/80 leading-relaxed">
                 Você acessará o ambiente operacional deste restaurante com sua
                 identidade de operador KÔMA. Nenhuma senha de cliente é utilizada ou
-                revelada. Todas as ações nesta sessão serão registradas em trilha de
-                auditoria imutável.
+                revelada. O início, o motivo, a duração e o encerramento desta sessão
+                ficam registrados na auditoria administrativa.
               </p>
             </div>
           </div>
