@@ -5,6 +5,7 @@ import {
   Edit3,
   ExternalLink,
   Eye,
+  Headphones,
   Lock,
   Plus,
   RefreshCw,
@@ -20,6 +21,7 @@ import {
 } from "../config/subscriptionPlans";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminNewTenantModal } from "./SuperAdminNewTenantModal";
+import { SuperAdminSupportModal } from "./SuperAdminSupportModal";
 import type { Tenant } from "./superAdminTypes";
 
 interface SuperAdminTenantsTabProps {
@@ -58,6 +60,7 @@ export function SuperAdminTenantsTab({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("ALL");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [supportTenant, setSupportTenant] = useState<Tenant | null>(null);
   const [showNewTenantModal, setShowNewTenantModal] = useState(false);
 
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -222,6 +225,7 @@ export function SuperAdminTenantsTab({
                     <td className="px-4 py-3.5 text-koma-foreground">{tenant.monthlyBilling != null ? formatCurrency(tenant.monthlyBilling) : "—"}</td>
                     <td className="px-4 py-3.5 text-koma-muted">{formatActivity(tenant.lastActivity)}</td>
                     <td className="px-4 py-3.5 text-right"><div className="inline-flex items-center gap-1.5">
+                      <button type="button" onClick={() => setSupportTenant(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
                       <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Ver detalhes"><Eye className="h-3 w-3" /> Detalhes</button>
                       <button type="button" onClick={() => openEditModal(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Editar restaurante e plano"><Edit3 className="h-3 w-3" /> Editar</button>
                       <button type="button" onClick={() => openStatusModal(tenant)} className={`rounded border p-1.5 ${isSuspended ? "border-emerald-800/50 bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60" : "border-rose-800/50 bg-rose-950/40 text-rose-400 hover:bg-rose-900/60"}`} title={isSuspended ? "Reativar restaurante" : "Suspender restaurante"}>{isSuspended ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}</button>
@@ -245,7 +249,11 @@ export function SuperAdminTenantsTab({
               <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Pagamento online</span><p className="mt-1 font-semibold text-koma-foreground">{paymentStatusLabel(selectedTenant.onlinePaymentStatus)}</p></div>
             </div>
             <div className="space-y-2 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs"><h4 className="flex items-center gap-1.5 font-bold text-koma-foreground"><CreditCard className="h-4 w-4 text-[#00b894]" /> Comercial Oficial</h4><p className="text-koma-muted">Mensalidade: <strong className="text-koma-secondary">{officialPlan(selectedTenant.plan) ? formatCurrency(officialPlan(selectedTenant.plan)!.price) : "Não disponível"}</strong></p><p className="text-koma-muted">Taxa Split Pix: <strong className="text-koma-secondary">{officialPlan(selectedTenant.plan) ? formatPercentage(officialPlan(selectedTenant.plan)!.splitFeeRate) : "Não disponível"}</strong></p></div>
-            <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">{selectedTenant.subdomain && <a href={`/c/${selectedTenant.subdomain}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-koma-secondary"><ExternalLink className="h-3.5 w-3.5" /> Abrir cardápio</a>}<button type="button" onClick={() => setSelectedTenant(null)} className="rounded-lg bg-[#00b894] px-4 py-1.5 text-xs font-bold text-black">Fechar</button></div>
+            <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
+              <button type="button" onClick={() => { const t = selectedTenant; setSelectedTenant(null); setSupportTenant(t); }} className="flex items-center gap-1.5 rounded-lg border border-amber-600/60 bg-amber-950/60 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-900/80"><Headphones className="h-3.5 w-3.5" /> Entrar em Modo Suporte</button>
+              {selectedTenant.subdomain && <a href={`/c/${selectedTenant.subdomain}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-koma-secondary"><ExternalLink className="h-3.5 w-3.5" /> Abrir cardápio</a>}
+              <button type="button" onClick={() => setSelectedTenant(null)} className="rounded-lg bg-[#00b894] px-4 py-1.5 text-xs font-bold text-black">Fechar</button>
+            </div>
           </div>
         </div>
       )}
@@ -284,6 +292,14 @@ export function SuperAdminTenantsTab({
         <SuperAdminNewTenantModal
           onClose={() => setShowNewTenantModal(false)}
           onCreated={refreshTenants}
+        />
+      )}
+
+      {supportTenant && (
+        <SuperAdminSupportModal
+          tenant={supportTenant}
+          onClose={() => setSupportTenant(null)}
+          onSessionStarted={() => setSupportTenant(null)}
         />
       )}
     </div>

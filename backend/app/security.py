@@ -11,6 +11,7 @@ from .config import settings
 from .database import get_db
 from .models import Restaurante, Usuario
 from .session_models import UserSessionVersion
+from .support_models import SupportOperatorUser, SupportSession
 
 # Password context configuration
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -202,6 +203,59 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
             raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
+
+    # Suporte Administrativo KÔMA (Support Mode auditado)
+    if bool(payload.get("support_mode")):
+        support_session_id = payload.get("support_session_id")
+        token_jti = payload.get("jti")
+        operator = payload.get("operator") or user_id
+        if not support_session_id or not token_jti:
+            raise credentials_exception
+
+        session_rec = (
+            db.query(SupportSession)
+            .filter(
+                SupportSession.id == str(support_session_id),
+                SupportSession.restaurante_id == restaurante_id,
+                SupportSession.token_jti == str(token_jti),
+            )
+            .first()
+        )
+        if session_rec is None or session_rec.status != "active":
+            if db.in_transaction():
+                db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sessão de suporte encerrada ou inexistente. Faça login novamente.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        now_utc = datetime.now(timezone.utc)
+        expires_at = session_rec.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if now_utc > expires_at:
+            session_rec.status = "expired"
+            try:
+                db.commit()
+            except Exception:
+                if db.in_transaction():
+                    db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sessão de suporte expirada. Solicite novo acesso administrativo.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if db.in_transaction():
+            db.rollback()
+
+        return SupportOperatorUser(
+            operator=str(operator),
+            restaurante_id=int(restaurante_id),
+            session_id=str(session_rec.id),
+            reason=str(session_rec.reason or ""),
+        )
 
     row = (
         db.query(Usuario, UserSessionVersion.token_version)

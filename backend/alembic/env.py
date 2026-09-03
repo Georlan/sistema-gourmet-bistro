@@ -14,6 +14,7 @@ from app.database import Base
 from app.config import settings
 from app import models
 from app import session_models  # noqa: F401
+from app import support_models  # noqa: F401
 from app import financial_cash_constraints  # noqa: F401
 from app.migration_runtime import (
     prepare_migration_connection,
