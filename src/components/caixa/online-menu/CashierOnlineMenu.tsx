@@ -54,12 +54,6 @@ const workspaceBySection: Record<OnlineMenuSection, OnlineMenuWorkspace> = {
   qr_links: 'divulgacao',
 };
 
-const workspaceOptions: { id: OnlineMenuWorkspace; label: string; target: string }[] = [
-  { id: 'loja', label: 'Loja', target: 'cardapio_perfil' },
-  { id: 'operacao', label: 'Operação', target: 'cardapio_pedidos' },
-  { id: 'divulgacao', label: 'Divulgação', target: 'cardapio_qr_links' },
-];
-
 const detailsByWorkspace: Record<OnlineMenuWorkspace, { label: string; target: string; section: OnlineMenuSection }[]> = {
   loja: [
     { label: 'Perfil', target: 'cardapio_perfil', section: 'perfil' },
@@ -85,43 +79,24 @@ function CompactOnlineMenuNavigation({
   const activeWorkspace = workspaceBySection[activeSection];
   const detailOptions = detailsByWorkspace[activeWorkspace];
 
-  return (
-    <div className="mb-4 space-y-2">
-      <div className="flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl border border-koma-border bg-koma-page p-1">
-        {workspaceOptions.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setActiveSubTab(option.target)}
-            className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-bold transition-colors ${
-              option.id === activeWorkspace
-                ? 'bg-emerald-600 text-white'
-                : 'text-koma-muted hover:bg-koma-raised hover:text-koma-foreground'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+  if (detailOptions.length <= 1) return null;
 
-      {detailOptions.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          {detailOptions.map((option) => (
-            <button
-              key={option.target}
-              type="button"
-              onClick={() => setActiveSubTab(option.target)}
-              className={`rounded-lg border px-3 py-1.5 text-[9px] font-bold transition-colors ${
-                option.section === activeSection
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
+  return (
+    <div className="mb-4 flex flex-wrap gap-1.5">
+      {detailOptions.map((option) => (
+        <button
+          key={option.target}
+          type="button"
+          onClick={() => setActiveSubTab(option.target)}
+          className={`rounded-lg border px-3 py-1.5 text-[9px] font-bold transition-colors ${
+            option.section === activeSection
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+              : 'border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
