@@ -6,6 +6,9 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 
 const card = source('../src/components/caixa/online-menu/MercadoPagoConnectionCard.tsx');
 const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
+const integrations = source('../src/components/caixa/settings/CashierIntegrationsSettings.tsx');
+const settings = source('../src/components/caixa/settings/CashierSettings.tsx');
+const navigation = source('../src/components/caixa/navigation/cashierNavigation.ts');
 
 test('Mercado Pago connection card uses authenticated backend endpoints', () => {
   assert.match(card, /\/payments\/mercado-pago\/status/);
@@ -26,10 +29,12 @@ test('frontend does not handle provider secrets', () => {
   }
 });
 
-test('online menu composes the Mercado Pago card before settings', () => {
-  assert.match(onlineMenu, /import \{ MercadoPagoConnectionCard \}/);
-  const paymentCard = onlineMenu.indexOf('<MercadoPagoConnectionCard');
-  const settingsPanel = onlineMenu.indexOf('<CardapioDigitalSettingsPanel');
-  assert.ok(paymentCard > -1);
-  assert.ok(settingsPanel > paymentCard);
+test('Sistema > Configurações owns the technical Mercado Pago connection', () => {
+  assert.doesNotMatch(onlineMenu, /MercadoPagoConnectionCard/);
+  assert.match(integrations, /MercadoPagoConnectionCard/);
+  assert.match(settings, /activeSubTab === 'integracoes'/);
+  assert.match(settings, /CashierIntegrationsSettings/);
+  assert.match(navigation, /config_integracoes/);
+  assert.match(navigation, /label: 'Integrações'/);
+  assert.match(navigation, /subTab: 'integracoes'/);
 });
