@@ -925,6 +925,10 @@ class ConfiguracaoRestaurante(Base):
             name="ck_config_restaurante_taxa_servico",
         ),
         CheckConstraint(
+            "taxa_entrega_padrao BETWEEN 0 AND 10000",
+            name="ck_config_restaurante_taxa_entrega_padrao",
+        ),
+        CheckConstraint(
             "impressao_nome_posicao IN ('cabecalho', 'rodape', 'oculto')",
             name="ck_config_restaurante_impressao_nome_posicao",
         ),
@@ -937,6 +941,12 @@ class ConfiguracaoRestaurante(Base):
     delivery_ativo = Column(Boolean, default=True)
     pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
+    taxa_entrega_padrao = Column(
+        Numeric(14, 2, asdecimal=False),
+        default=7.0,
+        server_default=text("7.00"),
+        nullable=False,
+    )
     tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
     tabela_taxas_bairros = Column(JSON, default=list)
     tabela_taxas_km = Column(JSON, default=list)
