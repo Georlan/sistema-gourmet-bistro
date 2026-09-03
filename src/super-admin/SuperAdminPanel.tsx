@@ -150,9 +150,7 @@ export default function SuperAdminPanel() {
         body: JSON.stringify({ text: safeText }),
       });
       const data = await response.json() as { success?: boolean };
-      if (!data.success) {
-        throw new Error("o servidor não confirmou a entrega");
-      }
+      if (!data.success) throw new Error("o servidor não confirmou a entrega");
       addAuditLog(`Notificação entregue ao Telegram: ${text.substring(0, 40)}...`, "INFO", "TELEGRAM");
       return true;
     } catch (err) {
@@ -178,40 +176,26 @@ export default function SuperAdminPanel() {
       {apiNotice && (
         <div className="flex items-center justify-between gap-4 border-b border-amber-800/60 bg-amber-950/40 px-6 py-2 text-xs text-amber-200" role="status">
           <span>{apiNotice}</span>
-          <button type="button" className="underline font-bold" onClick={() => setApiNotice(null)}>
-            fechar
-          </button>
+          <button type="button" className="underline font-bold" onClick={() => setApiNotice(null)}>fechar</button>
         </div>
       )}
 
       <header className="flex items-center justify-between px-6 py-3.5 bg-koma-card border-b border-[#1e293b] shrink-0 gap-4" id="superadmin-header">
         <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-1.5 text-koma-muted hover:text-koma-foreground rounded-lg border border-zinc-800"
-            aria-label="Abrir menu lateral"
-          >
+          <button type="button" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden p-1.5 text-koma-muted hover:text-koma-foreground rounded-lg border border-zinc-800" aria-label="Abrir menu lateral">
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
-
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#00b894] flex items-center justify-center font-black text-black text-sm tracking-tight shadow-sm select-none">
-              K
-            </div>
+            <div className="w-8 h-8 rounded-lg bg-[#00b894] flex items-center justify-center font-black text-black text-sm tracking-tight shadow-sm select-none">K</div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-koma-foreground tracking-tight">
-                  Super Admin KÔMA
-                </h1>
+                <h1 className="text-base font-bold text-koma-foreground tracking-tight">Super Admin KÔMA</h1>
                 <span className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${backendIsOnline ? "bg-emerald-950/80 text-emerald-400 border-emerald-800/40" : "bg-zinc-900 text-koma-muted border-zinc-800"}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${backendIsOnline ? "bg-emerald-400" : "bg-zinc-600"}`}></span>
                   {backendIsOnline ? "Backend online" : "Backend não verificado"}
                 </span>
               </div>
-              <p className="text-[11px] text-koma-muted hidden sm:block">
-                Console operacional central
-              </p>
+              <p className="text-[11px] text-koma-muted hidden sm:block">Console operacional central</p>
             </div>
           </div>
         </div>
@@ -219,91 +203,44 @@ export default function SuperAdminPanel() {
         <div className="flex-1 max-w-md hidden md:block">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-koma-subtle" />
-            <input
-              type="text"
-              placeholder="Buscar por restaurante, ID ou slug..."
-              value={globalSearch}
-              onChange={e => setGlobalSearch(e.target.value)}
-              className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]"
-            />
+            <input type="text" placeholder="Buscar por restaurante, ID ou slug..." value={globalSearch} onChange={e => setGlobalSearch(e.target.value)} className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]" />
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="hidden lg:flex flex-col items-end text-[11px] text-koma-muted font-mono">
-            <span className="text-koma-foreground font-semibold">
-              BE {runtimeHealth?.commit || "desconhecido"} • FE {frontendBuildSha}
-            </span>
+            <span className="text-koma-foreground font-semibold">BE {runtimeHealth?.commit || "desconhecido"} • FE {frontendBuildSha}</span>
             <span className="text-[10px] text-koma-subtle">ambiente operacional</span>
           </div>
-
           <div className="h-6 w-px bg-zinc-800 hidden lg:block"></div>
-
           <div className="flex items-center gap-2">
-            <span className="hidden sm:inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-koma-secondary">
-              superadmin
-            </span>
-
-            <button
-              type="button"
-              onClick={() => clearSuperAdminSession()}
-              className="px-3 py-1.5 bg-zinc-900 hover:bg-rose-950/50 border border-zinc-800 hover:border-rose-800/60 text-koma-secondary hover:text-rose-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Encerrar sessão de SuperAdmin"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sair</span>
+            <span className="hidden sm:inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-koma-secondary">superadmin</span>
+            <button type="button" onClick={() => clearSuperAdminSession()} className="px-3 py-1.5 bg-zinc-900 hover:bg-rose-950/50 border border-zinc-800 hover:border-rose-800/60 text-koma-secondary hover:text-rose-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5" title="Encerrar sessão de SuperAdmin">
+              <LogOut className="w-3.5 h-3.5" /><span>Sair</span>
             </button>
           </div>
         </div>
       </header>
 
       <div className="flex-1 flex min-h-0 relative" id="superadmin-body-container">
-        <aside
-          className={`w-64 bg-koma-card border-r border-[#1e293b] flex flex-col justify-between shrink-0 z-30 ${
-            isMobileMenuOpen ? "absolute inset-y-0 left-0 shadow-2xl" : "hidden md:flex"
-          }`}
-          id="superadmin-sidebar"
-        >
+        <aside className={`w-64 bg-koma-card border-r border-[#1e293b] flex flex-col justify-between shrink-0 z-30 ${isMobileMenuOpen ? "absolute inset-y-0 left-0 shadow-2xl" : "hidden md:flex"}`} id="superadmin-sidebar">
           <div className="p-3 space-y-1.5">
-            <div className="px-3 py-2 text-[10px] font-bold text-koma-muted uppercase tracking-wider">
-              Navegação
-            </div>
-
+            <div className="px-3 py-2 text-[10px] font-bold text-koma-muted uppercase tracking-wider">Navegação</div>
             <nav className="space-y-1">
               {navItems.map(item => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
-
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`w-full text-left text-xs font-semibold px-3 py-2.5 rounded-lg transition-all flex items-center justify-between cursor-pointer ${
-                      isActive
-                        ? "bg-[#00b894] text-black font-bold shadow-sm"
-                        : "text-koma-secondary hover:bg-koma-page hover:text-koma-foreground"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon className={`w-4 h-4 ${isActive ? "text-black" : "text-koma-muted"}`} />
-                      <span>{item.label}</span>
-                    </div>
+                  <button key={item.id} type="button" onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left text-xs font-semibold px-3 py-2.5 rounded-lg transition-all flex items-center justify-between ${isActive ? "bg-[#00b894] text-black font-bold shadow-sm" : "text-koma-secondary hover:bg-koma-page hover:text-koma-foreground"}`}>
+                    <div className="flex items-center gap-2.5"><Icon className={`w-4 h-4 ${isActive ? "text-black" : "text-koma-muted"}`} /><span>{item.label}</span></div>
                     {isActive && <ChevronRight className="w-3.5 h-3.5 text-black" />}
                   </button>
                 );
               })}
             </nav>
           </div>
-
           <div className="p-4 border-t border-zinc-800/80 bg-koma-page/40 text-[11px] text-koma-muted space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-koma-foreground">KÔMA SaaS Platform</span>
-              <span className="text-[#00b894] font-bold">v3.5</span>
-            </div>
+            <div className="flex items-center justify-between"><span className="font-semibold text-koma-foreground">KÔMA SaaS Platform</span><span className="text-[#00b894] font-bold">v3.5</span></div>
             <p className="text-[10px] text-koma-subtle">Operação multi-tenant</p>
           </div>
         </aside>
@@ -322,54 +259,20 @@ export default function SuperAdminPanel() {
               runtimeHealth={runtimeHealth}
             />
           )}
-
           {activeTab === "tenants" && (
             <SuperAdminTenantsTab
               tenants={tenants}
               tenantsAvailable={tenantsAvailable}
               isLoading={isLoadingTenants}
               refreshTenants={fetchTenants}
-              onToggleStatus={handleToggleTenantStatus}
-              onAddLog={addAuditLog}
-              onTriggerTelegramAlert={triggerTelegramAlert}
               globalSearch={globalSearch}
             />
           )}
-
-          {activeTab === "payments" && (
-            <SuperAdminPaymentsTab
-              failedWebhooks={failedWebhooks}
-              webhooksAvailable={false}
-            />
-          )}
-
-          {activeTab === "billing" && (
-            <SuperAdminBillingTab
-              tenants={tenants}
-              tenantsAvailable={tenantsAvailable}
-            />
-          )}
-
-          {activeTab === "operations" && (
-            <SuperAdminOperationsTab
-              onAddLog={addAuditLog}
-              onTriggerTelegramAlert={triggerTelegramAlert}
-            />
-          )}
-
-          {activeTab === "audit" && (
-            <SuperAdminAuditTab
-              logs={auditLogs}
-              onClearLogs={() => setAuditLogs([])}
-            />
-          )}
-
-          {activeTab === "settings" && (
-            <SuperAdminSettingsTab
-              onAddLog={addAuditLog}
-              onTriggerTelegramAlert={triggerTelegramAlert}
-            />
-          )}
+          {activeTab === "payments" && <SuperAdminPaymentsTab failedWebhooks={failedWebhooks} webhooksAvailable={false} />}
+          {activeTab === "billing" && <SuperAdminBillingTab tenants={tenants} tenantsAvailable={tenantsAvailable} />}
+          {activeTab === "operations" && <SuperAdminOperationsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
+          {activeTab === "audit" && <SuperAdminAuditTab logs={auditLogs} onClearLogs={() => setAuditLogs([])} />}
+          {activeTab === "settings" && <SuperAdminSettingsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
         </main>
       </div>
     </div>
