@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - "src/super-admin/**"
+      - "src/components/auth/TenantSuspensionBoundary.tsx"
+      - "src/main.tsx"
       - "src/config/subscriptionPlans.ts"
       - "tests/superAdminPhase2.test.ts"
+      - "tests/tenantSuspensionBoundary.test.ts"
       - "backend/app/routes/super_admin.py"
       - "backend/app/routes/super_admin_onboarding.py"
       - "backend/app/database.py"
