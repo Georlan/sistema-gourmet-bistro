@@ -6,18 +6,20 @@ import { getCashierNavigationItem, getCashierNavigationTarget } from '../src/com
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('Cardápio online exposes canonical operational sections from one navigation tree', () => {
+test('Cardápio online expõe três workspaces sem perder os owners detalhados', () => {
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
-    ['Perfil', 'Pedidos & horários', 'Marca', 'Entrega & áreas', 'Pagamentos', 'QR & links'],
+    ['Loja', 'Operação', 'Divulgação'],
   );
-  assert.deepEqual(getCashierNavigationTarget('online_perfil'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
-  assert.deepEqual(getCashierNavigationTarget('online_pedidos'), { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' });
-  assert.deepEqual(getCashierNavigationTarget('online_marca'), { tab: 'cardapio_digital', subTab: 'cardapio_marca' });
-  assert.deepEqual(getCashierNavigationTarget('online_entrega'), { tab: 'cardapio_digital', subTab: 'cardapio_entrega' });
-  assert.deepEqual(getCashierNavigationTarget('online_pagamentos'), { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' });
-  assert.deepEqual(getCashierNavigationTarget('online_qr_links'), { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' });
+  assert.deepEqual(getCashierNavigationTarget('online_loja'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
+  assert.deepEqual(getCashierNavigationTarget('online_operacao'), { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' });
+  assert.deepEqual(getCashierNavigationTarget('online_divulgacao'), { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' });
+
+  const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
+  for (const detail of ['Perfil', 'Marca', 'Pedidos & horários', 'Entrega & áreas', 'Pagamentos', 'QR & links']) {
+    assert.match(onlineMenu, new RegExp(detail.replace('&', '\\&')));
+  }
 });
 
 test('CashierOnlineMenu routes channel concerns to their canonical owners', () => {
