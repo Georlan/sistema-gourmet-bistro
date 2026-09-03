@@ -12,7 +12,10 @@ from .. import financial_cash_constraints as _financial_cash_constraints  # noqa
 from . import super_admin as _super_admin  # noqa: E402,F401
 from .super_admin_access import router as _super_admin_access_router  # noqa: E402
 from .super_admin_support import router as _super_admin_support_router  # noqa: E402
+from .super_admin_incidents import router as _super_admin_incidents_router  # noqa: E402
 
 _super_admin.router.include_router(_super_admin_access_router)
 _super_admin.router.include_router(_super_admin_support_router)
+_super_admin.router.include_router(_super_admin_incidents_router)
+
 
