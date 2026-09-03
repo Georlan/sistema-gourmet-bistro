@@ -57,6 +57,19 @@ export interface CaixaOrdersWorkspaceProps {
   readonly now: number;
 }
 
+function AutomaticOrderAcceptanceEffect({
+  enabled,
+  orders,
+  acceptOrder,
+}: {
+  readonly enabled: boolean;
+  readonly orders: readonly DeliveryOrderView[];
+  readonly acceptOrder: (order: DeliveryOrderView) => void;
+}) {
+  useAutomaticOrderAcceptance(enabled, orders, acceptOrder);
+  return null;
+}
+
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
   items: string | readonly { nome?: string }[],
@@ -127,7 +140,6 @@ export function CaixaOrdersWorkspace({
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
   const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
-  useAutomaticOrderAcceptance(autoAccept, deliveryOrders, actions.acceptDigitalOrder);
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
   const ordersStages = [
@@ -151,6 +163,11 @@ export function CaixaOrdersWorkspace({
 
   return (
     <div className={"orders-workspace flex flex-col space-y-4"}>
+      <AutomaticOrderAcceptanceEffect
+        enabled={autoAccept}
+        orders={deliveryOrders}
+        acceptOrder={actions.acceptDigitalOrder}
+      />
       <OperationalBanner
         id="orders-heading"
         eyebrow="OPERAÇÃO"
