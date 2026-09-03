@@ -63,3 +63,5 @@ jobs:
             backend/tests/test_super_admin_trial.py \
             backend/tests/test_super_admin_phase2b.py \
             backend/tests/test_route_ownership.py
+
+# This targeted gate intentionally validates the 7-day trial slice without enabling SaaS billing.
