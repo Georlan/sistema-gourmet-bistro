@@ -1,7 +1,6 @@
 import { Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
-import { MercadoPagoConnectionCard } from './MercadoPagoConnectionCard';
 
 interface Props {
   apiBaseUrl: string;
@@ -28,8 +27,7 @@ const readRestaurantIdFromAuthorization = (authorization?: string): number | nul
   }
 };
 
-
-/** Plan gate and direct composition only; the settings panel owns its single snapshot. */
+/** Plan gate and online-channel composition only. Technical integrations live under Sistema. */
 export default function CashierOnlineMenu({
   apiBaseUrl, authHeaders, setActiveSubTab, setActiveTab, hasOnlineMenu,
 }: Props) {
@@ -57,14 +55,11 @@ export default function CashierOnlineMenu({
   );
   const restaurantId = readRestaurantIdFromAuthorization(authHeaders.Authorization || authHeaders.authorization);
   return (
-    <div className="space-y-4">
-      <MercadoPagoConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
-      <CardapioDigitalSettingsPanel
-        key={authHeaders.Authorization || authHeaders.authorization}
-        apiBaseUrl={apiBaseUrl}
-        authHeaders={authHeaders}
-        publicMenuUrl={restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null}
-      />
-    </div>
+    <CardapioDigitalSettingsPanel
+      key={authHeaders.Authorization || authHeaders.authorization}
+      apiBaseUrl={apiBaseUrl}
+      authHeaders={authHeaders}
+      publicMenuUrl={restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null}
+    />
   );
 }
