@@ -140,6 +140,8 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'online_perfil', label: 'Perfil', target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' } },
           { id: 'online_pedidos', label: 'Pedidos & horários', target: { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' } },
           { id: 'online_marca', label: 'Marca', target: { tab: 'cardapio_digital', subTab: 'cardapio_marca' } },
+          { id: 'online_entrega', label: 'Entrega & áreas', target: { tab: 'cardapio_digital', subTab: 'cardapio_entrega' } },
+          { id: 'online_pagamentos', label: 'Pagamentos', target: { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' } },
         ],
       },
     ],
