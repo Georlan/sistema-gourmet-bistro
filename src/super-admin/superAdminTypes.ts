@@ -56,3 +56,15 @@ export interface IntegrationsHealthStatus {
   telegram?: { status: string };
   evolution?: { status: string; details?: unknown };
 }
+
+export interface SuperAdminAuditLogEntry {
+  id: string;
+  restauranteId: string;
+  restaurantName: string;
+  actor: string;
+  action: string;
+  reason: string;
+  beforeData?: Record<string, unknown> | null;
+  afterData?: Record<string, unknown> | null;
+  createdAt?: string | null;
+}

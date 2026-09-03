@@ -138,6 +138,18 @@ export default function SuperAdminPanel() {
     }
   };
 
+  const handleForceConfirmWebhook = async (webhookId: string) => {
+    try {
+      await superAdminFetch(`/api/super-admin/webhooks/failed/${encodeURIComponent(webhookId)}/retry`, {
+        method: "POST",
+      });
+      return true;
+    } catch (err) {
+      reportApiError("Webhook não pôde ser reprocessado", err);
+      return false;
+    }
+  };
+
   const triggerTelegramAlert = async (text: string) => {
     try {
       const safeText = text

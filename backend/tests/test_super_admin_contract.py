@@ -161,7 +161,6 @@ def test_superadmin_health_never_reports_configuration_as_health(monkeypatch):
     ("method", "path"),
     [
         ("post", "/api/super-admin/restaurantes/onboarding"),
-        ("put", "/api/super-admin/restaurantes/tenant-test/status"),
         ("post", "/api/super-admin/restaurantes/tenant-test/flush-cache"),
         ("post", "/api/super-admin/git/deploy"),
         ("post", "/api/super-admin/db/backup"),
@@ -176,8 +175,6 @@ def test_unimplemented_superadmin_actions_fail_explicitly(method, path):
             "plan": "pro",
             "subdomain": "tenant.example.test",
         }
-    elif path.endswith("status"):
-        request_kwargs["json"] = {"status": "SUSPENDED"}
 
     response = getattr(client, method)(path, **request_kwargs)
     assert response.status_code == 501

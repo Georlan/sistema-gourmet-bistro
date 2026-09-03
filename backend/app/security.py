@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
-from .models import Usuario
+from .models import Restaurante, Usuario
 
 # Password context configuration
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -143,6 +143,17 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
+
+    # Check SaaS tenant status
+    if restaurante_id and restaurante_id > 0:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+        if restaurante and getattr(restaurante, "saas_status", "active") == "suspended":
+            if db.in_transaction():
+                db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Restaurante temporariamente suspenso na plataforma KÔMA.",
+            )
 
     # O restante da requisição só precisa dos campos já carregados do usuário.
     # Destacar antes do rollback preserva esses escalares sem manter a conexão
