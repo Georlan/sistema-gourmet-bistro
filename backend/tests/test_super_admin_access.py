@@ -155,7 +155,7 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
         tenant_id, user_id = _create_tenant()
         tenant_headers = _tenant_headers(user_id, tenant_id)
 
-        before = client.get("/api/auth/usuarios", headers=tenant_headers)
+        before = client.get("/auth/usuarios", headers=tenant_headers)
         assert before.status_code == 200, before.text
 
         guarded = client.put(
@@ -187,7 +187,7 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
             for diagnostic in forced.json()["tenant"]["diagnostics"]
         )
 
-        blocked = client.get("/api/auth/usuarios", headers=tenant_headers)
+        blocked = client.get("/auth/usuarios", headers=tenant_headers)
         assert blocked.status_code == 403, blocked.text
 
         db = SessionLocal()
@@ -226,7 +226,7 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
 
         # JWTs são stateless hoje: reativar pode tornar novamente válido um token
         # ainda não expirado. Revogação permanente de sessões é uma camada futura.
-        restored = client.get("/api/auth/usuarios", headers=tenant_headers)
+        restored = client.get("/auth/usuarios", headers=tenant_headers)
         assert restored.status_code == 200, restored.text
     finally:
         _cleanup_tenant(tenant_id)
