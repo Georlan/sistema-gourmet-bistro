@@ -16,8 +16,6 @@ from ..models import CaixaTurno
 from ..timezone_utils import get_operational_now
 
 
-DEFAULT_DELIVERY_FEE = 7.0
-
 _DAY_INDEX = {
     "segunda": 0,
     "terca": 1,
@@ -49,6 +47,15 @@ def _normalize_text(value: Any) -> str:
     return " ".join(
         ascii_text.casefold().replace("_", " ").replace("-feira", "").split()
     )
+
+
+def _configured_delivery_fee(configuracao: Any) -> float:
+    if configuracao is None:
+        return 0.0
+    try:
+        return max(0.0, float(getattr(configuracao, "taxa_entrega_padrao", 0.0) or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _parse_days(value: Any) -> set[int]:
@@ -216,6 +223,7 @@ def evaluate_online_order_policy(
         if configuracao is not None
         else True
     )
+    delivery_fee = _configured_delivery_fee(configuracao)
     # Bancos legados podem conter NULL antes do default atual. Somente False
     # explícito representa uma decisão do restaurante de desligar o delivery.
     delivery_enabled = configured_delivery is not False
@@ -226,7 +234,7 @@ def evaluate_online_order_policy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,
             pickup_enabled=pickup_enabled,
-            delivery_fee=DEFAULT_DELIVERY_FEE,
+            delivery_fee=delivery_fee,
             reason="O restaurante está fechado para novos pedidos online no momento.",
             source="forced_closed",
         )
@@ -245,7 +253,7 @@ def evaluate_online_order_policy(
                 accepting_orders=False,
                 delivery_enabled=delivery_enabled,
                 pickup_enabled=pickup_enabled,
-                delivery_fee=DEFAULT_DELIVERY_FEE,
+                delivery_fee=delivery_fee,
                 reason="O restaurante está fora do horário de pedidos online.",
                 source="schedule",
             )
@@ -256,7 +264,7 @@ def evaluate_online_order_policy(
             accepting_orders=False,
             delivery_enabled=False,
             pickup_enabled=pickup_enabled,
-            delivery_fee=DEFAULT_DELIVERY_FEE,
+            delivery_fee=delivery_fee,
             reason="O delivery está desativado para este restaurante.",
             source="delivery_disabled",
         )
@@ -271,6 +279,6 @@ def evaluate_online_order_policy(
         accepting_orders=True,
         delivery_enabled=delivery_enabled,
         pickup_enabled=pickup_enabled,
-        delivery_fee=DEFAULT_DELIVERY_FEE,
+        delivery_fee=delivery_fee,
         source=source,
     )
