@@ -50,6 +50,13 @@ test("Gestão de restaurantes mantém create/list/edit/status no mesmo fluxo rea
     tenantsTab,
     /\/api\/super-admin\/restaurantes\/\$\{statusTargetTenant\.id\}\/status/,
   );
-  assert.match(onboardingModal, /Mercado Pago: desconectado/);
-  assert.match(onboardingModal, /cardápio vazio/);
+  assert.match(onboardingModal, /Mercado Pago do cardápio: desconectado/);
+});
+
+test("Novo restaurante nasce com 7 dias grátis sem criar cobrança SaaS automática", () => {
+  assert.match(onboardingModal, /7 dias grátis/);
+  assert.match(onboardingModal, /daysGranted/);
+  assert.match(onboardingModal, /daysRemaining/);
+  assert.match(onboardingModal, /A cobrança SaaS recorrente ainda não é criada automaticamente/);
+  assert.match(onboardingModal, /não suspende o restaurante automaticamente nesta etapa/);
 });
