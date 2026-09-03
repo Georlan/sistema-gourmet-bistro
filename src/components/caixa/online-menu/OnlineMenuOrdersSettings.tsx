@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { AlertCircle, CheckCircle2, Clock3, ExternalLink, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ExternalLink, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 
@@ -102,19 +102,27 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUrl }: Props) {
   const [config, setConfig] = useState<OrdersConfig>({ status_override: 'Automático', horarios_funcionamento: [] });
+  const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingScheduledOrders, setIsSavingScheduledOrders] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/config`, { headers: authHeaders, cache: 'no-store' });
+      const [response, scheduledOrdersResponse] = await Promise.all([
+        fetch(`${apiBaseUrl}/api/cardapio-digital/config`, { headers: authHeaders, cache: 'no-store' }),
+        fetch(`${apiBaseUrl}/api/restaurant-features/scheduled-orders`, { headers: authHeaders, cache: 'no-store' }),
+      ]);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar os horários.');
+      const scheduledOrdersData = await scheduledOrdersResponse.json().catch(() => ({}));
+      if (!scheduledOrdersResponse.ok) throw new Error(scheduledOrdersData.detail || 'Não foi possível carregar a configuração de agendamento.');
       const next = normalizeConfig(data as Record<string, unknown>);
       setConfig(next);
+      setScheduledOrdersEnabled(Boolean(scheduledOrdersData.enabled));
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));
     } catch (error) {
       setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Falha ao carregar os horários.' });
@@ -163,6 +171,38 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
     }
   };
 
+  const updateScheduledOrders = async (enabled: boolean) => {
+    const previous = scheduledOrdersEnabled;
+    setScheduledOrdersEnabled(enabled);
+    setIsSavingScheduledOrders(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/restaurant-features/scheduled-orders`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Não foi possível atualizar os pedidos agendados.');
+      const persistedEnabled = Boolean(data.enabled);
+      setScheduledOrdersEnabled(persistedEnabled);
+      window.dispatchEvent(new CustomEvent('koma_scheduled_orders_feature_updated', {
+        detail: { enabled: persistedEnabled },
+      }));
+      setFeedback({
+        type: 'success',
+        text: persistedEnabled ? 'Pedidos agendados ativados.' : 'Pedidos agendados desativados.',
+      });
+    } catch (error) {
+      setScheduledOrdersEnabled(previous);
+      setFeedback({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Erro ao atualizar os pedidos agendados.',
+      });
+    } finally {
+      setIsSavingScheduledOrders(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="grid min-h-[360px] place-items-center rounded-2xl border border-koma-border bg-koma-panel">
@@ -184,6 +224,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
         metrics={[
           { label: 'status', value: statusLabel },
           { label: 'períodos', value: config.horarios_funcionamento.length },
+          { label: 'agendamento', value: scheduledOrdersEnabled ? 'Ativo' : 'Desligado' },
         ]}
       />
 
@@ -220,6 +261,45 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-600 dark:text-emerald-300">
+              <CalendarClock size={17} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-koma-foreground">Pedidos agendados</h3>
+              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+                Permita que o cliente escolha uma data e horário futuros. Desligado, o checkout fica somente em O quanto antes e a área de Agendados não aparece no Caixa.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={scheduledOrdersEnabled}
+            aria-label="Permitir pedidos agendados"
+            disabled={isSavingScheduledOrders}
+            onClick={() => void updateScheduledOrders(!scheduledOrdersEnabled)}
+            className={clsx(
+              'relative h-7 w-12 shrink-0 rounded-full border transition disabled:cursor-wait disabled:opacity-60',
+              scheduledOrdersEnabled
+                ? 'border-emerald-500/60 bg-emerald-500/25'
+                : 'border-koma-border bg-koma-raised',
+            )}
+          >
+            <span
+              className={clsx(
+                'absolute top-1 h-[18px] w-[18px] rounded-full shadow-sm transition-all',
+                scheduledOrdersEnabled
+                  ? 'left-[25px] bg-emerald-500'
+                  : 'left-1 bg-koma-muted',
+              )}
+            />
+          </button>
         </div>
       </section>
 
