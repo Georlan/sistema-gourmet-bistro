@@ -4,16 +4,16 @@ import {
   Server,
   RefreshCw,
   AlertTriangle,
-  CheckCircle2,
   ExternalLink,
   GitBranch,
   Globe,
   Database,
-  ShieldAlert,
   Power,
   X,
+  HelpCircle,
 } from "lucide-react";
 import { superAdminErrorMessage, superAdminFetch, publicApiFetch } from "./superAdminApi";
+import type { IntegrationsHealthStatus } from "./superAdminTypes";
 
 interface SuperAdminOperationsTabProps {
   onAddLog: (
@@ -47,6 +47,7 @@ export function SuperAdminOperationsTab({
   onTriggerTelegramAlert,
 }: SuperAdminOperationsTabProps) {
   const [backendHealth, setBackendHealth] = useState<{ status: string; commit?: string; version?: string } | null>(null);
+  const [integrationsHealth, setIntegrationsHealth] = useState<IntegrationsHealthStatus | null>(null);
   const [dnsRecords, setDnsRecords] = useState<DnsRecord[]>([]);
   const [githubRuns, setGithubRuns] = useState<GithubRun[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,18 +63,33 @@ export function SuperAdminOperationsTab({
       const res = await publicApiFetch("/health/live");
       if (res.ok) {
         setBackendHealth(await res.json());
+      } else {
+        setBackendHealth({ status: "unavailable" });
       }
     } catch {
       setBackendHealth({ status: "unavailable" });
     }
 
     try {
+      const resHealth = await superAdminFetch("/api/super-admin/integrations/health");
+      if (resHealth.ok) {
+        setIntegrationsHealth(await resHealth.json());
+      } else {
+        setIntegrationsHealth(null);
+      }
+    } catch {
+      setIntegrationsHealth(null);
+    }
+
+    try {
       const resDns = await superAdminFetch("/api/super-admin/cloudflare/dns");
       if (resDns.ok) {
         setDnsRecords(await resDns.json());
+      } else {
+        setDnsRecords([]);
       }
     } catch {
-      // Handled gracefully without crash
+      setDnsRecords([]);
     }
 
     try {
@@ -82,9 +98,11 @@ export function SuperAdminOperationsTab({
         const payload = await resRuns.json();
         const runs = Array.isArray(payload) ? payload : payload.workflow_runs || [];
         setGithubRuns(runs);
+      } else {
+        setGithubRuns([]);
       }
     } catch {
-      // Handled gracefully
+      setGithubRuns([]);
     }
 
     setIsLoading(false);
@@ -101,13 +119,13 @@ export function SuperAdminOperationsTab({
       const response = await superAdminFetch("/api/super-admin/railway/restart", { method: "POST" });
       if (response.ok) {
         setOperationNotice("Reinicialização de emergência disparada com sucesso no Railway.");
-        onAddLog("Reinicialização de emergência do servidor disparada no Railway.", "critical");
+        onAddLog("Reinicialização de emergência do servidor disparada no Railway.", "CRITICAL", "OPERATIONS");
         onTriggerTelegramAlert("🚨 ALERTA CRÍTICO: Reinicialização do servidor KÔMA disparada pelo SuperAdmin.");
       }
     } catch (err) {
       const msg = superAdminErrorMessage(err);
       setOperationNotice(`Falha na reinicialização: ${msg}`);
-      onAddLog(`Falha ao disparar reinicialização: ${msg}`, "error");
+      onAddLog(`Falha ao disparar reinicialização: ${msg}`, "ERROR", "OPERATIONS");
     } finally {
       setIsRestarting(false);
     }
@@ -124,7 +142,7 @@ export function SuperAdminOperationsTab({
               Operações & Manutenção da Plataforma
             </h2>
             <p className="text-xs text-koma-muted mt-0.5">
-              Diagnóstico em tempo real, estado dos nós de infraestrutura e ações de contingência
+              Diagnóstico em tempo real baseado exclusivamente em evidência do backend
             </p>
           </div>
 
@@ -132,7 +150,7 @@ export function SuperAdminOperationsTab({
             <button
               type="button"
               onClick={() => setShowRestartModal(true)}
-              className="px-3 py-2 bg-rose-950/70 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5"
+              className="px-3 py-2 bg-rose-950/70 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Power className="w-4 h-4" /> Reiniciar Servidor (Emergência)
             </button>
@@ -141,7 +159,7 @@ export function SuperAdminOperationsTab({
               type="button"
               onClick={fetchOperationsData}
               disabled={isLoading}
-              className="p-2 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50"
+              className="p-2 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50 cursor-pointer"
               title="Atualizar diagnóstico"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -155,7 +173,7 @@ export function SuperAdminOperationsTab({
             <button
               type="button"
               onClick={() => setOperationNotice(null)}
-              className="text-koma-subtle hover:text-koma-foreground text-xs font-bold"
+              className="text-koma-subtle hover:text-koma-foreground text-xs font-bold cursor-pointer"
             >
               fechar
             </button>
@@ -168,47 +186,72 @@ export function SuperAdminOperationsTab({
         {/* Backend FastAPI */}
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Backend API</span>
+            <span className="text-xs font-medium text-koma-muted">Backend API (Live)</span>
             <Server className="w-4 h-4 text-[#00b894]" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className={`w-2 h-2 rounded-full ${backendHealth?.status === "ok" ? "bg-emerald-400" : "bg-amber-400"}`}></span>
             <span className="font-bold text-sm text-koma-foreground">
-              {backendHealth?.status === "ok" ? "Online / Ativo" : "Não Verificado"}
+              {backendHealth?.status === "ok" ? "Online / Saudável" : "Indisponível / Desconhecido"}
             </span>
           </div>
           <p className="text-[11px] text-koma-subtle font-mono">
-            Commit: {backendHealth?.commit || "75ac2e8add9f"} (v{backendHealth?.version || "3.5"})
+            Commit: {backendHealth?.commit || "desconhecido"} (v{backendHealth?.version || "3.5"})
           </p>
         </div>
 
-        {/* Supabase Postgres */}
+        {/* Postgres (Supabase) */}
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-koma-muted">Postgres (Supabase)</span>
             <Database className="w-4 h-4 text-[#00b894]" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="font-bold text-sm text-koma-foreground">Conectado (Pool Ativo)</span>
+            {integrationsHealth?.database?.status === "available" ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className="font-bold text-sm text-koma-foreground">Disponível</span>
+              </>
+            ) : integrationsHealth?.database?.status === "unavailable" ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+                <span className="font-bold text-sm text-rose-300">Indisponível</span>
+              </>
+            ) : (
+              <>
+                <HelpCircle className="w-4 h-4 text-zinc-500" />
+                <span className="font-bold text-sm text-koma-muted">Não verificado</span>
+              </>
+            )}
           </div>
           <p className="text-[11px] text-koma-subtle">
-            Isolamento transacional por tenant
+            {integrationsHealth?.database?.latency_ms != null
+              ? `Latência: ${integrationsHealth.database.latency_ms}ms`
+              : "Isolamento transacional por tenant"}
           </p>
         </div>
 
-        {/* Redis Cache */}
+        {/* Railway / Cloud Infrastructure */}
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Redis Cache</span>
+            <span className="text-xs font-medium text-koma-muted">Railway Host</span>
             <Server className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="font-bold text-sm text-koma-foreground">Operacional</span>
+            {integrationsHealth?.railway?.status === "configured" ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className="font-bold text-sm text-koma-foreground">Configurado</span>
+              </>
+            ) : (
+              <>
+                <HelpCircle className="w-4 h-4 text-zinc-500" />
+                <span className="font-bold text-sm text-koma-muted">Sem telemetria</span>
+              </>
+            )}
           </div>
           <p className="text-[11px] text-koma-subtle">
-            Rate limiting & snapshot de pedidos
+            Ambiente passionate-truth
           </p>
         </div>
 
@@ -219,11 +262,20 @@ export function SuperAdminOperationsTab({
             <Globe className="w-4 h-4 text-purple-400" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="font-bold text-sm text-koma-foreground">Protegido (SSL Ativo)</span>
+            {integrationsHealth?.cloudflare?.status === "configured" || dnsRecords.length > 0 ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className="font-bold text-sm text-koma-foreground">Configurado</span>
+              </>
+            ) : (
+              <>
+                <HelpCircle className="w-4 h-4 text-zinc-500" />
+                <span className="font-bold text-sm text-koma-muted">Não verificado</span>
+              </>
+            )}
           </div>
           <p className="text-[11px] text-koma-subtle">
-            Domínios do cardápio & SaaS
+            {dnsRecords.length > 0 ? `${dnsRecords.length} registro(s) mapeado(s)` : "Domínios e rotas"}
           </p>
         </div>
       </div>
@@ -242,7 +294,7 @@ export function SuperAdminOperationsTab({
           <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
             {githubRuns.length === 0 ? (
               <div className="py-6 text-center text-koma-muted">
-                Pipeline de CI/CD em execução via GitHub Actions.
+                Nenhum histórico de execução retornado pela API ou integração não configurada.
               </div>
             ) : (
               githubRuns.slice(0, 5).map(run => (
@@ -282,20 +334,13 @@ export function SuperAdminOperationsTab({
             <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2">
               <Globe className="w-4 h-4 text-[#00b894]" /> Registros DNS do SaaS (Cloudflare)
             </h3>
-            <span className="text-[11px] text-koma-muted">Proxy Ativo</span>
+            <span className="text-[11px] text-koma-muted">Proxy</span>
           </div>
 
           <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
             {dnsRecords.length === 0 ? (
-              <div className="space-y-2">
-                <div className="p-2.5 bg-koma-page rounded-lg border border-zinc-800 flex items-center justify-between">
-                  <span className="font-mono text-koma-foreground">app.koma.com.br</span>
-                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded">CNAME • Proxied</span>
-                </div>
-                <div className="p-2.5 bg-koma-page rounded-lg border border-zinc-800 flex items-center justify-between">
-                  <span className="font-mono text-koma-foreground">api.koma.com.br</span>
-                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded">CNAME • Proxied</span>
-                </div>
+              <div className="py-6 text-center text-koma-muted">
+                Nenhum registro DNS carregado ou integração não configurada.
               </div>
             ) : (
               dnsRecords.map(d => (
@@ -320,7 +365,7 @@ export function SuperAdminOperationsTab({
               <button
                 type="button"
                 onClick={() => setShowRestartModal(false)}
-                className="text-koma-subtle hover:text-koma-foreground"
+                className="text-koma-subtle hover:text-koma-foreground cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -335,7 +380,7 @@ export function SuperAdminOperationsTab({
               <button
                 type="button"
                 onClick={() => setShowRestartModal(false)}
-                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-koma-secondary hover:text-koma-foreground rounded-lg text-xs font-semibold"
+                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-koma-secondary hover:text-koma-foreground rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Cancelar
               </button>
@@ -344,7 +389,7 @@ export function SuperAdminOperationsTab({
                 type="button"
                 onClick={handleRestart}
                 disabled={isRestarting}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {isRestarting ? "Disparando..." : "Confirmar e Reiniciar"}
               </button>

@@ -9,9 +9,6 @@ import {
   Settings,
   LogOut,
   Search,
-  Bell,
-  RefreshCw,
-  ShieldCheck,
   ChevronRight,
   Menu,
   X,
@@ -40,52 +37,13 @@ type TabId =
   | "audit"
   | "settings";
 
-// Default fallback tenants structured according to the real registered database tenants
-const INITIAL_TENANTS: Tenant[] = [
-  {
-    id: "1",
-    name: "Kôma Matriz",
-    subdomain: "koma-matriz",
-    plan: "Pocket",
-    status: "ACTIVE",
-    monthlyOrders: 95,
-    monthlyBilling: 3850,
-    createdAt: "2026-08-01",
-    lastActivity: "Hoje às 11:20",
-    onlinePaymentStatus: "connected" as unknown as undefined,
-  },
-  {
-    id: "2",
-    name: "Pizzeria Bella Italia",
-    subdomain: "pizzeria-bella-italia",
-    plan: "Premium",
-    status: "ACTIVE",
-    monthlyOrders: 312,
-    monthlyBilling: 15420,
-    createdAt: "2026-08-15",
-    lastActivity: "Hoje às 10:55",
-    onlinePaymentStatus: "disconnected" as unknown as undefined,
-  },
-  {
-    id: "3",
-    name: "Restaurante Piloto 3",
-    subdomain: "piloto-3",
-    plan: "Premium",
-    status: "ACTIVE",
-    monthlyOrders: 18,
-    monthlyBilling: 90,
-    createdAt: "2026-09-02",
-    lastActivity: "Hoje às 14:10",
-    onlinePaymentStatus: "connected" as unknown as undefined,
-  },
-];
-
 export default function SuperAdminPanel() {
   const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "75ac2e8";
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [globalSearch, setGlobalSearch] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [tenants, setTenants] = useState<Tenant[]>(INITIAL_TENANTS);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantsAvailable, setTenantsAvailable] = useState(false);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
   const [failedWebhooks, setFailedWebhooks] = useState<FailedWebhook[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -129,10 +87,18 @@ export default function SuperAdminPanel() {
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) {
           setTenants(data);
+          setTenantsAvailable(true);
+        } else {
+          setTenants([]);
+          setTenantsAvailable(false);
         }
+      } else {
+        setTenants([]);
+        setTenantsAvailable(false);
       }
     } catch {
-      // 501 / 503 handled gracefully by maintaining known tenant structure
+      setTenants([]);
+      setTenantsAvailable(false);
     } finally {
       setIsLoadingTenants(false);
     }
@@ -180,8 +146,6 @@ export default function SuperAdminPanel() {
   };
 
   const triggerTelegramAlert = async (text: string) => {
-    const now = new Date();
-    const timeStr = now.toTimeString().split(" ")[0].substring(0, 5);
     try {
       const safeText = text
         .replaceAll("&", "&amp;")
@@ -363,6 +327,7 @@ export default function SuperAdminPanel() {
           {activeTab === "overview" && (
             <SuperAdminOverviewTab
               tenants={tenants}
+              tenantsAvailable={tenantsAvailable}
               isLoadingTenants={isLoadingTenants}
               refreshTenants={fetchTenants}
               onNavigateToTab={(tab) => setActiveTab(tab)}
@@ -370,12 +335,14 @@ export default function SuperAdminPanel() {
               failedWebhooks={failedWebhooks}
               onForceConfirmWebhook={handleForceConfirmWebhook}
               globalSearch={globalSearch}
+              runtimeHealth={runtimeHealth}
             />
           )}
 
           {activeTab === "tenants" && (
             <SuperAdminTenantsTab
               tenants={tenants}
+              tenantsAvailable={tenantsAvailable}
               isLoading={isLoadingTenants}
               refreshTenants={fetchTenants}
               onToggleStatus={handleToggleTenantStatus}
@@ -388,7 +355,7 @@ export default function SuperAdminPanel() {
           {activeTab === "payments" && (
             <SuperAdminPaymentsTab
               failedWebhooks={failedWebhooks}
-              webhooksAvailable={true}
+              webhooksAvailable={failedWebhooks.length > 0}
               onForceConfirmWebhook={handleForceConfirmWebhook}
               onAddLog={addAuditLog}
               onTriggerTelegramAlert={triggerTelegramAlert}
@@ -396,7 +363,10 @@ export default function SuperAdminPanel() {
           )}
 
           {activeTab === "billing" && (
-            <SuperAdminBillingTab tenants={tenants} />
+            <SuperAdminBillingTab
+              tenants={tenants}
+              tenantsAvailable={tenantsAvailable}
+            />
           )}
 
           {activeTab === "operations" && (

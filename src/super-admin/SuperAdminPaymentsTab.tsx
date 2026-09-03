@@ -2,19 +2,16 @@ import React, { useState } from "react";
 import {
   CreditCard,
   CheckCircle2,
-  AlertTriangle,
-  RefreshCw,
-  ExternalLink,
-  ShieldCheck,
   Zap,
-  ArrowUpRight,
-  Search,
+  ShieldCheck,
   Check,
-  X,
   Layers,
-  Percent,
 } from "lucide-react";
 import type { FailedWebhook } from "./superAdminTypes";
+import {
+  SUBSCRIPTION_PLANS,
+  formatPercentage,
+} from "../config/subscriptionPlans";
 
 interface SuperAdminPaymentsTabProps {
   failedWebhooks: FailedWebhook[];
@@ -49,7 +46,7 @@ export function SuperAdminPaymentsTab({
     try {
       const ok = await onForceConfirmWebhook(id);
       if (ok) {
-        onAddLog(`Webhook #${id} confirmado manualmente via console de pagamentos.`, "success");
+        onAddLog(`Webhook #${id} confirmado manualmente via console de pagamentos.`, "INFO", "PAYMENTS");
         onTriggerTelegramAlert(`Webhook #${id} foi conciliado manualmente pelo SuperAdmin.`);
       }
     } finally {
@@ -74,7 +71,7 @@ export function SuperAdminPaymentsTab({
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/40 text-emerald-300 text-xs font-semibold">
             <CheckCircle2 className="w-4 h-4 text-[#00b894]" />
-            Mercado Pago Produção Ativo
+            Mercado Pago Integrado
           </div>
         </div>
 
@@ -102,7 +99,7 @@ export function SuperAdminPaymentsTab({
             </div>
             <p className="font-bold text-koma-foreground text-sm">Regra Dinâmica por Plano</p>
             <p className="text-koma-muted text-[11px]">
-              Pocket 1,79% • Pro 0,89% • Premium 0,39%
+              {SUBSCRIPTION_PLANS.map(p => `${p.name} ${formatPercentage(p.splitFeeRate)}`).join(" • ")}
             </p>
           </div>
 
@@ -162,11 +159,17 @@ export function SuperAdminPaymentsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/40">
-                {filteredWebhooks.length === 0 ? (
+                {!webhooksAvailable ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-koma-muted">
                       <ShieldCheck className="w-7 h-7 text-[#00b894] mx-auto opacity-70 mb-1" />
                       Nenhuma pendência crítica de webhook registrada.
+                    </td>
+                  </tr>
+                ) : filteredWebhooks.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-koma-muted">
+                      Nenhum evento registrado com o filtro selecionado.
                     </td>
                   </tr>
                 ) : (
@@ -203,7 +206,7 @@ export function SuperAdminPaymentsTab({
                             type="button"
                             onClick={() => handleConfirm(wh.id)}
                             disabled={isConfirming === wh.id}
-                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold transition-colors disabled:opacity-50"
+                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
                           >
                             {isConfirming === wh.id ? "Confirmando..." : "Confirmar"}
                           </button>
@@ -225,40 +228,15 @@ export function SuperAdminPaymentsTab({
           </h3>
 
           <div className="space-y-3 text-xs">
-            {/* Tenant 1 */}
-            <div className="p-3 bg-koma-page rounded-lg border border-zinc-800 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-koma-foreground">Restaurante 1 (Matriz)</span>
-                <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/30">
-                  Ativo
-                </span>
-              </div>
-              <p className="text-koma-muted text-[11px]">Provedor: Mercado Pago Pix & Cartão</p>
-            </div>
-
-            {/* Tenant 2 */}
-            <div className="p-3 bg-koma-page rounded-lg border border-zinc-800 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-koma-foreground">Pizzeria Bella Italia (#2)</span>
-                <span className="text-[10px] text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/30">
-                  Desconectado
-                </span>
-              </div>
-              <p className="text-koma-muted text-[11px]">
-                Conta histórica de sandbox desconectada para isolamento dos testes de produção.
+            <div className="p-4 bg-koma-page rounded-lg border border-zinc-800 space-y-2 text-koma-muted">
+              <p className="font-semibold text-koma-foreground text-xs">
+                Auditoria de Contas de Pagamento
               </p>
-            </div>
-
-            {/* Tenant 3 */}
-            <div className="p-3 bg-koma-page rounded-lg border border-zinc-800 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-koma-foreground">Restaurante Piloto 3 (#3)</span>
-                <span className="text-[10px] text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800/30">
-                  Pronto para OAuth
-                </span>
-              </div>
-              <p className="text-koma-muted text-[11px]">
-                Tenant piloto de produção criado. Aguardando autorização OAuth para início de vendas Pix.
+              <p className="text-[11px] leading-relaxed">
+                A visualização de contas de pagamento vinculadas de todos os estabelecimentos será alimentada via endpoint cross-tenant dedicado (Fase 2).
+              </p>
+              <p className="text-[11px] leading-relaxed text-koma-subtle">
+                Cada restaurante gerencia sua própria conexão OAuth com Mercado Pago de forma isolada em seu respectivo painel de administração.
               </p>
             </div>
           </div>

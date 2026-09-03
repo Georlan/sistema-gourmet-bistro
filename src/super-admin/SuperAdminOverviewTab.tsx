@@ -17,9 +17,15 @@ import {
   Unlock,
 } from "lucide-react";
 import type { Tenant, FailedWebhook } from "./superAdminTypes";
+import {
+  SUBSCRIPTION_PLANS,
+  formatCurrency,
+  formatPercentage,
+} from "../config/subscriptionPlans";
 
 interface SuperAdminOverviewTabProps {
   tenants: Tenant[];
+  tenantsAvailable?: boolean;
   isLoadingTenants: boolean;
   refreshTenants: () => void;
   onNavigateToTab: (tab: "tenants" | "payments" | "billing" | "operations" | "audit" | "settings") => void;
@@ -28,10 +34,12 @@ interface SuperAdminOverviewTabProps {
   failedWebhooks: FailedWebhook[];
   onForceConfirmWebhook: (id: string) => Promise<boolean>;
   globalSearch: string;
+  runtimeHealth?: { status: "ok" | "unavailable"; commit?: string | null; version?: string } | null;
 }
 
 export function SuperAdminOverviewTab({
   tenants,
+  tenantsAvailable = false,
   isLoadingTenants,
   refreshTenants,
   onNavigateToTab,
@@ -40,6 +48,7 @@ export function SuperAdminOverviewTab({
   failedWebhooks,
   onForceConfirmWebhook,
   globalSearch,
+  runtimeHealth,
 }: SuperAdminOverviewTabProps) {
   const [tableSearch, setTableSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "SUSPENDED">("ALL");
@@ -51,7 +60,7 @@ export function SuperAdminOverviewTab({
       !effectiveSearch ||
       t.name.toLowerCase().includes(effectiveSearch) ||
       t.id.toLowerCase().includes(effectiveSearch) ||
-      t.subdomain.toLowerCase().includes(effectiveSearch) ||
+      (t.subdomain && t.subdomain.toLowerCase().includes(effectiveSearch)) ||
       (t.plan && t.plan.toLowerCase().includes(effectiveSearch));
 
     const matchesStatus =
@@ -60,23 +69,19 @@ export function SuperAdminOverviewTab({
     return matchesSearch && matchesStatus;
   });
 
-  // Calculate real KPIs based on registered tenants
-  const activeCount = tenants.filter(t => t.status === "ACTIVE").length;
-  const suspendedCount = tenants.filter(t => t.status === "SUSPENDED").length;
-  const delinquentCount = 0; // Kôma subscription billing is current
-  const totalOrdersToday = tenants.reduce((acc, t) => acc + (t.monthlyOrders ? Math.round(t.monthlyOrders / 30) : 0), 8);
-  
-  // Calculate MRR based on plans (Pocket: 97, Pro/Bistro/Delivery: 197, Premium: 347)
-  const planPrices: Record<string, number> = {
-    Pocket: 97,
-    Bistro: 197,
-    Delivery: 197,
-    Pro: 197,
-    Premium: 347,
-  };
-  const estimatedMRR = tenants
-    .filter(t => t.status === "ACTIVE")
-    .reduce((sum, t) => sum + (planPrices[t.plan] || 197), 0);
+  const activeCount = tenantsAvailable ? tenants.filter(t => t.status === "ACTIVE").length : null;
+  const suspendedCount = tenantsAvailable ? tenants.filter(t => t.status === "SUSPENDED").length : null;
+
+  const estimatedMRR = tenantsAvailable
+    ? tenants
+        .filter(t => t.status === "ACTIVE")
+        .reduce((sum, t) => {
+          const matchedPlan = SUBSCRIPTION_PLANS.find(
+            p => p.id === t.plan?.toLowerCase()
+          );
+          return sum + (matchedPlan?.price || 0);
+        }, 0)
+    : null;
 
   const unresolvedWebhooks = failedWebhooks.filter(w => !w.resolved);
 
@@ -94,13 +99,20 @@ export function SuperAdminOverviewTab({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-koma-foreground tracking-tight">
-              {activeCount} <span className="text-xs font-normal text-koma-muted">/ {tenants.length}</span>
+              {activeCount !== null ? activeCount : "—"}{" "}
+              <span className="text-xs font-normal text-koma-muted">
+                {tenantsAvailable ? `/ ${tenants.length}` : ""}
+              </span>
             </div>
             <p className="text-[11px] text-koma-subtle mt-1 flex items-center gap-1">
-              {suspendedCount > 0 ? (
-                <span className="text-amber-400 font-medium">{suspendedCount} suspenso(s)</span>
+              {tenantsAvailable ? (
+                suspendedCount && suspendedCount > 0 ? (
+                  <span className="text-amber-400 font-medium">{suspendedCount} suspenso(s)</span>
+                ) : (
+                  <span className="text-emerald-400 font-medium">100% da base ativa</span>
+                )
               ) : (
-                <span className="text-emerald-400 font-medium">100% da frota ativa</span>
+                <span className="text-zinc-400">Dados ainda não disponíveis</span>
               )}
             </p>
           </div>
@@ -116,10 +128,10 @@ export function SuperAdminOverviewTab({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-koma-foreground tracking-tight">
-              {delinquentCount}
+              —
             </div>
-            <p className="text-[11px] text-emerald-400 font-medium mt-1">
-              Cobranças 100% em dia
+            <p className="text-[11px] text-zinc-400 mt-1">
+              Aguardando consolidação
             </p>
           </div>
         </div>
@@ -134,7 +146,7 @@ export function SuperAdminOverviewTab({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-koma-foreground tracking-tight">
-              {totalOrdersToday}
+              —
             </div>
             <p className="text-[11px] text-koma-subtle mt-1">
               Via cardápio digital KÔMA
@@ -152,10 +164,10 @@ export function SuperAdminOverviewTab({
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-koma-foreground tracking-tight">
-              R$ {estimatedMRR.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {estimatedMRR !== null ? formatCurrency(estimatedMRR) : "—"}
             </div>
             <p className="text-[11px] text-koma-subtle mt-1">
-              Recorrência mensal base
+              {tenantsAvailable ? "Recorrência base confirmada" : "Dados ainda não disponíveis"}
             </p>
           </div>
         </div>
@@ -179,7 +191,7 @@ export function SuperAdminOverviewTab({
               {unresolvedWebhooks.length}
             </div>
             <p className="text-[11px] text-koma-subtle mt-1">
-              {unresolvedWebhooks.length > 0 ? "Exige ação operacional" : "Gateways & webhooks operando"}
+              {unresolvedWebhooks.length > 0 ? "Exige ação operacional" : "Nenhum incidente crítico"}
             </p>
           </div>
         </div>
@@ -209,14 +221,16 @@ export function SuperAdminOverviewTab({
                   placeholder="Filtrar nesta lista..."
                   value={tableSearch}
                   onChange={e => setTableSearch(e.target.value)}
-                  className="w-44 sm:w-56 bg-koma-page border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]"
+                  disabled={!tenantsAvailable}
+                  className="w-44 sm:w-56 bg-koma-page border border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894] disabled:opacity-50"
                 />
               </div>
 
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value as "ALL" | "ACTIVE" | "SUSPENDED")}
-                className="bg-koma-page border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894]"
+                disabled={!tenantsAvailable}
+                className="bg-koma-page border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894] disabled:opacity-50"
               >
                 <option value="ALL">Todos</option>
                 <option value="ACTIVE">Ativos</option>
@@ -227,7 +241,7 @@ export function SuperAdminOverviewTab({
                 type="button"
                 onClick={refreshTenants}
                 disabled={isLoadingTenants}
-                className="p-1.5 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50"
+                className="p-1.5 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50 cursor-pointer"
                 title="Atualizar lista"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoadingTenants ? "animate-spin" : ""}`} />
@@ -250,16 +264,27 @@ export function SuperAdminOverviewTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/40">
-                {filteredTenants.length === 0 ? (
+                {!tenantsAvailable ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-koma-muted space-y-2">
+                      <Store className="w-8 h-8 text-zinc-600 mx-auto" />
+                      <div className="font-semibold text-koma-foreground text-sm">
+                        Dados dos restaurantes indisponíveis
+                      </div>
+                      <p className="text-xs text-koma-subtle max-w-md mx-auto">
+                        A listagem cross-tenant ainda não possui fonte auditável no servidor (planejada para a Fase 2).
+                      </p>
+                    </td>
+                  </tr>
+                ) : filteredTenants.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-koma-muted">
-                      {isLoadingTenants ? "Carregando restaurantes..." : "Nenhum restaurante encontrado com os filtros aplicados."}
+                      Nenhum restaurante encontrado com os filtros aplicados.
                     </td>
                   </tr>
                 ) : (
                   filteredTenants.map(tenant => {
                     const isSuspended = tenant.status === "SUSPENDED";
-                    const isConnected = tenant.id === "1" || tenant.id === "3";
 
                     return (
                       <tr key={tenant.id} className="hover:bg-koma-page/50 transition-colors">
@@ -279,7 +304,7 @@ export function SuperAdminOverviewTab({
                             )}
                           </div>
                           <div className="text-[11px] text-koma-muted font-mono">
-                            /{tenant.subdomain || `tenant-${tenant.id}`}
+                            /c/{tenant.subdomain || `tenant-${tenant.id}`}
                           </div>
                         </td>
 
@@ -314,23 +339,29 @@ export function SuperAdminOverviewTab({
                         </td>
 
                         <td className="py-3 px-3">
-                          {tenant.id === "2" ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/30">
-                              Desconectado
-                            </span>
-                          ) : isConnected ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
-                              Mercado Pago Ativo
+                          {tenant.onlinePaymentStatus ? (
+                            <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${
+                              tenant.onlinePaymentStatus === "connected"
+                                ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/30"
+                                : tenant.onlinePaymentStatus === "disconnected"
+                                ? "text-amber-400 bg-amber-950/40 border-amber-800/30"
+                                : "text-koma-subtle bg-zinc-900 border-zinc-800"
+                            }`}>
+                              {tenant.onlinePaymentStatus === "connected"
+                                ? "Mercado Pago Ativo"
+                                : tenant.onlinePaymentStatus === "disconnected"
+                                ? "Desconectado"
+                                : "Pendente"}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] text-koma-subtle bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                              Não configurado
+                            <span className="text-[11px] text-koma-subtle font-mono">
+                              Não disponível
                             </span>
                           )}
                         </td>
 
                         <td className="py-3 px-3 text-koma-muted text-[11px]">
-                          {tenant.lastActivity || "Hoje"}
+                          {tenant.lastActivity || "Não disponível"}
                         </td>
 
                         <td className="py-3 px-3 text-right">
@@ -338,7 +369,7 @@ export function SuperAdminOverviewTab({
                             <button
                               type="button"
                               onClick={() => onSelectTenantDetails ? onSelectTenantDetails(tenant) : onNavigateToTab("tenants")}
-                              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-koma-secondary hover:text-koma-foreground text-xs font-medium transition-colors"
+                              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-koma-secondary hover:text-koma-foreground text-xs font-medium transition-colors cursor-pointer"
                               title="Gerenciar restaurante"
                             >
                               Gerenciar
@@ -346,7 +377,7 @@ export function SuperAdminOverviewTab({
 
                             <button
                               type="button"
-                              onClick={() => onToggleStatus(tenant.id, tenant.status)}
+                              onClick={() => onToggleStatus(tenant.id, tenant.status as "ACTIVE" | "SUSPENDED" | "PENDING")}
                               className={`p-1 rounded border transition-colors ${
                                 isSuspended
                                   ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/50"
@@ -367,11 +398,13 @@ export function SuperAdminOverviewTab({
           </div>
 
           <div className="pt-2 flex items-center justify-between text-xs text-koma-muted">
-            <span>Exibindo {filteredTenants.length} de {tenants.length} restaurantes</span>
+            <span>
+              {tenantsAvailable ? `Exibindo ${filteredTenants.length} de ${tenants.length} restaurantes` : "Base de dados isolada"}
+            </span>
             <button
               type="button"
               onClick={() => onNavigateToTab("tenants")}
-              className="font-medium text-[#00b894] hover:underline flex items-center gap-1"
+              className="font-medium text-[#00b894] hover:underline flex items-center gap-1 cursor-pointer"
             >
               Ver gestão completa de restaurantes <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -405,7 +438,7 @@ export function SuperAdminOverviewTab({
                     <button
                       type="button"
                       onClick={() => onForceConfirmWebhook(wh.id)}
-                      className="w-full mt-1 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded text-[11px] transition-colors"
+                      className="w-full mt-1 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
                     >
                       Reconciliar e Confirmar
                     </button>
@@ -432,28 +465,26 @@ export function SuperAdminOverviewTab({
 
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
+                <span className="text-koma-secondary">Backend API (FastAPI)</span>
+                <span className={`inline-flex items-center gap-1 font-medium ${
+                  runtimeHealth?.status === "ok" ? "text-emerald-400" : "text-amber-400"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${runtimeHealth?.status === "ok" ? "bg-emerald-400" : "bg-amber-400"}`}></span>
+                  {runtimeHealth?.status === "ok" ? "Online / Saudável" : "Desconhecido"}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
                 <span className="text-koma-secondary">Mercado Pago Split</span>
-                <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Produção Ativa
+                <span className="text-koma-muted font-mono">
+                  {SUBSCRIPTION_PLANS.map(p => formatPercentage(p.splitFeeRate)).join(" / ")}
                 </span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-koma-secondary">Taxas por Plano</span>
-                <span className="text-koma-muted font-mono">0,39% a 1,79%</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-koma-secondary">Postgres (Supabase)</span>
-                <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-koma-secondary">Cache Redis</span>
-                <span className="inline-flex items-center gap-1 font-medium text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online
+                <span className="text-koma-secondary">Postgres & Infraestrutura</span>
+                <span className="text-koma-muted text-[11px]">
+                  Ver Central de Operações
                 </span>
               </div>
             </div>
@@ -462,7 +493,7 @@ export function SuperAdminOverviewTab({
               <button
                 type="button"
                 onClick={() => onNavigateToTab("operations")}
-                className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-semibold text-koma-secondary hover:text-koma-foreground transition-colors flex items-center justify-center gap-1"
+                className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-semibold text-koma-secondary hover:text-koma-foreground transition-colors flex items-center justify-center gap-1 cursor-pointer"
               >
                 Abrir Central de Operações <ChevronRight className="w-3.5 h-3.5" />
               </button>

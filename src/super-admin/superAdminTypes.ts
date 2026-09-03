@@ -1,17 +1,17 @@
 export interface Tenant {
   id: string;
   name: string;
-  subdomain: string;
-  plan: "Pocket" | "Pro" | "Bistro" | "Delivery" | "Premium";
-  monthlyOrders: number;
-  monthlyBilling: number;
-  status: "ACTIVE" | "SUSPENDED" | "PENDING";
-  createdAt: string;
-  lastActivity?: string;
-  printerStatus?: "online" | "offline";
-  failedWebhooksCount24h?: number;
-  healthStatus?: "green" | "yellow" | "red";
-  onlinePaymentStatus?: "connected" | "disconnected" | "pending";
+  subdomain?: string;
+  plan: "Pocket" | "Pro" | "Bistro" | "Delivery" | "Premium" | string;
+  monthlyOrders?: number | null;
+  monthlyBilling?: number | null;
+  status: "ACTIVE" | "SUSPENDED" | "PENDING" | string;
+  createdAt?: string | null;
+  lastActivity?: string | null;
+  printerStatus?: "online" | "offline" | null;
+  failedWebhooksCount24h?: number | null;
+  healthStatus?: "green" | "yellow" | "red" | null;
+  onlinePaymentStatus?: "connected" | "disconnected" | "pending" | string | null;
 }
 
 export interface FailedWebhook {
@@ -31,4 +31,26 @@ export interface ActiveDevice {
   device: "Painel do Caixa" | "Printer Gateway";
   status: "CONNECTED" | "DISCONNECTED";
   ip: string;
+}
+
+export interface CredentialsStatus {
+  cloudflare?: { configured: boolean };
+  railway?: { configured: boolean };
+  github?: { configured: boolean };
+  telegram?: { configured: boolean };
+  supabase?: { configured: boolean };
+}
+
+export interface IntegrationsHealthStatus {
+  database?: {
+    status: "available" | "unavailable" | "unknown";
+    latency_ms?: number;
+    source?: string;
+  };
+  supabase?: { status: string };
+  cloudflare?: { status: string };
+  railway?: { status: string };
+  github?: { status: string };
+  telegram?: { status: string };
+  evolution?: { status: string; details?: unknown };
 }

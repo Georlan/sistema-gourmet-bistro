@@ -11,19 +11,19 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
-  SlidersHorizontal,
   CreditCard,
-  Building2,
-  Calendar,
-  Layers,
   X,
-  AlertTriangle,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
+import {
+  SUBSCRIPTION_PLANS,
+  formatPercentage,
+} from "../config/subscriptionPlans";
 
 interface SuperAdminTenantsTabProps {
   tenants: Tenant[];
+  tenantsAvailable?: boolean;
   isLoading: boolean;
   refreshTenants: () => void;
   onToggleStatus: (id: string, currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING") => Promise<boolean>;
@@ -38,6 +38,7 @@ interface SuperAdminTenantsTabProps {
 
 export function SuperAdminTenantsTab({
   tenants,
+  tenantsAvailable = false,
   isLoading,
   refreshTenants,
   onToggleStatus,
@@ -62,10 +63,10 @@ export function SuperAdminTenantsTab({
       !effectiveSearch ||
       t.name.toLowerCase().includes(effectiveSearch) ||
       t.id.toLowerCase().includes(effectiveSearch) ||
-      t.subdomain.toLowerCase().includes(effectiveSearch) ||
+      (t.subdomain && t.subdomain.toLowerCase().includes(effectiveSearch)) ||
       (t.plan && t.plan.toLowerCase().includes(effectiveSearch));
 
-    const matchesPlan = selectedPlan === "ALL" || t.plan === selectedPlan;
+    const matchesPlan = selectedPlan === "ALL" || t.plan?.toLowerCase() === selectedPlan.toLowerCase();
     const matchesStatus = selectedStatus === "ALL" || t.status === selectedStatus;
 
     return matchesSearch && matchesPlan && matchesStatus;
@@ -80,12 +81,12 @@ export function SuperAdminTenantsTab({
         method: "POST",
       });
       setFlushResult(`Cache Redis do restaurante ${flushTarget.name} limpo com sucesso.`);
-      onAddLog(`Cache Redis do restaurante #${flushTarget.id} foi limpo.`, "success");
+      onAddLog(`Cache Redis do restaurante #${flushTarget.id} foi limpo.`, "INFO", "TENANTS");
       onTriggerTelegramAlert(`Cache Redis de ${flushTarget.name} foi limpo pelo SuperAdmin.`);
     } catch (err) {
       const msg = superAdminErrorMessage(err);
       setFlushResult(`Falha ao limpar cache: ${msg}`);
-      onAddLog(`Falha ao limpar cache do restaurante #${flushTarget.id}: ${msg}`, "error");
+      onAddLog(`Falha ao limpar cache do restaurante #${flushTarget.id}: ${msg}`, "ERROR", "TENANTS");
     } finally {
       setIsFlushing(false);
     }
@@ -99,10 +100,10 @@ export function SuperAdminTenantsTab({
           <div>
             <h2 className="text-lg font-bold text-koma-foreground flex items-center gap-2">
               <Store className="w-5 h-5 text-[#00b894]" />
-              Gestão de Restaurantes e Tenants
+              Gestão de Restaurantes (Tenants)
             </h2>
             <p className="text-xs text-koma-muted mt-0.5">
-              Administre isolamento multitenant, planos, status operacional e integrações
+              Administração da base de estabelecimentos, isolamento de dados e planos
             </p>
           </div>
 
@@ -110,7 +111,7 @@ export function SuperAdminTenantsTab({
             <button
               type="button"
               onClick={() => setShowNewTenantModal(true)}
-              className="px-3 py-2 bg-[#00b894] hover:bg-[#00c996] text-black text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+              className="px-3.5 py-2 bg-[#00b894] hover:bg-[#00c996] text-black text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <Plus className="w-4 h-4" /> Novo Restaurante
             </button>
@@ -119,7 +120,7 @@ export function SuperAdminTenantsTab({
               type="button"
               onClick={refreshTenants}
               disabled={isLoading}
-              className="p-2 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50"
+              className="p-2 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50 cursor-pointer"
               title="Atualizar lista"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -128,76 +129,87 @@ export function SuperAdminTenantsTab({
         </div>
 
         {/* Filters Row */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-3 border-t border-zinc-800/60">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-zinc-800/80">
+          <div className="relative w-full sm:w-80">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-koma-subtle" />
             <input
               type="text"
-              placeholder="Pesquisar por nome, ID ou slug..."
+              placeholder="Buscar por nome, ID, subdomínio ou plano..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]"
+              disabled={!tenantsAvailable}
+              className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894] disabled:opacity-50"
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs text-koma-muted">
-              <span>Plano:</span>
-              <select
-                value={selectedPlan}
-                onChange={e => setSelectedPlan(e.target.value)}
-                className="bg-koma-page border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894]"
-              >
-                <option value="ALL">Todos os Planos</option>
-                <option value="Pocket">Pocket</option>
-                <option value="Pro">Pro / Delivery</option>
-                <option value="Premium">Premium</option>
-              </select>
-            </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <select
+              value={selectedPlan}
+              onChange={e => setSelectedPlan(e.target.value)}
+              disabled={!tenantsAvailable}
+              className="bg-koma-page border border-zinc-800 rounded-lg px-3 py-2 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894] disabled:opacity-50"
+            >
+              <option value="ALL">Todos os Planos</option>
+              {SUBSCRIPTION_PLANS.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
 
-            <div className="flex items-center gap-1.5 text-xs text-koma-muted">
-              <span>Status:</span>
-              <select
-                value={selectedStatus}
-                onChange={e => setSelectedStatus(e.target.value)}
-                className="bg-koma-page border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894]"
-              >
-                <option value="ALL">Todos</option>
-                <option value="ACTIVE">Ativo</option>
-                <option value="SUSPENDED">Suspenso</option>
-              </select>
-            </div>
+            <select
+              value={selectedStatus}
+              onChange={e => setSelectedStatus(e.target.value)}
+              disabled={!tenantsAvailable}
+              className="bg-koma-page border border-zinc-800 rounded-lg px-3 py-2 text-xs text-koma-foreground focus:outline-none focus:border-[#00b894] disabled:opacity-50"
+            >
+              <option value="ALL">Todos os Status</option>
+              <option value="ACTIVE">Ativos</option>
+              <option value="SUSPENDED">Suspensos</option>
+              <option value="PENDING">Pendentes</option>
+            </select>
           </div>
         </div>
       </div>
 
-      {/* Main Tenants Table */}
-      <div className="bg-koma-card border border-[#1e293b] rounded-xl overflow-hidden shadow-sm">
+      {/* Tenants Table */}
+      <div className="bg-koma-card border border-[#1e293b] rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-koma-page/60 border-b border-zinc-800 text-koma-muted font-medium">
-                <th className="py-3 px-4">Restaurante / Slug</th>
+              <tr className="border-b border-zinc-800 text-koma-muted font-medium bg-koma-page/30">
+                <th className="py-3 px-4">Estabelecimento</th>
                 <th className="py-3 px-4">ID</th>
                 <th className="py-3 px-4">Plano</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Pagamento Online</th>
-                <th className="py-3 px-4">Volume Mensal</th>
-                <th className="py-3 px-4">Cadastrado em</th>
+                <th className="py-3 px-4">Volume (Mês)</th>
+                <th className="py-3 px-4">Cadastro</th>
                 <th className="py-3 px-4 text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50">
-              {filteredTenants.length === 0 ? (
+            <tbody className="divide-y divide-zinc-800/40">
+              {!tenantsAvailable ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-koma-muted">
-                    {isLoading ? "Consultando base de restaurantes..." : "Nenhum restaurante localizado com os filtros atuais."}
+                  <td colSpan={8} className="py-12 text-center text-koma-muted space-y-2">
+                    <Store className="w-8 h-8 text-zinc-600 mx-auto" />
+                    <div className="font-semibold text-koma-foreground text-sm">
+                      Dados dos restaurantes indisponíveis
+                    </div>
+                    <p className="text-xs text-koma-subtle max-w-md mx-auto">
+                      A listagem cross-tenant ainda não possui fonte auditável no servidor (planejada para a Fase 2).
+                    </p>
+                  </td>
+                </tr>
+              ) : filteredTenants.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-koma-muted">
+                    Nenhum restaurante localizado com os filtros selecionados.
                   </td>
                 </tr>
               ) : (
                 filteredTenants.map(tenant => {
                   const isSuspended = tenant.status === "SUSPENDED";
-                  const isConnected = tenant.id === "1" || tenant.id === "3";
 
                   return (
                     <tr key={tenant.id} className="hover:bg-koma-page/40 transition-colors">
@@ -231,7 +243,7 @@ export function SuperAdminTenantsTab({
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
                           tenant.plan === "Premium"
                             ? "bg-purple-950/50 text-purple-300 border-purple-800/40"
-                            : tenant.plan === "Pro" || tenant.plan === "Delivery"
+                            : tenant.plan === "Pro" || tenant.plan === "Delivery" || tenant.plan === "Bistro"
                             ? "bg-blue-950/50 text-blue-300 border-blue-800/40"
                             : "bg-emerald-950/50 text-emerald-300 border-emerald-800/40"
                         }`}>
@@ -252,32 +264,40 @@ export function SuperAdminTenantsTab({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        {tenant.id === "2" ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/30">
-                            Desconectado
-                          </span>
-                        ) : isConnected ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/30">
-                            Mercado Pago Ativo
+                        {tenant.onlinePaymentStatus ? (
+                          <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border ${
+                            tenant.onlinePaymentStatus === "connected"
+                              ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/30"
+                              : tenant.onlinePaymentStatus === "disconnected"
+                              ? "text-amber-400 bg-amber-950/40 border-amber-800/30"
+                              : "text-koma-subtle bg-zinc-900 border-zinc-800"
+                          }`}>
+                            {tenant.onlinePaymentStatus === "connected"
+                              ? "Mercado Pago Ativo"
+                              : tenant.onlinePaymentStatus === "disconnected"
+                              ? "Desconectado"
+                              : "Pendente"}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-koma-subtle bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                            Não configurado
+                          <span className="text-[11px] text-koma-subtle font-mono">
+                            Não disponível
                           </span>
                         )}
                       </td>
 
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-koma-foreground">
-                          {tenant.monthlyOrders || 0} pedidos
+                          {tenant.monthlyOrders != null ? `${tenant.monthlyOrders} pedidos` : "—"}
                         </div>
                         <div className="text-[11px] text-koma-muted">
-                          R$ {(tenant.monthlyBilling || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          {tenant.monthlyBilling != null
+                            ? `R$ ${tenant.monthlyBilling.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                            : "—"}
                         </div>
                       </td>
 
                       <td className="py-3.5 px-4 text-koma-muted text-[11px]">
-                        {tenant.createdAt || "2026-08-01"}
+                        {tenant.createdAt || "Não disponível"}
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
@@ -285,7 +305,7 @@ export function SuperAdminTenantsTab({
                           <button
                             type="button"
                             onClick={() => setSelectedTenant(tenant)}
-                            className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-koma-secondary hover:text-koma-foreground text-xs font-medium transition-colors flex items-center gap-1"
+                            className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-koma-secondary hover:text-koma-foreground text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
                             title="Ver detalhes"
                           >
                             <Eye className="w-3 h-3" /> Detalhes
@@ -293,7 +313,7 @@ export function SuperAdminTenantsTab({
 
                           <button
                             type="button"
-                            onClick={() => onToggleStatus(tenant.id, tenant.status)}
+                            onClick={() => onToggleStatus(tenant.id, tenant.status as "ACTIVE" | "SUSPENDED" | "PENDING")}
                             className={`p-1.5 rounded border transition-colors ${
                               isSuspended
                                 ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/40 hover:bg-emerald-900/50"
@@ -311,7 +331,7 @@ export function SuperAdminTenantsTab({
                               setFlushResult(null);
                               setShowFlushModal(true);
                             }}
-                            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-koma-subtle hover:text-amber-400 rounded transition-colors"
+                            className="p-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-koma-subtle hover:text-amber-400 rounded transition-colors cursor-pointer"
                             title="Limpar cache Redis deste tenant"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -339,7 +359,7 @@ export function SuperAdminTenantsTab({
               <button
                 type="button"
                 onClick={() => setSelectedTenant(null)}
-                className="text-koma-subtle hover:text-koma-foreground"
+                className="text-koma-subtle hover:text-koma-foreground cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -358,7 +378,9 @@ export function SuperAdminTenantsTab({
 
               <div className="bg-koma-page p-3 rounded-lg border border-zinc-800 space-y-1">
                 <span className="text-koma-muted">Slug do Cardápio</span>
-                <p className="font-mono text-koma-foreground">/c/{selectedTenant.subdomain}</p>
+                <p className="font-mono text-koma-foreground">
+                  {selectedTenant.subdomain ? `/c/${selectedTenant.subdomain}` : "Não configurado"}
+                </p>
               </div>
 
               <div className="bg-koma-page p-3 rounded-lg border border-zinc-800 space-y-1">
@@ -374,15 +396,20 @@ export function SuperAdminTenantsTab({
                 <CreditCard className="w-4 h-4 text-[#00b894]" /> Pagamentos & Split
               </h4>
               <p className="text-koma-muted">
-                Taxa de split aplicada conforme plano {selectedTenant.plan}:{" "}
+                Taxa de split conforme plano {selectedTenant.plan}:{" "}
                 <strong className="text-koma-secondary">
-                  {selectedTenant.plan === "Premium" ? "0,39%" : selectedTenant.plan === "Pro" ? "0,89%" : "1,79%"}
+                  {(() => {
+                    const planObj = SUBSCRIPTION_PLANS.find(
+                      p => p.id === selectedTenant.plan?.toLowerCase()
+                    );
+                    return planObj ? formatPercentage(planObj.splitFeeRate) : "Não disponível";
+                  })()}
                 </strong>
               </p>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-koma-muted">Conta Mercado Pago:</span>
-                <span className="font-semibold text-emerald-400">
-                  {selectedTenant.id === "2" ? "Desconectada para testes" : "Pronta para operação"}
+                <span className="font-semibold text-koma-secondary">
+                  {selectedTenant.onlinePaymentStatus || "Não disponível"}
                 </span>
               </div>
             </div>
@@ -402,87 +429,9 @@ export function SuperAdminTenantsTab({
               <button
                 type="button"
                 onClick={() => setSelectedTenant(null)}
-                className="px-4 py-1.5 bg-[#00b894] hover:bg-[#00c996] text-black text-xs font-bold rounded-lg transition-colors"
+                className="px-4 py-1.5 bg-[#00b894] hover:bg-[#00c996] text-black text-xs font-bold rounded-lg transition-colors cursor-pointer"
               >
                 Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Tenant Modal */}
-      {showNewTenantModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-koma-card border border-[#1e293b] rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-              <h3 className="text-base font-bold text-koma-foreground flex items-center gap-2">
-                <Plus className="w-5 h-5 text-[#00b894]" /> Novo Restaurante (Tenant)
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowNewTenantModal(false)}
-                className="text-koma-subtle hover:text-koma-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-3 bg-amber-950/30 border border-amber-800/40 rounded-lg text-xs space-y-1 text-amber-200">
-              <strong className="block font-bold">Aviso de Provisionamento:</strong>
-              <p>
-                O provisionamento automático via endpoint `/api/super-admin/restaurantes/onboarding` está agendado para a Fase 2.
-                Novos restaurantes atualmente são provisionados no banco de dados com isolamento transacional garantido.
-              </p>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-koma-secondary font-medium mb-1">Nome do Restaurante</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Cantina da Nonna"
-                  className="w-full bg-koma-page border border-zinc-800 rounded-lg px-3 py-2 text-koma-foreground focus:outline-none focus:border-[#00b894]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-koma-secondary font-medium mb-1">Slug Público</label>
-                <input
-                  type="text"
-                  placeholder="Ex: cantina-nonna"
-                  className="w-full bg-koma-page border border-zinc-800 rounded-lg px-3 py-2 text-koma-foreground font-mono focus:outline-none focus:border-[#00b894]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-koma-secondary font-medium mb-1">Plano Inicial</label>
-                <select className="w-full bg-koma-page border border-zinc-800 rounded-lg px-3 py-2 text-koma-foreground focus:outline-none focus:border-[#00b894]">
-                  <option value="Pocket">Pocket (R$ 97/mês + 1,79%)</option>
-                  <option value="Pro">Pro (R$ 197/mês + 0,89%)</option>
-                  <option value="Premium">Premium (R$ 347/mês + 0,39%)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
-              <button
-                type="button"
-                onClick={() => setShowNewTenantModal(false)}
-                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-koma-secondary hover:text-koma-foreground rounded-lg text-xs font-semibold"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNewTenantModal(false);
-                  onAddLog("Solicitação de cadastro de novo restaurante registrada.", "info");
-                }}
-                className="px-4 py-2 bg-[#00b894] hover:bg-[#00c996] text-black rounded-lg text-xs font-bold"
-              >
-                Registrar Tenant
               </button>
             </div>
           </div>
@@ -500,7 +449,7 @@ export function SuperAdminTenantsTab({
               <button
                 type="button"
                 onClick={() => setShowFlushModal(false)}
-                className="text-koma-subtle hover:text-koma-foreground"
+                className="text-koma-subtle hover:text-koma-foreground cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -521,7 +470,7 @@ export function SuperAdminTenantsTab({
               <button
                 type="button"
                 onClick={() => setShowFlushModal(false)}
-                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-koma-secondary hover:text-koma-foreground rounded-lg text-xs font-semibold"
+                className="px-3 py-2 bg-zinc-900 border border-zinc-700 text-koma-secondary hover:text-koma-foreground rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Fechar
               </button>
@@ -530,9 +479,47 @@ export function SuperAdminTenantsTab({
                 type="button"
                 onClick={handleFlushCache}
                 disabled={isFlushing}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {isFlushing ? "Limpando..." : "Confirmar Limpeza"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Tenant Modal */}
+      {showNewTenantModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-koma-card border border-[#1e293b] rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h3 className="text-base font-bold text-koma-foreground flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#00b894]" /> Novo Restaurante (Tenant)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowNewTenantModal(false)}
+                className="text-koma-subtle hover:text-koma-foreground cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-950/30 border border-amber-800/40 rounded-lg text-xs space-y-1 text-amber-200">
+              <strong className="block font-bold">Aviso de Provisionamento:</strong>
+              <p>
+                O provisionamento automático via endpoint `/api/super-admin/restaurantes/onboarding` está agendado para a Fase 2.
+                Novos restaurantes atualmente são provisionados no banco de dados com isolamento transacional garantido.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setShowNewTenantModal(false)}
+                className="px-4 py-1.5 bg-[#00b894] hover:bg-[#00c996] text-black text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Entendido
               </button>
             </div>
           </div>
