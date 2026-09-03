@@ -81,7 +81,7 @@ export default function CashierCatalog({
             eyebrow="CATÁLOGO"
             title="Produtos"
             accent="fáceis de controlar"
-            description="Escolha uma categoria e pause um item ou o grupo inteiro sem procurar em listas longas."
+            description="Selecione produtos para pausar, reajustar preços ou mover de categoria sem abrir item por item."
             metrics={[
               { label: 'produtos', value: apiProdutos.length },
               { label: 'disponíveis', value: apiProdutos.filter((item) => item.ativo !== false).length },
@@ -185,6 +185,26 @@ export default function CashierCatalog({
               }
               await fetchProdutos();
               showToast(ativo ? 'Produtos disponibilizados.' : 'Produtos pausados.');
+            }}
+            onBatchEdit={async (productIds, update) => {
+              const response = await fetch(`${apiBaseUrl}/produtos/edicao-lote`, {
+                method: 'PATCH',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ produto_ids: productIds, ...update }),
+              });
+              const payload = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                showToast(payload.detail || 'Não foi possível editar os produtos selecionados.', 'error');
+                return false;
+              }
+              await fetchProdutos();
+              if (update.reajuste_percentual !== undefined) {
+                const prefix = update.reajuste_percentual > 0 ? '+' : '';
+                showToast(`Preços reajustados em ${prefix}${update.reajuste_percentual}%.`);
+              } else {
+                showToast('Produtos movidos de categoria.');
+              }
+              return true;
             }}
             focusCategoryId={cardapioCategoryFocus}
             onFocusCategoryHandled={() => setCardapioCategoryFocus(null)}
