@@ -3,7 +3,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
@@ -26,7 +26,16 @@ class TenantOnboardingRequest(BaseModel):
     plan: str = Field(min_length=2, max_length=32)
     admin_name: str = Field(min_length=2, max_length=100)
     admin_email: str = Field(min_length=3, max_length=100)
-    temporary_password: str = Field(min_length=8, max_length=128)
+    temporary_password: str = Field(min_length=8, max_length=72)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("temporary_password")
+    @classmethod
+    def validate_bcrypt_password_size(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("A senha temporária deve possuir no máximo 72 bytes.")
+        return value
 
 
 def _normalize_payload(payload: TenantOnboardingRequest) -> dict[str, str]:
@@ -106,10 +115,11 @@ def _serialize_conflict(detail: str) -> HTTPException:
 
 def _slug_owner_id(db, slug: str) -> int | None:
     if db.get_bind().dialect.name == "postgresql":
-        return db.execute(
+        value = db.execute(
             text("SELECT id FROM koma_internal.resolve_public_restaurant(:identifier)"),
             {"identifier": slug},
         ).scalar_one_or_none()
+        return int(value) if value is not None else None
 
     value = db.execute(
         text(
