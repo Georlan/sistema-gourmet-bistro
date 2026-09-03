@@ -33,6 +33,10 @@ interface CardapioProdutosTabProps {
   onRemoveProduct: (product: Product) => Promise<void>;
   onToggleProduct: (product: Product, ativo: boolean) => Promise<void>;
   onSetCategoryAvailability: (productIds: string[], ativo: boolean) => Promise<void>;
+  onBatchEdit: (
+    productIds: string[],
+    update: { reajuste_percentual?: number; categoria_id?: string },
+  ) => Promise<boolean>;
   focusCategoryId?: string | null;
   onFocusCategoryHandled?: () => void;
 }
@@ -77,6 +81,7 @@ export function CardapioProdutosTab({
   onRemoveProduct,
   onToggleProduct,
   onSetCategoryAvailability,
+  onBatchEdit,
   focusCategoryId,
   onFocusCategoryHandled,
 }: CardapioProdutosTabProps) {
@@ -88,6 +93,8 @@ export function CardapioProdutosTab({
   const [pendingBatchAction, setPendingBatchAction] = useState(false);
   const [pendingCategoryAction, setPendingCategoryAction] = useState(false);
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
+  const [batchPriceAdjustment, setBatchPriceAdjustment] = useState('');
+  const [batchCategoryId, setBatchCategoryId] = useState('');
 
   useEffect(() => {
     if (!focusCategoryId) return;
@@ -177,6 +184,11 @@ export function CardapioProdutosTab({
   const pausedCount = produtos.length - activeCount;
   const productsWithMedia = mediaStats.single + mediaStats.gallery;
   const mediaCoverage = produtos.length > 0 ? Math.round((productsWithMedia / produtos.length) * 100) : 100;
+  const parsedBatchPriceAdjustment = Number(batchPriceAdjustment.replace(',', '.'));
+  const batchPriceAdjustmentValid = batchPriceAdjustment.trim() !== ''
+    && Number.isFinite(parsedBatchPriceAdjustment)
+    && parsedBatchPriceAdjustment >= -90
+    && parsedBatchPriceAdjustment <= 500;
 
   useEffect(() => {
     const validProductIds = new Set(produtos.map((product) => String(product.id)));
@@ -210,6 +222,21 @@ export function CardapioProdutosTab({
     try {
       await onSetCategoryAvailability(Array.from(selectedProductIds), available);
       setSelectedProductIds(new Set());
+    } finally {
+      setPendingBatchAction(false);
+    }
+  };
+
+  const applyBatchEdit = async (update: { reajuste_percentual?: number; categoria_id?: string }) => {
+    if (!selectedCount || pendingBatchAction) return;
+    setPendingBatchAction(true);
+    try {
+      const updated = await onBatchEdit(Array.from(selectedProductIds), update);
+      if (updated) {
+        setSelectedProductIds(new Set());
+        if (update.reajuste_percentual !== undefined) setBatchPriceAdjustment('');
+        if (update.categoria_id) setBatchCategoryId('');
+      }
     } finally {
       setPendingBatchAction(false);
     }
@@ -454,37 +481,88 @@ export function CardapioProdutosTab({
       )}
 
       {selectedCount > 0 && (
-        <section className="flex flex-col gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-500/[0.08] md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="font-black text-slate-950 dark:text-white">
-              {selectedCount} produto{selectedCount === 1 ? '' : 's'} selecionado{selectedCount === 1 ? '' : 's'}
-            </p>
-            <p className="text-xs text-slate-600 dark:text-slate-400">A alteração será aplicada de uma vez.</p>
+        <section className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-500/[0.08]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-black text-slate-950 dark:text-white">
+                {selectedCount} produto{selectedCount === 1 ? '' : 's'} selecionado{selectedCount === 1 ? '' : 's'}
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">Pausar, reajustar ou mover sem abrir produto por produto.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void applyBatchAvailability(true)}
+                disabled={pendingBatchAction}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
+              >
+                <PlayCircle size={16} /> Voltar a vender
+              </button>
+              <button
+                type="button"
+                onClick={() => void applyBatchAvailability(false)}
+                disabled={pendingBatchAction}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300 bg-white px-4 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300"
+              >
+                <PauseCircle size={16} /> Pausar venda
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProductIds(new Set())}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-700 dark:border-white/15 dark:text-slate-300"
+              >
+                <X size={15} /> Limpar
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void applyBatchAvailability(true)}
-              disabled={pendingBatchAction}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400 disabled:cursor-wait disabled:opacity-60"
-            >
-              <PlayCircle size={16} /> Voltar a vender
-            </button>
-            <button
-              type="button"
-              onClick={() => void applyBatchAvailability(false)}
-              disabled={pendingBatchAction}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-300 bg-white px-4 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300"
-            >
-              <PauseCircle size={16} /> Pausar venda
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedProductIds(new Set())}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-700 dark:border-white/15 dark:text-slate-300"
-            >
-              <X size={15} /> Limpar
-            </button>
+
+          <div className="mt-3 grid gap-2 border-t border-emerald-200 pt-3 dark:border-emerald-500/20 lg:grid-cols-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-black/15">
+              <span className="px-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Reajuste</span>
+              <input
+                type="number"
+                min={-90}
+                max={500}
+                step="0.1"
+                value={batchPriceAdjustment}
+                onChange={(event) => setBatchPriceAdjustment(event.target.value)}
+                placeholder="Ex.: 8 ou -5"
+                aria-label="Reajuste percentual dos produtos selecionados"
+                className="h-9 min-w-32 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-900 outline-none focus:border-emerald-500 dark:border-white/15 dark:bg-black/20 dark:text-white"
+              />
+              <span className="text-xs font-black text-slate-500">%</span>
+              <button
+                type="button"
+                onClick={() => void applyBatchEdit({ reajuste_percentual: parsedBatchPriceAdjustment })}
+                disabled={pendingBatchAction || !batchPriceAdjustmentValid}
+                className="h-9 rounded-lg bg-slate-900 px-3 text-[10px] font-black text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"
+              >
+                Aplicar preço
+              </button>
+            </div>
+
+            <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-white/10 dark:bg-black/15">
+              <span className="px-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Categoria</span>
+              <select
+                value={batchCategoryId}
+                onChange={(event) => setBatchCategoryId(event.target.value)}
+                aria-label="Nova categoria dos produtos selecionados"
+                className="h-9 min-w-44 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-900 outline-none focus:border-emerald-500 dark:border-white/15 dark:bg-black/20 dark:text-white"
+              >
+                <option value="">Mover para...</option>
+                {categorias.map((category) => (
+                  <option key={category.id} value={category.id}>{category.nome}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void applyBatchEdit({ categoria_id: batchCategoryId })}
+                disabled={pendingBatchAction || !batchCategoryId}
+                className="h-9 rounded-lg bg-slate-900 px-3 text-[10px] font-black text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"
+              >
+                Mover
+              </button>
+            </div>
           </div>
         </section>
       )}
