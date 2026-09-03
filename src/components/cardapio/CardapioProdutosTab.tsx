@@ -354,7 +354,11 @@ export function CardapioProdutosTab({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => (selectionMode ? leaveSelectionMode() : setSelectionMode(true))}
+              onClick={() => {
+                setProductDetailId(null);
+                if (selectionMode) leaveSelectionMode();
+                else setSelectionMode(true);
+              }}
               className={clsx(
                 'inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black transition',
                 selectionMode
@@ -510,7 +514,7 @@ export function CardapioProdutosTab({
                 disabled={visibleIds.length === 0}
                 className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 disabled:opacity-40 dark:border-white/15 dark:bg-black/15 dark:text-slate-200"
               >
-                <ListChecks size={14} /> {allVisibleSelected ? 'Desmarcar exibidos' : `Selecionar ${filteredProducts.length} exibidos`}
+                <ListChecks size={14} /> {allVisibleSelected ? 'Desmarcar todos' : `Selecionar todos os ${filteredProducts.length}`}
               </button>
               <button
                 type="button"
@@ -607,11 +611,12 @@ export function CardapioProdutosTab({
               const isSelected = selectedProductIds.has(product.id);
               const mediaCount = productMediaCount(product);
               const detailKey = String(product.id);
+              const detailOpen = productDetailId === detailKey;
               return (
                 <article
                   key={product.id}
                   className={clsx(
-                    'group relative flex min-h-40 flex-col rounded-2xl border p-3 shadow-sm transition',
+                    'relative flex min-h-40 flex-col rounded-2xl border p-3 shadow-sm transition',
                     isAvailable
                       ? 'border-slate-200 bg-white hover:border-emerald-400 dark:border-white/10 dark:bg-[#141b16] dark:hover:border-emerald-500/35'
                       : 'border-rose-200 bg-rose-50/60 hover:border-rose-400 dark:border-rose-500/25 dark:bg-rose-950/15',
@@ -655,49 +660,57 @@ export function CardapioProdutosTab({
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setProductDetailId((current) => current === detailKey ? null : detailKey)}
-                      aria-expanded={productDetailId === detailKey}
-                      aria-controls={`catalog-product-details-${detailKey}`}
-                      aria-label={`Ver detalhes de ${product.nome}`}
-                      title="Ver detalhes"
-                      className="absolute right-11 top-3 z-20 grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-emerald-300"
-                    >
-                      <Info size={14} />
-                    </button>
-                    <details className="absolute right-3 top-3 z-30">
-                      <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-white" aria-label={`Mais ações para ${product.nome}`}>
-                        <MoreHorizontal size={16} />
-                      </summary>
-                      <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#17201a]">
-                        <button type="button" onClick={() => onDuplicateProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">
-                          <Copy size={14} /> Duplicar
+                    {!selectionMode && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setProductDetailId((current) => current === detailKey ? null : detailKey)}
+                          aria-expanded={detailOpen}
+                          aria-controls={`catalog-product-details-${detailKey}`}
+                          aria-label={`${detailOpen ? 'Ocultar' : 'Ver'} detalhes de ${product.nome}`}
+                          title={detailOpen ? 'Ocultar detalhes' : 'Ver detalhes'}
+                          className="absolute right-11 top-3 z-20 grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-emerald-300"
+                        >
+                          <Info size={14} />
                         </button>
-                        <button type="button" onClick={() => void onRemoveProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">
-                          <Trash2 size={14} /> Excluir
-                        </button>
-                      </div>
-                    </details>
+                        <details className="absolute right-3 top-3 z-30">
+                          <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-white" aria-label={`Mais ações para ${product.nome}`}>
+                            <MoreHorizontal size={16} />
+                          </summary>
+                          <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#17201a]">
+                            <button type="button" onClick={() => onDuplicateProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">
+                              <Copy size={14} /> Duplicar
+                            </button>
+                            <button type="button" onClick={() => void onRemoveProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">
+                              <Trash2 size={14} /> Excluir
+                            </button>
+                          </div>
+                        </details>
+                      </>
+                    )}
                   </div>
 
-                  <div
-                    id={`catalog-product-details-${detailKey}`}
-                    role="note"
-                    className={clsx(
-                      'pointer-events-none absolute inset-x-3 top-14 z-20 rounded-xl border border-slate-200 bg-white/95 p-2.5 text-left shadow-xl backdrop-blur-md transition-all dark:border-white/10 dark:bg-[#17201a]/95',
-                      'translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100',
-                      productDetailId === detailKey && 'translate-y-0 opacity-100',
-                    )}
-                  >
-                    <span className="block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Detalhes do produto</span>
-                    <p className="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
-                      {product.descricao || 'Sem descrição cadastrada.'}
+                  {product.descricao && !detailOpen && (
+                    <p className="mt-2 line-clamp-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+                      {product.descricao}
                     </p>
-                    <span className="mt-1.5 block font-mono text-[8px] text-slate-500">
-                      Cód. {product.id} · {mediaCount === 0 ? 'Sem foto' : `${mediaCount} foto${mediaCount === 1 ? '' : 's'}`}
-                    </span>
-                  </div>
+                  )}
+
+                  {detailOpen && (
+                    <div
+                      id={`catalog-product-details-${detailKey}`}
+                      role="note"
+                      className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-left dark:border-white/10 dark:bg-black/15"
+                    >
+                      <span className="block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Detalhes do produto</span>
+                      <p className="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+                        {product.descricao || 'Sem descrição cadastrada.'}
+                      </p>
+                      <span className="mt-1.5 block font-mono text-[8px] text-slate-500">
+                        Cód. {product.id} · {mediaCount === 0 ? 'Sem foto' : `${mediaCount} foto${mediaCount === 1 ? '' : 's'}`}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
                     <div>
