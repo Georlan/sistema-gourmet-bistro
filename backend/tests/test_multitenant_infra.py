@@ -16,6 +16,11 @@ from app.main import app
 
 GLOBAL_MODEL_TABLES = {"restaurantes"}
 
+# Tabelas tenant-owned manipuladas exclusivamente pelo control plane recebem
+# restaurante_id explicitamente dentro de tenant_session_scope, em vez de depender
+# de default ORM implícito. Continuam nullable=False e protegidas pelo mesmo RLS.
+CONTROL_PLANE_TENANT_TABLES = {"restaurant_trials"}
+
 # Eventos recebidos da Meta podem chegar antes de o provedor permitir
 # correlacioná-los a uma mensagem/tenant. A tabela continua sob RLS e linhas
 # sem tenant não são visíveis ao runtime, mas a coluna é intencionalmente nula.
@@ -41,6 +46,8 @@ def test_all_tenant_models_declare_a_required_context_default():
             assert tenant_column.nullable is True, table_name
             continue
         assert tenant_column.nullable is False, table_name
+        if table_name in CONTROL_PLANE_TENANT_TABLES:
+            continue
         assert tenant_column.default is not None, table_name
 
 def test_current_restaurante_id_default_is_none_outside_request():
