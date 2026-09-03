@@ -19,7 +19,7 @@ GLOBAL_MODEL_TABLES = {"restaurantes"}
 # Tabelas tenant-owned manipuladas exclusivamente pelo control plane recebem
 # restaurante_id explicitamente dentro de tenant_session_scope, em vez de depender
 # de default ORM implícito. Continuam nullable=False e protegidas pelo mesmo RLS.
-CONTROL_PLANE_TENANT_TABLES = {"restaurant_trials"}
+CONTROL_PLANE_TENANT_TABLES = {"restaurant_trials", "support_sessions"}
 
 # Eventos recebidos da Meta podem chegar antes de o provedor permitir
 # correlacioná-los a uma mensagem/tenant. A tabela continua sob RLS e linhas
