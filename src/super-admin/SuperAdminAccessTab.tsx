@@ -221,6 +221,40 @@ export function SuperAdminAccessTab({ globalSearch }: { globalSearch: string }) 
     }
   };
 
+  const revokeSessions = async () => {
+    if (!selected || !editor) return;
+    const reason = editor.reason.trim();
+    if (reason.length < 3) {
+      setError("Informe um motivo administrativo com pelo menos 3 caracteres.");
+      return;
+    }
+    if (editor.user.status === "pendente_ativacao") {
+      setError("Usuário pendente ainda não possui sessão operacional ativa para encerrar.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await superAdminFetch(
+        `/api/super-admin/access/restaurantes/${encodeURIComponent(selected.restaurantId)}/usuarios/${encodeURIComponent(editor.user.id)}/revogar-sessoes`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        },
+      );
+      const body = await response.json() as { message?: string };
+      setNotice(body.message || "Sessões do usuário encerradas com sucesso.");
+      setEditor(null);
+      await Promise.all([loadTenants(), loadDetail(selected.restaurantId)]);
+    } catch (err) {
+      setError(superAdminErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-5" data-testid="superadmin-access-center">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -331,7 +365,7 @@ export function SuperAdminAccessTab({ globalSearch }: { globalSearch: string }) 
           <div className="flex items-start justify-between gap-4 border-b border-zinc-800 p-4">
             <div>
               <div className="flex items-center gap-2"><UsersRound className="h-4 w-4 text-[#00b894]" /><h3 className="text-sm font-bold text-koma-foreground">Equipe · {selected.restaurantName}</h3></div>
-              <p className="mt-1 text-[11px] text-koma-muted">Bloquear acesso passa a valer nas próximas requisições autenticadas. Reativar pode tornar novamente válidos tokens ainda não expirados; revogação permanente de sessões terá uma camada dedicada.</p>
+              <p className="mt-1 text-[11px] text-koma-muted">Bloquear acesso revoga as sessões já emitidas. Reativar o usuário não restaura tokens antigos; um novo login é necessário.</p>
             </div>
             <button type="button" onClick={() => setSelected(null)} className="rounded p-1 text-koma-muted hover:text-koma-foreground" aria-label="Fechar equipe"><X className="h-4 w-4" /></button>
           </div>
@@ -391,12 +425,14 @@ export function SuperAdminAccessTab({ globalSearch }: { globalSearch: string }) 
                 <span><strong>Forçar override administrativo</strong><span className="mt-1 block text-[11px] text-amber-200/80">Use quando a decisão for intencional mesmo que deixe o tenant sem administrador ativo. O override fica explícito na auditoria.</span></span>
               </label>
 
-              <div className="rounded-lg border border-zinc-800 bg-koma-page/60 p-3 text-[11px] text-koma-muted">
+              <div className="space-y-2 rounded-lg border border-zinc-800 bg-koma-page/60 p-3 text-[11px] text-koma-muted">
                 <div className="flex gap-2"><Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>Este controle não lê, redefine ou revela senha, token de convite, token Mercado Pago ou credencial de sessão.</span></div>
+                <div>Encerrar sessões invalida os tokens operacionais já emitidos sem alterar senha, cargo, status ou dados do usuário.</div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-zinc-800 p-4">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-800 p-4">
               <button type="button" onClick={() => setEditor(null)} disabled={saving} className="rounded-lg border border-zinc-700 px-4 py-2 text-xs font-bold text-koma-secondary">Cancelar</button>
+              <button type="button" onClick={() => void revokeSessions()} disabled={saving || editor.user.status === "pendente_ativacao"} className="rounded-lg border border-rose-800 px-4 py-2 text-xs font-black text-rose-200 hover:bg-rose-950/30 disabled:opacity-50">{saving ? "Aplicando..." : "Encerrar sessões"}</button>
               <button type="button" onClick={() => void saveAccess()} disabled={saving} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-black text-black disabled:opacity-50">{saving ? "Aplicando..." : "Aplicar controle"}</button>
             </div>
           </div>
