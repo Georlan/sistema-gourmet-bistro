@@ -11,6 +11,7 @@ import {
 } from '../../../domain/cashierOrderProjection';
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
+import { useAutomaticOrderAcceptance } from './useAutomaticOrderAcceptance';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly columns: {
@@ -126,6 +127,7 @@ export function CaixaOrdersWorkspace({
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
   const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
+  useAutomaticOrderAcceptance(autoAccept, deliveryOrders, actions.acceptDigitalOrder);
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
   const ordersStages = [
