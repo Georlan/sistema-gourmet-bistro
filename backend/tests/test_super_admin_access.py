@@ -8,7 +8,7 @@ from app.database import SessionLocal, tenant_session_scope
 from app.main import app
 from app.models import SuperAdminAuditLog, Usuario
 from app.routes import super_admin
-from app.security import create_access_token, get_password_hash
+from app.security import create_access_token, get_password_hash, get_user_token_version
 
 
 client = TestClient(app)
@@ -37,13 +37,33 @@ def _superadmin_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _tenant_headers(user_id: str, tenant_id: int) -> dict[str, str]:
+def _tenant_headers(
+    user_id: str,
+    tenant_id: int,
+    *,
+    token_version: int | None = None,
+) -> dict[str, str]:
     token = create_access_token(
         subject=user_id,
         restaurante_id=tenant_id,
         role="admin",
+        token_version=token_version,
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+def _fresh_tenant_headers(user_id: str, tenant_id: int) -> dict[str, str]:
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id):
+            token_version = get_user_token_version(
+                db,
+                user_id=user_id,
+                restaurante_id=tenant_id,
+            )
+    finally:
+        db.close()
+    return _tenant_headers(user_id, tenant_id, token_version=token_version)
 
 
 def _onboarding_payload() -> dict[str, str]:
@@ -68,6 +88,7 @@ def _cleanup_tenant(tenant_id: int | None) -> None:
                 "restaurant_trials",
                 "super_admin_audit_logs",
                 "restaurant_payment_accounts",
+                "user_session_versions",
                 "usuarios",
                 "configuracoes_restaurante",
             ):
@@ -145,17 +166,18 @@ def test_access_center_lista_diagnostico_real_sem_expor_segredos():
         assert "token_convite" not in serialized
         assert "access_token" not in serialized
         assert "refresh_token" not in serialized
+        assert "token_version" not in serialized
     finally:
         _cleanup_tenant(tenant_id)
 
 
-def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
+def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_sem_ressuscitar_token_antigo():
     tenant_id = None
     try:
         tenant_id, user_id = _create_tenant()
-        tenant_headers = _tenant_headers(user_id, tenant_id)
+        legacy_headers = _tenant_headers(user_id, tenant_id)
 
-        before = client.get("/auth/usuarios", headers=tenant_headers)
+        before = client.get("/auth/usuarios", headers=legacy_headers)
         assert before.status_code == 200, before.text
 
         guarded = client.put(
@@ -180,6 +202,7 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
         )
         assert forced.status_code == 200, forced.text
         assert forced.json()["forced"] is True
+        assert forced.json()["sessionsRevoked"] is True
         assert forced.json()["user"]["status"] == "inativo"
         assert forced.json()["tenant"]["activeAdmins"] == 0
         assert any(
@@ -187,8 +210,8 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
             for diagnostic in forced.json()["tenant"]["diagnostics"]
         )
 
-        blocked = client.get("/auth/usuarios", headers=tenant_headers)
-        assert blocked.status_code == 403, blocked.text
+        blocked = client.get("/auth/usuarios", headers=legacy_headers)
+        assert blocked.status_code == 401, blocked.text
 
         db = SessionLocal()
         try:
@@ -209,6 +232,8 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
                 }
                 assert audit.after_data["status"] == "inativo"
                 assert audit.after_data["forced"] is True
+                assert audit.after_data["sessions_revoked"] is True
+                assert "token" not in str(audit.after_data).lower()
         finally:
             db.close()
 
@@ -222,12 +247,115 @@ def test_superadmin_pode_forcar_bloqueio_do_ultimo_admin_com_auditoria():
         )
         assert reactivated.status_code == 200, reactivated.text
         assert reactivated.json()["forced"] is False
+        assert reactivated.json()["sessionsRevoked"] is False
         assert reactivated.json()["user"]["status"] == "ativo"
 
-        # JWTs são stateless hoje: reativar pode tornar novamente válido um token
-        # ainda não expirado. Revogação permanente de sessões é uma camada futura.
-        restored = client.get("/auth/usuarios", headers=tenant_headers)
+        # Reativar a identidade nunca ressuscita um JWT emitido antes do bloqueio.
+        still_revoked = client.get("/auth/usuarios", headers=legacy_headers)
+        assert still_revoked.status_code == 401, still_revoked.text
+
+        fresh_headers = _fresh_tenant_headers(user_id, tenant_id)
+        restored = client.get("/auth/usuarios", headers=fresh_headers)
         assert restored.status_code == 200, restored.text
+    finally:
+        _cleanup_tenant(tenant_id)
+
+
+def test_superadmin_revoga_sessoes_sem_alterar_status_cargo_ou_credencial():
+    tenant_id = None
+    try:
+        tenant_id, user_id = _create_tenant()
+        old_headers = _tenant_headers(user_id, tenant_id)
+
+        assert client.get("/auth/usuarios", headers=old_headers).status_code == 200
+
+        revoked = client.post(
+            f"/api/super-admin/access/restaurantes/{tenant_id}/usuarios/{user_id}/revogar-sessoes",
+            headers=_superadmin_headers(),
+            json={"reason": "Encerramento preventivo das sessões do administrador"},
+        )
+        assert revoked.status_code == 200, revoked.text
+        assert revoked.json()["message"] == "Sessões do usuário encerradas com sucesso."
+        assert revoked.json()["user"]["status"] == "ativo"
+        assert revoked.json()["user"]["role"] == "admin"
+        assert "token" not in revoked.text.lower()
+        assert "senha" not in revoked.text.lower()
+
+        assert client.get("/auth/usuarios", headers=old_headers).status_code == 401
+
+        detail = client.get(
+            f"/api/super-admin/access/restaurantes/{tenant_id}",
+            headers=_superadmin_headers(),
+        )
+        assert detail.status_code == 200, detail.text
+        user_payload = next(user for user in detail.json()["users"] if user["id"] == user_id)
+        assert user_payload["status"] == "ativo"
+        assert user_payload["role"] == "admin"
+
+        fresh_headers = _fresh_tenant_headers(user_id, tenant_id)
+        assert client.get("/auth/usuarios", headers=fresh_headers).status_code == 200
+
+        db = SessionLocal()
+        try:
+            with tenant_session_scope(db, tenant_id):
+                audit = (
+                    db.query(SuperAdminAuditLog)
+                    .filter(
+                        SuperAdminAuditLog.restaurante_id == tenant_id,
+                        SuperAdminAuditLog.action == "SUPERADMIN_USER_SESSIONS_REVOKED",
+                    )
+                    .one()
+                )
+                assert audit.reason == "Encerramento preventivo das sessões do administrador"
+                assert audit.before_data == {
+                    "user_id": user_id,
+                    "status": "ativo",
+                    "role": "admin",
+                }
+                assert audit.after_data == {
+                    "user_id": user_id,
+                    "status": "ativo",
+                    "role": "admin",
+                    "sessions_revoked": True,
+                }
+                serialized = f"{audit.before_data} {audit.after_data}".lower()
+                assert "token" not in serialized
+                assert "senha" not in serialized
+        finally:
+            db.close()
+    finally:
+        _cleanup_tenant(tenant_id)
+
+
+def test_superadmin_nao_revoga_sessao_de_convite_pendente():
+    tenant_id = None
+    try:
+        tenant_id, _ = _create_tenant()
+        pending_user_id = str(uuid.uuid4())
+        db = SessionLocal()
+        try:
+            with tenant_session_scope(db, tenant_id):
+                db.add(
+                    Usuario(
+                        id=pending_user_id,
+                        restaurante_id=tenant_id,
+                        nome="Convite Pendente",
+                        email=f"pending-{uuid.uuid4().hex[:8]}@example.test",
+                        cargo="garcom",
+                        status="pendente_ativacao",
+                    )
+                )
+                db.commit()
+        finally:
+            db.close()
+
+        response = client.post(
+            f"/api/super-admin/access/restaurantes/{tenant_id}/usuarios/{pending_user_id}/revogar-sessoes",
+            headers=_superadmin_headers(),
+            json={"reason": "Teste de convite ainda sem sessão operacional"},
+        )
+        assert response.status_code == 409, response.text
+        assert "sessão operacional" in response.json()["detail"]
     finally:
         _cleanup_tenant(tenant_id)
 
