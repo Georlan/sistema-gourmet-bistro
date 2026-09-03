@@ -56,7 +56,7 @@ test('vendas and caixa expose existing operational views as children', () => {
   assert.equal(getCashierNavigationParentId('caixa_movimentacoes'), 'financeiro');
 });
 
-test('cadastros expose existing catalog inventory and customer views without creating screens', () => {
+test('cadastros keep sidebar compact while preserving existing workspace owners', () => {
   const cardapio = parents().find((item) => item.id === 'cardapio');
   const estoque = parents().find((item) => item.id === 'estoque');
   const clientes = parents().find((item) => item.id === 'clientes');
@@ -65,39 +65,30 @@ test('cadastros expose existing catalog inventory and customer views without cre
     'Produtos', 'Complementos', 'Preparo e impressão',
   ]);
   assert.deepEqual(estoque?.children?.map((child) => child.label), [
-    'Ingredientes', 'Histórico', 'Inventário', 'Fornecedores',
+    'Estoque', 'Compras', 'Fornecedores',
   ]);
-  assert.deepEqual(clientes?.children?.map((child) => child.label), [
-    'Clientes', 'Fidelidade', 'Cupons & promoções',
-  ]);
+  assert.equal(clientes?.children, undefined);
 
   assert.deepEqual(getCashierNavigationTarget('cardapio_preparo'), { tab: 'cardapio', subTab: 'categorias' });
   assert.deepEqual(getCashierNavigationTarget('estoque_fornecedores'), { tab: 'estoque', subTab: 'fornecedores' });
-  assert.deepEqual(getCashierNavigationTarget('clientes_cupons'), { tab: 'clientes', subTab: 'cupons' });
+  assert.deepEqual(getCashierNavigationTarget('clientes'), { tab: 'clientes', subTab: 'clientes' });
+  assert.equal(getCashierNavigationTarget('clientes_cupons'), undefined);
 });
 
-test('gestao exposes existing report and team views without duplicating owners', () => {
+test('gestao keeps reports and team as single sidebar destinations', () => {
   const relatorios = parents().find((item) => item.id === 'relatorios');
   const equipe = parents().find((item) => item.id === 'permissoes_cargos');
 
-  assert.deepEqual(relatorios?.children?.map((child) => child.label), [
-    'Visão geral', 'Financeiro', 'Produtos', 'Equipe',
-  ]);
-  assert.deepEqual(equipe?.children?.map((child) => child.label), [
-    'Pessoas', 'Funções e acessos',
-  ]);
-
-  assert.deepEqual(getCashierNavigationTarget('relatorios_financeiro'), {
-    tab: 'relatorios', subTab: 'financeiro',
+  assert.equal(relatorios?.children, undefined);
+  assert.equal(equipe?.children, undefined);
+  assert.deepEqual(getCashierNavigationTarget('relatorios'), {
+    tab: 'relatorios', subTab: 'visao_geral',
   });
-  assert.deepEqual(getCashierNavigationTarget('relatorios_equipe'), {
-    tab: 'relatorios', subTab: 'equipe',
+  assert.deepEqual(getCashierNavigationTarget('permissoes_cargos'), {
+    tab: 'permissoes_cargos', subTab: 'pessoas',
   });
-  assert.deepEqual(getCashierNavigationTarget('equipe_funcoes_acessos'), {
-    tab: 'permissoes_cargos', subTab: 'cargos_permissoes',
-  });
-  assert.equal(getCashierNavigationParentId('relatorios_produtos'), 'relatorios');
-  assert.equal(getCashierNavigationParentId('equipe_pessoas'), 'permissoes_cargos');
+  assert.equal(getCashierNavigationTarget('relatorios_financeiro'), undefined);
+  assert.equal(getCashierNavigationTarget('equipe_funcoes_acessos'), undefined);
 });
 
 test('navigation tree owns default tab and subtab destinations', () => {
@@ -158,4 +149,20 @@ test('desktop and mobile delegate nested rendering to the same component', () =>
     assert.match(source, /groups=\{CASHIER_SIDEBAR_GROUPS\}/);
     assert.doesNotMatch(source, /group\.items\.map/);
   }
+});
+
+test('operation horizontal tabs mirror Navigation Tree v2 children', () => {
+  const caixa = readFileSync(
+    new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
+  );
+  assert.match(caixa, /operationSubnavItems = getCashierNavigationItem\('operacao'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /operationSubnavItems\.map/);
+});
+
+test('CaixaPanel delegates operation subnav clicks and active state to the shared navigation controller', () => {
+  const caixa = readFileSync(
+    new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
+  );
+  assert.match(caixa, /handleSidebarNavigation\(item\.id\)/);
+  assert.match(caixa, /activeSubTab === item\.target\.subTab/);
 });
