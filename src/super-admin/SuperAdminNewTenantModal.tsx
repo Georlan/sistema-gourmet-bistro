@@ -14,6 +14,13 @@ type OnboardingResponse = {
   plan: string;
   status: string;
   onlinePaymentStatus: string;
+  trial: {
+    status: string;
+    startedAt: string;
+    endsAt: string;
+    daysRemaining: number;
+    daysGranted: number;
+  };
   admin: {
     id: string;
     name: string;
@@ -41,6 +48,15 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 100);
+}
+
+function formatTrialEnd(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "data indisponível";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
@@ -152,7 +168,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
               </div>
               <div>
                 <h3 className="text-base font-bold text-koma-foreground">Restaurante criado</h3>
-                <p className="mt-1 text-xs text-koma-muted">Tenant #{created.id} provisionado e pronto para o primeiro acesso.</p>
+                <p className="mt-1 text-xs text-koma-muted">Tenant #{created.id} provisionado com {created.trial.daysGranted} dias grátis.</p>
               </div>
             </div>
             <button type="button" onClick={close} className="text-koma-subtle hover:text-koma-foreground"><X className="h-5 w-5" /></button>
@@ -160,7 +176,14 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 text-xs">
             <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Restaurante</span><p className="mt-1 font-bold text-koma-foreground">{created.name}</p><p className="font-mono text-[10px] text-koma-subtle">#{created.id} · {created.subdomain}</p></div>
-            <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Plano</span><p className="mt-1 font-bold text-koma-foreground">{officialCreatedPlan?.name || created.plan}</p><p className="text-[10px] text-koma-subtle">Mercado Pago: desconectado</p></div>
+            <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Plano de recursos</span><p className="mt-1 font-bold text-koma-foreground">{officialCreatedPlan?.name || created.plan}</p><p className="text-[10px] text-koma-subtle">Mercado Pago do cardápio: desconectado</p></div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-4 text-xs">
+            <p className="font-bold text-emerald-200">Período grátis ativo</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-emerald-100/70">
+              {created.trial.daysRemaining} dias disponíveis · termina em {formatTrialEnd(created.trial.endsAt)}. A expiração não suspende o restaurante automaticamente nesta etapa; o Super Admin mantém o controle da decisão.
+            </p>
           </div>
 
           <div className="mt-4 rounded-lg border border-amber-800/40 bg-amber-950/20 p-4 text-xs">
@@ -192,7 +215,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-koma-foreground"><Plus className="h-5 w-5 text-[#00b894]" /> Novo restaurante</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">Cria o tenant, configuração padrão e administrador inicial em uma única operação.</p>
+            <p className="mt-1 text-[10px] text-koma-muted">Cria o tenant, configuração padrão, administrador inicial e 7 dias grátis em uma única operação.</p>
           </div>
           <button type="button" onClick={close} disabled={isSubmitting} className="text-koma-subtle hover:text-koma-foreground disabled:opacity-50"><X className="h-5 w-5" /></button>
         </div>
@@ -203,7 +226,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Slug público</span><input value={slug} onChange={event => updateSlug(event.target.value)} required minLength={2} maxLength={100} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="pizzaria-central" /><span className="mt-1 block text-[10px] text-koma-subtle">/c/{slug || "slug-do-restaurante"}</span></label>
           </div>
 
-          <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Plano comercial</span><select value={plan} onChange={event => setPlan(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{SUBSCRIPTION_PLANS.map(item => <option key={item.id} value={item.id}>{item.name} — {formatCurrency(item.price)}/mês · {formatPercentage(item.splitFeeRate)} split</option>)}</select>{selectedPlan && <span className="mt-1 block text-[10px] text-koma-subtle">Plano oficial KÔMA · cobrança recorrente {formatCurrency(selectedPlan.price)}</span>}</label>
+          <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Plano de recursos durante o trial</span><select value={plan} onChange={event => setPlan(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{SUBSCRIPTION_PLANS.map(item => <option key={item.id} value={item.id}>{item.name} — referência {formatCurrency(item.price)}/mês · {formatPercentage(item.splitFeeRate)} split</option>)}</select>{selectedPlan && <span className="mt-1 block text-[10px] text-koma-subtle">O restaurante testa os recursos do {selectedPlan.name} por 7 dias. A cobrança SaaS recorrente ainda não é criada automaticamente.</span>}</label>
 
           <div className="border-t border-zinc-800 pt-4">
             <p className="mb-3 font-bold text-koma-foreground">Administrador inicial</p>
@@ -214,13 +237,13 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
             <label className="mt-4 block"><span className="mb-1 block font-medium text-koma-secondary">Senha temporária</span><input type="password" value={temporaryPassword} onChange={event => setTemporaryPassword(event.target.value)} required minLength={8} maxLength={72} autoComplete="new-password" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Mínimo 8 caracteres" /><span className="mt-1 block text-[10px] text-koma-subtle">Não será retornada pelo backend. Após a criação, aparece uma única vez a partir deste formulário.</span></label>
           </div>
 
-          <div className="rounded-lg border border-zinc-800 bg-koma-page p-3 text-[10px] leading-relaxed text-koma-muted">O restaurante nasce <strong className="text-koma-secondary">ativo</strong>, com cardápio vazio e Mercado Pago <strong className="text-amber-300">desconectado</strong>. A conta recebedora será vinculada depois pelo OAuth oficial.</div>
+          <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-[10px] leading-relaxed text-emerald-100/75">O restaurante nasce <strong className="text-emerald-200">ativo com 7 dias grátis</strong>. O fim do trial é acompanhado pelo Super Admin e não suspende automaticamente nesta etapa. O Mercado Pago do Cardápio Online nasce <strong className="text-amber-300">desconectado</strong> e será vinculado depois pelo OAuth oficial.</div>
 
           {error && <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/40 p-3 text-xs text-rose-300">{error}</div>}
 
           <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
             <button type="button" onClick={close} disabled={isSubmitting} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
-            <button type="submit" disabled={isSubmitting} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-bold text-black hover:bg-[#00c996] disabled:opacity-50">{isSubmitting ? "Provisionando..." : "Criar restaurante"}</button>
+            <button type="submit" disabled={isSubmitting} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-bold text-black hover:bg-[#00c996] disabled:opacity-50">{isSubmitting ? "Provisionando..." : "Criar com 7 dias grátis"}</button>
           </div>
         </form>
       </div>
