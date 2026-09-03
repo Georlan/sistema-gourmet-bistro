@@ -379,9 +379,13 @@ export default function CardapioDigital({
             : "pendente",
         itens: cart.map((item) => ({
           id: item.product.id,
+          produto_id: item.product.id,
           nome: item.product.name,
           quantidade: item.quantity,
           observacao: item.notes,
+          modifier_ids: Object.values(item.selectedOptions)
+            .flat()
+            .map((option) => option.id),
         })),
       };
       try {
