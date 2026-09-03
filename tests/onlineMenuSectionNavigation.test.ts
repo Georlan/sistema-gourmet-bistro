@@ -10,13 +10,14 @@ test('Cardápio online exposes canonical operational sections from one navigatio
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
-    ['Perfil', 'Pedidos & horários', 'Marca', 'Entrega & áreas', 'Pagamentos'],
+    ['Perfil', 'Pedidos & horários', 'Marca', 'Entrega & áreas', 'Pagamentos', 'QR & links'],
   );
   assert.deepEqual(getCashierNavigationTarget('online_perfil'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
   assert.deepEqual(getCashierNavigationTarget('online_pedidos'), { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' });
   assert.deepEqual(getCashierNavigationTarget('online_marca'), { tab: 'cardapio_digital', subTab: 'cardapio_marca' });
   assert.deepEqual(getCashierNavigationTarget('online_entrega'), { tab: 'cardapio_digital', subTab: 'cardapio_entrega' });
   assert.deepEqual(getCashierNavigationTarget('online_pagamentos'), { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' });
+  assert.deepEqual(getCashierNavigationTarget('online_qr_links'), { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' });
 });
 
 test('CashierOnlineMenu routes channel concerns to their canonical owners', () => {
@@ -24,11 +25,13 @@ test('CashierOnlineMenu routes channel concerns to their canonical owners', () =
   assert.match(onlineMenu, /OnlineMenuOrdersSettings/);
   assert.match(onlineMenu, /OnlineMenuDeliverySettings/);
   assert.match(onlineMenu, /OnlineMenuPaymentSettings/);
+  assert.match(onlineMenu, /OnlineMenuQrLinks/);
   assert.match(onlineMenu, /cardapio_perfil/);
   assert.match(onlineMenu, /cardapio_pedidos/);
   assert.match(onlineMenu, /cardapio_marca/);
   assert.match(onlineMenu, /cardapio_entrega/);
   assert.match(onlineMenu, /cardapio_pagamentos/);
+  assert.match(onlineMenu, /cardapio_qr_links/);
   assert.match(onlineMenu, /setActiveTab\('impressao_salao'\)/);
   assert.match(onlineMenu, /setActiveSubTab\('integracoes'\)/);
 });
@@ -58,6 +61,16 @@ test('Pagamentos edits channel methods while technical provider management stays
   assert.match(payments, /pagamento_online_ativo/);
   assert.match(payments, /onManageIntegrations/);
   assert.doesNotMatch(payments, /MercadoPagoConnectionCard/);
+});
+
+test('QR & links derives one public URL and renders QR locally', () => {
+  const qr = source('../src/components/caixa/online-menu/OnlineMenuQrLinks.tsx');
+  assert.match(qr, /new URL\(publicMenuUrl, window\.location\.origin\)/);
+  assert.match(qr, /QRCodeSVG/);
+  assert.match(qr, /navigator\.clipboard\.writeText/);
+  assert.match(qr, /navigator\.share/);
+  assert.match(qr, /download = 'koma-cardapio-qr\.svg'/);
+  assert.doesNotMatch(qr, /quickchart|qrserver|googleapis|fetch\(/i);
 });
 
 test('CardapioDigitalSettingsPanel remains caller-controlled for profile and brand', () => {

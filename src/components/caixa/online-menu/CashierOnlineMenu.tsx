@@ -4,6 +4,7 @@ import type { CashierTab } from '../cashierContracts';
 import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
 import { OnlineMenuOrdersSettings } from './OnlineMenuOrdersSettings';
 import { OnlineMenuPaymentSettings } from './OnlineMenuPaymentSettings';
+import { OnlineMenuQrLinks } from './OnlineMenuQrLinks';
 
 interface Props {
   apiBaseUrl: string;
@@ -38,6 +39,7 @@ const sectionBySubTab = {
   cardapio_marca: 'marca',
   cardapio_entrega: 'entrega',
   cardapio_pagamentos: 'pagamentos',
+  cardapio_qr_links: 'qr_links',
 } as const;
 
 /** Plan gate and online-channel composition only. Technical integrations live under Sistema. */
@@ -96,6 +98,10 @@ export default function CashierOnlineMenu({
         }}
       />
     );
+  }
+
+  if (activeSection === 'qr_links') {
+    return <OnlineMenuQrLinks publicMenuUrl={publicMenuUrl} />;
   }
 
   return (

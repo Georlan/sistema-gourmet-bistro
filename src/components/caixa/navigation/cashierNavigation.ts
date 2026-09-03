@@ -142,6 +142,7 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           { id: 'online_marca', label: 'Marca', target: { tab: 'cardapio_digital', subTab: 'cardapio_marca' } },
           { id: 'online_entrega', label: 'Entrega & áreas', target: { tab: 'cardapio_digital', subTab: 'cardapio_entrega' } },
           { id: 'online_pagamentos', label: 'Pagamentos', target: { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' } },
+          { id: 'online_qr_links', label: 'QR & links', target: { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' } },
         ],
       },
     ],
