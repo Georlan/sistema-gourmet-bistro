@@ -163,6 +163,6 @@ test('CaixaPanel delegates operation subnav clicks and active state to the share
   const caixa = readFileSync(
     new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
   );
-  assert.match(caixa, /handleSidebarNavigation\(item\.id\)/);
-  assert.match(caixa, /activeSubTab === item\.target\.subTab/);
+  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
+  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
 });
