@@ -18,7 +18,7 @@ from .super_admin import _discover_restaurant_ids, get_current_admin
 
 
 router = APIRouter(
-    prefix="/super-admin/billing",
+    prefix="/billing",
     tags=["SuperAdmin Billing"],
 )
 
@@ -188,7 +188,6 @@ def billing_overview(admin: dict = Depends(get_current_admin)):
                 "canceledSubscriptions": canceled_count,
                 "notConfiguredSubscriptions": not_configured_count,
                 "needsReviewSubscriptions": needs_review_count,
-                # Receita recebida precisa vir de um ledger de cobrança recorrente.
                 "recurringRevenueReceivedAvailable": False,
             },
             "subscriptions": subscriptions,
