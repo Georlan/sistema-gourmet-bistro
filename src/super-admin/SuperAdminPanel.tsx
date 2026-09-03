@@ -14,6 +14,7 @@ import {
   Sparkles,
   UsersRound,
   X,
+  AlertOctagon,
 } from "lucide-react";
 import type { Tenant, FailedWebhook } from "./superAdminTypes";
 import {
@@ -23,6 +24,7 @@ import {
   superAdminFetch,
 } from "./superAdminApi";
 import { SuperAdminOverviewTab } from "./SuperAdminOverviewTab";
+import { SuperAdminIncidentCenterTab } from "./SuperAdminIncidentCenterTab";
 import { SuperAdminTenantsTab } from "./SuperAdminTenantsTab";
 import { SuperAdminTrialsTab } from "./SuperAdminTrialsTab";
 import { SuperAdminAccessTab } from "./SuperAdminAccessTab";
@@ -34,6 +36,7 @@ import { SuperAdminSettingsTab } from "./SuperAdminSettingsTab";
 
 type TabId =
   | "overview"
+  | "incidents"
   | "tenants"
   | "trials"
   | "access"
@@ -179,6 +182,7 @@ export default function SuperAdminPanel() {
 
   const navItems = [
     { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard },
+    { id: "incidents" as TabId, label: "Central de incidentes", icon: AlertOctagon },
     { id: "tenants" as TabId, label: "Restaurantes", icon: Store },
     { id: "trials" as TabId, label: "Períodos grátis", icon: Sparkles },
     { id: "access" as TabId, label: "Acessos e equipe", icon: UsersRound },
@@ -277,6 +281,12 @@ export default function SuperAdminPanel() {
               failedWebhooks={failedWebhooks}
               globalSearch={globalSearch}
               runtimeHealth={runtimeHealth}
+            />
+          )}
+          {activeTab === "incidents" && (
+            <SuperAdminIncidentCenterTab
+              tenants={tenants}
+              globalSearch={globalSearch}
             />
           )}
           {activeTab === "tenants" && (
