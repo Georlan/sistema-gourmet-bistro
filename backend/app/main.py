@@ -32,6 +32,7 @@ from .routes import (
     printing,
     products,
     relatorios,
+    restaurant_features,
     super_admin,
     super_admin_onboarding,
     tables,
@@ -378,6 +379,7 @@ app.include_router(print_agents.router)
 app.include_router(printing.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
+app.include_router(restaurant_features.router)
 app.include_router(super_admin.router, prefix="/api")
 app.include_router(super_admin_onboarding.router, prefix="/api")
 
