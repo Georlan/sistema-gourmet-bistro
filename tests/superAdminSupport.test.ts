@@ -32,7 +32,9 @@ test('modal de suporte exige motivo obrigatório e não manipula senhas de clien
   assert.match(supportModal, /cleanReason\.length < 5/);
   assert.match(supportModal, /O motivo da intervenção é obrigatório/);
   assert.match(supportModal, /Nenhuma senha de cliente/);
-  assert.match(supportModal, /trilha de auditoria/);
+  assert.match(supportModal, /início, o motivo, a duração e o encerramento desta sessão/);
+  assert.match(supportModal, /auditoria administrativa/);
+  assert.doesNotMatch(supportModal, /Todas as ações nesta sessão serão registradas/);
   assert.match(supportModal, /saveOperatorSession/);
   assert.doesNotMatch(supportModal, /senha_hash|password|client_secret/i);
 });
