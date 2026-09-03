@@ -1,6 +1,9 @@
 import { Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
+import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
+import { OnlineMenuOrdersSettings } from './OnlineMenuOrdersSettings';
+import { OnlineMenuPaymentSettings } from './OnlineMenuPaymentSettings';
 
 interface Props {
   apiBaseUrl: string;
@@ -33,6 +36,8 @@ const sectionBySubTab = {
   cardapio_perfil: 'perfil',
   cardapio_pedidos: 'pedidos',
   cardapio_marca: 'marca',
+  cardapio_entrega: 'entrega',
+  cardapio_pagamentos: 'pagamentos',
 } as const;
 
 /** Plan gate and online-channel composition only. Technical integrations live under Sistema. */
@@ -63,14 +68,42 @@ export default function CashierOnlineMenu({
   );
 
   const restaurantId = readRestaurantIdFromAuthorization(authHeaders.Authorization || authHeaders.authorization);
+  const publicMenuUrl = restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null;
   const activeSection = sectionBySubTab[activeSubTab as keyof typeof sectionBySubTab] ?? 'perfil';
+
+  if (activeSection === 'pedidos') {
+    return (
+      <OnlineMenuOrdersSettings
+        apiBaseUrl={apiBaseUrl}
+        authHeaders={authHeaders}
+        publicMenuUrl={publicMenuUrl}
+      />
+    );
+  }
+
+  if (activeSection === 'entrega') {
+    return <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
+  }
+
+  if (activeSection === 'pagamentos') {
+    return (
+      <OnlineMenuPaymentSettings
+        apiBaseUrl={apiBaseUrl}
+        authHeaders={authHeaders}
+        onManageIntegrations={() => {
+          setActiveTab('impressao_salao');
+          setActiveSubTab('integracoes');
+        }}
+      />
+    );
+  }
 
   return (
     <CardapioDigitalSettingsPanel
       key={authHeaders.Authorization || authHeaders.authorization}
       apiBaseUrl={apiBaseUrl}
       authHeaders={authHeaders}
-      publicMenuUrl={restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null}
+      publicMenuUrl={publicMenuUrl}
       activeSection={activeSection}
       onSectionChange={(section) => {
         setActiveSubTab(
