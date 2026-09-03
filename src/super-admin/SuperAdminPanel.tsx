@@ -38,14 +38,14 @@ type TabId =
   | "settings";
 
 export default function SuperAdminPanel() {
-  const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "75ac2e8";
+  const frontendBuildSha = import.meta.env.VITE_BUILD_SHA || "desconhecido";
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [globalSearch, setGlobalSearch] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantsAvailable, setTenantsAvailable] = useState(false);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
-  const [failedWebhooks, setFailedWebhooks] = useState<FailedWebhook[]>([]);
+  const [failedWebhooks] = useState<FailedWebhook[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null; version?: string } | null>(null);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
@@ -67,7 +67,6 @@ export default function SuperAdminPanel() {
     if (level === "WARNING" || level === "warning") normalizedLevel = "WARNING";
     else if (level === "ERROR" || level === "error") normalizedLevel = "ERROR";
     else if (level === "CRITICAL" || level === "critical") normalizedLevel = "CRITICAL";
-    else normalizedLevel = "INFO";
 
     const newLog: AuditLogItem = {
       id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -83,15 +82,16 @@ export default function SuperAdminPanel() {
     setIsLoadingTenants(true);
     try {
       const response = await superAdminFetch("/api/super-admin/restaurantes");
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setTenants(data);
-          setTenantsAvailable(true);
-        } else {
-          setTenants([]);
-          setTenantsAvailable(false);
-        }
+      if (!response.ok) {
+        setTenants([]);
+        setTenantsAvailable(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setTenants(data);
+        setTenantsAvailable(true);
       } else {
         setTenants([]);
         setTenantsAvailable(false);
@@ -107,40 +107,33 @@ export default function SuperAdminPanel() {
   useEffect(() => {
     publicApiFetch("/health/live")
       .then(res => res.json())
-      .then(data => setRuntimeHealth({ status: data.status === "ok" ? "ok" : "unavailable", commit: data.commit, version: data.version }))
+      .then(data => setRuntimeHealth({
+        status: data.status === "ok" ? "ok" : "unavailable",
+        commit: data.commit,
+        version: data.version,
+      }))
       .catch(() => setRuntimeHealth({ status: "unavailable" }));
 
     fetchTenants();
     addAuditLog("Sessão autenticada de SuperAdmin iniciada.", "INFO", "AUTH");
   }, []);
 
-  const handleToggleTenantStatus = async (id: string, currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING") => {
+  const handleToggleTenantStatus = async (
+    id: string,
+    currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING"
+  ) => {
     const targetStatus = currentStatus === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
     try {
       await superAdminFetch(`/api/super-admin/restaurantes/${encodeURIComponent(id)}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: targetStatus })
+        body: JSON.stringify({ status: targetStatus }),
       });
       setTenants(prev => prev.map(t => t.id === id ? { ...t, status: targetStatus } : t));
       addAuditLog(`Status do restaurante #${id} alterado para ${targetStatus}.`, "INFO", "TENANTS");
       return true;
     } catch (err) {
       reportApiError("Status do restaurante não foi alterado", err);
-      return false;
-    }
-  };
-
-  const handleForceConfirmWebhook = async (id: string): Promise<boolean> => {
-    try {
-      await superAdminFetch(`/api/super-admin/webhooks/asaas/${encodeURIComponent(id)}/confirm`, {
-        method: "POST"
-      });
-      setFailedWebhooks(prev => prev.map(w => w.id === id ? { ...w, resolved: true } : w));
-      addAuditLog(`Webhook #${id} confirmado manualmente.`, "INFO", "PAYMENTS");
-      return true;
-    } catch (err) {
-      reportApiError("Webhook não foi confirmado", err);
       return false;
     }
   };
@@ -154,7 +147,7 @@ export default function SuperAdminPanel() {
       const response = await superAdminFetch("/api/super-admin/telegram/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: safeText })
+        body: JSON.stringify({ text: safeText }),
       });
       const data = await response.json() as { success?: boolean };
       if (!data.success) {
@@ -178,10 +171,10 @@ export default function SuperAdminPanel() {
     { id: "settings" as TabId, label: "Configurações", icon: Settings },
   ];
 
+  const backendIsOnline = runtimeHealth?.status === "ok";
+
   return (
     <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans antialiased" id="superadmin-root">
-      
-      {/* Top Notice Bar if any error */}
       {apiNotice && (
         <div className="flex items-center justify-between gap-4 border-b border-amber-800/60 bg-amber-950/40 px-6 py-2 text-xs text-amber-200" role="status">
           <span>{apiNotice}</span>
@@ -191,9 +184,7 @@ export default function SuperAdminPanel() {
         </div>
       )}
 
-      {/* Main Header */}
       <header className="flex items-center justify-between px-6 py-3.5 bg-koma-card border-b border-[#1e293b] shrink-0 gap-4" id="superadmin-header">
-        {/* Brand & Title */}
         <div className="flex items-center gap-3.5">
           <button
             type="button"
@@ -213,24 +204,24 @@ export default function SuperAdminPanel() {
                 <h1 className="text-base font-bold text-koma-foreground tracking-tight">
                   Super Admin KÔMA
                 </h1>
-                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-800/40">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Online
+                <span className={`hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${backendIsOnline ? "bg-emerald-950/80 text-emerald-400 border-emerald-800/40" : "bg-zinc-900 text-koma-muted border-zinc-800"}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${backendIsOnline ? "bg-emerald-400" : "bg-zinc-600"}`}></span>
+                  {backendIsOnline ? "Backend online" : "Backend não verificado"}
                 </span>
               </div>
               <p className="text-[11px] text-koma-muted hidden sm:block">
-                Console Operacional Central • Produção
+                Console operacional central
               </p>
             </div>
           </div>
         </div>
 
-        {/* Global Search */}
         <div className="flex-1 max-w-md hidden md:block">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-koma-subtle" />
             <input
               type="text"
-              placeholder="Buscar por restaurante, ID, admin ou slug..."
+              placeholder="Buscar por restaurante, ID ou slug..."
               value={globalSearch}
               onChange={e => setGlobalSearch(e.target.value)}
               className="w-full bg-koma-page border border-zinc-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-koma-foreground placeholder:text-koma-subtle focus:outline-none focus:border-[#00b894]"
@@ -238,20 +229,19 @@ export default function SuperAdminPanel() {
           </div>
         </div>
 
-        {/* Header Right Actions */}
         <div className="flex items-center gap-3">
           <div className="hidden lg:flex flex-col items-end text-[11px] text-koma-muted font-mono">
             <span className="text-koma-foreground font-semibold">
-              BE {runtimeHealth?.commit || "75ac2e8"} • FE {frontendBuildSha}
+              BE {runtimeHealth?.commit || "desconhecido"} • FE {frontendBuildSha}
             </span>
-            <span className="text-[10px] text-koma-subtle">passionate-truth / prod</span>
+            <span className="text-[10px] text-koma-subtle">ambiente operacional</span>
           </div>
 
           <div className="h-6 w-px bg-zinc-800 hidden lg:block"></div>
 
           <div className="flex items-center gap-2">
             <span className="hidden sm:inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-koma-secondary">
-              admin
+              superadmin
             </span>
 
             <button
@@ -267,10 +257,7 @@ export default function SuperAdminPanel() {
         </div>
       </header>
 
-      {/* Main Body with Sidebar + Content */}
       <div className="flex-1 flex min-h-0 relative" id="superadmin-body-container">
-        
-        {/* Left Sidebar Navigation */}
         <aside
           className={`w-64 bg-koma-card border-r border-[#1e293b] flex flex-col justify-between shrink-0 z-30 ${
             isMobileMenuOpen ? "absolute inset-y-0 left-0 shadow-2xl" : "hidden md:flex"
@@ -312,17 +299,15 @@ export default function SuperAdminPanel() {
             </nav>
           </div>
 
-          {/* Sidebar Footer */}
           <div className="p-4 border-t border-zinc-800/80 bg-koma-page/40 text-[11px] text-koma-muted space-y-1">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-koma-foreground">KÔMA SaaS Platform</span>
               <span className="text-[#00b894] font-bold">v3.5</span>
             </div>
-            <p className="text-[10px] text-koma-subtle">Isolamento Multi-Tenant Garantido</p>
+            <p className="text-[10px] text-koma-subtle">Operação multi-tenant</p>
           </div>
         </aside>
 
-        {/* Content Area */}
         <main className="flex-1 bg-koma-page p-6 overflow-y-auto" id="superadmin-content">
           {activeTab === "overview" && (
             <SuperAdminOverviewTab
@@ -333,7 +318,6 @@ export default function SuperAdminPanel() {
               onNavigateToTab={(tab) => setActiveTab(tab)}
               onToggleStatus={handleToggleTenantStatus}
               failedWebhooks={failedWebhooks}
-              onForceConfirmWebhook={handleForceConfirmWebhook}
               globalSearch={globalSearch}
               runtimeHealth={runtimeHealth}
             />
@@ -355,10 +339,7 @@ export default function SuperAdminPanel() {
           {activeTab === "payments" && (
             <SuperAdminPaymentsTab
               failedWebhooks={failedWebhooks}
-              webhooksAvailable={failedWebhooks.length > 0}
-              onForceConfirmWebhook={handleForceConfirmWebhook}
-              onAddLog={addAuditLog}
-              onTriggerTelegramAlert={triggerTelegramAlert}
+              webhooksAvailable={false}
             />
           )}
 
