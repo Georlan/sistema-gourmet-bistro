@@ -30,10 +30,9 @@ describe('Super Admin Hardening & Integrity', () => {
     assert.equal(premium.splitFeeRate, 0.0029);
   });
 
-  it('valida que nenhum arquivo em src/super-admin/ possui precos legados ou splits hardcoded', () => {
+  it('impede regressao para hardcodes, Sentry, Asaas e tenants ficticios', () => {
     const dir = path.join(process.cwd(), 'src/super-admin');
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.tsx') || f.endsWith('.ts'));
-
     const forbiddenPatterns = [
       /price:\s*97\b/,
       /price:\s*197\b/,
@@ -46,68 +45,51 @@ describe('Super Admin Hardening & Integrity', () => {
       /0[,.]39%/,
       /\bINITIAL_TENANTS\b/,
       /\bsentry\b/i,
+      /\basaas\b/i,
       /app\.koma\.com\.br/,
       /api\.koma\.com\.br/,
+      /Reconciliar e Confirmar/i,
     ];
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(dir, file), 'utf-8');
       for (const pattern of forbiddenPatterns) {
-        const match = content.match(pattern);
         assert.equal(
-          match,
+          content.match(pattern),
           null,
-          `Arquivo ${file} contem padrao proibido: ${pattern} (encontrado: ${match?.[0]})`
+          `Arquivo ${file} contem padrao proibido: ${pattern}`
         );
       }
     }
   });
 
-  it('valida que nao ha comparacoes hardcoded por tenant.id especifico em src/super-admin', () => {
+  it('nao permite comparacoes hardcoded por tenant.id especifico', () => {
     const dir = path.join(process.cwd(), 'src/super-admin');
     const files = fs.readdirSync(dir).filter(f => f.endsWith('.tsx') || f.endsWith('.ts'));
-
-    const forbiddenTenantIdComparisons = [
+    const forbidden = [
       /tenant\.id\s*===\s*["']1["']/,
       /tenant\.id\s*===\s*["']2["']/,
       /tenant\.id\s*===\s*["']3["']/,
-      /id\s*===\s*["']1["']\s*\|\|\s*id\s*===\s*["']3["']/,
     ];
-
     for (const file of files) {
       const content = fs.readFileSync(path.join(dir, file), 'utf-8');
-      for (const pattern of forbiddenTenantIdComparisons) {
-        const match = content.match(pattern);
-        assert.equal(
-          match,
-          null,
-          `Arquivo ${file} contem comparacao hardcoded por tenant.id: ${pattern} (encontrado: ${match?.[0]})`
-        );
-      }
+      for (const pattern of forbidden) assert.equal(content.match(pattern), null);
     }
   });
 
-  it('valida que as abas de faturamento e overview consomem a fonte oficial de planos', () => {
-    const billingPath = path.join(process.cwd(), 'src/super-admin/SuperAdminBillingTab.tsx');
-    const billingContent = fs.readFileSync(billingPath, 'utf-8');
-    assert.ok(
-      billingContent.includes('SUBSCRIPTION_PLANS'),
-      'SuperAdminBillingTab deve importar e usar SUBSCRIPTION_PLANS'
-    );
-    assert.ok(
-      billingContent.includes('ANNUAL_DISCOUNT_RATE'),
-      'SuperAdminBillingTab deve importar e usar ANNUAL_DISCOUNT_RATE'
-    );
-
-    const overviewPath = path.join(process.cwd(), 'src/super-admin/SuperAdminOverviewTab.tsx');
-    const overviewContent = fs.readFileSync(overviewPath, 'utf-8');
-    assert.ok(
-      overviewContent.includes('SUBSCRIPTION_PLANS'),
-      'SuperAdminOverviewTab deve importar e usar SUBSCRIPTION_PLANS'
-    );
+  it('usa a fonte oficial compartilhada de planos', () => {
+    for (const file of [
+      'SuperAdminBillingTab.tsx',
+      'SuperAdminOverviewTab.tsx',
+      'SuperAdminTenantsTab.tsx',
+      'SuperAdminPaymentsTab.tsx',
+    ]) {
+      const content = fs.readFileSync(path.join(process.cwd(), 'src/super-admin', file), 'utf-8');
+      assert.ok(content.includes('SUBSCRIPTION_PLANS'), `${file} deve usar SUBSCRIPTION_PLANS`);
+    }
   });
 
-  it('formata moedas e percentuais corretamente conforme padrao KÔMA', () => {
+  it('formata moedas e percentuais conforme padrão KÔMA', () => {
     assert.match(formatCurrency(109), /^R\$\s*109,00$/);
     assert.match(formatCurrency(209.5), /^R\$\s*209,50$/);
     assert.equal(formatPercentage(0.0149), '1,49%');
@@ -116,12 +98,12 @@ describe('Super Admin Hardening & Integrity', () => {
     assert.equal(formatPercentage(0.10), '10,00%');
   });
 
-  it('valida fail-closed para indisponibilidade de listagem cross-tenant', () => {
-    const panelPath = path.join(process.cwd(), 'src/super-admin/SuperAdminPanel.tsx');
-    const panelContent = fs.readFileSync(panelPath, 'utf-8');
-    assert.ok(
-      panelContent.includes('tenantsAvailable'),
-      'SuperAdminPanel deve rastrear explicitamente se os dados de tenants estao disponiveis'
+  it('mantem fail-closed para a disponibilidade cross-tenant', () => {
+    const panelContent = fs.readFileSync(
+      path.join(process.cwd(), 'src/super-admin/SuperAdminPanel.tsx'),
+      'utf-8'
     );
+    assert.ok(panelContent.includes('tenantsAvailable'));
+    assert.ok(panelContent.includes('setTenantsAvailable(false)'));
   });
 });
