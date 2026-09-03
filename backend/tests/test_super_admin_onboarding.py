@@ -62,8 +62,17 @@ def _cleanup_tenant(tenant_id: int | None) -> None:
     db = SessionLocal()
     try:
         with tenant_session_scope(db, tenant_id):
-            # SQL direto deixa o FK ON DELETE CASCADE remover a auditoria sem
-            # tentar mutar o modelo imutável SuperAdminAuditLog pelo ORM.
+            # Os testes criam somente estes filhos. A limpeza é SQL para não
+            # disparar os guards ORM de imutabilidade da auditoria.
+            for table_name in (
+                "super_admin_audit_logs",
+                "usuarios",
+                "configuracoes_restaurante",
+            ):
+                db.execute(
+                    text(f"DELETE FROM {table_name} WHERE restaurante_id = :tenant_id"),
+                    {"tenant_id": tenant_id},
+                )
             db.execute(
                 text("DELETE FROM restaurantes WHERE id = :tenant_id"),
                 {"tenant_id": tenant_id},
