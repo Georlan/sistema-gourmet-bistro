@@ -15,6 +15,7 @@ type DeliveryConfig = {
   delivery_ativo: boolean;
   pedido_minimo: number;
   frete_gratis_valor: number;
+  taxa_entrega_padrao: number;
   tipo_taxa_entrega: DeliveryFeeMode;
   tabela_taxas_bairros: BairroTaxaRow[];
 };
@@ -22,6 +23,11 @@ type DeliveryConfig = {
 interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+}
+
+function normalizeMoney(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
 function normalizeNeighborhoods(value: unknown): BairroTaxaRow[] {
@@ -33,7 +39,7 @@ function normalizeNeighborhoods(value: unknown): BairroTaxaRow[] {
       return {
         id: `bairro-${index}`,
         bairro: String(row.bairro || '').trim(),
-        taxa: Number(row.taxa) || 0,
+        taxa: normalizeMoney(row.taxa),
       };
     })
     .filter((row) => row.bairro);
@@ -42,8 +48,9 @@ function normalizeNeighborhoods(value: unknown): BairroTaxaRow[] {
 function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
   return {
     delivery_ativo: data.delivery_ativo !== false,
-    pedido_minimo: Number(data.pedido_minimo) || 0,
-    frete_gratis_valor: Number(data.frete_gratis_valor) || 0,
+    pedido_minimo: normalizeMoney(data.pedido_minimo),
+    frete_gratis_valor: normalizeMoney(data.frete_gratis_valor),
+    taxa_entrega_padrao: normalizeMoney(data.taxa_entrega_padrao),
     tipo_taxa_entrega: data.tipo_taxa_entrega === 'bairro' ? 'bairro' : 'fixa',
     tabela_taxas_bairros: normalizeNeighborhoods(data.tabela_taxas_bairros),
   };
@@ -51,12 +58,13 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
 
 function persistedPayload(config: DeliveryConfig) {
   const neighborhoods = config.tabela_taxas_bairros
-    .map(({ bairro, taxa }) => ({ bairro: bairro.trim(), taxa: Math.max(0, Number(taxa) || 0) }))
+    .map(({ bairro, taxa }) => ({ bairro: bairro.trim(), taxa: normalizeMoney(taxa) }))
     .filter((row) => row.bairro);
   return {
     delivery_ativo: config.delivery_ativo,
-    pedido_minimo: Math.max(0, Number(config.pedido_minimo) || 0),
-    frete_gratis_valor: Math.max(0, Number(config.frete_gratis_valor) || 0),
+    pedido_minimo: normalizeMoney(config.pedido_minimo),
+    frete_gratis_valor: normalizeMoney(config.frete_gratis_valor),
+    taxa_entrega_padrao: normalizeMoney(config.taxa_entrega_padrao),
     tipo_taxa_entrega: config.tipo_taxa_entrega,
     tabela_taxas_bairros: config.tipo_taxa_entrega === 'bairro' ? neighborhoods : [],
   };
@@ -75,6 +83,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
     delivery_ativo: true,
     pedido_minimo: 0,
     frete_gratis_valor: 0,
+    taxa_entrega_padrao: 0,
     tipo_taxa_entrega: 'fixa',
     tabela_taxas_bairros: [],
   });
@@ -176,7 +185,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
         description="Defina quando aceitar delivery, o valor mínimo, frete grátis e como cobrar a entrega."
         metrics={[
           { label: 'delivery', value: config.delivery_ativo ? 'Ativo' : 'Pausado' },
-          { label: config.tipo_taxa_entrega === 'bairro' ? 'bairros' : 'cobrança', value: config.tipo_taxa_entrega === 'bairro' ? areasCount : 'Única' },
+          { label: config.tipo_taxa_entrega === 'bairro' ? 'bairros' : 'taxa única', value: config.tipo_taxa_entrega === 'bairro' ? areasCount : `R$ ${payload.taxa_entrega_padrao.toFixed(2)}` },
           { label: 'pedido mínimo', value: payload.pedido_minimo > 0 ? `R$ ${payload.pedido_minimo.toFixed(2)}` : 'Livre' },
         ]}
       />
@@ -288,9 +297,19 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
         </div>
 
         {config.tipo_taxa_entrega === 'fixa' ? (
-          <div className="mt-4 rounded-xl border border-dashed border-koma-border bg-koma-card p-4 text-[10px] leading-relaxed text-koma-muted">
-            O cardápio usa a taxa padrão atual do restaurante. O valor editável da taxa única será tratado separadamente para não criar uma regra duplicada no sistema.
-          </div>
+          <label className="mt-4 block max-w-sm">
+            <FieldLabel>Taxa única (R$)</FieldLabel>
+            <input
+              type="number"
+              min="0"
+              step="0.50"
+              value={config.taxa_entrega_padrao || ''}
+              onChange={(event) => setConfig((current) => ({ ...current, taxa_entrega_padrao: Number(event.target.value) || 0 }))}
+              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+              placeholder="0,00"
+            />
+            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Esse valor será aplicado aos pedidos de delivery quando a cobrança for única.</span>
+          </label>
         ) : (
           <div className="mt-4 border-t border-koma-border pt-4">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
