@@ -75,6 +75,14 @@ def schedule_order_in_session(
     if existing is not None:
         return existing
 
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.id == comanda_id,
+    ).with_for_update().one()
+    # Reutiliza a barreira operacional já aplicada por Caixa/KDS/SmartPOS.
+    # Não existe OnlinePaymentIntent para este caso; na liberação voltamos a NULL.
+    comanda.online_payment_status = "pending"
+
     record = ScheduledOrder(
         restaurante_id=restaurante_id,
         comanda_id=comanda_id,
@@ -152,13 +160,12 @@ def release_due_scheduled_orders_in_session(
             Comanda.restaurante_id == restaurante_id,
             Comanda.id == record.comanda_id,
             Comanda.fechada.is_(False),
-        ).first()
+        ).with_for_update().first()
         if comanda is None:
             record.released_at = now
             continue
-        if comanda.online_payment_status not in (None, "approved"):
-            continue
 
+        comanda.online_payment_status = None
         _publish_created_event(db, comanda)
         record.released_at = now
         released += 1
