@@ -12,7 +12,9 @@ from ..schemas import LoginRequest, LoginResponse, UsuarioResponse, AtivarContaR
 from ..security import (
     create_access_token,
     get_password_hash,
+    get_user_token_version,
     require_permission,
+    revoke_user_sessions,
     verify_password,
 )
 from ..services.staff_login_rate_limit import (
@@ -260,7 +262,16 @@ def login(
     # Materializa o payload antes de limpar o bucket. O cleanup pode encerrar a
     # transação de leitura atual, então não mantemos dependência de atributos ORM
     # depois desse ponto.
-    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
+    token_version = get_user_token_version(
+        db,
+        user_id=usuario.id,
+        restaurante_id=usuario.restaurante_id,
+    )
+    access_token = create_access_token(
+        subject=usuario.id,
+        restaurante_id=usuario.restaurante_id,
+        token_version=token_version,
+    )
     user_data = _login_user_payload(usuario)
 
     clear_staff_login_failures(
@@ -383,7 +394,16 @@ def ativar_conta(
         target_audience="internal",
     )
 
-    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
+    token_version = get_user_token_version(
+        db,
+        user_id=usuario.id,
+        restaurante_id=usuario.restaurante_id,
+    )
+    access_token = create_access_token(
+        subject=usuario.id,
+        restaurante_id=usuario.restaurante_id,
+        token_version=token_version,
+    )
     user_data = _login_user_payload(usuario)
 
     return {
@@ -457,6 +477,11 @@ def delete_usuario(
         ).first()
         if target:
             target.status = "inativo"
+            revoke_user_sessions(
+                db,
+                user_id=target.id,
+                restaurante_id=current_user.restaurante_id,
+            )
             db.commit()
 
     background_tasks.add_task(
