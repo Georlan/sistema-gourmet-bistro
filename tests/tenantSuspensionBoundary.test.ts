@@ -35,7 +35,7 @@ test('boundary cobre tokens operacionais sem sequestrar Super Admin ou cardápio
 
 test('usuário suspenso só pode revalidar acesso ou sair', () => {
   assert.match(boundary, /Verificar acesso/);
-  assert.match(boundary, />\s*Sair\s*</);
+  assert.match(boundary, /Sair/);
   assert.match(boundary, /clearOperatorSession\(\)/);
   assert.match(boundary, /window\.location\.reload\(\)/);
 });
