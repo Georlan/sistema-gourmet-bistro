@@ -326,7 +326,7 @@ export default function CashierCatalog({
                       method: 'POST',
                       headers: { ...authHeaders, 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        id: prodFormId,
+                        id: prodFormId.trim() || suggestedProductCode,
                         ...payload,
                       }),
                     });
@@ -359,28 +359,6 @@ export default function CashierCatalog({
                   >
                     Criar categoria
                   </button>
-                </div>
-              )}
-              {!editingProduct && (
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="product-code"
-                    className={"text-[10px] font-bold text-koma-secondary block"}
-                  >
-                    Código do produto
-                  </label>
-                  <input
-                    type="text"
-                    id="product-code"
-                    required
-                    placeholder="Ex.: 001"
-                    value={prodFormId}
-                    onChange={(e) => setProdFormId(e.target.value)}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
-                  />
-                  <p className="text-[9px] leading-relaxed text-koma-muted">
-                    Sugerimos o próximo código livre. Você pode trocar agora; depois de criado, ele não muda.
-                  </p>
                 </div>
               )}
 
@@ -476,6 +454,36 @@ export default function CashierCatalog({
                 </p>
               </div>
 
+              {!editingProduct && (
+                <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
+                  <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
+                    <span>Mais opções</span>
+                    <span className="text-[9px] font-medium text-koma-muted group-open:hidden">Código e ajustes avançados</span>
+                    <span className="hidden text-[9px] font-medium text-koma-muted group-open:inline">Ocultar</span>
+                  </summary>
+                  <div className="space-y-1.5 border-t border-koma-border p-3">
+                    <label
+                      htmlFor="product-code"
+                      className={"text-[10px] font-bold text-koma-secondary block"}
+                    >
+                      Código de busca / PDV
+                    </label>
+                    <input
+                      type="text"
+                      id="product-code"
+                      aria-label="Código do produto"
+                      placeholder="Ex.: 001"
+                      value={prodFormId}
+                      onChange={(e) => setProdFormId(e.target.value)}
+                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                    />
+                    <p className="text-[9px] leading-relaxed text-koma-muted">
+                      O KÔMA já sugere um código. Altere apenas se sua operação usa código curto, etiqueta ou leitura no PDV.
+                    </p>
+                  </div>
+                </details>
+              )}
+
               <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
                 <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
                   <span>
@@ -521,24 +529,35 @@ export default function CashierCatalog({
                 </div>
               </details>
 
-              <label
-                htmlFor="prod-form-ativo"
-                className={"flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3"}
-              >
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
-                  <strong className="block text-[10px] text-koma-foreground">Disponível para venda</strong>
+                  <strong className="block text-[10px] text-koma-foreground">Produto à venda</strong>
                   <span className="mt-0.5 block text-[9px] text-koma-muted">
-                    Desative para manter o produto cadastrado sem oferecê-lo nos canais de venda.
+                    {prodFormAtivo
+                      ? 'O produto aparece normalmente nos canais de venda.'
+                      : 'Pausado: continua cadastrado e pode ser reativado a qualquer momento.'}
                   </span>
                 </span>
-                <input
-                  type="checkbox"
-                  id="prod-form-ativo"
-                  checked={prodFormAtivo}
-                  onChange={(e) => setProdFormAtivo(e.target.checked)}
-                  className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-koma-card"}
-                />
-              </label>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={`text-[9px] font-bold ${prodFormAtivo ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
+                    {prodFormAtivo ? 'À venda' : 'Pausado'}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={prodFormAtivo}
+                    aria-label="Produto à venda"
+                    onClick={() => setProdFormAtivo((current) => !current)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${prodFormAtivo
+                      ? 'border-emerald-500 bg-emerald-500'
+                      : 'border-koma-border bg-koma-raised'}`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${prodFormAtivo ? 'translate-x-6' : 'translate-x-1'}`}
+                    />
+                  </button>
+                </div>
+              </div>
 
               <div className={"flex gap-2 pt-2"}>
                 <button
