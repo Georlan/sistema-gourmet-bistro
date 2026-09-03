@@ -2,7 +2,11 @@ import re
 from decimal import Decimal
 from pathlib import Path
 
-from app.subscription import SUBSCRIPTION_MARKETPLACE_RATES
+from app.subscription import (
+    ANNUAL_DISCOUNT_RATE,
+    SUBSCRIPTION_MARKETPLACE_RATES,
+    SUBSCRIPTION_MONTHLY_PRICES_CENTS,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,11 +39,13 @@ def test_commercial_catalog_is_synced_across_frontend_and_payment_backend():
     source = FRONTEND_CATALOG.read_text(encoding="utf-8")
 
     assert "export const ANNUAL_DISCOUNT_RATE = 0.1;" in source
+    assert ANNUAL_DISCOUNT_RATE == Decimal("0.10")
 
     for plan_id in ("pocket", "pro", "premium"):
         frontend_price, frontend_rate = _frontend_plan(source, plan_id)
         assert frontend_price == EXPECTED_PRICES[plan_id]
         assert frontend_rate == EXPECTED_RATES[plan_id]
+        assert SUBSCRIPTION_MONTHLY_PRICES_CENTS[plan_id] == EXPECTED_PRICES[plan_id] * 100
         assert SUBSCRIPTION_MARKETPLACE_RATES[plan_id] == EXPECTED_RATES[plan_id]
 
 
