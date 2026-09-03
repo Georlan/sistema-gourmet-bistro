@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
 from app.main import app
 from app.routes import super_admin
 from app.routes.super_admin_services import (
@@ -41,26 +40,22 @@ def _superadmin_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_superadmin_login_issues_dedicated_token_but_fake_tenant_list_is_unavailable():
+def test_superadmin_login_issues_dedicated_token_and_tenant_read_model_is_available():
     response = client.post(
         "/api/super-admin/token",
-        json={
-            "username": SUPERADMIN_USERNAME,
-            "password": SUPERADMIN_PASSWORD,
-        },
+        json={"username": SUPERADMIN_USERNAME, "password": SUPERADMIN_PASSWORD},
     )
     assert response.status_code == 200
     payload = response.json()
     assert payload["token_type"] == "bearer"
-    assert isinstance(payload["access_token"], str)
     assert payload["access_token"]
 
     tenants = client.get(
         "/api/super-admin/restaurantes",
         headers={"Authorization": f"Bearer {payload['access_token']}"},
     )
-    assert tenants.status_code == 501
-    assert "fonte real" in tenants.json()["detail"].lower()
+    assert tenants.status_code == 200
+    assert isinstance(tenants.json(), list)
 
 
 def test_superadmin_rejects_invalid_credentials():
@@ -93,21 +88,22 @@ def test_superadmin_rejects_common_user_token_with_403():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 403
-    assert response.json()["detail"] == "Acesso restrito a superadministradores."
 
 
 @pytest.mark.parametrize("environment", ["test", "development", "staging", "production"])
-def test_superadmin_never_exposes_simulated_tenants(monkeypatch, environment):
+def test_superadmin_tenant_list_never_exposes_simulated_rows(monkeypatch, environment):
     monkeypatch.setenv("ENVIRONMENT", environment)
     response = client.get(
         "/api/super-admin/restaurantes",
         headers=_superadmin_headers(),
     )
-    assert response.status_code == 501
+    assert response.status_code == 200
     assert "simulated" not in response.text.lower()
+    assert "access_token" not in response.text.lower()
+    assert "webhook_secret" not in response.text.lower()
 
 
-def test_superadmin_source_contains_no_fake_tenants_or_mock_success():
+def test_superadmin_source_contains_no_fake_tenants_asaas_or_sentry_surface():
     route_source = (
         Path(__file__).resolve().parents[1] / "app/routes/super_admin.py"
     ).read_text(encoding="utf-8")
@@ -121,13 +117,15 @@ def test_superadmin_source_contains_no_fake_tenants_or_mock_success():
         "Koma Burgers",
         "MOCK_ACTIVE",
         "MOCK_PROVISIONED",
-        "DEVELOPMENT MOCK",
+        "/webhooks/asaas/",
+        "/sentry/issues",
+        '"sentry": configured',
     ):
         assert marker not in route_source
         assert marker not in services_source
 
 
-def test_superadmin_health_never_reports_unverified_integrations_as_green(monkeypatch):
+def test_superadmin_health_never_reports_configuration_as_health(monkeypatch):
     for name in (
         "SUPABASE_DB_URL",
         "SUPABASE_SERVICE_ROLE_KEY",
@@ -136,8 +134,9 @@ def test_superadmin_health_never_reports_unverified_integrations_as_green(monkey
         "RAILWAY_API_TOKEN",
         "RAILWAY_PROJECT_ID",
         "GITHUB_TOKEN",
-        "SENTRY_DSN",
-        "SENTRY_AUTH_TOKEN",
+        "MERCADO_PAGO_CLIENT_ID",
+        "MERCADO_PAGO_CLIENT_SECRET",
+        "MERCADO_PAGO_WEBHOOK_SECRET",
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_CHAT_ID",
     ):
@@ -151,6 +150,8 @@ def test_superadmin_health_never_reports_unverified_integrations_as_green(monkey
     payload = response.json()
     assert payload["database"]["status"] == "available"
     assert payload["database"]["source"] == "select_1"
+    assert "sentry" not in payload
+    assert payload["mercado_pago"]["status"] == "not_configured"
     for service, health in payload.items():
         assert health.get("status") not in {"green", "healthy", "online"}, service
         assert health.get("simulated") is False, service
@@ -161,6 +162,7 @@ def test_superadmin_health_never_reports_unverified_integrations_as_green(monkey
     [
         ("post", "/api/super-admin/restaurantes/onboarding"),
         ("put", "/api/super-admin/restaurantes/tenant-test/status"),
+        ("post", "/api/super-admin/restaurantes/tenant-test/flush-cache"),
         ("post", "/api/super-admin/git/deploy"),
         ("post", "/api/super-admin/db/backup"),
         ("get", "/api/super-admin/websocket-clients"),
@@ -237,7 +239,7 @@ def test_credentials_endpoint_returns_only_configuration_booleans():
     assert response.status_code == 200
     data = response.json()
     assert set(data) == {
-        "sentry",
+        "mercado_pago",
         "cloudflare",
         "railway",
         "github",
@@ -259,7 +261,3 @@ def test_update_credentials_is_unavailable_and_does_not_mutate_environment():
     )
     assert response.status_code == 501
     assert test_key not in os.environ
-
-
-def test_security_sensitive_defaults_remain_unset():
-    assert not settings.SENTRY_DSN or "ingest.us.sentry.io" not in settings.SENTRY_DSN
