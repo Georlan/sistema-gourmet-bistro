@@ -451,14 +451,20 @@ def test_q_audit_endpoint_e_cross_tenant_nao_expoem_secrets_nem_tokens(setup_tes
         assert f'"{sensitive}": "[redacted]"' in text_content or sensitive not in text_content
 
 
-def test_a_alembic_heads_is_single_and_matches_migration():
+def test_a_alembic_heads_is_single_and_phase2_migration_remains_in_chain():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
+
     alembic_cfg = Config("backend/alembic.ini")
     script = ScriptDirectory.from_config(alembic_cfg)
     heads = script.get_heads()
+
     assert len(heads) == 1
-    assert heads[0] == "2b3c4d5e6f7a"
+    revisions = {
+        revision.revision
+        for revision in script.walk_revisions(base="base", head=heads[0])
+    }
+    assert "2b3c4d5e6f7a" in revisions
 
 
 def test_k_webhook_payment_reconciliation_works_when_suspended(setup_test_tenants):
