@@ -457,6 +457,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     perm_garcom_ociosas: bool
     pedido_minimo: Optional[float] = 0.0
     frete_gratis_valor: Optional[float] = 0.0
+    taxa_entrega_padrao: float
     tipo_taxa_entrega: Optional[str] = "fixa"
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
@@ -473,6 +474,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     delivery_ativo: Optional[bool] = None
     pedido_minimo: Optional[float] = None
     frete_gratis_valor: Optional[float] = None
+    taxa_entrega_padrao: Optional[float] = Field(default=None, ge=0, le=10_000)
     tipo_taxa_entrega: Optional[str] = None
     tabela_taxas_bairros: Optional[list] = None
     tabela_taxas_km: Optional[list] = None
