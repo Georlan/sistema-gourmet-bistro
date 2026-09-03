@@ -518,6 +518,90 @@ export default function CardapioPage() {
     else handleAddToCart(product, 1, {}, "");
   };
 
+  const handleRepeatOrder = (order: StoredOrder) => {
+    if (!orderingEnabled) {
+      setNotice(`${orderingMessage} Você ainda pode consultar os produtos.`);
+      return;
+    }
+    if (!Array.isArray(order.itens) || order.itens.length === 0) {
+      setNotice("Este pedido não possui itens disponíveis para repetir.");
+      return;
+    }
+
+    const repeated: CartItem[] = [];
+    let skipped = 0;
+
+    order.itens.forEach((stored) => {
+      const productId = String(stored.produto_id || stored.id || "");
+      const normalizedName = stored.nome.trim().toLocaleLowerCase("pt-BR");
+      const product = activeBrand.products.find((item) => (
+        item.id === productId
+        || item.name.trim().toLocaleLowerCase("pt-BR") === normalizedName
+      ));
+      if (!product || product.isAvailable === false) {
+        skipped += 1;
+        return;
+      }
+
+      const savedModifierIds = new Set((stored.modifier_ids || []).map(String));
+      const selectedOptions: Record<string, ProductOption[]> = {};
+      let invalidRequiredGroup = false;
+      (product.modifierGroups || []).forEach((group) => {
+        const options = group.options.filter(
+          (option) => option.active !== false && savedModifierIds.has(String(option.id)),
+        );
+        if (options.length > 0) selectedOptions[group.id] = options;
+        if (group.minSelection > options.length) invalidRequiredGroup = true;
+      });
+      if (invalidRequiredGroup) {
+        skipped += 1;
+        return;
+      }
+
+      const optionIds = Object.values(selectedOptions)
+        .flatMap((list) => list.map((option) => option.id))
+        .sort()
+        .join("-");
+      const notes = stored.observacao || "";
+      repeated.push({
+        id: `${product.id}-${optionIds}-${notes.trim()}`,
+        product,
+        quantity: Math.max(1, Number(stored.quantidade || 1)),
+        selectedOptions,
+        notes,
+      });
+    });
+
+    if (repeated.length === 0) {
+      setIsOrdersDrawerOpen(false);
+      setNotice("Os itens deste pedido mudaram no cardápio. Monte um novo pedido para confirmar as opções atuais.");
+      return;
+    }
+
+    setCart((current) => {
+      const next = [...current];
+      repeated.forEach((candidate) => {
+        const existingIndex = next.findIndex((item) => item.id === candidate.id);
+        if (existingIndex >= 0) {
+          next[existingIndex] = {
+            ...next[existingIndex],
+            quantity: next[existingIndex].quantity + candidate.quantity,
+          };
+        } else {
+          next.push(candidate);
+        }
+      });
+      return next;
+    });
+    setIsOrdersDrawerOpen(false);
+    setIsCartOpen(true);
+    setNotice(
+      skipped > 0
+        ? `Pedido adicionado à sacola. ${skipped} item(ns) precisam ser escolhidos novamente porque o cardápio mudou.`
+        : "Pedido adicionado à sacola para você revisar.",
+    );
+  };
+
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cart.reduce((total, item) => {
     let unit = item.product.price;
@@ -620,7 +704,6 @@ export default function CardapioPage() {
             "rounded-2xl border p-4 shadow-lg transition-all",
             rejected ? "border-rose-500/30 bg-rose-500/[0.07]" : terminal ? "border-emerald-500/30 bg-emerald-500/[0.07]" : "border-emerald-500/25 bg-koma-card",
           )} id="active-order-banner">
-            {/* Multi-order switcher if more than 1 order exists */}
             {storedOrders.length > 1 && (
               <div className="mb-3 flex items-center justify-between border-b border-koma-border/60 pb-2.5">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
@@ -909,6 +992,7 @@ export default function CardapioPage() {
             setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
           }
         }}
+        onRepeatOrder={handleRepeatOrder}
         isRefreshing={isRefreshingOrders}
       />
     </div>
