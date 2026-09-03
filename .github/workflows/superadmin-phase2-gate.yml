@@ -8,9 +8,12 @@ on:
       - "src/main.tsx"
       - "src/config/subscriptionPlans.ts"
       - "tests/superAdminPhase2.test.ts"
+      - "tests/superAdminAccess.test.ts"
       - "tests/tenantSuspensionBoundary.test.ts"
+      - "backend/app/routes/__init__.py"
       - "backend/app/routes/super_admin.py"
       - "backend/app/routes/super_admin_onboarding.py"
+      - "backend/app/routes/super_admin_access.py"
       - "backend/app/database.py"
       - "backend/app/models.py"
       - "backend/app/security.py"
@@ -56,6 +59,7 @@ jobs:
         run: |
           python -m py_compile backend/app/routes/super_admin.py
           python -m py_compile backend/app/routes/super_admin_onboarding.py
+          python -m py_compile backend/app/routes/super_admin_access.py
           python -m py_compile backend/app/main.py
 
       - name: Run Phase 2 backend acceptance suite
@@ -64,6 +68,8 @@ jobs:
             backend/tests/test_super_admin_onboarding.py \
             backend/tests/test_super_admin_phase2b.py \
             backend/tests/test_super_admin_contract.py \
+            backend/tests/test_super_admin_trial.py \
+            backend/tests/test_super_admin_access.py \
             backend/tests/test_route_ownership.py \
             backend/tests/test_commercial_pricing_sync.py
 
