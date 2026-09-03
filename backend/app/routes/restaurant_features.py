@@ -2,10 +2,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from ..database import get_db, require_tenant_id
+from ..database import get_db, require_tenant_id, tenant_session_scope
 from ..models import Usuario
 from ..security import get_current_user, require_permission
 from ..services.capabilities import has_capability
+from ..services.public_orders import resolve_restaurant_id
 from ..smartpos_models import RestauranteCapability
 from .websocket import manager
 
@@ -26,6 +27,22 @@ class FeatureToggleUpdate(BaseModel):
     enabled: bool
 
     model_config = ConfigDict(extra="forbid")
+
+
+@router.get("/public/scheduled-orders", response_model=FeatureToggleResponse)
+def get_public_scheduled_orders_feature(
+    restaurante_id: int,
+    db: Session = Depends(get_db),
+):
+    resolved_id = resolve_restaurant_id(str(restaurante_id), None, db)
+    with tenant_session_scope(db, resolved_id):
+        return {
+            "enabled": has_capability(
+                db,
+                resolved_id,
+                SCHEDULED_ORDERS_CAPABILITY,
+            )
+        }
 
 
 @router.get("/scheduled-orders", response_model=FeatureToggleResponse)

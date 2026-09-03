@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
+  CalendarClock,
   Check,
   CheckCircle2,
   MapPin,
@@ -30,6 +31,7 @@ interface CreatedOrder {
   numero_pedido: string | number;
   total?: number;
   pagamento?: OnlinePaymentResponse;
+  scheduled_for?: string | null;
 }
 
 interface OnlinePaymentResponse {
@@ -73,6 +75,8 @@ interface PendingOrderSubmission {
 const PENDING_ORDER_STORAGE_KEY = "koma_pending_order_submission";
 const PENDING_ORDER_TTL_MS = 15 * 60 * 1000;
 const ORDER_REQUEST_TIMEOUT_MS = 15_000;
+const SCHEDULE_MIN_LEAD_MS = 30 * 60 * 1000;
+const SCHEDULE_MAX_HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
 
 const createIdempotencyKey = () => (
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -84,6 +88,24 @@ const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 }).format(value);
+
+const toLocalDateTimeInput = (date: Date) => {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+};
+
+const formatScheduledDate = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
 
 export default function CardapioDigital({
   activeBrand,
@@ -109,6 +131,9 @@ export default function CardapioDigital({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
+  const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
+  const [scheduledFor, setScheduledFor] = useState("");
   const isSubmittingRef = useRef(false);
   const idempotencyKeyRef = useRef<string>(createIdempotencyKey());
 
@@ -129,6 +154,49 @@ export default function CardapioDigital({
   );
   const availablePayments = useMemo(() => getAvailablePaymentMethods(activeBrand.paymentMethods), [activeBrand.paymentMethods]);
   const paymentError = getPaymentSelectionError(paymentMethodDetail, availablePayments);
+  const schedulePaymentError = scheduleMode === "scheduled" && paymentMethodDetail !== "dinheiro"
+    ? "Pedidos agendados usam pagamento no atendimento nesta versão. Selecione dinheiro."
+    : "";
+
+  const scheduleMin = toLocalDateTimeInput(new Date(Date.now() + SCHEDULE_MIN_LEAD_MS));
+  const scheduleMax = toLocalDateTimeInput(new Date(Date.now() + SCHEDULE_MAX_HORIZON_MS));
+
+  useEffect(() => {
+    const restauranteId = Number(activeBrand.id);
+    if (!Number.isInteger(restauranteId) || restauranteId <= 0) {
+      setScheduledOrdersEnabled(false);
+      setScheduleMode("now");
+      return;
+    }
+
+    let cancelled = false;
+    const loadFeature = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/restaurant-features/public/scheduled-orders?restaurante_id=${restauranteId}`,
+          { cache: "no-store" },
+        );
+        const data = await response.json().catch(() => null);
+        const enabled = response.ok && data?.enabled === true;
+        if (cancelled) return;
+        setScheduledOrdersEnabled(enabled);
+        if (!enabled) {
+          setScheduleMode("now");
+          setScheduledFor("");
+        }
+      } catch {
+        if (!cancelled) {
+          setScheduledOrdersEnabled(false);
+          setScheduleMode("now");
+          setScheduledFor("");
+        }
+      }
+    };
+    void loadFeature();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrand.id]);
 
   const resolvePersistentIdempotencyKey = (fingerprint: string) => {
     let key = idempotencyKeyRef.current;
@@ -168,8 +236,8 @@ export default function CardapioDigital({
 
   const handlePlaceOrder = async () => {
     if (isSubmittingRef.current) return;
-    if (paymentError) {
-      setErrorMessage(paymentError);
+    if (paymentError || schedulePaymentError) {
+      setErrorMessage(paymentError || schedulePaymentError);
       return;
     }
 
@@ -177,6 +245,7 @@ export default function CardapioDigital({
     const normalizedPhone = customerPhone.replace(/\D/g, "");
     const normalizedName = customerName.trim();
     const normalizedAddress = address.trim();
+    let scheduledForIso: string | undefined;
 
     if (!Number.isInteger(targetRestauranteId) || targetRestauranteId <= 0) {
       setErrorMessage("Não foi possível identificar o restaurante. Reabra o cardápio pelo link oficial.");
@@ -198,6 +267,27 @@ export default function CardapioDigital({
       setErrorMessage("Sua sacola está vazia.");
       return;
     }
+    if (scheduleMode === "scheduled") {
+      if (!scheduledOrdersEnabled) {
+        setErrorMessage("Este restaurante não está aceitando pedidos agendados.");
+        return;
+      }
+      const target = new Date(scheduledFor);
+      const targetMs = target.getTime();
+      if (!scheduledFor || Number.isNaN(targetMs)) {
+        setErrorMessage("Escolha a data e o horário do pedido.");
+        return;
+      }
+      if (targetMs < Date.now() + SCHEDULE_MIN_LEAD_MS - 60_000) {
+        setErrorMessage("Escolha um horário com pelo menos 30 minutos de antecedência.");
+        return;
+      }
+      if (targetMs > Date.now() + SCHEDULE_MAX_HORIZON_MS + 60_000) {
+        setErrorMessage("O pedido pode ser agendado com no máximo 7 dias de antecedência.");
+        return;
+      }
+      scheduledForIso = target.toISOString();
+    }
 
     const savedMesa = localStorage.getItem("koma_mesa_numero");
     const finalClienteNome = (savedMesa && deliveryMethod !== "delivery")
@@ -211,6 +301,7 @@ export default function CardapioDigital({
       cliente_telefone: normalizedPhone,
       tipo_pedido: deliveryMethod,
       endereco: deliveryMethod === "delivery" ? normalizedAddress : "",
+      scheduled_for: scheduledForIso || null,
       itens: cleanedItems,
     });
     const idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);
@@ -248,6 +339,7 @@ export default function CardapioDigital({
           cupom_codigo: cupomCodigo,
           usar_cashback: usarCashback,
           tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
+          scheduled_for: scheduledForIso,
           idempotency_key: idempotencyKey,
         }),
       });
@@ -269,6 +361,7 @@ export default function CardapioDigital({
 
       const authoritativeTotal = Number(data.total);
       const orderTotal = Number.isFinite(authoritativeTotal) ? authoritativeTotal : estimatedTotal;
+      const confirmedSchedule = String(data.scheduled_for || scheduledForIso || "") || undefined;
       const orderObj = {
         id: comandaId,
         numero_pedido: String(numeroPedido),
@@ -279,9 +372,11 @@ export default function CardapioDigital({
         tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
         total: orderTotal,
         idempotency_key: idempotencyKey,
-        status: data.pagamento?.cobranca_online && data.pagamento?.status !== "approved"
-          ? "aguardando_pagamento"
-          : "pendente",
+        status: confirmedSchedule
+          ? "agendado"
+          : data.pagamento?.cobranca_online && data.pagamento?.status !== "approved"
+            ? "aguardando_pagamento"
+            : "pendente",
         itens: cart.map((item) => ({
           id: item.product.id,
           nome: item.product.name,
@@ -301,6 +396,7 @@ export default function CardapioDigital({
         numero_pedido: numeroPedido,
         total: orderTotal,
         pagamento: data.pagamento,
+        scheduled_for: confirmedSchedule,
       });
     } catch (error) {
       console.warn("Falha ao registrar pedido no backend:", error);
@@ -353,6 +449,9 @@ export default function CardapioDigital({
     if (createdOrder) onOrderSuccess(createdOrder);
   };
 
+  const isCreatedOrderScheduled = Boolean(createdOrder?.scheduled_for);
+  const createdScheduleLabel = formatScheduledDate(createdOrder?.scheduled_for);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/75 p-0 sm:items-center sm:p-4 animate-fade-in" id="cardapio-checkout-overlay">
       <div className="relative flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[30px] border border-koma-border bg-koma-panel text-koma-foreground shadow-2xl sm:rounded-[30px] animate-scale-up" id="checkout-card">
@@ -381,9 +480,21 @@ export default function CardapioDigital({
           {createdOrder ? (
             <div className="flex flex-col items-center justify-center py-7 text-center sm:py-10 animate-scale-up">
               <div className="grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-500"><CheckCircle2 className="h-9 w-9" /></div>
-              <span className="mt-5 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">{createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" ? "Aguardando pagamento" : "Pedido recebido"}</span>
+              <span className="mt-5 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">
+                {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
+                  ? "Aguardando pagamento"
+                  : isCreatedOrderScheduled
+                    ? "Pedido agendado"
+                    : "Pedido recebido"}
+              </span>
               <h3 className="mt-1.5 font-display text-2xl font-black tracking-tight text-koma-foreground">Pedido #{createdOrder.numero_pedido}</h3>
-              <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">{createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" ? "Pague o Pix abaixo. O pedido só aparecerá para o restaurante depois da confirmação automática." : "Seu pedido entrou no painel do restaurante e está aguardando aceite. Você pode acompanhar o andamento neste mesmo cardápio."}</p>
+              <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">
+                {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
+                  ? "Pague o Pix abaixo. O pedido só aparecerá para o restaurante depois da confirmação automática."
+                  : isCreatedOrderScheduled
+                    ? `Pedido reservado para ${createdScheduleLabel}. Ele entra na operação somente no horário escolhido.`
+                    : "Seu pedido entrou no painel do restaurante e está aguardando aceite. Você pode acompanhar o andamento neste mesmo cardápio."}
+              </p>
 
               {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" && (
                 <div className="mt-5 w-full max-w-md rounded-2xl border border-emerald-500/25 bg-koma-card p-4">
@@ -397,6 +508,9 @@ export default function CardapioDigital({
               <div className="mt-5 grid w-full max-w-md gap-2 text-left sm:grid-cols-2">
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? `Entrega · ${address}` : "Retirada no balcão"}</p></div>
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Total</span><p className="mt-1 text-base font-black text-emerald-500">{formatPrice(createdOrder.total ?? estimatedTotal)}</p></div>
+                {isCreatedOrderScheduled && (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3.5 sm:col-span-2"><span className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Agendado para</span><p className="mt-1 text-[11px] font-bold text-koma-foreground">{createdScheduleLabel}</p></div>
+                )}
               </div>
 
               <div className="mt-6 w-full max-w-sm space-y-2">
@@ -412,6 +526,24 @@ export default function CardapioDigital({
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><UserRound className="h-3.5 w-3.5 text-emerald-500" /> Contato</div><p className="mt-2 text-xs font-black text-koma-foreground">{customerName}</p><p className="mt-0.5 text-[10px] text-koma-muted">{customerPhone}</p></div>
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {deliveryMethod === "delivery" ? "Entrega" : "Retirada"}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
               </div>
+
+              {scheduledOrdersEnabled && (
+                <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
+                  <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-emerald-500" /><h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Quando preparar?</h3></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => { setScheduleMode("now"); setScheduledFor(""); setErrorMessage(""); }} className={`h-11 rounded-xl border px-3 text-[10px] font-black ${scheduleMode === "now" ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500" : "border-koma-border text-koma-muted"}`}>O quanto antes</button>
+                    <button type="button" onClick={() => { setScheduleMode("scheduled"); setErrorMessage(""); }} className={`h-11 rounded-xl border px-3 text-[10px] font-black ${scheduleMode === "scheduled" ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500" : "border-koma-border text-koma-muted"}`}>Agendar</button>
+                  </div>
+                  {scheduleMode === "scheduled" && (
+                    <div className="mt-3">
+                      <label htmlFor="scheduled-order-time" className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-koma-muted">Data e horário</label>
+                      <input id="scheduled-order-time" type="datetime-local" min={scheduleMin} max={scheduleMax} value={scheduledFor} onChange={(event) => { setScheduledFor(event.target.value); setErrorMessage(""); }} className="h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-semibold text-koma-foreground outline-none focus:border-emerald-500/50" />
+                      <p className="mt-2 text-[9px] leading-relaxed text-koma-subtle">Entre 30 minutos e 7 dias. O pedido fica fora da cozinha e do caixa operacional até o horário escolhido.</p>
+                      {schedulePaymentError && <p className="mt-2 text-[10px] font-bold text-amber-500">{schedulePaymentError}</p>}
+                    </div>
+                  )}
+                </section>
+              )}
 
               <section>
                 <div className="mb-2.5 flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Itens do pedido</h3><button type="button" onClick={onClose} className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500 hover:text-emerald-400"><ArrowLeft className="h-3 w-3" /> Editar sacola</button></div>
@@ -444,8 +576,8 @@ export default function CardapioDigital({
 
         {!createdOrder && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6 sm:py-5">
-            <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">Pix só entra no painel após o pagamento. Dinheiro entra direto e é cobrado pessoalmente.</p>
+            <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
+            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro entra direto e é cobrado pessoalmente."}</p>
           </footer>
         )}
       </div>
