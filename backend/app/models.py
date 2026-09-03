@@ -25,6 +25,12 @@ from .crypt import encrypt_field, decrypt_field
 
 class Restaurante(Base):
     __tablename__ = "restaurantes"
+    __table_args__ = (
+        CheckConstraint(
+            "saas_status IN ('active', 'suspended')",
+            name="ck_restaurantes_saas_status",
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     nome = Column(String, nullable=False)
@@ -41,6 +47,7 @@ class Restaurante(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     status_override = Column(String, default="Automático")
+    saas_status = Column(String(20), default="active", server_default="active", nullable=False)
     socials = Column(JSON, nullable=True)
     horarios_funcionamento = Column(JSON, nullable=True)
     formas_pagamento_aceitas = Column(JSON, nullable=True)
@@ -1138,6 +1145,42 @@ def block_activity_log_update(mapper, connection, target):
 @event.listens_for(ActivityLog, 'before_delete')
 def block_activity_log_delete(mapper, connection, target):
     raise PermissionError("Activity logs are immutable and cannot be deleted.")
+
+
+class SuperAdminAuditLog(Base):
+    __tablename__ = "super_admin_audit_logs"
+    __table_args__ = (
+        Index("ix_super_admin_audit_logs_created_at", "created_at").ddl_if(dialect="postgresql"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    actor = Column(String(255), nullable=False)
+    action = Column(String(64), nullable=False)
+    reason = Column(Text, nullable=False)
+    before_data = Column(JSON, nullable=True)
+    after_data = Column(JSON, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+
+@event.listens_for(SuperAdminAuditLog, 'before_update')
+def block_super_admin_audit_log_update(mapper, connection, target):
+    raise PermissionError("Super admin audit logs are immutable and cannot be updated.")
+
+
+@event.listens_for(SuperAdminAuditLog, 'before_delete')
+def block_super_admin_audit_log_delete(mapper, connection, target):
+    raise PermissionError("Super admin audit logs are immutable and cannot be deleted.")
 
 
 class Insumo(Base):

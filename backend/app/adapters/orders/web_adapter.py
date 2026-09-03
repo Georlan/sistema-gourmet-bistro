@@ -225,6 +225,12 @@ class CardapioWebAdapter:
                     detail="Restaurante não encontrado.",
                 )
 
+            if getattr(restaurante, "saas_status", "active") == "suspended":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Restaurante temporariamente suspenso para novos pedidos.",
+                )
+
             # Replay rápido por chave idempotente
             existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
             if existing_comanda:
