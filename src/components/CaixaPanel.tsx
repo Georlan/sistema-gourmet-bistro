@@ -62,6 +62,7 @@ const loadCashierTeam = () => import('./caixa/team/CashierTeam');
 const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
 const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [];
+const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -767,6 +768,17 @@ export function CaixaPanel({
                 </button>
               ))}
 
+            {activeTab === 'cardapio_digital' &&
+              onlineMenuSubnavItems.map((sub) => (
+                <button
+                  key={sub.id}
+                  onClick={() => handleSidebarNavigation(sub.id)}
+                  className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+                >
+                  {sub.label}
+                </button>
+              ))}
+
             {activeTab === 'cardapio' &&
               [
                 { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
@@ -1323,6 +1335,7 @@ export function CaixaPanel({
               sectionProps={{
                 apiBaseUrl,
                 authHeaders,
+                activeSubTab,
                 setActiveSubTab,
                 setActiveTab,
                 hasOnlineMenu,
