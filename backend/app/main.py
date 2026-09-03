@@ -33,6 +33,7 @@ from .routes import (
     products,
     relatorios,
     super_admin,
+    super_admin_onboarding,
     tables,
     websocket,
     whatsapp_webhook,
@@ -378,6 +379,7 @@ app.include_router(printing.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
 app.include_router(super_admin.router, prefix="/api")
+app.include_router(super_admin_onboarding.router, prefix="/api")
 
 if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
     app.include_router(whatsapp_webhook.router)
