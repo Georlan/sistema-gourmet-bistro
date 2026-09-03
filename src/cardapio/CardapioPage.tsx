@@ -273,6 +273,7 @@ export default function CardapioPage() {
       }
 
       const statusOverride = String(restaurant.status_override || "Automático").toLocaleLowerCase("pt-BR");
+      const configuredDeliveryFee = Number(restaurant.taxa_entrega_padrao);
       const brand: BrandConfig = {
         id: String(restaurant.id),
         name: String(restaurant.nome || "Restaurante"),
@@ -306,7 +307,7 @@ export default function CardapioPage() {
               taxa: Number(b.taxa || 0),
             }))
           : [],
-        taxaEntregaPadrao: Number(restaurant.taxa_entrega_padrao || 7),
+        taxaEntregaPadrao: Number.isFinite(configuredDeliveryFee) ? Math.max(0, configuredDeliveryFee) : 0,
         storeStatus: statusOverride.includes("fech")
           ? "closed"
           : statusOverride.includes("abert")
