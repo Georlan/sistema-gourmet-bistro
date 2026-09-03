@@ -5,6 +5,7 @@ import type { CashierTab } from '../cashierContracts';
 interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  activeSubTab: string;
   setActiveSubTab: (tab: string) => void;
   setActiveTab: (tab: CashierTab) => void;
   hasOnlineMenu: boolean;
@@ -27,9 +28,16 @@ const readRestaurantIdFromAuthorization = (authorization?: string): number | nul
   }
 };
 
+const sectionBySubTab = {
+  cardapio_digital: 'perfil',
+  cardapio_perfil: 'perfil',
+  cardapio_pedidos: 'pedidos',
+  cardapio_marca: 'marca',
+} as const;
+
 /** Plan gate and online-channel composition only. Technical integrations live under Sistema. */
 export default function CashierOnlineMenu({
-  apiBaseUrl, authHeaders, setActiveSubTab, setActiveTab, hasOnlineMenu,
+  apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu,
 }: Props) {
   if (!hasOnlineMenu) return (
         <div
@@ -53,13 +61,26 @@ export default function CashierOnlineMenu({
           </button>
         </div>
   );
+
   const restaurantId = readRestaurantIdFromAuthorization(authHeaders.Authorization || authHeaders.authorization);
+  const activeSection = sectionBySubTab[activeSubTab as keyof typeof sectionBySubTab] ?? 'perfil';
+
   return (
     <CardapioDigitalSettingsPanel
       key={authHeaders.Authorization || authHeaders.authorization}
       apiBaseUrl={apiBaseUrl}
       authHeaders={authHeaders}
       publicMenuUrl={restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null}
+      activeSection={activeSection}
+      onSectionChange={(section) => {
+        setActiveSubTab(
+          section === 'pedidos'
+            ? 'cardapio_pedidos'
+            : section === 'marca'
+              ? 'cardapio_marca'
+              : 'cardapio_perfil',
+        );
+      }}
     />
   );
 }
