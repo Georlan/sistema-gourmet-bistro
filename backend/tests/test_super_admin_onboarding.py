@@ -4,14 +4,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app.database import SessionLocal
+from app.database import SessionLocal, tenant_session_scope
 from app.main import app
 from app.models import (
     Categoria,
     ConfiguracaoRestaurante,
     Produto,
     RestaurantPaymentAccount,
-    Restaurante,
     SuperAdminAuditLog,
     Usuario,
 )
@@ -62,13 +61,14 @@ def _cleanup_tenant(tenant_id: int | None) -> None:
         return
     db = SessionLocal()
     try:
-        # O delete SQL deixa o FK ON DELETE CASCADE remover a auditoria sem
-        # tentar mutar diretamente o modelo imutável SuperAdminAuditLog.
-        db.execute(
-            text("DELETE FROM restaurantes WHERE id = :tenant_id"),
-            {"tenant_id": tenant_id},
-        )
-        db.commit()
+        with tenant_session_scope(db, tenant_id):
+            # SQL direto deixa o FK ON DELETE CASCADE remover a auditoria sem
+            # tentar mutar o modelo imutável SuperAdminAuditLog pelo ORM.
+            db.execute(
+                text("DELETE FROM restaurantes WHERE id = :tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+            db.commit()
     finally:
         db.close()
 
@@ -76,13 +76,19 @@ def _cleanup_tenant(tenant_id: int | None) -> None:
 def _find_restaurant_id_by_slug(slug: str) -> int | None:
     db = SessionLocal()
     try:
-        value = db.execute(
-            text(
-                "SELECT id FROM restaurantes "
-                "WHERE lower(COALESCE(slug, '')) = lower(:slug) LIMIT 1"
-            ),
-            {"slug": slug},
-        ).scalar_one_or_none()
+        if db.get_bind().dialect.name == "postgresql":
+            value = db.execute(
+                text("SELECT id FROM koma_internal.resolve_public_restaurant(:identifier)"),
+                {"identifier": slug},
+            ).scalar_one_or_none()
+        else:
+            value = db.execute(
+                text(
+                    "SELECT id FROM restaurantes "
+                    "WHERE lower(COALESCE(slug, '')) = lower(:slug) LIMIT 1"
+                ),
+                {"slug": slug},
+            ).scalar_one_or_none()
         return int(value) if value is not None else None
     finally:
         db.close()
@@ -114,49 +120,53 @@ def test_onboarding_cria_tenant_defaults_admin_auditoria_e_login():
 
         db = SessionLocal()
         try:
-            restaurant = db.execute(
-                text("SELECT nome, slug, plano, saas_status FROM restaurantes WHERE id = :id"),
-                {"id": tenant_id},
-            ).mappings().one()
-            assert restaurant["nome"] == payload["name"]
-            assert restaurant["slug"] == payload["subdomain"]
-            assert restaurant["plano"] == "pro"
-            assert restaurant["saas_status"] == "active"
+            with tenant_session_scope(db, tenant_id):
+                restaurant = db.execute(
+                    text(
+                        "SELECT nome, slug, plano, saas_status "
+                        "FROM restaurantes WHERE id = :id"
+                    ),
+                    {"id": tenant_id},
+                ).mappings().one()
+                assert restaurant["nome"] == payload["name"]
+                assert restaurant["slug"] == payload["subdomain"]
+                assert restaurant["plano"] == "pro"
+                assert restaurant["saas_status"] == "active"
 
-            config = db.query(ConfiguracaoRestaurante).filter(
-                ConfiguracaoRestaurante.restaurante_id == tenant_id
-            ).one()
-            assert config.impressao_nome_restaurante == payload["name"]
+                config = db.query(ConfiguracaoRestaurante).filter(
+                    ConfiguracaoRestaurante.restaurante_id == tenant_id
+                ).one()
+                assert config.impressao_nome_restaurante == payload["name"]
 
-            admin = db.query(Usuario).filter(
-                Usuario.restaurante_id == tenant_id,
-                Usuario.email == payload["admin_email"],
-            ).one()
-            assert admin.cargo == "admin"
-            assert admin.status == "ativo"
-            assert admin.senha_hash
-            assert admin.senha_hash != payload["temporary_password"]
-            assert verify_password(payload["temporary_password"], admin.senha_hash)
+                admin = db.query(Usuario).filter(
+                    Usuario.restaurante_id == tenant_id,
+                    Usuario.email == payload["admin_email"],
+                ).one()
+                assert admin.cargo == "admin"
+                assert admin.status == "ativo"
+                assert admin.senha_hash
+                assert admin.senha_hash != payload["temporary_password"]
+                assert verify_password(payload["temporary_password"], admin.senha_hash)
 
-            assert db.query(Categoria).filter(
-                Categoria.restaurante_id == tenant_id
-            ).count() == 0
-            assert db.query(Produto).filter(
-                Produto.restaurante_id == tenant_id
-            ).count() == 0
-            assert db.query(RestaurantPaymentAccount).filter(
-                RestaurantPaymentAccount.restaurante_id == tenant_id
-            ).count() == 0
+                assert db.query(Categoria).filter(
+                    Categoria.restaurante_id == tenant_id
+                ).count() == 0
+                assert db.query(Produto).filter(
+                    Produto.restaurante_id == tenant_id
+                ).count() == 0
+                assert db.query(RestaurantPaymentAccount).filter(
+                    RestaurantPaymentAccount.restaurante_id == tenant_id
+                ).count() == 0
 
-            logs = db.query(SuperAdminAuditLog).filter(
-                SuperAdminAuditLog.restaurante_id == tenant_id
-            ).all()
-            assert len(logs) == 1
-            assert logs[0].action == "SUPERADMIN_TENANT_ONBOARD"
-            serialized_audit = str(logs[0].after_data).lower()
-            assert "password" not in serialized_audit
-            assert "senha" not in serialized_audit
-            assert payload["temporary_password"].lower() not in serialized_audit
+                logs = db.query(SuperAdminAuditLog).filter(
+                    SuperAdminAuditLog.restaurante_id == tenant_id
+                ).all()
+                assert len(logs) == 1
+                assert logs[0].action == "SUPERADMIN_TENANT_ONBOARD"
+                serialized_audit = str(logs[0].after_data).lower()
+                assert "password" not in serialized_audit
+                assert "senha" not in serialized_audit
+                assert payload["temporary_password"].lower() not in serialized_audit
         finally:
             db.close()
 
@@ -203,19 +213,7 @@ def test_onboarding_slug_duplicado_nao_cria_segundo_tenant():
         )
         assert second.status_code == 409, second.text
         assert "já está em uso" in second.json()["detail"]
-
-        db = SessionLocal()
-        try:
-            count = db.execute(
-                text(
-                    "SELECT COUNT(*) FROM restaurantes "
-                    "WHERE lower(COALESCE(slug, '')) = lower(:slug)"
-                ),
-                {"slug": payload["subdomain"]},
-            ).scalar_one()
-            assert int(count) == 1
-        finally:
-            db.close()
+        assert _find_restaurant_id_by_slug(payload["subdomain"]) == first_id
     finally:
         _cleanup_tenant(first_id)
 
@@ -225,6 +223,7 @@ def test_onboarding_rejeita_plano_slug_e_senha_invalidos_sem_criar_tenant():
         {"plan": "ultra"},
         {"subdomain": "Slug Inválido"},
         {"temporary_password": "curta"},
+        {"temporary_password": "á" * 40},
     ]
     for changes in cases:
         payload = _payload()
