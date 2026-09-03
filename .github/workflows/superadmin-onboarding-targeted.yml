@@ -29,6 +29,7 @@ jobs:
       MIGRATION_DATABASE_URL: sqlite:///./superadmin-onboarding-ci.db
       SUPERADMIN_USERNAME: owner-ci@example.test
       SUPERADMIN_PASSWORD_HASH: unused-because-tests-override-it
+      PYTHONPATH: backend
 
     steps:
       - name: Checkout
@@ -53,9 +54,8 @@ jobs:
           python -m py_compile backend/app/main.py
 
       - name: Run targeted Super Admin tests
-        working-directory: backend
         run: |
           python -m pytest -q \
-            tests/test_super_admin_onboarding.py \
-            tests/test_super_admin_phase2b.py \
-            tests/test_route_ownership.py
+            backend/tests/test_super_admin_onboarding.py \
+            backend/tests/test_super_admin_phase2b.py \
+            backend/tests/test_route_ownership.py
