@@ -53,8 +53,9 @@ test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao volta
   const cart = page.getByRole('button', { name: /^Carrinho \(/ });
   if (await cart.isVisible()) await cart.click();
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
-  await page.getByRole('main').getByRole('button', { name: 'Salão', exact: true }).click();
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  const main = page.getByRole('main');
+  await main.getByRole('button', { name: 'Salão', exact: true }).click();
+  await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   if (await cart.isVisible()) await cart.click();
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
   await expect(page.locator('#pdv-submit-btn').locator('..')).toContainText('112,00');
