@@ -1,27 +1,29 @@
 # Governança de mudanças
 
-## Estado temporário — quality gates desativados
+## Quality gates de merge
 
-Os quality gates automáticos foram removidos temporariamente para destravar o fluxo de desenvolvimento e reduzir o tempo entre PR e merge.
+Os quatro contexts exigidos pela proteção da branch `main` voltaram a executar validações reais em `.github/workflows/quality-gate.yml`.
 
-A proteção da branch `main` ainda referencia quatro nomes históricos de status checks. Como a integração atual não consegue editar branch protection, existe apenas um workflow mínimo de compatibilidade (`merge-compatibility-shim.yml`) que publica esses quatro contexts como sucesso sem executar suites de teste. Ele não é um quality gate e deve ser removido assim que os required checks forem retirados da proteção da branch.
+Checks obrigatórios:
 
-Contexts mantidos apenas por compatibilidade:
+- `Frontend typecheck + unit + build`: TypeScript, suíte unitária frontend e build de produção;
+- `Backend full + critical regression gate`: Alembic com head único e suíte completa `backend/tests`;
+- `Browser regression matrix`: smoke E2E de owners operacionais e contexto de salão em mobile/desktop;
+- `postgres-security-audit`: regressões de CORS, contrato do Super Admin e invariantes multitenant.
 
-- `Frontend typecheck + unit + build`
-- `Backend full + critical regression gate`
-- `Browser regression matrix`
-- `postgres-security-audit`
+O antigo `merge-compatibility-shim.yml`, que publicava sucesso sem executar testes, foi removido. Nenhum PR deve ser mergeado se um desses contexts estiver vermelho ou ausente.
 
-Foram removidos os workflows pesados de quality gate, auditoria adversarial, migration baseline, release drift, B1.4 operational smoke e CodeQL. Eles serão redesenhados depois, com foco em checks rápidos e seletivos por risco/caminho alterado.
+## Estratégia de velocidade
 
-Enquanto esse modo temporário estiver ativo, mudanças de alto risco em pagamentos, autenticação, estoque, migrações, multi-tenant/RLS e state machines devem receber revisão e validação direcionadas antes de merge. Mudanças pequenas de UI/UX não devem ficar bloqueadas por suites integrais do produto.
+O caminho crítico de PR concentra validações que protegem comportamento, autenticação, tenancy e build sem restaurar toda a antiga matriz pesada em cada alteração.
 
-## Próximo desenho
+Auditorias de maior custo, PostgreSQL adversarial completo, concorrência, dependency audit e matrizes browser extensas podem continuar em workflows dedicados, agendados ou pós-merge. Mudanças de alto risco em pagamentos, autenticação, estoque, migrações, multi-tenant/RLS e state machines ainda devem receber testes direcionados adicionais no próprio PR.
 
-Quando os gates forem recriados, a meta é separar:
+Mudanças pequenas de UI/UX não precisam ampliar a suíte além dos gates canônicos e dos testes diretamente afetados.
 
-1. checks rápidos de PR, com orçamento de poucos minutos;
-2. testes direcionados por paths/risco;
-3. suites pesadas agendadas ou pós-merge;
-4. auditorias de segurança fora do caminho crítico de entrega.
+## Regra de evidência
+
+- `main` deve permanecer verde.
+- Falha real não é corrigida relaxando um contrato sem justificar a intenção do teste.
+- Testes de governança devem distinguir tabelas globais, tabelas tenant-owned do runtime e tabelas tenant-owned operadas explicitamente pelo control plane.
+- Quando um teste está verificando uma regra de domínio persistida, prefira validar o estado canônico no banco/serviço em vez de acoplar a regressão a um detalhe opcional da resposta HTTP.
