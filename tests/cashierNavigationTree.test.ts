@@ -105,7 +105,7 @@ test('navigation tree owns default tab and subtab destinations', () => {
   assert.deepEqual(getCashierNavigationTarget('financeiro'), { tab: 'financeiro', subTab: 'turno_atual' });
   assert.deepEqual(getCashierNavigationTarget('estoque'), { tab: 'estoque', subTab: 'insumos' });
   assert.deepEqual(getCashierNavigationTarget('cardapio_digital'), {
-    tab: 'cardapio_digital', subTab: 'cardapio_digital',
+    tab: 'cardapio_digital', subTab: 'cardapio_perfil',
   });
   assert.deepEqual(getCashierNavigationTarget('assinatura_pix'), { tab: 'assinatura_pix', subTab: 'planos' });
   assert.equal(getCashierNavigationTarget('nao-existe'), undefined);
