@@ -99,7 +99,7 @@ test('navigation tree owns default tab and subtab destinations', () => {
     tab: 'cardapio_digital', subTab: 'cardapio_perfil',
   });
   assert.deepEqual(getCashierNavigationTarget('assinatura_pix'), { tab: 'assinatura_pix', subTab: 'planos' });
-  assert.equal(getCashierNavigationTarget('nao-existe'), undefined;
+  assert.equal(getCashierNavigationTarget('nao-existe'), undefined);
 });
 
 test('novo pedido keeps PDV openCounter as the owner of counter initialization', () => {
