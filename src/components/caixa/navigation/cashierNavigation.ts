@@ -108,9 +108,8 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         icon: Package,
         target: { tab: 'estoque', subTab: 'insumos' },
         children: [
-          { id: 'estoque_ingredientes', label: 'Ingredientes', target: { tab: 'estoque', subTab: 'insumos' } },
-          { id: 'estoque_historico', label: 'Histórico', target: { tab: 'estoque', subTab: 'historico' } },
-          { id: 'estoque_inventario', label: 'Inventário', target: { tab: 'estoque', subTab: 'inventario' } },
+          { id: 'estoque_ingredientes', label: 'Estoque', target: { tab: 'estoque', subTab: 'insumos' } },
+          { id: 'estoque_historico', label: 'Compras', target: { tab: 'estoque', subTab: 'historico' } },
           { id: 'estoque_fornecedores', label: 'Fornecedores', target: { tab: 'estoque', subTab: 'fornecedores' } },
         ],
       },
