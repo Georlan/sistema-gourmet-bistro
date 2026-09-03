@@ -6,11 +6,15 @@ const boundary = readFileSync('src/components/auth/TenantSuspensionBoundary.tsx'
 const main = readFileSync('src/main.tsx', 'utf8');
 
 test('suspensão substitui o app operacional por uma tela exclusiva', () => {
-  assert.match(boundary, /accessState === 'suspended'/);
   assert.match(boundary, /Estabelecimento temporariamente suspenso/);
   assert.match(boundary, /Caixa, vendas, cardápio interno, estoque, clientes/);
-  assert.match(boundary, /return <SuspensionScreen/);
-  assert.doesNotMatch(boundary, /SuspensionScreen[\s\S]*children[\s\S]*SuspensionScreen/);
+  assert.match(
+    boundary,
+    /if \(accessState === 'suspended'\) \{\s*return <SuspensionScreen checking=\{checking\} onRetry=\{retry\} onLogout=\{logout\} \/>;\s*\}/,
+  );
+  const suspendedReturn = boundary.indexOf("if (accessState === 'suspended')");
+  const normalReturn = boundary.lastIndexOf('return <>{children}</>;');
+  assert.ok(suspendedReturn >= 0 && normalReturn > suspendedReturn, 'o app normal só volta depois do gate de suspensão');
 });
 
 test('boundary detecta suspensão no backend e revalida a sessão periodicamente', () => {
