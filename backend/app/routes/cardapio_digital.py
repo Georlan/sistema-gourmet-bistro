@@ -186,7 +186,7 @@ def _public_restaurant_payload(
         "tipo_taxa_entrega": configuracao.tipo_taxa_entrega if configuracao and configuracao.tipo_taxa_entrega else "fixa",
         "tabela_taxas_bairros": configuracao.tabela_taxas_bairros if configuracao and configuracao.tabela_taxas_bairros else [],
         "tabela_taxas_km": configuracao.tabela_taxas_km if configuracao and configuracao.tabela_taxas_km else [],
-        "taxa_entrega_padrao": float(restaurante.taxa_entrega_padrao or 0.0) if hasattr(restaurante, "taxa_entrega_padrao") and restaurante.taxa_entrega_padrao is not None else 0.0,
+        "taxa_entrega_padrao": float(configuracao.taxa_entrega_padrao) if configuracao and configuracao.taxa_entrega_padrao is not None else 0.0,
     }
 
 
