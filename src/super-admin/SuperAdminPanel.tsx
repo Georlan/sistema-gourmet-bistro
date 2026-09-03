@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Menu,
   Sparkles,
+  UsersRound,
   X,
 } from "lucide-react";
 import type { Tenant, FailedWebhook } from "./superAdminTypes";
@@ -24,6 +25,7 @@ import {
 import { SuperAdminOverviewTab } from "./SuperAdminOverviewTab";
 import { SuperAdminTenantsTab } from "./SuperAdminTenantsTab";
 import { SuperAdminTrialsTab } from "./SuperAdminTrialsTab";
+import { SuperAdminAccessTab } from "./SuperAdminAccessTab";
 import { SuperAdminPaymentsTab } from "./SuperAdminPaymentsTab";
 import { SuperAdminBillingTab } from "./SuperAdminBillingTab";
 import { SuperAdminOperationsTab } from "./SuperAdminOperationsTab";
@@ -34,6 +36,7 @@ type TabId =
   | "overview"
   | "tenants"
   | "trials"
+  | "access"
   | "payments"
   | "billing"
   | "operations"
@@ -178,6 +181,7 @@ export default function SuperAdminPanel() {
     { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard },
     { id: "tenants" as TabId, label: "Restaurantes", icon: Store },
     { id: "trials" as TabId, label: "Períodos grátis", icon: Sparkles },
+    { id: "access" as TabId, label: "Acessos e equipe", icon: UsersRound },
     { id: "payments" as TabId, label: "Pagamentos online", icon: CreditCard },
     { id: "billing" as TabId, label: "Planos e cobrança", icon: ReceiptText },
     { id: "operations" as TabId, label: "Operações e manutenção", icon: Wrench },
@@ -291,6 +295,7 @@ export default function SuperAdminPanel() {
               refreshTenants={fetchTenants}
             />
           )}
+          {activeTab === "access" && <SuperAdminAccessTab globalSearch={globalSearch} />}
           {activeTab === "payments" && <SuperAdminPaymentsTab failedWebhooks={failedWebhooks} webhooksAvailable={false} />}
           {activeTab === "billing" && <SuperAdminBillingTab tenants={tenants} tenantsAvailable={tenantsAvailable} />}
           {activeTab === "operations" && <SuperAdminOperationsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
