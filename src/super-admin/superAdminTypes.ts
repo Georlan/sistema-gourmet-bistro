@@ -34,6 +34,7 @@ export interface ActiveDevice {
 }
 
 export interface CredentialsStatus {
+  mercado_pago?: { configured: boolean };
   cloudflare?: { configured: boolean };
   railway?: { configured: boolean };
   github?: { configured: boolean };
@@ -51,6 +52,7 @@ export interface IntegrationsHealthStatus {
   cloudflare?: { status: string };
   railway?: { status: string };
   github?: { status: string };
+  mercado_pago?: { status: string };
   telegram?: { status: string };
   evolution?: { status: string; details?: unknown };
 }
