@@ -1583,6 +1583,8 @@ def atualizar_configuracoes(
         config.pedido_minimo = config_in.pedido_minimo
     if config_in.frete_gratis_valor is not None:
         config.frete_gratis_valor = config_in.frete_gratis_valor
+    if config_in.taxa_entrega_padrao is not None:
+        config.taxa_entrega_padrao = config_in.taxa_entrega_padrao
     if config_in.tipo_taxa_entrega is not None:
         config.tipo_taxa_entrega = config_in.tipo_taxa_entrega
     if config_in.tabela_taxas_bairros is not None:
