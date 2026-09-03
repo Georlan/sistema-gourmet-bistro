@@ -11,6 +11,7 @@ import {
   Search,
   ChevronRight,
   Menu,
+  Sparkles,
   X,
 } from "lucide-react";
 import type { Tenant, FailedWebhook } from "./superAdminTypes";
@@ -22,6 +23,7 @@ import {
 } from "./superAdminApi";
 import { SuperAdminOverviewTab } from "./SuperAdminOverviewTab";
 import { SuperAdminTenantsTab } from "./SuperAdminTenantsTab";
+import { SuperAdminTrialsTab } from "./SuperAdminTrialsTab";
 import { SuperAdminPaymentsTab } from "./SuperAdminPaymentsTab";
 import { SuperAdminBillingTab } from "./SuperAdminBillingTab";
 import { SuperAdminOperationsTab } from "./SuperAdminOperationsTab";
@@ -31,6 +33,7 @@ import { SuperAdminSettingsTab } from "./SuperAdminSettingsTab";
 type TabId =
   | "overview"
   | "tenants"
+  | "trials"
   | "payments"
   | "billing"
   | "operations"
@@ -174,6 +177,7 @@ export default function SuperAdminPanel() {
   const navItems = [
     { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard },
     { id: "tenants" as TabId, label: "Restaurantes", icon: Store },
+    { id: "trials" as TabId, label: "Períodos grátis", icon: Sparkles },
     { id: "payments" as TabId, label: "Pagamentos online", icon: CreditCard },
     { id: "billing" as TabId, label: "Planos e cobrança", icon: ReceiptText },
     { id: "operations" as TabId, label: "Operações e manutenção", icon: Wrench },
@@ -278,6 +282,13 @@ export default function SuperAdminPanel() {
               isLoading={isLoadingTenants}
               refreshTenants={fetchTenants}
               globalSearch={globalSearch}
+            />
+          )}
+          {activeTab === "trials" && (
+            <SuperAdminTrialsTab
+              tenants={tenants}
+              globalSearch={globalSearch}
+              refreshTenants={fetchTenants}
             />
           )}
           {activeTab === "payments" && <SuperAdminPaymentsTab failedWebhooks={failedWebhooks} webhooksAvailable={false} />}
