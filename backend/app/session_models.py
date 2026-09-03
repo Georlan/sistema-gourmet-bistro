@@ -1,6 +1,6 @@
 import datetime
 
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 
 from .database import Base, current_restaurante_id
 
@@ -51,6 +51,7 @@ class UserSessionVersion(Base):
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        server_default=func.now(),
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
         nullable=False,
     )
