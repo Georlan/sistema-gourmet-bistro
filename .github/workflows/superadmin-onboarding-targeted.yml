@@ -3,6 +3,7 @@ name: SuperAdmin Onboarding Targeted
 on:
   pull_request:
     paths:
+      - "backend/alembic/versions/3d4e5f6a7b8c_add_restaurant_trials.py"
       - "backend/app/main.py"
       - "backend/app/routes/super_admin.py"
       - "backend/app/routes/super_admin_onboarding.py"
@@ -11,6 +12,7 @@ on:
       - "backend/app/security.py"
       - "backend/tests/test_super_admin_onboarding.py"
       - "backend/tests/test_super_admin_phase2b.py"
+      - "backend/tests/test_super_admin_trial.py"
       - "backend/tests/test_route_ownership.py"
       - ".github/workflows/superadmin-onboarding-targeted.yml"
 
@@ -52,10 +54,12 @@ jobs:
           python -m py_compile backend/app/routes/super_admin_onboarding.py
           python -m py_compile backend/app/routes/super_admin.py
           python -m py_compile backend/app/main.py
+          python -m py_compile backend/alembic/versions/3d4e5f6a7b8c_add_restaurant_trials.py
 
       - name: Run targeted Super Admin tests
         run: |
           python -m pytest -q \
             backend/tests/test_super_admin_onboarding.py \
+            backend/tests/test_super_admin_trial.py \
             backend/tests/test_super_admin_phase2b.py \
             backend/tests/test_route_ownership.py
