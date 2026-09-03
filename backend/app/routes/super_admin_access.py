@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..database import SessionLocal, tenant_session_scope
 from ..models import RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog, Usuario
+from ..security import revoke_user_sessions
 from .super_admin import _discover_restaurant_ids, _payment_status, get_current_admin
 
 logger = logging.getLogger("koma.super_admin.access")
@@ -28,6 +29,12 @@ class UserAccessUpdateRequest(BaseModel):
         if self.status is None and self.role is None:
             raise ValueError("Informe ao menos uma alteração de status ou cargo.")
         return self
+
+
+class UserSessionRevokeRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 def _parse_tenant_id(tenant_id: str) -> int:
@@ -368,12 +375,21 @@ def update_user_access(
             if payload.role is not None:
                 user.role = payload.role
 
+            sessions_revoked = before_status != "inativo" and next_status == "inativo"
+            if sessions_revoked:
+                revoke_user_sessions(
+                    db,
+                    user_id=user.id,
+                    restaurante_id=tenant_id_int,
+                )
+
             forced = bool(removes_last_active_admin and payload.force)
             after = {
                 "user_id": user.id,
                 "status": _normalize_status(user),
                 "role": _normalize_role(user),
                 "forced": forced,
+                "sessions_revoked": sessions_revoked,
             }
             db.add(
                 SuperAdminAuditLog(
@@ -401,15 +417,17 @@ def update_user_access(
             tenant_payload = _tenant_access_payload(db, restaurante, users)
 
             logger.warning(
-                "SUPERADMIN USER ACCESS UPDATED tenant=%s user=%s actor=%s forced=%s",
+                "SUPERADMIN USER ACCESS UPDATED tenant=%s user=%s actor=%s forced=%s sessions_revoked=%s",
                 tenant_id_int,
                 user.id,
                 admin.get("user"),
                 forced,
+                sessions_revoked,
             )
             return {
                 "message": "Acesso do usuário atualizado com sucesso.",
                 "forced": forced,
+                "sessionsRevoked": sessions_revoked,
                 "user": _user_snapshot(user),
                 "tenant": tenant_payload,
             }
@@ -429,6 +447,111 @@ def update_user_access(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Falha ao atualizar o acesso do usuário.",
+        )
+    finally:
+        db.close()
+
+
+@router.post("/restaurantes/{tenant_id}/usuarios/{user_id}/revogar-sessoes")
+def revoke_user_access_sessions(
+    tenant_id: str,
+    user_id: str,
+    payload: UserSessionRevokeRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Encerra JWTs operacionais já emitidos sem alterar senha, cargo ou status."""
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    clean_reason = payload.reason.strip()
+    if len(clean_reason) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="O motivo para encerrar as sessões é obrigatório.",
+        )
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            restaurante = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == tenant_id_int)
+                .one_or_none()
+            )
+            if restaurante is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Restaurante não encontrado.",
+                )
+
+            user = (
+                db.query(Usuario)
+                .filter(
+                    Usuario.id == user_id,
+                    Usuario.restaurante_id == tenant_id_int,
+                )
+                .with_for_update()
+                .one_or_none()
+            )
+            if user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Usuário não encontrado neste restaurante.",
+                )
+
+            if _normalize_status(user) == "pendente_ativacao":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Usuário ainda não possui sessão operacional ativa para revogar.",
+                )
+
+            snapshot = {
+                "user_id": user.id,
+                "status": _normalize_status(user),
+                "role": _normalize_role(user),
+            }
+            revoke_user_sessions(
+                db,
+                user_id=user.id,
+                restaurante_id=tenant_id_int,
+            )
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id_int,
+                    actor=str(admin.get("user") or "superadmin"),
+                    action="SUPERADMIN_USER_SESSIONS_REVOKED",
+                    reason=clean_reason,
+                    before_data=snapshot,
+                    after_data={**snapshot, "sessions_revoked": True},
+                )
+            )
+            db.commit()
+            db.refresh(user)
+
+            logger.warning(
+                "SUPERADMIN USER SESSIONS REVOKED tenant=%s user=%s actor=%s",
+                tenant_id_int,
+                user.id,
+                admin.get("user"),
+            )
+            return {
+                "message": "Sessões do usuário encerradas com sucesso.",
+                "user": _user_snapshot(user),
+            }
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
+    except Exception:
+        if db.in_transaction():
+            db.rollback()
+        logger.exception(
+            "SUPERADMIN USER SESSION REVOCATION FAILED tenant=%s user=%s actor=%s",
+            tenant_id_int,
+            user_id,
+            admin.get("user"),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao encerrar as sessões do usuário.",
         )
     finally:
         db.close()
