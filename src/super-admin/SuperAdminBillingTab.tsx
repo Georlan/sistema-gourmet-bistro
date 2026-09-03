@@ -6,7 +6,6 @@ import {
   RefreshCw,
   ReceiptText,
   ShieldCheck,
-  TrendingUp,
   X,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
@@ -345,7 +344,7 @@ export function SuperAdminBillingTab(_props: SuperAdminBillingTabProps) {
             <p className="text-xs text-koma-muted mt-1">Regras explícitas; nenhuma suspensão ou receita é inferida silenciosamente.</p>
           </div>
           <div className="space-y-2 text-xs text-koma-secondary">
-            <div className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-[#00b894] shrink-0" /><span>Mensalidade fixa oficial: Pocket R$ 109, Pro R$ 209, Premium R$ 309.</span></div>
+            <div className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-[#00b894] shrink-0" /><span>Mensalidades e taxas são lidas do catálogo comercial oficial compartilhado abaixo.</span></div>
             <div className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-[#00b894] shrink-0" /><span>Anual aplica {formatPercentage(ANNUAL_DISCOUNT_RATE)} somente à mensalidade fixa.</span></div>
             <div className="flex gap-2"><CheckCircle2 className="w-4 h-4 text-[#00b894] shrink-0" /><span>Inadimplência contratual é separada de suspensão SaaS; o Super Admin decide a suspensão.</span></div>
             <div className="flex gap-2"><AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" /><span>Alterar plano fora desta tela invalida o MRR do contrato até uma revisão explícita.</span></div>
@@ -460,10 +459,6 @@ export function SuperAdminBillingTab(_props: SuperAdminBillingTabProps) {
           </div>
         </div>
       )}
-
-      <div className="sr-only" aria-hidden="true">
-        <TrendingUp />
-      </div>
     </div>
   );
 }
