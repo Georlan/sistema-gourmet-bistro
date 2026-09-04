@@ -209,7 +209,7 @@ def test_cashier_direct_sale_after_merge_uses_destination_family_and_next_letter
             PrintJob.source_id == latest_launch_id,
         ).first()
         assert job is not None
-        assert f"PEDIDO: #{destination_base}-B" in job.payload_text
+        assert f"PEDIDO #{destination_base}-B" in job.payload_text
         assert "CAIXA APÓS MESCLAGEM" in job.payload_text
     finally:
         db.close()
