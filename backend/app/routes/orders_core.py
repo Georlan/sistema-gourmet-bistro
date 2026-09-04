@@ -46,6 +46,13 @@ from ..waiter_permissions import (
     require_waiter_permission,
 )
 from ..adapters.orders.pos_adapter import PosAdapter
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 
 logger = logging.getLogger("koma.orders")
 
@@ -893,7 +900,11 @@ def update_item_details(
         current_garcom,
         "perm_garcom_editar",
     )
-    item = db.query(Item).filter(Item.id == item_id).first()
+    restaurante_id = require_tenant_id()
+    item = db.query(Item).filter(
+        Item.restaurante_id == restaurante_id,
+        Item.id == item_id,
+    ).first()
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -901,7 +912,10 @@ def update_item_details(
         )
         
     # Verificar se a comanda já está fechada
-    comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.id == item.comanda_id,
+    ).first()
     if comanda and comanda.fechada:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -922,6 +936,7 @@ def update_item_details(
             for _ in range(additional_qty):
                 new_item = Item(
                     id=f"i-{uuid.uuid4().hex[:8]}",
+                    restaurante_id=restaurante_id,
                     comanda_id=item.comanda_id,
                     lancamento_id=item.lancamento_id,
                     produto_id=item.produto_id,
@@ -952,30 +967,34 @@ def update_item_details(
         )
     db.refresh(item)
 
-    # Imprimir via de comanda indicando edição/alteração
+    # A mutação já foi confirmada. A impressão continua best-effort, porém a
+    # rota declara apenas a intenção; o Core escolhe documento e destino.
     try:
-        dest = item.produto.categoria.destino_impressao if (item.produto and item.produto.categoria) else "COZINHA"
-        if dest != "NENHUM":
-            header = "=== ITEM ALTERADO/ADICIONADO ==="
-            lines = [
-                header.center(32),
-                f"MESA: {comanda.mesa_id if comanda.mesa_id else 'BALCAO'}",
-                f"PRODUTO: {item.produto.nome}",
-                f"OBS (EDITADO): {item.observacao}",
-                f"CLIENTE: {item.cliente_nome}",
-            ]
-            if added_count > 0:
-                lines.append(f"QTD ADICIONADA: +{added_count}")
-            lines.append("="*32)
-            ticket_text = "\n".join(lines) + "\n\n\n"
-            background_tasks.add_task(
-                print_in_background,
-                "cozinha",
-                ticket_text,
-                restaurante_id=require_tenant_id(),
-            )
-    except Exception as e:
-        print(f"Error printing edited item ticket: {e}")
+        PrintingApplicationService.request_print(
+            db,
+            PrintIntent(
+                restaurant_id=restaurante_id,
+                source_type=PrintSourceType.ITEM,
+                source_id=item.id,
+                action=PrintAction.ITEM_CHANGE,
+                requested_by=current_garcom.nome,
+                quantity_added=added_count,
+            ),
+        )
+        db.commit()
+    except UniversalPrintingError as exc:
+        db.rollback()
+        logger.warning(
+            "Impressão de alteração do item %s ignorada após mutação confirmada: %s",
+            item.id,
+            exc,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Falha inesperada ao enfileirar impressão de alteração do item %s",
+            item.id,
+        )
 
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
