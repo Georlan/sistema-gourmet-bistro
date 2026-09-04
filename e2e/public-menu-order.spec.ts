@@ -92,14 +92,15 @@ async function mockPublicMenuBackend(
     }
 
     if (pathname === '/cardapio/pedidos' && request.method() === 'POST') {
-      capturedOrders.push(request.postDataJSON() as CapturedOrder);
+      const order = request.postDataJSON() as CapturedOrder;
+      capturedOrders.push(order);
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
         body: JSON.stringify({
           comanda_id: 'pedido-e2e',
           numero_pedido: 4321,
-          total: request.postDataJSON()?.tipo_pedido === 'delivery' ? 55 : 48,
+          total: 48 + Number(order.taxa_entrega || 0),
         }),
       });
       return;
@@ -225,7 +226,7 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
     cliente_nome: 'Bruno Cliente',
     cliente_telefone: '85988887777',
     tipo_pedido: 'delivery',
-    taxa_entrega: 7,
+    taxa_entrega: 0,
     endereco_entrega: 'Rua das Flores, 123, Centro',
   });
   expect(backend.getOtpRequests()).toBe(0);

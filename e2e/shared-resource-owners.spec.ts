@@ -16,9 +16,13 @@ async function open(page: Page) {
 }
 
 async function navigate(page: Page, label: string) {
-  const button = page.getByRole('button', { name: new RegExp('^' + label + '(?: \\d+)?$') });
-  if (!await button.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
-  await button.click();
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await sidebar.getByRole('button', { name: new RegExp('^' + label + '(?: \\d+)?$') }).click();
+}
+
+function cashierSubnavButton(page: Page, name: string) {
+  return page.locator('.cashier-subnav').getByRole('button', { name, exact: true });
 }
 
 const profile = {
@@ -108,7 +112,7 @@ test('catálogo administrativo e venda usam o mesmo snapshot sem GET ao trocar d
   await expect(page.getByText('Produto inativo', { exact: true })).toBeVisible();
   const before = reads;
   await navigate(page, 'Vendas');
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
   await expect(page.getByText('Produto inativo', { exact: true })).toBeHidden();
   expect(reads).toBe(before);
@@ -187,15 +191,15 @@ test('estoque lê somente recursos da aba e mantém histórico completo', async 
   });
   await open(page);
   expect(reads).toEqual([]);
-  await navigate(page, 'Estoque');
+  await navigate(page, 'Estoque & compras');
   await expect(page.getByText('Arroz arbóreo', { exact: true }).first()).toBeVisible();
   expect(reads.sort()).toEqual(Array.from({ length: mountReads }, () => ['/estoque/fichas-tecnicas', '/estoque/insumos']).flat().sort());
   reads.length = 0;
-  await page.getByRole('button', { name: 'Fornecedores', exact: true }).click();
+  await cashierSubnavButton(page, 'Fornecedores').click();
   await expect(page.getByText('Distribuidora E2E', { exact: true }).first()).toBeVisible();
-  expect(reads).toEqual(['/estoque/distribuidores']);
+  expect(reads.sort()).toEqual(['/estoque/distribuidores', '/estoque/insumos']);
   reads.length = 0;
-  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await cashierSubnavButton(page, 'Histórico').click();
   await expect(page.getByText('Distribuidora E2E · NF-900', { exact: true })).toBeVisible();
   expect(reads.sort()).toEqual(['/estoque/distribuidores', '/estoque/entradas', '/estoque/insumos', '/estoque/movimentacoes', '/estoque/notas']);
 });
