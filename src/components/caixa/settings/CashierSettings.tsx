@@ -1,7 +1,7 @@
 
 import { Lock, Percent, Printer, Smartphone, Users } from 'lucide-react';
 import React, { useState } from 'react';
-import { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { CashierIntegrationsSettings } from './CashierIntegrationsSettings';

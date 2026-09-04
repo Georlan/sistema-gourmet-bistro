@@ -37,7 +37,8 @@ MesasView passa o estado calculado ao MesaCard; o card não precisa recalcular.
 Os adaptadores usam índices construídos em uma passagem pelo snapshot, em vez de
 filtrar o snapshot inteiro novamente para cada mesa. Há teste de equivalência
 com a projeção anterior do Caixa, incluindo união, contas fechadas e pagamentos.
-O export anterior em cashierOrderProjection permanece como compatibilidade.
+O export de compatibilidade em `cashierOrderProjection` foi removido na limpeza
+pós-universalização; consumidores agora importam `cashierSalonProjection` diretamente.
 
 ## Histórico: evolução funcional do Salão na PR #143
 

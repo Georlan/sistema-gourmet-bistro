@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
-import { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { smartSearchMatch } from '../../../domain/search';
 import { Product } from '../../../types';
 import { makeOperationKey, operationalFetch } from '../../../utils/operationalRequest';

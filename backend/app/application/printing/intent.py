@@ -32,8 +32,9 @@ class PrintTrigger(str, Enum):
 class PrintIntent:
     """Comando canônico de impressão independente da borda que o originou.
 
-    A borda informa apenas origem, ação e gatilho. Motor, política, snapshot,
-    formatter, destino físico e PrintJob pertencem ao Core de Impressão.
+    A borda informa somente a origem, a ação e metadados semânticos mínimos.
+    Motor, política, snapshot, formatter, destino físico e PrintJob pertencem
+    ao Core de Impressão.
     """
 
     restaurant_id: int

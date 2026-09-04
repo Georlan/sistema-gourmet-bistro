@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Check, ChevronLeft, ChevronRight, Info, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
-import { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { getProductPresets } from '../../../domain/catalogPresentation';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import { OperationalBanner } from '../../shared/OperationalBanner';

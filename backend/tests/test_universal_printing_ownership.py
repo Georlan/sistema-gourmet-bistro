@@ -9,6 +9,7 @@ MIGRATED_PRINT_PRODUCERS = (
     "app/adapters/orders/pos_adapter.py",
     "app/adapters/orders/waiter_adapter.py",
     "app/routes/orders.py",
+    "app/routes/orders_core.py",
     "app/routes/atendimentos.py",
     "app/routes/atendimento_printing.py",
     "app/routes/printing.py",
@@ -17,12 +18,34 @@ MIGRATED_PRINT_PRODUCERS = (
 FORBIDDEN_OUTSIDE_PRINT_CORE = (
     "PrintJob(",
     "PrintDocumentService",
+    "enqueue_print_job(",
     "enqueue_table_receipt(",
     "generate_kitchen_ticket",
     "generate_delivery_unified_ticket",
     "generate_delivery_kitchen_ticket",
     "generate_delivery_motoboy_ticket",
     "print_in_background",
+)
+
+SUPERSEDED_ORDERS_CORE_PRINT_PATHS = (
+    "MENSAGEM_WHATSAPP_PRONTO_RETIRADA",
+    "MENSAGEM_WHATSAPP_SAIU_ENTREGA",
+    "MENSAGEM_WHATSAPP_RECUSADO",
+    "_get_print_preferences",
+    "enqueue_print_job_in_session",
+    "enqueue_initial_production_for_order",
+    "reimprimir_lancamento_cozinha",
+    "print_in_background",
+    "=== ITEM ALTERADO/ADICIONADO ===",
+)
+
+SUPERSEDED_DOMAIN_PRINTING_FILES = (
+    "app/domain/printing/service.py",
+    "app/domain/printing/grouping.py",
+    "app/domain/printing/production_formatter.py",
+    "app/domain/printing/closing_formatter.py",
+    "app/domain/printing/delivery_formatter.py",
+    "app/domain/printing/types.py",
 )
 
 
@@ -59,6 +82,21 @@ def test_item_edit_declares_only_the_canonical_delta_intent():
     assert "=== ITEM ALTERADO/ADICIONADO ===" in core_source
     assert "is_production_destination" in core_source
     assert "enqueue_print_job(" in core_source
+
+
+def test_orders_core_does_not_restore_superseded_printing_paths():
+    source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
+    found = [token for token in SUPERSEDED_ORDERS_CORE_PRINT_PATHS if token in source]
+    assert found == []
+
+
+def test_superseded_domain_printing_stack_stays_removed():
+    restored = [
+        relative_path
+        for relative_path in SUPERSEDED_DOMAIN_PRINTING_FILES
+        if (BACKEND_ROOT / relative_path).exists()
+    ]
+    assert restored == []
 
 
 def test_order_engine_resolver_is_semantic_not_channel_based():
