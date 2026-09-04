@@ -209,6 +209,7 @@ export function SuperAdminIncidentCenterTab({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          tenant_id: actionIncident.tenant_id,
           action_type: actionIncident.action_type,
           target_id: actionIncident.action_target_id,
           reason: actionReason.trim(),

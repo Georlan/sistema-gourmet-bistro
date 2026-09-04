@@ -3,9 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.orm import Session
-
-from ..database import get_db
+from ..database import SessionLocal, tenant_session_scope
 from ..services.incident_service import (
     IncidentItem,
     IncidentSeverity,
@@ -13,13 +11,14 @@ from ..services.incident_service import (
     diagnose_all_incidents,
     execute_incident_action,
 )
-from .super_admin import get_current_admin
+from .super_admin import _discover_restaurant_ids, get_current_admin
 
 logger = logging.getLogger("koma.super_admin.incidents")
 router = APIRouter(prefix="/incidents", tags=["SuperAdminIncidents"])
 
 
 class IncidentActionRequest(BaseModel):
+    tenant_id: int = Field(gt=0)
     action_type: str = Field(min_length=3, max_length=64)
     target_id: str = Field(min_length=1, max_length=128)
     reason: str = Field(min_length=3, max_length=1000)
@@ -33,13 +32,24 @@ class IncidentSummaryResponse(BaseModel):
     by_source: Dict[str, int]
 
 
+def _incident_tenant_ids(db, requested_tenant_id: Optional[int]) -> List[int]:
+    discovered_ids = _discover_restaurant_ids(db)
+    if requested_tenant_id is None:
+        return discovered_ids
+    if requested_tenant_id not in discovered_ids:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Restaurante '{requested_tenant_id}' não encontrado.",
+        )
+    return [requested_tenant_id]
+
+
 @router.get("", response_model=List[IncidentItem])
 def list_incidents(
     tenant_id: Optional[int] = Query(None, description="Filtrar por ID do restaurante"),
     source: Optional[str] = Query(None, description="Filtrar por origem (outbox, mercado_pago, impressao, acesso, tenant)"),
     severity: Optional[str] = Query(None, description="Filtrar por severidade (critical, high, medium, low, info)"),
     admin: dict = Depends(get_current_admin),
-    db: Session = Depends(get_db),
 ):
     """Diagnostica e lista incidentes operacionais reais do KÔMA."""
     if source and source not in [s.value for s in IncidentSource]:
@@ -53,23 +63,32 @@ def list_incidents(
             detail=f"Severidade inválida: {severity}",
         )
 
-    incidents = diagnose_all_incidents(
-        db,
-        filter_tenant_id=tenant_id,
-        filter_source=source,
-        filter_severity=severity,
-    )
-    return incidents
+    db = SessionLocal()
+    try:
+        return diagnose_all_incidents(
+            db,
+            tenant_ids=_incident_tenant_ids(db, tenant_id),
+            filter_source=source,
+            filter_severity=severity,
+        )
+    finally:
+        db.close()
 
 
 @router.get("/summary", response_model=IncidentSummaryResponse)
 def get_incidents_summary(
     tenant_id: Optional[int] = Query(None),
     admin: dict = Depends(get_current_admin),
-    db: Session = Depends(get_db),
 ):
     """Retorna contadores consolidados de incidentes por severidade e origem."""
-    all_incidents = diagnose_all_incidents(db, filter_tenant_id=tenant_id)
+    db = SessionLocal()
+    try:
+        all_incidents = diagnose_all_incidents(
+            db,
+            tenant_ids=_incident_tenant_ids(db, tenant_id),
+        )
+    finally:
+        db.close()
 
     by_severity = {sev.value: 0 for sev in IncidentSeverity}
     by_source = {src.value: 0 for src in IncidentSource}
@@ -89,21 +108,25 @@ def get_incidents_summary(
 def perform_incident_action(
     payload: IncidentActionRequest,
     admin: dict = Depends(get_current_admin),
-    db: Session = Depends(get_db),
 ):
     """Executa ação corretiva canônica auditada sobre um incidente operacional."""
     operator = str(admin.get("user") or "superadmin")
+    db = SessionLocal()
     try:
-        result = execute_incident_action(
-            db,
-            action_type=payload.action_type,
-            target_id=payload.target_id,
-            reason=payload.reason,
-            operator=operator,
-        )
-        return result
+        _incident_tenant_ids(db, payload.tenant_id)
+        with tenant_session_scope(db, payload.tenant_id):
+            return execute_incident_action(
+                db,
+                tenant_id=payload.tenant_id,
+                action_type=payload.action_type,
+                target_id=payload.target_id,
+                reason=payload.reason,
+                operator=operator,
+            )
     except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(err),
         )
+    finally:
+        db.close()

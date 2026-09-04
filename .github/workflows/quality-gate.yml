@@ -104,7 +104,21 @@ jobs:
   security:
     name: postgres-security-audit
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: koma_security_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d koma_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       ENVIRONMENT: test
       SECRET_KEY: security-audit-secret-key-2026-only-for-ci
@@ -128,4 +142,40 @@ jobs:
           backend/tests/test_cardapio_public_cors_railway.py
           backend/tests/test_super_admin_contract.py
           backend/tests/test_multitenant_infra.py
+          -q -ra
+      - name: Bootstrap Supabase compatibility roles
+        env:
+          PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/koma_security_test
+        run: >-
+          python -c "import os, psycopg2;
+          c=psycopg2.connect(os.environ['PG_ADMIN_URL']); c.autocommit=True;
+          q=c.cursor();
+          q.execute('CREATE ROLE anon NOLOGIN');
+          q.execute('CREATE ROLE authenticated NOLOGIN');
+          q.execute('CREATE ROLE service_role NOLOGIN');
+          q.close(); c.close()"
+      - name: Apply schema to ephemeral PostgreSQL
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
+        run: python -m alembic -c alembic.ini upgrade head
+      - name: Provision restricted runtime role
+        env:
+          PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/koma_security_test
+        run: >-
+          python -c "import os, psycopg2;
+          c=psycopg2.connect(os.environ['PG_ADMIN_URL']); c.autocommit=True;
+          q=c.cursor();
+          q.execute(\"CREATE ROLE koma_security_runtime LOGIN PASSWORD 'koma-security-runtime' IN ROLE koma_app\");
+          q.close(); c.close()"
+      - name: Run real PostgreSQL RLS incident regression
+        env:
+          DATABASE_URL: postgresql+psycopg2://koma_security_runtime:koma-security-runtime@localhost:5432/koma_security_test
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: "true"
+          STRICT_RLS_ROLE_CHECK: "true"
+        run: >-
+          python -m pytest
+          backend/tests/test_super_admin_incidents_postgres.py
           -q -ra

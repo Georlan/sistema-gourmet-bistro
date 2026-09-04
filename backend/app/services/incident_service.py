@@ -69,11 +69,43 @@ SEVERITY_ORDER = {
 def diagnose_all_incidents(
     db: Session,
     *,
-    filter_tenant_id: Optional[int] = None,
+    tenant_ids: List[int],
     filter_source: Optional[str] = None,
     filter_severity: Optional[str] = None,
 ) -> List[IncidentItem]:
-    """Diagnostica e agrega incidentes reais de todas as fontes operacionais do KÔMA.
+    """Diagnostica incidentes por tenant sem desativar o isolamento RLS.
+
+    Os IDs devem ser descobertos antes por ``koma_internal.list_public_restaurants``.
+    Cada leitura é executada dentro do escopo do próprio restaurante, inclusive
+    quando o chamador é um superadministrador cross-tenant.
+    """
+    incidents: List[IncidentItem] = []
+    for tenant_id in tenant_ids:
+        with tenant_session_scope(db, tenant_id):
+            incidents.extend(
+                _diagnose_tenant_incidents(
+                    db,
+                    tenant_id=tenant_id,
+                    filter_source=filter_source,
+                    filter_severity=filter_severity,
+                )
+            )
+
+    incidents.sort(
+        key=lambda inc: (SEVERITY_ORDER.get(inc.severity, 99), inc.detected_at),
+        reverse=False,
+    )
+    return incidents
+
+
+def _diagnose_tenant_incidents(
+    db: Session,
+    *,
+    tenant_id: int,
+    filter_source: Optional[str] = None,
+    filter_severity: Optional[str] = None,
+) -> List[IncidentItem]:
+    """Diagnostica fontes reais de um único tenant já vinculado à sessão.
 
     Nenhum dado é mockado ou inventado. Se o subsistema estiver sem anomalias,
     nenhum incidente será gerado para ele.
@@ -82,9 +114,7 @@ def diagnose_all_incidents(
     incidents: List[IncidentItem] = []
 
     # Mapeamento de estabelecimentos
-    tenants_query = db.query(Restaurante)
-    if filter_tenant_id is not None:
-        tenants_query = tenants_query.filter(Restaurante.id == filter_tenant_id)
+    tenants_query = db.query(Restaurante).filter(Restaurante.id == tenant_id)
     tenants_map = {r.id: r for r in tenants_query.all()}
 
     if not tenants_map:
@@ -478,17 +508,13 @@ def diagnose_all_incidents(
     if filter_severity:
         incidents = [inc for inc in incidents if inc.severity.value == filter_severity]
 
-    incidents.sort(
-        key=lambda inc: (SEVERITY_ORDER.get(inc.severity, 99), inc.detected_at),
-        reverse=False,
-    )
-
     return incidents
 
 
 def execute_incident_action(
     db: Session,
     *,
+    tenant_id: int,
     action_type: str,
     target_id: str,
     reason: str,
@@ -496,14 +522,22 @@ def execute_incident_action(
 ) -> Dict[str, Any]:
     """Executa ação de recuperação canônica e auditada sobre um incidente."""
     clean_reason = reason.strip()
+    if len(clean_reason) < 3:
+        raise ValueError("O motivo da ação deve ter ao menos 3 caracteres.")
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     if action_type == "reprocess_outbox_event":
-        event = db.query(IntegrationOutbox).filter(IntegrationOutbox.id == target_id).first()
+        event = (
+            db.query(IntegrationOutbox)
+            .filter(
+                IntegrationOutbox.restaurante_id == tenant_id,
+                IntegrationOutbox.id == target_id,
+            )
+            .first()
+        )
         if not event:
             raise ValueError(f"Evento do outbox '{target_id}' não encontrado.")
 
-        tenant_id = event.restaurante_id
         old_status = event.status
         event.status = "pending"
         event.attempts = 0
@@ -542,9 +576,11 @@ def execute_incident_action(
 
     elif action_type == "reclaim_outbox_stale":
         try:
-            tenant_id = int(target_id)
+            target_tenant_id = int(target_id)
         except ValueError:
             raise ValueError(f"ID de tenant inválido: {target_id}")
+        if target_tenant_id != tenant_id:
+            raise ValueError("O incidente não pertence ao restaurante informado.")
 
         recovered_count = recover_stale_outbox_claims(
             db,
@@ -579,11 +615,17 @@ def execute_incident_action(
         }
 
     elif action_type == "retry_print_job":
-        job = db.query(PrintJob).filter(PrintJob.id == target_id).first()
+        job = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.restaurante_id == tenant_id,
+                PrintJob.id == target_id,
+            )
+            .first()
+        )
         if not job:
             raise ValueError(f"Job de impressão '{target_id}' não encontrado.")
 
-        tenant_id = job.restaurante_id
         old_status = job.status
         job.status = "pending"
         job.attempts = 0
