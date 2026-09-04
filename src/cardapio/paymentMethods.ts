@@ -35,6 +35,15 @@ export function getAvailablePaymentMethods(groups?: PaymentMethodGroup[]): Payme
   return result;
 }
 
+export function getCheckoutPaymentMethods(
+  groups?: PaymentMethodGroup[],
+  onlinePaymentEnabled?: boolean,
+): PaymentMethod[] {
+  return getAvailablePaymentMethods(groups).filter(
+    (method) => method !== 'pix' || onlinePaymentEnabled !== false,
+  );
+}
+
 export function getPaymentSelectionError(method: PaymentMethod | null | undefined, available: PaymentMethod[]): string | null {
   if (available.length === 0) return PAYMENT_UNAVAILABLE_MESSAGE;
   return method && available.includes(method) ? null : PAYMENT_RESELECT_MESSAGE;

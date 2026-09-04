@@ -47,6 +47,11 @@ def setup_restaurant_authority():
             db.add(restaurante)
         restaurante.status_override = "Automático"
         restaurante.horarios_funcionamento = None
+        restaurante.formas_pagamento_aceitas = [
+            "Dinheiro",
+            "Cartão de crédito",
+            "Cartão de débito",
+        ]
         db.commit()
 
         config = db.query(ConfiguracaoRestaurante).filter(
@@ -124,7 +129,13 @@ def setup_restaurant_authority():
         db.close()
 
 
-def _payload(key: str, *, phone: str = "81944440000", fee: float = 0.0):
+def _payload(
+    key: str,
+    *,
+    phone: str = "81944440000",
+    fee: float = 0.0,
+    payment_detail: str = "dinheiro",
+):
     return {
         "restaurante_id": RESTAURANTE_ID,
         "itens": [{
@@ -137,6 +148,7 @@ def _payload(key: str, *, phone: str = "81944440000", fee: float = 0.0):
         "endereco_entrega": "Rua do Servidor, 7",
         "taxa_entrega": fee,
         "forma_pagamento": "na_entrega",
+        "forma_pagamento_detalhe": payment_detail,
         "tipo_pedido": "delivery",
         "idempotency_key": key,
     }
@@ -214,6 +226,66 @@ def test_delivery_desativado_e_bloqueado_no_backend():
 
     assert response.status_code == 409
     assert response.json()["detail"] == "O delivery está desativado para este restaurante."
+
+
+def test_configuracao_publica_informa_delivery_desativado():
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == RESTAURANTE_ID,
+        ).one()
+        config.delivery_ativo = False
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+
+    response = client.get(
+        f"/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}",
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["restaurante"]["delivery_ativo"] is False
+
+
+@pytest.mark.parametrize("payment_detail", ["cartao_credito", "cartao_debito"])
+def test_cartao_fisico_e_aceito_com_pagamento_no_atendimento(payment_detail):
+    key = f"authority-{payment_detail}-0001"
+    payload = _payload(key, payment_detail=payment_detail)
+    response = client.post(
+        "/cardapio/pedidos",
+        json=payload,
+        headers={"X-Idempotency-Key": key},
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["pagamento"] == {
+        "status": "pendente_no_atendimento",
+        "cobranca_online": False,
+    }
+
+
+def test_cartao_fisico_nao_configurado_e_rejeitado():
+    db = SessionLocal()
+    tenant = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        restaurante = db.query(Restaurante).filter(
+            Restaurante.id == RESTAURANTE_ID,
+        ).one()
+        restaurante.formas_pagamento_aceitas = ["Dinheiro"]
+        db.commit()
+    finally:
+        current_restaurante_id.reset(tenant)
+        db.close()
+
+    payload = _payload("authority-card-disabled-0001", payment_detail="cartao_credito")
+    response = client.post("/cardapio/pedidos", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "A forma de pagamento escolhida não está habilitada pelo restaurante."
+    )
 
 
 def test_horario_automatico_fechado_e_bloqueado_no_backend():

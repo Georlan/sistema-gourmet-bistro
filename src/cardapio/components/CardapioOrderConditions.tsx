@@ -5,13 +5,16 @@ import type { BrandConfig } from '../CardapioTypes';
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfig; onOpen: () => void }) {
+  const deliveryEnabled = brand.deliveryEnabled !== false;
   return (
     <section aria-label="Condições do pedido" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-koma-border bg-koma-card px-4 py-2">
-      {(brand.pedidoMinimo ?? 0) > 0 ? (
-        <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">Pedido mínimo</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
+      {!deliveryEnabled ? (
+        <span className="text-xs font-semibold text-koma-secondary">Somente retirada</span>
+      ) : (brand.pedidoMinimo ?? 0) > 0 ? (
+        <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">Mínimo para entrega</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
       ) : <span className="text-xs font-semibold text-koma-secondary">Entrega e retirada</span>}
-      <button type="button" aria-label="Ver taxas de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
-        <span>Taxas de entrega</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
+        <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
       </button>
     </section>
   );
@@ -19,10 +22,18 @@ export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfi
 
 export function CardapioDeliveryInfo({ brand }: { brand: BrandConfig }) {
   const neighborhoods = brand.tabelaTaxasBairros ?? [];
+  if (brand.deliveryEnabled === false) {
+    return (
+      <section aria-labelledby="store-delivery-title">
+        <h3 id="store-delivery-title" className="flex items-center gap-2 text-sm font-bold text-koma-foreground"><Truck className="h-4 w-4 text-koma-muted" aria-hidden="true" />Somente retirada</h3>
+        <p className="mt-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs leading-relaxed text-koma-secondary">A entrega está pausada no momento. Você ainda pode fazer o pedido e retirar no restaurante.</p>
+      </section>
+    );
+  }
   return (
     <section aria-labelledby="store-delivery-title">
       <h3 id="store-delivery-title" className="flex items-center gap-2 text-sm font-bold text-koma-foreground"><Truck className="h-4 w-4 text-emerald-500" aria-hidden="true" />Entrega e retirada</h3>
-      {(brand.pedidoMinimo ?? 0) > 0 && <p className="mt-3 text-xs leading-relaxed text-koma-secondary">Pedido mínimo: <strong>{money(brand.pedidoMinimo!)}</strong> em produtos.</p>}
+      {(brand.pedidoMinimo ?? 0) > 0 && <p className="mt-3 text-xs leading-relaxed text-koma-secondary">Pedido mínimo para entrega: <strong>{money(brand.pedidoMinimo!)}</strong> em produtos.</p>}
       {(brand.freteGratisValor ?? 0) > 0 && <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-koma-secondary">Frete grátis a partir de <strong>{money(brand.freteGratisValor!)}</strong> em produtos.</p>}
       {neighborhoods.length > 0 ? (
         <>
