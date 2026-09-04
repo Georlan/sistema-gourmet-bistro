@@ -26,6 +26,7 @@ from app.models import (
     ProdutoGrupoModificador,
     ProdutoInsumo,
     Restaurante,
+    ConfiguracaoRestaurante,
     Usuario,
     Comanda,
     Motoboy,
@@ -59,6 +60,16 @@ def char_setup(char_client):
                 plano="pro",
             )
             db.add(rest)
+            db.commit()
+
+        config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID).first()
+        if not config:
+            config = ConfiguracaoRestaurante(
+                restaurante_id=CHAR_RESTAURANT_ID,
+                taxa_entrega_fixa=7.0,
+                tipo_taxa_entrega="fixa",
+            )
+            db.add(config)
             db.commit()
 
         # 2. Usuário Operador / Caixa e Garçom

@@ -7,6 +7,7 @@ from typing import Optional
 
 class PrintSourceType(str, Enum):
     ORDER = "pedido"
+    ITEM = "item"
     TABLE = "mesa"
     CASH_SHIFT = "caixa_turno"
 
@@ -17,6 +18,7 @@ class PrintAction(str, Enum):
     RECEIPT = "extrato"
     CLOSING = "fechamento"
     DISPATCH = "despacho"
+    ITEM_CHANGE = "alteracao_item"
 
 
 class PrintTrigger(str, Enum):
@@ -43,4 +45,5 @@ class PrintIntent:
     values_only: bool = False
     requested_by: Optional[str] = None
     courier_name: Optional[str] = None
+    quantity_added: int = 0
     idempotency_key: Optional[str] = None

@@ -8,10 +8,12 @@ import os
 import signal
 import uuid
 from typing import Optional
+import httpx
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ...database import TenantSession, engine, tenant_session_scope
+from ..scheduled_orders import release_due_scheduled_orders_in_session
 from .dispatcher import DEFAULT_STALE_TIMEOUT_SECONDS, dispatch_pending_outbox_events
 
 logger = logging.getLogger("koma.outbox.worker")
@@ -77,6 +79,7 @@ class OutboxWorker:
             "dead_letter": 0,
             "recovered_stale": 0,
             "total": 0,
+            "scheduled_released": 0,
         }
         try:
             if restaurant_id is not None:
@@ -87,6 +90,19 @@ class OutboxWorker:
             for rid in target_tenant_ids:
                 try:
                     with tenant_session_scope(db, rid):
+                        released = release_due_scheduled_orders_in_session(
+                            db,
+                            restaurante_id=rid,
+                        )
+                        if released:
+                            db.commit()
+                            aggregated_stats["scheduled_released"] += released
+                            logger.info(
+                                "[SCHEDULED ORDERS] %d pedido(s) liberado(s) para o tenant %s.",
+                                released,
+                                rid,
+                            )
+
                         stats = dispatch_pending_outbox_events(
                             db,
                             batch_size=self.batch_size,
@@ -95,9 +111,17 @@ class OutboxWorker:
                             restaurant_id=rid,
                             client=client,
                         )
-                        for k in aggregated_stats:
-                            aggregated_stats[k] += stats.get(k, 0)
+                        for key in (
+                            "claimed",
+                            "delivered",
+                            "failed",
+                            "dead_letter",
+                            "recovered_stale",
+                            "total",
+                        ):
+                            aggregated_stats[key] += stats.get(key, 0)
                 except Exception as tenant_exc:
+                    db.rollback()
                     logger.error(
                         "[OUTBOX WORKER] Erro ao processar outbox do tenant %s: %s",
                         rid,
@@ -121,8 +145,7 @@ class OutboxWorker:
                 loop = asyncio.get_running_loop()
                 stats = await loop.run_in_executor(None, self.run_once)
 
-                # Se havia trabalho para fazer, processa o próximo lote com menor latência
-                if stats["total"] > 0 or stats["recovered_stale"] > 0:
+                if stats["total"] > 0 or stats["recovered_stale"] > 0 or stats["scheduled_released"] > 0:
                     logger.debug("[OUTBOX WORKER] Ciclo concluído: %s", stats)
                     await asyncio.sleep(0.1)
                 else:
@@ -185,7 +208,7 @@ async def _run_standalone_cli():
         try:
             loop.add_signal_handler(sig, stop_event.set)
         except NotImplementedError:
-            pass  # Windows fallback
+            pass
 
     task = worker.start()
     await stop_event.wait()

@@ -1,0 +1,100 @@
+name: SuperAdmin Phase 2 Gate
+
+on:
+  pull_request:
+    paths:
+      - "src/super-admin/**"
+      - "src/components/auth/TenantSuspensionBoundary.tsx"
+      - "src/main.tsx"
+      - "src/config/subscriptionPlans.ts"
+      - "tests/superAdminPhase2.test.ts"
+      - "tests/superAdminAccess.test.ts"
+      - "tests/tenantSuspensionBoundary.test.ts"
+      - "backend/app/routes/__init__.py"
+      - "backend/app/routes/super_admin.py"
+      - "backend/app/routes/super_admin_onboarding.py"
+      - "backend/app/routes/super_admin_access.py"
+      - "backend/app/database.py"
+      - "backend/app/models.py"
+      - "backend/app/security.py"
+      - "backend/tests/test_super_admin_*.py"
+      - "backend/tests/test_route_ownership.py"
+      - "backend/tests/test_commercial_pricing_sync.py"
+      - ".github/workflows/superadmin-phase2-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  phase2-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: superadmin-phase2-ci-secret-key
+      ENCRYPTION_KEY: dgvrWayyUxrh0PjzBcjn1AJ5woxjUE3lLTRptHDUSEQ=
+      DATABASE_URL: sqlite:///./superadmin-phase2-ci.db
+      MIGRATION_DATABASE_URL: sqlite:///./superadmin-phase2-ci.db
+      SUPERADMIN_USERNAME: owner-ci@example.test
+      SUPERADMIN_PASSWORD_HASH: unused-because-tests-override-it
+      PYTHONPATH: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile Super Admin modules
+        run: |
+          python -m py_compile backend/app/routes/super_admin.py
+          python -m py_compile backend/app/routes/super_admin_onboarding.py
+          python -m py_compile backend/app/routes/super_admin_access.py
+          python -m py_compile backend/app/main.py
+
+      - name: Run Phase 2 backend acceptance suite
+        run: |
+          python -m pytest -q \
+            backend/tests/test_super_admin_onboarding.py \
+            backend/tests/test_super_admin_phase2b.py \
+            backend/tests/test_super_admin_contract.py \
+            backend/tests/test_super_admin_trial.py \
+            backend/tests/test_super_admin_access.py \
+            backend/tests/test_route_ownership.py \
+            backend/tests/test_commercial_pricing_sync.py
+
+  phase2-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Run frontend unit suite
+        run: npm run test:unit
+
+      - name: Build production frontend
+        run: npm run build

@@ -15,6 +15,8 @@ from app.security import (
     _authenticated_user_from_token,
     create_access_token,
     get_password_hash,
+    get_user_token_version,
+    revoke_user_sessions,
 )
 
 
@@ -125,6 +127,72 @@ def test_existing_token_stops_working_as_soon_as_account_is_deactivated(auth_db)
         current_restaurante_id.reset(context)
 
     assert exc.value.status_code == 403
+
+
+def test_revocation_invalidates_legacy_and_versioned_tokens_without_mass_logout(auth_db):
+    context = current_restaurante_id.set(1)
+    auth_db.restaurante_id = 1
+    try:
+        legacy_token = create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+        )
+        version_one_token = create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+            token_version=1,
+        )
+
+        assert _authenticated_user_from_token(legacy_token, auth_db).id == "user-tenant-1"
+        assert _authenticated_user_from_token(version_one_token, auth_db).id == "user-tenant-1"
+        assert get_user_token_version(
+            auth_db,
+            user_id="user-tenant-1",
+            restaurante_id=1,
+        ) == 1
+
+        assert revoke_user_sessions(
+            auth_db,
+            user_id="user-tenant-1",
+            restaurante_id=1,
+        ) == 2
+        auth_db.commit()
+
+        for revoked_token in (legacy_token, version_one_token):
+            with pytest.raises(HTTPException) as exc:
+                _authenticated_user_from_token(revoked_token, auth_db)
+            assert exc.value.status_code == 401
+
+        current_version = get_user_token_version(
+            auth_db,
+            user_id="user-tenant-1",
+            restaurante_id=1,
+        )
+        assert current_version == 2
+        fresh_token = create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+            token_version=current_version,
+        )
+        assert _authenticated_user_from_token(fresh_token, auth_db).id == "user-tenant-1"
+    finally:
+        current_restaurante_id.reset(context)
+
+
+def test_access_token_rejects_invalid_or_injected_session_generation():
+    with pytest.raises(ValueError, match="token_version"):
+        create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+            token_version=0,
+        )
+
+    with pytest.raises(ValueError, match="chaves reservadas"):
+        create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+            extra_claims={"tv": 999},
+        )
 
 
 def test_activation_allows_same_email_in_different_restaurants():

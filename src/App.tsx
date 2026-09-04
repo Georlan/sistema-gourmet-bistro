@@ -15,6 +15,7 @@ import { KomaLogo } from './components/KomaLogo';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { AppRouteBoundary } from './components/app/AppRouteBoundary';
 import { OperationalDrawer } from './components/app/OperationalDrawer';
+import { SupportSessionBanner } from './components/app/SupportSessionBanner';
 import { OperationalLogin } from './components/auth/OperationalLogin';
 import { MesasView } from './components/mesas/MesasView';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
@@ -1503,6 +1504,7 @@ export default function App() {
   if (isManagementRole(activeRole)) {
     return (
       <div className={`management-shell w-full bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+        <SupportSessionBanner />
         <React.Suspense fallback={<CashierLoading />}>
           <MemoizedCaixaPanel
             orders={orders}
@@ -1537,6 +1539,7 @@ export default function App() {
 
   return (
     <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+      <SupportSessionBanner />
       {/* GLOBAL TOP HEADER */}
       <header className="bg-koma-page/95 backdrop-blur-xl border-b border-koma-border-subtle text-koma-foreground shrink-0 sticky top-0 z-30">
         <div className="max-w-[1680px] mx-auto px-3 sm:px-6 lg:px-10 py-3.5">

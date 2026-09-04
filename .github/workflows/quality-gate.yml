@@ -1,0 +1,181 @@
+name: Koma Quality Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: quality-gate-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend typecheck + unit + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript check
+        run: npm run lint
+      - name: Frontend unit tests
+        run: npm run test:unit
+      - name: Production build
+        run: npm run build
+
+  browser:
+    name: Browser regression matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run merge smoke matrix
+        env:
+          KOMA_E2E_PORT: '4283'
+        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  backend:
+    name: Backend full + critical regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: quality-gate-secret-key-2026-only-for-ci
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PYTHONPATH: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+      - name: Reject tests outside canonical suite
+        run: |
+          if find backend -maxdepth 1 -type f -name 'test_*.py' -print -quit | grep -q .; then
+            find backend -maxdepth 1 -type f -name 'test_*.py' -print
+            exit 1
+          fi
+      - name: Validate Alembic single head
+        working-directory: backend
+        run: |
+          heads="$(python -m alembic -c alembic.ini heads)"
+          printf '%s\n' "$heads"
+          count="$(printf '%s\n' "$heads" | grep -c '(head)')"
+          test "$count" -eq 1
+      - name: Run full backend regression suite
+        run: python -m pytest backend/tests -q -ra
+
+  security:
+    name: postgres-security-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: koma_security_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d koma_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: security-audit-secret-key-2026-only-for-ci
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      PYTHONPATH: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install backend dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+      - name: Run security regression gate
+        run: >-
+          python -m pytest
+          backend/tests/test_cors_and_security_headers.py
+          backend/tests/test_cardapio_public_cors_railway.py
+          backend/tests/test_super_admin_contract.py
+          backend/tests/test_multitenant_infra.py
+          -q -ra
+      - name: Bootstrap Supabase compatibility roles
+        env:
+          PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/koma_security_test
+        run: >-
+          python -c "import os, psycopg2;
+          c=psycopg2.connect(os.environ['PG_ADMIN_URL']); c.autocommit=True;
+          q=c.cursor();
+          q.execute('CREATE ROLE anon NOLOGIN');
+          q.execute('CREATE ROLE authenticated NOLOGIN');
+          q.execute('CREATE ROLE service_role NOLOGIN');
+          q.close(); c.close()"
+      - name: Apply schema to ephemeral PostgreSQL
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
+        run: python -m alembic -c alembic.ini upgrade head
+      - name: Provision restricted runtime role
+        env:
+          PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/koma_security_test
+        run: >-
+          python -c "import os, psycopg2;
+          c=psycopg2.connect(os.environ['PG_ADMIN_URL']); c.autocommit=True;
+          q=c.cursor();
+          q.execute(\"CREATE ROLE koma_security_runtime LOGIN PASSWORD 'koma-security-runtime' IN ROLE koma_app\");
+          q.close(); c.close()"
+      - name: Run real PostgreSQL RLS incident regression
+        env:
+          DATABASE_URL: postgresql+psycopg2://koma_security_runtime:koma-security-runtime@localhost:5432/koma_security_test
+          MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: "true"
+          STRICT_RLS_ROLE_CHECK: "true"
+        run: >-
+          python -m pytest
+          backend/tests/test_super_admin_incidents_postgres.py
+          -q -ra

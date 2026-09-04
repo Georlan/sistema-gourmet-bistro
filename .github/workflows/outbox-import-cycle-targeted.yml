@@ -1,0 +1,61 @@
+name: Outbox Scheduled Import Gate
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/services/outbox/**"
+      - "backend/app/services/scheduled_orders.py"
+      - "backend/app/routes/cardapio.py"
+      - "backend/app/main.py"
+      - ".github/workflows/outbox-import-cycle-targeted.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  import-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: outbox-import-ci-secret-key
+      ENCRYPTION_KEY: dgvrWayyUxrh0PjzBcjn1AJ5woxjUE3lLTRptHDUSEQ=
+      DATABASE_URL: sqlite:///./outbox-import-ci.db
+      MIGRATION_DATABASE_URL: sqlite:///./outbox-import-ci.db
+      PYTHONPATH: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile affected modules
+        run: |
+          python -m py_compile backend/app/services/outbox/__init__.py
+          python -m py_compile backend/app/services/outbox/worker.py
+          python -m py_compile backend/app/services/scheduled_orders.py
+          python -m py_compile backend/app/main.py
+
+      - name: Import application and both sides of the dependency
+        run: |
+          python - <<'PY'
+          from app.main import app
+          from app.services.scheduled_orders import release_due_scheduled_orders_in_session
+          from app.services.outbox import default_outbox_worker
+
+          assert app is not None
+          assert callable(release_due_scheduled_orders_in_session)
+          assert default_outbox_worker is not None
+          print("outbox/scheduled-orders import smoke: ok")
+          PY

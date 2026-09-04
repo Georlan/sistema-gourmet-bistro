@@ -1,4 +1,11 @@
-"""Serviço de Transactional Outbox e Integrações do KÔMA."""
+"""Serviço de Transactional Outbox e Integrações do KÔMA.
+
+O worker é carregado sob demanda. Isso evita um ciclo de importação entre
+`scheduled_orders` -> `outbox` -> `worker` -> `scheduled_orders` durante o boot
+da aplicação, sem alterar a API pública do pacote.
+"""
+
+from typing import TYPE_CHECKING, Any
 
 from .publisher import enqueue_outbox_event_in_session
 from .signer import (
@@ -13,7 +20,25 @@ from .dispatcher import (
     dispatch_single_outbox_event,
     recover_stale_outbox_claims,
 )
-from .worker import OutboxWorker, default_outbox_worker, discover_active_restaurant_ids
+
+if TYPE_CHECKING:
+    from .worker import OutboxWorker
+
+
+_WORKER_EXPORTS = {
+    "OutboxWorker",
+    "default_outbox_worker",
+    "discover_active_restaurant_ids",
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _WORKER_EXPORTS:
+        from . import worker
+
+        return getattr(worker, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "enqueue_outbox_event_in_session",

@@ -16,17 +16,31 @@ const render = (view: React.ReactElement) => renderToStaticMarkup(view).replace(
 test('resumo mostra mínimo configurado e acesso às taxas sem sacola', () => {
   const html = render(createElement(CardapioConditionsSummary, { brand: brand({ pedidoMinimo: 30 }), onOpen: () => {} }));
   assert.match(html, /Condições do pedido/);
-  assert.match(html, /Pedido mínimo/);
+  assert.match(html, /Mínimo para entrega/);
   assert.match(html, /R\$ 30,00/);
-  assert.match(html, /Ver taxas de entrega/);
+  assert.match(html, /Taxas de entrega/);
   assert.match(html, /min-h-11/);
+});
+
+test('delivery pausado anuncia somente retirada e não publica taxas ou mínimo', () => {
+  const paused = brand({
+    deliveryEnabled: false,
+    pedidoMinimo: 30,
+    taxaEntregaPadrao: 12,
+    tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 5 }],
+  });
+  const summary = render(createElement(CardapioConditionsSummary, { brand: paused, onOpen: () => {} }));
+  const details = render(createElement(CardapioDeliveryInfo, { brand: paused }));
+  assert.match(summary, /Somente retirada/);
+  assert.match(details, /entrega está pausada/);
+  assert.doesNotMatch(`${summary}${details}`, /R\$|Pedido mínimo|Taxa padrão|Taxas por bairro/);
 });
 
 test('sem mínimo não anuncia valor inventado ou mínimo zero', () => {
   for (const pedidoMinimo of [undefined, 0]) {
     const html = render(createElement(CardapioConditionsSummary, { brand: brand({ pedidoMinimo }), onOpen: () => {} }));
     assert.doesNotMatch(html, /Pedido mínimo|R\$/);
-    assert.match(html, /Ver taxas de entrega/);
+    assert.match(html, /Taxas de entrega/);
   }
 });
 

@@ -38,6 +38,17 @@ class PrintingApplicationService:
     @classmethod
     def request_print(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
         try:
+            if intent.source_type == PrintSourceType.ITEM:
+                # Import local evita ciclo: o documento delta reutiliza o erro
+                # público deste módulo, mas continua atrás desta entrada única.
+                from .item_change import ItemChangePrintingService
+
+                return ItemChangePrintingService.request_print(db, intent)
+            if intent.action == PrintAction.ITEM_CHANGE:
+                raise UniversalPrintingError(
+                    "Alteração de item exige origem de impressão item",
+                    status_code=422,
+                )
             engine, order_context = cls._resolve_engine(db, intent)
             if engine == PrintEngineType.TABLE_RECEIPT:
                 return cls._run_table_engine(db, intent)
