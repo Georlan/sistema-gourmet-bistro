@@ -39,7 +39,7 @@ def test_table_account_uses_same_operational_identity_and_items_hierarchy():
     finally:
         printer_service.width = old_width
 
-    assert "CONTA #2" in ticket
+    assert "CONTA: #2" in ticket
     assert "PEDIDO: #2" not in ticket
     assert ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON in ticket
     assert ESC_BOLD_OFF + ESC_NORMAL_SIZE in ticket
