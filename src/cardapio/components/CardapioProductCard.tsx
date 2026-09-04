@@ -26,26 +26,19 @@ export default function CardapioProductCard({
     currency: "BRL",
   }).format(product.price);
 
-  const openProduct = () => {
-    if (available) onSelectProduct(product);
-  };
-
   return (
     <article
       className={`cardapio-product-card group relative ${available ? "is-available" : "is-unavailable"}`}
       id={`product-card-${product.id}`}
-      onClick={openProduct}
-      onKeyDown={(event) => {
-        if (!available || event.target !== event.currentTarget) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          openProduct();
-        }
-      }}
-      role={available ? "button" : undefined}
-      tabIndex={available ? 0 : -1}
-      aria-label={`${product.name}, ${formattedPrice}${available ? ", ver detalhes" : ", indisponível"}`}
     >
+      {available && (
+        <button
+          type="button"
+          className="cardapio-product-card__details-hitbox"
+          onClick={() => onSelectProduct(product)}
+          aria-label={`${product.name}, ${formattedPrice}, ver detalhes`}
+        />
+      )}
       <div className="cardapio-product-card__content">
         <div className="cardapio-product-card__copy">
           <div className="cardapio-product-card__heading">
@@ -70,8 +63,7 @@ export default function CardapioProductCard({
             {available && (
               <button
                 type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
+                onClick={() => {
                   onFastAdd(product);
                 }}
                 className="cardapio-product-card__add inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-sm cursor-pointer"

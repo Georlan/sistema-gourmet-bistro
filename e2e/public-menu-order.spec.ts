@@ -157,6 +157,27 @@ async function openCart(page: Page) {
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
 }
 
+test('cartão do produto mantém detalhes e adição como controles separados', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders);
+
+  await page.goto('/cardapio?restaurante_id=2');
+  const card = page.locator('#product-card-101');
+  await expect(card).not.toHaveAttribute('role', 'button');
+  await expect(card.locator('button button, [role="button"] button')).toHaveCount(0);
+
+  const detailsButton = card.getByRole('button', { name: /Pizza Margherita.*ver detalhes/ });
+  await detailsButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Fechar detalhes do produto' })).toBeVisible();
+  await page.getByRole('button', { name: 'Fechar detalhes do produto' }).click();
+
+  await card.getByRole('button', { name: 'Adicionar Pizza Margherita à sacola' }).click();
+  await openCart(page);
+  await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
+  expect(capturedOrders).toHaveLength(0);
+});
+
 test('sacola orienta o visitante até cada campo inválido e bloqueia a página de fundo', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders, {

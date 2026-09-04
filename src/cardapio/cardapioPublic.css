@@ -460,12 +460,30 @@
   opacity: 0.62;
 }
 
+.cardapio-product-card__details-hitbox {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.cardapio-product-card:has(.cardapio-product-card__details-hitbox:focus-visible) {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 3px;
+}
+
 .cardapio-product-card__content {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 112px;
   gap: 13px;
   min-height: 132px;
   padding: 12px;
+  pointer-events: none;
 }
 
 .cardapio-product-card__copy {
@@ -554,6 +572,8 @@
 }
 
 .cardapio-product-card__add {
+  position: relative;
+  z-index: 3;
   display: inline-flex;
   min-height: 30px;
   align-items: center;
@@ -567,6 +587,7 @@
   font-size: 8px;
   font-weight: 900;
   cursor: pointer;
+  pointer-events: auto;
   transition: 150ms ease;
 }
 
