@@ -356,6 +356,23 @@ test('modo automático bloqueia o pedido no catálogo quando o servidor informa 
   expect(capturedOrders).toHaveLength(0);
 });
 
+test('modo automático mostra aberto quando a política do servidor aceita pedidos', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders, {
+    statusOverride: 'Automático',
+    restaurant: {
+      aceitando_pedidos: true,
+      origem_disponibilidade: 'cash_open',
+    },
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await expect(page.locator('#brand-banner-hero').getByText('Aberto para pedidos', { exact: true })).toBeVisible();
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  expect(capturedOrders).toHaveLength(0);
+});
+
 test('pedido recusado continua visível em vez de desaparecer', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await page.addInitScript(() => {

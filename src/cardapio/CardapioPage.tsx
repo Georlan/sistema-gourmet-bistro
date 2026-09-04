@@ -273,6 +273,7 @@ export default function CardapioPage() {
       }
 
       const statusOverride = String(restaurant.status_override || "Automático").toLocaleLowerCase("pt-BR");
+      const hasServerAvailability = typeof restaurant.aceitando_pedidos === "boolean";
       const acceptingOrders = restaurant.aceitando_pedidos !== false;
       const brand: BrandConfig = {
         id: String(restaurant.id),
@@ -309,11 +310,13 @@ export default function CardapioPage() {
             }))
           : [],
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
-        storeStatus: !acceptingOrders || statusOverride.includes("fech")
-          ? "closed"
-          : statusOverride.includes("abert")
-            ? "open"
-            : "automatic",
+        storeStatus: hasServerAvailability
+          ? acceptingOrders ? "open" : "closed"
+          : statusOverride.includes("fech")
+            ? "closed"
+            : statusOverride.includes("abert")
+              ? "open"
+              : "automatic",
         acceptingOrders,
         orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
         availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
