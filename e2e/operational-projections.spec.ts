@@ -250,9 +250,9 @@ test('busca e etapa móvel do Kanban sobrevivem à troca entre Pedidos e Salão'
   if (compact) await closingTab.click();
   await expect(page.locator('.orders-card--closing')).toHaveCount(1);
   await expect(page.locator('.orders-card--salon')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Salão', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Salão', exact: true }).click();
   await expect(page.locator('article[data-table-status="occupied"]')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Pedidos', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Pedidos', exact: true }).click();
   await expect(search).toHaveValue('segunda rodada');
   await expect(page.locator('.orders-card--closing')).toHaveCount(1);
   await expect(page.locator('.orders-card--salon')).toHaveCount(0);

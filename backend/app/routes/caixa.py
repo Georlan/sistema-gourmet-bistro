@@ -1579,6 +1579,18 @@ def atualizar_configuracoes(
         config.mapa_mesas_ativo = config_in.mapa_mesas_ativo
     if config_in.delivery_ativo is not None:
         config.delivery_ativo = config_in.delivery_ativo
+    if config_in.pedido_minimo is not None:
+        config.pedido_minimo = config_in.pedido_minimo
+    if config_in.frete_gratis_valor is not None:
+        config.frete_gratis_valor = config_in.frete_gratis_valor
+    if config_in.tipo_taxa_entrega is not None:
+        config.tipo_taxa_entrega = config_in.tipo_taxa_entrega
+    if config_in.taxa_entrega_fixa is not None:
+        config.taxa_entrega_fixa = config_in.taxa_entrega_fixa
+    if config_in.tabela_taxas_bairros is not None:
+        config.tabela_taxas_bairros = config_in.tabela_taxas_bairros
+    if config_in.tabela_taxas_km is not None:
+        config.tabela_taxas_km = config_in.tabela_taxas_km
     if config_in.taxa_servico_ativa is not None:
         config.taxa_servico_ativa = config_in.taxa_servico_ativa
     if config_in.taxa_servico_padrao is not None:

@@ -17,6 +17,7 @@ from ..services.public_orders import (
     enforce_public_order_rate_limits,
     resolve_restaurant_id,
 )
+from ..services.scheduled_orders import scheduled_for_order
 from ..adapters.orders.web_adapter import CardapioWebAdapter
 # Stable Python compatibility export; order creation already uses the Core.
 from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
@@ -29,6 +30,10 @@ router = APIRouter(
 
 MAX_PUBLIC_ORDER_UNITS = 200
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
+
+
+class CardapioPedidoAgendavelCreate(CardapioPedidoCreate):
+    scheduled_for: datetime.datetime | None = None
 
 
 def _order_total(comanda: Comanda) -> float:
@@ -83,7 +88,7 @@ def _enforce_public_order_rate_limits(
 
 @router.post("/pedidos", status_code=status.HTTP_201_CREATED)
 def criar_pedido_online(
-    payload: CardapioPedidoCreate,
+    payload: CardapioPedidoAgendavelCreate,
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -176,8 +181,15 @@ def consultar_status_pedido_publico(
             for item in comanda.itens
         ]
 
+        schedule = scheduled_for_order(
+            db,
+            restaurante_id=int(rest_id),
+            comanda_id=comanda.id,
+        )
         status_retorno = comanda.delivery_status or "pendente"
-        if comanda.fechada and status_retorno != "recusado":
+        if schedule is not None and schedule.released_at is None:
+            status_retorno = "agendado"
+        elif comanda.fechada and status_retorno != "recusado":
             status_retorno = "finalizado"
 
         payment_intent = db.query(OnlinePaymentIntent).filter(
@@ -195,6 +207,8 @@ def consultar_status_pedido_publico(
             "total": _order_total(comanda),
             "fechada": comanda.fechada,
             "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
+            "scheduled_for": schedule.scheduled_for.isoformat() if schedule is not None else None,
+            "scheduled_released_at": schedule.released_at.isoformat() if schedule is not None and schedule.released_at else None,
             "itens": itens_payload,
             "pagamento": (
                 {

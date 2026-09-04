@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 

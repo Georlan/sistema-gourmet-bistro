@@ -1,34 +1,19 @@
-"""Rotas públicas de pedidos com state machine hardened para delivery.
+"""Rotas públicas de pedidos sobre o ciclo de vida canônico.
 
-``orders_core`` mantém as rotas e callbacks compartilhados de pedidos. As três
-rotas do ciclo de vida de delivery são registradas somente aqui e compartilham
-a mesma máquina de estados.
+``orders_core`` mantém rotas e callbacks compartilhados durante a migração. As
+rotas de delivery/retirada deste módulo não escrevem estado de pedido
+ diretamente: elas traduzem o contrato HTTP legado para o Core de Aplicação.
 """
 
 from __future__ import annotations
 
-import datetime
-
 from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from ..database import current_restaurante_id, get_db, require_tenant_id
-from ..models import Comanda, Motoboy, Restaurante, Usuario
-from ..schemas import ComandaResponse
-from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
-from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
-from ..services.order_state_machine import (
-    CANONICAL_ORDER_STATUSES,
-    InvalidOrderTransition,
-    normalize_order_status,
-    validate_order_transition,
+from ..application.orders.lifecycle import (
+    LEGACY_ORDER_STATUS_INPUTS,
+    OrderLifecycleCoordinator,
 )
-from ..services.notificacoes import agendar_notificacao_whatsapp_task
-from ..websocket_manager import manager
-
-from ..services.shifts import require_open_cash_shift
-from ..application.orders.service import OrderApplicationService
-from ..application.orders.commands import DispatchOrderCommand
 from ..application.printing import (
     PrintAction,
     PrintIntent,
@@ -37,12 +22,24 @@ from ..application.printing import (
     PrintingApplicationService,
     UniversalPrintingError,
 )
+from ..database import current_restaurante_id, get_db, require_tenant_id
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
+from ..domain.orders.types import (
+    OrderStatus,
+    normalize_to_order_status,
+    to_legacy_order_status,
+)
+from ..models import Comanda, Motoboy, Restaurante, Usuario
+from ..schemas import ComandaResponse
+from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
+from ..services.notificacoes import agendar_notificacao_whatsapp_task
+from ..services.shifts import require_open_cash_shift
+from ..websocket_manager import manager
 
 # Compatibilidade Python explícita para os adapters e callbacks ainda em migração.
 from .orders_core import (
-    _criar_acesso_motoboy,
     _agendar_notificacao_whatsapp_status,
+    _criar_acesso_motoboy,
     criar_venda_direta,
     gerar_novo_numero_pedido,
     lancar_itens,
@@ -53,27 +50,60 @@ from .orders_core import (
 
 def _canonical_target_or_422(raw_status: str) -> str:
     target = (raw_status or "").strip().casefold()
-    if target not in CANONICAL_ORDER_STATUSES:
+    if target not in LEGACY_ORDER_STATUS_INPUTS:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "Status inválido. Use um de: "
-                + ", ".join(sorted(CANONICAL_ORDER_STATUSES))
+                + ", ".join(sorted(LEGACY_ORDER_STATUS_INPUTS))
             ),
         )
     return target
 
 
-def _transition_or_409(comanda: Comanda, target: str):
+def _transition_via_application_or_http(
+    db: Session,
+    *,
+    restaurant_id: int,
+    comanda_id: str,
+    target_status: str,
+    operator_user_id: str | int | None,
+    courier_id: str | int | None = None,
+    reason: str | None = None,
+):
     try:
-        return validate_order_transition(
-            comanda.delivery_status,
-            target,
-            comanda.tipo,
+        return OrderLifecycleCoordinator.transition_check_status(
+            db,
+            restaurant_id=restaurant_id,
+            comanda_id=comanda_id,
+            target_status=target_status,
+            operator_user_id=operator_user_id,
+            courier_id=courier_id,
+            reason=reason,
+            commit=False,
         )
-    except InvalidOrderTransition as exc:
+    except InvalidOrderTransitionError as exc:
+        db.rollback()
+        current = to_legacy_order_status(normalize_to_order_status(exc.current_status))
+        target = to_legacy_order_status(normalize_to_order_status(exc.target_status))
+        allowed = sorted(
+            {
+                to_legacy_order_status(normalize_to_order_status(candidate))
+                for candidate in exc.allowed_targets
+            }
+        )
+        allowed_text = ", ".join(allowed) if allowed else "nenhum"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Transição de status inválida: {current} → {target}. "
+                f"Próximos status permitidos: {allowed_text}."
+            ),
+        ) from exc
+    except OrderValidationError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
 
@@ -96,12 +126,11 @@ def _normalize_legacy_progress_target(comanda: Comanda, target: str) -> str:
 
     O Caixa legado ainda envia ``transito`` ao clicar na ação visual que significa
     "pedido pronto". A tradução acontece somente quando o pedido já está em
-    produção; assim a state machine continua proibindo saltos reais e o estado
-    persistido permanece ``pronto``. Em pedidos já prontos, ``transito`` continua
-    significando despacho de delivery e segue as regras normais.
+    produção; assim o Core continua proibindo saltos reais. Em pedidos já
+    prontos, ``transito`` continua significando despacho de delivery.
     """
-    current = normalize_order_status(comanda.delivery_status)
-    if current == "producao" and target == "transito":
+    current = normalize_to_order_status(comanda.delivery_status)
+    if current == OrderStatus.PREPARING and target == "transito":
         return "pronto"
     return target
 
@@ -114,7 +143,7 @@ def atualizar_status_delivery(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
 ):
-    """Avança um pedido pela state machine canônica de delivery/retirada."""
+    """Adapta o status legado para os comandos canônicos do ciclo de vida."""
     target = _canonical_target_or_422(status_novo)
     rid = require_tenant_id()
     comanda = (
@@ -135,42 +164,40 @@ def atualizar_status_delivery(
         )
 
     target = _normalize_legacy_progress_target(comanda, target)
-    transition = _transition_or_409(comanda, target)
-    if not transition.changed:
-        return comanda
-
+    current_status = normalize_to_order_status(comanda.delivery_status)
+    target_status = normalize_to_order_status(target)
     # Trânsito de delivery deve sempre possuir entregador. A rota dedicada de
-    # despacho faz vínculo + transição atomicamente.
-    if target == "transito" and _is_delivery(comanda) and not comanda.motoboy_id:
+    # despacho faz vínculo + transição atomicamente; o Core repete essa proteção
+    # para qualquer futuro consumidor que não passe por esta rota.
+    if target_status == OrderStatus.DISPATCHED and _is_delivery(comanda) and not comanda.motoboy_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Vincule um motoboy usando a ação de despacho antes de iniciar a entrega.",
         )
 
-    status_anterior = normalize_order_status(comanda.delivery_status)
-
-    if transition.first_accept:
+    if current_status == OrderStatus.PENDING and target_status == OrderStatus.PREPARING:
         require_open_cash_shift(db, rid)
-        itens_ativos = [item for item in comanda.itens if item.status != "cancelado"]
-        consumir_estoque_dos_itens(
-            db,
-            itens_ativos,
-            usuario_id=current_user.id,
-            liberar_pendente=True,
-        )
 
-    comanda.delivery_status = target
-
-    for lanc in (comanda.lancamentos or []):
-        if target in {"pendente", "producao", "pronto", "finalizado", "recusado", "cancelado"}:
-            lanc.status = target
-        elif target == "transito":
-            lanc.status = "pronto"
-
-    if target in {"pronto", "transito", "finalizado"}:
-        for item in comanda.itens:
-            if item.status == "preparando":
-                item.status = "pronto"
+    status_anterior = to_legacy_order_status(current_status)
+    transition = _transition_via_application_or_http(
+        db,
+        restaurant_id=rid,
+        comanda_id=comanda.id,
+        target_status=target,
+        operator_user_id=getattr(current_user, "id", None),
+        courier_id=(
+            comanda.motoboy_id
+            if target_status == OrderStatus.DISPATCHED
+            else None
+        ),
+        reason=(
+            "Recusado/cancelado pela operação via ciclo de delivery"
+            if target_status in {OrderStatus.REJECTED, OrderStatus.CANCELLED}
+            else None
+        ),
+    )
+    if not transition.changed:
+        return transition.comanda
 
     if transition.first_accept:
         try:
@@ -193,33 +220,15 @@ def atualizar_status_delivery(
                 print_err,
             )
 
-    if target == "recusado":
-        itens_cancelados = []
-        for item in comanda.itens:
-            if item.status != "cancelado":
-                item.status = "cancelado"
-                item.cancelado_por = current_user.id
-                itens_cancelados.append(item)
-        estornar_estoque_dos_itens(
-            db,
-            itens_cancelados,
-            usuario_id=current_user.id,
-        )
-        comanda.fechada = True
-        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-
-    if target == "finalizado":
-        comanda.fechada = True
-        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-
     db.commit()
     db.refresh(comanda)
+    target_legacy = to_legacy_order_status(transition.target_status)
     _agendar_notificacao_whatsapp_status(
         background_tasks,
         db,
         comanda,
         status_anterior,
-        target,
+        target_legacy,
     )
     background_tasks.add_task(
         manager.broadcast,
@@ -237,7 +246,7 @@ def despachar_delivery(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
 ):
-    """Vincula motoboy e executa exclusivamente a transição pronto -> transito."""
+    """Vincula motoboy e delega a transição pronto -> trânsito ao Core."""
     rid = require_tenant_id()
     comanda = (
         db.query(Comanda)
@@ -268,37 +277,32 @@ def despachar_delivery(
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
 
-    transition = _transition_or_409(comanda, "transito")
-    if not transition.changed:
+    current_status = normalize_to_order_status(comanda.delivery_status)
+    if current_status == OrderStatus.DISPATCHED:
         if comanda.motoboy_id not in {None, motoboy_id}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Este pedido já está em trânsito com outro motoboy.",
             )
         if comanda.motoboy_id is None:
+            # Reparação logística compatível para registros legados. Não altera
+            # o estado do pedido; somente restaura o vínculo com o entregador.
             comanda.motoboy_id = motoboy_id
             db.commit()
             db.refresh(comanda)
         return comanda
 
-    status_anterior = normalize_order_status(comanda.delivery_status)
+    status_anterior = to_legacy_order_status(current_status)
     acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid)
 
-    try:
-        OrderApplicationService.dispatch_order(
-            db=db,
-            cmd=DispatchOrderCommand(
-                restaurant_id=rid,
-                order_id=comanda.id,
-                courier_id=motoboy_id,
-                operator_user_id=getattr(current_user, "id", None),
-            ),
-            commit=False,
-        )
-    except InvalidOrderTransitionError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    except OrderValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    _transition_via_application_or_http(
+        db,
+        restaurant_id=rid,
+        comanda_id=comanda.id,
+        target_status="transito",
+        operator_user_id=getattr(current_user, "id", None),
+        courier_id=motoboy_id,
+    )
 
     try:
         PrintingApplicationService.request_print(
@@ -376,7 +380,7 @@ def confirmar_entrega_motoboy(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Confirma apenas pedidos em trânsito pertencentes ao motoboy autenticado."""
+    """Confirma a entrega usando a mesma autoridade canônica de lifecycle."""
     motoboy_rate_limiter.check(request)
     token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
@@ -405,15 +409,24 @@ def confirmar_entrega_motoboy(
                 detail="Este pedido pertence a outro motoboy.",
             )
 
-        transition = _transition_or_409(comanda, "finalizado")
-        if not transition.changed:
+        current_status = normalize_to_order_status(comanda.delivery_status)
+        if current_status == OrderStatus.COMPLETED:
             return {"status": "sucesso", "mensagem": "Entrega já estava confirmada."}
 
-        status_anterior = normalize_order_status(comanda.delivery_status)
-        comanda.delivery_status = "finalizado"
-        comanda.motoboy_id = motoboy_id
-        comanda.fechada = True
-        comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+        status_anterior = to_legacy_order_status(current_status)
+        if comanda.motoboy_id is None:
+            # Compatibilidade para despachos legados que chegaram a trânsito sem
+            # persistir o vínculo. O status continua sendo alterado somente pelo Core.
+            comanda.motoboy_id = motoboy_id
+
+        _transition_via_application_or_http(
+            db,
+            restaurant_id=rest_id,
+            comanda_id=comanda.id,
+            target_status="finalizado",
+            operator_user_id=None,
+            courier_id=motoboy_id,
+        )
         db.commit()
         db.refresh(comanda)
 

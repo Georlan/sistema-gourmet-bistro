@@ -130,21 +130,15 @@ test("501 e 503 são tratados como capacidade indisponível", async () => {
   );
 });
 
-test("falhas de suspensão e webhook não possuem mutação local no catch", () => {
+test("falha de suspensão não possui mutação local e o painel não simula feed de webhooks", () => {
   const source = readFileSync(new URL("../src/super-admin/SuperAdminPanel.tsx", import.meta.url), "utf8");
   const suspension = source.slice(
     source.indexOf("const handleToggleTenantStatus"),
-    source.indexOf("const handleForceConfirmWebhook"),
-  );
-  const webhook = source.slice(
-    source.indexOf("const handleForceConfirmWebhook"),
     source.indexOf("const triggerTelegramAlert"),
   );
 
   const suspensionCatch = suspension.slice(suspension.indexOf("catch"));
-  const webhookCatch = webhook.slice(webhook.indexOf("catch"));
   assert.doesNotMatch(suspensionCatch, /setTenants\s*\(/);
   assert.match(suspensionCatch, /return false/);
-  assert.doesNotMatch(webhookCatch, /setFailedWebhooks\s*\(/);
-  assert.match(webhookCatch, /return false/);
+  assert.doesNotMatch(source, /failedWebhooks|webhooksAvailable|handleForceConfirmWebhook/);
 });

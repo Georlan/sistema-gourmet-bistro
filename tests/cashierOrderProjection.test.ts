@@ -9,9 +9,9 @@ import {
   getCashierTableOrderPresentation,
   isCashierTableOrder,
   projectCashierDeliveryState,
-  projectCashierSalonTables,
   projectCashierTableSlices,
 } from '../src/domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../src/domain/cashierSalonProjection';
 
 const NOW = Date.UTC(2026, 7, 30, 15, 30);
 const TABLE: Table = { id: 7, capacidade: 4, nome: 'Varanda' };

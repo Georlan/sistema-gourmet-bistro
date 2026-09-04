@@ -2,9 +2,13 @@ import { expect, type Page, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
 async function navigate(page: Page, label: string) {
-  const button = page.getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) });
-  if (!await button.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
-  await button.click();
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await sidebar.getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) }).click();
+}
+
+function cashierSubnavButton(page: Page, name: string) {
+  return page.locator('.cashier-subnav').getByRole('button', { name, exact: true });
 }
 
 async function open(page: Page) {
@@ -52,7 +56,7 @@ test('abertura não baixa módulos administrativos e atraso de módulo não bloq
 
 test('rascunho administrativo e carrinho sobrevivem à navegação entre módulos', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
   await showCart(page);
   await page.locator('#pdv-customer-name-input').fill('Cliente do rascunho');
@@ -68,7 +72,7 @@ test('rascunho administrativo e carrinho sobrevivem à navegação entre módulo
   await expect(dialog.getByLabel('Nome do produto')).toHaveValue('Produto ainda não salvo');
   await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
   await navigate(page, 'Vendas');
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
   await expect(page.locator('#pdv-customer-name-input')).toHaveValue('Cliente do rascunho');
   await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
@@ -77,13 +81,13 @@ test('rascunho administrativo e carrinho sobrevivem à navegação entre módulo
 test('falha ao carregar relatórios fica isolada e preserva o carrinho', async ({ page }) => {
   await page.route('**/*CashierReports*', route => route.abort('failed'), { times: 1 });
   await open(page);
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
   await navigate(page, 'Relatórios');
   await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível abrir Relatórios' })).toBeVisible();
   await navigate(page, 'Vendas');
   await expect(page.locator('.orders-board')).toBeVisible();
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
   await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await navigate(page, 'Relatórios');
@@ -91,7 +95,7 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await page.getByRole('button', { name: 'Recarregar página' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível abrir Relatórios' })).toBeVisible();
   await navigate(page, 'Vendas');
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
   await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await navigate(page, 'Relatórios');
@@ -112,7 +116,7 @@ test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async (
     await route.fulfill({ status: sales.length === 1 ? 503 : 200, contentType: 'application/json',
       body: JSON.stringify(sales.length === 1 ? { detail: 'Falha controlada' } : { id: 'sale-confirmed' }) });
   });
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await page.getByTitle('Adicionar Risoto da casa', { exact: true }).click();
   await showCart(page);
   await page.getByRole('button', { name: 'Mesa', exact: true }).click();
@@ -121,7 +125,7 @@ test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async (
   await expect(page.locator('.orders-board')).toBeVisible();
   await expect(page.getByText('Erro ao registrar venda: Falha controlada')).toBeVisible();
   expect(sales).toHaveLength(1);
-  await page.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
   await expect(page.locator('#pdv-target-table')).toHaveValue('10');
   await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();

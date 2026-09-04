@@ -3,12 +3,11 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, or_
-from typing import List, Optional, Any
+from typing import List, Optional
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id
 from ..config import settings
-from ..timezone_utils import get_operational_now
 from ..models import (
     Comanda,
     Mesa,
@@ -18,7 +17,6 @@ from ..models import (
     ActivityLog,
     Motoboy,
     MotoboyTokenAtivo,
-    ConfiguracaoRestaurante,
     Restaurante,
 )
 from ..schemas import (
@@ -36,16 +34,28 @@ from ..security import (
 )
 from ..websocket_manager import manager
 from ..services.order_read_projection import project_check_details
-from ..services.printing import PrintingRequestError, enqueue_table_receipt
 from ..services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ..services.atendimentos import (
     ensure_atendimento_for_comanda,
 )
-from ..subscription import subscription_has_printing
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 from ..waiter_permissions import (
     require_waiter_permission,
 )
 from ..adapters.orders.pos_adapter import PosAdapter
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 
 logger = logging.getLogger("koma.orders")
 
@@ -54,19 +64,6 @@ router = APIRouter(
     tags=["Comandas e Pedidos"]
 )
 
-
-MENSAGEM_WHATSAPP_PRONTO_RETIRADA = (
-    "Olá, {nome}! 👋 Seu pedido #{numero} no {restaurante} já está PRONTO PARA "
-    "RETIRADA! 🍔 Pode vir buscar no nosso balcão. Te esperamos!"
-)
-MENSAGEM_WHATSAPP_SAIU_ENTREGA = (
-    "Olá, {nome}! 🛵 Seu pedido #{numero} no {restaurante} acabou de SAIR PARA "
-    "ENTREGA! 🚀 Nosso entregador já está a caminho do seu endereço. Bom apetite!"
-)
-MENSAGEM_WHATSAPP_RECUSADO = (
-    "Olá, {nome}. Infelizmente seu pedido #{numero} no {restaurante} não pôde "
-    "ser aceito no momento. Entre em contato conosco para mais detalhes."
-)
 
 from ..services.shifts import require_open_cash_shift
 from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
@@ -127,240 +124,6 @@ def _agendar_notificacao_whatsapp_status(
         numero_pedido=comanda.numero_pedido,
         modalidade=comanda.tipo,
     )
-
-
-def _get_print_preferences(db: Session, restaurante_id: int) -> dict:
-    config = (
-        db.query(ConfiguracaoRestaurante)
-        .options(joinedload(ConfiguracaoRestaurante.restaurante))
-        .filter(
-            ConfiguracaoRestaurante.restaurante_id == restaurante_id
-        )
-        .first()
-    )
-    restaurant_name = "Kôma Gourmet Bistrô"
-    if config:
-        restaurant_name = (
-            config.impressao_nome_restaurante
-            or (config.restaurante.nome if config.restaurante else None)
-            or restaurant_name
-        )
-    return {
-        "restaurant_name": restaurant_name,
-        "restaurant_name_position": (
-            config.impressao_nome_posicao if config else "cabecalho"
-        ),
-        "print_footer": (
-            config.impressao_mensagem_rodape if config else None
-        ),
-    }
-
-
-def enqueue_print_job_in_session(
-    db: Session,
-    restaurante_id: int,
-    printer_name: str,
-    ticket_text: str,
-    document_type: str = "producao",
-    source_type: str = "pedido",
-    source_id: str = "",
-    idempotency_key: Optional[str] = None,
-) -> Optional[Any]:
-    """
-    Enfileira um PrintJob na mesma sessão do banco de dados para garantir atomicidade transacional com a criação do pedido.
-    """
-    try:
-        import datetime
-        from ..models import PrintJob, Restaurante
-        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-        if restaurante and not subscription_has_printing(
-            restaurante_id,
-            restaurante.plano,
-        ):
-            logger.info("Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.", restaurante_id)
-            return None
-
-        dest_clean = "COZINHA"
-        p_upper = (printer_name or "").upper()
-        if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
-            dest_clean = "FECHAMENTO"
-        elif "DELIVERY" in p_upper or "MOTOBOY" in p_upper or "ENTREGA" in p_upper:
-            dest_clean = "ENTREGA"
-        elif "BAR" in p_upper:
-            dest_clean = "BAR"
-
-        doc_type_clean = "entrega" if "delivery" in p_upper or "motoboy" in p_upper else document_type.lower()
-        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
-        ikey = idempotency_key or f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
-
-        existing_job = db.query(PrintJob).filter(
-            PrintJob.restaurante_id == restaurante_id,
-            PrintJob.idempotency_key == ikey,
-        ).first()
-        if existing_job:
-            return existing_job
-
-        job = PrintJob(
-            restaurante_id=restaurante_id,
-            document_type=doc_type_clean,
-            destination=dest_clean,
-            source_type=source_type.lower(),
-            source_id=str(source_id),
-            payload_text=ticket_text.replace("\x00", "\\x00"),
-            status="pending",
-            idempotency_key=ikey
-        )
-        try:
-            with db.begin_nested():
-                db.add(job)
-                db.flush()
-        except Exception:
-            return db.query(PrintJob).filter(
-                PrintJob.restaurante_id == restaurante_id,
-                PrintJob.idempotency_key == ikey,
-            ).first()
-        return job
-    except Exception as e:
-        logger.error(f"[PRINT JOB TX ERROR] Falha ao adicionar PrintJob na sessão: {e}")
-        return None
-
-
-def enqueue_initial_production_for_order(
-    db: Session,
-    comanda: Comanda,
-) -> list[Any]:
-    """Enfileira a primeira via de produção de uma comanda aceita.
-
-    A chave é estável por pedido e destino. Como a aceitação bloqueia a linha
-    da comanda e o banco possui uma restrição única para a chave, repetir a
-    mesma requisição nunca cria uma segunda impressão física.
-    """
-    from ..domain.printing import PrintDocumentService
-    from ..domain.printing.models import OrderPrintData, PrintItem as DomainPrintItem
-
-    active_items = [
-        item for item in comanda.itens
-        if item.status != "cancelado" and item.produto is not None
-    ]
-    if not active_items:
-        return []
-
-    print_preferences = _get_print_preferences(db, comanda.restaurante_id)
-    print_items = [
-        DomainPrintItem(
-            codigo=str(getattr(item.produto, "codigo", None) or item.produto.id),
-            nome=item.produto.nome,
-            quantidade=1,
-            preco_unit=float(item.preco_unit or 0),
-            observacao=item.observacao or "",
-            cliente_nome=item.cliente_nome or "Consumo Geral",
-            destino_impressao=(
-                item.produto.categoria.destino_impressao
-                if item.produto.categoria
-                else "COZINHA"
-            ),
-        )
-        for item in active_items
-    ]
-    documents = PrintDocumentService.generate_production(OrderPrintData(
-        restaurante_nome=print_preferences["restaurant_name"],
-        numero_pedido=str(comanda.numero_pedido or ""),
-        mesa=str(comanda.mesa_id) if comanda.mesa_id else "BALCAO",
-        tipo_pedido=comanda.tipo,
-        garcom_nome=(
-            comanda.criada_por.nome if comanda.criada_por else "CAIXA"
-        ),
-        horario=get_operational_now().strftime("%H:%M"),
-        itens=print_items,
-    )) or {}
-
-    jobs = []
-    for destination, ticket_text in documents.items():
-        destination_key = str(destination).strip().lower()
-        job = enqueue_print_job_in_session(
-            db,
-            restaurante_id=comanda.restaurante_id,
-            printer_name=str(destination),
-            ticket_text=ticket_text,
-            document_type="producao",
-            source_type="pedido",
-            source_id=comanda.id,
-            idempotency_key=(
-                f"aceite:pedido:{comanda.id}:producao:{destination_key}"
-            ),
-        )
-        if job is not None:
-            jobs.append(job)
-
-    if jobs:
-        printed_at = datetime.datetime.now(datetime.timezone.utc)
-        for item in active_items:
-            item.impresso_em = printed_at
-
-    return jobs
-
-
-def print_in_background(
-    printer_name: str,
-    ticket_text: str,
-    document_type: str = "producao",
-    source_type: str = "pedido",
-    source_id: str = "",
-    restaurante_id: int | None = None,
-):
-    try:
-        import datetime
-        from ..database import SessionLocal
-        from ..models import PrintJob, Restaurante
-        if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
-            raise ValueError("Background de impressão exige restaurante_id explícito")
-        tenant_context = current_restaurante_id.set(restaurante_id)
-        db = None
-        try:
-            db = SessionLocal(restaurante_id=restaurante_id)
-            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if restaurante and not subscription_has_printing(
-                restaurante_id,
-                restaurante.plano,
-            ):
-                logger.info(
-                    "Impressão ignorada para restaurante %s: recurso não incluído no Kôma Pocket.",
-                    restaurante_id,
-                )
-                return
-
-            dest_clean = "COZINHA"
-            p_upper = (printer_name or "").upper()
-            if "FECHAMENTO" in p_upper or "RECIBO" in p_upper or "VALORES" in p_upper:
-                dest_clean = "FECHAMENTO"
-            elif "DELIVERY" in p_upper or "MOTOBOY" in p_upper or "ENTREGA" in p_upper:
-                dest_clean = "ENTREGA"
-            elif "BAR" in p_upper:
-                dest_clean = "BAR"
-            
-            doc_type_clean = "entrega" if "delivery" in p_upper or "motoboy" in p_upper else document_type.lower()
-            ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
-            ikey = f"{doc_type_clean}:{source_type}:{source_id}:{printer_name}:{ts}"
-            
-            job = PrintJob(
-                restaurante_id=restaurante_id,
-                document_type=doc_type_clean,
-                destination=dest_clean,
-                source_type=source_type.lower(),
-                source_id=str(source_id),
-                payload_text=ticket_text.replace("\x00", "\\x00"),
-                status="pending",
-                idempotency_key=ikey
-            )
-            db.add(job)
-            db.commit()
-            print(f"[PRINT JOB ENQUEUED] Job ID {job.id} enfileirado para o Kôma Print Agent!")
-        finally:
-            if db is not None:
-                db.close()
-            current_restaurante_id.reset(tenant_context)
-    except Exception as e:
-        print(f"[PRINT JOB ERROR] Falha ao enfileirar PrintJob: {e}")
 
 # ----------------- READ ENDPOINTS -----------------
 
@@ -466,7 +229,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Mesa {comanda_in.mesa_id} não encontrada"
             )
-            
+
         # 2. A mesma mesa pode ter comandas separadas por cliente. Um clique
         # repetido sem identificador reutiliza a comanda geral; um nome novo
         # cria outra comanda compartilhando o mesmo número do pedido.
@@ -598,7 +361,6 @@ async def criar_venda_direta(
     )
 
 
-
 @router.put("/{comanda_id}/pedir-conta", response_model=ComandaResponse)
 def pedir_conta(
     comanda_id: str,
@@ -670,7 +432,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         Item.id.in_(itens_ids),
         Item.comanda_id == comanda_id
     ).all()
-    
+
     if len(itens) != len(itens_ids):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -756,7 +518,7 @@ def fechar_comanda(
     subtotal = sum(i.preco_unit for i in comanda.itens if i.status != 'cancelado')
     total_com_taxa = round(subtotal * 1.10, 2)
     valor_pago = comanda.valor_pago or 0.0
-    
+
     # Verifica se há saldo devedor
     if force:
         ensure_permission(current_garcom, "comandas:forcar_fechamento")
@@ -862,7 +624,7 @@ def cancelar_item(
     item.status = "cancelado"
     item.cancelado_por = current_garcom.id
     estornar_estoque_dos_itens(db, [item], usuario_id=current_garcom.id)
-    
+
     # Audit log
     audit = ActivityLog(
         restaurante_id=current_restaurante_id.get(),
@@ -893,21 +655,28 @@ def update_item_details(
         current_garcom,
         "perm_garcom_editar",
     )
-    item = db.query(Item).filter(Item.id == item_id).first()
+    restaurante_id = require_tenant_id()
+    item = db.query(Item).filter(
+        Item.restaurante_id == restaurante_id,
+        Item.id == item_id,
+    ).first()
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Item não encontrado"
         )
-        
+
     # Verificar se a comanda já está fechada
-    comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.id == item.comanda_id,
+    ).first()
     if comanda and comanda.fechada:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não é possível editar itens de uma comanda já fechada"
         )
-        
+
     try:
         if update_data.observacao is not None:
             item.observacao = update_data.observacao
@@ -917,11 +686,11 @@ def update_item_details(
         added_count = 0
         novos_itens = []
         if update_data.quantidade_adicional and update_data.quantidade_adicional > 1:
-            import uuid
             additional_qty = update_data.quantidade_adicional - 1
             for _ in range(additional_qty):
                 new_item = Item(
                     id=f"i-{uuid.uuid4().hex[:8]}",
+                    restaurante_id=restaurante_id,
                     comanda_id=item.comanda_id,
                     lancamento_id=item.lancamento_id,
                     produto_id=item.produto_id,
@@ -952,30 +721,34 @@ def update_item_details(
         )
     db.refresh(item)
 
-    # Imprimir via de comanda indicando edição/alteração
+    # A mutação já foi confirmada. A impressão continua best-effort, porém a
+    # rota declara apenas a intenção; o Core escolhe documento e destino.
     try:
-        dest = item.produto.categoria.destino_impressao if (item.produto and item.produto.categoria) else "COZINHA"
-        if dest != "NENHUM":
-            header = "=== ITEM ALTERADO/ADICIONADO ==="
-            lines = [
-                header.center(32),
-                f"MESA: {comanda.mesa_id if comanda.mesa_id else 'BALCAO'}",
-                f"PRODUTO: {item.produto.nome}",
-                f"OBS (EDITADO): {item.observacao}",
-                f"CLIENTE: {item.cliente_nome}",
-            ]
-            if added_count > 0:
-                lines.append(f"QTD ADICIONADA: +{added_count}")
-            lines.append("="*32)
-            ticket_text = "\n".join(lines) + "\n\n\n"
-            background_tasks.add_task(
-                print_in_background,
-                "cozinha",
-                ticket_text,
-                restaurante_id=require_tenant_id(),
-            )
-    except Exception as e:
-        print(f"Error printing edited item ticket: {e}")
+        PrintingApplicationService.request_print(
+            db,
+            PrintIntent(
+                restaurant_id=restaurante_id,
+                source_type=PrintSourceType.ITEM,
+                source_id=item.id,
+                action=PrintAction.ITEM_CHANGE,
+                requested_by=current_garcom.nome,
+                quantity_added=added_count,
+            ),
+        )
+        db.commit()
+    except UniversalPrintingError as exc:
+        db.rollback()
+        logger.warning(
+            "Impressão de alteração do item %s ignorada após mutação confirmada: %s",
+            item.id,
+            exc,
+        )
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Falha inesperada ao enfileirar impressão de alteração do item %s",
+            item.id,
+        )
 
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
@@ -1021,206 +794,6 @@ def update_item_status(
 
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
-
-
-
-def reimprimir_lancamento_cozinha(
-    lancamento_id: str,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(get_current_user)
-):
-    """Reimprime um documento já lançado.
-
-    Para Consumo no Local, reimpressão significa emitir novamente o Extrato
-    Completo canônico da mesa. Delivery/retirada mantêm as vias próprias.
-    """
-    del current_garcom
-    rid = require_tenant_id()
-
-    if lancamento_id.startswith("c-"):
-        comanda = db.query(Comanda).filter(
-            Comanda.restaurante_id == rid,
-            Comanda.id == lancamento_id,
-        ).first()
-        if not comanda:
-            raise HTTPException(
-                status_code=404,
-                detail="Comanda não encontrada"
-            )
-            
-        # If it's a Delivery or Retirada, trigger delivery/takeout print tickets!
-        if comanda.tipo in ["Delivery", "Entrega", "Retirada"]:
-            try:
-                from ..printer_service import printer_service
-                
-                motoboy_nome = "Balcão"
-                if comanda.motoboy_id:
-                    mb = db.query(Motoboy).filter(
-                        Motoboy.restaurante_id == rid,
-                        Motoboy.id == comanda.motoboy_id,
-                    ).first()
-                    if mb:
-                        motoboy_nome = mb.nome
-                        
-                config = db.query(ConfiguracaoRestaurante).filter(
-                    ConfiguracaoRestaurante.restaurante_id == rid
-                ).first()
-                unificar = config.unificar_vias_delivery if config else False
-                
-                if unificar:
-                    unified_text = printer_service.generate_delivery_unified_ticket(comanda, motoboy_nome)
-                    background_tasks.add_task(
-                        print_in_background,
-                        "delivery_unico",
-                        unified_text,
-                        restaurante_id=rid,
-                    )
-                else:
-                    kitchen_text = printer_service.generate_delivery_kitchen_ticket(comanda)
-                    motoboy_text = printer_service.generate_delivery_motoboy_ticket(comanda, motoboy_nome)
-                    background_tasks.add_task(
-                        print_in_background,
-                        "delivery_cozinha",
-                        kitchen_text,
-                        restaurante_id=rid,
-                    )
-                    background_tasks.add_task(
-                        print_in_background,
-                        "delivery_motoboy",
-                        motoboy_text,
-                        restaurante_id=rid,
-                    )
-                    
-                return {"status": "success", "detail": "Reimpressão de Delivery enviada com sucesso"}
-            except Exception as print_err:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Erro na impressora de delivery: {print_err}"
-                )
-
-        active_items = [i for i in comanda.itens if i.status != "cancelado"]
-        garcom_nome = comanda.criada_por.nome if comanda.criada_por else "Garçom"
-    else:
-        lancamento = (
-            db.query(Lancamento)
-            .join(Comanda, Comanda.id == Lancamento.comanda_id)
-            .filter(
-                Comanda.restaurante_id == rid,
-                Lancamento.id == lancamento_id,
-            )
-            .first()
-        )
-        if not lancamento:
-            raise HTTPException(
-                status_code=404,
-                detail="Lançamento não encontrado"
-            )
-        comanda = db.query(Comanda).filter(
-            Comanda.restaurante_id == rid,
-            Comanda.id == lancamento.comanda_id,
-        ).first()
-        if not comanda:
-            raise HTTPException(
-                status_code=404,
-                detail="Comanda associada não encontrada"
-            )
-        active_items = [i for i in lancamento.itens if i.status != "cancelado"]
-        garcom_nome = lancamento.garcom.nome if lancamento.garcom else "Garçom"
-        
-    if not active_items:
-        raise HTTPException(
-            status_code=400,
-            detail="Não há itens ativos para imprimir"
-        )
-
-    is_local = (
-        (comanda.tipo or "").strip().casefold()
-        in {"consumo no local", "mesa", "local"}
-        and comanda.mesa_id is not None
-    )
-    if is_local:
-        try:
-            job = enqueue_table_receipt(
-                db,
-                rid,
-                comanda.mesa_id,
-                apenas_valores=False,
-                source_type="reimpressao",
-                source_id=lancamento_id,
-            )
-            if job is None:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="A impressão física não está disponível no plano atual.",
-                )
-            db.commit()
-            return {
-                "status": "success",
-                "detail": "Extrato Completo da mesa enviado novamente para impressão",
-            }
-        except PrintingRequestError as print_err:
-            db.rollback()
-            raise HTTPException(
-                status_code=print_err.status_code,
-                detail=str(print_err),
-            ) from print_err
-        except HTTPException:
-            db.rollback()
-            raise
-        except Exception as print_err:
-            db.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Erro na impressora: {print_err}"
-            ) from print_err
-        
-    try:
-        from ..printer_service import printer_service
-        
-        items_payload = []
-        for it in active_items:
-            items_payload.append({
-                "quantidade": 1,
-                "codigo": it.produto.id,
-                "nome": it.produto.nome,
-                "descricao": it.produto.descricao,
-                "observacao": it.observacao,
-                "cliente_nome": it.cliente_nome,
-                "preco_unit": float(it.preco_unit) if it.preco_unit else 0.0
-            })
-
-        print_preferences = _get_print_preferences(
-            db,
-            comanda.restaurante_id,
-        )
-        ticket_text = printer_service.generate_kitchen_ticket(
-            num_pedido=comanda.numero_pedido,
-            tipo=comanda.tipo,
-            mesa_id=comanda.mesa_id,
-            garcom_nome=garcom_nome,
-            items=items_payload,
-            is_reprint=True,
-            **print_preferences,
-        )
-        background_tasks.add_task(
-            print_in_background,
-            "cozinha_reimpressao",
-            ticket_text,
-            restaurante_id=rid,
-        )
-        
-        print_time = datetime.datetime.now(datetime.timezone.utc)
-        for it in active_items:
-            it.impresso_em = print_time
-        db.commit()
-    except Exception as print_err:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erro na impressora: {print_err}"
-        )
-        
-    return {"status": "success", "detail": "Reimpressão enviada com sucesso"}
 
 
 # ----------------- DELIVERY & MOTOBOYS ENDPOINTS -----------------
@@ -1366,35 +939,35 @@ def painel_entregador(
     token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]
     rest_id = token_data["restaurante_id"]
-    
+
     current_restaurante_id.set(rest_id)
-    
+
     motoboy = db.query(Motoboy).filter(
         Motoboy.id == motoboy_id,
         Motoboy.restaurante_id == rest_id
     ).first()
     if not motoboy:
         raise HTTPException(status_code=404, detail="Motoboy não encontrado")
-    
+
     comandas = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.fechada == False,
         Comanda.delivery_status.in_(["pronto", "transito"]),
         (Comanda.motoboy_id == motoboy_id) | (Comanda.motoboy_id == None)
     ).order_by(Comanda.criado_em.desc()).all()
-    
+
     entregas = []
     for c in comandas:
         calc_total = sum(i.preco_unit for i in c.itens) if c.itens else 0.0
         total_entrega = calc_total + (c.delivery_taxa or 0.0)
-        
+
         prod_counts = {}
         for i in c.itens:
             pname = i.produto.nome if i.produto else "Item"
             prod_counts[pname] = prod_counts.get(pname, 0) + 1
-        
+
         itens_str = ", ".join([f"{qty}x {pname}" for pname, qty in prod_counts.items()])
-        
+
         entregas.append({
             "id": c.id,
             "numero_pedido": c.numero_pedido,
@@ -1409,7 +982,7 @@ def painel_entregador(
             "itens_resumo": itens_str,
             "criado_em": c.criado_em.isoformat() if c.criado_em else None
         })
-    
+
     return {
         "motoboy": {
             "id": motoboy.id,

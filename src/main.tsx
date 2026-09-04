@@ -2,12 +2,17 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
 
 function isPublicMenuRoute(): boolean {
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
-  if (pathname.startsWith("/cardapio") || params.get("view") === "cardapio") return true;
+  if (
+    pathname.startsWith("/cardapio")
+    || pathname.startsWith("/c/")
+    || params.get("view") === "cardapio"
+  ) return true;
 
   const hostname = window.location.hostname.toLowerCase();
   const parts = hostname.split(".");
@@ -24,6 +29,18 @@ function isPublicMenuRoute(): boolean {
     && !parts[0].startsWith("ais-dev")
     && !parts[0].startsWith("ais-pre")
     && !isPlatformHost;
+}
+
+function bypassTenantSuspensionBoundary(): boolean {
+  const pathname = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+
+  return isPublicMenuRoute()
+    || pathname.startsWith("/super-admin")
+    || pathname.startsWith("/landing")
+    || pathname.startsWith("/ativar")
+    || params.get("view") === "landing"
+    || params.get("view") === "ativar";
 }
 
 // O tema operacional pertence ao app autenticado. O cardápio público tem
@@ -58,8 +75,10 @@ const RouteLoading = () => (
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <React.Suspense fallback={<RouteLoading />}>
-      <RootApp />
-    </React.Suspense>
+    <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
+      <React.Suspense fallback={<RouteLoading />}>
+        <RootApp />
+      </React.Suspense>
+    </TenantSuspensionBoundary>
   </React.StrictMode>
 );

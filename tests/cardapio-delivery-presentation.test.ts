@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { getDeliveryQuote } from '../src/cardapio/deliveryPresentation';
+import { getDeliveryMinimumRemaining, getDeliveryQuote } from '../src/cardapio/deliveryPresentation';
 
 const neighborhoods = [{ bairro: 'Centro', taxa: 5 }, { bairro: 'Retiro', taxa: 0 }];
 
@@ -34,12 +34,18 @@ test('limiar de frete grátis preserva cálculo por subtotal e precedência sobr
 
 test('taxa configurada zero não se confunde com configuração ausente no cálculo', () => {
   assert.equal(getDeliveryQuote({ taxaEntregaPadrao: 0 }, 25, '').fee, 0);
-  assert.equal(getDeliveryQuote(undefined, 25, '').fee, 7);
+  assert.equal(getDeliveryQuote(undefined, 25, '').fee, 0);
 });
 
 test('cotações usam apenas a configuração fornecida de cada restaurante', () => {
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }] }, 25, 'Centro').fee, 9);
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Centro').fee, 5);
+});
+
+test('pedido mínimo bloqueia somente entrega, nunca retirada', () => {
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'delivery'), 10);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'pickup'), 0);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 30, 'delivery'), 0);
 });
 
 const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');
@@ -57,6 +63,12 @@ test('resumo não promete total final, mostra mínimo e preserva bloqueio de loj
   assert.match(cart, /<span>Total estimado<\/span>/);
   assert.match(cart, /remainingMinimum > 0 &&/);
   assert.match(cart, /disabled=\{!orderingEnabled \|\| availablePayments.length === 0\}/);
+});
+
+test('UI impede selecionar entrega desativada sem bloquear retirada', () => {
+  assert.match(cart, /disabled=\{!deliveryEnabled\} aria-pressed=\{deliveryMethod === "delivery"\}/);
+  assert.match(cart, /deliveryEnabled \? deliveryLabel : "Indisponível no momento"/);
+  assert.match(cart, /deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin/);
 });
 
 test('promoção ausente não renderiza zero solto na sacola', () => {

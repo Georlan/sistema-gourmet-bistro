@@ -5,7 +5,6 @@ import {
   getOrderItems, type OperationalTimestampSource,
 } from './operationalState';
 import { getOrderDisplayNumber } from './orderIdentity';
-export { projectCashierSalonTables } from './cashierSalonProjection';
 /** Cashier delivery column membership, not a payment or item-status inference. */
 export function projectCashierDeliveryState(status?: string, modalidade?: string) {
   return {

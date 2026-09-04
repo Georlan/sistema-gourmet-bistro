@@ -7,6 +7,7 @@ from typing import Optional
 
 class PrintSourceType(str, Enum):
     ORDER = "pedido"
+    ITEM = "item"
     TABLE = "mesa"
     CASH_SHIFT = "caixa_turno"
 
@@ -17,6 +18,7 @@ class PrintAction(str, Enum):
     RECEIPT = "extrato"
     CLOSING = "fechamento"
     DISPATCH = "despacho"
+    ITEM_CHANGE = "alteracao_item"
 
 
 class PrintTrigger(str, Enum):
@@ -30,8 +32,9 @@ class PrintTrigger(str, Enum):
 class PrintIntent:
     """Comando canônico de impressão independente da borda que o originou.
 
-    A borda informa apenas origem, ação e gatilho. Motor, política, snapshot,
-    formatter, destino físico e PrintJob pertencem ao Core de Impressão.
+    A borda informa somente a origem, a ação e metadados semânticos mínimos.
+    Motor, política, snapshot, formatter, destino físico e PrintJob pertencem
+    ao Core de Impressão.
     """
 
     restaurant_id: int
@@ -43,4 +46,5 @@ class PrintIntent:
     values_only: bool = False
     requested_by: Optional[str] = None
     courier_name: Optional[str] = None
+    quantity_added: int = 0
     idempotency_key: Optional[str] = None

@@ -1,8 +1,21 @@
-"""Máquina de estados canônica para delivery e retirada."""
+"""Compatibilidade legada para a máquina de estados de Pedidos.
+
+As regras de transição pertencem a ``domain.orders.state_machine``. Este módulo
+mantém somente o contrato histórico em português usado por rotas/testes antigos
+e traduz entradas/saídas para o domínio canônico.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from ..domain.orders.errors import InvalidOrderTransitionError
+from ..domain.orders.state_machine import OrderStateMachine
+from ..domain.orders.types import (
+    FulfillmentType,
+    normalize_to_order_status,
+    to_legacy_order_status,
+)
 
 
 CANONICAL_ORDER_STATUSES = frozenset({
@@ -69,25 +82,27 @@ def normalize_order_kind(value: str | None) -> str:
     return "desconhecido"
 
 
+def _fulfillment_from_legacy_kind(kind: str) -> FulfillmentType:
+    if kind == "delivery":
+        return FulfillmentType.DELIVERY
+    if kind == "retirada":
+        return FulfillmentType.PICKUP
+    # Historicamente tipos desconhecidos usavam o ramo mais permissivo de
+    # pronto/transito. DINE_IN preserva exatamente esse comportamento no Core.
+    return FulfillmentType.DINE_IN
+
+
 def allowed_order_targets(current_status: str | None, order_type: str | None) -> set[str]:
     current = normalize_order_status(current_status)
-    kind = normalize_order_kind(order_type)
+    if current not in CANONICAL_ORDER_STATUSES:
+        return set()
 
-    if current == "pendente":
-        return {"producao", "recusado"}
-    if current == "producao":
-        # Depois do aceite o restaurante ainda precisa conseguir cancelar por
-        # indisponibilidade operacional; nesse caso o estoque já baixado é estornado.
-        return {"pronto", "recusado"}
-    if current == "pronto":
-        if kind == "retirada":
-            return {"finalizado", "recusado"}
-        if kind == "delivery":
-            return {"transito", "recusado"}
-        return {"transito", "finalizado", "recusado"}
-    if current == "transito":
-        return {"finalizado", "recusado"} if kind != "retirada" else {"recusado"}
-    return set()
+    kind = normalize_order_kind(order_type)
+    allowed = OrderStateMachine.get_allowed_targets(
+        normalize_to_order_status(current),
+        _fulfillment_from_legacy_kind(kind),
+    )
+    return {to_legacy_order_status(status) for status in allowed}
 
 
 def validate_order_transition(
@@ -102,27 +117,30 @@ def validate_order_transition(
     if current not in CANONICAL_ORDER_STATUSES:
         raise InvalidOrderTransition(current, target, set())
     if target not in CANONICAL_ORDER_STATUSES:
-        raise InvalidOrderTransition(current, target, allowed_order_targets(current, order_type))
-
-    if current == target:
-        return OrderTransition(
-            current=current,
-            target=target,
-            order_kind=kind,
-            changed=False,
-            first_accept=False,
-            terminal=target in {"finalizado", "recusado"},
+        raise InvalidOrderTransition(
+            current,
+            target,
+            allowed_order_targets(current, order_type),
         )
 
-    allowed = allowed_order_targets(current, order_type)
-    if target not in allowed:
-        raise InvalidOrderTransition(current, target, allowed)
+    try:
+        result = OrderStateMachine.validate_transition(
+            current_status=normalize_to_order_status(current),
+            target_status=normalize_to_order_status(target),
+            fulfillment=_fulfillment_from_legacy_kind(kind),
+        )
+    except InvalidOrderTransitionError as exc:
+        raise InvalidOrderTransition(
+            current,
+            target,
+            allowed_order_targets(current, order_type),
+        ) from exc
 
     return OrderTransition(
         current=current,
         target=target,
         order_kind=kind,
-        changed=True,
-        first_accept=current == "pendente" and target == "producao",
-        terminal=target in {"finalizado", "recusado"},
+        changed=result.changed,
+        first_accept=result.first_accept,
+        terminal=result.is_terminal,
     )

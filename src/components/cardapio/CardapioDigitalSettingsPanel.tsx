@@ -15,14 +15,13 @@ import {
   RefreshCw,
   Save,
   Sparkles,
-  Store,
   Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { CardapioAssetUploader } from '../CardapioAssetUploader';
 import { OperationalBanner } from '../shared/OperationalBanner';
 
-type SettingsTab = 'perfil' | 'pedidos' | 'marca';
+export type CardapioDigitalSettingsSection = 'perfil' | 'pedidos' | 'marca';
 
 type HourRow = {
   id: string;
@@ -64,16 +63,12 @@ interface CardapioDigitalSettingsPanelProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   publicMenuUrl: string | null;
+  activeSection: CardapioDigitalSettingsSection;
+  onSectionChange: (section: CardapioDigitalSettingsSection) => void;
 }
 
 const KOMA_MENU_PRIMARY = '#00b894';
 const KOMA_MENU_BACKGROUND = '#090a0f';
-
-const tabs: Array<{ id: SettingsTab; label: string; description: string; icon: typeof Store }> = [
-  { id: 'perfil', label: 'Perfil público', description: 'Nome, contato e localização', icon: Store },
-  { id: 'pedidos', label: 'Pedidos', description: 'Status, horários e pagamentos', icon: Clock3 },
-  { id: 'marca', label: 'Marca', description: 'Logo e capa do restaurante', icon: ImageIcon },
-];
 
 const paymentOptions = [
   { id: 'Pix', label: 'Pix', helper: 'Aparece para o cliente como forma aceita.' },
@@ -374,8 +369,10 @@ export function CardapioDigitalSettingsPanel({
   apiBaseUrl,
   authHeaders,
   publicMenuUrl,
+  activeSection,
+  onSectionChange,
 }: CardapioDigitalSettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
+  const activeTab = activeSection;
   const [config, setConfig] = useState<RestaurantConfig>(emptyConfig);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -447,7 +444,7 @@ export function CardapioDigitalSettingsPanel({
   const saveConfig = async () => {
     if (!config.nome.trim()) {
       setFeedback({ type: 'error', text: 'Informe o nome público do restaurante.' });
-      setActiveTab('perfil');
+      onSectionChange('perfil');
       return;
     }
 
@@ -504,32 +501,6 @@ export function CardapioDigitalSettingsPanel({
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
         <div className="min-w-0 space-y-4">
-          <nav className="flex gap-2 overflow-x-auto rounded-2xl border border-koma-border bg-koma-panel p-2" aria-label="Seções das configurações do cardápio">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={clsx(
-                    'min-w-[170px] flex-1 rounded-xl border px-3.5 py-3 text-left transition',
-                    active
-                      ? 'border-emerald-500/45 bg-emerald-500/10 text-koma-foreground'
-                      : 'border-transparent text-koma-secondary hover:border-koma-border hover:bg-koma-raised',
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <Icon size={15} className={active ? 'text-emerald-600 dark:text-emerald-300' : 'text-koma-muted'} />
-                    <strong className="text-[11px]">{tab.label}</strong>
-                  </div>
-                  <span className="mt-1.5 block text-[9px] leading-relaxed text-koma-muted">{tab.description}</span>
-                </button>
-              );
-            })}
-          </nav>
-
           <div
             className={clsx(
               'flex items-start gap-3 rounded-2xl border px-4 py-3.5',

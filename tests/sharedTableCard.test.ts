@@ -7,7 +7,8 @@ import { CashierSalonCard } from '../src/components/caixa/salao/CashierSalonCard
 import { CaixaSalonTab } from '../src/components/caixa/salao/CaixaSalonTab';
 import { tableCardPresentation } from '../src/components/shared/SharedTableCard';
 import { deriveTableOperationalState } from '../src/domain/operationalState';
-import { projectCashierSalonTables, projectCashierTableSlices } from '../src/domain/cashierOrderProjection';
+import { projectCashierTableSlices } from '../src/domain/cashierOrderProjection';
+import { projectCashierSalonTables } from '../src/domain/cashierSalonProjection';
 import { readCheckLaunchIdentities } from '../src/domain/orderIdentity';
 import { splitOrdersByLaunch } from '../src/domain/orderLots';
 import type { Order, OrderItem } from '../src/types';

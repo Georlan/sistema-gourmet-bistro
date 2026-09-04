@@ -57,6 +57,7 @@ DIAS 1-2                    DIAS 3-4                    DIAS 5-6                
 *Meta: Validar o ciclo operacional completo em condições reais de salão, balcão e cozinha.*
 
 - [ ] **Task 2.1 — Criação do Tenant de Homologação Completo**
+  - **Roteiro e evidência:** `docs/operations/first-client-acceptance.md` e `docs/operations/first-client-acceptance-report-template.md`.
   - **Ação:** Cadastrar ambiente completo:
     - 4 Usuários (1 Admin, 1 Caixa, 2 Garçons).
     - 10 Mesas, 5 Categorias, 20 Produtos com Fichas Técnicas (baixa de estoque) e adicionais.
@@ -79,6 +80,7 @@ DIAS 1-2                    DIAS 3-4                    DIAS 5-6                
   - **Critério:** Valores e estoque conferidos sem divergência.
 
 - [ ] **Task 2.3 — Teste em Hardware de Impressão Real**
+  - **Preflight obrigatório:** `python3 print-agent/hardware_preflight.py`; uma fila configurada sem equipamento presente mantém esta task bloqueada.
   - **Ação:** Testar `FastAPI -> PrintJob -> Print Agent -> Impressora Térmica (ESC/POS)`:
     - Impressão de cupom de cozinha e bar com adicionais e observações.
     - Impressão de conferência de conta.

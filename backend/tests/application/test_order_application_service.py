@@ -207,6 +207,14 @@ class TestOrderApplicationServicePhase31:
             assert dto.delivery_fee == Decimal("5.00")
             assert dto.total == Decimal("25.00") + Decimal("5.00")  # 30.00
         finally:
+            config = db.query(ConfiguracaoRestaurante).filter(
+                ConfiguracaoRestaurante.restaurante_id == CHAR_RESTAURANT_ID
+            ).first()
+            if config:
+                config.tipo_taxa_entrega = "fixa"
+                config.taxa_entrega_fixa = 7.0
+                config.tabela_taxas_bairros = []
+                db.commit()
             db.close()
 
     def test_cupom_transactional_effects_increment_usage_and_persist_fk(self, char_setup):
