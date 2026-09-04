@@ -163,7 +163,16 @@ class OrderApplicationService:
             .first()
         )
         if config is None:
-            raise OrderValidationError("Configurações do restaurante não foram encontradas para calcular a entrega.")
+            rest = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+            if rest is not None:
+                config = ConfiguracaoRestaurante(
+                    restaurante_id=restaurante_id,
+                    delivery_ativo=True,
+                    tipo_taxa_entrega="fixa",
+                    taxa_entrega_fixa=7.0,
+                )
+            else:
+                raise OrderValidationError("Configurações do restaurante não foram encontradas para calcular a entrega.")
 
         tipo_taxa = getattr(config, "tipo_taxa_entrega", None)
         if tipo_taxa not in ("fixa", "bairro"):

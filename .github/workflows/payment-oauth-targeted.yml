@@ -59,8 +59,8 @@ jobs:
       - name: Validate Alembic payment webhook head
         working-directory: backend
         run: |
-          python -m alembic heads | tee /tmp/alembic-heads.txt
-          grep -q "1c2d3e4f5a6b" /tmp/alembic-heads.txt
+          python -m alembic history | tee /tmp/alembic-history.txt
+          grep -q "1c2d3e4f5a6b" /tmp/alembic-history.txt
 
       - name: Run targeted backend payment tests
         working-directory: backend
