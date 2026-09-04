@@ -34,6 +34,7 @@ def test_delivery_routes_do_not_write_order_lifecycle_directly():
     assert "OrderApplicationService." not in source
     assert "validate_order_transition(" not in source
     assert "services.order_state_machine" not in source
+    assert "if current_status == target_status:" not in source
 
 
 def test_aggregate_lifecycle_preserves_each_launch_status_and_skips_replays():
@@ -60,6 +61,49 @@ def test_aggregate_lifecycle_preserves_each_launch_status_and_skips_replays():
     # O lançamento já pronto não pode gerar um segundo OrderReady; o finalizado
     # nem participa mais do lote ativo.
     assert pending == [("launch-preparing", OrderStatus.PREPARING)]
+
+
+def test_aggregate_target_still_advances_a_lagging_launch():
+    comanda = SimpleNamespace(
+        id="check-mixed",
+        delivery_status="pronto",
+        tipo="retirada",
+        lancamentos=[
+            SimpleNamespace(id="launch-preparing", status="producao", timestamp=1),
+            SimpleNamespace(id="launch-ready", status="pronto", timestamp=2),
+        ],
+    )
+
+    class FakeQuery:
+        def filter(self, *args):
+            return self
+
+        def with_for_update(self):
+            return self
+
+        def first(self):
+            return comanda
+
+    class FakeSession:
+        def query(self, *args):
+            return FakeQuery()
+
+    with patch.object(
+        OrderLifecycleCoordinator,
+        "_apply_single_transition",
+    ) as apply_transition:
+        result = OrderLifecycleCoordinator.transition_check_status(
+            FakeSession(),
+            restaurant_id=CHAR_RESTAURANT_ID,
+            comanda_id=comanda.id,
+            target_status="pronto",
+            commit=False,
+        )
+
+    assert result.changed is True
+    apply_transition.assert_called_once()
+    assert apply_transition.call_args.kwargs["order_id"] == "launch-preparing"
+    assert apply_transition.call_args.kwargs["current_status"] == OrderStatus.PREPARING
 
 
 def test_aggregate_rejection_chooses_reject_or_cancel_per_launch_status():

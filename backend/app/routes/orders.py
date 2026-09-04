@@ -84,9 +84,21 @@ def _transition_via_application_or_http(
         )
     except InvalidOrderTransitionError as exc:
         db.rollback()
+        current = to_legacy_order_status(normalize_to_order_status(exc.current_status))
+        target = to_legacy_order_status(normalize_to_order_status(exc.target_status))
+        allowed = sorted(
+            {
+                to_legacy_order_status(normalize_to_order_status(candidate))
+                for candidate in exc.allowed_targets
+            }
+        )
+        allowed_text = ", ".join(allowed) if allowed else "nenhum"
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
+            detail=(
+                f"Transição de status inválida: {current} → {target}. "
+                f"Próximos status permitidos: {allowed_text}."
+            ),
         ) from exc
     except OrderValidationError as exc:
         db.rollback()
@@ -154,9 +166,6 @@ def atualizar_status_delivery(
     target = _normalize_legacy_progress_target(comanda, target)
     current_status = normalize_to_order_status(comanda.delivery_status)
     target_status = normalize_to_order_status(target)
-    if current_status == target_status:
-        return comanda
-
     # Trânsito de delivery deve sempre possuir entregador. A rota dedicada de
     # despacho faz vínculo + transição atomicamente; o Core repete essa proteção
     # para qualquer futuro consumidor que não passe por esta rota.
@@ -187,6 +196,8 @@ def atualizar_status_delivery(
             else None
         ),
     )
+    if not transition.changed:
+        return transition.comanda
 
     if transition.first_accept:
         try:

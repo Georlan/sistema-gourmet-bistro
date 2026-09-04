@@ -96,16 +96,6 @@ class OrderLifecycleCoordinator:
             fulfillment=fulfillment,
         )
 
-        result = OrderLifecycleResult(
-            comanda=comanda,
-            current_status=current,
-            target_status=target,
-            changed=transition.changed,
-            first_accept=transition.first_accept,
-        )
-        if not transition.changed:
-            return result
-
         if (
             target == OrderStatus.DISPATCHED
             and fulfillment == FulfillmentType.DELIVERY
@@ -118,6 +108,14 @@ class OrderLifecycleCoordinator:
         active_orders = cls._active_orders(comanda)
         if not active_orders:
             if comanda.lancamentos:
+                if not transition.changed:
+                    return OrderLifecycleResult(
+                        comanda=comanda,
+                        current_status=current,
+                        target_status=target,
+                        changed=False,
+                        first_accept=False,
+                    )
                 raise OrderValidationError(
                     "A Comanda possui apenas pedidos terminais e não pode avançar de status."
                 )
@@ -132,7 +130,16 @@ class OrderLifecycleCoordinator:
             active_orders,
             target_status=target,
             fulfillment=fulfillment,
+            aggregate_status=current,
         )
+        if not pending_transitions:
+            return OrderLifecycleResult(
+                comanda=comanda,
+                current_status=current,
+                target_status=target,
+                changed=False,
+                first_accept=False,
+            )
 
         for order_id, order_current in pending_transitions:
             cls._apply_single_transition(
@@ -146,11 +153,12 @@ class OrderLifecycleCoordinator:
                 reason=reason,
             )
 
-        # ``complete_order`` finaliza o pedido/lote; a Comanda é a agregação
-        # operacional usada pelo contrato legado. Fechar a conta aqui mantém a
-        # regra fora da rota e cobre também comandas antigas sem Lancamento.
-        if target == OrderStatus.COMPLETED:
-            comanda.delivery_status = to_legacy_order_status(OrderStatus.COMPLETED)
+        # A Comanda é a projeção agregada do contrato legado. Os serviços por
+        # Lancamento atualizam esse estado quando possuem itens suficientes para
+        # inferi-lo; o coordenador confirma o alvo após todos os comandos, cobrindo
+        # também comandas antigas sem itens ou com lotes em estágios diferentes.
+        comanda.delivery_status = to_legacy_order_status(target)
+        if target in _TERMINAL_ORDER_STATUSES:
             comanda.fechada = True
             if comanda.fechado_em is None:
                 comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
@@ -166,6 +174,7 @@ class OrderLifecycleCoordinator:
             changed=True,
             first_accept=transition.first_accept,
         )
+
 
     @staticmethod
     def _active_orders(comanda: Comanda) -> list[tuple[str, OrderStatus]]:
@@ -189,6 +198,7 @@ class OrderLifecycleCoordinator:
         *,
         target_status: OrderStatus,
         fulfillment: FulfillmentType,
+        aggregate_status: OrderStatus | None = None,
     ) -> list[tuple[str, OrderStatus]]:
         """Valida cada lançamento e elimina apenas transições já aplicadas.
 
@@ -200,13 +210,24 @@ class OrderLifecycleCoordinator:
 
         pending: list[tuple[str, OrderStatus]] = []
         for order_id, current_status in active_orders:
+            effective_current = current_status
+            if (
+                aggregate_status == OrderStatus.DISPATCHED
+                and current_status not in _TERMINAL_ORDER_STATUSES
+            ):
+                # Lancamento não possui o estado persistido ``transito``. Em
+                # delivery, esse estágio pertence à Comanda agregada; registros
+                # modernos mantêm o lote em ``pronto`` e legados podem mantê-lo
+                # até em ``pendente``. A confirmação do agregado é a evidência
+                # autoritativa de que houve despacho.
+                effective_current = OrderStatus.DISPATCHED
             transition = OrderStateMachine.validate_transition(
-                current_status=current_status,
+                current_status=effective_current,
                 target_status=target_status,
                 fulfillment=fulfillment,
             )
             if transition.changed:
-                pending.append((order_id, current_status))
+                pending.append((order_id, effective_current))
         return pending
 
     @staticmethod
