@@ -246,7 +246,7 @@ def test_lancamentos_automaticos_sao_parciais_e_extrato_e_mesa_inteira():
     assert "1x HAMBÚRGUER ARQUITETURA" in first.payload_text
     assert "1x CHEESE ARQUITETURA" not in first.payload_text
     assert "R$ 19,00" in first.payload_text
-    assert "TOTAL DESTE PEDIDO:" in first.payload_text
+    assert "TOTAL DO PEDIDO:" in first.payload_text
     assert "TOTAL GERAL DA MESA:" not in first.payload_text
 
     assert second.document_type == "producao"
@@ -256,7 +256,7 @@ def test_lancamentos_automaticos_sao_parciais_e_extrato_e_mesa_inteira():
     assert "1x CHEESE ARQUITETURA" in second.payload_text
     assert "1x HAMBÚRGUER ARQUITETURA" not in second.payload_text
     assert "R$ 25,00" in second.payload_text
-    assert "TOTAL DESTE PEDIDO:" in second.payload_text
+    assert "TOTAL DO PEDIDO:" in second.payload_text
     assert first.idempotency_key != second.idempotency_key
 
     extrato = client.post(
@@ -273,7 +273,7 @@ def test_lancamentos_automaticos_sao_parciais_e_extrato_e_mesa_inteira():
     assert "1x CHEESE ARQUITETURA" in complete.payload_text
     assert "R$ 44,00" in complete.payload_text
     assert "TOTAL GERAL DA MESA:" in complete.payload_text
-    assert "TOTAL DESTE PEDIDO:" not in complete.payload_text
+    assert "TOTAL DO PEDIDO:" not in complete.payload_text
 
 
 def test_lote_misto_imprime_todos_os_itens_quando_um_item_habilita_a_via():
@@ -292,7 +292,7 @@ def test_lote_misto_imprime_todos_os_itens_quando_um_item_habilita_a_via():
     assert "1x COCA COLA LATA" in job.payload_text
     assert "R$ 19,00" in job.payload_text
     assert "R$ 6,00" in job.payload_text
-    assert "TOTAL DESTE PEDIDO:" in job.payload_text
+    assert "TOTAL DO PEDIDO:" in job.payload_text
     assert "R$ 25,00" in job.payload_text
 
 
@@ -316,9 +316,10 @@ def test_lote_so_com_itens_sem_impressao_nao_dispara_automatico_mas_pode_imprimi
     manual = jobs[0]
     assert manual.source_type == "reimpressao"
     assert manual.source_id == lancamento_id
+    assert "REIMPRESSÃO" in manual.payload_text
     assert "1x COCA COLA LATA" in manual.payload_text
     assert "1x ÁGUA MINERAL" in manual.payload_text
-    assert "TOTAL DESTE PEDIDO:" in manual.payload_text
+    assert "TOTAL DO PEDIDO:" in manual.payload_text
     assert "R$ 10,00" in manual.payload_text
 
 
@@ -339,9 +340,12 @@ def test_reimpressao_de_lote_repete_somente_a_instancia_original():
     assert reprinted.source_id == lancamento_1
     assert reprinted.document_type == "producao"
     assert reprinted.destination == "COZINHA"
+    assert "REIMPRESSÃO" in reprinted.payload_text
+    assert "REIMPRESSÃO" not in original_first.payload_text
     assert "1x HAMBÚRGUER ARQUITETURA" in reprinted.payload_text
     assert "1x CHEESE ARQUITETURA" not in reprinted.payload_text
-    assert reprinted.payload_text == original_first.payload_text
+    assert "TOTAL DO PEDIDO:" in reprinted.payload_text
+    assert "R$ 19,00" in reprinted.payload_text
 
 
 def test_idempotency_key_estavel_nao_cria_segunda_via_automatica():

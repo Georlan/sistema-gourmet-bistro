@@ -21,15 +21,17 @@ from ...timezone_utils import to_operational_local_time
 
 @dataclass(frozen=True)
 class ComandaVariant:
-    """Campos que variam sem criar um segundo modelo visual de comanda."""
+    """Contexto que varia sem criar outro layout de comanda operacional."""
 
     origin_label: Optional[str] = None
-    location_label: str = "BALCÃO"
+    location_label: Optional[str] = "BALCÃO"
     operator_label: str = "OPERADOR"
     customer_name: Optional[str] = None
     is_reprint: bool = False
     event_at: Optional[datetime.datetime] = None
     via_label: Optional[str] = None
+    table_id: Optional[int] = None
+    preserve_item_customers: bool = False
     delivery_phone: Optional[str] = None
     delivery_address: Optional[str] = None
     delivery_neighborhood: Optional[str] = None
@@ -51,49 +53,75 @@ def _order_type_label(tipo: object) -> str:
     return "CONSUMO NO LOCAL"
 
 
-def _to_receipt_item(item: PrintItem) -> dict:
+def _to_receipt_item(item: PrintItem, *, preserve_customer: bool = False) -> dict:
     return {
         "codigo": item.codigo,
         "produto": {"id": item.codigo, "nome": item.nome},
         "preco_unit": float(item.preco_unit or 0.0),
         "status": "preparando",
-        # Cliente é exibido no bloco canônico do cabeçalho para pedidos remotos.
-        "cliente_nome": "Consumo Geral",
+        # Remotos exibem cliente no bloco contextual. No salão, a identidade por
+        # item precisa ser preservada para mesas divididas por cliente.
+        "cliente_nome": (
+            item.cliente_nome or "Consumo Geral"
+            if preserve_customer
+            else "Consumo Geral"
+        ),
         "observacao": item.observacao or "",
         "quantidade": max(int(item.quantidade or 1), 1),
     }
 
 
+def _clean_esc_text(value: str) -> str:
+    return str(value or "").replace(ESC_BOLD_ON, "").replace(ESC_BOLD_OFF, "").strip()
+
+
 def _replace_metadata_line(
     lines: list[str],
     *,
-    order_number: object,
+    order_number: Optional[object],
     event_at: Optional[datetime.datetime],
     operator_label: str,
-    operator_name: str,
-    location_label: str,
+    operator_name: Optional[str],
+    location_label: Optional[str],
     width: int,
 ) -> None:
-    """Transforma o cabeçalho-base em uma hierarquia própria para bobina térmica.
+    """Aplica a hierarquia operacional sobre a base compartilhada da comanda.
 
-    O número do pedido vira o principal ponto de leitura e os metadados ficam em
-    duas colunas previsíveis. Nenhum dado novo é inventado: o canal vem do contexto
-    já resolvido pelo Core de Impressão.
+    O número do pedido vira o principal ponto de leitura. Quando a base contém
+    uma mesa, ela é preservada em linha própria; pedidos remotos não carregam o
+    antigo texto ``SEM MESA``. Canal é acrescentado somente quando o contexto
+    semântico o fornece.
     """
     local_event = event_at
     if isinstance(local_event, datetime.datetime) and local_event.tzinfo is not None:
         local_event = to_operational_local_time(local_event) or local_event
 
     for index, line in enumerate(lines):
-        if "PEDIDO: #" in line:
-            lines[index] = (
-                ESC_DOUBLE_HEIGHT_ON
-                + ESC_BOLD_ON
-                + align_center(f"PEDIDO #{order_number}", width)
-                + ESC_BOLD_OFF
-                + ESC_NORMAL_SIZE
-            )
-            break
+        if "PEDIDO: #" not in line:
+            continue
+        resolved_order = str(order_number).strip() if order_number is not None else ""
+        if not resolved_order:
+            tail = line.split("PEDIDO: #", 1)[1]
+            for marker in ("MESA:", "SEM MESA"):
+                if marker in tail:
+                    tail = tail.split(marker, 1)[0]
+                    break
+            resolved_order = _clean_esc_text(tail)
+
+        table_label: Optional[str] = None
+        if "MESA:" in line:
+            table_label = "MESA: " + _clean_esc_text(line.split("MESA:", 1)[1])
+
+        lines[index] = (
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + align_center(f"PEDIDO #{resolved_order}", width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
+        )
+        if table_label:
+            lines.insert(index + 1, ESC_BOLD_ON + table_label + ESC_BOLD_OFF)
+        break
 
     if isinstance(local_event, datetime.datetime):
         for index, line in enumerate(lines):
@@ -106,14 +134,18 @@ def _replace_metadata_line(
                 break
 
     for index, line in enumerate(lines):
-        if "GARÇOM:" in line:
-            operator_text = (
-                f"{str(operator_label or 'OPERADOR').strip().upper()}: "
-                f"{str(operator_name or 'OPERADOR').strip()}"
-            )
-            channel_text = f"CANAL: {str(location_label or 'BALCÃO').strip().upper()}"
+        if "GARÇOM:" not in line:
+            continue
+        operator_text = (
+            f"{str(operator_label or 'OPERADOR').strip().upper()}: "
+            f"{str(operator_name or 'OPERADOR').strip()}"
+        )
+        if location_label:
+            channel_text = f"CANAL: {str(location_label).strip().upper()}"
             lines[index] = split_justified(operator_text, channel_text, width)
-            break
+        else:
+            lines[index] = operator_text
+        break
 
 
 def _insert_variant_header(
@@ -216,6 +248,31 @@ def _style_items_header(lines: list[str], *, width: int) -> None:
             break
 
 
+def apply_operational_visual_hierarchy(
+    receipt: str,
+    *,
+    order_number: Optional[object] = None,
+    event_at: Optional[datetime.datetime] = None,
+    operator_label: str = "GARÇOM",
+    operator_name: Optional[str] = None,
+    location_label: Optional[str] = None,
+) -> str:
+    """Aplica a hierarquia visual compartilhada à base térmica da comanda."""
+    width = int(getattr(printer_service, "width", 40) or 40)
+    lines = receipt.split("\n")
+    _replace_metadata_line(
+        lines,
+        order_number=order_number,
+        event_at=event_at,
+        operator_label=operator_label,
+        operator_name=operator_name,
+        location_label=location_label,
+        width=width,
+    )
+    _style_items_header(lines, width=width)
+    return "\n".join(lines)
+
+
 def _replace_total(
     lines: list[str],
     *,
@@ -260,22 +317,29 @@ def render_canonical_comanda(
     items: list[PrintItem],
     variant: ComandaVariant,
 ) -> str:
-    """Renderiza pedidos remotos sobre a mesma base visual das comandas de mesa.
+    """Fonte única do layout de toda comanda operacional do Kôma.
 
-    A base continua sendo ``PrinterService.generate_receipt``. Este adaptador
-    apenas injeta dados que dependem da natureza do pedido (origem, balcão,
-    entrega, pagamento e reimpressão), sem duplicar cabeçalho, itens ou rodapé.
+    Consumo local, retirada e delivery passam por este renderer. Os motores só
+    resolvem dados e contexto; cabeçalho, identidade, itens, valores, observações,
+    total e rodapé pertencem a esta função. Documentos semanticamente diferentes
+    (fechamento, caixa, despacho e delta de item) permanecem fora deste modelo.
     """
     width = int(getattr(printer_service, "width", 40) or 40)
     receipt = printer_service.generate_receipt(
         num_pedido=order_number,
         tipo=order_type,
-        mesa_id=None,
+        mesa_id=variant.table_id,
         garcom_nome=operator_name,
         comandas_details=[
             {
                 "identificador": "Consumo Geral",
-                "itens": [_to_receipt_item(item) for item in items],
+                "itens": [
+                    _to_receipt_item(
+                        item,
+                        preserve_customer=variant.preserve_item_customers,
+                    )
+                    for item in items
+                ],
             }
         ],
         print_header=restaurant_name,
@@ -284,18 +348,16 @@ def render_canonical_comanda(
         apenas_valores=False,
         restaurant_name_position=restaurant_name_position,
     )
-    lines = receipt.split("\n")
-    _replace_metadata_line(
-        lines,
+    receipt = apply_operational_visual_hierarchy(
+        receipt,
         order_number=order_number,
         event_at=variant.event_at,
         operator_label=variant.operator_label,
         operator_name=operator_name,
         location_label=variant.location_label,
-        width=width,
     )
+    lines = receipt.split("\n")
     _insert_variant_header(lines, tipo=order_type, variant=variant, width=width)
     _insert_context_block(lines, variant=variant, width=width)
-    _style_items_header(lines, width=width)
     _replace_total(lines, items=items, variant=variant, width=width)
     return "\n".join(lines)
