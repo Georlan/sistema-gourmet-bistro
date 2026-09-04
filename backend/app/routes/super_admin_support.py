@@ -1,7 +1,6 @@
 import datetime
 import logging
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,7 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
 from ..security import create_access_token, get_current_user
-from ..support_models import SupportOperatorUser, SupportSession
+from ..support_models import SupportSession
 from .super_admin import get_current_admin
 
 logger = logging.getLogger("koma.super_admin.support")
@@ -25,7 +24,11 @@ class SupportSessionStartRequest(BaseModel):
 
 
 class SupportSessionEndRequest(BaseModel):
-    reason: str = Field(default="Encerramento manual da sessão pelo operador.", min_length=3, max_length=1000)
+    reason: str = Field(
+        default="Encerramento manual da sessão pelo operador.",
+        min_length=3,
+        max_length=1000,
+    )
 
     model_config = ConfigDict(extra="forbid")
 
@@ -51,74 +54,80 @@ def start_support_session(
 ):
     """Inicia uma sessão de suporte administrativo temporária e auditada no tenant.
 
-    Não usa credenciais do cliente nem expõe senhas ou tokens existentes.
-    Cria uma identidade administrativa própria com vigência delimitada,
-    registrada em trilha de auditoria append-only.
+    O Super Admin autentica com restaurante_id=0, portanto toda leitura/escrita
+    tenant-owned deste fluxo precisa entrar explicitamente no escopo do tenant alvo
+    antes de tocar tabelas protegidas por RLS.
     """
     target_tenant_id = _parse_tenant_id(tenant_id)
     operator = str(admin.get("user") or "superadmin")
     clean_reason = payload.reason.strip()
 
     with SessionLocal() as db:
-        restaurante = (
-            db.query(Restaurante)
-            .filter(Restaurante.id == target_tenant_id)
-            .first()
-        )
-        if not restaurante:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Estabelecimento não localizado.",
+        with tenant_session_scope(db, target_tenant_id):
+            # O lock do restaurante serializa inícios concorrentes mesmo quando ainda
+            # não existe uma support_session ativa para bloquear.
+            restaurante = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == target_tenant_id)
+                .with_for_update()
+                .one_or_none()
             )
+            if restaurante is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Estabelecimento não localizado.",
+                )
 
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        expires_at = now_utc + datetime.timedelta(minutes=payload.duration_minutes)
-        session_id = uuid.uuid4().hex
-        token_jti = uuid.uuid4().hex
+            tenant_name = str(restaurante.nome or f"Restaurante {target_tenant_id}")
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            expires_at = now_utc + datetime.timedelta(minutes=payload.duration_minutes)
+            session_id = uuid.uuid4().hex
+            token_jti = uuid.uuid4().hex
 
-        # Encerra com lock qualquer sessão de suporte anterior que ainda esteja ativa no tenant
-        active_sessions = (
-            db.query(SupportSession)
-            .filter(
-                SupportSession.restaurante_id == target_tenant_id,
-                SupportSession.status == "active",
+            active_sessions = (
+                db.query(SupportSession)
+                .filter(
+                    SupportSession.restaurante_id == target_tenant_id,
+                    SupportSession.status == "active",
+                )
+                .with_for_update()
+                .all()
             )
-            .all()
-        )
-        for s in active_sessions:
-            s.status = "ended"
-            s.ended_at = now_utc
+            superseded_sessions: list[str] = []
+            for session_rec in active_sessions:
+                session_rec.status = "ended"
+                session_rec.ended_at = now_utc
+                superseded_sessions.append(str(session_rec.id))
 
-        support_record = SupportSession(
-            id=session_id,
-            restaurante_id=target_tenant_id,
-            operator=operator,
-            reason=clean_reason,
-            duration_minutes=payload.duration_minutes,
-            token_jti=token_jti,
-            status="active",
-            started_at=now_utc,
-            expires_at=expires_at,
-        )
-        db.add(support_record)
+            support_record = SupportSession(
+                id=session_id,
+                restaurante_id=target_tenant_id,
+                operator=operator,
+                reason=clean_reason,
+                duration_minutes=payload.duration_minutes,
+                token_jti=token_jti,
+                status="active",
+                started_at=now_utc,
+                expires_at=expires_at,
+            )
+            db.add(support_record)
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=target_tenant_id,
+                    actor=operator,
+                    action="SUPERADMIN_SUPPORT_SESSION_START",
+                    reason=clean_reason,
+                    after_data={
+                        "session_id": session_id,
+                        "duration_minutes": payload.duration_minutes,
+                        "expires_at": expires_at.isoformat(),
+                        "tenant_name": tenant_name,
+                        "superseded_sessions": superseded_sessions,
+                    },
+                )
+            )
+            db.commit()
 
-        # Trilha de auditoria append-only
-        audit_log = SuperAdminAuditLog(
-            restaurante_id=target_tenant_id,
-            actor=operator,
-            action="SUPERADMIN_SUPPORT_SESSION_START",
-            reason=clean_reason,
-            after_data={
-                "session_id": session_id,
-                "duration_minutes": payload.duration_minutes,
-                "expires_at": expires_at.isoformat(),
-                "tenant_name": restaurante.nome,
-            },
-        )
-        db.add(audit_log)
-        db.commit()
-
-        # Gera o token de acesso operacional em Support Mode
         access_token = create_access_token(
             subject=f"support:{operator}",
             restaurante_id=target_tenant_id,
@@ -134,7 +143,8 @@ def start_support_session(
         )
 
         logger.info(
-            "Sessão de suporte iniciada para restaurante %s pelo operador %s (sessão=%s, duração=%s min)",
+            "Sessão de suporte iniciada para restaurante %s pelo operador %s "
+            "(sessão=%s, duração=%s min)",
             target_tenant_id,
             operator,
             session_id,
@@ -146,12 +156,12 @@ def start_support_session(
             "access_token": access_token,
             "token_type": "bearer",
             "restaurant_id": target_tenant_id,
-            "restaurant_name": restaurante.nome,
+            "restaurant_name": tenant_name,
             "operator": operator,
             "reason": clean_reason,
             "duration_minutes": payload.duration_minutes,
             "expires_at": expires_at.isoformat(),
-            "support_url": f"/?view=caixa&support=1",
+            "support_url": "/?view=caixa&support=1",
         }
 
 
@@ -161,46 +171,49 @@ def end_support_session(
     payload: SupportSessionEndRequest = SupportSessionEndRequest(),
     admin: dict = Depends(get_current_admin),
 ):
-    """Encerra a sessão de suporte ativa de um restaurante a partir do painel Super Admin."""
+    """Encerra as sessões de suporte ativas de um restaurante pelo Super Admin."""
     target_tenant_id = _parse_tenant_id(tenant_id)
     operator = str(admin.get("user") or "superadmin")
     clean_reason = payload.reason.strip()
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     with SessionLocal() as db:
-        active_sessions = (
-            db.query(SupportSession)
-            .filter(
-                SupportSession.restaurante_id == target_tenant_id,
-                SupportSession.status == "active",
+        with tenant_session_scope(db, target_tenant_id):
+            active_sessions = (
+                db.query(SupportSession)
+                .filter(
+                    SupportSession.restaurante_id == target_tenant_id,
+                    SupportSession.status == "active",
+                )
+                .with_for_update()
+                .all()
             )
-            .all()
-        )
 
-        if not active_sessions:
-            return {
-                "message": "Nenhuma sessão de suporte ativa para este restaurante.",
-                "closed_count": 0,
-            }
+            if not active_sessions:
+                return {
+                    "message": "Nenhuma sessão de suporte ativa para este restaurante.",
+                    "closed_count": 0,
+                }
 
-        closed_ids = []
-        for s in active_sessions:
-            s.status = "ended"
-            s.ended_at = now_utc
-            closed_ids.append(s.id)
+            closed_ids: list[str] = []
+            for session_rec in active_sessions:
+                session_rec.status = "ended"
+                session_rec.ended_at = now_utc
+                closed_ids.append(str(session_rec.id))
 
-        audit_log = SuperAdminAuditLog(
-            restaurante_id=target_tenant_id,
-            actor=operator,
-            action="SUPERADMIN_SUPPORT_SESSION_END",
-            reason=clean_reason,
-            after_data={
-                "closed_sessions": closed_ids,
-                "ended_at": now_utc.isoformat(),
-            },
-        )
-        db.add(audit_log)
-        db.commit()
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=target_tenant_id,
+                    actor=operator,
+                    action="SUPERADMIN_SUPPORT_SESSION_END",
+                    reason=clean_reason,
+                    after_data={
+                        "closed_sessions": closed_ids,
+                        "ended_at": now_utc.isoformat(),
+                    },
+                )
+            )
+            db.commit()
 
         logger.info(
             "Sessões de suporte encerradas para restaurante %s pelo operador %s: %s",
@@ -226,41 +239,43 @@ def get_active_support_session(
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     with SessionLocal() as db:
-        session_rec = (
-            db.query(SupportSession)
-            .filter(
-                SupportSession.restaurante_id == target_tenant_id,
-                SupportSession.status == "active",
+        with tenant_session_scope(db, target_tenant_id):
+            session_rec = (
+                db.query(SupportSession)
+                .filter(
+                    SupportSession.restaurante_id == target_tenant_id,
+                    SupportSession.status == "active",
+                )
+                .order_by(SupportSession.started_at.desc())
+                .first()
             )
-            .order_by(SupportSession.started_at.desc())
-            .first()
-        )
 
-        if not session_rec:
-            return {"active": False, "session": None}
+            if session_rec is None:
+                return {"active": False, "session": None}
 
-        exp = session_rec.expires_at
-        if exp.tzinfo is None:
-            exp = exp.replace(tzinfo=datetime.timezone.utc)
+            expires_at = session_rec.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
 
-        if now_utc > exp:
-            session_rec.status = "expired"
-            db.commit()
-            return {"active": False, "session": None}
+            if now_utc > expires_at:
+                session_rec.status = "expired"
+                db.commit()
+                return {"active": False, "session": None}
 
-        remaining_seconds = max(0, int((exp - now_utc).total_seconds()))
+            remaining_seconds = max(0, int((expires_at - now_utc).total_seconds()))
+            payload = {
+                "active": True,
+                "session": {
+                    "id": session_rec.id,
+                    "operator": session_rec.operator,
+                    "reason": session_rec.reason,
+                    "started_at": session_rec.started_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "remaining_seconds": remaining_seconds,
+                },
+            }
 
-        return {
-            "active": True,
-            "session": {
-                "id": session_rec.id,
-                "operator": session_rec.operator,
-                "reason": session_rec.reason,
-                "started_at": session_rec.started_at.isoformat(),
-                "expires_at": exp.isoformat(),
-                "remaining_seconds": remaining_seconds,
-            },
-        }
+        return payload
 
 
 @router.post("/end-current")
@@ -269,7 +284,7 @@ def end_current_support_session(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Permite que o operador em Modo Suporte encerre sua sessão diretamente da barra de navegação."""
+    """Permite ao operador encerrar sua própria sessão pelo banner operacional."""
     if not getattr(current_user, "is_support_mode", False):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -295,18 +310,19 @@ def end_current_support_session(
         session_rec.status = "ended"
         session_rec.ended_at = now_utc
 
-    audit_log = SuperAdminAuditLog(
-        restaurante_id=target_tenant_id,
-        actor=operator,
-        action="SUPERADMIN_SUPPORT_SESSION_END",
-        reason=clean_reason,
-        after_data={
-            "session_id": session_id,
-            "ended_by": "operator_banner",
-            "ended_at": now_utc.isoformat(),
-        },
+    db.add(
+        SuperAdminAuditLog(
+            restaurante_id=target_tenant_id,
+            actor=operator,
+            action="SUPERADMIN_SUPPORT_SESSION_END",
+            reason=clean_reason,
+            after_data={
+                "session_id": session_id,
+                "ended_by": "operator_banner",
+                "ended_at": now_utc.isoformat(),
+            },
+        )
     )
-    db.add(audit_log)
     db.commit()
 
     logger.info(
