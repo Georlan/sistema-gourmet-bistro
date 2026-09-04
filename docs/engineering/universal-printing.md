@@ -23,6 +23,9 @@ snapshot, documento, destino e `PrintJob` pertencem ao Core de Impressão.
    regra de pedido, cliente, modalidade ou produto.
 9. Migração é Strangler: URLs antigas podem permanecer como aliases, mas devem
    delegar ao Core antes de serem removidas.
+10. Todo `backend/app` é protegido por teste de ownership: criação de `PrintJob`,
+    enqueue e chamadas de renderer térmico são proibidas fora do namespace do
+    Core e das exceções de infraestrutura explicitamente documentadas.
 
 ## Fluxo atual
 
@@ -77,14 +80,16 @@ Uma alteração de item usa a mesma entrada sem enviar texto nem impressora:
 O cliente não envia texto, preço, destino de impressora ou nome de formatter.
 Esses dados são reconstruídos do banco e da configuração do restaurante.
 
-## Estado atual — 02/09/2026
+## Estado atual — 04/09/2026
 
 Os produtores migrados declaram `PrintIntent` e delegam ao
-`PrintingApplicationService`. Pedidos remotos são renderizados pelo modelo
-canônico de comanda; `PrintItem` e `group_items_by_print_destination` permanecem
-como primitivas de domínio para roteamento setorial. Extrato de mesa, fechamento
-de caixa e despacho continuam atrás do mesmo serviço de aplicação usando os
-renderers já validados para cada documento.
+`PrintingApplicationService`. Existe uma única classe pública com esse nome: o
+pacote `app.application.printing` reexporta diretamente o orquestrador canônico,
+sem wrapper ou segunda implementação. Pedidos remotos são renderizados pelo
+modelo canônico de comanda; `PrintItem` e `group_items_by_print_destination`
+permanecem como primitivas de domínio para roteamento setorial. Extrato de mesa,
+fechamento de caixa e despacho continuam atrás do mesmo serviço de aplicação
+usando os renderers já validados para cada documento.
 
 A edição/adição de item também convergiu. `PrintSourceType.ITEM` com
 `PrintAction.ITEM_CHANGE` carrega novamente o item persistido, sua comanda,
@@ -100,9 +105,24 @@ A limpeza pós-migração removeu o antigo `PrintDocumentService`, seus DTOs
 produção/fechamento/delivery que já não tinham consumidor de produção. Também
 foram removidos de `orders_core.py` os helpers antigos que criavam `PrintJob`,
 faziam reimpressão fora do Core Universal ou enfileiravam a antiga via delta.
-Testes arquiteturais impedem que esses caminhos sejam restaurados silenciosamente.
 
-O Print Agent e suas rotas de diagnóstico permanecem fora desta limpeza.
+A proteção arquitetural deixou de depender apenas de uma lista fixa de produtores.
+O teste de ownership percorre todos os arquivos Python em `backend/app` e falha se
+um arquivo novo tentar instanciar `PrintJob`, enfileirar impressão ou chamar os
+geradores térmicos diretamente fora do Core. Isso torna a regra executável para
+canais futuros, mesmo que quem os implemente não conheça o histórico da migração.
+
+## Exceção de infraestrutura: diagnóstico do Print Agent
+
+`app/routes/print_agents.py` é uma exceção deliberada ao ownership do Core porque
+implementa transporte, fila, recuperação e diagnóstico físico. A rota
+administrativa `POST /api/print-agents/jobs/inject` pode criar um `PrintJob` com
+payload fornecido pelo painel **Imprimir teste** para validar agente, spooler e
+impressora sem depender da existência de um pedido.
+
+Essa exceção não é API de negócio. Pedido, mesa, caixa, delivery, item, totem,
+marketplace ou qualquer canal futuro não podem usar `/jobs/inject` como atalho;
+esses fluxos devem criar `PrintIntent` e passar pelo `PrintingApplicationService`.
 
 ## Histórico da migração
 
@@ -132,8 +152,9 @@ Os produtores foram migrados incrementalmente, preservando URL e resposta:
 6. fechamento de caixa e documentos auxiliares;
 7. edição/adição de item com documento delta próprio.
 
-A proteção arquitetural atual impede que os produtores já migrados voltem a
-criar `PrintJob`, escolher formatter ou chamar os geradores antigos diretamente.
+A proteção arquitetural atual varre `backend/app` inteiro. Qualquer novo produtor
+que tente criar `PrintJob`, escolher formatter ou chamar os geradores antigos
+fora das fronteiras permitidas faz o CI falhar automaticamente.
 
 ### Etapa 3 — convergência visual
 

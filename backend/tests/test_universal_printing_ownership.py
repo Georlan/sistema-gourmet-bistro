@@ -1,9 +1,15 @@
+import ast
 from pathlib import Path
 
+from app.application.printing import PrintingApplicationService
 from app.application.printing.engine import PrintEngineType, resolve_order_engine
+from app.application.printing.service import (
+    PrintingApplicationService as CanonicalPrintingApplicationService,
+)
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+BACKEND_APP_ROOT = BACKEND_ROOT / "app"
 
 MIGRATED_PRINT_PRODUCERS = (
     "app/adapters/orders/pos_adapter.py",
@@ -15,17 +21,31 @@ MIGRATED_PRINT_PRODUCERS = (
     "app/routes/printing.py",
 )
 
-FORBIDDEN_OUTSIDE_PRINT_CORE = (
-    "PrintJob(",
+# O Core pode montar payload, resolver destino e criar PrintJob. O Print Agent
+# possui uma única exceção deliberada para transporte/diagnóstico físico: a rota
+# administrativa /api/print-agents/jobs/inject. Nenhum fluxo de negócio deve usar
+# essa exceção.
+PRINT_CORE_ALLOWED_PREFIXES = (
+    "app/application/printing/",
+)
+PRINT_CORE_ALLOWED_FILES = {
+    "app/services/printing.py",
+    "app/printer_service.py",
+    "app/routes/print_agents.py",
+}
+
+FORBIDDEN_CALLS_OUTSIDE_PRINT_CORE = {
+    "PrintJob",
     "PrintDocumentService",
-    "enqueue_print_job(",
-    "enqueue_table_receipt(",
+    "enqueue_print_job",
+    "enqueue_table_receipt",
+    "generate_receipt",
     "generate_kitchen_ticket",
     "generate_delivery_unified_ticket",
     "generate_delivery_kitchen_ticket",
     "generate_delivery_motoboy_ticket",
     "print_in_background",
-)
+}
 
 SUPERSEDED_ORDERS_CORE_PRINT_PATHS = (
     "MENSAGEM_WHATSAPP_PRONTO_RETIRADA",
@@ -49,16 +69,62 @@ SUPERSEDED_DOMAIN_PRINTING_FILES = (
 )
 
 
-def test_migrated_producers_only_declare_print_intent():
+def _called_symbol(node: ast.Call) -> str | None:
+    func = node.func
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
+def _is_print_core_path(relative_path: str) -> bool:
+    return relative_path in PRINT_CORE_ALLOWED_FILES or any(
+        relative_path.startswith(prefix) for prefix in PRINT_CORE_ALLOWED_PREFIXES
+    )
+
+
+def test_public_printing_application_service_is_the_canonical_class():
+    """Existe uma única classe pública de orquestração, sem wrapper duplicado."""
+    assert PrintingApplicationService is CanonicalPrintingApplicationService
+
+
+def test_backend_app_cannot_bypass_universal_printing_core():
+    """Novos canais não podem criar job ou escolher renderer fora do Core.
+
+    A varredura cobre todo backend/app, inclusive arquivos que ainda nem existem
+    hoje. Isso evita depender de uma lista manual de produtores migrados e faz o
+    CI rejeitar um futuro atalho arquitetural automaticamente.
+    """
     violations: dict[str, list[str]] = {}
-    for relative_path in MIGRATED_PRINT_PRODUCERS:
-        source = (BACKEND_ROOT / relative_path).read_text(encoding="utf-8")
-        found = [token for token in FORBIDDEN_OUTSIDE_PRINT_CORE if token in source]
-        if found:
-            violations[relative_path] = found
-        assert "PrintingApplicationService" in source
+
+    for path in BACKEND_APP_ROOT.rglob("*.py"):
+        relative_path = path.relative_to(BACKEND_ROOT).as_posix()
+        if _is_print_core_path(relative_path):
+            continue
+
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=relative_path)
+        forbidden = sorted(
+            {
+                symbol
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and (symbol := _called_symbol(node))
+                in FORBIDDEN_CALLS_OUTSIDE_PRINT_CORE
+            }
+        )
+        if forbidden:
+            violations[relative_path] = forbidden
 
     assert violations == {}
+
+
+def test_migrated_producers_only_declare_print_intent():
+    for relative_path in MIGRATED_PRINT_PRODUCERS:
+        source = (BACKEND_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "PrintingApplicationService" in source
+        assert "PrintIntent" in source
 
 
 def test_item_edit_declares_only_the_canonical_delta_intent():
