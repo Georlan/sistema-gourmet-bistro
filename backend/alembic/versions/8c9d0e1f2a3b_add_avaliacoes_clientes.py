@@ -1,7 +1,7 @@
 """add avaliacoes clientes table
 
-Revision ID: 2b3c4d5e6f7a
-Revises: 1c2d3e4f5a6b
+Revision ID: 8c9d0e1f2a3b
+Revises: 7b8c9d0e1f2a
 Create Date: 2026-09-02 20:20:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '2b3c4d5e6f7a'
-down_revision = '1c2d3e4f5a6b'
+revision = '8c9d0e1f2a3b'
+down_revision = '7b8c9d0e1f2a'
 branch_labels = None
 depends_on = None
 
