@@ -46,7 +46,12 @@ test('shared owners have concrete dependencies and private request/submission gu
 test('catalog listeners and polling keep their cleanup next to their owner', () => {
   const catalog = read('src/components/app/data/useOperationalCatalog.ts');
   const effects = calls(catalog).filter(call => call.expression.getText() === 'useEffect');
-  assert.equal(effects.length, 2);
+  assert.equal(effects.length, 3);
+  const initialLoad = effects.find(effect => {
+    const source = effect.getText();
+    return source.includes('fetchLiveCatalog()') && source.includes('catalogAbortRef.current?.abort()');
+  })!.getText();
+  assert.doesNotMatch(initialLoad, /isWsConnected/);
   const polling = effects.find(effect => effect.getText().includes('setInterval'))!.getText();
   assert.match(polling, /if \(!isAuthenticated\) return/);
   assert.match(polling, /if \(isWsConnected\) return/);
