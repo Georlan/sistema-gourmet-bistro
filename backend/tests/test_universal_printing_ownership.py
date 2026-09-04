@@ -38,6 +38,29 @@ def test_migrated_producers_only_declare_print_intent():
     assert violations == {}
 
 
+def test_item_edit_declares_only_the_canonical_delta_intent():
+    route_source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(
+        encoding="utf-8"
+    )
+    core_source = (BACKEND_ROOT / "app/application/printing/item_change.py").read_text(
+        encoding="utf-8"
+    )
+
+    item_edit_source = route_source.split('@router.put("/itens/{item_id}",', 1)[1]
+    item_edit_source = item_edit_source.split(
+        '@router.put("/itens/{item_id}/status",', 1
+    )[0]
+    assert "PrintSourceType.ITEM" in item_edit_source
+    assert "PrintAction.ITEM_CHANGE" in item_edit_source
+    assert "quantity_added=added_count" in item_edit_source
+    assert "=== ITEM ALTERADO/ADICIONADO ===" not in item_edit_source
+    assert "print_in_background" not in item_edit_source
+
+    assert "=== ITEM ALTERADO/ADICIONADO ===" in core_source
+    assert "is_production_destination" in core_source
+    assert "enqueue_print_job(" in core_source
+
+
 def test_order_engine_resolver_is_semantic_not_channel_based():
     assert resolve_order_engine("Consumo no Local") == PrintEngineType.DINE_IN_ORDER
     assert resolve_order_engine("Retirada") == PrintEngineType.PICKUP_ORDER

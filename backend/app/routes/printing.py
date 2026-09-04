@@ -29,6 +29,7 @@ class UniversalPrintRequest(BaseModel):
     table_id: Optional[int] = Field(default=None, gt=0)
     values_only: bool = False
     courier_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    quantity_added: int = Field(default=0, ge=0, le=999)
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=180)
 
 
@@ -62,6 +63,7 @@ def _execute_print(
                 values_only=payload.values_only,
                 requested_by=current_user.nome,
                 courier_name=payload.courier_name,
+                quantity_added=payload.quantity_added,
                 idempotency_key=payload.idempotency_key,
             ),
         )
@@ -77,6 +79,11 @@ def _execute_print(
         ) from exc
 
     if not jobs:
+        if (
+            payload.source_type == PrintSourceType.ITEM
+            and payload.action == PrintAction.ITEM_CHANGE
+        ):
+            return []
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="A impressão física não está disponível no plano atual.",
@@ -100,7 +107,11 @@ def imprimir_universal(
     jobs = _execute_print(db, current_user, payload)
     return {
         "status": "success",
-        "detail": "Impressão enviada para a fila.",
+        "detail": (
+            "Impressão enviada para a fila."
+            if jobs
+            else "Nenhuma via necessária para esta intenção."
+        ),
         "job_ids": [job.id for job in jobs],
         "jobs": [
             {
