@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   Store,
-  AlertCircle,
   ShoppingBag,
   TrendingUp,
   CreditCard,
@@ -11,13 +10,13 @@ import {
   AlertTriangle,
   ChevronRight,
   CheckCircle2,
-  HelpCircle,
 } from "lucide-react";
-import type { Tenant, FailedWebhook } from "./superAdminTypes";
+import type { Tenant } from "./superAdminTypes";
 import {
   SUBSCRIPTION_PLANS,
   formatCurrency,
   formatPercentage,
+  getSubscriptionPlan,
 } from "../config/subscriptionPlans";
 
 interface SuperAdminOverviewTabProps {
@@ -25,10 +24,9 @@ interface SuperAdminOverviewTabProps {
   tenantsAvailable?: boolean;
   isLoadingTenants: boolean;
   refreshTenants: () => void;
-  onNavigateToTab: (tab: "tenants" | "payments" | "billing" | "operations" | "audit" | "settings") => void;
+  onNavigateToTab: (tab: "incidents" | "tenants" | "payments" | "billing" | "operations" | "audit" | "settings") => void;
   onSelectTenantDetails?: (tenant: Tenant) => void;
   onToggleStatus: (id: string, currentStatus: "ACTIVE" | "SUSPENDED" | "PENDING") => Promise<boolean>;
-  failedWebhooks: FailedWebhook[];
   globalSearch: string;
   runtimeHealth?: { status: "ok" | "unavailable"; commit?: string | null; version?: string } | null;
 }
@@ -51,7 +49,6 @@ export function SuperAdminOverviewTab({
   refreshTenants,
   onNavigateToTab,
   onSelectTenantDetails,
-  failedWebhooks,
   globalSearch,
   runtimeHealth,
 }: SuperAdminOverviewTabProps) {
@@ -67,12 +64,11 @@ export function SuperAdminOverviewTab({
   );
 
   const activeCount = tenantsAvailable ? tenants.filter(t => t.status === "ACTIVE").length : null;
-  const estimatedMRR = tenantsAvailable
+  const catalogMonthlyReference = tenantsAvailable
     ? tenants
         .filter(t => t.status === "ACTIVE")
         .reduce((sum, tenant) => {
-          const plan = SUBSCRIPTION_PLANS.find(p => p.id === tenant.plan?.toLowerCase());
-          return sum + (plan?.price || 0);
+          return sum + getSubscriptionPlan(tenant.plan).price;
         }, 0)
     : null;
 
@@ -80,17 +76,16 @@ export function SuperAdminOverviewTab({
     ? tenants.reduce((sum, tenant) => sum + Number(tenant.monthlyOrders || 0), 0)
     : null;
 
-  // A fonte agregada de incidentes de pagamento ainda será criada na Fase 3.
-  // Um array vazio local não é evidência de ausência de incidentes.
-  const paymentIncidentFeedAvailable = failedWebhooks.length > 0;
-  const unresolvedPaymentIncidents = failedWebhooks.filter(w => !w.resolved).length;
+  const connectedPayments = tenantsAvailable
+    ? tenants.filter(tenant => tenant.onlinePaymentStatus === "connected").length
+    : null;
 
   return (
     <div className="space-y-6">
-      <section aria-label="Indicadores operacionais" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <section aria-label="Indicadores operacionais" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Restaurantes registrados</span>
+            <span className="text-xs font-medium text-koma-muted">Restaurantes ativos</span>
             <Store className="w-4 h-4 text-[#00b894]" />
           </div>
           <div className="mt-3 text-2xl font-bold text-koma-foreground">
@@ -99,15 +94,6 @@ export function SuperAdminOverviewTab({
           <p className="text-[11px] text-koma-subtle mt-1">
             {tenantsAvailable ? `${tenants.length} tenant(s) na fonte cross-tenant` : "Fonte indisponível"}
           </p>
-        </div>
-
-        <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Inadimplentes</span>
-            <AlertCircle className="w-4 h-4 text-koma-subtle" />
-          </div>
-          <div className="mt-3 text-2xl font-bold text-koma-foreground">—</div>
-          <p className="text-[11px] text-koma-subtle mt-1">Cobrança recorrente ainda não consolidada</p>
         </div>
 
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
@@ -125,25 +111,25 @@ export function SuperAdminOverviewTab({
 
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">MRR base</span>
+            <span className="text-xs font-medium text-koma-muted">Referência mensal do catálogo</span>
             <TrendingUp className="w-4 h-4 text-[#00b894]" />
           </div>
           <div className="mt-3 text-2xl font-bold text-koma-foreground">
-            {estimatedMRR !== null ? formatCurrency(estimatedMRR) : "—"}
+            {catalogMonthlyReference !== null ? formatCurrency(catalogMonthlyReference) : "—"}
           </div>
-          <p className="text-[11px] text-koma-subtle mt-1">Planos ativos × catálogo oficial</p>
+          <p className="text-[11px] text-koma-subtle mt-1">Planos ativos × catálogo; não confirma recebimento</p>
         </div>
 
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-koma-muted">Incidentes de pagamento</span>
+            <span className="text-xs font-medium text-koma-muted">Pagamentos online conectados</span>
             <CreditCard className="w-4 h-4 text-koma-subtle" />
           </div>
           <div className="mt-3 text-2xl font-bold text-koma-foreground">
-            {paymentIncidentFeedAvailable ? unresolvedPaymentIncidents : "—"}
+            {connectedPayments !== null ? connectedPayments : "—"}
           </div>
           <p className="text-[11px] text-koma-subtle mt-1">
-            {paymentIncidentFeedAvailable ? "Fonte de eventos carregada" : "Feed agregado entra na Fase 3"}
+            {connectedPayments !== null ? `${connectedPayments} conexão(ões) confirmada(s) pela fonte` : "Fonte indisponível"}
           </p>
         </div>
       </section>
@@ -261,10 +247,12 @@ export function SuperAdminOverviewTab({
               <AlertTriangle className="w-4 h-4 text-amber-400" />
               Central de Incidentes
             </h3>
-            <div className="py-4 text-center space-y-1.5">
-              <HelpCircle className="w-7 h-7 text-zinc-500 mx-auto" />
-              <p className="text-xs font-semibold text-koma-foreground">Feed operacional ainda não consolidado</p>
-              <p className="text-[11px] text-koma-muted">Impressão, Print Agent, outbox, pedidos e pagamentos serão agregados na Fase 4.</p>
+            <div className="py-3 space-y-2">
+              <p className="text-xs font-semibold text-koma-foreground">Diagnóstico operacional com fonte real</p>
+              <p className="text-[11px] text-koma-muted">Consulte falhas de impressão e outbox retornadas pelos endpoints de incidentes.</p>
+              <button type="button" onClick={() => onNavigateToTab("incidents")} className="w-full py-1.5 bg-koma-page hover:bg-zinc-800 border border-zinc-700 rounded-lg text-xs font-semibold text-koma-secondary flex items-center justify-center gap-1">
+                Abrir Central de Incidentes <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 

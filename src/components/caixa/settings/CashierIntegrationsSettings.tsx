@@ -20,7 +20,7 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders }: Props) 
         description="Conexões técnicas ficam centralizadas aqui. As telas de venda usam apenas o status e as capacidades já conectadas."
         metrics={[
           { label: 'pagamentos online', value: 'Mercado Pago' },
-          { label: 'automação', value: 'Em breve' },
+          { label: 'configuração', value: 'por restaurante' },
         ]}
       />
 

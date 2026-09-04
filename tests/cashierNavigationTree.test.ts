@@ -7,6 +7,8 @@ import {
   getCashierNavigationAction,
   getCashierNavigationParentId,
   getCashierNavigationTarget,
+  isCashierNavigationActive,
+  normalizeCashierNavigationState,
 } from '../src/components/caixa/navigation/cashierNavigation';
 
 const parents = () => CASHIER_SIDEBAR_GROUPS.flatMap((group) => group.items);
@@ -65,7 +67,7 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
     'Produtos', 'Complementos', 'Preparo e impressão',
   ]);
   assert.deepEqual(estoque?.children?.map((child) => child.label), [
-    'Estoque', 'Compras', 'Fornecedores',
+    'Estoque', 'Compras', 'Inventário', 'Fornecedores',
   ]);
   assert.equal(clientes?.children, undefined);
 
@@ -117,15 +119,75 @@ test('novo pedido keeps PDV openCounter as the owner of counter initialization',
   assert.match(pdvController, /handleNavigationOpenCounter = \(\) => openCounter\(\)/);
 });
 
-test('persisted aliases normalize to their visible child owners', () => {
-  const navigationController = readFileSync(
-    new URL('../src/components/caixa/navigation/useCashierNavigation.ts', import.meta.url), 'utf8',
-  );
-  assert.match(navigationController, /'cupons_desconto'\]\.includes\(saved\)\) return 'cupons'/);
-  assert.match(navigationController, /\['fornecedores', 'distribuidores'\]\.includes\(saved\)\) return 'fornecedores'/);
-  assert.match(navigationController, /'notas_entrada'/);
-  assert.match(navigationController, /'relatorio_garcons', 'relatorio_garçons'\]\.includes\(saved\)\)\s*return 'equipe'/);
-  assert.match(navigationController, /\['pessoas', 'equipe', 'convites'\]\.includes\(saved\)\) return 'pessoas'/);
+test('persisted aliases normalize with the active parent context', () => {
+  assert.deepEqual(normalizeCashierNavigationState('financeiro', 'movimentacoes'), {
+    tab: 'financeiro', subTab: 'movimentacoes',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('estoque', 'movimentacoes'), {
+    tab: 'estoque', subTab: 'historico',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('estoque', 'contagem'), {
+    tab: 'estoque', subTab: 'inventario',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('configuracoes', 'equipe'), {
+    tab: 'permissoes_cargos', subTab: 'pessoas',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('dashboard', 'dre'), {
+    tab: 'relatorios', subTab: 'financeiro',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('relatorios', 'fluxo_caixa'), {
+    tab: 'relatorios', subTab: 'financeiro',
+  });
+});
+
+test('a stale or mismatched child falls back to the selected parent default', () => {
+  assert.deepEqual(normalizeCashierNavigationState('financeiro', 'produtos'), {
+    tab: 'financeiro', subTab: 'turno_atual',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('cardapio_digital', 'fechamento'), {
+    tab: 'cardapio_digital', subTab: 'cardapio_perfil',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('unknown', 'unknown'), {
+    tab: 'operacao', subTab: 'pedidos',
+  });
+});
+
+test('every nested parent always has exactly one active child', () => {
+  for (const parent of parents().filter((item) => item.children?.length)) {
+    const states = [parent.target, ...(parent.children ?? []).map((child) => child.target)];
+    for (const state of states) {
+      const activeChildren = parent.children?.filter((child) =>
+        isCashierNavigationActive(child.id, state.tab, state.subTab)) ?? [];
+      assert.equal(activeChildren.length, 1, `${parent.id}/${state.subTab} must have one active child`);
+      assert.equal(isCashierNavigationActive(parent.id, state.tab, state.subTab), true);
+    }
+  }
+});
+
+test('child aliases select the canonical visible shortcut only inside their parent', () => {
+  assert.equal(isCashierNavigationActive('caixa_fechamento', 'financeiro', 'conferencia_cega'), true);
+  assert.equal(isCashierNavigationActive('estoque_historico', 'estoque', 'movimentacoes'), true);
+  assert.equal(isCashierNavigationActive('caixa_movimentacoes', 'estoque', 'movimentacoes'), false);
+  assert.equal(isCashierNavigationActive('estoque_inventario', 'estoque', 'contagem'), true);
+});
+
+test('online-menu detail sections stay open under exactly one sidebar child', () => {
+  const cases = [
+    ['cardapio_marca', 'online_loja'],
+    ['cardapio_entrega', 'online_operacao'],
+    ['cardapio_pagamentos', 'online_operacao'],
+    ['cardapio_qr_links', 'online_divulgacao'],
+  ] as const;
+  const online = parents().find((item) => item.id === 'cardapio_digital');
+
+  for (const [subTab, expectedChild] of cases) {
+    assert.deepEqual(normalizeCashierNavigationState('cardapio_digital', subTab), {
+      tab: 'cardapio_digital', subTab,
+    });
+    const activeChildren = online?.children?.filter((child) =>
+      isCashierNavigationActive(child.id, 'cardapio_digital', subTab)) ?? [];
+    assert.deepEqual(activeChildren.map((child) => child.id), [expectedChild]);
+  }
 });
 
 test('online menu and subscription are primary navigation, not duplicated footer shortcuts', () => {

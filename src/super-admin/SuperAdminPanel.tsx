@@ -16,7 +16,7 @@ import {
   X,
   AlertOctagon,
 } from "lucide-react";
-import type { Tenant, FailedWebhook } from "./superAdminTypes";
+import type { Tenant } from "./superAdminTypes";
 import {
   clearSuperAdminSession,
   publicApiFetch,
@@ -54,7 +54,6 @@ export default function SuperAdminPanel() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantsAvailable, setTenantsAvailable] = useState(false);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
-  const [failedWebhooks] = useState<FailedWebhook[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null; version?: string } | null>(null);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
@@ -143,18 +142,6 @@ export default function SuperAdminPanel() {
       return true;
     } catch (err) {
       reportApiError("Status do restaurante não foi alterado", err);
-      return false;
-    }
-  };
-
-  const handleForceConfirmWebhook = async (webhookId: string) => {
-    try {
-      await superAdminFetch(`/api/super-admin/webhooks/failed/${encodeURIComponent(webhookId)}/retry`, {
-        method: "POST",
-      });
-      return true;
-    } catch (err) {
-      reportApiError("Webhook não pôde ser reprocessado", err);
       return false;
     }
   };
@@ -278,7 +265,6 @@ export default function SuperAdminPanel() {
               refreshTenants={fetchTenants}
               onNavigateToTab={(tab) => setActiveTab(tab)}
               onToggleStatus={handleToggleTenantStatus}
-              failedWebhooks={failedWebhooks}
               globalSearch={globalSearch}
               runtimeHealth={runtimeHealth}
             />
@@ -306,7 +292,9 @@ export default function SuperAdminPanel() {
             />
           )}
           {activeTab === "access" && <SuperAdminAccessTab globalSearch={globalSearch} />}
-          {activeTab === "payments" && <SuperAdminPaymentsTab failedWebhooks={failedWebhooks} webhooksAvailable={false} />}
+          {activeTab === "payments" && (
+            <SuperAdminPaymentsTab tenants={tenants} tenantsAvailable={tenantsAvailable} />
+          )}
           {activeTab === "billing" && <SuperAdminBillingTab tenants={tenants} tenantsAvailable={tenantsAvailable} />}
           {activeTab === "operations" && <SuperAdminOperationsTab onAddLog={addAuditLog} onTriggerTelegramAlert={triggerTelegramAlert} />}
           {activeTab === "audit" && <SuperAdminAuditTab logs={auditLogs} onClearLogs={() => setAuditLogs([])} />}
