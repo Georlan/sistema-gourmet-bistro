@@ -963,10 +963,24 @@ class OrderApplicationService:
         if not comanda:
             raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
 
+        fulfillment = normalize_to_fulfillment(comanda.tipo)
         current_status = normalize_to_order_status(
             lancamento.status if lancamento and lancamento.status else comanda.delivery_status
         )
-        fulfillment = normalize_to_fulfillment(comanda.tipo)
+        aggregate_status = normalize_to_order_status(comanda.delivery_status)
+        if (
+            fulfillment == FulfillmentType.DELIVERY
+            and aggregate_status == OrderStatus.DISPATCHED
+            and current_status not in {
+                OrderStatus.COMPLETED,
+                OrderStatus.REJECTED,
+                OrderStatus.CANCELLED,
+            }
+        ):
+            # ``Lancamento.status`` não aceita ``transito``; o despacho é
+            # persistido na Comanda. Isso também preserva comandas legadas cujo
+            # lote individual permaneceu em um estado anterior.
+            current_status = aggregate_status
 
         OrderStateMachine.validate_transition(
             current_status=current_status,
