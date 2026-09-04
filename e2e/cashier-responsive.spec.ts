@@ -68,6 +68,10 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewport + 1);
 }
 
+function cashierSubnavButton(page: Page, name: string) {
+  return page.locator('.cashier-subnav').getByRole('button', { name, exact: true });
+}
+
 async function swipeDocumentUp(page: Page) {
   const client = await page.context().newCDPSession(page);
   const viewport = page.viewportSize();
@@ -165,7 +169,7 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     await expect(pendingItemsWarning).toBeVisible();
     await expect.poll(() => pendingItemsWarning.evaluate(element => getComputedStyle(element).color)).toBe('rgb(146, 64, 14)');
 
-    await page.getByRole('button', { name: 'Salão', exact: true }).click();
+    await cashierSubnavButton(page, 'Salão').click();
     const freeTableCard = page.locator('[data-table-status="free"]').first();
     const freeTableAction = freeTableCard.getByRole('button', { name: 'Abrir pedido' });
     const occupiedTableAction = page.locator('[data-table-status="occupied"]').first().getByRole('button', { name: 'Ver comanda' });
@@ -229,25 +233,25 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await page.goto('/?view=caixa');
 
   await page.getByRole('button', { name: 'Cardápio', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Preparo e impressão', exact: true })).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Produtos')).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Preparo e impressão')).toBeVisible();
   await expect(page.getByLabel('Buscar produtos')).toBeVisible();
   await expect(page.getByLabel('Categorias do cardápio')).toBeVisible();
   await expect(page.getByLabel('Filtrar por disponibilidade')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Pratos', exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Preparo e impressão', exact: true }).click();
+  await cashierSubnavButton(page, 'Preparo e impressão').click();
   await expect(page.getByLabel('Buscar categorias')).toBeVisible();
   await expect(page.getByLabel('Rotas de impressão')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Nova categoria', exact: true })).toBeVisible();
   await expect(page.getByText('cat-pratos', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Estoque', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Ingredientes', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Histórico', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Inventário', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Fornecedores', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Estoque & compras', exact: true }).click();
+  await expect(cashierSubnavButton(page, 'Ingredientes')).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Histórico')).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Inventário')).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Fornecedores')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Entradas', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Reposição pede atenção' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Fichas técnicas', exact: true })).toBeVisible();
@@ -258,7 +262,7 @@ test('áreas de gestão usam navegação consolidada sem listas redundantes', as
   await expect(page.getByText(/baixa e o estorno por cancelamento serão automáticos/i)).toBeVisible();
   await page.getByRole('button', { name: 'Fechar fichas técnicas' }).click();
 
-  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await cashierSubnavButton(page, 'Histórico').click();
   await expect(page.getByRole('heading', { name: 'Tudo que mudou em um só lugar' })).toBeVisible();
   await expect(page.getByLabel('Buscar no histórico de estoque')).toBeVisible();
   await expect(page.getByText('Distribuidora E2E · NF-900')).toBeVisible();
@@ -280,20 +284,21 @@ test('Cardápio mantém filtros e ações principais fáceis em qualquer largura
   await seedCatalogSession(page);
   await page.goto('/?view=caixa');
 
-  await expect(page.getByRole('button', { name: 'Produtos', exact: true })).toBeVisible();
+  await expect(cashierSubnavButton(page, 'Produtos')).toBeVisible();
   await expect(page.getByLabel('Buscar produtos')).toBeVisible();
   await expect(page.getByLabel('Categorias do cardápio')).toBeVisible();
   await expect(page.getByLabel('Filtrar por disponibilidade')).toBeVisible();
   await expect(page.getByText('Risoto da casa', { exact: true })).toBeVisible();
   await expect(page.getByText('Suco natural', { exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await page.getByLabel('Selecionar os 2 exibidos').check();
+  await page.getByRole('button', { name: 'Selecionar produtos', exact: true }).click();
+  await page.getByRole('button', { name: 'Selecionar todos os 2', exact: true }).click();
   await expect(page.getByText('2 produtos selecionados', { exact: true })).toBeVisible();
   const batchAvailabilityRequest = page.waitForRequest(request => (
     request.method() === 'PATCH'
     && new URL(request.url()).pathname === '/produtos/disponibilidade'
   ));
-  await page.locator('section').filter({ hasText: '2 produtos selecionados' }).getByRole('button', { name: 'Pausar venda', exact: true }).click();
+  await page.locator('section').filter({ hasText: '2 produtos selecionados' }).getByRole('button', { name: 'Pausar', exact: true }).click();
   await batchAvailabilityRequest;
 
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
@@ -307,7 +312,7 @@ test('Cardápio mantém filtros e ações principais fáceis em qualquer largura
   await expectNoHorizontalOverflow(page);
   await productDialog.getByRole('button', { name: 'Fechar' }).click();
 
-  await page.getByRole('button', { name: 'Preparo e impressão', exact: true }).click();
+  await cashierSubnavButton(page, 'Preparo e impressão').click();
   await expect(page.getByLabel('Buscar categorias')).toBeVisible();
   await expect(page.getByLabel('Rotas de impressão')).toBeVisible();
   const routeRequest = page.waitForRequest(request => (
@@ -417,7 +422,7 @@ test('estoque mantém banners, filtros e fichas técnicas utilizáveis em qualqu
   await expectNoHorizontalOverflow(page);
   await page.getByRole('button', { name: 'Fechar fichas técnicas' }).click();
 
-  await page.getByRole('button', { name: 'Histórico', exact: true }).click();
+  await cashierSubnavButton(page, 'Histórico').click();
   if (viewportWidth > 768) {
     await expect(page.getByRole('heading', { name: 'Tudo que mudou em um só lugar' })).toBeVisible();
   } else {
@@ -425,7 +430,7 @@ test('estoque mantém banners, filtros e fichas técnicas utilizáveis em qualqu
   }
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Inventário', exact: true }).click();
+  await cashierSubnavButton(page, 'Inventário').click();
   if (viewportWidth > 768) {
     await expect(page.getByRole('heading', { name: 'Faça a primeira conferência' })).toBeVisible();
   } else {
@@ -433,7 +438,7 @@ test('estoque mantém banners, filtros e fichas técnicas utilizáveis em qualqu
   }
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Fornecedores', exact: true }).click();
+  await cashierSubnavButton(page, 'Fornecedores').click();
   if (viewportWidth > 768) {
     await expect(page.getByRole('heading', { name: 'Reposição mais previsível' })).toBeVisible();
   } else {

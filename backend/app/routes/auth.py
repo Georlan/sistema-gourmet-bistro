@@ -12,7 +12,9 @@ from ..schemas import LoginRequest, LoginResponse, UsuarioResponse, AtivarContaR
 from ..security import (
     create_access_token,
     get_password_hash,
+    get_user_token_version,
     require_permission,
+    revoke_user_sessions,
     verify_password,
 )
 from ..services.staff_login_rate_limit import (
@@ -242,26 +244,35 @@ def login(
     tenant_context = current_restaurante_id.set(restaurante_id)
     try:
         usuario = db.query(Usuario).filter(Usuario.id == identity["id"]).first()
+        if not usuario:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Usuário ou senha incorretos"
+            )
+
+        status_val = str(usuario.status or "pendente_ativacao").lower().strip()
+        if status_val != "ativo":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Conta de usuário pendente, inativa ou bloqueada.",
+            )
+
+        # Materializa o payload antes de limpar o bucket. O cleanup pode encerrar a
+        # transação de leitura atual, então não mantemos dependência de atributos ORM
+        # depois desse ponto.
+        token_version = get_user_token_version(
+            db,
+            user_id=usuario.id,
+            restaurante_id=usuario.restaurante_id,
+        )
+        access_token = create_access_token(
+            subject=usuario.id,
+            restaurante_id=usuario.restaurante_id,
+            token_version=token_version,
+        )
+        user_data = _login_user_payload(usuario)
     finally:
         current_restaurante_id.reset(tenant_context)
-    if not usuario:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário ou senha incorretos"
-        )
-
-    status_val = str(usuario.status or "pendente_ativacao").lower().strip()
-    if status_val != "ativo":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Conta de usuário pendente, inativa ou bloqueada.",
-        )
-
-    # Materializa o payload antes de limpar o bucket. O cleanup pode encerrar a
-    # transação de leitura atual, então não mantemos dependência de atributos ORM
-    # depois desse ponto.
-    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
-    user_data = _login_user_payload(usuario)
 
     clear_staff_login_failures(
         db,
@@ -314,77 +325,85 @@ def ativar_conta(
     tenant_context = current_restaurante_id.set(restaurante_id)
     try:
         usuario = db.query(Usuario).filter(Usuario.id == identity["id"]).first()
-    finally:
-        current_restaurante_id.reset(tenant_context)
-
-    if not usuario:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Link de ativação inválido ou expirado"
-        )
-
-    if usuario.status != "pendente_ativacao":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta conta já foi ativada previamente."
-        )
-
-    if usuario.token_expira_em is not None:
-        token_exp = usuario.token_expira_em
-        if token_exp.tzinfo is None:
-            token_exp = token_exp.replace(tzinfo=timezone.utc)
-        if now_utc > token_exp:
+        if not usuario:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Link de ativação inválido ou expirado"
             )
 
-    # A sessão já está vinculada ao restaurante do convite; portanto esta
-    # consulta valida duplicidade somente dentro do tenant correto.
-    existente_email = db.query(Usuario).filter(Usuario.email == email_clean).first()
-    if existente_email and existente_email.id != usuario.id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Este e-mail já está cadastrado neste estabelecimento."
+        if usuario.status != "pendente_ativacao":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Esta conta já foi ativada previamente."
+            )
+
+        if usuario.token_expira_em is not None:
+            token_exp = usuario.token_expira_em
+            if token_exp.tzinfo is None:
+                token_exp = token_exp.replace(tzinfo=timezone.utc)
+            if now_utc > token_exp:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Link de ativação inválido ou expirado"
+                )
+
+        # A sessão já está vinculada ao restaurante do convite; portanto esta
+        # consulta valida duplicidade somente dentro do tenant correto.
+        existente_email = db.query(Usuario).filter(Usuario.email == email_clean).first()
+        if existente_email and existente_email.id != usuario.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este e-mail já está cadastrado neste estabelecimento."
+            )
+
+        usuario.email = email_clean
+        usuario.senha_hash = get_password_hash(payload.senha)
+        usuario.status = "ativo"
+        usuario.token_convite = None
+        usuario.token_expira_em = None
+
+        try:
+            db.commit()
+            db.refresh(usuario)
+        except IntegrityError as exc:
+            db.rollback()
+            logger.warning(
+                "Conflito de integridade ao ativar usuário %s no restaurante %s: %s",
+                identity["id"],
+                restaurante_id,
+                exc,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Não foi possível ativar a conta porque o e-mail ou telefone "
+                    "já está em uso neste estabelecimento."
+                ),
+            ) from exc
+
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "team_updated",
+                "detail": {"action": "activated", "user_id": usuario.id},
+            },
+            restaurante_id=usuario.restaurante_id,
+            target_audience="internal",
         )
 
-    usuario.email = email_clean
-    usuario.senha_hash = get_password_hash(payload.senha)
-    usuario.status = "ativo"
-    usuario.token_convite = None
-    usuario.token_expira_em = None
-
-    try:
-        db.commit()
-        db.refresh(usuario)
-    except IntegrityError as exc:
-        db.rollback()
-        logger.warning(
-            "Conflito de integridade ao ativar usuário %s no restaurante %s: %s",
-            identity["id"],
-            restaurante_id,
-            exc,
+        token_version = get_user_token_version(
+            db,
+            user_id=usuario.id,
+            restaurante_id=usuario.restaurante_id,
         )
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Não foi possível ativar a conta porque o e-mail ou telefone "
-                "já está em uso neste estabelecimento."
-            ),
-        ) from exc
-
-    background_tasks.add_task(
-        manager.broadcast,
-        {
-            "event": "team_updated",
-            "detail": {"action": "activated", "user_id": usuario.id},
-        },
-        restaurante_id=usuario.restaurante_id,
-        target_audience="internal",
-    )
-
-    access_token = create_access_token(subject=usuario.id, restaurante_id=usuario.restaurante_id)
-    user_data = _login_user_payload(usuario)
+        access_token = create_access_token(
+            subject=usuario.id,
+            restaurante_id=usuario.restaurante_id,
+            token_version=token_version,
+        )
+        user_data = _login_user_payload(usuario)
+    finally:
+        current_restaurante_id.reset(tenant_context)
 
     return {
         "access_token": access_token,
@@ -457,6 +476,11 @@ def delete_usuario(
         ).first()
         if target:
             target.status = "inativo"
+            revoke_user_sessions(
+                db,
+                user_id=target.id,
+                restaurante_id=current_user.restaurante_id,
+            )
             db.commit()
 
     background_tasks.add_task(

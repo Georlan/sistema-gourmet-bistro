@@ -21,6 +21,10 @@ from ..services.clientes import (
     normalizar_telefone_cliente,
     registrar_movimento_fidelidade,
 )
+from ..services.customer_relationship import (
+    build_customer_relationship_payloads,
+    load_customer_relationship_metrics,
+)
 from ..websocket_manager import manager
 from ..timezone_utils import (
     parse_operational_filter_datetime,
@@ -148,7 +152,12 @@ def get_loyalty_clients(
     clientes = db.query(Cliente).filter(
         Cliente.restaurante_id == restaurante_id,
     ).order_by(Cliente.criado_em.desc(), Cliente.id.asc()).all()
-    return [cliente_payload(cliente) for cliente in clientes]
+    metrics = load_customer_relationship_metrics(
+        db,
+        restaurante_id=restaurante_id,
+        cliente_ids=[c.id for c in clientes],
+    )
+    return build_customer_relationship_payloads(clientes, metrics)
 
 
 @router.get("/fidelidade/clientes/lookup")

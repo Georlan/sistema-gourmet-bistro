@@ -171,13 +171,23 @@ def test_pendente_nao_baixa_e_primeiro_aceite_baixa_uma_unica_vez(monkeypatch):
         headers={"X-Idempotency-Key": payload["idempotency_key"]},
     )
     assert created.status_code == 201, created.text
-    assert created.json()["delivery_status"] == "pendente" if "delivery_status" in created.json() else True
+    comanda_id = created.json()["comanda_id"]
+
+    token = current_restaurante_id.set(restaurante_id)
+    try:
+        with SessionLocal() as db:
+            pending = db.query(Comanda).filter(
+                Comanda.restaurante_id == restaurante_id,
+                Comanda.id == comanda_id,
+            ).one()
+            assert pending.delivery_status == "pendente"
+    finally:
+        current_restaurante_id.reset(token)
 
     stock, movements = _stock_and_movements(restaurante_id, seeded["insumo_id"])
     assert stock == 10.0
     assert all(origin != SALE_ORIGIN for origin, _ in movements)
 
-    comanda_id = created.json()["comanda_id"]
     accepted = client.put(
         f"/comandas/{comanda_id}/delivery/status?status_novo=producao",
         headers=seeded["headers"],

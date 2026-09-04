@@ -84,6 +84,18 @@ journalctl --user -u koma-print-agent.service -f
 lpstat -p -d
 ```
 
+Antes de homologar a impressão do primeiro cliente, execute o preflight que
+distingue uma fila antiga de uma impressora fisicamente presente:
+
+```bash
+python3 print-agent/hardware_preflight.py \
+  --report /tmp/koma-hardware-preflight.json
+```
+
+Somente `status: PASSED` permite iniciar os testes em papel. O roteiro completo
+e o critério de evidência estão em
+`docs/operations/first-client-acceptance.md`.
+
 Cada impressão concluída registra uma linha `[LATÊNCIA]` com quatro medidas:
 
 - `fila`: tempo entre a criação do job no backend e sua reserva pelo agente;

@@ -46,6 +46,8 @@ def setup_rush_hour_environment():
             config = ConfiguracaoRestaurante(
                 restaurante_id=SIM_REST_ID,
                 delivery_ativo=True,
+                tipo_taxa_entrega="bairro",
+                taxa_entrega_fixa=7.0,
                 pedido_minimo=15.0,
                 frete_gratis_valor=150.0,
                 tabela_taxas_bairros=[
@@ -54,6 +56,13 @@ def setup_rush_hour_environment():
                 ],
             )
             db.add(config)
+            db.commit()
+        else:
+            config.tipo_taxa_entrega = "bairro"
+            config.tabela_taxas_bairros = [
+                {"bairro": "Centro", "taxa": 5.0},
+                {"bairro": "Bairro Nobre", "taxa": 10.0},
+            ]
             db.commit()
 
         # 3. Usuários (Caixa, Garçom 1, Garçom 2, Cozinha)

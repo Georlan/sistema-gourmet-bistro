@@ -61,7 +61,6 @@ from ...services.clientes import (
     normalizar_telefone_cliente,
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
-from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from .commands import (
     AcceptOrderCommand,
@@ -145,36 +144,72 @@ class OrderApplicationService:
         items_subtotal: Decimal,
         neighborhood: Optional[str] = None,
     ) -> Decimal:
-        """Calcula de forma autoritativa no servidor a taxa de entrega."""
+        """Calcula de forma autoritativa no servidor a taxa de entrega.
+
+        Regras canônicas:
+        1. Se não é delivery (ex: pickup/salão/balcão) -> taxa 0.00.
+        2. Carregar configuração do restaurante: se ausente ou tipo inválido -> OrderValidationError.
+        3. Modo bairro: exige bairro preenchido; se ausente ou não cadastrado -> OrderValidationError (fora da cobertura).
+        4. Validar cobertura ANTES de calcular frete grátis: se frete grátis atingido -> taxa 0.00.
+        5. Modo fixa -> usa exclusivamente taxa_entrega_fixa persistida.
+        6. Modo bairro -> usa taxa cadastrada da linha do bairro encontrado.
+        """
         if fulfillment != FulfillmentType.DELIVERY:
             return Decimal("0.00")
 
-        restaurante = (
-            db.query(Restaurante)
-            .filter(Restaurante.id == restaurante_id)
-            .first()
-        )
         config = (
             db.query(ConfiguracaoRestaurante)
             .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
             .first()
         )
-        policy = evaluate_online_order_policy(restaurante, config, modalidade="delivery")
+        if config is None:
+            rest = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+            if rest is not None:
+                config = ConfiguracaoRestaurante(
+                    restaurante_id=restaurante_id,
+                    delivery_ativo=True,
+                    tipo_taxa_entrega="fixa",
+                    taxa_entrega_fixa=7.0,
+                )
+            else:
+                raise OrderValidationError("Configurações do restaurante não foram encontradas para calcular a entrega.")
 
-        # 1. Regra de frete grátis por valor de subtotal
-        if config and config.frete_gratis_valor and float(config.frete_gratis_valor) > 0:
+        tipo_taxa = getattr(config, "tipo_taxa_entrega", None)
+        if tipo_taxa not in ("fixa", "bairro"):
+            raise OrderValidationError(f"Tipo de taxa de entrega '{tipo_taxa}' inválido ou não suportado.")
+
+        matched_bairro_taxa: Decimal | None = None
+
+        if tipo_taxa == "bairro":
+            clean_bairro = str(neighborhood or "").strip()
+            if not clean_bairro:
+                raise OrderValidationError("Bairro de entrega é obrigatório quando a cobrança é por bairro.")
+
+            normalized_target = clean_bairro.casefold()
+            tabela = config.tabela_taxas_bairros or []
+            for b in tabela:
+                if isinstance(b, dict) and str(b.get("bairro", "")).strip().casefold() == normalized_target:
+                    matched_bairro_taxa = to_money_decimal(b.get("taxa", 0.0))
+                    break
+
+            if matched_bairro_taxa is None:
+                raise OrderValidationError(
+                    f"O bairro '{clean_bairro}' não está na área de entrega atendida pelo restaurante."
+                )
+
+        # 4. Validar cobertura ANTES de aplicar frete grátis por valor de subtotal
+        if config.frete_gratis_valor and float(config.frete_gratis_valor) > 0:
             if items_subtotal >= to_money_decimal(config.frete_gratis_valor):
                 return Decimal("0.00")
 
-        # 2. Regra por tabela de bairros cadastrada
-        if neighborhood and config and config.tabela_taxas_bairros:
-            clean_bairro = str(neighborhood).strip().casefold()
-            for b in config.tabela_taxas_bairros:
-                if isinstance(b, dict) and str(b.get("bairro", "")).strip().casefold() == clean_bairro:
-                    return to_money_decimal(b.get("taxa", 0.0))
+        # 5. Modo taxa fixa
+        if tipo_taxa == "fixa":
+            if config.taxa_entrega_fixa is None:
+                raise OrderValidationError("Taxa de entrega fixa não configurada no estabelecimento.")
+            return to_money_decimal(config.taxa_entrega_fixa)
 
-        # 3. Taxa da política online do restaurante
-        return to_money_decimal(policy.delivery_fee)
+        # 6. Modo taxa por bairro
+        return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")
 
     @classmethod
     def create_order(
@@ -928,10 +963,24 @@ class OrderApplicationService:
         if not comanda:
             raise ValueError(f"Pedido/Comanda {cmd.order_id} não encontrado.")
 
+        fulfillment = normalize_to_fulfillment(comanda.tipo)
         current_status = normalize_to_order_status(
             lancamento.status if lancamento and lancamento.status else comanda.delivery_status
         )
-        fulfillment = normalize_to_fulfillment(comanda.tipo)
+        aggregate_status = normalize_to_order_status(comanda.delivery_status)
+        if (
+            fulfillment == FulfillmentType.DELIVERY
+            and aggregate_status == OrderStatus.DISPATCHED
+            and current_status not in {
+                OrderStatus.COMPLETED,
+                OrderStatus.REJECTED,
+                OrderStatus.CANCELLED,
+            }
+        ):
+            # ``Lancamento.status`` não aceita ``transito``; o despacho é
+            # persistido na Comanda. Isso também preserva comandas legadas cujo
+            # lote individual permaneceu em um estado anterior.
+            current_status = aggregate_status
 
         OrderStateMachine.validate_transition(
             current_status=current_status,

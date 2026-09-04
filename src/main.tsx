@@ -2,11 +2,54 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
 
-// Aplica o tema persistido antes do primeiro paint do React, inclusive nas rotas
-// que retornam cedo dentro de App (/cardapio, /landing, /super-admin, etc.).
-initializeKomaTheme();
+function isPublicMenuRoute(): boolean {
+  const pathname = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+  if (
+    pathname.startsWith("/cardapio")
+    || pathname.startsWith("/c/")
+    || params.get("view") === "cardapio"
+  ) return true;
+
+  const hostname = window.location.hostname.toLowerCase();
+  const parts = hostname.split(".");
+  const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro"];
+  const isPlatformHost = hostname.endsWith(".pages.dev")
+    || hostname.endsWith(".railway.app")
+    || hostname.endsWith(".up.railway.app")
+    || hostname.endsWith(".vercel.app")
+    || hostname.endsWith(".netlify.app")
+    || hostname.endsWith(".github.io");
+
+  return parts.length > 2
+    && !ignoredSubdomains.includes(parts[0])
+    && !parts[0].startsWith("ais-dev")
+    && !parts[0].startsWith("ais-pre")
+    && !isPlatformHost;
+}
+
+function bypassTenantSuspensionBoundary(): boolean {
+  const pathname = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+
+  return isPublicMenuRoute()
+    || pathname.startsWith("/super-admin")
+    || pathname.startsWith("/landing")
+    || pathname.startsWith("/ativar")
+    || params.get("view") === "landing"
+    || params.get("view") === "ativar";
+}
+
+// O tema operacional pertence ao app autenticado. O cardápio público tem
+// apresentação própria e não deve herdar a preferência local do operador.
+if (isPublicMenuRoute()) {
+  document.documentElement.setAttribute("data-koma-theme", "dark");
+} else {
+  initializeKomaTheme();
+}
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
@@ -32,8 +75,10 @@ const RouteLoading = () => (
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <React.Suspense fallback={<RouteLoading />}>
-      <RootApp />
-    </React.Suspense>
+    <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
+      <React.Suspense fallback={<RouteLoading />}>
+        <RootApp />
+      </React.Suspense>
+    </TenantSuspensionBoundary>
   </React.StrictMode>
 );

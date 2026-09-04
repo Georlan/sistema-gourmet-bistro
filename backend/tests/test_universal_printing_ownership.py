@@ -61,25 +61,33 @@ def test_migrated_producers_only_declare_print_intent():
     assert violations == {}
 
 
-def test_orders_core_does_not_restore_superseded_printing_paths():
-    source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
-    found = [token for token in SUPERSEDED_ORDERS_CORE_PRINT_PATHS if token in source]
-    assert found == []
-
-
 def test_item_edit_declares_only_the_canonical_delta_intent():
-    route_source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
-    core_source = (BACKEND_ROOT / "app/application/printing/item_change.py").read_text(encoding="utf-8")
+    route_source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(
+        encoding="utf-8"
+    )
+    core_source = (BACKEND_ROOT / "app/application/printing/item_change.py").read_text(
+        encoding="utf-8"
+    )
 
-    assert "PrintSourceType.ITEM" in route_source
-    assert "PrintAction.ITEM_CHANGE" in route_source
-    assert "quantity_added=added_count" in route_source
-    assert "=== ITEM ALTERADO/ADICIONADO ===" not in route_source
-    assert "enqueue_print_job(" not in route_source
+    item_edit_source = route_source.split('@router.put("/itens/{item_id}",', 1)[1]
+    item_edit_source = item_edit_source.split(
+        '@router.put("/itens/{item_id}/status",', 1
+    )[0]
+    assert "PrintSourceType.ITEM" in item_edit_source
+    assert "PrintAction.ITEM_CHANGE" in item_edit_source
+    assert "quantity_added=added_count" in item_edit_source
+    assert "=== ITEM ALTERADO/ADICIONADO ===" not in item_edit_source
+    assert "print_in_background" not in item_edit_source
 
     assert "=== ITEM ALTERADO/ADICIONADO ===" in core_source
     assert "is_production_destination" in core_source
     assert "enqueue_print_job(" in core_source
+
+
+def test_orders_core_does_not_restore_superseded_printing_paths():
+    source = (BACKEND_ROOT / "app/routes/orders_core.py").read_text(encoding="utf-8")
+    found = [token for token in SUPERSEDED_ORDERS_CORE_PRINT_PATHS if token in source]
+    assert found == []
 
 
 def test_superseded_domain_printing_stack_stays_removed():

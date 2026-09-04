@@ -5,7 +5,7 @@ import test from 'node:test';
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { BrandConfig } from '../src/cardapio/CardapioTypes';
-import { getAvailablePaymentMethods, getPaymentSelectionError, resolvePaymentSelection, PAYMENT_UNAVAILABLE_MESSAGE, PAYMENT_RESELECT_MESSAGE, type PaymentMethod } from '../src/cardapio/paymentMethods';
+import { getAvailablePaymentMethods, getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, PAYMENT_UNAVAILABLE_MESSAGE, PAYMENT_RESELECT_MESSAGE, type PaymentMethod } from '../src/cardapio/paymentMethods';
 import CardapioPaymentOptions from '../src/cardapio/components/CardapioPaymentOptions';
 register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 Object.defineProperty(globalThis, 'window', {
@@ -42,6 +42,18 @@ test('não inventa pagamento para cadastro vazio, genérico ou desconhecido', ()
   assert.deepEqual(getAvailablePaymentMethods(groups('Voucher', 'Pix')), ['pix']);
 });
 
+test('Pix depende da cobrança online, mas cartões físicos continuam disponíveis', () => {
+  const configured = groups('Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito');
+  assert.deepEqual(
+    getCheckoutPaymentMethods(configured, false),
+    ['dinheiro', 'cartao_credito', 'cartao_debito'],
+  );
+  assert.deepEqual(
+    getCheckoutPaymentMethods(configured, true),
+    ['pix', 'dinheiro', 'cartao_credito', 'cartao_debito'],
+  );
+});
+
 test('somente as formas de cada loja são oferecidas, sem fallback de outra loja', () => {
   const a = getAvailablePaymentMethods(groups('Pix', 'Dinheiro'));
   const b = getAvailablePaymentMethods(groups('Cartão de débito'));
@@ -76,6 +88,16 @@ test('sacola de loja com apenas débito não inicia em Pix nem oferece crédito/
   assert.doesNotMatch(html, />Pix<|>Dinheiro<|>Cartão de crédito<|Precisa de troco/);
 });
 
+test('sacola mantém cartão físico quando a conta de pagamento online está desligada', () => {
+  const physicalCardBrand = { ...brand(['Pix', 'Cartão de débito']), onlinePaymentEnabled: false };
+  const html = renderToStaticMarkup(createElement(CardapioCartDrawer, {
+    restaurantId: '901', brandConfig: physicalCardBrand, cart, user: null,
+    onClose() {}, onUpdateQty() {}, onRemoveItem() {}, onPlaceOrder() {},
+  }));
+  assert.match(html, /aria-pressed="true"[^]*Cartão de débito/);
+  assert.doesNotMatch(html, />Pix</);
+});
+
 test('sacola com dinheiro mostra troco e loja vazia não habilita revisão', () => {
   assert.match(renderCart(['Dinheiro']), /Precisa de troco/);
   for (const names of [[], ['Voucher']]) {
@@ -90,6 +112,17 @@ test('revisão aceita débito configurado e não mostra troco indevido', () => {
   const html = renderReview(['Cartão de débito'], 'cartao_debito', 100);
   assert.match(html, /Cartão de débito/);
   assert.doesNotMatch(html, /Troco para|Confira o pagamento|<button[^>]*disabled=""[^>]*id="btn-place-order-final"/);
+});
+
+test('revisão não anuncia Pix quando a cobrança online está desativada', () => {
+  const offlineBrand = { ...brand(['Pix', 'Cartão de crédito']), onlinePaymentEnabled: false };
+  const html = renderToStaticMarkup(createElement(CardapioDigital, {
+    activeBrand: offlineBrand, cart, deliveryFee: 0, deliveryMethod: 'pickup', address: '', customerName: 'Teste local', customerPhone: '00000000000',
+    paymentMethodDetail: 'cartao_credito', onClose() {}, onOrderSuccess() {},
+  }));
+  assert.match(html, /Formas disponíveis neste pedido/);
+  assert.match(html, /Cartão de crédito/);
+  assert.doesNotMatch(html, />Pix</);
 });
 
 test('revisão bloqueia forma removida, ausente ou não cadastrada em vez de assumir Pix', () => {

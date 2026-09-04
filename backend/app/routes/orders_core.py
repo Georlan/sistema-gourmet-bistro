@@ -49,6 +49,13 @@ from ..waiter_permissions import (
     require_waiter_permission,
 )
 from ..adapters.orders.pos_adapter import PosAdapter
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
 
 logger = logging.getLogger("koma.orders")
 
@@ -648,7 +655,11 @@ def update_item_details(
         current_garcom,
         "perm_garcom_editar",
     )
-    item = db.query(Item).filter(Item.id == item_id).first()
+    restaurante_id = require_tenant_id()
+    item = db.query(Item).filter(
+        Item.restaurante_id == restaurante_id,
+        Item.id == item_id,
+    ).first()
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -656,7 +667,10 @@ def update_item_details(
         )
 
     # Verificar se a comanda já está fechada
-    comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.id == item.comanda_id,
+    ).first()
     if comanda and comanda.fechada:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -676,7 +690,7 @@ def update_item_details(
             for _ in range(additional_qty):
                 new_item = Item(
                     id=f"i-{uuid.uuid4().hex[:8]}",
-                    restaurante_id=require_tenant_id(),
+                    restaurante_id=restaurante_id,
                     comanda_id=item.comanda_id,
                     lancamento_id=item.lancamento_id,
                     produto_id=item.produto_id,
@@ -707,14 +721,13 @@ def update_item_details(
         )
     db.refresh(item)
 
-    # A mutação já foi confirmada. A impressão é best-effort, como antes, mas
-    # agora a rota declara somente a intenção; snapshot, texto e destino pertencem
-    # ao Core Universal de Impressão.
+    # A mutação já foi confirmada. A impressão continua best-effort, porém a
+    # rota declara apenas a intenção; o Core escolhe documento e destino.
     try:
         PrintingApplicationService.request_print(
             db,
             PrintIntent(
-                restaurant_id=require_tenant_id(),
+                restaurant_id=restaurante_id,
                 source_type=PrintSourceType.ITEM,
                 source_id=item.id,
                 action=PrintAction.ITEM_CHANGE,

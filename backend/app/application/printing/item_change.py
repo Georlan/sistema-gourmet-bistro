@@ -12,12 +12,7 @@ from .service import UniversalPrintingError
 
 
 class ItemChangePrintingService:
-    """Renderiza a via delta de edição/adição a partir do snapshot persistido.
-
-    A borda informa apenas qual item mudou e quantas unidades foram adicionadas.
-    Produto, mesa, cliente, observação e destino são reconstruídos do banco para
-    que a rota não volte a montar texto térmico nem escolher impressora.
-    """
+    """Gera a via delta de um item usando somente o estado persistido."""
 
     @classmethod
     def request_print(cls, db: Session, intent: PrintIntent) -> list[PrintJob]:
@@ -104,9 +99,8 @@ class ItemChangePrintingService:
     def _render_item_change(item: Item, *, quantity_added: int) -> str:
         comanda = item.comanda
         mesa_label = comanda.mesa_id if comanda and comanda.mesa_id else "BALCAO"
-        header = "=== ITEM ALTERADO/ADICIONADO ==="
         lines = [
-            header.center(32),
+            "=== ITEM ALTERADO/ADICIONADO ===".center(32),
             f"MESA: {mesa_label}",
             f"PRODUTO: {item.produto.nome}",
             f"OBS (EDITADO): {item.observacao or ''}",

@@ -2,9 +2,9 @@ import { expect, type Page, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
 async function navigate(page: Page, label: string) {
-  const button = page.getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) });
-  if (!await button.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
-  await button.click();
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  await sidebar.getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) }).click();
 }
 
 async function open(page: Page) {
@@ -100,7 +100,7 @@ test('ingrediente conserva rascunho após erro e não muda o contrato monetário
     await route.fulfill({ status: bodies.length === 1 ? 503 : 200, json: { detail: 'Falha controlada de ingrediente' } });
   });
   page.on('dialog', dialog => dialog.accept());
-  await navigate(page, 'Estoque');
+  await navigate(page, 'Estoque & compras');
   await page.getByRole('button', { name: 'Novo ingrediente', exact: true }).click();
   const form = page.locator('form').filter({ has: page.getByPlaceholder('ex: Contra Filé') });
   await form.getByPlaceholder('ex: Contra Filé').fill('Ingrediente de teste');
@@ -110,7 +110,7 @@ test('ingrediente conserva rascunho após erro e não muda o contrato monetário
   await expect(form.getByPlaceholder('ex: Contra Filé')).toHaveValue('Ingrediente de teste');
   await page.evaluate(() => window.dispatchEvent(new Event('koma-open-impressoras')));
   await expect(form).toBeHidden();
-  await navigate(page, 'Estoque');
+  await navigate(page, 'Estoque & compras');
   await expect(form.getByPlaceholder('ex: Contra Filé')).toHaveValue('Ingrediente de teste');
   await form.getByRole('button', { name: 'Criar Ingrediente', exact: true }).click();
   await expect(form).toBeHidden();

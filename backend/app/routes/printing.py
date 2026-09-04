@@ -107,7 +107,11 @@ def imprimir_universal(
     jobs = _execute_print(db, current_user, payload)
     return {
         "status": "success",
-        "detail": "Impressão enviada para a fila." if jobs else "Nenhuma via necessária para esta intenção.",
+        "detail": (
+            "Impressão enviada para a fila."
+            if jobs
+            else "Nenhuma via necessária para esta intenção."
+        ),
         "job_ids": [job.id for job in jobs],
         "jobs": [
             {
