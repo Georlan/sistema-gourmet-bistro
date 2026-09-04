@@ -24,7 +24,7 @@ export default function CardapioStoreInfoDrawer({
   const statusLabel = brand.storeStatus === "open"
     ? "Aberto para pedidos"
     : brand.storeStatus === "closed"
-      ? "Pedidos pausados"
+      ? brand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados"
       : "Funcionamento por horário";
 
   return (

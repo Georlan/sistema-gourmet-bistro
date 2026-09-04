@@ -376,11 +376,14 @@ export function CardapioDigitalSettingsPanel({
   const [config, setConfig] = useState<RestaurantConfig>(emptyConfig);
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
+    setLoadError('');
     try {
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/config`, {
         headers: authHeaders,
@@ -391,8 +394,10 @@ export function CardapioDigitalSettingsPanel({
       const next = normalizeConfig(data);
       setConfig(next);
       setSavedSnapshot(JSON.stringify(buildPersistedPayload(next)));
+      setHasLoadedConfig(true);
     } catch (error) {
-      setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Falha ao carregar configurações.' });
+      console.error('Falha ao carregar configurações do cardápio online:', error);
+      setLoadError('Não foi possível carregar as configurações do cardápio. Confira sua conexão e tente novamente.');
     } finally {
       setIsLoading(false);
     }
@@ -403,7 +408,7 @@ export function CardapioDigitalSettingsPanel({
   }, [loadConfig]);
 
   useEffect(() => {
-    if (!feedback) return;
+    if (!feedback || feedback.type === 'error') return;
     const timer = window.setTimeout(() => setFeedback(null), 4500);
     return () => window.clearTimeout(timer);
   }, [feedback]);
@@ -420,7 +425,7 @@ export function CardapioDigitalSettingsPanel({
   };
 
   const currentPayload = useMemo(() => buildPersistedPayload(config), [config]);
-  const hasUnsavedChanges = JSON.stringify(currentPayload) !== savedSnapshot;
+  const hasUnsavedChanges = hasLoadedConfig && JSON.stringify(currentPayload) !== savedSnapshot;
 
   const readiness = useMemo(() => {
     const checks = [
@@ -442,6 +447,10 @@ export function CardapioDigitalSettingsPanel({
   }, [config]);
 
   const saveConfig = async () => {
+    if (!hasLoadedConfig || loadError) {
+      setFeedback({ type: 'error', text: 'Recarregue as configurações antes de publicar alterações.' });
+      return;
+    }
     if (!config.nome.trim()) {
       setFeedback({ type: 'error', text: 'Informe o nome público do restaurante.' });
       onSectionChange('perfil');
@@ -484,13 +493,32 @@ export function CardapioDigitalSettingsPanel({
     );
   }
 
+  if (loadError && !hasLoadedConfig) {
+    return (
+      <div className="grid min-h-[360px] place-items-center rounded-2xl border border-rose-500/25 bg-koma-panel p-6 text-center">
+        <div className="max-w-md">
+          <AlertCircle size={32} className="mx-auto text-rose-500" />
+          <h2 className="mt-4 text-base font-black text-koma-foreground">Não conseguimos carregar o cardápio online</h2>
+          <p className="mt-2 text-xs leading-relaxed text-koma-muted">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => void loadConfig()}
+            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-5 text-xs font-black text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+          >
+            <RefreshCw size={14} /> Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 text-left animate-fade-in">
       <OperationalBanner
         id="online-menu-settings-heading"
         eyebrow="CARDÁPIO ONLINE"
         title="Sua vitrine"
-        accent="pronta para vender"
+        accent={readiness.ready ? 'pronta para vender' : 'precisa de ajustes'}
         description="Configure só o que muda a experiência do cliente. O visual, a navegação e o fluxo de pedido seguem o padrão Kôma."
         metrics={[
           { label: 'status', value: statusLabel },
@@ -498,6 +526,16 @@ export function CardapioDigitalSettingsPanel({
           { label: 'pagamentos', value: config.formas_pagamento_aceitas.length },
         ]}
       />
+
+      {loadError && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/[0.08] px-4 py-3 text-xs text-rose-700 dark:text-rose-300" role="alert">
+          <AlertCircle size={16} className="shrink-0" />
+          <span className="min-w-0 flex-1">{loadError} Os dados já carregados foram preservados.</span>
+          <button type="button" onClick={() => void loadConfig()} className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-500/25 px-3 text-[10px] font-black uppercase tracking-wider">
+            <RefreshCw size={13} /> Tentar novamente
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
         <div className="min-w-0 space-y-4">
@@ -900,7 +938,7 @@ export function CardapioDigitalSettingsPanel({
             )}
             <button
               type="button"
-              disabled={isSaving || !hasUnsavedChanges}
+              disabled={isSaving || !hasUnsavedChanges || !hasLoadedConfig || Boolean(loadError)}
               onClick={() => void saveConfig()}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-default disabled:border-koma-border disabled:bg-koma-raised disabled:text-koma-muted disabled:opacity-70"
             >

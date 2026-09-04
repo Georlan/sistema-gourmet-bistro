@@ -108,7 +108,7 @@ export default function CardapioHeader({
   const statusLabel = activeBrand.storeStatus === "open"
     ? "Aberto para pedidos"
     : activeBrand.storeStatus === "closed"
-      ? "Pedidos pausados"
+      ? activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados"
       : "Ver horários";
 
   return (
@@ -191,7 +191,7 @@ export default function CardapioHeader({
                 onClick={onCartToggle}
                 className="cardapio-public-icon-button is-cart"
                 title="Sua sacola"
-                aria-label={`Sua sacola, ${cartCount} itens`}
+                aria-label={`Sua sacola, ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
                 id="btn-cart-header"
               >
                 <ShoppingBag size={17} />

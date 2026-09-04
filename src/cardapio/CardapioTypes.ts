@@ -94,6 +94,9 @@ export interface BrandConfig {
   operatingHours?: OperatingHours[];
   googleMapsUrl?: string;
   storeStatus?: "open" | "closed" | "automatic";
+  acceptingOrders?: boolean;
+  orderingMessage?: string;
+  availabilitySource?: string;
   deliveryEnabled?: boolean;
   pedidoMinimo?: number;
   freteGratisValor?: number;

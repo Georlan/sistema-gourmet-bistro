@@ -36,6 +36,7 @@ from ..schemas import (
 )
 from ..websocket_manager import manager
 from ..services.restaurant_profile import apply_restaurant_profile_update
+from ..services.online_order_policy import evaluate_online_order_policy
 from .products import ordered_categories as _ordered_categories
 
 logger = logging.getLogger("koma.cardapio_digital")
@@ -164,6 +165,7 @@ def _public_restaurant_payload(
     configuracao: Optional[ConfiguracaoRestaurante] = None,
     pagamento_online_ativo: bool = False,
 ) -> dict:
+    policy = evaluate_online_order_policy(restaurante, configuracao)
     return {
         "id": restaurante.id,
         "nome": restaurante.nome,
@@ -175,6 +177,9 @@ def _public_restaurant_payload(
         "endereco": restaurante.endereco,
         "google_maps_url": restaurante.google_maps_url,
         "status_override": restaurante.status_override,
+        "aceitando_pedidos": policy.accepting_orders,
+        "motivo_indisponibilidade": policy.reason,
+        "origem_disponibilidade": policy.source,
         "socials": restaurante.socials,
         "horarios_funcionamento": restaurante.horarios_funcionamento,
         "formas_pagamento_aceitas": restaurante.formas_pagamento_aceitas,

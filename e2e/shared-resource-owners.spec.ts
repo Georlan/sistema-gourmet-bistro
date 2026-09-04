@@ -72,6 +72,35 @@ test('cardápio online usa um painel, preserva rascunho e repete publicação ap
   expect(paths).not.toContain('/caixa/config-cardapio');
 });
 
+test('cardápio online não permite sobrescrever configuração quando a leitura falha', async ({ page }) => {
+  await setup(page);
+  let failuresRemaining = mountReads;
+  await page.route('**/api/cardapio-digital/config', async route => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 500, json: { detail: 'gravação não deveria ocorrer' } });
+      return;
+    }
+    if (failuresRemaining > 0) {
+      failuresRemaining -= 1;
+      await route.fulfill({ status: 503, json: { detail: 'Failed to fetch' } });
+      return;
+    }
+    await route.fulfill({ json: profile });
+  });
+
+  await open(page);
+  await navigate(page, 'Cardápio online');
+  await expect(page.getByRole('heading', { name: 'Não conseguimos carregar o cardápio online' })).toBeVisible();
+  await expect(page.getByText('Failed to fetch', { exact: true })).toHaveCount(0);
+  await expect(page.getByPlaceholder('Ex.: Pizzeria Bella Italia')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Salvar e publicar', exact: true })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(page.getByPlaceholder('Ex.: Pizzeria Bella Italia')).toHaveValue(profile.nome);
+  await expect(page.getByRole('button', { name: 'Tudo salvo', exact: true })).toBeDisabled();
+  await expect(page.getByText('Cardápio pronto para receber pedidos', { exact: true })).toBeVisible();
+});
+
 test('upload único valida arquivo e mantém logo e banner independentes', async ({ page }) => {
   await setup(page);
   await page.route('**/api/cardapio-digital/config', route => route.fulfill({ json: profile }));
