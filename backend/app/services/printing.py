@@ -380,6 +380,10 @@ def render_table_receipt(
     print_footer: Optional[str] = None,
     printed_by: Optional[str] = None,
 ) -> str:
+    # Import local evita ciclo: o Core de aplicação depende deste módulo para
+    # enqueue, enquanto o renderer compartilha apenas a hierarquia visual.
+    from ..application.printing.comanda_renderer import apply_operational_visual_hierarchy
+
     snapshot = load_open_table_snapshot(db, restaurante_id, mesa_id)
     preferences = get_print_preferences(db, restaurante_id)
     receipt = printer_service.generate_receipt(
@@ -397,8 +401,21 @@ def render_table_receipt(
         restaurant_name_position=preferences.restaurant_name_position,
     )
     if apenas_valores:
-        return _inject_closing_metadata(receipt, snapshot, printed_by=printed_by)
-    return _replace_account_header(receipt, snapshot)
+        receipt = _inject_closing_metadata(receipt, snapshot, printed_by=printed_by)
+        return apply_operational_visual_hierarchy(
+            receipt,
+            document_title="FECHAMENTO",
+        )
+
+    identity_label = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
+    return apply_operational_visual_hierarchy(
+        receipt,
+        order_number=snapshot.numero_pedido,
+        operator_label="GARÇOM",
+        operator_name=snapshot.garcom_nome,
+        location_label=None,
+        identity_label=identity_label,
+    )
 
 
 def render_table_source_receipt(
