@@ -1,5 +1,14 @@
 import type { BrandConfig } from './CardapioTypes';
 
+export function getDeliveryMinimumRemaining(
+  config: Pick<BrandConfig, 'pedidoMinimo'> | undefined,
+  subtotal: number,
+  fulfillment: 'delivery' | 'pickup',
+): number {
+  if (fulfillment !== 'delivery') return 0;
+  return Math.max(0, Number(config?.pedidoMinimo || 0) - subtotal);
+}
+
 type DeliveryConfig = Pick<BrandConfig, 'freteGratisValor' | 'tabelaTaxasBairros' | 'taxaEntregaPadrao'>;
 
 /** Existing cart fee rules, also used to preview delivery while pickup is selected. */
@@ -12,7 +21,7 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
     : undefined;
 
   return {
-    fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 7,
+    fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
     // The default fee remains in the calculation; only its provisional nature is clarified.
     awaitingNeighborhood: neighborhoods.length > 0 && !selected && !freeBySubtotal,
   };

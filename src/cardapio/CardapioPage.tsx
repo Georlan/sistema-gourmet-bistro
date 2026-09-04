@@ -297,6 +297,7 @@ export default function CardapioPage() {
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
         operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
+        deliveryEnabled: restaurant.delivery_ativo !== false,
         pedidoMinimo: Number(restaurant.pedido_minimo || 0),
         freteGratisValor: Number(restaurant.frete_gratis_valor || 0),
         tipoTaxaEntrega: String(restaurant.tipo_taxa_entrega || "fixa"),
@@ -306,7 +307,7 @@ export default function CardapioPage() {
               taxa: Number(b.taxa || 0),
             }))
           : [],
-        taxaEntregaPadrao: Number(restaurant.taxa_entrega_padrao || 7),
+        taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
         storeStatus: statusOverride.includes("fech")
           ? "closed"
           : statusOverride.includes("abert")

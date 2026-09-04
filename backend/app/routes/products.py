@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union
@@ -60,6 +61,18 @@ class DisponibilidadeLoteRequest(BaseModel):
 class DisponibilidadeLoteResponse(BaseModel):
     atualizados: int
     ativo: bool
+
+
+class EdicaoLoteRequest(BaseModel):
+    produto_ids: List[str] = Field(min_length=1, max_length=500)
+    reajuste_percentual: Optional[float] = Field(default=None, ge=-90, le=500)
+    categoria_id: Optional[str] = None
+
+
+class EdicaoLoteResponse(BaseModel):
+    atualizados: int
+    reajuste_percentual: Optional[float] = None
+    categoria_id: Optional[str] = None
 
 
 CATEGORY_DISPLAY_ORDER = [
@@ -294,6 +307,73 @@ def update_disponibilidade_lote(
             rest_id,
         )
     return {"atualizados": updated, "ativo": data.ativo}
+
+
+@router.patch(
+    "/edicao-lote",
+    response_model=EdicaoLoteResponse,
+)
+def update_produtos_lote(
+    data: EdicaoLoteRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Reajusta preços e/ou move produtos de categoria em uma única transação tenant-scoped."""
+    del current_user
+    rest_id = require_tenant_id()
+    product_ids = list(dict.fromkeys(product_id.strip() for product_id in data.produto_ids if product_id.strip()))
+    if not product_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe ao menos um produto válido.",
+        )
+    if data.reajuste_percentual is None and not data.categoria_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe um reajuste percentual ou uma categoria.",
+        )
+
+    if data.categoria_id:
+        category = db.query(Categoria).filter(
+            Categoria.restaurante_id == rest_id,
+            Categoria.id == data.categoria_id,
+        ).first()
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A categoria informada não existe",
+            )
+
+    products = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id.in_(product_ids),
+    ).all()
+
+    if data.reajuste_percentual is not None:
+        factor = Decimal("1") + (Decimal(str(data.reajuste_percentual)) / Decimal("100"))
+        for product in products:
+            current_price = Decimal(str(product.preco or 0))
+            product.preco = float(
+                (current_price * factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            )
+
+    if data.categoria_id:
+        for product in products:
+            product.categoria_id = data.categoria_id
+
+    db.commit()
+    if products:
+        notify_catalog_update(
+            background_tasks,
+            "Produtos do cardápio atualizados em lote",
+            rest_id,
+        )
+    return {
+        "atualizados": len(products),
+        "reajuste_percentual": data.reajuste_percentual,
+        "categoria_id": data.categoria_id,
+    }
 
 @router.post("/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED)
 def create_produto(

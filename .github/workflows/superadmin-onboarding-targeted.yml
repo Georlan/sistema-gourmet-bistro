@@ -1,0 +1,67 @@
+name: SuperAdmin Onboarding Targeted
+
+on:
+  pull_request:
+    paths:
+      - "backend/alembic/versions/3d4e5f6a7b8c_add_restaurant_trials.py"
+      - "backend/app/main.py"
+      - "backend/app/routes/super_admin.py"
+      - "backend/app/routes/super_admin_onboarding.py"
+      - "backend/app/database.py"
+      - "backend/app/models.py"
+      - "backend/app/security.py"
+      - "backend/tests/test_super_admin_onboarding.py"
+      - "backend/tests/test_super_admin_phase2b.py"
+      - "backend/tests/test_super_admin_trial.py"
+      - "backend/tests/test_route_ownership.py"
+      - ".github/workflows/superadmin-onboarding-targeted.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  targeted-onboarding:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: superadmin-onboarding-ci-secret-key
+      ENCRYPTION_KEY: dgvrWayyUxrh0PjzBcjn1AJ5woxjUE3lLTRptHDUSEQ=
+      DATABASE_URL: sqlite:///./superadmin-onboarding-ci.db
+      MIGRATION_DATABASE_URL: sqlite:///./superadmin-onboarding-ci.db
+      SUPERADMIN_USERNAME: owner-ci@example.test
+      SUPERADMIN_PASSWORD_HASH: unused-because-tests-override-it
+      PYTHONPATH: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile Super Admin onboarding modules
+        run: |
+          python -m py_compile backend/app/routes/super_admin_onboarding.py
+          python -m py_compile backend/app/routes/super_admin.py
+          python -m py_compile backend/app/main.py
+          python -m py_compile backend/alembic/versions/3d4e5f6a7b8c_add_restaurant_trials.py
+
+      - name: Run targeted Super Admin tests
+        run: |
+          python -m pytest -q \
+            backend/tests/test_super_admin_onboarding.py \
+            backend/tests/test_super_admin_trial.py \
+            backend/tests/test_super_admin_phase2b.py \
+            backend/tests/test_route_ownership.py
+
+# This targeted gate intentionally validates the 7-day trial slice without enabling SaaS billing.

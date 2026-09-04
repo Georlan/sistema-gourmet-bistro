@@ -1,0 +1,40 @@
+name: Cashier Orders Targeted
+
+on:
+  pull_request:
+    paths:
+      - "src/components/caixa/orders/**"
+      - "src/components/CaixaPanel.tsx"
+      - "tests/automaticOrderAcceptance.test.ts"
+      - "tests/cashierWorkspaceComponents.test.ts"
+      - ".github/workflows/cashier-orders-targeted.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cashier-orders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Production build
+        run: npm run build

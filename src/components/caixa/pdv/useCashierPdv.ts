@@ -229,7 +229,6 @@ export function useCashierPdv({
     isPdvSubmittingRef.current = true;
     setIsLoading(true);
 
-    // Snapshots dos dados do pedido para envio (capturados antes de qualquer reset de estado)
     const cartItems = [...pdvCart];
     const customerName = pdvCustomerName;
     const mesaId = pdvTargetMesaId;
@@ -239,12 +238,10 @@ export function useCashierPdv({
     const deliveryAddress = pdvDeliveryAddress;
     const deliveryTaxa = pdvDeliveryTaxa;
 
-    // ⚡ TRANSIÇÃO INSTANTÂNEA DE TELA (0ms delay)
     setActiveTab('operacao');
     setActiveSubTab('pedidos');
     showToast('Enviando pedido para a cozinha...', 'info');
 
-    // ⚡ CRIAÇÃO OTIMISTA DO PEDIDO (Aparece imediatamente no Kanban a 0ms)
     if (onOptimisticAddOrder) {
       const tempId = `temp-${Date.now()}`;
       const tempItems = cartItems.flatMap((item, idx) =>
@@ -278,7 +275,6 @@ export function useCashierPdv({
       onOptimisticAddOrder(optimisticOrder);
     }
 
-    // Reseta os campos do carrinho imediatamente
     setPdvCart([]);
     setPdvCustomerName('');
     setPdvCustomerPhone('');
@@ -395,7 +391,7 @@ export function useCashierPdv({
           product.categoria_id === pdvSelectedCategory ||
           product.categoria === pdvSelectedCategory;
         const matchesSearch = !pdvSearch || smartSearchMatch(`${product.nome} ${product.descricao || ''}`, pdvSearch);
-        return matchesSearch && matchesCategory;
+        return matchesCategory && matchesSearch;
       }),
     [apiCategorias, pdvSearch, pdvSelectedCategory, sellableProducts],
   );
@@ -415,6 +411,14 @@ export function useCashierPdv({
     setBalcaoMobileView('produtos');
     setPdvProductDetailId(null);
   };
+
+  // Navigation Tree v2 emits a semantic action instead of reproducing PDV reset
+  // rules. The PDV remains the owner of how a fresh counter sale is prepared.
+  useEffect(() => {
+    const handleNavigationOpenCounter = () => openCounter();
+    window.addEventListener('koma-navigation-open-counter', handleNavigationOpenCounter);
+    return () => window.removeEventListener('koma-navigation-open-counter', handleNavigationOpenCounter);
+  }, [pdvCart.length]);
 
   return {
     openCounter,

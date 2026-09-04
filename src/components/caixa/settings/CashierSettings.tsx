@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierOrderProjection';
 import { Table } from '../../../types';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
+import { CashierIntegrationsSettings } from './CashierIntegrationsSettings';
 import { CashierPrintingSettings } from './CashierPrintingSettings';
 import { CashierServiceTaxSettings } from './CashierServiceTaxSettings';
 import { CashierTableDialogs } from './CashierTableDialogs';
@@ -71,6 +72,7 @@ export default function CashierSettings({
   );
 
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
+  const isTechnicalIntegrations = activeSubTab === 'integracoes';
 
   const {
     handleDeleteMesa,
@@ -107,7 +109,11 @@ export default function CashierSettings({
 
   return (
     <>
-      {(activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
+      {isTechnicalIntegrations && (
+        <CashierIntegrationsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+      )}
+
+      {!isTechnicalIntegrations && (activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
         <div className="space-y-5">
           <div
             className={"flex flex-wrap gap-1.5 rounded-xl border border-koma-border bg-koma-page p-1 w-fit"}
@@ -190,12 +196,6 @@ export default function CashierSettings({
             updateConfiguracoes={updateConfiguracoes}
             setServiceTaxRate={setServiceTaxRate}
           />
-
-          {/* Service Tax config block moved to Salão e Impressão */}
-
-          {/* Waiters permissions switches (Left Column) */}
-
-          {/* Printer messages & test (Right Column) */}
         </div>
       )}
       <CashierTableDialogs

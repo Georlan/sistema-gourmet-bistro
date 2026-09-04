@@ -39,6 +39,16 @@ export interface LoyaltyCustomer {
   saldo_pontos?: number;
   saldo_cashback?: number;
   historico?: any[];
+  pedidos_concluidos?: number;
+  valor_pago_total?: number;
+  ticket_medio_pago?: number;
+  ultima_compra_em?: string | null;
+  dias_sem_comprar?: number | null;
+  segmento_relacionamento?:
+    | 'SEM_COMPRA'
+    | 'ATIVO'
+    | 'ATENCAO'
+    | 'REATIVAR';
 }
 
 export type CashierNotice = (message: string, type?: 'success' | 'error' | 'info') => void;

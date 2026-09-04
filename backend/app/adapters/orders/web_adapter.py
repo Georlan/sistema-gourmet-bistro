@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 import logging
+import unicodedata
 from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import or_
@@ -34,6 +35,7 @@ from ...domain.orders.errors import (
     ModifierInactiveError,
     ModifierNotFoundError,
     OrderDomainError,
+    OrderValidationError,
     ProductInactiveError,
     ProductNotFoundError,
     ProductTenantMismatchError,
@@ -65,12 +67,29 @@ from ...services.public_orders import (
     enforce_public_order_rate_limits,
     resolve_restaurant_id,
 )
+from ...services.scheduled_orders import (
+    schedule_order_in_session,
+    scheduled_for_order,
+    validate_schedule_request,
+)
+from ...timezone_utils import get_operational_now
 from ...websocket_manager import manager
 
 logger = logging.getLogger("koma.adapters.web")
 
 MAX_PUBLIC_ORDER_UNITS = 200
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
+PHYSICAL_CARD_METHODS = {"cartao_credito", "cartao_debito"}
+PAYMENT_METHOD_ALIASES = {
+    "pix": "pix",
+    "dinheiro": "dinheiro",
+    "credito": "cartao_credito",
+    "cartao credito": "cartao_credito",
+    "cartao de credito": "cartao_credito",
+    "debito": "cartao_debito",
+    "cartao debito": "cartao_debito",
+    "cartao de debito": "cartao_debito",
+}
 
 
 def _order_total(comanda: Comanda) -> float:
@@ -86,11 +105,21 @@ def _existing_order_response(db: Session, comanda: Comanda) -> dict[str, Any]:
         OnlinePaymentIntent.restaurante_id == comanda.restaurante_id,
         OnlinePaymentIntent.comanda_id == comanda.id,
     ).first()
+    schedule = scheduled_for_order(
+        db,
+        restaurante_id=comanda.restaurante_id,
+        comanda_id=comanda.id,
+    )
     return {
         "status": "success",
         "comanda_id": comanda.id,
         "numero_pedido": comanda.numero_pedido,
-        "delivery_status": comanda.delivery_status or "pendente",
+        "delivery_status": (
+            "agendado"
+            if schedule is not None and schedule.released_at is None
+            else (comanda.delivery_status or "pendente")
+        ),
+        "scheduled_for": schedule.scheduled_for.isoformat() if schedule is not None else None,
         "tipo": comanda.tipo,
         "cliente_id": comanda.cliente_id,
         "total": _order_total(comanda),
@@ -134,6 +163,22 @@ def _enforce_public_order_rate_limits(
     )
 
 
+def _configured_payment_methods(raw_methods: Any) -> set[str]:
+    if not isinstance(raw_methods, list):
+        return set()
+    configured: set[str] = set()
+    for raw_method in raw_methods:
+        if not isinstance(raw_method, str):
+            continue
+        normalized = unicodedata.normalize("NFD", raw_method)
+        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = " ".join(normalized.lower().replace("_", " ").replace("-", " ").split())
+        method = PAYMENT_METHOD_ALIASES.get(normalized)
+        if method:
+            configured.add(method)
+    return configured
+
+
 class CardapioWebAdapter:
     """Adaptador HTTP do Cardápio Digital para criação canônica de pedidos."""
 
@@ -148,7 +193,6 @@ class CardapioWebAdapter:
         request_idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Processa a requisição pública HTTP de criação de pedido pelo Cardápio Web."""
-        # 1. Validações estritas de borda HTTP
         modalidade = payload.tipo_pedido.strip().lower()
         if modalidade not in {"delivery", "retirada"}:
             raise HTTPException(
@@ -184,8 +228,15 @@ class CardapioWebAdapter:
                 detail="A chave idempotente deve possuir entre 8 e 128 caracteres.",
             )
 
+        scheduled_for = getattr(payload, "scheduled_for", None)
+        is_scheduled = scheduled_for is not None
         online_payment = payload.forma_pagamento == "online"
         payment_method = (payload.forma_pagamento_detalhe or "").strip().lower()
+        if is_scheduled and online_payment:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Pedidos agendados usam pagamento no atendimento nesta versão.",
+            )
         if online_payment:
             if payment_method != "pix":
                 raise HTTPException(
@@ -202,10 +253,10 @@ class CardapioWebAdapter:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="A chave idempotente é obrigatória no pagamento online.",
                 )
-        elif payment_method != "dinheiro":
+        elif payment_method not in {"dinheiro", "cartao_credito", "cartao_debito"}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Pedidos sem pagamento online só podem usar dinheiro no atendimento.",
+                detail="Pagamento no atendimento aceita dinheiro, cartão de crédito ou cartão de débito.",
             )
 
         tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
@@ -216,6 +267,7 @@ class CardapioWebAdapter:
         cliente = None
         cliente_nome = payload.cliente_nome
         telefone_clean = normalizar_telefone_cliente(payload.cliente_telefone)
+        normalized_schedule = None
 
         try:
             restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
@@ -225,7 +277,19 @@ class CardapioWebAdapter:
                     detail="Restaurante não encontrado.",
                 )
 
-            # Replay rápido por chave idempotente
+            if getattr(restaurante, "saas_status", "active") == "suspended":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Restaurante temporariamente suspenso para novos pedidos.",
+                )
+
+            if is_scheduled:
+                normalized_schedule = validate_schedule_request(
+                    db,
+                    restaurante_id=rest_id,
+                    scheduled_for=scheduled_for,
+                )
+
             existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
             if existing_comanda:
                 logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
@@ -241,7 +305,18 @@ class CardapioWebAdapter:
                     )
                 return _existing_order_response(db, existing_comanda)
 
-            # Autenticação de cliente
+            if (
+                not online_payment
+                and payment_method in PHYSICAL_CARD_METHODS
+                and payment_method not in _configured_payment_methods(
+                    restaurante.formas_pagamento_aceitas
+                )
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="A forma de pagamento escolhida não está habilitada pelo restaurante.",
+                )
+
             if customer_token:
                 _claims, cliente = authenticated_customer(
                     db,
@@ -251,14 +326,18 @@ class CardapioWebAdapter:
                 telefone_clean = cliente.telefone
                 cliente_nome = cliente.nome
 
-            # Avaliação de política online
             configuracao = db.query(ConfiguracaoRestaurante).filter(
                 ConfiguracaoRestaurante.restaurante_id == rest_id,
             ).first()
+            policy_now = None
+            if normalized_schedule is not None:
+                operational_tz = get_operational_now().tzinfo
+                policy_now = normalized_schedule.astimezone(operational_tz) if operational_tz else normalized_schedule
             policy = evaluate_online_order_policy(
                 restaurante,
                 configuracao,
                 modalidade=modalidade,
+                now=policy_now,
             )
             if not policy.accepting_orders:
                 raise HTTPException(
@@ -266,7 +345,6 @@ class CardapioWebAdapter:
                     detail=policy.reason or "O restaurante não está aceitando pedidos online no momento.",
                 )
 
-            # Limites de taxa
             _enforce_public_order_rate_limits(
                 db,
                 request=request,
@@ -274,10 +352,9 @@ class CardapioWebAdapter:
                 telefone=telefone_clean,
             )
 
-            # Janela temporal de duplicação (5 minutos)
-            cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
             recentes = []
-            if cliente is not None:
+            if not is_scheduled and cliente is not None:
+                cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
                 recentes = db.query(Comanda).filter(
                     Comanda.restaurante_id == rest_id,
                     Comanda.cliente_id == cliente.id,
@@ -296,7 +373,6 @@ class CardapioWebAdapter:
                     logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
                     return _existing_order_response(db, rec)
 
-            # Resolução de usuário operador elegível
             garcom = db.query(Usuario).filter(
                 Usuario.restaurante_id == rest_id,
                 Usuario.status == "ativo",
@@ -317,7 +393,6 @@ class CardapioWebAdapter:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
 
-            # 2. Mapeamento para CreateOrderCommand
             fulfillment = FulfillmentType.DELIVERY if modalidade == "delivery" else FulfillmentType.PICKUP
             items_input = tuple(
                 OrderItemInput(
@@ -334,7 +409,7 @@ class CardapioWebAdapter:
                 delivery_input = DeliveryInput(
                     address=endereco_comanda,
                     neighborhood=payload.bairro,
-                    fee=None,  # Resolvido autoritativamente no servidor
+                    fee=None,
                 )
 
             cmd = CreateOrderCommand(
@@ -354,13 +429,15 @@ class CardapioWebAdapter:
                 change_for=str(payload.troco_para) if payload.troco_para is not None else None,
                 idempotency_key=idempotency_key or None,
                 operator_user_id=garcom.id,
-                defer_operational_publish=online_payment,
+                defer_operational_publish=online_payment or is_scheduled,
             )
 
-            # 3. Delegação ao OrderApplicationService
-            order_dto = OrderApplicationService.create_order(db, cmd, commit=not online_payment)
+            order_dto = OrderApplicationService.create_order(
+                db,
+                cmd,
+                commit=not (online_payment or is_scheduled),
+            )
 
-            # Obter o comanda correspondente para response completa
             comanda = (
                 db.query(Comanda)
                 .filter(
@@ -372,7 +449,22 @@ class CardapioWebAdapter:
             numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
             cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
             payment_intent = None
-            if online_payment:
+
+            if is_scheduled:
+                if comanda is None or normalized_schedule is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Não foi possível preparar o pedido agendado.",
+                    )
+                schedule_order_in_session(
+                    db,
+                    restaurante_id=rest_id,
+                    comanda_id=comanda.id,
+                    scheduled_for=normalized_schedule,
+                )
+                db.commit()
+                db.refresh(comanda)
+            elif online_payment:
                 if comanda is None or payment_shift is None or payment_account is None:
                     raise OnlinePaymentConfigurationError("Não foi possível preparar o pagamento do pedido.")
                 payment_intent = OnlinePaymentService.create_intent_in_session(
@@ -412,7 +504,7 @@ class CardapioWebAdapter:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),
             )
-        except (InvalidFulfillmentDetailsError,) as err:
+        except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -475,8 +567,7 @@ class CardapioWebAdapter:
         finally:
             current_restaurante_id.reset(token_context)
 
-        # 4. O pedido online permanece invisível até o webhook aprovar.
-        if not online_payment:
+        if not online_payment and not is_scheduled:
             background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
             background_tasks.add_task(
                 manager.broadcast,
@@ -497,17 +588,22 @@ class CardapioWebAdapter:
                 target_audience="internal",
             )
 
-        # 5. Mapeamento da Resposta HTTP Padronizada
         return {
             "status": "success",
             "message": (
-                "Pix gerado. O pedido será enviado ao restaurante após a confirmação do pagamento."
-                if online_payment else "Pedido enviado e integrado ao caixa com sucesso!"
+                "Pedido agendado com sucesso. Ele será liberado no horário escolhido."
+                if is_scheduled
+                else (
+                    "Pix gerado. O pedido será enviado ao restaurante após a confirmação do pagamento."
+                    if online_payment else "Pedido enviado e integrado ao caixa com sucesso!"
+                )
             ),
             "id": order_dto.comanda_id,
             "comanda_id": order_dto.comanda_id,
             "numero_pedido": numero_pedido,
             "cliente_id": cliente_id,
+            "scheduled_for": normalized_schedule.isoformat() if normalized_schedule is not None else None,
+            "delivery_status": "agendado" if is_scheduled else None,
             "total": float(order_dto.total),
             "pagamento": (
                 OnlinePaymentService.public_payload(payment_intent)
