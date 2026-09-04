@@ -14,17 +14,6 @@ export interface Tenant {
   onlinePaymentStatus?: "connected" | "disconnected" | "pending" | string | null;
 }
 
-export interface FailedWebhook {
-  id: string;
-  tenantName: string;
-  orderId: string;
-  event: string;
-  amount: number;
-  errorReason: string;
-  createdAt: string;
-  resolved: boolean;
-}
-
 export interface ActiveDevice {
   restaurantId: string;
   restaurantName: string;
