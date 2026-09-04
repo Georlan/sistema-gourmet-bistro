@@ -72,7 +72,38 @@ def _to_receipt_item(item: PrintItem, *, preserve_customer: bool = False) -> dic
 
 
 def _clean_esc_text(value: str) -> str:
-    return str(value or "").replace(ESC_BOLD_ON, "").replace(ESC_BOLD_OFF, "").strip()
+    return (
+        str(value or "")
+        .replace(ESC_BOLD_ON, "")
+        .replace(ESC_BOLD_OFF, "")
+        .replace(ESC_DOUBLE_HEIGHT_ON, "")
+        .replace(ESC_NORMAL_SIZE, "")
+        .strip()
+    )
+
+
+def _style_document_title(
+    lines: list[str],
+    *,
+    document_title: Optional[str],
+    width: int,
+) -> None:
+    """Destaca títulos de documentos sem criar um segundo sistema visual."""
+    target = str(document_title or "").strip()
+    if not target:
+        return
+    normalized = target.casefold()
+    for index, line in enumerate(lines):
+        if _clean_esc_text(line).casefold() != normalized:
+            continue
+        lines[index] = (
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + align_center(target.upper(), width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
+        )
+        break
 
 
 def _replace_metadata_line(
@@ -83,11 +114,12 @@ def _replace_metadata_line(
     operator_label: str,
     operator_name: Optional[str],
     location_label: Optional[str],
+    identity_label: str,
     width: int,
 ) -> None:
     """Aplica a hierarquia operacional sobre a base compartilhada da comanda.
 
-    O número do pedido vira o principal ponto de leitura. Quando a base contém
+    A identidade principal vira o primeiro ponto de leitura. Quando a base contém
     uma mesa, ela é preservada em linha própria; pedidos remotos não carregam o
     antigo texto ``SEM MESA``. Canal é acrescentado somente quando o contexto
     semântico o fornece.
@@ -112,10 +144,11 @@ def _replace_metadata_line(
         if "MESA:" in line:
             table_label = "MESA: " + _clean_esc_text(line.split("MESA:", 1)[1])
 
+        resolved_label = str(identity_label or "PEDIDO").strip().upper() or "PEDIDO"
         lines[index] = (
             ESC_DOUBLE_HEIGHT_ON
             + ESC_BOLD_ON
-            + align_center(f"PEDIDO #{resolved_order}", width)
+            + align_center(f"{resolved_label} #{resolved_order}", width)
             + ESC_BOLD_OFF
             + ESC_NORMAL_SIZE
         )
@@ -256,10 +289,17 @@ def apply_operational_visual_hierarchy(
     operator_label: str = "GARÇOM",
     operator_name: Optional[str] = None,
     location_label: Optional[str] = None,
+    identity_label: str = "PEDIDO",
+    document_title: Optional[str] = None,
 ) -> str:
-    """Aplica a hierarquia visual compartilhada à base térmica da comanda."""
+    """Aplica o sistema visual compartilhado a qualquer documento operacional."""
     width = int(getattr(printer_service, "width", 40) or 40)
     lines = receipt.split("\n")
+    _style_document_title(
+        lines,
+        document_title=document_title,
+        width=width,
+    )
     _replace_metadata_line(
         lines,
         order_number=order_number,
@@ -267,6 +307,7 @@ def apply_operational_visual_hierarchy(
         operator_label=operator_label,
         operator_name=operator_name,
         location_label=location_label,
+        identity_label=identity_label,
         width=width,
     )
     _style_items_header(lines, width=width)
