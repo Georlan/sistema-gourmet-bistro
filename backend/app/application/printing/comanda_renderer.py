@@ -145,10 +145,11 @@ def _replace_metadata_line(
             table_label = "MESA: " + _clean_esc_text(line.split("MESA:", 1)[1])
 
         resolved_label = str(identity_label or "PEDIDO").strip().upper() or "PEDIDO"
+        separator = ":" if resolved_label in {"CONTA", "CONTAS"} else ""
         lines[index] = (
             ESC_DOUBLE_HEIGHT_ON
             + ESC_BOLD_ON
-            + align_center(f"{resolved_label} #{resolved_order}", width)
+            + align_center(f"{resolved_label}{separator} #{resolved_order}", width)
             + ESC_BOLD_OFF
             + ESC_NORMAL_SIZE
         )
