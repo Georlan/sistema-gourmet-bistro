@@ -61,6 +61,9 @@ type BackendOptions = {
     delivery_ativo?: boolean;
     pagamento_online_ativo?: boolean;
     pedido_minimo?: number;
+    aceitando_pedidos?: boolean;
+    motivo_indisponibilidade?: string;
+    origem_disponibilidade?: string;
   };
 };
 
@@ -153,6 +156,51 @@ async function openCart(page: Page) {
   }
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
 }
+
+test('sacola orienta o visitante até cada campo inválido e bloqueia a página de fundo', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders, {
+    restaurant: { pagamento_online_ativo: true },
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await expect(page.locator('#btn-cart-header')).toHaveAttribute('aria-label', 'Sua sacola, 0 itens');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  await expect(page.locator('#btn-cart-header')).toHaveAttribute('aria-label', 'Sua sacola, 1 item');
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
+
+  await page.getByRole('button', { name: /^Entrega\b/ }).click();
+  await page.locator('#btn-confirm-order').click();
+  const name = page.locator('#input-guest-name');
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe seu nome para o restaurante identificar o pedido.');
+
+  await name.fill('Cliente Teste');
+  await page.locator('#btn-confirm-order').click();
+  const phone = page.locator('#input-guest-phone');
+  await expect(phone).toBeFocused();
+  await expect(phone).toHaveAttribute('aria-invalid', 'true');
+
+  await phone.fill('85999999999');
+  await page.locator('#btn-confirm-order').click();
+  const address = page.locator('#input-delivery-address');
+  await expect(address).toBeFocused();
+  await expect(address).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe onde o pedido deve ser entregue.');
+
+  await address.fill('Rua do Teste, 123');
+  await page.locator('#btn-confirm-order').click();
+  const email = page.locator('#input-customer-email');
+  await expect(email).toBeFocused();
+  await expect(email).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe um e-mail válido para gerar o pagamento Pix.');
+
+  await page.locator('#btn-close-cart').click();
+  await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
+  expect(capturedOrders).toHaveLength(0);
+});
 
 test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos de tela', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
@@ -284,7 +332,27 @@ test('loja pausada mantém catálogo consultável e bloqueia criação de pedido
   await expect(page.getByText('Pedidos pausados.', { exact: false })).toBeVisible();
   await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
-  await expect(page.getByText(/restaurante pausou novos pedidos/i)).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('O restaurante pausou novos pedidos');
+  expect(capturedOrders).toHaveLength(0);
+});
+
+test('modo automático bloqueia o pedido no catálogo quando o servidor informa fora do horário', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders, {
+    statusOverride: 'Automático',
+    restaurant: {
+      aceitando_pedidos: false,
+      motivo_indisponibilidade: 'O restaurante está fora do horário de pedidos online.',
+      origem_disponibilidade: 'schedule',
+    },
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await expect(page.locator('#brand-banner-hero').getByText('Fora do horário', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
+  await page.locator('#btn-fast-add-101').click();
+  await expect(page.getByText(/fora do horário de pedidos online.*consultar os produtos/i)).toBeVisible();
+  await expect(page.locator('#floating-cart-trigger')).toHaveCount(0);
   expect(capturedOrders).toHaveLength(0);
 });
 

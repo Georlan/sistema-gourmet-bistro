@@ -353,6 +353,45 @@ def test_get_whitelabel_config_by_slug_success(test_setup):
     assert "cor_primaria" in data
 
 
+def test_public_menu_exposes_server_order_availability(test_setup):
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(test_setup["rest_id"])
+    try:
+        restaurant = db.query(Restaurante).filter(
+            Restaurante.id == test_setup["rest_id"]
+        ).one()
+        previous_status = restaurant.status_override
+        restaurant.status_override = "Forçado Fechado"
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+
+    try:
+        response = client.get(
+            f"/api/cardapio-digital/public?restaurante_id={test_setup['rest_id']}"
+        )
+        assert response.status_code == 200
+        restaurant_data = response.json()["restaurante"]
+        assert restaurant_data["aceitando_pedidos"] is False
+        assert restaurant_data["origem_disponibilidade"] == "forced_closed"
+        assert restaurant_data["motivo_indisponibilidade"] == (
+            "O restaurante está fechado para novos pedidos online no momento."
+        )
+    finally:
+        db = SessionLocal()
+        token_var = current_restaurante_id.set(test_setup["rest_id"])
+        try:
+            restaurant = db.query(Restaurante).filter(
+                Restaurante.id == test_setup["rest_id"]
+            ).one()
+            restaurant.status_override = previous_status
+            db.commit()
+        finally:
+            current_restaurante_id.reset(token_var)
+            db.close()
+
+
 def test_idempotency_order_deduplication(test_setup):
     """
     Test that sending an order with the same idempotency_key twice returns the same

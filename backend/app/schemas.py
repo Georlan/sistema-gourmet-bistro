@@ -749,6 +749,9 @@ class CardapioPublicRestaurantResponse(BaseModel):
     endereco: Optional[str] = None
     google_maps_url: Optional[str] = None
     status_override: Optional[str] = "Automático"
+    aceitando_pedidos: bool = True
+    motivo_indisponibilidade: Optional[str] = None
+    origem_disponibilidade: str = "automatic"
     socials: Optional[Any] = None
     horarios_funcionamento: Optional[Any] = None
     formas_pagamento_aceitas: Optional[Any] = None

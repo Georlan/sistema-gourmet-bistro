@@ -110,6 +110,23 @@ export default function CardapioCartDrawer({
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [invalidField, setInvalidField] = useState("");
+
+  const clearValidation = (fieldId?: string) => {
+    if (!fieldId || invalidField === fieldId) setInvalidField("");
+    if (errorMessage) setErrorMessage("");
+  };
+
+  const reportValidationError = (message: string, fieldId?: string) => {
+    setErrorMessage(message);
+    setInvalidField(fieldId || "");
+    if (!fieldId) return;
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(fieldId);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+  };
 
   // Payment detail & Change (Troco)
   const availablePayments = useMemo(() => {
@@ -130,7 +147,7 @@ export default function CardapioCartDrawer({
   const selectPayment = (method: PaymentMethod) => {
     if (!availablePayments.includes(method)) return;
     setPaymentSelection({ restaurantId: String(restaurantId), method });
-    setErrorMessage("");
+    clearValidation("cart-payment-methods");
     if (method !== 'dinheiro') {
       setPrecisaTroco(false);
       setTrocoPara("");
@@ -297,52 +314,53 @@ export default function CardapioCartDrawer({
 
   const handleCheckout = () => {
     setErrorMessage("");
+    setInvalidField("");
 
     if (!orderingEnabled) {
-      setErrorMessage(orderingMessage);
+      reportValidationError(orderingMessage);
       return;
     }
     if (cart.length === 0) {
-      setErrorMessage("Sua sacola está vazia.");
+      reportValidationError("Sua sacola está vazia.");
       return;
     }
     if (paymentError || !paymentDetail) {
-      setErrorMessage(paymentError || "Escolha uma forma de pagamento.");
+      reportValidationError(paymentError || "Escolha uma forma de pagamento.", "cart-payment-methods");
       return;
     }
 
     // Check minimum order
     const pedidoMin = brandConfig?.pedidoMinimo || 0;
     if (deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin) {
-      setErrorMessage(`O pedido mínimo para entrega é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`);
+      reportValidationError(`O pedido mínimo para entrega é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`, "cart-receive-methods");
       return;
     }
 
     if (deliveryMethod === "delivery" && !deliveryEnabled) {
-      setErrorMessage("O delivery está desativado para este restaurante. Escolha retirada.");
+      reportValidationError("O delivery está desativado para este restaurante. Escolha retirada.", "cart-receive-methods");
       return;
     }
 
     if (customerName.trim().length < 2) {
-      setErrorMessage("Informe seu nome para o restaurante identificar o pedido.");
+      reportValidationError("Informe seu nome para o restaurante identificar o pedido.", "input-guest-name");
       return;
     }
     if (normalizeBrazilianPhone(customerPhone).length < 10) {
-      setErrorMessage("Informe um celular válido com DDD.");
+      reportValidationError("Informe um celular válido com DDD.", "input-guest-phone");
       return;
     }
     if (deliveryMethod === "delivery" && address.trim().length < 5) {
-      setErrorMessage("Informe onde o pedido deve ser entregue.");
+      reportValidationError("Informe onde o pedido deve ser entregue.", "input-delivery-address");
       return;
     }
 
     if (paymentDetail === "pix" && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
-      setErrorMessage("Informe um e-mail válido para gerar o pagamento Pix.");
+      reportValidationError("Informe um e-mail válido para gerar o pagamento Pix.", "input-customer-email");
       return;
     }
 
     if (paymentDetail === "dinheiro" && precisaTroco && trocoValorNum < total) {
-      setErrorMessage(`O valor para troco deve ser maior que o total do pedido (${formatPrice(total)}).`);
+      reportValidationError(`O valor para troco deve ser maior que o total do pedido (${formatPrice(total)}).`, "payment-change-for");
       return;
     }
 
@@ -597,15 +615,15 @@ export default function CardapioCartDrawer({
               )}
 
               {/* Section 2: Delivery Method & Address & Bairro */}
-              <section className="border-t border-koma-border pt-5">
+              <section className="border-t border-koma-border pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
                 <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">2. Como quer receber?</h3>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button type="button" aria-pressed={deliveryMethod === "pickup"} onClick={() => { setDeliveryMethod("pickup"); setErrorMessage(""); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                  <button type="button" aria-pressed={deliveryMethod === "pickup"} onClick={() => { setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Retirada</strong>
                     <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Buscar no restaurante</span>
                   </button>
-                  <button type="button" disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"} onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); setErrorMessage(""); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                  <button type="button" disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"} onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><Truck className={deliveryMethod === "delivery" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "delivery" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Entrega</strong>
                     <span className="mt-1 block text-xs leading-relaxed text-koma-muted">{deliveryEnabled ? deliveryLabel : "Indisponível no momento"}</span>
@@ -649,7 +667,7 @@ export default function CardapioCartDrawer({
 
                     <label className="block">
                       <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-koma-foreground"><MapPin className="h-4 w-4 text-emerald-500" /> Endereço de entrega</span>
-                      <textarea rows={3} autoComplete="street-address" placeholder="Rua, número, complemento e bairro" value={address} onChange={(event) => { setAddress(event.target.value); if (errorMessage) setErrorMessage(""); }} className="w-full resize-none rounded-xl border border-koma-border bg-koma-card p-3 text-base leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-delivery-address" />
+                      <textarea rows={3} autoComplete="street-address" placeholder="Rua, número, complemento e bairro" value={address} onChange={(event) => { setAddress(event.target.value); clearValidation("input-delivery-address"); }} aria-invalid={invalidField === "input-delivery-address"} aria-describedby={invalidField === "input-delivery-address" ? "cart-checkout-error" : undefined} className={`w-full resize-none rounded-xl border bg-koma-card p-3 text-base leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-delivery-address" ? "border-rose-500" : "border-koma-border"}`} id="input-delivery-address" />
                     </label>
                   </div>
                 )}
@@ -732,7 +750,7 @@ export default function CardapioCartDrawer({
               </section>
 
               {/* Section 4: Forma de Pagamento & Troco */}
-              <section className="border-t border-koma-border pt-5">
+              <section className="border-t border-koma-border pt-5" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
                 <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">4. Como quer pagar?</h3>
                 <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pix é pago agora e só libera o pedido após confirmação. Dinheiro e cartão são pagos pessoalmente {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}.</p>
                 
@@ -792,8 +810,10 @@ export default function CardapioCartDrawer({
                             step="0.01"
                             placeholder="Outro valor..."
                             value={trocoPara}
-                            onChange={(e) => setTrocoPara(e.target.value)}
-                            className="min-h-12 w-full pl-9 pr-3 py-2 bg-koma-raised border border-koma-border rounded-xl text-base font-mono font-bold text-koma-foreground outline-none focus:border-emerald-500"
+                            onChange={(e) => { setTrocoPara(e.target.value); clearValidation("payment-change-for"); }}
+                            aria-invalid={invalidField === "payment-change-for"}
+                            aria-describedby={invalidField === "payment-change-for" ? "cart-checkout-error" : undefined}
+                            className={`min-h-12 w-full pl-9 pr-3 py-2 bg-koma-raised border rounded-xl text-base font-mono font-bold text-koma-foreground outline-none focus:border-emerald-500 ${invalidField === "payment-change-for" ? "border-rose-500" : "border-koma-border"}`}
                           />
                         </div>
                         {trocoCalculado > 0 && (
@@ -823,11 +843,11 @@ export default function CardapioCartDrawer({
                   <div className="mt-3 space-y-3">
                     <label className="block">
                       <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Seu nome</span>
-                      <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); if (errorMessage) setErrorMessage(""); }} className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-guest-name" /></span>
+                      <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-name" /></span>
                     </label>
                     <label className="block">
                       <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
-                      <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); if (errorMessage) setErrorMessage(""); }} className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-guest-phone" /></span>
+                      <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); clearValidation("input-guest-phone"); }} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-phone" /></span>
                     </label>
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-[10px] font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-500">Quer acumular pontos de fidelidade? <strong className="text-emerald-500">Identifique-se aqui.</strong></button>}
                   </div>
@@ -835,13 +855,13 @@ export default function CardapioCartDrawer({
                 {paymentDetail === "pix" && (
                   <label className="mt-3 block">
                     <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">E-mail para o Pix</span>
-                    <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); if (errorMessage) setErrorMessage(""); }} className="h-12 w-full rounded-xl border border-koma-border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500" id="input-customer-email" /></span>
+                    <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); clearValidation("input-customer-email"); }} aria-invalid={invalidField === "input-customer-email"} aria-describedby={invalidField === "input-customer-email" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-customer-email" ? "border-rose-500" : "border-koma-border"}`} id="input-customer-email" /></span>
                   </label>
                 )}
               </section>
 
               {errorMessage && (
-                <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] font-semibold text-rose-400" role="alert">
+                <div className="flex items-start gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] font-semibold text-rose-400" role="alert" id="cart-checkout-error">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{errorMessage}</span>
                 </div>

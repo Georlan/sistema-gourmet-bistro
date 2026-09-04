@@ -273,6 +273,7 @@ export default function CardapioPage() {
       }
 
       const statusOverride = String(restaurant.status_override || "Automático").toLocaleLowerCase("pt-BR");
+      const acceptingOrders = restaurant.aceitando_pedidos !== false;
       const brand: BrandConfig = {
         id: String(restaurant.id),
         name: String(restaurant.nome || "Restaurante"),
@@ -308,11 +309,14 @@ export default function CardapioPage() {
             }))
           : [],
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
-        storeStatus: statusOverride.includes("fech")
+        storeStatus: !acceptingOrders || statusOverride.includes("fech")
           ? "closed"
           : statusOverride.includes("abert")
             ? "open"
             : "automatic",
+        acceptingOrders,
+        orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
+        availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
       };
 
       setActiveBrand(brand);
@@ -388,6 +392,25 @@ export default function CardapioPage() {
     document.body.style.backgroundColor = KOMA_BACKGROUND;
     document.body.style.color = "#ffffff";
   }, [activeBrand]);
+
+  const hasOpenOverlay = Boolean(
+    selectedProduct
+    || isCartOpen
+    || isAuthOpen
+    || isCheckoutOpen
+    || isStoreInfoOpen
+    || isProfileOpen
+    || isOrdersDrawerOpen,
+  );
+
+  useEffect(() => {
+    if (!hasOpenOverlay) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [hasOpenOverlay]);
 
   useEffect(() => {
     if (!activeBrand?.id) return;
@@ -484,8 +507,8 @@ export default function CardapioPage() {
     return () => observer.disconnect();
   }, [activeBrand, visibleCategories]);
 
-  const orderingEnabled = activeBrand?.storeStatus !== "closed";
-  const orderingMessage = "O restaurante pausou novos pedidos por enquanto.";
+  const orderingEnabled = activeBrand?.acceptingOrders !== false && activeBrand?.storeStatus !== "closed";
+  const orderingMessage = activeBrand?.orderingMessage || "O restaurante pausou novos pedidos por enquanto.";
 
   const handleAddToCart = (
     product: Product,
@@ -742,7 +765,7 @@ export default function CardapioPage() {
               </div>
             </div>
             <button type="button" onClick={() => setIsStoreInfoOpen(true)} className={clsx("shrink-0 rounded-full border px-3 py-2 text-[10px] font-black backdrop-blur", activeBrand.storeStatus === "closed" ? "border-rose-400/30 bg-rose-500/15 text-rose-200" : activeBrand.storeStatus === "open" ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200" : "border-amber-400/30 bg-amber-500/15 text-amber-100")}>
-              {activeBrand.storeStatus === "closed" ? "Pedidos pausados" : activeBrand.storeStatus === "open" ? "Aberto para pedidos" : "Ver horários"}
+              {activeBrand.storeStatus === "closed" ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados") : activeBrand.storeStatus === "open" ? "Aberto para pedidos" : "Ver horários"}
             </button>
           </div>
         </section>
@@ -751,7 +774,7 @@ export default function CardapioPage() {
 
         {activeBrand.storeStatus === "closed" && (
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-            <strong>Pedidos pausados.</strong> O cardápio continua disponível para consulta, mas novos pedidos não podem ser enviados agora.
+            <strong>{activeBrand.availabilitySource === "schedule" ? "O restaurante está fora do horário de pedidos online." : "Pedidos pausados."}</strong>{activeBrand.availabilitySource === "schedule" ? " " : ` ${orderingMessage} `}O cardápio continua disponível para consulta.
           </div>
         )}
 
