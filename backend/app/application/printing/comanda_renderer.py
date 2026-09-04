@@ -21,15 +21,17 @@ from ...timezone_utils import to_operational_local_time
 
 @dataclass(frozen=True)
 class ComandaVariant:
-    """Campos que variam sem criar um segundo modelo visual de comanda."""
+    """Contexto que varia sem criar outro layout de comanda operacional."""
 
     origin_label: Optional[str] = None
-    location_label: str = "BALCÃO"
+    location_label: Optional[str] = "BALCÃO"
     operator_label: str = "OPERADOR"
     customer_name: Optional[str] = None
     is_reprint: bool = False
     event_at: Optional[datetime.datetime] = None
     via_label: Optional[str] = None
+    table_id: Optional[int] = None
+    preserve_item_customers: bool = False
     delivery_phone: Optional[str] = None
     delivery_address: Optional[str] = None
     delivery_neighborhood: Optional[str] = None
@@ -51,14 +53,19 @@ def _order_type_label(tipo: object) -> str:
     return "CONSUMO NO LOCAL"
 
 
-def _to_receipt_item(item: PrintItem) -> dict:
+def _to_receipt_item(item: PrintItem, *, preserve_customer: bool = False) -> dict:
     return {
         "codigo": item.codigo,
         "produto": {"id": item.codigo, "nome": item.nome},
         "preco_unit": float(item.preco_unit or 0.0),
         "status": "preparando",
-        # Cliente é exibido no bloco canônico do cabeçalho para pedidos remotos.
-        "cliente_nome": "Consumo Geral",
+        # Remotos exibem cliente no bloco contextual. No salão, a identidade por
+        # item precisa ser preservada para mesas divididas por cliente.
+        "cliente_nome": (
+            item.cliente_nome or "Consumo Geral"
+            if preserve_customer
+            else "Consumo Geral"
+        ),
         "observacao": item.observacao or "",
         "quantidade": max(int(item.quantidade or 1), 1),
     }
@@ -250,7 +257,7 @@ def apply_operational_visual_hierarchy(
     operator_name: Optional[str] = None,
     location_label: Optional[str] = None,
 ) -> str:
-    """Aplica a mesma hierarquia visual a pedido local, retirada e delivery."""
+    """Aplica a hierarquia visual compartilhada à base térmica da comanda."""
     width = int(getattr(printer_service, "width", 40) or 40)
     lines = receipt.split("\n")
     _replace_metadata_line(
@@ -310,22 +317,29 @@ def render_canonical_comanda(
     items: list[PrintItem],
     variant: ComandaVariant,
 ) -> str:
-    """Renderiza pedidos remotos sobre a mesma base visual das comandas de mesa.
+    """Fonte única do layout de toda comanda operacional do Kôma.
 
-    A base continua sendo ``PrinterService.generate_receipt``. Este adaptador
-    apenas injeta dados que dependem da natureza do pedido (origem, balcão,
-    entrega, pagamento e reimpressão), sem duplicar cabeçalho, itens ou rodapé.
+    Consumo local, retirada e delivery passam por este renderer. Os motores só
+    resolvem dados e contexto; cabeçalho, identidade, itens, valores, observações,
+    total e rodapé pertencem a esta função. Documentos semanticamente diferentes
+    (fechamento, caixa, despacho e delta de item) permanecem fora deste modelo.
     """
     width = int(getattr(printer_service, "width", 40) or 40)
     receipt = printer_service.generate_receipt(
         num_pedido=order_number,
         tipo=order_type,
-        mesa_id=None,
+        mesa_id=variant.table_id,
         garcom_nome=operator_name,
         comandas_details=[
             {
                 "identificador": "Consumo Geral",
-                "itens": [_to_receipt_item(item) for item in items],
+                "itens": [
+                    _to_receipt_item(
+                        item,
+                        preserve_customer=variant.preserve_item_customers,
+                    )
+                    for item in items
+                ],
             }
         ],
         print_header=restaurant_name,
