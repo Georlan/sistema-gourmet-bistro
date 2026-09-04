@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 import logging
+import unicodedata
 from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import or_
@@ -78,6 +79,17 @@ logger = logging.getLogger("koma.adapters.web")
 
 MAX_PUBLIC_ORDER_UNITS = 200
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
+PHYSICAL_CARD_METHODS = {"cartao_credito", "cartao_debito"}
+PAYMENT_METHOD_ALIASES = {
+    "pix": "pix",
+    "dinheiro": "dinheiro",
+    "credito": "cartao_credito",
+    "cartao credito": "cartao_credito",
+    "cartao de credito": "cartao_credito",
+    "debito": "cartao_debito",
+    "cartao debito": "cartao_debito",
+    "cartao de debito": "cartao_debito",
+}
 
 
 def _order_total(comanda: Comanda) -> float:
@@ -149,6 +161,22 @@ def _enforce_public_order_rate_limits(
         restaurante_id=restaurante_id,
         telefone=telefone,
     )
+
+
+def _configured_payment_methods(raw_methods: Any) -> set[str]:
+    if not isinstance(raw_methods, list):
+        return set()
+    configured: set[str] = set()
+    for raw_method in raw_methods:
+        if not isinstance(raw_method, str):
+            continue
+        normalized = unicodedata.normalize("NFD", raw_method)
+        normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+        normalized = " ".join(normalized.lower().replace("_", " ").replace("-", " ").split())
+        method = PAYMENT_METHOD_ALIASES.get(normalized)
+        if method:
+            configured.add(method)
+    return configured
 
 
 class CardapioWebAdapter:
@@ -225,10 +253,10 @@ class CardapioWebAdapter:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="A chave idempotente é obrigatória no pagamento online.",
                 )
-        elif payment_method != "dinheiro":
+        elif payment_method not in {"dinheiro", "cartao_credito", "cartao_debito"}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Pedidos sem pagamento online só podem usar dinheiro no atendimento.",
+                detail="Pagamento no atendimento aceita dinheiro, cartão de crédito ou cartão de débito.",
             )
 
         tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
@@ -276,6 +304,18 @@ class CardapioWebAdapter:
                         payer_email=payload.cliente_email or "",
                     )
                 return _existing_order_response(db, existing_comanda)
+
+            if (
+                not online_payment
+                and payment_method in PHYSICAL_CARD_METHODS
+                and payment_method not in _configured_payment_methods(
+                    restaurante.formas_pagamento_aceitas
+                )
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="A forma de pagamento escolhida não está habilitada pelo restaurante.",
+                )
 
             if customer_token:
                 _claims, cliente = authenticated_customer(

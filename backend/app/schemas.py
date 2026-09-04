@@ -753,6 +753,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     horarios_funcionamento: Optional[Any] = None
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
+    delivery_ativo: bool = True
     cor_primaria: Optional[str] = "#00b894"
     cor_fundo: Optional[str] = "#090a0f"
     pedido_minimo: Optional[float] = 0.0

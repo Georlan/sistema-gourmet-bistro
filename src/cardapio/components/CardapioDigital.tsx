@@ -24,7 +24,13 @@ import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/what
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
-import { getAvailablePaymentMethods, getPaymentSelectionError } from "../paymentMethods";
+import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
+import {
+  buildOrderSubmissionFingerprint,
+  normalizePendingOrderSubmissions,
+  resolveOrderSubmissionKey,
+  upsertPendingOrderSubmission,
+} from "../orderSubmission";
 
 interface CreatedOrder {
   comanda_id: string;
@@ -64,12 +70,6 @@ interface CardapioDigitalProps {
   onClose: () => void;
   onOrderSuccess: (order: CreatedOrder) => void;
   onSessionExpired?: () => void;
-}
-
-interface PendingOrderSubmission {
-  key: string;
-  fingerprint: string;
-  createdAt: number;
 }
 
 const PENDING_ORDER_STORAGE_KEY = "koma_pending_order_submission";
@@ -135,7 +135,8 @@ export default function CardapioDigital({
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
   const isSubmittingRef = useRef(false);
-  const idempotencyKeyRef = useRef<string>(createIdempotencyKey());
+  const idempotencyKeyRef = useRef<string>("");
+  const idempotencyFingerprintRef = useRef<string | null>(null);
 
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
     let unitPrice = item.product.price;
@@ -148,14 +149,13 @@ export default function CardapioDigital({
   }, 0), [cart]);
 
   const estimatedTotal = Math.max(0, subtotal + deliveryFee - descontoCupom - descontoCashback);
-  const paymentMethods = useMemo(
-    () => (activeBrand.paymentMethods || []).filter((method) => method?.type),
-    [activeBrand.paymentMethods],
+  const availablePayments = useMemo(
+    () => getCheckoutPaymentMethods(activeBrand.paymentMethods, activeBrand.onlinePaymentEnabled),
+    [activeBrand.onlinePaymentEnabled, activeBrand.paymentMethods],
   );
-  const availablePayments = useMemo(() => getAvailablePaymentMethods(activeBrand.paymentMethods), [activeBrand.paymentMethods]);
   const paymentError = getPaymentSelectionError(paymentMethodDetail, availablePayments);
-  const schedulePaymentError = scheduleMode === "scheduled" && paymentMethodDetail !== "dinheiro"
-    ? "Pedidos agendados usam pagamento no atendimento nesta versão. Selecione dinheiro."
+  const schedulePaymentError = scheduleMode === "scheduled" && paymentMethodDetail === "pix"
+    ? "Pedidos agendados usam pagamento no atendimento nesta versão. Selecione dinheiro ou cartão."
     : "";
 
   const scheduleMin = toLocalDateTimeInput(new Date(Date.now() + SCHEDULE_MIN_LEAD_MS));
@@ -199,36 +199,67 @@ export default function CardapioDigital({
   }, [activeBrand.id]);
 
   const resolvePersistentIdempotencyKey = (fingerprint: string) => {
-    let key = idempotencyKeyRef.current;
     try {
+      const now = Date.now();
       const raw = localStorage.getItem(PENDING_ORDER_STORAGE_KEY);
-      if (raw) {
-        const pending = JSON.parse(raw) as PendingOrderSubmission;
-        const isFresh = Number.isFinite(pending.createdAt)
-          && Date.now() - pending.createdAt <= PENDING_ORDER_TTL_MS;
-        if (pending.key && pending.fingerprint === fingerprint && isFresh) {
-          key = pending.key;
-        }
-      }
+      const submissions = normalizePendingOrderSubmissions(
+        raw ? JSON.parse(raw) : null,
+        now,
+        PENDING_ORDER_TTL_MS,
+      );
+      const pending = submissions.find((item) => item.fingerprint === fingerprint) ?? null;
 
-      localStorage.setItem(PENDING_ORDER_STORAGE_KEY, JSON.stringify({
+      const key = resolveOrderSubmissionKey({
+        fingerprint,
+        now,
+        ttlMs: PENDING_ORDER_TTL_MS,
+        pending,
+        currentKey: "",
+        currentFingerprint: null,
+        createKey: createIdempotencyKey,
+      });
+      const nextSubmissions = upsertPendingOrderSubmission(submissions, {
         key,
         fingerprint,
-        createdAt: Date.now(),
-      } satisfies PendingOrderSubmission));
+        createdAt: now,
+      }, now, PENDING_ORDER_TTL_MS);
+      localStorage.setItem(PENDING_ORDER_STORAGE_KEY, JSON.stringify({
+        submissions: nextSubmissions,
+      }));
+      idempotencyKeyRef.current = key;
+      idempotencyFingerprintRef.current = fingerprint;
+      return key;
     } catch (error) {
       console.warn("Não foi possível persistir a tentativa do pedido:", error);
+      const key = resolveOrderSubmissionKey({
+        fingerprint,
+        now: Date.now(),
+        ttlMs: PENDING_ORDER_TTL_MS,
+        pending: null,
+        currentKey: idempotencyKeyRef.current,
+        currentFingerprint: idempotencyFingerprintRef.current,
+        createKey: createIdempotencyKey,
+      });
+      idempotencyKeyRef.current = key;
+      idempotencyFingerprintRef.current = fingerprint;
+      return key;
     }
-    idempotencyKeyRef.current = key;
-    return key;
   };
 
   const clearPendingSubmission = (key: string) => {
     try {
       const raw = localStorage.getItem(PENDING_ORDER_STORAGE_KEY);
       if (!raw) return;
-      const pending = JSON.parse(raw) as PendingOrderSubmission;
-      if (pending.key === key) localStorage.removeItem(PENDING_ORDER_STORAGE_KEY);
+      const submissions = normalizePendingOrderSubmissions(
+        JSON.parse(raw),
+        Date.now(),
+        PENDING_ORDER_TTL_MS,
+      ).filter((submission) => submission.key !== key);
+      if (submissions.length === 0) {
+        localStorage.removeItem(PENDING_ORDER_STORAGE_KEY);
+      } else {
+        localStorage.setItem(PENDING_ORDER_STORAGE_KEY, JSON.stringify({ submissions }));
+      }
     } catch (error) {
       console.warn("Não foi possível limpar a tentativa confirmada:", error);
     }
@@ -296,14 +327,24 @@ export default function CardapioDigital({
 
     const cleanedItems = buildCardapioOrderItems(cart, finalClienteNome);
 
-    const fingerprint = JSON.stringify({
+    const orderRequest = {
       restaurante_id: targetRestauranteId,
-      cliente_telefone: normalizedPhone,
-      tipo_pedido: deliveryMethod,
-      endereco: deliveryMethod === "delivery" ? normalizedAddress : "",
-      scheduled_for: scheduledForIso || null,
       itens: cleanedItems,
-    });
+      cliente_nome: finalClienteNome,
+      cliente_telefone: normalizedPhone,
+      endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
+      taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
+      forma_pagamento: paymentMethodDetail === "pix" ? "online" : "na_entrega",
+      forma_pagamento_detalhe: paymentMethodDetail,
+      cliente_email: paymentMethodDetail === "pix" ? customerEmail?.trim().toLowerCase() : undefined,
+      troco_para: paymentMethodDetail === "dinheiro" ? trocoPara : undefined,
+      bairro: deliveryMethod === "delivery" ? bairro?.trim() || undefined : undefined,
+      cupom_codigo: cupomCodigo?.trim().toUpperCase() || undefined,
+      usar_cashback: usarCashback,
+      tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
+      scheduled_for: scheduledForIso || null,
+    };
+    const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
     const idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);
 
     isSubmittingRef.current = true;
@@ -325,21 +366,7 @@ export default function CardapioDigital({
         headers,
         signal: controller.signal,
         body: JSON.stringify({
-          restaurante_id: targetRestauranteId,
-          itens: cleanedItems,
-          cliente_nome: finalClienteNome,
-          cliente_telefone: normalizedPhone,
-          endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
-          taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
-          forma_pagamento: paymentMethodDetail === "dinheiro" ? "na_entrega" : "online",
-          forma_pagamento_detalhe: paymentMethodDetail,
-          cliente_email: paymentMethodDetail === "pix" ? customerEmail : undefined,
-          troco_para: paymentMethodDetail === "dinheiro" ? trocoPara : undefined,
-          bairro: bairro,
-          cupom_codigo: cupomCodigo,
-          usar_cashback: usarCashback,
-          tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
-          scheduled_for: scheduledForIso,
+          ...orderRequest,
           idempotency_key: idempotencyKey,
         }),
       });
@@ -559,7 +586,7 @@ export default function CardapioDigital({
 
               <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
                 {!paymentError && paymentMethodDetail ? <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} /> : <p role="alert" className="text-sm leading-relaxed text-amber-500">{paymentError} Volte à sacola para conferir.</p>}
-                {paymentMethods.length > 0 ? <div className="mt-3 border-t border-koma-border pt-3"><p className="text-xs text-koma-muted">Formas informadas pelo restaurante</p><div className="mt-2 flex flex-wrap gap-1.5">{paymentMethods.map((method) => <span key={method.type} className="rounded-lg border border-koma-border px-2.5 py-1.5 text-xs text-koma-secondary">{method.type}</span>)}</div></div> : <p className="mt-3 text-xs leading-relaxed text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}
+                {availablePayments.length > 0 ? <div className="mt-3 border-t border-koma-border pt-3"><p className="text-xs text-koma-muted">Formas disponíveis neste pedido</p><div className="mt-2 flex flex-wrap gap-1.5">{availablePayments.map((method) => <span key={method} className="rounded-lg border border-koma-border px-2.5 py-1.5 text-xs text-koma-secondary">{PAYMENT_LABELS[method]}</span>)}</div></div> : <p className="mt-3 text-xs leading-relaxed text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}
               </section>
 
               <section className="space-y-1.5 border-t border-koma-border pt-4 text-xs">
@@ -577,7 +604,7 @@ export default function CardapioDigital({
         {!createdOrder && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6 sm:py-5">
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro entra direto e é cobrado pessoalmente."}</p>
+            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>
         )}
       </div>

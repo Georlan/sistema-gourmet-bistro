@@ -34,9 +34,9 @@ import {
 } from "lucide-react";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
 import { API_BASE_URL } from "../../config/api";
-import { getDeliveryQuote } from "../deliveryPresentation";
+import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
-import { getAvailablePaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
+import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
 
 export interface CartItem {
   id: string;
@@ -113,11 +113,10 @@ export default function CardapioCartDrawer({
 
   // Payment detail & Change (Troco)
   const availablePayments = useMemo(() => {
-    const configured = getAvailablePaymentMethods(brandConfig?.paymentMethods);
-    if (brandConfig?.onlinePaymentEnabled === undefined) return configured;
-    return configured.filter((method) => (
-      method === "dinheiro" || (method === "pix" && brandConfig.onlinePaymentEnabled)
-    ));
+    return getCheckoutPaymentMethods(
+      brandConfig?.paymentMethods,
+      brandConfig?.onlinePaymentEnabled,
+    );
   }, [brandConfig?.onlinePaymentEnabled, brandConfig?.paymentMethods]);
   const [paymentSelection, setPaymentSelection] = useState<{ restaurantId: string; method: PaymentMethod | null }>(() => ({
     restaurantId: String(restaurantId),
@@ -207,13 +206,21 @@ export default function CardapioCartDrawer({
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
+  const deliveryEnabled = brandConfig?.deliveryEnabled !== false;
   const deliveryFee = deliveryMethod === "delivery" ? deliveryQuote.fee : 0;
   const deliveryLabel = deliveryQuote.awaitingNeighborhood
     ? "Taxa por bairro"
     : deliveryQuote.fee === 0 ? "Sem taxa de entrega" : `Taxa de ${formatPrice(deliveryQuote.fee)}`;
   const minimumOrder = brandConfig?.pedidoMinimo || 0;
-  const remainingMinimum = Math.max(0, minimumOrder - subtotal);
+  const remainingMinimum = getDeliveryMinimumRemaining(brandConfig, subtotal, deliveryMethod);
   const freeDeliveryThreshold = brandConfig?.freteGratisValor || 0;
+
+  useEffect(() => {
+    if (!deliveryEnabled && deliveryMethod === "delivery") {
+      setDeliveryMethod("pickup");
+      setSelectedBairro("");
+    }
+  }, [deliveryEnabled, deliveryMethod]);
 
   // Cashback deduction calculation
   const userCashbackBalance = Number(user?.saldo_cashback || 0);
@@ -306,8 +313,13 @@ export default function CardapioCartDrawer({
 
     // Check minimum order
     const pedidoMin = brandConfig?.pedidoMinimo || 0;
-    if (pedidoMin > 0 && subtotal < pedidoMin) {
+    if (deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin) {
       setErrorMessage(`O pedido mínimo para entrega é de ${formatPrice(pedidoMin)} (faltam ${formatPrice(pedidoMin - subtotal)}).`);
+      return;
+    }
+
+    if (deliveryMethod === "delivery" && !deliveryEnabled) {
+      setErrorMessage("O delivery está desativado para este restaurante. Escolha retirada.");
       return;
     }
 
@@ -324,10 +336,6 @@ export default function CardapioCartDrawer({
       return;
     }
 
-    if (paymentDetail !== "dinheiro" && paymentDetail !== "pix") {
-      setErrorMessage("Pagamento online por cartão será liberado após a etapa segura de tokenização. Use Pix ou dinheiro.");
-      return;
-    }
     if (paymentDetail === "pix" && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
       setErrorMessage("Informe um e-mail válido para gerar o pagamento Pix.");
       return;
@@ -597,10 +605,10 @@ export default function CardapioCartDrawer({
                     <strong className="mt-2 block text-sm text-koma-foreground">Retirada</strong>
                     <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Buscar no restaurante</span>
                   </button>
-                  <button type="button" aria-pressed={deliveryMethod === "delivery"} onClick={() => { setDeliveryMethod("delivery"); setErrorMessage(""); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                  <button type="button" disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"} onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); setErrorMessage(""); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><Truck className={deliveryMethod === "delivery" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "delivery" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Entrega</strong>
-                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">{deliveryLabel}</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">{deliveryEnabled ? deliveryLabel : "Indisponível no momento"}</span>
                   </button>
                 </div>
 
@@ -726,7 +734,7 @@ export default function CardapioCartDrawer({
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-koma-border pt-5">
                 <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">4. Como quer pagar?</h3>
-                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pix é pago agora e só libera o pedido após confirmação. Dinheiro é pago pessoalmente {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}.</p>
+                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pix é pago agora e só libera o pedido após confirmação. Dinheiro e cartão são pagos pessoalmente {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}.</p>
                 
                 <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
 

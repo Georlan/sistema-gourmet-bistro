@@ -57,6 +57,11 @@ type BackendOptions = {
   statusOverride?: string;
   orderStatus?: string;
   orderClosed?: boolean;
+  restaurant?: Partial<typeof basePublicMenuPayload.restaurante> & {
+    delivery_ativo?: boolean;
+    pagamento_online_ativo?: boolean;
+    pedido_minimo?: number;
+  };
 };
 
 async function mockPublicMenuBackend(
@@ -78,6 +83,7 @@ async function mockPublicMenuBackend(
           ...basePublicMenuPayload,
           restaurante: {
             ...basePublicMenuPayload.restaurante,
+            ...options.restaurant,
             status_override: options.statusOverride ?? basePublicMenuPayload.restaurante.status_override,
           },
         }),
@@ -230,6 +236,44 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
     endereco_entrega: 'Rua das Flores, 123, Centro',
   });
   expect(backend.getOtpRequests()).toBe(0);
+});
+
+test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders, {
+    restaurant: {
+      delivery_ativo: false,
+      pagamento_online_ativo: false,
+      pedido_minimo: 100,
+    },
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await expect(page.getByText('Somente retirada', { exact: true })).toBeVisible();
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+
+  const deliveryButton = page.getByRole('button', { name: /^Entrega\b/ });
+  await expect(deliveryButton).toBeDisabled();
+  await expect(deliveryButton).toContainText('Indisponível no momento');
+  await expect(page.getByRole('button', { name: 'Pix', exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Faltam .* pedido mínimo/)).toHaveCount(0);
+
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Carla Retirada');
+  await page.getByPlaceholder('(00) 00000-0000').fill('85977776666');
+  await page.getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
+  await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+  await expect(page.getByText(/^Cartão de crédito\s*· na retirada$/)).toBeVisible();
+  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+
+  await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+  expect(capturedOrders).toHaveLength(1);
+  expect(capturedOrders[0]).toMatchObject({
+    tipo_pedido: 'retirada',
+    taxa_entrega: 0,
+    forma_pagamento: 'na_entrega',
+    forma_pagamento_detalhe: 'cartao_credito',
+  });
 });
 
 test('loja pausada mantém catálogo consultável e bloqueia criação de pedido', async ({ page }) => {

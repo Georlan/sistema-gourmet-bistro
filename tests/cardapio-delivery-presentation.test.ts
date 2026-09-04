@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { getDeliveryQuote } from '../src/cardapio/deliveryPresentation';
+import { getDeliveryMinimumRemaining, getDeliveryQuote } from '../src/cardapio/deliveryPresentation';
 
 const neighborhoods = [{ bairro: 'Centro', taxa: 5 }, { bairro: 'Retiro', taxa: 0 }];
 
@@ -42,6 +42,12 @@ test('cotações usam apenas a configuração fornecida de cada restaurante', ()
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Centro').fee, 5);
 });
 
+test('pedido mínimo bloqueia somente entrega, nunca retirada', () => {
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'delivery'), 10);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'pickup'), 0);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 30, 'delivery'), 0);
+});
+
 const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');
 
 test('UI expõe seleção, nome acessível do bairro e endereço legível sem alterar checkout', () => {
@@ -57,6 +63,12 @@ test('resumo não promete total final, mostra mínimo e preserva bloqueio de loj
   assert.match(cart, /<span>Total estimado<\/span>/);
   assert.match(cart, /remainingMinimum > 0 &&/);
   assert.match(cart, /disabled=\{!orderingEnabled \|\| availablePayments.length === 0\}/);
+});
+
+test('UI impede selecionar entrega desativada sem bloquear retirada', () => {
+  assert.match(cart, /disabled=\{!deliveryEnabled\} aria-pressed=\{deliveryMethod === "delivery"\}/);
+  assert.match(cart, /deliveryEnabled \? deliveryLabel : "Indisponível no momento"/);
+  assert.match(cart, /deliveryMethod === "delivery" && pedidoMin > 0 && subtotal < pedidoMin/);
 });
 
 test('promoção ausente não renderiza zero solto na sacola', () => {
