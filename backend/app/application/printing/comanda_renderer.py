@@ -9,6 +9,8 @@ from ...domain.printing import PrintItem
 from ...printer_service import (
     ESC_BOLD_OFF,
     ESC_BOLD_ON,
+    ESC_DOUBLE_HEIGHT_ON,
+    ESC_NORMAL_SIZE,
     align_center,
     mask_phone,
     printer_service,
@@ -65,19 +67,32 @@ def _to_receipt_item(item: PrintItem) -> dict:
 def _replace_metadata_line(
     lines: list[str],
     *,
+    order_number: object,
     event_at: Optional[datetime.datetime],
     operator_label: str,
     operator_name: str,
     location_label: str,
     width: int,
 ) -> None:
+    """Transforma o cabeçalho-base em uma hierarquia própria para bobina térmica.
+
+    O número do pedido vira o principal ponto de leitura e os metadados ficam em
+    duas colunas previsíveis. Nenhum dado novo é inventado: o canal vem do contexto
+    já resolvido pelo Core de Impressão.
+    """
     local_event = event_at
     if isinstance(local_event, datetime.datetime) and local_event.tzinfo is not None:
         local_event = to_operational_local_time(local_event) or local_event
 
     for index, line in enumerate(lines):
-        if "SEM MESA" in line:
-            lines[index] = line.replace("SEM MESA", str(location_label or "BALCÃO").upper())
+        if "PEDIDO: #" in line:
+            lines[index] = (
+                ESC_DOUBLE_HEIGHT_ON
+                + ESC_BOLD_ON
+                + align_center(f"PEDIDO #{order_number}", width)
+                + ESC_BOLD_OFF
+                + ESC_NORMAL_SIZE
+            )
             break
 
     if isinstance(local_event, datetime.datetime):
@@ -92,7 +107,12 @@ def _replace_metadata_line(
 
     for index, line in enumerate(lines):
         if "GARÇOM:" in line:
-            lines[index] = f"{str(operator_label or 'OPERADOR').strip().upper()}: {str(operator_name or 'OPERADOR').strip()}"
+            operator_text = (
+                f"{str(operator_label or 'OPERADOR').strip().upper()}: "
+                f"{str(operator_name or 'OPERADOR').strip()}"
+            )
+            channel_text = f"CANAL: {str(location_label or 'BALCÃO').strip().upper()}"
+            lines[index] = split_justified(operator_text, channel_text, width)
             break
 
 
@@ -113,11 +133,7 @@ def _insert_variant_header(
 
     extras: list[str] = []
     if variant.origin_label:
-        extras.append(
-            ESC_BOLD_ON
-            + align_center(f"ORIGEM: {variant.origin_label.upper()}", width)
-            + ESC_BOLD_OFF
-        )
+        extras.append(align_center(f"ORIGEM: {variant.origin_label.upper()}", width))
     if variant.via_label:
         extras.append(align_center(f"VIA: {variant.via_label.upper()}", width))
     if variant.is_reprint:
@@ -143,13 +159,15 @@ def _insert_context_block(
 
     block: list[str] = []
     if variant.customer_name:
+        customer_lines = textwrap.wrap(
+            f"CLIENTE: {variant.customer_name.upper()}",
+            width=width,
+            break_long_words=True,
+            break_on_hyphens=False,
+        ) or ["CLIENTE: NÃO INFORMADO"]
         block.extend(
-            [
-                ESC_BOLD_ON
-                + align_center(f"CLIENTE: {variant.customer_name.upper()}", width)
-                + ESC_BOLD_OFF,
-                "",
-            ]
+            ESC_BOLD_ON + customer_line + ESC_BOLD_OFF
+            for customer_line in customer_lines
         )
 
     has_delivery_data = any(
@@ -162,6 +180,8 @@ def _insert_context_block(
         )
     )
     if has_delivery_data:
+        if block:
+            block.append("-" * width)
         block.append(ESC_BOLD_ON + "DADOS DA ENTREGA" + ESC_BOLD_OFF)
         if variant.delivery_phone:
             block.append(f"TELEFONE: {mask_phone(variant.delivery_phone)}")
@@ -179,10 +199,21 @@ def _insert_context_block(
             block.append(f"PAGAMENTO: {variant.payment_method.upper()}")
         if variant.change_for is not None and float(variant.change_for or 0.0) > 0:
             block.append(f"TROCO PARA: {_format_brl(float(variant.change_for))}")
-        block.extend(["-" * width, ""])
 
     if block:
+        block.extend(["-" * width, ""])
         lines[items_index:items_index] = block
+
+
+def _style_items_header(lines: list[str], *, width: int) -> None:
+    for index, line in enumerate(lines):
+        if line == ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF:
+            lines[index] = (
+                ESC_BOLD_ON
+                + split_justified("ITENS", "VALOR", width)
+                + ESC_BOLD_OFF
+            )
+            break
 
 
 def _replace_total(
@@ -256,6 +287,7 @@ def render_canonical_comanda(
     lines = receipt.split("\n")
     _replace_metadata_line(
         lines,
+        order_number=order_number,
         event_at=variant.event_at,
         operator_label=variant.operator_label,
         operator_name=operator_name,
@@ -264,5 +296,6 @@ def render_canonical_comanda(
     )
     _insert_variant_header(lines, tipo=order_type, variant=variant, width=width)
     _insert_context_block(lines, variant=variant, width=width)
+    _style_items_header(lines, width=width)
     _replace_total(lines, items=items, variant=variant, width=width)
     return "\n".join(lines)
