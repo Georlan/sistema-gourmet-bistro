@@ -5,7 +5,15 @@ from app.application.printing.comanda_renderer import (
     render_canonical_comanda,
 )
 from app.domain.printing import PrintItem
-from app.printer_service import ESC_FONT_A, ESC_RECEIPT_LINE, printer_service
+from app.printer_service import (
+    ESC_BOLD_OFF,
+    ESC_BOLD_ON,
+    ESC_DOUBLE_HEIGHT_ON,
+    ESC_FONT_A,
+    ESC_NORMAL_SIZE,
+    ESC_RECEIPT_LINE,
+    printer_service,
+)
 
 
 def _render(items, variant, *, order_type="Retirada"):
@@ -49,11 +57,17 @@ def test_online_pickup_uses_table_base_with_online_origin():
     assert "BAGUETERIA E PASTELARIA POR DO SOL" in ticket
     assert "RETIRADA" in ticket
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
-    assert "BALCÃO" in ticket
+    assert "PEDIDO #93" in ticket
+    assert "PEDIDO: #93" not in ticket
+    assert ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON in ticket
+    assert ESC_BOLD_OFF + ESC_NORMAL_SIZE in ticket
     assert "DATA: 31/08/2026" in ticket
     assert "HORA: 22:15" in ticket
     assert "OPERADOR: Admin" in ticket
+    assert "CANAL: BALCÃO" in ticket
     assert "CLIENTE: GEORLAN" in ticket
+    assert "ITENS" in ticket
+    assert "VALOR" in ticket
     assert "1x REFRIGERANTE 1L" in ticket
     assert "R$ 12,00" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
@@ -75,6 +89,8 @@ def test_online_reprint_is_same_base_plus_reprint_marker():
 
     assert ticket.count("REIMPRESSÃO") == 1
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
+    assert "PEDIDO #93" in ticket
+    assert "CANAL: BALCÃO" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
 
 
@@ -103,7 +119,8 @@ def test_delivery_keeps_same_base_and_adds_delivery_context():
     assert ticket.startswith(ESC_RECEIPT_LINE + ESC_FONT_A)
     assert "DELIVERY" in ticket
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
-    assert "ENTREGA" in ticket
+    assert "PEDIDO #93" in ticket
+    assert "CANAL: ENTREGA" in ticket
     assert "CLIENTE: MARIA" in ticket
     assert "DADOS DA ENTREGA" in ticket
     assert "TELEFONE: (88) 9XXXX-XX34" in ticket
@@ -131,5 +148,7 @@ def test_secondary_sector_still_uses_same_visual_base():
 
     assert ticket.startswith(ESC_RECEIPT_LINE + ESC_FONT_A)
     assert "VIA: BAR" in ticket
+    assert "PEDIDO #93" in ticket
     assert "ITENS" in ticket
+    assert "VALOR" in ticket
     assert "Gerenciado por Kôma" in ticket
