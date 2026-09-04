@@ -18,7 +18,11 @@ from ...services.printing import (
     enqueue_table_receipt,
     get_print_preferences,
 )
-from .comanda_renderer import ComandaVariant, render_canonical_comanda
+from .comanda_renderer import (
+    ComandaVariant,
+    apply_operational_visual_hierarchy,
+    render_canonical_comanda,
+)
 from .engine import PrintEngineType, resolve_order_engine
 from .intent import PrintAction, PrintIntent, PrintSourceType, PrintTrigger
 
@@ -238,6 +242,15 @@ class PrintingApplicationService:
             idempotency_key=idempotency_key,
             printed_by=intent.requested_by,
         )
+        if job is not None:
+            # A identidade humana (#2-A, #2-B...) já foi resolvida pelo snapshot
+            # de mesa. O Core só aplica a mesma hierarquia visual dos pedidos
+            # remotos e preserva MESA/Data/Hora/Garçom do documento original.
+            job.payload_text = apply_operational_visual_hierarchy(
+                job.payload_text,
+                operator_label="GARÇOM",
+                operator_name=cls._operator_name(lancamento, comanda),
+            ).replace("\x00", "\\x00")
         jobs = [job] if job is not None else []
         if jobs:
             cls._mark_items_printed(active_items)
