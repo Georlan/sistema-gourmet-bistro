@@ -21,6 +21,7 @@ test('Central de Incidentes consulta endpoints canônicos de diagnóstico', () =
   assert.match(incidentTab, /\/api\/super-admin\/incidents\?/);
   assert.match(incidentTab, /\/api\/super-admin\/incidents\/summary/);
   assert.match(incidentTab, /\/api\/super-admin\/incidents\/action/);
+  assert.match(incidentTab, /tenant_id: actionIncident\.tenant_id/);
 });
 
 test('Central exibe cartões KPI de severidade e filtros operacionais', () => {
