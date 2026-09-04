@@ -11,6 +11,7 @@ from ...domain.printing import (
 )
 from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
 from ...printer_service import printer_service
+from ...services.atendimentos import AtendimentoError, ensure_launch_identity
 from ...services.printing import (
     PrintingRequestError,
     enqueue_cash_closing_receipt,
@@ -18,11 +19,7 @@ from ...services.printing import (
     enqueue_table_receipt,
     get_print_preferences,
 )
-from .comanda_renderer import (
-    ComandaVariant,
-    apply_operational_visual_hierarchy,
-    render_canonical_comanda,
-)
+from .comanda_renderer import ComandaVariant, render_canonical_comanda
 from .engine import PrintEngineType, resolve_order_engine
 from .intent import PrintAction, PrintIntent, PrintSourceType, PrintTrigger
 
@@ -183,6 +180,7 @@ class PrintingApplicationService:
         comanda: Comanda,
         source_items: list[Item],
     ) -> list[PrintJob]:
+        """Renderiza pedido local diretamente na fonte canônica de comandas."""
         requested_source_id = str(intent.source_id or "").strip()
         requested_is_launch = requested_source_id.startswith("l-")
         mesa_id = intent.table_id or comanda.mesa_id
@@ -191,8 +189,18 @@ class PrintingApplicationService:
                 "Pedido local não possui mesa para impressão",
                 status_code=409,
             )
+        mesa_id = int(mesa_id)
 
-        active_items = cls._active_items(source_items)
+        # Lançamentos podem ser divididos entre mesas. A identidade humana é do
+        # lançamento original, mas cada via contém somente os itens que estão na
+        # mesa solicitada no momento da impressão.
+        active_items = [
+            item
+            for item in cls._active_items(source_items)
+            if item.comanda is not None
+            and item.comanda.restaurante_id == intent.restaurant_id
+            and item.comanda.mesa_id == mesa_id
+        ]
         if not active_items:
             raise UniversalPrintingError(
                 "Não há itens ativos neste pedido para imprimir",
@@ -228,29 +236,60 @@ class PrintingApplicationService:
         else:
             source_type = "pedido"
 
+        try:
+            order_number: object = (
+                ensure_launch_identity(db, lancamento).label
+                if lancamento is not None
+                else comanda.numero_pedido
+            )
+        except AtendimentoError as exc:
+            raise UniversalPrintingError(str(exc), status_code=exc.status_code) from exc
+
+        preferences = get_print_preferences(db, intent.restaurant_id)
+        source_time = (
+            lancamento.timestamp
+            if requested_is_launch and lancamento is not None
+            else comanda.criado_em
+        )
+        operator_name = cls._operator_name(lancamento, comanda)
+        print_items = [cls._to_print_item(item) for item in active_items]
+        payload = render_canonical_comanda(
+            restaurant_name=preferences.restaurant_name,
+            restaurant_name_position=preferences.restaurant_name_position,
+            print_footer=preferences.print_footer,
+            order_number=order_number,
+            order_type=comanda.tipo,
+            operator_name=operator_name,
+            items=print_items,
+            variant=ComandaVariant(
+                location_label=None,
+                operator_label="GARÇOM",
+                is_reprint=(intent.action == PrintAction.REPRINT),
+                event_at=source_time,
+                table_id=mesa_id,
+                preserve_item_customers=True,
+            ),
+        )
+
         idempotency_key = intent.idempotency_key
         if not idempotency_key and intent.trigger == PrintTrigger.AUTOMATIC:
-            idempotency_key = f"universal:auto:{source_id}:mesa:{int(mesa_id)}"
+            idempotency_key = f"universal:auto:{source_id}:mesa:{mesa_id}"
+        if not idempotency_key:
+            stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y%m%d%H%M%S%f"
+            )
+            idempotency_key = f"mesa:parcial:{mesa_id}:{stamp}"
 
-        job = enqueue_table_receipt(
+        job = enqueue_print_job(
             db,
-            intent.restaurant_id,
-            int(mesa_id),
-            apenas_valores=False,
+            restaurante_id=intent.restaurant_id,
+            document_type="producao",
+            destination="COZINHA",
             source_type=source_type,
             source_id=source_id,
+            payload_text=payload,
             idempotency_key=idempotency_key,
-            printed_by=intent.requested_by,
         )
-        if job is not None:
-            # A identidade humana (#2-A, #2-B...) já foi resolvida pelo snapshot
-            # de mesa. O Core só aplica a mesma hierarquia visual dos pedidos
-            # remotos e preserva MESA/Data/Hora/Garçom do documento original.
-            job.payload_text = apply_operational_visual_hierarchy(
-                job.payload_text,
-                operator_label="GARÇOM",
-                operator_name=cls._operator_name(lancamento, comanda),
-            ).replace("\x00", "\\x00")
         jobs = [job] if job is not None else []
         if jobs:
             cls._mark_items_printed(active_items)
@@ -265,7 +304,7 @@ class PrintingApplicationService:
         comanda: Comanda,
         source_items: list[Item],
     ) -> list[PrintJob]:
-        """Gera pedido remoto sobre a mesma base visual usada pelo salão.
+        """Gera pedido remoto pela mesma fonte visual usada pelo salão.
 
         A via primária sempre contém o pedido remoto completo. Destinos
         adicionais (BAR etc.) continuam recebendo suas vias setoriais, mas todos
@@ -476,6 +515,7 @@ class PrintingApplicationService:
                     joinedload(Lancamento.comanda).joinedload(Comanda.criada_por),
                     joinedload(Lancamento.garcom),
                     joinedload(Lancamento.itens).joinedload(Item.produto),
+                    joinedload(Lancamento.itens).joinedload(Item.comanda),
                 )
                 .filter(
                     Lancamento.restaurante_id == restaurant_id,
