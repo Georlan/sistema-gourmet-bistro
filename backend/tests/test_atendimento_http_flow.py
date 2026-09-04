@@ -378,7 +378,7 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     ]
 
     automatic = _latest_job_for_source(new_after_merge["id"])
-    assert f"PEDIDO: #{target_base}-B" in automatic.payload_text
+    assert f"PEDIDO #{target_base}-B" in automatic.payload_text
 
     # Transfere um item histórico da família incorporada para uma mesa vazia.
     db = SessionLocal()
@@ -468,7 +468,7 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     )
     assert reprint_m3.status_code == 200, reprint_m3.text
     payload_m3 = _latest_job_for_source(split_launch["id"]).payload_text
-    assert f"PEDIDO: #{split_label}" in payload_m3
+    assert f"PEDIDO #{split_label}" in payload_m3
     assert "MESA: 3" in payload_m3
     assert "FICA NA MESA 3" in payload_m3
     assert "VAI PARA MESA 5" not in payload_m3
@@ -480,7 +480,7 @@ def test_busy_http_day_preserves_family_ids_and_atomic_table_semantics():
     )
     assert reprint_m5.status_code == 200, reprint_m5.text
     payload_m5 = _latest_job_for_source(split_launch["id"]).payload_text
-    assert f"PEDIDO: #{split_label}" in payload_m5
+    assert f"PEDIDO #{split_label}" in payload_m5
     assert "MESA: 5" in payload_m5
     assert "VAI PARA MESA 5" in payload_m5
     assert "FICA NA MESA 3" not in payload_m5
