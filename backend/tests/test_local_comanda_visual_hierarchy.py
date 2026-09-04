@@ -1,6 +1,11 @@
+import datetime
 from pathlib import Path
 
-from app.application.printing.comanda_renderer import apply_operational_visual_hierarchy
+from app.application.printing.comanda_renderer import (
+    ComandaVariant,
+    render_canonical_comanda,
+)
+from app.domain.printing import PrintItem
 from app.printer_service import (
     ESC_BOLD_OFF,
     ESC_BOLD_ON,
@@ -10,32 +15,46 @@ from app.printer_service import (
 )
 
 
-def test_local_order_keeps_human_identity_and_table_with_shared_hierarchy():
+def _item(
+    name: str,
+    price: float,
+    *,
+    customer: str = "GERAL",
+) -> PrintItem:
+    return PrintItem(
+        codigo=name.lower().replace(" ", "-"),
+        nome=name,
+        quantidade=1,
+        preco_unit=price,
+        cliente_nome=customer,
+        observacao="",
+        destino_impressao="COZINHA",
+    )
+
+
+def test_local_order_is_born_from_canonical_renderer_with_table_identity():
     old_width = printer_service.width
     printer_service.width = 40
     try:
-        legacy = "\n".join(
-            [
-                ESC_BOLD_ON + "CONSUMO NO LOCAL".center(40) + ESC_BOLD_OFF,
-                ESC_BOLD_ON
-                + "PEDIDO: #2-A".ljust(32)
-                + "MESA: 5"
-                + ESC_BOLD_OFF,
-                "DATA: 04/09/2026".ljust(29) + "HORA: 19:20",
-                "GARÇOM: Georlan",
-                "-" * 40,
-                ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF,
-                "",
-                ESC_BOLD_ON + "1x HAMBÚRGUER BOVINO        R$ 19,00" + ESC_BOLD_OFF,
-                "-" * 40,
-                ESC_BOLD_ON + "TOTAL DESTE PEDIDO:         R$ 19,00" + ESC_BOLD_OFF,
-            ]
-        )
-
-        ticket = apply_operational_visual_hierarchy(
-            legacy,
-            operator_label="GARÇOM",
+        ticket = render_canonical_comanda(
+            restaurant_name="Bagueteria e Pastelaria Pôr do Sol",
+            restaurant_name_position="cabecalho",
+            print_footer=None,
+            order_number="2-A",
+            order_type="Consumo no Local",
             operator_name="Georlan",
+            items=[
+                _item("Hambúrguer Bovino", 19.0),
+                _item("Cheese Burguer", 22.0),
+                _item("Campari Dose", 5.0),
+            ],
+            variant=ComandaVariant(
+                location_label=None,
+                operator_label="GARÇOM",
+                event_at=datetime.datetime(2026, 9, 4, 19, 20),
+                table_id=5,
+                preserve_item_customers=True,
+            ),
         )
     finally:
         printer_service.width = old_width
@@ -50,42 +69,41 @@ def test_local_order_keeps_human_identity_and_table_with_shared_hierarchy():
     assert "GARÇOM: Georlan" in ticket
     assert "ITENS" in ticket
     assert "VALOR" in ticket
-    assert "TOTAL DESTE PEDIDO:" in ticket
+    assert "TOTAL DO PEDIDO:" in ticket
+    assert "R$ 46,00" in ticket
 
 
-def test_remote_base_does_not_leave_sem_mesa_after_shared_hierarchy():
+def test_remote_order_uses_same_renderer_without_sem_mesa():
     old_width = printer_service.width
     printer_service.width = 40
     try:
-        legacy = "\n".join(
-            [
-                ESC_BOLD_ON
-                + "PEDIDO: #91".ljust(32)
-                + "SEM MESA"
-                + ESC_BOLD_OFF,
-                "DATA: 01/09/2026".ljust(29) + "HORA: 00:21",
-                "GARÇOM: Admin",
-                ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF,
-            ]
-        )
-        ticket = apply_operational_visual_hierarchy(
-            legacy,
+        ticket = render_canonical_comanda(
+            restaurant_name="Bagueteria e Pastelaria Pôr do Sol",
+            restaurant_name_position="cabecalho",
+            print_footer=None,
             order_number=91,
-            operator_label="OPERADOR",
+            order_type="Retirada",
             operator_name="Admin",
-            location_label="BALCÃO",
+            items=[_item("Burguer Pôr do Sol", 34.0)],
+            variant=ComandaVariant(
+                origin_label="CARDÁPIO ONLINE",
+                location_label="BALCÃO",
+                operator_label="OPERADOR",
+                event_at=datetime.datetime(2026, 9, 1, 0, 21),
+            ),
         )
     finally:
         printer_service.width = old_width
 
     assert "PEDIDO #91" in ticket
     assert "SEM MESA" not in ticket
+    assert "ORIGEM: CARDÁPIO ONLINE" in ticket
     assert "OPERADOR: Admin" in ticket
     assert "CANAL: BALCÃO" in ticket
     assert "VALOR" in ticket
 
 
-def test_dine_in_engine_applies_shared_hierarchy_before_returning_job():
+def test_dine_in_engine_calls_canonical_renderer_instead_of_table_formatter():
     source = (
         Path(__file__).resolve().parents[1]
         / "app/application/printing/service.py"
@@ -94,6 +112,7 @@ def test_dine_in_engine_applies_shared_hierarchy_before_returning_job():
         "def _run_remote_order_engine", 1
     )[0]
 
-    assert "apply_operational_visual_hierarchy(" in local_engine
-    assert 'operator_label="GARÇOM"' in local_engine
-    assert '.replace("\\x00", "\\\\x00")' in local_engine
+    assert "render_canonical_comanda(" in local_engine
+    assert "enqueue_table_receipt(" not in local_engine
+    assert "table_id=mesa_id" in local_engine
+    assert "preserve_item_customers=True" in local_engine
