@@ -23,6 +23,7 @@ from .routes import (
     cardapio_config_bridge,
     cardapio_digital,
     cupons,
+    customer_satisfaction,
     estoque,
     modificadores,
     optimization,
@@ -368,6 +369,7 @@ app.include_router(websocket.router)
 app.include_router(cardapio_config_bridge.router)
 app.include_router(caixa.router)
 app.include_router(optimization.router)
+app.include_router(customer_satisfaction.router)
 app.include_router(online_payments.router)
 app.include_router(estoque.router)
 app.include_router(cardapio.router)

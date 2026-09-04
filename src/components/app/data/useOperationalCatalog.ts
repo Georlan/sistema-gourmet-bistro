@@ -91,11 +91,16 @@ export function useOperationalCatalog({
       ++catalogRequestRef.current;
       catalogAbortRef.current?.abort();
     };
-    if (isWsConnected) return cancel;
+    return cancel;
+  }, [isAuthenticated, fetchLiveCatalog]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (isWsConnected) return;
     const interval = setInterval(() => {
       fetchLiveCatalog();
     }, 40000); // refresh every 40s if not connected to WS
-    return () => { clearInterval(interval); cancel(); };
+    return () => clearInterval(interval);
   }, [isAuthenticated, isWsConnected, fetchLiveCatalog]);
 
   useEffect(() => {
