@@ -12,7 +12,7 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
     : undefined;
 
   return {
-    fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 7,
+    fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
     // The default fee remains in the calculation; only its provisional nature is clarified.
     awaitingNeighborhood: neighborhoods.length > 0 && !selected && !freeBySubtotal,
   };

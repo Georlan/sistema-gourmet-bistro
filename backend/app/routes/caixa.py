@@ -1585,6 +1585,8 @@ def atualizar_configuracoes(
         config.frete_gratis_valor = config_in.frete_gratis_valor
     if config_in.tipo_taxa_entrega is not None:
         config.tipo_taxa_entrega = config_in.tipo_taxa_entrega
+    if config_in.taxa_entrega_fixa is not None:
+        config.taxa_entrega_fixa = config_in.taxa_entrega_fixa
     if config_in.tabela_taxas_bairros is not None:
         config.tabela_taxas_bairros = config_in.tabela_taxas_bairros
     if config_in.tabela_taxas_km is not None:

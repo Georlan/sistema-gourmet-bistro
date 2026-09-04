@@ -17,7 +17,6 @@ from app.models import (
     Usuario,
 )
 from app.services.online_order_policy import (
-    DEFAULT_DELIVERY_FEE,
     evaluate_online_order_policy,
     schedule_is_open,
 )
@@ -57,9 +56,13 @@ def setup_restaurant_authority():
             config = ConfiguracaoRestaurante(
                 restaurante_id=RESTAURANTE_ID,
                 delivery_ativo=True,
+                tipo_taxa_entrega="fixa",
+                taxa_entrega_fixa=7.0,
             )
             db.add(config)
         config.delivery_ativo = True
+        config.tipo_taxa_entrega = "fixa"
+        config.taxa_entrega_fixa = 7.0
         db.query(PublicRateLimit).filter(
             PublicRateLimit.restaurante_id == RESTAURANTE_ID,
         ).delete(synchronize_session=False)
@@ -176,7 +179,7 @@ def test_cliente_nao_controla_taxa_de_delivery():
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["total"] == 25.0 + DEFAULT_DELIVERY_FEE
+    assert response.json()["total"] == 25.0 + 7.0
 
     db = SessionLocal()
     tenant = current_restaurante_id.set(RESTAURANTE_ID)
@@ -185,7 +188,7 @@ def test_cliente_nao_controla_taxa_de_delivery():
             Comanda.restaurante_id == RESTAURANTE_ID,
             Comanda.id == response.json()["comanda_id"],
         ).one()
-        assert float(comanda.delivery_taxa) == DEFAULT_DELIVERY_FEE
+        assert float(comanda.delivery_taxa) == 7.0
     finally:
         current_restaurante_id.reset(tenant)
         db.close()

@@ -16,8 +16,6 @@ from ..models import CaixaTurno
 from ..timezone_utils import get_operational_now
 
 
-DEFAULT_DELIVERY_FEE = 7.0
-
 _DAY_INDEX = {
     "segunda": 0,
     "terca": 1,
@@ -38,7 +36,6 @@ class OnlineOrderPolicy:
     accepting_orders: bool
     delivery_enabled: bool
     pickup_enabled: bool
-    delivery_fee: float
     reason: str | None = None
     source: str = "automatic"
 
@@ -226,7 +223,6 @@ def evaluate_online_order_policy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,
             pickup_enabled=pickup_enabled,
-            delivery_fee=DEFAULT_DELIVERY_FEE,
             reason="O restaurante está fechado para novos pedidos online no momento.",
             source="forced_closed",
         )
@@ -245,7 +241,6 @@ def evaluate_online_order_policy(
                 accepting_orders=False,
                 delivery_enabled=delivery_enabled,
                 pickup_enabled=pickup_enabled,
-                delivery_fee=DEFAULT_DELIVERY_FEE,
                 reason="O restaurante está fora do horário de pedidos online.",
                 source="schedule",
             )
@@ -256,7 +251,6 @@ def evaluate_online_order_policy(
             accepting_orders=False,
             delivery_enabled=False,
             pickup_enabled=pickup_enabled,
-            delivery_fee=DEFAULT_DELIVERY_FEE,
             reason="O delivery está desativado para este restaurante.",
             source="delivery_disabled",
         )
@@ -271,6 +265,5 @@ def evaluate_online_order_policy(
         accepting_orders=True,
         delivery_enabled=delivery_enabled,
         pickup_enabled=pickup_enabled,
-        delivery_fee=DEFAULT_DELIVERY_FEE,
         source=source,
     )

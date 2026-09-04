@@ -184,9 +184,10 @@ def _public_restaurant_payload(
         "pedido_minimo": float(configuracao.pedido_minimo or 0.0) if configuracao and configuracao.pedido_minimo is not None else 0.0,
         "frete_gratis_valor": float(configuracao.frete_gratis_valor or 0.0) if configuracao and configuracao.frete_gratis_valor is not None else 0.0,
         "tipo_taxa_entrega": configuracao.tipo_taxa_entrega if configuracao and configuracao.tipo_taxa_entrega else "fixa",
+        "taxa_entrega_fixa": float(configuracao.taxa_entrega_fixa or 0.0) if configuracao and configuracao.taxa_entrega_fixa is not None else 7.0,
         "tabela_taxas_bairros": configuracao.tabela_taxas_bairros if configuracao and configuracao.tabela_taxas_bairros else [],
         "tabela_taxas_km": configuracao.tabela_taxas_km if configuracao and configuracao.tabela_taxas_km else [],
-        "taxa_entrega_padrao": float(restaurante.taxa_entrega_padrao or 0.0) if hasattr(restaurante, "taxa_entrega_padrao") and restaurante.taxa_entrega_padrao is not None else 0.0,
+        "taxa_entrega_padrao": float(configuracao.taxa_entrega_fixa or 0.0) if configuracao and configuracao.taxa_entrega_fixa is not None else 7.0,
     }
 
 

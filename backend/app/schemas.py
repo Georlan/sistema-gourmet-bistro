@@ -458,6 +458,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     pedido_minimo: Optional[float] = 0.0
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
+    taxa_entrega_fixa: Optional[float] = 7.0
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
     plano: Optional[str] = "pocket"
@@ -474,6 +475,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     pedido_minimo: Optional[float] = None
     frete_gratis_valor: Optional[float] = None
     tipo_taxa_entrega: Optional[str] = None
+    taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = None
     tabela_taxas_km: Optional[list] = None
     taxa_servico_ativa: Optional[bool] = None
@@ -756,6 +758,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     pedido_minimo: Optional[float] = 0.0
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
+    taxa_entrega_fixa: Optional[float] = 7.0
     tabela_taxas_bairros: Optional[Any] = []
     tabela_taxas_km: Optional[Any] = []
     taxa_entrega_padrao: Optional[float] = 0.0

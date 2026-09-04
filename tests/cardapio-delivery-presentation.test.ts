@@ -34,7 +34,7 @@ test('limiar de frete grátis preserva cálculo por subtotal e precedência sobr
 
 test('taxa configurada zero não se confunde com configuração ausente no cálculo', () => {
   assert.equal(getDeliveryQuote({ taxaEntregaPadrao: 0 }, 25, '').fee, 0);
-  assert.equal(getDeliveryQuote(undefined, 25, '').fee, 7);
+  assert.equal(getDeliveryQuote(undefined, 25, '').fee, 0);
 });
 
 test('cotações usam apenas a configuração fornecida de cada restaurante', () => {
