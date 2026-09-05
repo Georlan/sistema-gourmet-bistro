@@ -143,7 +143,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
     orders,
     now: currentTime,
   });
-  const permanenceTime = operationalState.elapsed;
+  const elapsedTime = operationalState.elapsed;
 
   const originIds = Array.from(new Set(orders.map(o => o.mesaOrigemId).filter((id): id is number => id !== null && id !== undefined && id !== table.id)));
   const originStr = originIds.length > 0 ? ` + ${originIds.join(' + ')}` : '';
@@ -246,15 +246,15 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                   <h2 className="font-serif text-2xl sm:text-4xl leading-none font-extrabold tracking-tight text-koma-foreground truncate">
                     Mesa {table.id}{originStr}
                   </h2>
-                  <span className={`px-2.5 py-1 text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wider uppercase rounded-full border shrink-0 ${
-                    operationalState.occupancy === 'FREE'
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                      : operationalState.production.hasReadyItems
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                  }`}>
-                    {operationalState.occupancy === 'FREE' ? 'Livre' : operationalState.production.hasReadyItems ? 'Pronto' : 'Ocupada'}
-                  </span>
+                  {(operationalState.occupancy === 'FREE' || operationalState.production.hasReadyItems) && (
+                    <span className={`px-2.5 py-1 text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wider uppercase rounded-full border shrink-0 ${
+                      operationalState.occupancy === 'FREE'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                    }`}>
+                      {operationalState.occupancy === 'FREE' ? 'Livre' : 'Pronto'}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -276,10 +276,13 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <strong className="text-koma-foreground font-semibold">{activeWaiterNome}</strong>
             </span>
             {orders.length > 0 && (
-              <span className="flex items-center gap-1.5">
+              <span
+                className="flex items-center gap-1.5"
+                aria-label={`Tempo na mesa ${elapsedTime}`}
+                title="Tempo na mesa"
+              >
                 <Clock size={11} className="text-emerald-700 dark:text-emerald-400" />
-                <span>Permanência</span>
-                <strong className="text-koma-foreground font-medium font-mono">{permanenceTime}</strong>
+                <strong className="text-koma-foreground font-medium font-mono">{elapsedTime}</strong>
               </span>
             )}
           </div>
