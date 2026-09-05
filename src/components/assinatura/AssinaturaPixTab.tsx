@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  FileSignature,
 } from 'lucide-react';
 import {
   SUBSCRIPTION_PLANS,
@@ -30,6 +31,7 @@ import {
   getSubscriptionPricing
 } from '../../config/subscriptionPlans';
 import { KOMA_LANDING_CONFIG } from '../../landing/config/landingConfig';
+import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 
 interface AssinaturaPixTabProps {
   currentPlanId: SubscriptionPlanId;
@@ -95,7 +97,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
   isTestPlan = false,
   bannerNotice
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'planos_upgrade'>('meu_plano');
+  const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'planos_upgrade' | 'contrato_documentos'>('meu_plano');
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(currentPlanId);
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
   const [isYearly, setIsYearly] = useState(false);
@@ -167,6 +169,20 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
         >
           <Zap size={15} />
           <span>Planos & Upgrade</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('contrato_documentos')}
+          className={clsx(
+            'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
+            activeSubTab === 'contrato_documentos'
+              ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
+              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
+          )}
+        >
+          <FileSignature size={15} />
+          <span>Contrato e documentos</span>
         </button>
       </div>
 
@@ -253,6 +269,8 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
           </div>
         </div>
       )}
+
+      {activeSubTab === 'contrato_documentos' && <ContractDocumentsPanel />}
 
       {/* 3. SUB-ABA 2: PLANOS & UPGRADE */}
       {activeSubTab === 'planos_upgrade' && (
