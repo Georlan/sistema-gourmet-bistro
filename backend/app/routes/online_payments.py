@@ -85,6 +85,34 @@ def _resolve_mercado_pago_account_id(
     ).scalar_one_or_none()
 
 
+def _resolve_mercado_pago_account_id_by_payment(
+    db: Session,
+    external_payment_id: str,
+) -> str | None:
+    payment_id = str(external_payment_id or "").strip()
+    if not payment_id:
+        return None
+    if db.get_bind().dialect.name == "postgresql":
+        return db.execute(
+            text(
+                "SELECT koma_internal.resolve_mercado_pago_account_id_by_payment("
+                ":payment_id)"
+            ),
+            {"payment_id": payment_id},
+        ).scalar_one_or_none()
+    return db.execute(
+        text(
+            "SELECT a.id FROM online_payment_intents AS i "
+            "JOIN restaurant_payment_accounts AS a "
+            "ON a.restaurante_id = i.restaurante_id "
+            "AND a.provider = 'mercado_pago' AND a.status = 'active' "
+            "WHERE i.provider = 'mercado_pago' "
+            "AND i.external_payment_id = :payment_id LIMIT 1"
+        ),
+        {"payment_id": payment_id},
+    ).scalar_one_or_none()
+
+
 def _mercado_pago_webhook_provider_user_id(payload: object) -> str:
     if not isinstance(payload, dict):
         return ""
@@ -92,6 +120,15 @@ def _mercado_pago_webhook_provider_user_id(payload: object) -> str:
     if raw_user_id is None:
         return ""
     return str(raw_user_id).strip()
+
+
+def _mercado_pago_webhook_payment_id(payload: object, request: Request) -> str:
+    body_data = payload.get("data") if isinstance(payload, dict) else None
+    body_payment_id = str(body_data.get("id") or "") if isinstance(body_data, dict) else ""
+    query_payment_id = str(request.query_params.get("data.id") or "")
+    if query_payment_id and body_payment_id and query_payment_id != body_payment_id:
+        return ""
+    return query_payment_id or body_payment_id
 
 
 @router.get("/mercado-pago/status")
@@ -207,18 +244,31 @@ async def mercado_pago_application_webhook(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """Recebe o Webhook fixo da aplicação e roteia pelo vendedor OAuth."""
+    """Recebe o Webhook fixo da aplicação e roteia pelo vendedor OAuth.
+
+    Algumas atualizações do Mercado Pago não carregam ``user_id`` no topo. Nesses
+    casos roteamos por ``data.id`` somente quando esse payment_id já pertence a
+    uma intenção conhecida; a assinatura ainda é validada com o segredo da conta
+    antes de qualquer reconciliação.
+    """
     payload = await request.json()
     if not isinstance(payload, dict) or str(payload.get("type") or "").strip() != "payment":
         raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
 
-    provider_user_id = _mercado_pago_webhook_provider_user_id(payload)
-    if not provider_user_id:
+    payment_id = _mercado_pago_webhook_payment_id(payload, request)
+    if not payment_id:
         raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
 
-    account_id = _resolve_mercado_pago_account_id(db, provider_user_id)
+    provider_user_id = _mercado_pago_webhook_provider_user_id(payload)
+    account_id = (
+        _resolve_mercado_pago_account_id(db, provider_user_id)
+        if provider_user_id
+        else None
+    )
     if not account_id:
-        # Não revelar se um seller_id existe ou não antes de validar a assinatura.
+        account_id = _resolve_mercado_pago_account_id_by_payment(db, payment_id)
+    if not account_id:
+        # Não revelar se seller/payment existe antes de validar uma conta conhecida.
         raise HTTPException(status_code=401, detail="Assinatura de pagamento inválida.")
 
     return await mercado_pago_webhook(
@@ -237,11 +287,8 @@ async def mercado_pago_webhook(
     db: Session = Depends(get_db),
 ):
     payload = await request.json()
-    body_data = payload.get("data") if isinstance(payload, dict) else None
-    body_payment_id = str(body_data.get("id") or "") if isinstance(body_data, dict) else ""
-    query_payment_id = str(request.query_params.get("data.id") or "")
-    payment_id = query_payment_id or body_payment_id
-    if not payment_id or (query_payment_id and body_payment_id and query_payment_id != body_payment_id):
+    payment_id = _mercado_pago_webhook_payment_id(payload, request)
+    if not payment_id:
         raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
 
     rest_id = _resolve_account_tenant(db, account_id)
