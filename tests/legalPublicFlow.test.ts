@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const main = readFileSync('src/main.tsx', 'utf8');
 const legalContent = readFileSync('src/legal/legalContent.ts', 'utf8');
+const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
 const planContract = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
 const header = readFileSync('src/landing/sections/Header.tsx', 'utf8');
@@ -38,7 +39,7 @@ test('central legal publica o pacote v1.1 de lançamento', () => {
   assert.doesNotMatch(legalPage, /Começar no Pocket/);
 });
 
-test('contratação identifica parte, representante e apresenta aceite explícito', () => {
+test('contratação registra clickwrap com identidade, evidência e comprovante', () => {
   assert.match(planContract, /SUBSCRIPTION_PLANS\.find/);
   assert.match(planContract, /rawPlanId === 'pocket'/);
   assert.match(planContract, /rawPlanId === 'pro'/);
@@ -46,17 +47,33 @@ test('contratação identifica parte, representante e apresenta aceite explícit
   assert.match(planContract, /getSubscriptionPricing/);
   assert.match(planContract, /cobranca.*anual/);
   assert.match(planContract, /contractingPartyName/);
-  assert.match(planContract, /taxId/);
+  assert.match(planContract, /representativeTaxId/);
   assert.match(planContract, /representativeRole/);
   assert.match(planContract, /possuo poderes/);
-  assert.match(planContract, /Termos de Contratação/);
-  assert.match(planContract, /Condições Comerciais/);
-  assert.match(planContract, /Anexo de Tratamento de Dados/);
-  assert.match(planContract, /Política de Privacidade/);
-  assert.match(planContract, /Fornecedores e transferências/);
+  assert.match(planContract, /isValidCpf/);
+  assert.match(planContract, /taxIdKind/);
+  assert.match(planContract, /\/api\/contracts\/accept/);
+  assert.match(planContract, /contractLegalBundle\(\)/);
+  assert.match(planContract, /LEGAL_SOURCE_COMMIT/);
+  assert.match(planContract, /LEGAL_SOURCE_BLOB_SHA/);
+  assert.match(planContract, /Aceitar e registrar contratação/);
+  assert.match(planContract, /Comprovante de Contratação e Licenciamento Eletrônico/);
+  assert.match(planContract, /Imprimir \/ salvar em PDF/);
+  assert.match(planContract, /sourceIp/);
+  assert.match(planContract, /documents\.terms\.hash/);
   assert.match(planContract, /type="checkbox"/);
   assert.match(planContract, /disabled=\{!canContinue\}/);
   assert.doesNotMatch(planContract, /defaultChecked/i, 'aceite não pode nascer pré-marcado');
+});
+
+test('proveniência jurídica fixa commit e blob da Legal v1.1 sem dados pessoais do prestador', () => {
+  assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
+  assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
+  assert.match(legalEvidence, /requireDocument\('termos'\)/);
+  assert.match(legalEvidence, /requireDocument\('planos'\)/);
+  assert.match(legalEvidence, /requireDocument\('dpa'\)/);
+  assert.match(legalEvidence, /requireDocument\('privacidade'\)/);
+  assert.doesNotMatch(legalEvidence, /KOMA_LEGAL_PROVIDER_TAX_ID/);
 });
 
 test('landing não privilegia Pocket e envia cada plano para sua própria contratação', () => {
