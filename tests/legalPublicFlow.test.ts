@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const main = readFileSync('src/main.tsx', 'utf8');
 const legalContent = readFileSync('src/legal/legalContent.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
-const pocketContract = readFileSync('src/legal/PocketContractPage.tsx', 'utf8');
+const planContract = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
 const header = readFileSync('src/landing/sections/Header.tsx', 'utf8');
 const plans = readFileSync('src/landing/sections/Plans.tsx', 'utf8');
 const finalCta = readFileSync('src/landing/sections/FinalCTA.tsx', 'utf8');
@@ -14,7 +14,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /pathname\.startsWith\("\/legal"\)/);
   assert.match(main, /pathname\.startsWith\("\/contratar"\)/);
   assert.match(main, /import\("\.\/legal\/LegalPage"\)/);
-  assert.match(main, /import\("\.\/legal\/PocketContractPage"\)/);
+  assert.match(main, /import\("\.\/legal\/PlanContractPage"\)/);
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
@@ -33,21 +33,29 @@ test('central legal publica os seis documentos de lançamento', () => {
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Pocket usa catálogo canônico e apresenta aceite explícito', () => {
-  assert.match(pocketContract, /SUBSCRIPTION_PLANS\.find\(\(plan\) => plan\.id === 'pocket'\)/);
-  assert.match(pocketContract, /Termos de Contratação/);
-  assert.match(pocketContract, /Condições Comerciais/);
-  assert.match(pocketContract, /Anexo de Tratamento de Dados/);
-  assert.match(pocketContract, /Política de Privacidade/);
-  assert.match(pocketContract, /type="checkbox"/);
-  assert.match(pocketContract, /disabled=\{!canContinue\}/);
-  assert.doesNotMatch(pocketContract, /checkbox[^\n]*checked=/i, 'aceite não pode nascer pré-marcado');
+test('contratação resolve os três planos pelo catálogo canônico e apresenta aceite explícito', () => {
+  assert.match(planContract, /SUBSCRIPTION_PLANS\.find/);
+  assert.match(planContract, /rawPlanId === 'pocket'/);
+  assert.match(planContract, /rawPlanId === 'pro'/);
+  assert.match(planContract, /rawPlanId === 'premium'/);
+  assert.match(planContract, /getSubscriptionPricing/);
+  assert.match(planContract, /cobranca.*anual/);
+  assert.match(planContract, /Termos de Contratação/);
+  assert.match(planContract, /Condições Comerciais/);
+  assert.match(planContract, /Anexo de Tratamento de Dados/);
+  assert.match(planContract, /Política de Privacidade/);
+  assert.match(planContract, /type="checkbox"/);
+  assert.match(planContract, /disabled=\{!canContinue\}/);
+  assert.doesNotMatch(planContract, /defaultChecked/i, 'aceite não pode nascer pré-marcado');
 });
 
-test('landing oferece caminho direto ao Pocket sem tornar WhatsApp obrigatório', () => {
-  assert.match(header, /href="\/contratar\/pocket"/);
-  assert.match(plans, /href="\/contratar\/pocket"/);
-  assert.match(finalCta, /href="\/contratar\/pocket"/);
+test('landing não privilegia Pocket e envia cada plano para sua própria contratação', () => {
+  assert.match(plans, /href=\{`\/contratar\/\$\{plan\.id\}\?cobranca=\$\{billing\}`\}/);
+  assert.match(plans, /CONTRATAR \{planLabel\}/);
+  assert.match(header, /href="\/landing#planos"/);
+  assert.doesNotMatch(header, /\/contratar\/pocket/);
+  assert.match(finalCta, /ESCOLHER MEU PLANO/);
+  assert.doesNotMatch(finalCta, /\/contratar\/pocket/);
   assert.match(finalCta, /href="\/legal"/);
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
