@@ -164,11 +164,16 @@ class MercadoPagoProvider:
         if amount is not None and Decimal(str(amount)) <= 0:
             raise MercadoPagoError("Valor de reembolso inválido.")
 
-        body = {} if amount is None else {"amount": float(Decimal(str(amount)))}
+        request_kwargs: dict[str, object] = {
+            "headers": {"X-Idempotency-Key": key},
+        }
+        # Para reembolso total a API do Mercado Pago pede que `amount` seja
+        # omitido; enviamos a requisição sem corpo. Parcial leva somente amount.
+        if amount is not None:
+            request_kwargs["json"] = {"amount": float(Decimal(str(amount)))}
         response = self._client.post(
             f"/v1/payments/{payment_id:d}/refunds",
-            headers={"X-Idempotency-Key": key},
-            json=body,
+            **request_kwargs,
         )
         if response.status_code >= 400:
             raise MercadoPagoError(
