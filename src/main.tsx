@@ -32,21 +32,28 @@ function isPublicMenuRoute(): boolean {
     && !isPlatformHost;
 }
 
+function isPublicCommercialRoute(): boolean {
+  const pathname = window.location.pathname;
+  return pathname.startsWith("/landing")
+    || pathname.startsWith("/legal")
+    || pathname.startsWith("/contratar");
+}
+
 function bypassTenantSuspensionBoundary(): boolean {
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
 
   return isPublicMenuRoute()
+    || isPublicCommercialRoute()
     || pathname.startsWith("/super-admin")
-    || pathname.startsWith("/landing")
     || pathname.startsWith("/ativar")
     || params.get("view") === "landing"
     || params.get("view") === "ativar";
 }
 
-// O tema operacional pertence ao app autenticado. O cardápio público tem
-// apresentação própria e não deve herdar a preferência local do operador.
-if (isPublicMenuRoute()) {
+// O tema operacional pertence ao app autenticado. Rotas públicas têm
+// apresentação própria e não devem herdar a preferência local do operador.
+if (isPublicMenuRoute() || isPublicCommercialRoute()) {
   document.documentElement.setAttribute("data-koma-theme", "dark");
 } else {
   initializeKomaTheme();
@@ -65,10 +72,20 @@ if (sentryDsn) {
   });
 }
 
-const isSmartPosRoute = window.location.pathname.startsWith("/smartpos");
-const RootApp = React.lazy(isSmartPosRoute
-  ? () => import("./smartpos/SmartPosPage")
-  : () => import("./App"));
+const pathname = window.location.pathname;
+const isSmartPosRoute = pathname.startsWith("/smartpos");
+const isLegalRoute = pathname.startsWith("/legal");
+const isPocketContractRoute = pathname.startsWith("/contratar/pocket");
+
+const RootApp = React.lazy(
+  isSmartPosRoute
+    ? () => import("./smartpos/SmartPosPage")
+    : isLegalRoute
+      ? () => import("./legal/LegalPage")
+      : isPocketContractRoute
+        ? () => import("./legal/PocketContractPage")
+        : () => import("./App"),
+);
 
 const RouteLoading = () => (
   <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
