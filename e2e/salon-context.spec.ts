@@ -73,3 +73,43 @@ test('receber fica disponível para a mesa sem transformar itens servidos em con
   await expect(page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' })).toHaveValue('160,00');
   expect(state.actions.filter(action => /pagar|status|transferir/.test(action.path))).toEqual([]);
 });
+
+test('desktop 1366x768 compacta banners e libera a área operacional', async ({ page }) => {
+  const viewport = page.viewportSize();
+  test.skip(!viewport || viewport.width < 1024 || viewport.height > 820, 'Regra de densidade para desktop baixo.');
+
+  await openOperationalScenario(page, { subtab: 'pedidos' });
+
+  const ordersHero = page.locator('.orders-hero').first();
+  await expect(ordersHero).toBeVisible();
+  await expect(ordersHero.locator('.orders-eyebrow')).toBeHidden();
+  await expect(ordersHero.locator('.orders-hero__copy > p:last-child')).toBeHidden();
+  expect(await ordersHero.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(50);
+
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  await expect(sidebar.locator('.cashier-display-controls')).toBeHidden();
+  await expect(sidebar.getByRole('button', { name: 'Alternar tema' })).toBeVisible();
+  await expect(sidebar.locator('.cashier-operator')).toBeVisible();
+
+  const board = page.locator('.orders-board');
+  await expect(board).toBeVisible();
+  const boardBox = await board.boundingBox();
+  expect(boardBox).not.toBeNull();
+  expect(boardBox!.y).toBeLessThan(260);
+
+  const main = page.getByRole('main');
+  await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+
+  const pdvHero = page.locator('.orders-hero').first();
+  await expect(pdvHero).toBeVisible();
+  await expect(pdvHero.getByRole('heading', { name: 'Novo pedido', exact: true })).toBeVisible();
+  await expect(pdvHero.locator('.orders-eyebrow')).toBeHidden();
+  await expect(pdvHero.locator('.orders-hero__copy > p:last-child')).toBeHidden();
+  expect(await pdvHero.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(50);
+
+  const productSearch = page.getByPlaceholder('Buscar item, descrição ou código');
+  await expect(productSearch).toBeVisible();
+  const searchBox = await productSearch.boundingBox();
+  expect(searchBox).not.toBeNull();
+  expect(searchBox!.y).toBeLessThan(240);
+});
