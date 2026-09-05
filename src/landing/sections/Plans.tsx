@@ -8,7 +8,6 @@ import {
   getSubscriptionPricing,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
-import { useLeadCapture } from '../components/LeadCaptureProvider';
 
 const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   stage: string;
@@ -38,7 +37,6 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
-  const openDemo = useLeadCapture();
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
@@ -80,6 +78,8 @@ export function Plans() {
           const pricing = getSubscriptionPricing(plan.price);
           const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
           const presentation = PLAN_PRESENTATION[plan.id];
+          const billing = isYearly ? 'anual' : 'mensal';
+          const planLabel = plan.name.replace('Kôma ', '').toUpperCase();
 
           return (
             <article aria-labelledby={`plan-${plan.id}-title`} className={`koma-plan-card koma-plan-card--simple ${plan.recommended ? 'koma-plan-card--featured' : ''}`} key={plan.id}>
@@ -136,15 +136,12 @@ export function Plans() {
                 </p>
               </div>
 
-              {plan.id === 'pocket' && !isYearly ? (
-                <a href="/contratar/pocket" className="koma-btn koma-btn--outline-dark">
-                  COMEÇAR NO POCKET
-                </a>
-              ) : (
-                <button type="button" onClick={() => openDemo({ plan: plan.name, billing: isYearly ? 'anual' : 'mensal' })} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
-                  FALAR SOBRE {plan.name.replace('Kôma ', '').toUpperCase()}
-                </button>
-              )}
+              <a
+                href={`/contratar/${plan.id}?cobranca=${billing}`}
+                className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}
+              >
+                CONTRATAR {planLabel}
+              </a>
             </article>
           );
         })}
