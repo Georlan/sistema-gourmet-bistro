@@ -18,6 +18,14 @@ class ProviderPayment:
     expires_at: datetime.datetime | None = None
 
 
+@dataclass(frozen=True)
+class ProviderRefund:
+    external_id: str
+    payment_id: str
+    status: str
+    amount: Decimal
+
+
 class OnlinePaymentProvider(Protocol):
     def create_pix(
         self,
@@ -32,3 +40,11 @@ class OnlinePaymentProvider(Protocol):
     ) -> ProviderPayment: ...
 
     def get_payment(self, external_payment_id: str) -> ProviderPayment: ...
+
+    def refund_payment(
+        self,
+        external_payment_id: str,
+        *,
+        amount: Decimal | None,
+        idempotency_key: str,
+    ) -> ProviderRefund: ...
