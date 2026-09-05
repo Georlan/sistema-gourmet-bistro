@@ -1,0 +1,177 @@
+/*
+ * Desktop density policy for short POS monitors (for example 1366x768 with
+ * browser chrome). Keep operational data and actions visible; collapse only
+ * explanatory/decorative copy that consumes vertical space.
+ */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .cashier-topbar {
+    height: 2.65rem !important;
+    min-height: 2.65rem !important;
+  }
+
+  .cashier-subnav {
+    padding-block: 0.12rem !important;
+  }
+
+  .cashier-subnav__button {
+    min-height: 1.72rem;
+    padding-block: 0.24rem;
+  }
+
+  .cashier-content {
+    padding: 0.5rem !important;
+  }
+
+  .orders-workspace {
+    gap: 0.45rem !important;
+  }
+
+  /* OperationalBanner becomes a compact status strip instead of a hero.
+   * The explicit two-column override wins over the width-container rule that
+   * normally stacks copy and metrics below ~68rem of content width. */
+  .orders-hero:not(.orders-hero--without-metrics) {
+    grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) !important;
+    align-items: center;
+  }
+
+  .orders-hero {
+    min-height: 2.7rem !important;
+    padding: 0.35rem 0.65rem !important;
+    border-radius: 0.72rem;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  }
+
+  .orders-hero::before {
+    inset: 0 0 0 68%;
+    opacity: 0.62;
+  }
+
+  .orders-eyebrow,
+  .orders-hero__copy > p:last-child,
+  .orders-hero h1 em {
+    display: none;
+  }
+
+  .orders-hero h1 {
+    font-size: 0.92rem;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  .orders-hero__metrics {
+    grid-column: 2 !important;
+    min-width: 0 !important;
+    margin: 0 0 0 0.55rem !important;
+    gap: 0.24rem;
+  }
+
+  .orders-hero__metrics > div,
+  .orders-hero__status {
+    min-height: 1.9rem !important;
+    padding: 0.22rem 0.42rem !important;
+    border-radius: 0.5rem;
+  }
+
+  .orders-hero__metrics strong {
+    font-size: 0.7rem;
+  }
+
+  .orders-hero__metrics span {
+    margin-top: 0.06rem;
+    font-size: 0.49rem;
+  }
+
+  .orders-toolbar {
+    padding: 0.35rem 0.45rem;
+  }
+
+  .orders-search__input {
+    min-height: 2rem;
+    padding-block: 0.35rem;
+  }
+
+  .orders-column__header {
+    min-height: 3.2rem;
+  }
+
+  /* The sidebar keeps shift and operator identity but stops spending ~140px
+   * on always-open display preferences. Theme remains one click away. */
+  .cashier-sidebar__header {
+    gap: 0.45rem;
+    padding: 0.5rem !important;
+  }
+
+  .cashier-sidebar__brand-copy small,
+  .cashier-shift-card__copy small {
+    display: none;
+  }
+
+  .cashier-shift-card {
+    min-height: 2.5rem;
+    padding: 0.38rem 0.5rem;
+    border-radius: 0.7rem;
+  }
+
+  .cashier-sidebar__content {
+    padding-block: 0.3rem !important;
+  }
+
+  .cashier-sidebar__content [data-sidebar="group"] {
+    padding-block: 0.1rem;
+  }
+
+  .cashier-sidebar [data-sidebar="group-label"] {
+    height: 1.25rem;
+    margin-top: 0.15rem;
+    font-size: 0.56rem !important;
+  }
+
+  .cashier-sidebar [data-sidebar="menu-button"] {
+    min-height: 2.05rem;
+    padding-block: 0.22rem;
+  }
+
+  .cashier-sidebar__footer {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between;
+    gap: 0.4rem !important;
+    padding: 0.4rem 0.5rem !important;
+  }
+
+  .cashier-display-controls {
+    display: none !important;
+  }
+
+  .cashier-sidebar__compact-theme {
+    display: grid;
+    width: 1.9rem;
+    height: 1.9rem;
+    flex: 0 0 auto;
+    place-items: center;
+    color: var(--koma-text-muted);
+    border: 1px solid var(--koma-border-default);
+    border-radius: 0.6rem;
+    background: var(--koma-surface-raised);
+    cursor: pointer;
+  }
+
+  .cashier-operator {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 0.4rem;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .cashier-operator__avatar {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 0.6rem;
+  }
+
+  .cashier-operator__copy small {
+    display: none;
+  }
+}
