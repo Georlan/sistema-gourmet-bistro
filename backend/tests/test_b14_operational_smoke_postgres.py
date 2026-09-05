@@ -292,101 +292,47 @@ def test_b14_operational_smoke_postgres() -> None:
 
 
 def test_outbox_multi_tenant_worker_rls_postgres_smoke():
-    """Prova PostgreSQL Real (Fase 6 Final Closure):
-    - Executa contra PostgreSQL real com FORCE ROW LEVEL SECURITY.
-    - Utiliza koma_internal.list_public_restaurants() (SECURITY DEFINER).
-    - Valida que o worker descobre dois tenants e processa as Outboxes
-      de ambos sem bloqueio de RLS e sem cruzar dados entre tenants.
-    """
+    """The worker discovers tenants globally, but every write/read obeys RLS."""
     import datetime
-
-    # 1. Configura dois tenants distintos no PostgreSQL
-    tenant_1 = RESTAURANTE_ID  # 8814
-    tenant_2 = 8815
-
-    db = SessionLocal()
-    try:
-        # Garante criação do tenant 2 se ainda não existir
-        rest2 = db.query(Restaurante).filter(Restaurante.id == tenant_2).first()
-        if not rest2:
-            db.add(
-                Restaurante(
-                    id=tenant_2,
-                    nome="B1.4 Smoke Tenant 2",
-                    plano="pro",
-                )
-            )
-            db.commit()
-
-        # Configura webhooks para ambos os tenants
-        for rid in (tenant_1, tenant_2):
+    _seed_smoke_fixture()
+    tenants = (RESTAURANTE_ID, 8815)
+    for rid in tenants:
+        with SessionLocal(restaurante_id=rid) as db:
+            if db.query(Restaurante).filter(Restaurante.id == rid).first() is None:
+                db.add(Restaurante(id=rid, nome=f"Outbox smoke {rid}", plano="pro"))
+                db.flush()
             cfg = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rid).first()
-            if not cfg:
-                cfg = ConfiguracaoRestaurante(
-                    restaurante_id=rid,
-                    webhook_url=f"https://webhook.koma.test/tenant/{rid}",
-                    webhook_secret=f"secret-postgres-{rid}",
-                    webhook_ativo=True,
-                )
+            if cfg is None:
+                cfg = ConfiguracaoRestaurante(restaurante_id=rid)
                 db.add(cfg)
-            else:
-                cfg.webhook_url = f"https://webhook.koma.test/tenant/{rid}"
-                cfg.webhook_secret = f"secret-postgres-{rid}"
-                cfg.webhook_ativo = True
+            cfg.webhook_url = f"https://webhook.koma.test/tenant/{rid}"
+            cfg.webhook_secret = f"secret-postgres-{rid}"
+            cfg.webhook_ativo = True
+            db.add(IntegrationOutbox(
+                id=f"smoke-pg-outbox-{rid}", restaurante_id=rid,
+                event_id=f"evt-pg-smoke-{rid}", event_name="koma.order.created",
+                aggregate_type="order", aggregate_id=f"ord-pg-{rid}",
+                payload={"order_id": f"ord-pg-{rid}"}, status="pending",
+                created_at=datetime.datetime.now(datetime.timezone.utc),
+            ))
             db.commit()
-
-        # Insere evento de outbox para cada tenant
-        now = datetime.datetime.now(datetime.timezone.utc)
-        ev1 = IntegrationOutbox(
-            id="smoke-pg-outbox-t1",
-            restaurante_id=tenant_1,
-            event_id="evt-pg-smoke-1",
-            event_name="koma.order.created",
-            aggregate_type="order",
-            aggregate_id="ord-pg-t1",
-            payload={"order_id": "ord-pg-t1", "display_number": "10-A", "check_id": 10},
-            status="pending",
-            created_at=now,
-        )
-        ev2 = IntegrationOutbox(
-            id="smoke-pg-outbox-t2",
-            restaurante_id=tenant_2,
-            event_id="evt-pg-smoke-2",
-            event_name="koma.order.created",
-            aggregate_type="order",
-            aggregate_id="ord-pg-t2",
-            payload={"order_id": "ord-pg-t2", "display_number": "20-A", "check_id": 20},
-            status="pending",
-            created_at=now,
-        )
-        db.add_all([ev1, ev2])
-        db.commit()
-
-        # 2. Testa descoberta de tenants via koma_internal.list_public_restaurants()
+    with SessionLocal() as db:
         discovered_ids = discover_active_restaurant_ids(db)
-        assert tenant_1 in discovered_ids
-        assert tenant_2 in discovered_ids
-
-        # 3. Executa o OutboxWorker com mock de transporte
-        delivered_requests: list[httpx.Request] = []
-
-        def mock_transport(request: httpx.Request):
-            delivered_requests.append(request)
-            return httpx.Response(200, json={"status": "ok"})
-
-        client = httpx.Client(transport=httpx.MockTransport(mock_transport))
-        worker = OutboxWorker(batch_size=10, worker_id="worker-pg-smoke")
-        stats = worker.run_once(client=client)
-
-        assert stats["claimed"] >= 2
-        assert stats["delivered"] >= 2
-
-        # 4. Valida no PostgreSQL sob RLS que ambos os eventos foram marcados como 'delivered'
-        e1_db = db.query(IntegrationOutbox).filter(IntegrationOutbox.id == "smoke-pg-outbox-t1").first()
-        e2_db = db.query(IntegrationOutbox).filter(IntegrationOutbox.id == "smoke-pg-outbox-t2").first()
-        assert e1_db.status == "delivered"
-        assert e2_db.status == "delivered"
-
-    finally:
-        db.close()
-
+        assert all(rid in discovered_ids for rid in tenants)
+    requests = []
+    def transport(request):
+        requests.append(request)
+        return httpx.Response(200, json={"status": "ok"})
+    with httpx.Client(transport=httpx.MockTransport(transport)) as client:
+        stats = OutboxWorker(batch_size=10, worker_id="worker-pg-smoke").run_once(client=client)
+    assert stats["delivered"] >= 2
+    for rid in tenants:
+        with SessionLocal(restaurante_id=rid) as db:
+            event = db.query(IntegrationOutbox).filter(IntegrationOutbox.id == f"smoke-pg-outbox-{rid}").one()
+            assert event.status == "delivered"
+            other = next(x for x in tenants if x != rid)
+            assert db.query(IntegrationOutbox).filter(IntegrationOutbox.id == f"smoke-pg-outbox-{other}").first() is None
+        own = [r for r in requests if str(r.url) == f"https://webhook.koma.test/tenant/{rid}"]
+        assert own
+        assert any(f"ord-pg-{rid}" in r.content.decode() for r in own)
+        assert all(f"ord-pg-{other}" not in r.content.decode() for r in own)

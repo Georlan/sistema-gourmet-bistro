@@ -15,6 +15,52 @@ if settings.DATABASE_URL.startswith("sqlite"):
 
 Base = declarative_base()
 
+
+@event.listens_for(Session, "after_commit")
+def _close_revoked_websockets(session):
+    if session.in_nested_transaction():
+        return  # Releasing a savepoint does not make its writes durable.
+    if session.info.pop("outbox_pending_notification", False):
+        from .services.outbox import default_outbox_worker
+        default_outbox_worker.wake()
+    revoked = session.info.pop("revoked_websocket_sessions", set())
+    if revoked:
+        from .websocket_manager import manager
+        for restaurante_id, user_id in revoked:
+            manager.revoke(restaurante_id, user_id)
+
+
+@event.listens_for(Session, "after_rollback")
+def _discard_websocket_revocations(session):
+    nested = session.get_nested_transaction()
+    snapshots = session.info.get("commit_notification_savepoints", {})
+    if nested in snapshots:
+        outbox, revocations = snapshots[nested]
+        session.info["outbox_pending_notification"] = outbox
+        session.info["revoked_websocket_sessions"] = set(revocations)
+        return
+    session.info.pop("outbox_pending_notification", None)
+    session.info.pop("revoked_websocket_sessions", None)
+
+
+@event.listens_for(Session, "after_transaction_create")
+def _snapshot_commit_notifications(session, transaction):
+    if transaction.nested:
+        session.info.setdefault("commit_notification_savepoints", {})[transaction] = (
+            session.info.get("outbox_pending_notification", False),
+            set(session.info.get("revoked_websocket_sessions", set())),
+        )
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _clean_commit_notifications(session, transaction):
+    session.info.get("commit_notification_savepoints", {}).pop(transaction, None)
+    if transaction.parent is None:
+        # Session.close() can end a transaction without after_rollback.
+        session.info.pop("outbox_pending_notification", None)
+        session.info.pop("revoked_websocket_sessions", None)
+        session.info.pop("commit_notification_savepoints", None)
+
 # ContextVar to track the logical restaurante_id for the current request context
 current_restaurante_id: ContextVar[int | None] = ContextVar(
     "current_restaurante_id", default=None
@@ -338,7 +384,7 @@ def validate_postgres_runtime_role() -> None:
     if not role["is_koma_app"]:
         failures.append("não é membro da role koma_app")
     if failures:
-        if os.getenv("STRICT_RLS_ROLE_CHECK", "false").lower() == "true":
+        if os.getenv("STRICT_RLS_ROLE_CHECK", "true").lower() == "true":
             raise RuntimeError(
                 "DATABASE_URL insegura para o runtime PostgreSQL: "
                 f"role {role['role_name']!r} " + ", ".join(failures) + ". "

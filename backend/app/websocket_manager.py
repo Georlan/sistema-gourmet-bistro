@@ -18,6 +18,7 @@ class ConnectionManager:
         # Keeps track of active WebSocket connections grouped by restaurante_id and client_type
         # Structure: { restaurante_id: { "internal": [WebSocket...], "client": [WebSocket...] } }
         self.active_connections: dict[int, dict[str, list[WebSocket]]] = {}
+        self.identities: dict[WebSocket, tuple[int, str, asyncio.AbstractEventLoop]] = {}
 
     async def connect(
         self,
@@ -25,6 +26,7 @@ class ConnectionManager:
         restaurante_id: int,
         client_type: str = "internal",
         subprotocol: str | None = None,
+        user_id: str | None = None,
     ) -> None:
         if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
             logger.warning("Conexão WebSocket rejeitada: restaurante_id ausente ou inválido.")
@@ -35,6 +37,8 @@ class ConnectionManager:
             return
 
         await websocket.accept(subprotocol=subprotocol)
+        if user_id is not None:
+            self.identities[websocket] = (restaurante_id, user_id, asyncio.get_running_loop())
 
         if restaurante_id not in self.active_connections:
             self.active_connections[restaurante_id] = {"internal": [], "client": []}
@@ -47,6 +51,7 @@ class ConnectionManager:
         logger.info(f"WebSocket conectado: restaurante_id={restaurante_id}, client_type={client_type}")
 
     def disconnect(self, websocket: WebSocket, restaurante_id: int | None = None) -> None:
+        self.identities.pop(websocket, None)
         if restaurante_id is not None and isinstance(restaurante_id, int) and not isinstance(restaurante_id, bool) and restaurante_id > 0:
             if restaurante_id in self.active_connections:
                 for ctype, connections in list(self.active_connections[restaurante_id].items()):
@@ -61,6 +66,22 @@ class ConnectionManager:
                         connections.remove(websocket)
                 if not any(ctype_dict.values()):
                     del self.active_connections[rid]
+
+    def revoke(self, restaurante_id: int, user_id: str | None = None) -> None:
+        """Called after commit, including from synchronous request threads."""
+        for socket, (rid, uid, loop) in list(self.identities.items()):
+            if rid != restaurante_id or (user_id is not None and uid != user_id):
+                continue
+            def close_connection(ws=socket, tenant=rid):
+                self.disconnect(ws, tenant)
+                async def close():
+                    try:
+                        await ws.close(code=1008)
+                    except Exception:
+                        pass
+                asyncio.create_task(close())
+            if not loop.is_closed():
+                loop.call_soon_threadsafe(close_connection)
 
     async def broadcast(
         self,

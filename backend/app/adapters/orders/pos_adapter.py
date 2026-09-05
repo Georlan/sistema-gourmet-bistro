@@ -82,7 +82,7 @@ class PosAdapter:
     """Adaptador de Pedidos para PDV, Balcão e Venda Direta."""
 
     @classmethod
-    async def handle_create_pos_order(
+    def handle_create_pos_order(
         cls,
         venda_in: VendaDiretaCreate,
         background_tasks: BackgroundTasks,
@@ -417,7 +417,8 @@ class PosAdapter:
 
         # 5. Broadcasts de WebSocket
         if venda_in.mesa_id is not None:
-            await manager.broadcast(
+            background_tasks.add_task(
+                manager.broadcast,
                 {
                     "type": "MESA_UPDATED",
                     "mesa_id": venda_in.mesa_id,

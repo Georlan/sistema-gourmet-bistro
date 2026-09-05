@@ -1,8 +1,12 @@
 import os
 import logging
+import asyncio
+import contextlib
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 import jwt
+from starlette.concurrency import run_in_threadpool
 
 from ..config import settings, normalize_cors_origin
 from ..database import SessionLocal, current_restaurante_id
@@ -14,6 +18,27 @@ router = APIRouter(
 )
 
 KOMA_AUTH_SUBPROTOCOL = "koma-auth"
+SESSION_REVALIDATION_SECONDS = 30.0
+
+
+async def _watch_internal_session(websocket, token, user_id, restaurante_id):
+    """Recheck across processes and expire idle sockets without blocking the loop."""
+    try:
+        expires_at = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM],
+                                options={"require": ["exp"]})["exp"]
+        while True:
+            remaining = float(expires_at) - time.time()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(SESSION_REVALIDATION_SECONDS, remaining))
+            await run_in_threadpool(_validated_internal_websocket_identity, token, user_id)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        pass  # Fail closed on revocation, suspension, expiry or DB outage.
+    manager.disconnect(websocket, restaurante_id)
+    with contextlib.suppress(Exception):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
 
 
 def _websocket_auth_token(websocket: WebSocket, legacy_query_token: str | None) -> str | None:
@@ -162,7 +187,7 @@ async def websocket_endpoint(
 
     try:
         restaurante_id_val, authenticated_user_id, authenticated_user_name = (
-            _validated_internal_websocket_identity(token, garcom_id)
+            await run_in_threadpool(_validated_internal_websocket_identity, token, garcom_id)
         )
     except Exception:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
@@ -173,16 +198,21 @@ async def websocket_endpoint(
         restaurante_id_val,
         client_type="internal",
         subprotocol=KOMA_AUTH_SUBPROTOCOL,
+        user_id=authenticated_user_id,
     )
-
-    await manager.broadcast({
-        "event": "waiter_connected",
-        "garcom_id": authenticated_user_id,
-    }, restaurante_id_val, target_audience="internal")
+    watcher = asyncio.create_task(_watch_internal_session(
+        websocket, token, authenticated_user_id, restaurante_id_val,
+    ))
 
     try:
+        await manager.broadcast({
+            "event": "waiter_connected",
+            "garcom_id": authenticated_user_id,
+        }, restaurante_id_val, target_audience="internal")
         while True:
             data = await websocket.receive_json()
+            if websocket not in manager.identities:
+                break
 
             if data.get("action") != "draft_status":
                 continue
@@ -212,3 +242,8 @@ async def websocket_endpoint(
         }, restaurante_id_val, target_audience="internal")
     except Exception:
         manager.disconnect(websocket, restaurante_id_val)
+    finally:
+        manager.disconnect(websocket, restaurante_id_val)
+        watcher.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watcher

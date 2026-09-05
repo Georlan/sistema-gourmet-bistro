@@ -2,6 +2,7 @@ import datetime
 import os
 import time
 import uuid
+import hmac
 from typing import Any, Dict, Optional
 
 import jwt
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field
 from ..config import settings
 from ..database import SessionLocal, engine, tenant_session_scope
 from ..models import Lancamento, Pagamento, RestaurantPaymentAccount, Restaurante, SuperAdminAuditLog
-from ..security import IPRateLimiter, create_access_token, verify_password
+from ..security import IPRateLimiter, create_access_token, verify_password, superadmin_session_generation
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .super_admin_services import (
     CloudflareService,
@@ -136,6 +137,12 @@ def get_current_admin(authorization: str = Header(None)) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Valid authorization bearer token required.",
         )
+
+    if (payload.get("sub") != os.getenv("SUPERADMIN_USERNAME")
+        or payload.get("restaurante_id") != 0
+        or not isinstance(payload.get("sa_gen"), str)
+        or not hmac.compare_digest(payload["sa_gen"], superadmin_session_generation())):
+        raise HTTPException(status_code=401, detail="Sessão administrativa encerrada. Entre novamente.")
 
     return {"user": payload.get("sub"), "role": payload.get("role")}
 
@@ -373,6 +380,8 @@ def update_tenant_status(
                 after_data={"saas_status": new_status},
             )
             db.add(audit)
+            if new_status == "suspended":
+                db.info.setdefault("revoked_websocket_sessions", set()).add((tenant_id_int, None))
             db.commit()
 
             logger.info(

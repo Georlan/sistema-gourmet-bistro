@@ -152,7 +152,7 @@ def imprimir_recibo_mesa_com_identidade(
     response_model=LancamentoResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def lancar_itens_na_familia_principal(
+def lancar_itens_na_familia_principal(
     comanda_id: str,
     lancamento_in: LancamentoCreate,
     background_tasks: BackgroundTasks,
@@ -171,7 +171,7 @@ async def lancar_itens_na_familia_principal(
     from .orders import lancar_itens
 
     if supplied.tipo != "Consumo no Local" or supplied.mesa_id is None or supplied.fechada:
-        return await lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
+        return lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
 
     try:
         materialize_table_accounts_for_write(db, rid, int(supplied.mesa_id), actor_id=current_user.id)
@@ -182,12 +182,12 @@ async def lancar_itens_na_familia_principal(
             actor_id=current_user.id,
         )
         if principal is None:
-            return await lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
+            return lancar_itens(comanda_id, lancamento_in, background_tasks, db, current_user)
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
 
-    return await lancar_itens(principal.id, lancamento_in, background_tasks, db, current_user)
+    return lancar_itens(principal.id, lancamento_in, background_tasks, db, current_user)
 
 
 @router.post(
@@ -195,7 +195,7 @@ async def lancar_itens_na_familia_principal(
     response_model=ComandaDetail,
     status_code=status.HTTP_201_CREATED,
 )
-async def venda_direta_respeitando_familia_principal(
+def venda_direta_respeitando_familia_principal(
     venda_in: VendaDiretaCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -207,14 +207,14 @@ async def venda_direta_respeitando_familia_principal(
     normalized_type = (venda_in.tipo or "").strip().casefold()
     is_local = normalized_type in {"consumo no local", "mesa", "local"}
     if not is_local or venda_in.mesa_id is None:
-        return await criar_venda_direta(venda_in, background_tasks, db, current_user)
+        return criar_venda_direta(venda_in, background_tasks, db, current_user)
 
     rid = require_tenant_id()
     try:
         materialize_table_accounts_for_write(db, rid, venda_in.mesa_id, actor_id=current_user.id)
         families = get_table_family_snapshot(db, rid, venda_in.mesa_id)
         if len(families) <= 1:
-            return await criar_venda_direta(venda_in, background_tasks, db, current_user)
+            return criar_venda_direta(venda_in, background_tasks, db, current_user)
         principal = principal_command_for_table(db, rid, venda_in.mesa_id)
         if principal is None:
             raise AtendimentoError("Mesa mesclada sem família principal", status_code=409)
@@ -270,7 +270,7 @@ async def venda_direta_respeitando_familia_principal(
                 for item in venda_in.itens
             ],
         )
-        await lancar_itens(command.id, launch_payload, background_tasks, db, current_user)
+        lancar_itens(command.id, launch_payload, background_tasks, db, current_user)
         completed = (
             db.query(Comanda)
             .options(

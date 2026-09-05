@@ -101,4 +101,5 @@ def enqueue_outbox_event_in_session(
     )
 
     db.add(outbox_record)
+    db.info["outbox_pending_notification"] = True
     return outbox_record

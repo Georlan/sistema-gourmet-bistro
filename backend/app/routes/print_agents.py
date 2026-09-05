@@ -798,6 +798,7 @@ class DetectedPrinterReport(BaseModel):
 
 
 class PrinterDiagnosticsReport(BaseModel):
+    agent_version: Optional[str] = Field(default=None, max_length=40)
     adapter: str = Field(default="unknown", max_length=80)
     platform: str = Field(default="unknown", max_length=40)
     printers: List[DetectedPrinterReport] = Field(

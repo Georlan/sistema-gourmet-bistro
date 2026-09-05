@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
+import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 
 function isPublicMenuRoute(): boolean {
   const pathname = window.location.pathname;
@@ -59,6 +60,8 @@ if (sentryDsn) {
       // Limita o monitoramento de performance a 10% para nunca estourar o plano gratuito.
       tracesSampleRate: 0.1,
     });
+  }).catch((error: unknown) => {
+    console.warn('[monitoring] Monitoramento indisponível.', error);
   });
 }
 
@@ -75,10 +78,12 @@ const RouteLoading = () => (
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <AppRecoveryBoundary>
     <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
       <React.Suspense fallback={<RouteLoading />}>
         <RootApp />
       </React.Suspense>
     </TenantSuspensionBoundary>
+    </AppRecoveryBoundary>
   </React.StrictMode>
 );
