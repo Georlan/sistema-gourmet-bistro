@@ -12,7 +12,8 @@ from app.printer_service import (
 )
 
 
-def test_table_account_uses_same_operational_identity_and_items_hierarchy():
+def test_table_full_reprint_uses_order_identity_and_reprint_marker():
+    """A antiga via completa de mesa é segunda via do pedido, nunca conta."""
     old_width = printer_service.width
     printer_service.width = 40
     try:
@@ -30,6 +31,8 @@ def test_table_account_uses_same_operational_identity_and_items_hierarchy():
             ]
         )
 
+        # O caller legado ainda chega com CONTA; o Core Universal normaliza a
+        # semântica para reimpressão total do pedido até o alias ser removido.
         ticket = apply_operational_visual_hierarchy(
             legacy,
             order_number="2",
@@ -41,8 +44,10 @@ def test_table_account_uses_same_operational_identity_and_items_hierarchy():
     finally:
         printer_service.width = old_width
 
-    assert "CONTA: #2" in ticket
+    assert "REIMPRESSÃO" in ticket
+    assert "PEDIDO #2" in ticket
     assert "PEDIDO: #2" not in ticket
+    assert "CONTA: #2" not in ticket
     assert ESC_DOUBLE_HEIGHT_ON + ESC_BOLD_ON in ticket
     assert ESC_BOLD_OFF + ESC_NORMAL_SIZE in ticket
     assert "MESA: 5" in ticket
@@ -84,6 +89,8 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     assert "ITENS" in ticket
     assert "VALOR" in ticket
     assert "CONTA: #2" in ticket
+    assert "PEDIDO #2" not in ticket
+    assert "REIMPRESSÃO" not in ticket
     assert "IMPRESSO POR: GEORLAN" in ticket
 
 
