@@ -51,9 +51,12 @@ function bypassTenantSuspensionBoundary(): boolean {
     || params.get("view") === "ativar";
 }
 
-// O tema operacional pertence ao app autenticado. Rotas públicas têm
-// apresentação própria e não devem herdar a preferência local do operador.
-if (isPublicMenuRoute() || isPublicCommercialRoute()) {
+// O cardápio público preserva seu contrato explícito de isolamento do tema
+// operacional. As demais rotas públicas comerciais seguem o mesmo tema escuro,
+// mas em ramo separado para não diluir essa invariante.
+if (isPublicMenuRoute()) {
+  document.documentElement.setAttribute("data-koma-theme", "dark");
+} else if (isPublicCommercialRoute()) {
   document.documentElement.setAttribute("data-koma-theme", "dark");
 } else {
   initializeKomaTheme();
