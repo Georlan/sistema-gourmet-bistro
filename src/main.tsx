@@ -32,21 +32,31 @@ function isPublicMenuRoute(): boolean {
     && !isPlatformHost;
 }
 
+function isPublicCommercialRoute(): boolean {
+  const pathname = window.location.pathname;
+  return pathname.startsWith("/landing")
+    || pathname.startsWith("/legal")
+    || pathname.startsWith("/contratar");
+}
+
 function bypassTenantSuspensionBoundary(): boolean {
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
 
   return isPublicMenuRoute()
+    || isPublicCommercialRoute()
     || pathname.startsWith("/super-admin")
-    || pathname.startsWith("/landing")
     || pathname.startsWith("/ativar")
     || params.get("view") === "landing"
     || params.get("view") === "ativar";
 }
 
-// O tema operacional pertence ao app autenticado. O cardápio público tem
-// apresentação própria e não deve herdar a preferência local do operador.
+// O cardápio público preserva seu contrato explícito de isolamento do tema
+// operacional. As demais rotas públicas comerciais seguem o mesmo tema escuro,
+// mas em ramo separado para não diluir essa invariante.
 if (isPublicMenuRoute()) {
+  document.documentElement.setAttribute("data-koma-theme", "dark");
+} else if (isPublicCommercialRoute()) {
   document.documentElement.setAttribute("data-koma-theme", "dark");
 } else {
   initializeKomaTheme();
@@ -65,10 +75,20 @@ if (sentryDsn) {
   });
 }
 
-const isSmartPosRoute = window.location.pathname.startsWith("/smartpos");
-const RootApp = React.lazy(isSmartPosRoute
-  ? () => import("./smartpos/SmartPosPage")
-  : () => import("./App"));
+const pathname = window.location.pathname;
+const isSmartPosRoute = pathname.startsWith("/smartpos");
+const isLegalRoute = pathname.startsWith("/legal");
+const isPocketContractRoute = pathname.startsWith("/contratar/pocket");
+
+const RootApp = React.lazy(
+  isSmartPosRoute
+    ? () => import("./smartpos/SmartPosPage")
+    : isLegalRoute
+      ? () => import("./legal/LegalPage")
+      : isPocketContractRoute
+        ? () => import("./legal/PocketContractPage")
+        : () => import("./App"),
+);
 
 const RouteLoading = () => (
   <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
