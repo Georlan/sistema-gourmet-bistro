@@ -16,7 +16,7 @@ if agent_dir not in sys.path:
     sys.path.insert(0, agent_dir)
 
 from config import AgentConfig
-from api_client import AgentAuthenticationError, KomaApiClient
+from api_client import AGENT_VERSION, AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
 from adapters.file import FilePrinterAdapter
 from adapters.windows import (
@@ -670,6 +670,7 @@ def test_api_client_reuses_http_session():
             "diagnostics": {
                 **diagnostics,
                 "capabilities": ["connect_usb"],
+                "agent_version": AGENT_VERSION,
             }
         }
 

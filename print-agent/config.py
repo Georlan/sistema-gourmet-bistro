@@ -46,7 +46,9 @@ class AgentConfig:
         config = cls()
 
         # 1. Carregar arquivo JSON se existir
-        target_json = config_path or os.getenv("KOMA_CONFIG_FILE", "config.json")
+        legacy_directory = Path("config.json").exists() or Path("journal.db").exists()
+        default_path = Path("config.json") if legacy_directory else Path(__file__).with_name("config.json")
+        target_json = config_path or os.getenv("KOMA_CONFIG_FILE", str(default_path))
         config.config_path = target_json
         if os.path.exists(target_json):
             try:
