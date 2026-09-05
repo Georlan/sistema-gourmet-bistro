@@ -78,15 +78,15 @@ if (sentryDsn) {
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
-const isPocketContractRoute = pathname.startsWith("/contratar/pocket");
+const isPlanContractRoute = pathname.startsWith("/contratar/");
 
 const RootApp = React.lazy(
   isSmartPosRoute
     ? () => import("./smartpos/SmartPosPage")
     : isLegalRoute
       ? () => import("./legal/LegalPage")
-      : isPocketContractRoute
-        ? () => import("./legal/PocketContractPage")
+      : isPlanContractRoute
+        ? () => import("./legal/PlanContractPage")
         : () => import("./App"),
 );
 
