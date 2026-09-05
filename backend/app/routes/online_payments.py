@@ -260,16 +260,16 @@ async def mercado_pago_application_webhook(
         raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
 
     provider_user_id = _mercado_pago_webhook_provider_user_id(payload)
-    account_id = (
-        _resolve_mercado_pago_account_id(db, provider_user_id)
-        if provider_user_id
-        else None
-    )
-    if not account_id:
+    if provider_user_id:
+        account_id = _resolve_mercado_pago_account_id(db, provider_user_id)
+        # Se o provider declarou explicitamente um seller desconhecido, falha
+        # fechado em vez de ignorar o dado e tentar re-rotear por payment_id.
+        if not account_id:
+            raise HTTPException(status_code=401, detail="Assinatura de pagamento inválida.")
+    else:
         account_id = _resolve_mercado_pago_account_id_by_payment(db, payment_id)
-    if not account_id:
-        # Não revelar se seller/payment existe antes de validar uma conta conhecida.
-        raise HTTPException(status_code=401, detail="Assinatura de pagamento inválida.")
+        if not account_id:
+            raise HTTPException(status_code=401, detail="Assinatura de pagamento inválida.")
 
     return await mercado_pago_webhook(
         account_id=str(account_id),
