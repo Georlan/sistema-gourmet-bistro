@@ -27,7 +27,7 @@ export function FinalCTA() {
             <a href="/contratar/pocket" className="koma-btn koma-btn--primary">
               COMEÇAR NO POCKET <ArrowDownRight size={17} aria-hidden="true" />
             </a>
-            <button type="button" onClick={() => openDemo()}>
+            <button type="button" className="koma-btn koma-btn--outline-dark" onClick={() => openDemo()}>
               QUERO VER UMA DEMONSTRAÇÃO
             </button>
             <a href={KOMA_LANDING_CONFIG.whatsappUrl} target="_blank" rel="noopener noreferrer">
