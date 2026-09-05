@@ -106,6 +106,56 @@ def _style_document_title(
         break
 
 
+def _insert_reprint_marker(lines: list[str], *, width: int) -> None:
+    """Marca uma segunda via sem transformar pedido em conta/fechamento."""
+    marker = "REIMPRESSÃO"
+    if any(_clean_esc_text(line).casefold() == marker.casefold() for line in lines):
+        return
+
+    operational_types = {"consumo no local", "retirada", "delivery"}
+    type_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if _clean_esc_text(line).casefold() in operational_types
+        ),
+        None,
+    )
+    if type_index is not None:
+        insert_at = type_index + 1
+    else:
+        insert_at = next(
+            (index for index, line in enumerate(lines) if "PEDIDO: #" in line),
+            None,
+        )
+    if insert_at is None:
+        return
+
+    lines.insert(
+        insert_at,
+        ESC_BOLD_ON + align_center(marker, width) + ESC_BOLD_OFF,
+    )
+
+
+def _resolve_operational_identity(
+    *,
+    identity_label: str,
+    document_title: Optional[str],
+) -> tuple[str, bool]:
+    """Normaliza o alias legado da antiga impressão total de mesa.
+
+    Antes da consolidação conceitual, a via completa de mesa chegava ao renderer
+    como ``CONTA/CONTAS`` mesmo sem ser fechamento. Como esse é o único caller
+    operacional desse alias fora de FECHAMENTO, o Core o traduz para segunda via
+    de PEDIDO e mantém CONTA exclusivamente no documento de fechamento.
+    """
+    resolved = str(identity_label or "PEDIDO").strip().upper() or "PEDIDO"
+    is_closing = str(document_title or "").strip().casefold() == "fechamento"
+    if not is_closing and resolved in {"CONTA", "CONTAS"}:
+        return ("PEDIDOS" if resolved == "CONTAS" else "PEDIDO", True)
+    return resolved, False
+
+
 def _replace_metadata_line(
     lines: list[str],
     *,
@@ -299,6 +349,12 @@ def apply_operational_visual_hierarchy(
     """Aplica o sistema visual compartilhado a qualquer documento operacional."""
     width = int(getattr(printer_service, "width", 40) or 40)
     lines = receipt.split("\n")
+    resolved_identity, is_full_reprint = _resolve_operational_identity(
+        identity_label=identity_label,
+        document_title=document_title,
+    )
+    if is_full_reprint:
+        _insert_reprint_marker(lines, width=width)
     _style_document_title(
         lines,
         document_title=document_title,
@@ -311,7 +367,7 @@ def apply_operational_visual_hierarchy(
         operator_label=operator_label,
         operator_name=operator_name,
         location_label=location_label,
-        identity_label=identity_label,
+        identity_label=resolved_identity,
         width=width,
     )
     _style_items_header(lines, width=width)
