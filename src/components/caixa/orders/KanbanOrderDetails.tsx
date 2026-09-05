@@ -271,18 +271,20 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                   <button
                     type="button"
                     onClick={actions.printFullTable}
+                    title="Reimprime todos os itens ativos da mesa"
                     className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
                   >
                     <Printer size={13} />
-                    <span>Comanda Inteira</span>
+                    <span>Reimpressão total</span>
                   </button>
                   <button
                     type="button"
                     onClick={actions.printTableValues}
+                    title="Imprime o documento de fechamento da conta"
                     className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
                   >
                     <Printer size={13} />
-                    <span>Só Valores</span>
+                    <span>Fechamento</span>
                   </button>
                 </div>
                 {selectedKanbanOrder.contextoSalao && (
