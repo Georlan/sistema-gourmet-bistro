@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { Moon, Sun } from 'lucide-react';
 import { nextKomaTheme, persistKomaTheme } from '../../../config/theme';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
+import './cashierLowHeight.css';
 
 type Props = Pick<
   CashierSidebarProps,
