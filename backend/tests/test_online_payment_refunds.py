@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from decimal import Decimal
 
 import httpx
@@ -126,7 +125,7 @@ def online_refund_db():
         current_restaurante_id.reset(ctx)
 
 
-def test_mercado_pago_refund_endpoint_uses_idempotency_and_total_body():
+def test_mercado_pago_total_refund_uses_idempotency_and_omits_body():
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -150,7 +149,7 @@ def test_mercado_pago_refund_endpoint_uses_idempotency_and_total_body():
     assert refund.payment_id == "777001"
     assert requests[0].url == httpx.URL("https://api.mercadopago.com/v1/payments/777001/refunds")
     assert requests[0].headers["X-Idempotency-Key"] == "koma-refund-test-total"
-    assert json.loads(requests[0].content) == {}
+    assert requests[0].content == b""
 
 
 def test_provider_confirmed_refund_materializes_local_ledger_once(monkeypatch, online_refund_db):
@@ -210,7 +209,7 @@ def test_provider_confirmed_refund_materializes_local_ledger_once(monkeypatch, o
     assert len(calls) == 1
 
 
-def test_timeout_reserves_value_and_same_key_reconciles(monkeypatch, online_refund_db):
+def test_timeout_reserves_value_and_new_client_key_reuses_provider_key(monkeypatch, online_refund_db):
     db, payment, shift = online_refund_db
     first_keys: list[str] = []
 
@@ -283,13 +282,19 @@ def test_timeout_reserves_value_and_same_key_reconciles(monkeypatch, online_refu
         usuario_id="refund-user",
         valor=Decimal("80.00"),
         motivo="Timeout de teste com reserva",
-        idempotency_key="refund-timeout-001",
+        # A UI atual gera uma nova chave em cada submit. O backend deve reconhecer
+        # o mesmo fingerprint pendente e reutilizar a chave remota original.
+        idempotency_key="refund-timeout-ui-retry-002",
         metodo_devolucao="pix",
     )
     db.commit()
 
     assert first_keys == retry_keys
     assert Decimal(str(refund.valor)) == Decimal("80.00")
+    assert db.query(OnlinePaymentRefund).filter(
+        OnlinePaymentRefund.restaurante_id == RESTAURANT_ID,
+        OnlinePaymentRefund.pagamento_id == payment.id,
+    ).count() == 1
 
 
 def test_full_refund_omits_amount_and_webhook_resolves_known_payment(monkeypatch, online_refund_db):
