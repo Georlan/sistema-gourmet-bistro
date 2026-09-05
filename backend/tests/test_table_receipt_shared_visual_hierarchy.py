@@ -1,4 +1,6 @@
+import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from app.application.printing.comanda_renderer import apply_operational_visual_hierarchy
 from app.printer_service import (
@@ -83,6 +85,52 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     assert "VALOR" in ticket
     assert "CONTA: #2" in ticket
     assert "IMPRESSO POR: GEORLAN" in ticket
+
+
+def test_shared_hierarchy_normalizes_naive_utc_event_before_printing_time():
+    """DateTime sem tzinfo vindo do banco continua sendo UTC, não hora local."""
+    old_width = printer_service.width
+    printer_service.width = 40
+    naive_utc = datetime.datetime(2026, 9, 5, 0, 25)
+    fortaleza_time = datetime.datetime(
+        2026,
+        9,
+        4,
+        21,
+        25,
+        tzinfo=datetime.timezone(datetime.timedelta(hours=-3)),
+    )
+    legacy = "\n".join(
+        [
+            ESC_BOLD_ON + "CONSUMO NO LOCAL".center(40) + ESC_BOLD_OFF,
+            ESC_BOLD_ON + "PEDIDO: #4-A".ljust(31) + "MESA: 4" + ESC_BOLD_OFF,
+            "DATA: 05/09/2026".ljust(29) + "HORA: 00:25",
+            "GARÇOM: Georlan",
+            "-" * 40,
+            ESC_BOLD_ON + "ITENS" + ESC_BOLD_OFF,
+        ]
+    )
+
+    try:
+        with patch(
+            "app.application.printing.comanda_renderer.to_operational_local_time",
+            return_value=fortaleza_time,
+        ) as normalize_time:
+            ticket = apply_operational_visual_hierarchy(
+                legacy,
+                order_number="4-A",
+                event_at=naive_utc,
+                operator_label="GARÇOM",
+                operator_name="Georlan",
+                location_label=None,
+            )
+    finally:
+        printer_service.width = old_width
+
+    normalize_time.assert_called_once_with(naive_utc)
+    assert "DATA: 04/09/2026" in ticket
+    assert "HORA: 21:25" in ticket
+    assert "HORA: 00:25" not in ticket
 
 
 def test_table_receipt_renderer_delegates_visuals_to_shared_hierarchy():

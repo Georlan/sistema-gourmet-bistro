@@ -124,8 +124,11 @@ def _replace_metadata_line(
     antigo texto ``SEM MESA``. Canal é acrescentado somente quando o contexto
     semântico o fornece.
     """
+    # As colunas DateTime legadas do banco armazenam UTC e podem voltar naive.
+    # A política temporal da impressão precisa, portanto, normalizar tanto
+    # datetimes aware quanto naive pelo helper operacional canônico.
     local_event = event_at
-    if isinstance(local_event, datetime.datetime) and local_event.tzinfo is not None:
+    if isinstance(local_event, datetime.datetime):
         local_event = to_operational_local_time(local_event) or local_event
 
     for index, line in enumerate(lines):

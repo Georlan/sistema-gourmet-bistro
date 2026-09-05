@@ -16,6 +16,9 @@ from app.printer_service import (
 )
 
 
+LOCAL_TIMEZONE = datetime.timezone(datetime.timedelta(hours=-3))
+
+
 def _render(items, variant, *, order_type="Retirada"):
     old_width = printer_service.width
     printer_service.width = 40
@@ -49,7 +52,7 @@ def test_online_pickup_uses_table_base_with_online_origin():
             location_label="BALCÃO",
             operator_label="OPERADOR",
             customer_name="GEORLAN",
-            event_at=datetime.datetime(2026, 8, 31, 22, 15),
+            event_at=datetime.datetime(2026, 8, 31, 22, 15, tzinfo=LOCAL_TIMEZONE),
         ),
     )
 
@@ -105,7 +108,7 @@ def test_delivery_keeps_same_base_and_adds_delivery_context():
             location_label="ENTREGA",
             operator_label="OPERADOR",
             customer_name="MARIA",
-            event_at=datetime.datetime(2026, 8, 31, 22, 20),
+            event_at=datetime.datetime(2026, 8, 31, 22, 20, tzinfo=LOCAL_TIMEZONE),
             delivery_phone="88999991234",
             delivery_address="Rua José de Alencar, 124, Apto 302",
             delivery_neighborhood="Centro",

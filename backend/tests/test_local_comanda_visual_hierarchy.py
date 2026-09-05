@@ -15,6 +15,9 @@ from app.printer_service import (
 )
 
 
+LOCAL_TIMEZONE = datetime.timezone(datetime.timedelta(hours=-3))
+
+
 def _item(
     name: str,
     price: float,
@@ -51,7 +54,7 @@ def test_local_order_is_born_from_canonical_renderer_with_table_identity():
             variant=ComandaVariant(
                 location_label=None,
                 operator_label="GARÇOM",
-                event_at=datetime.datetime(2026, 9, 4, 19, 20),
+                event_at=datetime.datetime(2026, 9, 4, 19, 20, tzinfo=LOCAL_TIMEZONE),
                 table_id=5,
                 preserve_item_customers=True,
             ),
@@ -89,7 +92,7 @@ def test_remote_order_uses_same_renderer_without_sem_mesa():
                 origin_label="CARDÁPIO ONLINE",
                 location_label="BALCÃO",
                 operator_label="OPERADOR",
-                event_at=datetime.datetime(2026, 9, 1, 0, 21),
+                event_at=datetime.datetime(2026, 9, 1, 0, 21, tzinfo=LOCAL_TIMEZONE),
             ),
         )
     finally:
