@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -92,7 +93,7 @@ class RestaurantContractAcceptance(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     restaurante_id = Column(
-        String,
+        Integer,
         ForeignKey("restaurantes.id", ondelete="CASCADE"),
         default=lambda: current_restaurante_id.get(),
         nullable=False,
