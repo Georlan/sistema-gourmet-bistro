@@ -87,6 +87,7 @@ def online_refund_db():
         account.access_token = "test"
         account.webhook_secret = "test"
         db.add(account)
+        db.flush()
         db.add(OnlinePaymentIntent(
             id="refund-intent",
             restaurante_id=RESTAURANT_ID,
