@@ -230,7 +230,7 @@ test('details groups visible units and delegates print/transfer/cancellation wit
   assert.match(markup, /2×/);
   assert.doesNotMatch(markup, /Item cancelado/);
   assert.doesNotMatch(markup, /option value="7"/);
-  for (const label of ['Reimprimir produção', 'Comanda Inteira', 'Só Valores', 'Transferir', 'Cancelar toda a mesa e liberar']) {
+  for (const label of ['Reimprimir produção', 'Reimpressão total', 'Fechamento', 'Transferir', 'Cancelar toda a mesa e liberar']) {
     invoke(button(view, label), 'onClick');
   }
   assert.deepEqual(calls, ['production', 'full', 'values', 'transfer', 'consumption']);
