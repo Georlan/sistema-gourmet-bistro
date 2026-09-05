@@ -15,18 +15,19 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.orm import declarative_base
 
 from .database import Base, current_restaurante_id
 
 
-class ContractAcceptance(Base):
-    """Evidência append-only do clickwrap.
+# A evidência de aceite nasce antes do tenant e não é uma entidade multi-tenant.
+# Mantê-la fora de Base.metadata evita tratá-la acidentalmente como tabela de
+# domínio tenant-scoped. A migração Alembic explícita é a fonte do esquema.
+ContractEvidenceBase = declarative_base()
 
-    A linha não carrega ``restaurante_id`` de propósito: o aceite pode existir
-    antes do tenant e a evidência jurídica não deve ser reescrita quando o
-    restaurante for provisionado. O vínculo posterior vive em
-    ``RestaurantContractAcceptance``.
-    """
+
+class ContractAcceptance(ContractEvidenceBase):
+    """Evidência append-only do clickwrap, global e sem leitura direta do runtime."""
 
     __tablename__ = "contract_acceptances"
 
@@ -87,7 +88,7 @@ class ContractAcceptance(Base):
 
 
 class RestaurantContractAcceptance(Base):
-    """Vínculo tenant-scoped entre restaurante e um aceite já congelado."""
+    """Vínculo tenant-scoped entre restaurante e um aceite global já congelado."""
 
     __tablename__ = "restaurant_contract_acceptances"
 
@@ -99,13 +100,9 @@ class RestaurantContractAcceptance(Base):
         nullable=False,
         index=True,
     )
-    acceptance_id = Column(
-        String(36),
-        ForeignKey("contract_acceptances.id", ondelete="RESTRICT"),
-        nullable=False,
-        unique=True,
-        index=True,
-    )
+    # FK para a tabela global é criada pela migração explícita. Não declaramos
+    # ForeignKey aqui porque a tabela alvo vive em metadata separado por design.
+    acceptance_id = Column(String(36), nullable=False, unique=True, index=True)
     linked_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
