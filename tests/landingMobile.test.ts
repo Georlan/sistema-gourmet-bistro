@@ -38,12 +38,16 @@ test('demo uses a native dialog and only two required inputs, not a signup form'
   assert.equal(renderToStaticMarkup(createElement(LeadCaptureModal, { open: false, onClose() {} })), '');
 });
 
-test('Pocket mensal contrata direto; Pro/Premium seguem no demo e economia anual continua condicional', () => {
+test('Pocket, Pro e Premium mensais seguem direto para suas telas de contratação', () => {
   const html = renderToStaticMarkup(createElement(LeadCaptureProvider, null, createElement(Plans)));
-  assert.match(html, /<a[^>]*href="\/contratar\/pocket"[^>]*>COMEÇAR NO POCKET<\/a>/);
-  assert.match(html, /<button[^>]*>FALAR SOBRE PRO<\/button>/);
-  assert.match(html, /<button[^>]*>FALAR SOBRE PREMIUM<\/button>/);
-  assert.equal(html.includes('href="#cadastro"'), false);
+  assert.match(html, /href="\/contratar\/pocket\?cobranca=mensal"/);
+  assert.match(html, /href="\/contratar\/pro\?cobranca=mensal"/);
+  assert.match(html, /href="\/contratar\/premium\?cobranca=mensal"/);
+  assert.match(html, />CONTRATAR POCKET<\/a>/);
+  assert.match(html, />CONTRATAR PRO<\/a>/);
+  assert.match(html, />CONTRATAR PREMIUM<\/a>/);
+  assert.equal(html.includes('FALAR SOBRE PRO'), false);
+  assert.equal(html.includes('FALAR SOBRE PREMIUM'), false);
   assert.equal(html.includes('koma-plan-savings'), false);
   assert.equal((html.match(/class="koma-plan-addons"/g) ?? []).length, 3);
 });

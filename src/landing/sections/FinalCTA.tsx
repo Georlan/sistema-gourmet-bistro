@@ -7,7 +7,7 @@ import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { useLeadCapture } from '../components/LeadCaptureProvider';
 
 const NEXT_STEPS = [
-  'Escolha o Pocket e revise o preço.',
+  'Escolha o plano e o período de cobrança.',
   'Leia os documentos e informe os dados do responsável.',
   'Conclua a ativação do restaurante.',
 ] as const;
@@ -21,11 +21,11 @@ export function FinalCTA() {
         <div className="koma-final-conversion-copy">
           <span>07 / PRÓXIMO PASSO</span>
           <h2 id="final-title">PRONTO PARA COMEÇAR?</h2>
-          <p>Entre pelo Pocket direto ou peça uma demonstração antes de decidir.</p>
+          <p>Escolha o plano que faz sentido para a sua operação ou peça uma demonstração antes de decidir.</p>
 
           <div className="koma-final-conversion-actions">
-            <a href="/contratar/pocket" className="koma-btn koma-btn--primary">
-              COMEÇAR NO POCKET <ArrowDownRight size={17} aria-hidden="true" />
+            <a href="/landing#planos" className="koma-btn koma-btn--primary">
+              ESCOLHER MEU PLANO <ArrowDownRight size={17} aria-hidden="true" />
             </a>
             <button type="button" className="koma-btn koma-btn--outline-dark" onClick={() => openDemo()}>
               QUERO VER UMA DEMONSTRAÇÃO
