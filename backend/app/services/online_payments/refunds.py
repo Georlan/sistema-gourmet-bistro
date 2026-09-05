@@ -108,17 +108,17 @@ def create_mercado_pago_refund(
     metodo_devolucao: str | None = None,
     alocacoes: Sequence[tuple[str, object]] | None = None,
 ) -> PagamentoEstorno:
-    """Executa um reembolso Mercado Pago sem manter locks durante a rede.
+    """Executa um reembolso Mercado Pago sem manter transação durante a rede.
 
     1. Reserva de forma persistente/idempotente e COMMITA a linha ``requested``.
-    2. Chama o Mercado Pago fora da transação que bloqueou ``Pagamento``.
+    2. Chama o Mercado Pago sem lock/transação aberta no banco.
     3. Persiste a confirmação remota.
     4. Só então materializa ``PagamentoEstorno`` local.
 
-    Se a rede ficar em estado incerto, a mesma ``idempotency_key`` reutiliza a
-    mesma chave remota e pode ser repetida com segurança. Se o provedor confirmar
-    mas a gravação local falhar, a linha ``confirmed`` permite convergência sem
-    chamar o provedor novamente.
+    Se a rede ficar em estado incerto, a mesma operação semântica reutiliza a
+    mesma chave remota mesmo que a UI gere uma nova chave na retentativa. Se o
+    provedor confirmar mas a gravação local falhar, a linha ``confirmed`` permite
+    convergência sem chamar o provedor novamente.
     """
     refund_value = money(valor)
     reason = (motivo or "").strip()
@@ -154,10 +154,22 @@ def create_mercado_pago_refund(
         allocations=alocacoes,
     )
 
+    # Primeiro honramos a chave exata. Se a UI gerar outra chave após timeout,
+    # uma reserva ainda sem estorno local com o MESMO fingerprint representa a
+    # mesma operação incerta e deve reutilizar a chave remota, não criar refund 2.
     row = db.query(OnlinePaymentRefund).filter(
         OnlinePaymentRefund.restaurante_id == restaurante_id,
         OnlinePaymentRefund.idempotency_key == key,
     ).first()
+    if row is None:
+        row = db.query(OnlinePaymentRefund).filter(
+            OnlinePaymentRefund.restaurante_id == restaurante_id,
+            OnlinePaymentRefund.pagamento_id == payment.id,
+            OnlinePaymentRefund.request_fingerprint == request_fingerprint,
+            OnlinePaymentRefund.status.in_(("requested", "confirmed")),
+            OnlinePaymentRefund.estorno_id.is_(None),
+        ).order_by(OnlinePaymentRefund.created_at.asc()).first()
+
     if row is not None:
         _validate_existing_request(
             row,
@@ -222,41 +234,57 @@ def create_mercado_pago_refund(
             request_fingerprint=request_fingerprint,
         )
         db.add(row)
-        try:
-            # Este commit é proposital: libera o FOR UPDATE adquirido pelo guard
-            # antes de qualquer chamada HTTP ao provedor.
-            db.commit()
-        except IntegrityError as exc:
-            db.rollback()
-            row = db.query(OnlinePaymentRefund).filter(
-                OnlinePaymentRefund.restaurante_id == restaurante_id,
-                OnlinePaymentRefund.idempotency_key == key,
-            ).first()
-            if row is None:
-                raise RefundDomainError(
-                    "Conflito concorrente ao reservar o reembolso online. Tente novamente.",
-                    status_code=409,
-                ) from exc
-            _validate_existing_request(
-                row,
-                intent=intent,
-                payment_id=str(payment.id),
-                amount=refund_value,
-                fingerprint=request_fingerprint,
-            )
 
-    # Uma reserva já existente também pode ter chegado aqui com o lock da rota
-    # ainda aberto. Commit sem alterações encerra a transação antes da rede.
-    if row.status == "requested":
+    # Snapshot de tudo que a chamada remota precisa enquanto a transação ainda
+    # está aberta. Depois do commit abaixo não há SELECT antes do HTTP.
+    provider_call = row.status == "requested"
+    access_token: str | None = None
+    original_amount = money(payment.valor)
+    external_payment_id = str(row.external_payment_id)
+    provider_key = str(row.provider_idempotency_key)
+    provider_amount = None if refund_value == original_amount else refund_value
+    if provider_call:
+        access_token = _provider_account(db, restaurante_id).access_token
+
+    try:
+        # Commit também libera o FOR UPDATE adquirido pelo refund_guard. A chamada
+        # HTTP acontece somente depois deste ponto e sem transação aberta.
         db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        concurrent = db.query(OnlinePaymentRefund).filter(
+            OnlinePaymentRefund.restaurante_id == restaurante_id,
+            OnlinePaymentRefund.idempotency_key == key,
+        ).first()
+        if concurrent is None:
+            concurrent = db.query(OnlinePaymentRefund).filter(
+                OnlinePaymentRefund.restaurante_id == restaurante_id,
+                OnlinePaymentRefund.pagamento_id == payment.id,
+                OnlinePaymentRefund.request_fingerprint == request_fingerprint,
+                OnlinePaymentRefund.status.in_(("requested", "confirmed")),
+                OnlinePaymentRefund.estorno_id.is_(None),
+            ).order_by(OnlinePaymentRefund.created_at.asc()).first()
+        if concurrent is None:
+            raise RefundDomainError(
+                "Conflito concorrente ao reservar o reembolso online. Tente novamente.",
+                status_code=409,
+            ) from exc
+        _validate_existing_request(
+            concurrent,
+            intent=intent,
+            payment_id=str(payment.id),
+            amount=refund_value,
+            fingerprint=request_fingerprint,
+        )
+        # Reinicia pelo registro vencedor. Não chamamos o provider nessa pilha
+        # para evitar corrida; a retentativa do cliente converge imediatamente.
+        raise RefundDomainError(
+            "O reembolso já foi reservado por outra tentativa. Repita a operação para reconciliar.",
+            status_code=503,
+        ) from exc
 
-        account = _provider_account(db, restaurante_id)
-        access_token = account.access_token
-        original_amount = money(payment.valor)
-        external_payment_id = str(row.external_payment_id)
-        provider_key = str(row.provider_idempotency_key)
-        provider_amount = None if refund_value == original_amount else refund_value
-
+    if provider_call:
+        assert access_token is not None
         try:
             provider_refund = MercadoPagoProvider(access_token).refund_payment(
                 external_payment_id,
@@ -273,7 +301,7 @@ def create_mercado_pago_refund(
                 persisted.error_message = "Comunicação com o Mercado Pago ficou em estado incerto."
                 db.commit()
             raise RefundDomainError(
-                "Não foi possível confirmar o reembolso no Mercado Pago. Repita a mesma operação; a chave idempotente impede devolução duplicada.",
+                "Não foi possível confirmar o reembolso no Mercado Pago. Repita a operação; a reserva idempotente impede devolução duplicada.",
                 status_code=503,
             ) from exc
         except MercadoPagoError as exc:
@@ -287,7 +315,7 @@ def create_mercado_pago_refund(
                 db.commit()
             if exc.retryable:
                 raise RefundDomainError(
-                    "O Mercado Pago ainda não confirmou a devolução. Repita a mesma operação para reconciliar sem duplicar o reembolso.",
+                    "O Mercado Pago ainda não confirmou a devolução. Repita a operação para reconciliar sem duplicar o reembolso.",
                     status_code=503,
                 ) from exc
             raise RefundDomainError(
@@ -335,12 +363,12 @@ def create_mercado_pago_refund(
             )
         if provider_status != "approved":
             raise RefundDomainError(
-                "O reembolso está em processamento no Mercado Pago. Repita a mesma operação para reconciliar o resultado.",
+                "O reembolso está em processamento no Mercado Pago. Repita a operação para reconciliar o resultado.",
                 status_code=503,
             )
 
     # A confirmação remota já foi persistida. Daqui em diante não há nova
-    # chamada externa; uma falha local pode ser corrigida repetindo a mesma chave.
+    # chamada externa; uma falha local pode ser corrigida repetindo a operação.
     row = db.query(OnlinePaymentRefund).filter(
         OnlinePaymentRefund.restaurante_id == restaurante_id,
         OnlinePaymentRefund.id == row.id,
@@ -354,6 +382,9 @@ def create_mercado_pago_refund(
     if local is not None:
         return local
 
+    # Use a chave da reserva original mesmo quando a UI trouxe uma nova chave na
+    # retentativa semântica; assim provider e ledger local convergem na mesma op.
+    ledger_key = str(row.idempotency_key)
     try:
         refund = create_refund(
             db,
@@ -363,7 +394,7 @@ def create_mercado_pago_refund(
             usuario_id=usuario_id,
             valor=refund_value,
             motivo=reason,
-            idempotency_key=key,
+            idempotency_key=ledger_key,
             metodo_devolucao="pix",
             alocacoes=alocacoes,
         )
