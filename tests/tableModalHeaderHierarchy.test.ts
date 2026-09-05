@@ -10,12 +10,15 @@ const source = readFileSync(path.join(root, 'src/components/MesaDetailsModalBase
 test('mesa is the primary visual anchor of the salon modal header', () => {
   const contextIndex = source.indexOf('Consumo no local');
   const tableIndex = source.indexOf('Mesa {table.id}{originStr}');
-  const permanenceIndex = source.indexOf('Permanência');
+  const elapsedIndex = source.indexOf('{elapsedTime}');
 
   assert.ok(contextIndex >= 0, 'operational context should be visible');
   assert.ok(tableIndex > contextIndex, 'table identity should follow the context eyebrow');
-  assert.ok(permanenceIndex > tableIndex, 'permanence must remain secondary to table identity');
+  assert.ok(elapsedIndex > tableIndex, 'elapsed time must remain secondary to table identity');
   assert.match(source, /text-2xl sm:text-4xl[^\n]*font-extrabold/);
   assert.match(source, /aria-label="Voltar ao mapa de mesas"/);
   assert.match(source, /aria-label="Fechar detalhes da mesa"/);
+  assert.doesNotMatch(source, />Ocupada</);
+  assert.doesNotMatch(source, />Permanência</);
+  assert.match(source, /Tempo na mesa/);
 });
