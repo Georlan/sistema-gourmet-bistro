@@ -186,4 +186,5 @@ jobs:
           backend/tests/test_super_admin_incidents_postgres.py
           backend/tests/test_b14_operational_smoke_postgres.py
           backend/tests/test_atendimento_concurrency_postgres.py
+          backend/tests/test_first_client_payment_simulation.py
           -q -ra
