@@ -21,7 +21,6 @@ import pytest
 from app.application.orders.commands import (
     CreateOrderCommand,
     CustomerInput,
-    DeliveryInput,
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
@@ -152,13 +151,15 @@ def _seed_online_order(db, restaurante_id: int):
     db.add_all([shift, account])
     db.commit()
 
+    # Retirada torna o total determinístico em R$ 100,00. Delivery aplica a taxa
+    # padrão de entrega do domínio (R$ 7,00 quando não há configuração explícita),
+    # que não faz parte do que este gate financeiro pretende testar.
     command = CreateOrderCommand(
         restaurant_id=restaurante_id,
         channel=OrderChannel.WEB_CARDAPIO,
-        fulfillment=FulfillmentType.DELIVERY,
+        fulfillment=FulfillmentType.PICKUP,
         items=(OrderItemInput(product_id=product_id, quantity=Decimal("1")),),
         customer=CustomerInput(name="Cliente Simulado", phone="85999999999"),
-        delivery=DeliveryInput(address="Rua da Simulação, 100"),
         payment_method="pix",
         idempotency_key=f"first-client-order-{restaurante_id}",
         operator_user_id=user_id,
