@@ -31,6 +31,13 @@ def backup(output_dir: Path, connection_url: str) -> Path:
     folder.mkdir(mode=0o700)
     archive = folder / "application.dump"
     connection_url = connection_url.replace("postgresql+psycopg2://", "postgresql://", 1)
+    parameters = parse_dsn(connection_url)
+    if parameters.get("host", "") not in ("", "localhost", "127.0.0.1", "::1"):
+        if parameters.get("sslmode") not in ("require", "verify-ca", "verify-full"):
+            parameters["sslmode"] = "require"
+    if parameters.get("sslpassword"):
+        raise RuntimeError("Use autenticação de backup com senha de banco; senhas de chave SSL não são aceitas neste script.")
+    connection_url = make_dsn(**parameters)
     db = psycopg2.connect(connection_url, connect_timeout=10)
     try:
         db.set_session(isolation_level="REPEATABLE READ", readonly=True)

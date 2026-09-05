@@ -112,10 +112,13 @@ que o serviço não poderia usar. Para versionar infraestrutura posteriormente,
 importar o projeto na opção [Infrastructure as Code](https://docs.railway.com/infrastructure-as-code)
 e revisar o plano antes de aplicá-lo.
 
-Existe uma alteração anterior pendente na Evolution API que o Railway rejeita
-por incompatibilidade entre volume e múltiplas regiões. Não aplicar o botão
-global de deploy sem resolver essa alteração. As duas configurações do Kôma
-foram apenas preparadas no painel; ainda precisam ser aplicadas.
+Em 05/09/2026, a adição pendente de uma réplica na região `us-west2` à Evolution
+API foi cancelada porque era incompatível com seu volume. O serviço existente
+foi preservado. `Wait for CI=true` e `/health/ready` foram salvos e verificados
+no painel do Kôma. O Railway iniciou uma republicação ao salvar, apesar do
+modificador documentado para apenas aplicar configurações; essa republicação
+foi abortada. A implantação anterior continuou ativa e a rota de prontidão
+continuou respondendo. O código dos PRs permanece fora de produção.
 
 As migrações novas convertem sete campos monetários para `Numeric(14,2)`,
 permitem convites sem senha e otimizam a avaliação de contexto de policies RLS.
