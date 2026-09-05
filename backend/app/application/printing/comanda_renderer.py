@@ -106,6 +106,23 @@ def _style_document_title(
         break
 
 
+def _style_operational_type(lines: list[str], *, width: int) -> None:
+    """Faz o tipo do atendimento participar do cabeçalho operacional principal."""
+    operational_types = {"consumo no local", "retirada", "delivery"}
+    for index, line in enumerate(lines):
+        clean = _clean_esc_text(line)
+        if clean.casefold() not in operational_types:
+            continue
+        lines[index] = (
+            ESC_DOUBLE_HEIGHT_ON
+            + ESC_BOLD_ON
+            + align_center(clean.upper(), width)
+            + ESC_BOLD_OFF
+            + ESC_NORMAL_SIZE
+        )
+        break
+
+
 def _insert_reprint_marker(lines: list[str], *, width: int) -> None:
     """Marca uma segunda via sem transformar pedido em conta/fechamento."""
     marker = "REIMPRESSÃO"
@@ -169,10 +186,9 @@ def _replace_metadata_line(
 ) -> None:
     """Aplica a hierarquia operacional sobre a base compartilhada da comanda.
 
-    A identidade principal vira o primeiro ponto de leitura. Quando a base contém
-    uma mesa, ela é preservada em linha própria; pedidos remotos não carregam o
-    antigo texto ``SEM MESA``. Canal é acrescentado somente quando o contexto
-    semântico o fornece.
+    Pedido e mesa são identidades operacionais primárias. Em consumo local, a
+    mesa deixa o bloco pequeno de metadados e sobe para o cabeçalho, imediatamente
+    antes do número do pedido. Fechamento continua sendo documento de CONTA.
     """
     # As colunas DateTime legadas do banco armazenam UTC e podem voltar naive.
     # A política temporal da impressão precisa, portanto, normalizar tanto
@@ -199,15 +215,27 @@ def _replace_metadata_line(
 
         resolved_label = str(identity_label or "PEDIDO").strip().upper() or "PEDIDO"
         separator = ":" if resolved_label in {"CONTA", "CONTAS"} else ""
-        lines[index] = (
+        identity_line = (
             ESC_DOUBLE_HEIGHT_ON
             + ESC_BOLD_ON
             + align_center(f"{resolved_label}{separator} #{resolved_order}", width)
             + ESC_BOLD_OFF
             + ESC_NORMAL_SIZE
         )
-        if table_label:
-            lines.insert(index + 1, ESC_BOLD_ON + table_label + ESC_BOLD_OFF)
+
+        if table_label and resolved_label not in {"CONTA", "CONTAS"}:
+            table_line = (
+                ESC_DOUBLE_HEIGHT_ON
+                + ESC_BOLD_ON
+                + align_center(table_label, width)
+                + ESC_BOLD_OFF
+                + ESC_NORMAL_SIZE
+            )
+            lines[index:index + 1] = [table_line, identity_line]
+        else:
+            lines[index] = identity_line
+            if table_label:
+                lines.insert(index + 1, ESC_BOLD_ON + table_label + ESC_BOLD_OFF)
         break
 
     if isinstance(local_event, datetime.datetime):
@@ -353,6 +381,7 @@ def apply_operational_visual_hierarchy(
         identity_label=identity_label,
         document_title=document_title,
     )
+    _style_operational_type(lines, width=width)
     if is_full_reprint:
         _insert_reprint_marker(lines, width=width)
     _style_document_title(
