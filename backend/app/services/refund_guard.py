@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
 from ..financial_refund_models import PagamentoEstornoAlocacao
-from ..models import Pagamento
+from ..models import OnlinePaymentIntent, Pagamento
 from ..smartpos_models import SmartPosPaymentIntent
 from .cash_reconciliation import (
     RefundDomainError,
@@ -135,12 +135,17 @@ def create_refund_guarded(
     metodo_devolucao: str | None = None,
     alocacoes: Sequence[tuple[str, object]] | None = None,
 ) -> PagamentoEstorno:
-    """Protege o serviço 3C contra estornos legados sem origem materializada.
+    """Protege o serviço 3C e orquestra meios integrados antes do ledger local.
 
     O lock é adquirido ANTES do cálculo do saldo histórico. Retentativas
     idempotentes são reconhecidas antes da regra de saldo: se um estorno de 100%
     já foi persistido e a resposta se perdeu, repetir a mesma chave precisa
     devolver o mesmo evento, não falhar por saldo remanescente igual a zero.
+
+    Pagamentos Pix originados pelo cardápio online são um caso especial: a
+    devolução física precisa ser confirmada pelo Mercado Pago antes de criar o
+    ``PagamentoEstorno`` local. A orquestração persiste a reserva e libera este
+    lock antes da chamada HTTP.
     """
     payment = (
         db.query(Pagamento)
@@ -165,6 +170,29 @@ def create_refund_guarded(
             db,
             restaurante_id=restaurante_id,
             payment_id=payment_id,
+            turno_id=turno_id,
+            usuario_id=usuario_id,
+            valor=valor,
+            motivo=motivo,
+            idempotency_key=idempotency_key,
+            metodo_devolucao=metodo_devolucao,
+            alocacoes=alocacoes,
+        )
+
+    online_intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == restaurante_id,
+        OnlinePaymentIntent.pagamento_id == payment_id,
+        OnlinePaymentIntent.provider == "mercado_pago",
+    ).first()
+    if online_intent is not None:
+        # Lazy import evita ciclo refund_guard -> online_refund -> cash_reconciliation.
+        from .online_payments.refunds import create_mercado_pago_refund
+
+        return create_mercado_pago_refund(
+            db,
+            restaurante_id=restaurante_id,
+            intent=online_intent,
+            payment=payment,
             turno_id=turno_id,
             usuario_id=usuario_id,
             valor=valor,
