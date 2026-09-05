@@ -6,5 +6,5 @@ try {
     $installDir = Join-Path $env:LOCALAPPDATA "KomaPrintAgent"
     $python = Join-Path $installDir ".venv\Scripts\pythonw.exe"
     $main = Join-Path $installDir "main.py"
-    Start-Process -FilePath $python -ArgumentList @($main) -WindowStyle Hidden
+    Start-Process -FilePath $python -ArgumentList @($main) -WorkingDirectory $installDir -WindowStyle Hidden
 }

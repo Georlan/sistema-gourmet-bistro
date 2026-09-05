@@ -1,25 +1,34 @@
 """
 Diário de Bordo Local SQLite para Idempotência e Resiliência Off-line/On-line.
-Garante que o papel nunca seja impresso duas vezes caso ocorra queda de conexão
-entre a saída física do cupom e a confirmação via HTTP para a nuvem.
+Evita novo envio dos trabalhos registrados quando a confirmação HTTP falha.
+Aceitação pelo spooler não comprova saída no papel. Uma queda entre o envio ao
+spooler e a gravação local deixa o resultado incerto e pode exigir conferência.
 """
 
 import os
 import sqlite3
 import datetime
+import time
+from contextlib import contextmanager
 from typing import Optional, Dict, Any, List
 
 
 class PrintJournal:
     def __init__(self, db_path: str = "journal.db"):
         self.db_path = db_path
+        self._last_cleanup = 0.0
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
+    @contextmanager
+    def _get_connection(self):
         conn = sqlite3.connect(self.db_path, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 10000")
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_db(self):
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
@@ -40,7 +49,7 @@ class PrintJournal:
             conn.commit()
 
     def is_printed(self, job_id: str, idempotency_key: Optional[str] = None) -> bool:
-        """Verifica se o job já foi impresso fisicamente nesta máquina."""
+        """Verifica se o job já foi aceito pelo spooler nesta máquina."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             if idempotency_key:
@@ -67,7 +76,7 @@ class PrintJournal:
             return row is not None and row["confirmed_backend"] == 1
 
     def record_print_success(self, job_id: str, idempotency_key: str, printer_name: str, confirmed: bool = False):
-        """Registra a conclusão física da impressão no banco local."""
+        """Registra a aceitação pelo spooler no banco local."""
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         with self._get_connection() as conn:
             conn.execute("""
@@ -88,6 +97,8 @@ class PrintJournal:
                 "UPDATE journal_jobs SET confirmed_backend = 1 WHERE job_id = ?",
                 (job_id,)
             )
+            if time.monotonic() - self._last_cleanup < 60:
+                return
             # Mantém a deduplicação local por sete dias, limitada aos 2.000
             # trabalhos confirmados mais recentes. Pendências HTTP nunca são
             # removidas por esta manutenção.
@@ -117,9 +128,10 @@ class PrintJournal:
                 """
             )
             conn.commit()
+            self._last_cleanup = time.monotonic()
 
     def get_unconfirmed_printed_jobs(self) -> List[Dict[str, Any]]:
-        """Retorna trabalhos que já saíram no papel mas aguardam reconexão HTTP para confirmação."""
+        """Retorna trabalhos que já foram aceitos pelo spooler mas aguardam reconexão HTTP para confirmação."""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""

@@ -5,6 +5,9 @@ Gerencia a execução em loop (polling + heartbeat) com resiliência e idempotê
 
 import time
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+from pathlib import Path
 from config import AgentConfig, is_automatic_printer_name
 from api_client import AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
@@ -16,6 +19,69 @@ log = logging.getLogger("print-agent.worker")
 RECONCILIATION_INTERVAL_SECONDS = 5.0
 DIAGNOSTIC_REFRESH_INTERVAL_SECONDS = 5.0
 NOT_READY_LOG_INTERVAL_SECONDS = 300.0
+MAX_DIAGNOSTIC_AGE_SECONDS = 30.0
+
+
+class AgentMaintenance:
+    """One owner for hardware discovery and control HTTP, outside the print lane.
+
+    Sessions are never shared across threads. A short-lived ready snapshot lets
+    the spooler accept tickets while Windows runs its slow PnP discovery.
+    """
+
+    def __init__(self, config, adapter, hardware_lock):
+        self.config = config
+        self.adapter = adapter
+        self.hardware_lock = hardware_lock
+        self.client = KomaApiClient(config.api_url, config.agent_token)
+        self.snapshot = ({}, 0.0)
+        self.last_heartbeat = 0.0
+        self.last_command_id = ""
+        self.last_command_result = None
+        self.refresh()
+
+    def refresh(self):
+        started = time.monotonic()
+        try:
+            diagnostics = self.adapter.get_diagnostics()
+        except Exception:
+            log.exception("[DIAGNÓSTICO] Não foi possível verificar as impressoras.")
+            diagnostics = {"printers": [], "error": "diagnostics_failed"}
+        self.snapshot = (diagnostics, time.monotonic())
+        try:
+            bind_single_ready_windows_usb(self.config, diagnostics)
+        except (OSError, ValueError):
+            log.exception("[IMPRESSORA] Não foi possível memorizar a fila USB.")
+        log.info("[LATÊNCIA] diagnostico_hardware_ms=%s", round((time.monotonic() - started) * 1000))
+
+    def tick(self):
+        now = time.monotonic()
+        if now - self.snapshot[1] >= DIAGNOSTIC_REFRESH_INTERVAL_SECONDS:
+            self.refresh()
+        if now - self.last_heartbeat < self.config.heartbeat_interval_seconds:
+            return
+        self.last_heartbeat = now
+        response = self.client.heartbeat(diagnostics=self.snapshot[0])
+        command = response.get("command") if isinstance(response, dict) else None
+        if not isinstance(command, dict) or not command.get("id"):
+            return
+        command_id = str(command["id"])
+        if command_id != self.last_command_id:
+            # Explicit hardware configuration may pause submission; routine
+            # diagnostic/heartbeat calls never hold this lock.
+            with self.hardware_lock:
+                result = execute_agent_command(self.adapter, command)
+                if result.get("success") and result.get("printer_name"):
+                    try:
+                        self.config.remember_printer(result["printer_name"])
+                    except (OSError, ValueError):
+                        result = {**result, "success": False, "code": "printer_config_save_failed",
+                                  "message": "Não foi possível salvar a impressora neste computador."}
+                self.last_command_id, self.last_command_result = command_id, result
+                if isinstance(result.get("diagnostics"), dict):
+                    self.snapshot = (result["diagnostics"], time.monotonic())
+        if self.client.complete_command(command_id, self.last_command_result):
+            self.last_command_id, self.last_command_result = "", None
 
 
 def bind_single_ready_windows_usb(
@@ -98,7 +164,7 @@ def execute_agent_command(adapter, command: dict) -> dict:
 def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJournal):
     """
     Verifica e reenvia confirmações (complete_job) para o backend de trabalhos
-    que já saíram fisicamente no papel, mas a conexão caiu antes de notificar o servidor.
+    que já foram aceitos pelo spooler, mas a conexão caiu antes de notificar o servidor.
     """
     unconfirmed = journal.get_unconfirmed_printed_jobs()
     if len(unconfirmed) > 1:
@@ -124,326 +190,112 @@ def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJourna
     for item in unconfirmed:
         job_id = item["job_id"]
         printer = item["printer_name"] or "Padrão"
-        log.info(f"[RESILIÊNCIA] Tentando re-confirmar no backend o job '{job_id}' (já impresso fisicamente)...")
+        log.info(f"[RESILIÊNCIA] Tentando re-confirmar no backend o job '{job_id}' (já aceito pelo spooler)...")
         if client.complete_job(job_id, printer_name=printer):
             journal.mark_backend_confirmed(job_id)
             log.info(f"[RESILIÊNCIA] Job '{job_id}' re-confirmado com SUCESSO no backend!")
 
 
 def run_agent_loop(config: AgentConfig, max_loops: int = None):
-    """
-    Loop principal do agente de impressão.
-    Se max_loops for informado, executa essa quantidade de iterações e encerra (útil em testes).
+    """Drain tickets independently of slow diagnostics and cloud acknowledgments.
+
+    The journal is committed before queuing acknowledgments. On restart its
+    unconfirmed records are replayed without submitting the ticket again.
     """
     client = KomaApiClient(config.api_url, config.agent_token)
-    journal = PrintJournal(db_path="journal.db")
+    ack_client = KomaApiClient(config.api_url, config.agent_token)
+    journal = PrintJournal(db_path=str(Path(config.config_path).resolve().with_name("journal.db")))
     adapter = get_adapter(config.adapter, output_dir=config.output_dir)
-
-    print("=========================================================")
-    print("      KÔMA PRINT AGENT — DAEMON MULTIPLATAFORMA          ")
-    print("=========================================================")
-    print(f"API Backend: {config.api_url}")
-    print(f"Agent ID:    {config.agent_id}")
-    print(f"Adaptador:   {adapter.__class__.__name__}")
-    print(f"Polling:     {config.poll_interval_seconds}s")
-    print(f"Lote:        até {config.claim_batch_size} trabalho(s)")
-    print(
-        "Paralelismo: até "
-        f"{config.max_parallel_printers} impressora(s)"
-    )
-    print("=========================================================")
-
-    last_heartbeat = 0.0
-    last_diagnostics_refresh = 0.0
-    last_reconciliation = 0.0
-    last_not_ready_log = 0.0
-    latest_diagnostics = {
-        "adapter": adapter.__class__.__name__,
-        "platform": "unknown",
-        "printers": [],
-        "default_printer": None,
-        "error": None,
-    }
-    last_command_id = ""
-    last_command_result = None
+    hardware_lock = Lock()
+    maintenance = AgentMaintenance(config, adapter, hardware_lock)
+    pending = {}
+    ack_future = maintenance_future = None
+    ack_items = []
+    next_ack_at = last_reconciliation = 0.0
     loop_count = 0
+    log.info("[AGENTE] Transporte independente; polling=%ss, lote=%s", config.poll_interval_seconds, config.claim_batch_size)
 
-    while True:
-        should_wait = True
-        try:
-            now = time.time()
-            diagnostics_changed = False
+    def collect_ack():
+        nonlocal ack_future, next_ack_at
+        completed_future, ack_future = ack_future, None
+        confirmed = completed_future.result()
+        for item in ack_items:
+            job_id = item["job_id"]
+            if job_id in confirmed:
+                journal.mark_backend_confirmed(job_id)
+                pending.pop(job_id, None)
+        next_ack_at = time.monotonic() + (RECONCILIATION_INTERVAL_SECONDS if len(confirmed) < len(ack_items) else 0)
 
-            should_refresh_diagnostics = (
-                now - last_diagnostics_refresh
-                >= DIAGNOSTIC_REFRESH_INTERVAL_SECONDS
-            )
-            if should_refresh_diagnostics:
-                try:
-                    refreshed_diagnostics = adapter.get_diagnostics()
-                except Exception as exc:
-                    log.warning(
-                        "[DIAGNÓSTICO] Não foi possível verificar as "
-                        "impressoras locais: %s",
-                        exc,
-                    )
-                    refreshed_diagnostics = {
-                        "adapter": adapter.__class__.__name__,
-                        "platform": "unknown",
-                        "printers": [],
-                        "default_printer": None,
-                        "error": str(exc)[:300],
-                    }
-                diagnostics_changed = (
-                    refreshed_diagnostics != latest_diagnostics
-                )
-                latest_diagnostics = refreshed_diagnostics
-                last_diagnostics_refresh = now
+    try:
+        with ThreadPoolExecutor(max_workers=1, thread_name_prefix="koma-control") as control, \
+             ThreadPoolExecutor(max_workers=1, thread_name_prefix="koma-ack") as acknowledgments:
+            try:
+                while max_loops is None or loop_count < max_loops:
+                    loop_count += 1
+                    should_wait = True
+                    try:
+                        now = time.monotonic()
+                        if maintenance_future is not None and maintenance_future.done():
+                            completed_maintenance = maintenance_future
+                            maintenance_future = None
+                            completed_maintenance.result()  # Propagate revoked credentials.
+                        if maintenance_future is None:
+                            maintenance_future = control.submit(maintenance.tick)
+                        if ack_future is not None and ack_future.done():
+                            collect_ack()
+                        if now - last_reconciliation >= RECONCILIATION_INTERVAL_SECONDS:
+                            for item in journal.get_unconfirmed_printed_jobs():
+                                pending[item["job_id"]] = {"job_id": item["job_id"], "printer_name": item["printer_name"] or "Padrão"}
+                            last_reconciliation = now
 
-                try:
-                    if bind_single_ready_windows_usb(
-                        config,
-                        latest_diagnostics,
-                    ):
-                        diagnostics_changed = True
-                except (OSError, ValueError) as exc:
-                    log.warning(
-                        "[IMPRESSORA] Não foi possível memorizar a fila "
-                        "USB detectada: %s",
-                        exc,
-                    )
-
-            # 1. Enviar heartbeat periódico ou imediatamente quando o cabo,
-            # a fila ou a disponibilidade física mudarem.
-            if (
-                diagnostics_changed
-                or now - last_heartbeat
-                >= config.heartbeat_interval_seconds
-            ):
-                heartbeat_response = client.heartbeat(
-                    diagnostics=latest_diagnostics
-                )
-                # Evita repetir heartbeat a cada job quando houver uma falha
-                # transitória; a próxima tentativa ocorrerá na cadência normal.
-                last_heartbeat = now
-                command = (
-                    heartbeat_response.get("command")
-                    if isinstance(heartbeat_response, dict)
-                    else None
-                )
-                if isinstance(command, dict) and command.get("id"):
-                    command_id = str(command["id"])
-                    if (
-                        command_id == last_command_id
-                        and isinstance(last_command_result, dict)
-                    ):
-                        command_result = last_command_result
-                    else:
-                        log.info(
-                            "[COMANDO USB] Executando solicitação '%s'.",
-                            command_id,
+                        diagnostics, checked_at = maintenance.snapshot
+                        ready = not bool(getattr(adapter, "requires_physical_printer", True)) or (
+                            now - checked_at <= MAX_DIAGNOSTIC_AGE_SECONDS
+                            and _diagnostics_have_ready_printer(diagnostics)
                         )
-                        command_result = execute_agent_command(
-                            adapter,
-                            command,
-                        )
-                        selected_printer = str(
-                            command_result.get("printer_name") or ""
-                        ).strip()
-                        if command_result.get("success") and selected_printer:
-                            try:
-                                config.remember_printer(selected_printer)
-                            except (OSError, ValueError) as exc:
-                                log.exception(
-                                    "[IMPRESSORA] Falha ao memorizar a fila "
-                                    "selecionada."
-                                )
-                                command_result = {
-                                    **command_result,
-                                    "success": False,
-                                    "code": "printer_config_save_failed",
-                                    "message": (
-                                        "A impressora foi encontrada, mas o "
-                                        "Kôma não conseguiu salvar a escolha "
-                                        "neste computador."
-                                    ),
-                                    "error": str(exc)[:200],
-                                }
-                        last_command_id = command_id
-                        last_command_result = command_result
-
-                    result_diagnostics = command_result.get(
-                        "diagnostics"
-                    )
-                    if isinstance(result_diagnostics, dict):
-                        latest_diagnostics = result_diagnostics
-                        last_diagnostics_refresh = now
-                    if client.complete_command(
-                        command_id,
-                        command_result,
-                    ):
-                        log.info(
-                            "[COMANDO USB] Solicitação '%s' concluída: %s",
-                            command_id,
-                            command_result.get("message"),
-                        )
-                        last_command_id = ""
-                        last_command_result = None
-                    else:
-                        log.warning(
-                            "[COMANDO USB] Resultado de '%s' aguardando "
-                            "confirmação no backend.",
-                            command_id,
-                        )
-
-            # 2. Reconciliar confirmações pendentes em cadência própria. Fazer
-            # isso a cada polling abriria o SQLite sem necessidade.
-            if now - last_reconciliation >= RECONCILIATION_INTERVAL_SECONDS:
-                process_unconfirmed_journal_jobs(client, journal)
-                last_reconciliation = now
-
-            requires_physical_printer = bool(
-                getattr(adapter, "requires_physical_printer", True)
-            )
-            printer_ready = (
-                not requires_physical_printer
-                or _diagnostics_have_ready_printer(latest_diagnostics)
-            )
-            if not printer_ready:
-                if (
-                    now - last_not_ready_log
-                    >= NOT_READY_LOG_INTERVAL_SECONDS
-                ):
-                    log.warning(
-                        "[IMPRESSORA AUSENTE] Conector online, mas nenhuma "
-                        "impressora física conectada e configurada foi "
-                        "detectada. A fila permanecerá intacta."
-                    )
-                    last_not_ready_log = now
-                loop_count += 1
-                if max_loops is not None and loop_count >= max_loops:
-                    break
-                time.sleep(config.poll_interval_seconds)
-                continue
-
-            # 3. Reservar um pequeno lote em uma única ida à nuvem. O envio
-            # ao CUPS continua sequencial para preservar a ordem física.
-            claim_started = time.perf_counter()
-            claimed_jobs = client.claim_jobs(config.claim_batch_size)
-            claim_api_ms = round(
-                (time.perf_counter() - claim_started) * 1000
-            )
-            if claimed_jobs:
-                log.info(
-                    "[LOTE RESERVADO] %s trabalho(s) em %sms",
-                    len(claimed_jobs),
-                    claim_api_ms,
-                )
-                outcomes = dispatch_claimed_jobs(
-                    adapter,
-                    journal,
-                    claimed_jobs,
-                    config.printers,
-                    config.max_parallel_printers,
-                )
-                confirmations = [
-                    {
-                        "job_id": item["job"]["id"],
-                        "printer_name": item["printer_name"],
-                    }
-                    for item in outcomes
-                    if item["state"] == "accepted"
-                ]
-                failed = [item for item in outcomes if item["state"] == "failed"]
-                release_ids = [
-                    item["job"]["id"]
-                    for item in outcomes
-                    if item["state"] == "release"
-                ]
-                printer_failed = bool(failed)
-
-                for item in failed:
-                    client.fail_job(
-                        item["job"]["id"],
-                        error_msg=(
-                            "Falha no adaptador de impressão "
-                            f"'{adapter.__class__.__name__}'"
-                        ),
-                    )
-                if release_ids:
-                    client.release_jobs(release_ids)
-                if printer_failed:
-                    last_diagnostics_refresh = 0.0
-
-                confirmation_ms = 0
-                confirmed_ids = set()
-                if confirmations:
-                    confirmation_started = time.perf_counter()
-                    confirmed_ids = client.complete_jobs(confirmations)
-                    confirmation_ms = round(
-                        (
-                            time.perf_counter()
-                            - confirmation_started
-                        )
-                        * 1000
-                    )
-
-                for item in confirmations:
-                    job_id = item["job_id"]
-                    outcome = next(
-                        item
-                        for item in outcomes
-                        if item["job"]["id"] == job_id
-                    )
-                    queue_latency_ms = outcome["job"].get(
-                        "queue_latency_ms"
-                    )
-                    queue_metric = (
-                        f"{queue_latency_ms}ms"
-                        if queue_latency_ms is not None
-                        else "indisponível"
-                    )
-                    if job_id in confirmed_ids:
-                        journal.mark_backend_confirmed(job_id)
-                        log.info(
-                            "[SUCESSO] Job '%s' aceito pelo sistema e "
-                            "confirmado no backend.",
-                            job_id,
-                        )
-                    else:
-                        log.warning(
-                            "[PENDÊNCIA HTTP] Job '%s' foi aceito pelo "
-                            "sistema, mas a confirmação remota falhou. O "
-                            "journal impedirá uma segunda impressão.",
-                            job_id,
-                        )
-                    log.info(
-                        "[LATÊNCIA] Job '%s': fila=%s, reserva_lote_api=%sms, "
-                        "envio_cups=%sms, confirmacao_lote_api=%sms",
-                        job_id,
-                        queue_metric,
-                        claim_api_ms,
-                        outcome.get("submit_ms", 0),
-                        confirmation_ms,
-                    )
-
-                # Se o lote terminou normalmente, consulta o próximo sem
-                # aguardar o polling ocioso. Em falha física, força diagnóstico.
-                should_wait = printer_failed
-
-        except KeyboardInterrupt:
-            print("\n[DAEMON] Encerrando Kôma Print Agent graciosamente...")
-            break
-        except AgentAuthenticationError:
-            # A camada principal limpa apenas a credencial rejeitada e abre o
-            # pareamento. Continuar aqui geraria 401 a cada heartbeat.
-            raise
-        except Exception as e:
-            log.error(f"[ERRO WORKER] Exceção no loop principal: {e}")
-
-        loop_count += 1
-        if max_loops is not None and loop_count >= max_loops:
-            break
-
-        if should_wait:
-            time.sleep(config.poll_interval_seconds)
+                        if ready:
+                            started = time.perf_counter()
+                            jobs = client.claim_jobs(config.claim_batch_size)
+                            claim_ms = round((time.perf_counter() - started) * 1000)
+                            if jobs:
+                                with hardware_lock:
+                                    outcomes = dispatch_claimed_jobs(adapter, journal, jobs, dict(config.printers), config.max_parallel_printers)
+                                failures = [item for item in outcomes if item["state"] == "failed"]
+                                releases = [item["job"]["id"] for item in outcomes if item["state"] == "release"]
+                                for item in outcomes:
+                                    if item["state"] == "accepted":
+                                        job_id = item["job"]["id"]
+                                        pending[job_id] = {"job_id": job_id, "printer_name": item["printer_name"]}
+                                        log.info("[LATÊNCIA] job=%s fila_ms=%s reserva_api_ms=%s envio_spooler_ms=%s",
+                                                 job_id, item["job"].get("queue_latency_ms"), claim_ms, item["submit_ms"])
+                                for item in failures:
+                                    client.fail_job(item["job"]["id"], error_msg="Falha ao enviar à impressora local.")
+                                if releases:
+                                    client.release_jobs(releases)
+                                if failures:
+                                    maintenance.snapshot = ({}, 0.0)
+                                should_wait = bool(failures)
+                        if ack_future is None and pending and now >= next_ack_at:
+                            ack_items = list(pending.values())[:10]
+                            ack_future = acknowledgments.submit(ack_client.complete_jobs, ack_items)
+                    except AgentAuthenticationError:
+                        raise
+                    except Exception:
+                        log.exception("[AGENTE] Falha transitória; a fila local será reconciliada.")
+                    if max_loops is not None and loop_count >= max_loops:
+                        break
+                    if should_wait:
+                        time.sleep(config.poll_interval_seconds)
+            finally:
+                # Bounded HTTP timeouts; leave unacknowledged jobs durable on
+                # disk. Never clear credentials or the journal during shutdown.
+                if ack_future is not None:
+                    collect_ack()
+                if maintenance_future is not None:
+                    maintenance_future.result()
+    except KeyboardInterrupt:
+        log.info("[AGENTE] Encerrado; confirmações pendentes permanecem no diário local.")
+    finally:
+        client.session.close()
+        ack_client.session.close()
+        maintenance.client.session.close()
