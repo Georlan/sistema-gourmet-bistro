@@ -70,12 +70,12 @@ export function Header() {
             <WhatsAppIcon />
             Falar no WhatsApp
           </a>
-          <a href="/contratar/pocket" className="koma-btn koma-btn--primary koma-btn--sm">
-            Começar no Pocket
+          <a href="/landing#planos" className="koma-btn koma-btn--primary koma-btn--sm">
+            Escolher plano
           </a>
         </div>
 
-        <a href="/contratar/pocket" className="koma-mobile-demo koma-btn koma-btn--primary" onClick={() => setMenuOpen(false)}>Começar</a>
+        <a href="/landing#planos" className="koma-mobile-demo koma-btn koma-btn--primary" onClick={() => setMenuOpen(false)}>Planos</a>
         <button
           ref={toggleRef}
           type="button"
@@ -109,11 +109,11 @@ export function Header() {
             Ver o Kôma em ação
           </button>
           <a
-            href="/contratar/pocket"
+            href="/landing#planos"
             className="koma-btn koma-btn--primary"
             onClick={() => setMenuOpen(false)}
           >
-            Começar no Pocket
+            Escolher plano
           </a>
           <a
             href={KOMA_LANDING_CONFIG.whatsappUrl}
