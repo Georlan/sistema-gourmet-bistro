@@ -70,8 +70,8 @@ if (-not (Test-KomaPython $pythonCommand)) {
 }
 
 $requiredFiles = @(
-    "main.py", "config.py", "pairing.py", "worker.py", "dispatcher.py",
-    "api_client.py", "journal.py", "requirements.txt",
+    "main.py", "config.py", "pairing.py", "worker.py", "dispatcher.py", "agent_runtime.py",
+    "api_client.py", "journal.py", "requirements.txt", "requirements.lock",
     "koma-print-launcher.ps1", "check-windows.ps1"
 )
 $adapterFiles = @(
@@ -110,13 +110,22 @@ if (-not (Test-Path $venvPython)) {
         $pythonSource = Get-KomaPythonPath $pythonCommand
         & $pythonSource -m venv $venvDir
     }
+    if ($LASTEXITCODE -ne 0) {
+        throw "Nao foi possivel preparar o ambiente local de impressao."
+    }
 }
 & $venvPython -m pip install --disable-pip-version-check --quiet -r (Join-Path $installDir "requirements.txt")
+if ($LASTEXITCODE -ne 0) {
+    throw "Nao foi possivel instalar as dependencias. Verifique a internet e execute novamente."
+}
 
 Write-Host "[KOMA] Conectando este computador ao restaurante..."
 Push-Location $installDir
 try {
     & $venvPython main.py --pair-only
+    if ($LASTEXITCODE -ne 0) {
+        throw "O computador ainda nao foi conectado. Conclua o pareamento no Koma e execute novamente."
+    }
 } finally {
     Pop-Location
 }

@@ -30,6 +30,8 @@ required_files=(
     api_client.py
     journal.py
     requirements.txt
+    requirements.lock
+    agent_runtime.py
 )
 adapter_files=(
     __init__.py

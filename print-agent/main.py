@@ -7,6 +7,7 @@ import sys
 from config import AgentConfig, parse_cli_args
 from api_client import AgentAuthenticationError, KomaApiClient
 from worker import run_agent_loop
+from agent_runtime import AgentAlreadyRunning, single_instance, configure_file_logging
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +18,16 @@ logging.basicConfig(
 
 def main() -> int:
     config = parse_cli_args(AgentConfig.load())
+    try:
+        with single_instance():
+            configure_file_logging()
+            return run(config)
+    except AgentAlreadyRunning:
+        print("[KÔMA] O conector já está aberto neste computador.")
+        return 0
+
+
+def run(config: AgentConfig) -> int:
 
     while True:
         if not config.agent_token:
@@ -36,7 +47,11 @@ def main() -> int:
         try:
             # Valida inclusive no modo --pair-only. Assim o instalador não
             # declara pronta uma credencial que o backend já revogou.
-            KomaApiClient(config.api_url, config.agent_token).heartbeat()
+            probe = KomaApiClient(config.api_url, config.agent_token)
+            try:
+                probe.heartbeat()
+            finally:
+                probe.session.close()
         except AgentAuthenticationError:
             from pairing import clear_stored_token
 

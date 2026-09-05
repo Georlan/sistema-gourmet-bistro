@@ -8,6 +8,7 @@ import requests
 
 log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb"]
+AGENT_VERSION = "2026.09.05.1"
 
 
 class AgentAuthenticationError(RuntimeError):
@@ -22,6 +23,7 @@ def _diagnostics_with_capabilities(
     return {
         **diagnostics,
         "capabilities": AGENT_CAPABILITIES,
+        "agent_version": AGENT_VERSION,
     }
 
 
@@ -36,6 +38,11 @@ class KomaApiClient:
             "Content-Type": "application/json",
             "X-Agent-Token": agent_token,
         }
+
+    @staticmethod
+    def _check_auth(response):
+        if response.status_code in (401, 403):
+            raise AgentAuthenticationError("A autorização deste computador foi revogada.")
 
     def register(self, agent_id: str, jwt_token: str) -> Optional[str]:
         """Registra um novo agente na API via JWT de admin e obtém o token permanente do agente."""
@@ -83,6 +90,7 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=5,
             )
+            self._check_auth(resp)
             if resp.status_code == 200:
                 payload = resp.json()
                 return payload if isinstance(payload, dict) else {}
@@ -127,7 +135,10 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=10,
             )
+            self._check_auth(resp)
             return resp.status_code == 200
+        except AgentAuthenticationError:
+            raise
         except Exception as exc:
             log.error(
                 "Erro ao confirmar comando local '%s': %s",
@@ -143,9 +154,12 @@ class KomaApiClient:
         url = f"{self.api_url}/api/print-agents/jobs/next"
         try:
             resp = self.session.get(url, headers=self.headers, timeout=5)
+            self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
                 return data if data else None
+        except AgentAuthenticationError:
+            raise
         except Exception as e:
             log.debug(f"Erro ao consultar próximo job: {e}")
         return None
@@ -157,6 +171,7 @@ class KomaApiClient:
         url = f"{self.api_url}/api/print-agents/jobs/claim-next"
         try:
             resp = self.session.post(url, headers=self.headers, timeout=5)
+            self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
                 return data if data else None
@@ -166,6 +181,8 @@ class KomaApiClient:
                     f"(HTTP {resp.status_code}): {resp.text}"
                 )
                 return None
+        except AgentAuthenticationError:
+            raise
         except Exception as e:
             log.debug(f"Erro ao buscar e reservar próximo job: {e}")
             return None
@@ -199,6 +216,7 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=5,
             )
+            self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
                 return data if isinstance(data, list) else []
@@ -208,6 +226,8 @@ class KomaApiClient:
                     f"(HTTP {resp.status_code}): {resp.text}"
                 )
                 return []
+        except AgentAuthenticationError:
+            raise
         except Exception as exc:
             log.debug(f"Erro ao reservar lote de impressão: {exc}")
             return []
@@ -222,10 +242,13 @@ class KomaApiClient:
         url = f"{self.api_url}/api/print-agents/jobs/{job_id}/claim"
         try:
             resp = self.session.post(url, headers=self.headers, timeout=5)
+            self._check_auth(resp)
             if resp.status_code == 200:
                 return resp.json()
             elif resp.status_code in (409, 404):
                 log.warning(f"Claim do job '{job_id}' recusado (HTTP {resp.status_code}): {resp.text}")
+        except AgentAuthenticationError:
+            raise
         except Exception as e:
             log.error(f"Erro ao reivindicar job '{job_id}': {e}")
         return None
@@ -242,7 +265,10 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=10,
             )
+            self._check_auth(resp)
             return resp.status_code == 200
+        except AgentAuthenticationError:
+            raise
         except Exception as e:
             log.error(f"Erro ao confirmar conclusão do job '{job_id}': {e}")
             return False
@@ -274,6 +300,7 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=10,
             )
+            self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
                 return {
@@ -286,6 +313,8 @@ class KomaApiClient:
                     f"(HTTP {resp.status_code}): {resp.text}"
                 )
                 return set()
+        except AgentAuthenticationError:
+            raise
         except Exception as exc:
             log.error(f"Erro ao confirmar lote de impressão: {exc}")
             return set()
@@ -312,6 +341,7 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=5,
             )
+            self._check_auth(resp)
             if resp.status_code == 200:
                 data = resp.json()
                 return {
@@ -322,6 +352,8 @@ class KomaApiClient:
                 "Falha ao devolver lote não impresso "
                 f"(HTTP {resp.status_code}): {resp.text}"
             )
+        except AgentAuthenticationError:
+            raise
         except Exception as exc:
             log.error(f"Erro ao devolver lote não impresso: {exc}")
         return set()
@@ -338,7 +370,10 @@ class KomaApiClient:
                 headers=self.headers,
                 timeout=10,
             )
+            self._check_auth(resp)
             return resp.status_code == 200
+        except AgentAuthenticationError:
+            raise
         except Exception as e:
             log.error(f"Erro ao reportar falha do job '{job_id}': {e}")
             return False
