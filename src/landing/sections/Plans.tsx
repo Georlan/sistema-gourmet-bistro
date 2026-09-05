@@ -136,9 +136,15 @@ export function Plans() {
                 </p>
               </div>
 
-              <button type="button" onClick={() => openDemo({ plan: plan.name, billing: isYearly ? 'anual' : 'mensal' })} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
-                ESCOLHER {plan.name.replace('Kôma ', '').toUpperCase()}
-              </button>
+              {plan.id === 'pocket' && !isYearly ? (
+                <a href="/contratar/pocket" className="koma-btn koma-btn--outline-dark">
+                  COMEÇAR NO POCKET
+                </a>
+              ) : (
+                <button type="button" onClick={() => openDemo({ plan: plan.name, billing: isYearly ? 'anual' : 'mensal' })} className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}>
+                  FALAR SOBRE {plan.name.replace('Kôma ', '').toUpperCase()}
+                </button>
+              )}
             </article>
           );
         })}
