@@ -5,7 +5,7 @@ import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 test('desktop baixo prioriza área operacional sem remover contexto', async ({ page }) => {
   const viewport = page.viewportSize();
   test.skip(
-    !viewport || viewport.width < 1024 || viewport.height > 760,
+    !viewport || viewport.width < 1024 || viewport.height > 820,
     'Regra específica para desktops com pouca altura útil.',
   );
 
