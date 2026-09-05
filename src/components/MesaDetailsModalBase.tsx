@@ -165,7 +165,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       console.error(e);
       alert(apenasValores
         ? 'Erro ao enviar impressão de fechamento'
-        : 'Erro ao enviar impressão do recibo completo');
+        : 'Erro ao enviar reimpressão da mesa');
     } finally {
       setIsPrintingDirect(false);
     }
@@ -194,7 +194,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       }, 1500);
     } catch (err) {
       console.error("Error printing receipt:", err);
-      alert(apenasValores ? "Erro ao enviar impressão do extrato resumido" : "Erro ao enviar impressão do recibo completo");
+      alert(apenasValores ? "Erro ao enviar impressão de fechamento" : "Erro ao enviar reimpressão da mesa");
     }
   };
 
@@ -224,61 +224,65 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       className="fixed inset-0 bg-black/75 flex items-center justify-center p-0 sm:p-4 z-40 animate-fade-in overflow-y-auto"
     >
       <div className="bg-koma-card rounded-none sm:rounded-3xl border-0 sm:border border-koma-border shadow-2xl w-full max-w-5xl overflow-hidden h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col">
-               {/* MODAL HEADER */}
-        <div className="bg-koma-raised text-koma-foreground px-3 py-2.5 sm:p-5 flex flex-col gap-1.5 shrink-0 border-b border-koma-border z-30">
-          {/* Top Line: Title + Status + Close Button */}
-          <div className="flex justify-between items-center w-full">
-            <div className="flex items-center gap-2 min-w-0">
+        {/* MODAL HEADER — mesa é a âncora operacional */}
+        <div className="bg-koma-raised text-koma-foreground px-3 py-3 sm:px-5 sm:py-4 flex flex-col gap-2 shrink-0 border-b border-koma-border z-30">
+          <div className="flex items-start justify-between gap-3 w-full">
+            <div className="flex items-start gap-2.5 min-w-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 hover:bg-koma-card rounded-xl text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-koma-border shrink-0"
+                aria-label="Voltar ao mapa de mesas"
+                className="mt-0.5 p-1.5 hover:bg-koma-card rounded-xl text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-koma-border shrink-0"
                 title="Voltar ao mapa"
               >
                 <ArrowLeft size={16} />
               </button>
-              <div className="flex items-center gap-2 min-w-0">
-                <h2 className="font-serif text-base sm:text-2xl font-bold tracking-tight text-koma-foreground truncate">
-                  Mesa {table.id}{originStr}
-                </h2>
-                <span className={`px-2 py-0.5 text-[9px] font-sans font-bold tracking-wider uppercase rounded-full border shrink-0 ${
-                  operationalState.occupancy === 'FREE'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                    : operationalState.production.hasReadyItems
-                      ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                }`}>
-                  {operationalState.occupancy === 'FREE' ? 'Livre' : operationalState.production.hasReadyItems ? 'Pronto' : 'Ocupada'}
-                </span>
+
+              <div className="min-w-0">
+                <div className="text-[9px] sm:text-[10px] uppercase tracking-[0.22em] font-sans font-extrabold text-emerald-700 dark:text-emerald-400">
+                  Consumo no local
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <h2 className="font-serif text-2xl sm:text-4xl leading-none font-extrabold tracking-tight text-koma-foreground truncate">
+                    Mesa {table.id}{originStr}
+                  </h2>
+                  <span className={`px-2.5 py-1 text-[9px] sm:text-[10px] font-sans font-extrabold tracking-wider uppercase rounded-full border shrink-0 ${
+                    operationalState.occupancy === 'FREE'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : operationalState.production.hasReadyItems
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                  }`}>
+                    {operationalState.occupancy === 'FREE' ? 'Livre' : operationalState.production.hasReadyItems ? 'Pronto' : 'Ocupada'}
+                  </span>
+                </div>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] uppercase tracking-wider bg-koma-panel px-2.5 py-1 rounded-lg border border-koma-border font-sans text-emerald-700 dark:text-emerald-400 font-bold hidden sm:inline-block">
-                Garçom: <strong className="text-koma-foreground">{activeWaiterNome}</strong>
-              </span>
-              <button
-                id="close-mesa-modal-btn"
-                onClick={onClose}
-                className="p-1.5 rounded-xl hover:bg-white/5 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent hover:border-koma-border"
-              >
-                <X size={18} />
-              </button>
-            </div>
+
+            <button
+              id="close-mesa-modal-btn"
+              type="button"
+              onClick={onClose}
+              aria-label="Fechar detalhes da mesa"
+              className="p-1.5 rounded-xl hover:bg-white/5 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent hover:border-koma-border shrink-0"
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          {/* Sub Line for active orders or mobile info */}
-          {orders.length > 0 && (
-            <div className="flex items-center justify-between gap-2 text-[11px] text-koma-subtle font-sans pt-0.5 border-t border-koma-border/50">
-              <span className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-10 sm:pl-11 pt-2 border-t border-koma-border/60 text-[10px] sm:text-[11px] text-koma-subtle font-sans">
+            <span className="flex items-center gap-1.5">
+              <span className="uppercase tracking-wider text-koma-subtle">Garçom</span>
+              <strong className="text-koma-foreground font-semibold">{activeWaiterNome}</strong>
+            </span>
+            {orders.length > 0 && (
+              <span className="flex items-center gap-1.5">
                 <Clock size={11} className="text-emerald-700 dark:text-emerald-400" />
-                Permanência: <strong className="text-koma-foreground font-medium font-mono">{permanenceTime}</strong>
+                <span>Permanência</span>
+                <strong className="text-koma-foreground font-medium font-mono">{permanenceTime}</strong>
               </span>
-              <span className="text-[10px] text-emerald-400 font-bold sm:hidden">
-                {activeWaiterNome}
-              </span>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* MODAL TABS */}
