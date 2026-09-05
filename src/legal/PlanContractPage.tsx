@@ -8,11 +8,14 @@ import {
   getSubscriptionPricing,
   type SubscriptionPlanId,
 } from '../config/subscriptionPlans';
-import { LEGAL_VERSION } from './legalContent';
+import { LEGAL_PROVIDER_NAME, LEGAL_VERSION } from './legalContent';
 import './legal.css';
 
 type ContractForm = {
+  contractingPartyName: string;
+  taxId: string;
   responsibleName: string;
+  representativeRole: string;
   email: string;
   phone: string;
   restaurantName: string;
@@ -24,7 +27,10 @@ type ContractCopy = {
 };
 
 const EMPTY_FORM: ContractForm = {
+  contractingPartyName: '',
+  taxId: '',
   responsibleName: '',
+  representativeRole: '',
   email: '',
   phone: '',
   restaurantName: '',
@@ -104,7 +110,7 @@ export default function PlanContractPage() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canContinue) return;
-    // Nesta etapa a tela valida UX + seleção comercial + documentos.
+    // Nesta etapa a tela valida UX + identificação + seleção comercial + documentos.
     // O próximo passo conecta o evento ao registro imutável de aceite e ao provisionamento seguro.
     setPreviewComplete(true);
   };
@@ -133,8 +139,8 @@ export default function PlanContractPage() {
             <h1>KÔMA<br /><em>{planLabel.toUpperCase()}.</em></h1>
             <p>{copy.description}</p>
             <p>
-              Revise a oferta, informe os dados do responsável e consulte os documentos que regerão a contratação.
-              Nada fica escondido no fim do processo.
+              Revise a oferta, identifique corretamente o contratante e o representante e consulte os documentos que
+              regerão a contratação. Nada fica escondido no fim do processo.
             </p>
           </div>
           <aside
@@ -145,7 +151,7 @@ export default function PlanContractPage() {
             <strong>{formatCurrency(displayedMonthlyPrice)}</strong>
             <small>
               {isYearly
-                ? `equivalente por mês · ${formatCurrency(pricing.annualTotal)} por ano`
+                ? `equivalente por mês · ${formatCurrency(pricing.annualTotal)} por ano em cobrança única`
                 : 'por mês'}
               {' '}+ {formatPercentage(plan.splitFeeRate)} nos pedidos online pagos elegíveis
             </small>
@@ -155,18 +161,31 @@ export default function PlanContractPage() {
         <form className="koma-contract-grid" onSubmit={handleSubmit}>
           <section className="koma-contract-panel" aria-labelledby="contract-data-title">
             <h2 id="contract-data-title">Dados para a contratação</h2>
-            <p>Esses dados identificarão o responsável e o restaurante no aceite eletrônico.</p>
+            <p>Esses dados identificarão o contratante, o representante e o restaurante no aceite eletrônico.</p>
 
             <div className="koma-contract-fields">
               <div className="koma-contract-field">
-                <label htmlFor="responsible-name">Nome do responsável</label>
+                <label htmlFor="contracting-party-name">Nome / razão social do contratante</label>
                 <input
-                  id="responsible-name"
-                  name="responsibleName"
-                  autoComplete="name"
-                  value={form.responsibleName}
-                  onChange={(event) => updateField('responsibleName', event.target.value)}
-                  placeholder="Nome completo"
+                  id="contracting-party-name"
+                  name="contractingPartyName"
+                  autoComplete="organization"
+                  value={form.contractingPartyName}
+                  onChange={(event) => updateField('contractingPartyName', event.target.value)}
+                  placeholder="Pessoa ou empresa que contratará o KÔMA"
+                  required
+                />
+              </div>
+              <div className="koma-contract-field">
+                <label htmlFor="contract-tax-id">CPF / CNPJ do contratante</label>
+                <input
+                  id="contract-tax-id"
+                  name="taxId"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={form.taxId}
+                  onChange={(event) => updateField('taxId', event.target.value)}
+                  placeholder="Documento do contratante"
                   required
                 />
               </div>
@@ -183,7 +202,30 @@ export default function PlanContractPage() {
                 />
               </div>
               <div className="koma-contract-field">
-                <label htmlFor="contract-email">E-mail</label>
+                <label htmlFor="responsible-name">Responsável pela contratação</label>
+                <input
+                  id="responsible-name"
+                  name="responsibleName"
+                  autoComplete="name"
+                  value={form.responsibleName}
+                  onChange={(event) => updateField('responsibleName', event.target.value)}
+                  placeholder="Nome completo"
+                  required
+                />
+              </div>
+              <div className="koma-contract-field">
+                <label htmlFor="representative-role">Cargo / função do representante</label>
+                <input
+                  id="representative-role"
+                  name="representativeRole"
+                  value={form.representativeRole}
+                  onChange={(event) => updateField('representativeRole', event.target.value)}
+                  placeholder="Ex.: proprietário, sócio, administrador"
+                  required
+                />
+              </div>
+              <div className="koma-contract-field">
+                <label htmlFor="contract-email">E-mail oficial</label>
                 <input
                   id="contract-email"
                   name="email"
@@ -224,8 +266,9 @@ export default function PlanContractPage() {
                 Li e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>,
                 {' '}as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a> e o
                 {' '}<a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a>,
-                todos na versão {LEGAL_VERSION}. Declaro também estar ciente da
-                {' '}<a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>.
+                todos na versão {LEGAL_VERSION}. Declaro que os dados informados são verdadeiros e que possuo poderes
+                para contratar em nome do estabelecimento quando estiver atuando como representante. Declaro também
+                estar ciente da <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>.
               </label>
             </div>
 
@@ -233,14 +276,15 @@ export default function PlanContractPage() {
               Revisar contratação <ArrowRight size={17} aria-hidden="true" />
             </button>
             <p className="koma-contract-note">
-              Esta etapa apresenta a oferta e a versão jurídica selecionadas. O registro imutável do aceite e o
-              provisionamento automático serão conectados ao backend antes da liberação definitiva do self-service.
+              Esta etapa apresenta a oferta, a identidade declarada e a versão jurídica selecionadas. O registro
+              imutável do aceite, os hashes dos documentos, a prova de sessão e o provisionamento automático serão
+              conectados ao backend antes da liberação definitiva do self-service.
             </p>
 
             {previewComplete && (
               <div className="koma-contract-status" role="status">
                 <CheckCircle2 size={18} aria-hidden="true" />
-                <strong> Interface validada.</strong> Os dados, o plano, a cobrança e a versão jurídica estão prontos para o endpoint de contratação da próxima etapa.
+                <strong> Revisão pronta.</strong> Os dados do contratante, o plano, a cobrança e a versão jurídica estão prontos para o endpoint de contratação da próxima etapa.
               </div>
             )}
           </section>
@@ -252,23 +296,30 @@ export default function PlanContractPage() {
             </div>
             <dl>
               <div><dt>Plano</dt><dd>{planLabel}</dd></div>
-              <div><dt>Cobrança</dt><dd>{isYearly ? 'Anual' : 'Mensal'}</dd></div>
+              <div><dt>Cobrança</dt><dd>{isYearly ? 'Anual, parcela única' : 'Mensal'}</dd></div>
               <div><dt>Mensalidade</dt><dd>{formatCurrency(displayedMonthlyPrice)}/mês{isYearly ? ' equivalente' : ''}</dd></div>
               {isYearly && <div><dt>Total anual</dt><dd>{formatCurrency(pricing.annualTotal)}/ano</dd></div>}
               <div><dt>Taxa KÔMA online</dt><dd>{formatPercentage(plan.splitFeeRate)}</dd></div>
               <div><dt>Implantação</dt><dd>R$ 0</dd></div>
+              <div><dt>Trial padrão</dt><dd>7 dias sem mensalidade</dd></div>
               <div><dt>Pagamento online</dt><dd>via conta do restaurante</dd></div>
+              <div><dt>Prestador</dt><dd>{LEGAL_PROVIDER_NAME}</dd></div>
             </dl>
+
+            <p className="koma-contract-note">
+              O CPF e os demais dados jurídicos necessários do prestador constarão do Comprovante de Contratação individual entregue após o aceite definitivo.
+            </p>
 
             <div className="koma-contract-legal-list" aria-label="Documentos da contratação">
               <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação <ExternalLink size={15} aria-hidden="true" /></a>
               <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais <ExternalLink size={15} aria-hidden="true" /></a>
               <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Dados (DPA) <ExternalLink size={15} aria-hidden="true" /></a>
               <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade <ExternalLink size={15} aria-hidden="true" /></a>
+              <a href="/legal/suboperadores" target="_blank" rel="noreferrer">Fornecedores e transferências <ExternalLink size={15} aria-hidden="true" /></a>
             </div>
 
             <p className="koma-contract-note">
-              No anual, o desconto de 10% incide apenas sobre a mensalidade fixa. A taxa KÔMA por pedido permanece a do plano selecionado. Custos do provedor de pagamento são separados.
+              No anual, o desconto de 10% incide apenas sobre a mensalidade fixa e a cobrança é feita em parcela única. A taxa KÔMA por pedido permanece a do plano selecionado. Custos do provedor de pagamento são separados.
             </p>
           </aside>
         </form>
