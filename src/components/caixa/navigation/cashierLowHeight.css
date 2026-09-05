@@ -3,7 +3,7 @@
  * browser chrome). Keep operational data and actions visible; collapse only
  * explanatory/decorative copy that consumes vertical space.
  */
-@media (min-width: 1024px) and (max-height: 760px) {
+@media (min-width: 1024px) and (max-height: 820px) {
   .cashier-topbar {
     height: 2.65rem !important;
     min-height: 2.65rem !important;
