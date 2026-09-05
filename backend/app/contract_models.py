@@ -103,6 +103,7 @@ class RestaurantContractAcceptance(Base):
         String(36),
         ForeignKey("contract_acceptances.id", ondelete="RESTRICT"),
         nullable=False,
+        unique=True,
         index=True,
     )
     linked_at = Column(
