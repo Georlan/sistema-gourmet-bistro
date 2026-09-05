@@ -38,11 +38,11 @@ test('demo uses a native dialog and only two required inputs, not a signup form'
   assert.equal(renderToStaticMarkup(createElement(LeadCaptureModal, { open: false, onClose() {} })), '');
 });
 
-test('plan choices are buttons connected to the shared demo, and savings stay conditional', () => {
+test('Pocket mensal contrata direto; Pro/Premium seguem no demo e economia anual continua condicional', () => {
   const html = renderToStaticMarkup(createElement(LeadCaptureProvider, null, createElement(Plans)));
-  for (const name of ['POCKET', 'PRO', 'PREMIUM']) {
-    assert.match(html, new RegExp('<button[^>]*>ESCOLHER ' + name + '</button>'));
-  }
+  assert.match(html, /<a[^>]*href="\/contratar\/pocket"[^>]*>COMEÇAR NO POCKET<\/a>/);
+  assert.match(html, /<button[^>]*>FALAR SOBRE PRO<\/button>/);
+  assert.match(html, /<button[^>]*>FALAR SOBRE PREMIUM<\/button>/);
   assert.equal(html.includes('href="#cadastro"'), false);
   assert.equal(html.includes('koma-plan-savings'), false);
   assert.equal((html.match(/class="koma-plan-addons"/g) ?? []).length, 3);
