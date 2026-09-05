@@ -69,7 +69,7 @@ class WaiterAdapter:
     """Adaptador de borda para o canal Garçom / Lançamentos em Comanda Existente."""
 
     @classmethod
-    async def handle_launch_items(
+    def handle_launch_items(
         cls,
         *,
         comanda_id: str,
@@ -352,7 +352,8 @@ class WaiterAdapter:
 
         # 8. Broadcasts de WebSocket
         if comanda.mesa_id is not None:
-            await manager.broadcast(
+            background_tasks.add_task(
+                manager.broadcast,
                 {
                     "type": "MESA_UPDATED",
                     "mesa_id": comanda.mesa_id,

@@ -353,11 +353,15 @@ for (const withoutCheck of [false, true]) {
     const filters = page.getByRole('group', { name: 'Filtrar mesas por status' });
     const occupiedTable = page.locator('#mesa-card-7');
     await expect(occupiedTable).not.toContainText('Livre');
+    await expect(occupiedTable).toHaveAccessibleName(/Mesa 7: Em atendimento/);
     await filters.getByRole('button', { name: /^Ocupadas/ }).click();
     await expect(occupiedTable).toBeVisible();
     await expect(page.locator('#mesa-card-8')).toHaveCount(0);
     await occupiedTable.click();
-    await expect(page.getByRole('heading', { name: 'Mesa 7', exact: true }).locator('..').getByText('Ocupada', { exact: true })).toBeVisible();
+    // The modal intentionally omits the redundant occupied badge (f6c32ea).
+    const tableHeading = page.getByRole('heading', { name: 'Mesa 7', exact: true });
+    await expect(tableHeading).toBeVisible();
+    await expect(tableHeading.locator('..').getByText('Livre', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('tab', { name: /Cardápio/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[id^="placed-order-"]')).toHaveCount(0);
     expect(state.writes).toEqual([]);
@@ -496,7 +500,7 @@ for (const printKind of ['direta', 'extrato', 'cozinha'] as const) {
     await expect(page.getByText(/enviada com sucesso/)).toHaveCount(0);
     state.releasePrint();
     await expect.poll(() => alerts).toEqual([printKind === 'direta' ? 'Erro ao enviar impressão de fechamento'
-      : printKind === 'extrato' ? 'Erro ao enviar impressão do recibo completo'
+      : printKind === 'extrato' ? 'Erro ao enviar reimpressão da mesa'
         : 'Erro ao enviar reimpressão para a cozinha']);
     await expect(printButton).toBeVisible();
     await expect(printButton).toBeEnabled();

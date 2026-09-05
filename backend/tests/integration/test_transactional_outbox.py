@@ -53,7 +53,7 @@ from tests.characterization.orders.fixtures import (
 @pytest.fixture
 def outbox_db(char_setup):
     """Sessão de banco com webhook configurado para o restaurante de teste."""
-    db: Session = SessionLocal()
+    db: Session = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
     try:
         config = (
             db.query(ConfiguracaoRestaurante)

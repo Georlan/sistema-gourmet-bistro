@@ -115,6 +115,7 @@ class Settings:
         raise RuntimeError("A variável de ambiente 'SECRET_KEY' é obrigatória e não foi configurada.")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200  # 30 days
+    SUPERADMIN_TOKEN_EXPIRE_MINUTES: int = max(1, min(60, int(os.getenv("SUPERADMIN_TOKEN_EXPIRE_MINUTES", "30"))))
     CUSTOMER_TOKEN_EXPIRE_MINUTES: int = int(
         os.getenv("CUSTOMER_TOKEN_EXPIRE_MINUTES", "43200")
     )

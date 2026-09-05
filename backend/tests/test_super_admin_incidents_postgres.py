@@ -73,7 +73,9 @@ def _delete_tenant(tenant_id: int) -> None:
             db.commit()
 
 
-def test_incident_center_lists_filters_and_retries_under_real_rls():
+def test_incident_center_lists_filters_and_retries_under_real_rls(monkeypatch):
+    monkeypatch.setenv("SUPERADMIN_USERNAME", SUPERADMIN)
+    monkeypatch.setenv("SUPERADMIN_PASSWORD_HASH", "local-pg-test-only")
     _seed_tenant(TENANT_A, "Postgres Incident A", JOB_A)
     _seed_tenant(TENANT_B, "Postgres Incident B", JOB_B)
 

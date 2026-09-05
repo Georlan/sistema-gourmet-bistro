@@ -63,6 +63,13 @@ class OutboxWorker:
         self.is_running = False
         self._stop_event: Optional[asyncio.Event] = None
         self._task: Optional[asyncio.Task] = None
+        self._wake_event: Optional[asyncio.Event] = None
+        self._loop = None
+
+    def wake(self):
+        """Commit notification is a hint; periodic reconciliation stays durable."""
+        if self._loop and not self._loop.is_closed() and self._wake_event:
+            self._loop.call_soon_threadsafe(self._wake_event.set)
 
     def run_once(
         self,
@@ -139,17 +146,26 @@ class OutboxWorker:
         self.is_running = True
         if self._stop_event is None:
             self._stop_event = asyncio.Event()
+        self._loop = asyncio.get_running_loop()
+        self._wake_event = asyncio.Event()
+        idle_delay = self.poll_interval_seconds
 
         while self.is_running and not self._stop_event.is_set():
             try:
                 loop = asyncio.get_running_loop()
+                self._wake_event.clear()
                 stats = await loop.run_in_executor(None, self.run_once)
 
                 if stats["total"] > 0 or stats["recovered_stale"] > 0 or stats["scheduled_released"] > 0:
                     logger.debug("[OUTBOX WORKER] Ciclo concluído: %s", stats)
                     await asyncio.sleep(0.1)
+                    idle_delay = self.poll_interval_seconds
                 else:
-                    await asyncio.sleep(self.poll_interval_seconds)
+                    try:
+                        await asyncio.wait_for(self._wake_event.wait(), timeout=idle_delay)
+                        idle_delay = self.poll_interval_seconds
+                    except asyncio.TimeoutError:
+                        idle_delay = min(10.0, idle_delay * 2)
 
             except asyncio.CancelledError:
                 logger.info("[OUTBOX WORKER] Recebido cancelamento no worker %s.", self.worker_id)
@@ -176,6 +192,7 @@ class OutboxWorker:
         self.is_running = False
         if self._stop_event:
             self._stop_event.set()
+        self.wake()
 
         if self._task:
             try:

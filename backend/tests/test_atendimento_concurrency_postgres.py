@@ -10,8 +10,9 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database import Base, current_restaurante_id
+from app.database import TenantSession, current_restaurante_id
 from app.models import Comanda, Mesa, Restaurante, Usuario
+from app.security import get_password_hash
 from app.operational_models import (
     AtendimentoComanda,
     AtendimentoMesa,
@@ -31,13 +32,12 @@ POSTGRES_URL = os.getenv("KOMA_CONCURRENCY_DATABASE_URL", "").strip()
 @pytest.mark.skipif(not POSTGRES_URL, reason="PostgreSQL concorrente não configurado")
 def test_two_simultaneous_table_openings_converge_to_one_command_and_account():
     engine = create_engine(POSTGRES_URL, pool_size=4, max_overflow=0, pool_pre_ping=True)
-    Session = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(class_=TenantSession, bind=engine, autocommit=False, autoflush=False)
 
     tenant_id = 880000 + (uuid.uuid4().int % 10000)
     user_id = f"usr-race-{tenant_id}"
     table_id = 91
-    seed = Session()
+    seed = Session(restaurante_id=tenant_id)
     try:
         seed.add(Restaurante(id=tenant_id, nome="Concorrência H3O", plano="bistro"))
         seed.flush()
@@ -49,6 +49,7 @@ def test_two_simultaneous_table_openings_converge_to_one_command_and_account():
                 email=f"race-{tenant_id}@koma.test",
                 role="caixa",
                 status="ativo",
+                senha_hash=get_password_hash("local-race-test-password"),
             )
         )
         seed.add(Mesa(id=table_id, restaurante_id=tenant_id, capacidade=4, nome="Mesa 91"))
@@ -60,7 +61,7 @@ def test_two_simultaneous_table_openings_converge_to_one_command_and_account():
 
     def open_or_reuse(command_suffix: str) -> str:
         token = current_restaurante_id.set(tenant_id)
-        db = Session()
+        db = Session(restaurante_id=tenant_id)
         try:
             ready.wait(timeout=10)
             lock_table_for_service(db, tenant_id, table_id)
@@ -105,7 +106,7 @@ def test_two_simultaneous_table_openings_converge_to_one_command_and_account():
             command_ids = list(executor.map(open_or_reuse, ("a", "b")))
 
         assert len(set(command_ids)) == 1
-        verify = Session()
+        verify = Session(restaurante_id=tenant_id)
         try:
             assert verify.query(Comanda).filter(
                 Comanda.restaurante_id == tenant_id,
@@ -123,7 +124,7 @@ def test_two_simultaneous_table_openings_converge_to_one_command_and_account():
         finally:
             verify.close()
     finally:
-        cleanup = Session()
+        cleanup = Session(restaurante_id=tenant_id)
         try:
             cleanup.query(AtendimentoComanda).filter(
                 AtendimentoComanda.restaurante_id == tenant_id

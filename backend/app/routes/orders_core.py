@@ -342,7 +342,7 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
     return nova_comanda
 
 
-async def criar_venda_direta(
+def criar_venda_direta(
     venda_in: VendaDiretaCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -353,7 +353,7 @@ async def criar_venda_direta(
     Elimina a necessidade de 2 chamadas HTTP separadas no PDV. Pedidos de
     delivery e retirada criados pelo caixa já entram aceitos em produção.
     """
-    return await PosAdapter.handle_create_pos_order(
+    return PosAdapter.handle_create_pos_order(
         venda_in=venda_in,
         background_tasks=background_tasks,
         db=db,
@@ -383,7 +383,7 @@ def pedir_conta(
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return comanda
 
-async def lancar_itens(
+def lancar_itens(
     comanda_id: str,
     lancamento_in: LancamentoCreate,
     background_tasks: BackgroundTasks,
@@ -395,7 +395,7 @@ async def lancar_itens(
     """
     from ..adapters.orders.waiter_adapter import WaiterAdapter
 
-    return await WaiterAdapter.handle_launch_items(
+    return WaiterAdapter.handle_launch_items(
         comanda_id=comanda_id,
         lancamento_in=lancamento_in,
         background_tasks=background_tasks,

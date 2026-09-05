@@ -30,7 +30,22 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
     return hashed.decode("utf-8")
 
-RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role", "tv"}
+RESERVED_CLAIMS = {"sub", "exp", "restaurante_id", "role", "tv", "sa_gen"}
+
+
+def superadmin_session_generation() -> str:
+    """Opaque generation changes with credentials or an explicit revocation.
+
+    Never place the password hash itself in a readable JWT payload.
+    """
+    import hashlib
+    import hmac
+    import json
+    import os
+    material = json.dumps([os.getenv("SUPERADMIN_USERNAME", ""),
+                           os.getenv("SUPERADMIN_PASSWORD_HASH", ""),
+                           os.getenv("SUPERADMIN_SESSION_VERSION", "1")])
+    return hmac.new(settings.SECRET_KEY.encode(), material.encode(), hashlib.sha256).hexdigest()
 
 # Matriz central de autorização do backoffice. As rotas devem depender de uma
 # permissão de negócio, em vez de repetir listas de cargos localmente.
@@ -106,6 +121,7 @@ def revoke_user_sessions(db: Session, *, user_id: str, restaurante_id: int) -> i
         session_version.token_version = int(session_version.token_version or 1) + 1
 
     db.flush()
+    db.info.setdefault("revoked_websocket_sessions", set()).add((restaurante_id, str(user_id)))
     return int(session_version.token_version)
 
 
@@ -139,6 +155,9 @@ def create_access_token(
     ):
         raise ValueError("token_version deve ser um inteiro positivo válido.")
 
+    if role == "superadmin":
+        admin_ttl = timedelta(minutes=settings.SUPERADMIN_TOKEN_EXPIRE_MINUTES)
+        expires_delta = min(expires_delta, admin_ttl) if expires_delta else admin_ttl
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
@@ -153,6 +172,8 @@ def create_access_token(
     to_encode["restaurante_id"] = restaurante_id
     if role is not None:
         to_encode["role"] = role
+    if role == "superadmin":
+        to_encode["sa_gen"] = superadmin_session_generation()
     if token_version is not None:
         to_encode["tv"] = token_version
 

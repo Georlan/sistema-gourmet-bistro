@@ -55,7 +55,7 @@ jobs:
       - name: Run merge smoke matrix
         env:
           KOMA_E2E_PORT: '4283'
-        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts e2e/app-recovery.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v6
@@ -80,7 +80,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13.15'
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install backend dependencies
@@ -98,6 +98,10 @@ jobs:
           printf '%s\n' "$heads"
           count="$(printf '%s\n' "$heads" | grep -c '(head)')"
           test "$count" -eq 1
+      - name: Install print agent dependencies
+        run: python -m pip install -r print-agent/requirements.txt
+      - name: Run print agent regression suite
+        run: python -m pytest print-agent/tests -q -ra
       - name: Run full backend regression suite
         run: python -m pytest backend/tests -q -ra
 
@@ -130,7 +134,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13.15'
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install backend dependencies
@@ -169,13 +173,17 @@ jobs:
           q=c.cursor();
           q.execute(\"CREATE ROLE koma_security_runtime LOGIN PASSWORD 'koma-security-runtime' IN ROLE koma_app\");
           q.close(); c.close()"
-      - name: Run real PostgreSQL RLS incident regression
+      - name: Run real PostgreSQL operational and RLS regressions
         env:
           DATABASE_URL: postgresql+psycopg2://koma_security_runtime:koma-security-runtime@localhost:5432/koma_security_test
           MIGRATION_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/koma_security_test
           KOMA_PYTEST_USE_EXTERNAL_DATABASE: "true"
           STRICT_RLS_ROLE_CHECK: "true"
+          CREATE_SCHEMA_ON_STARTUP: "false"
+          KOMA_CONCURRENCY_DATABASE_URL: postgresql+psycopg2://koma_security_runtime:koma-security-runtime@localhost:5432/koma_security_test
         run: >-
           python -m pytest
           backend/tests/test_super_admin_incidents_postgres.py
+          backend/tests/test_b14_operational_smoke_postgres.py
+          backend/tests/test_atendimento_concurrency_postgres.py
           -q -ra
