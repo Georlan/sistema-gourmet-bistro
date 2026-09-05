@@ -26,7 +26,14 @@
     gap: 0.45rem !important;
   }
 
-  /* OperationalBanner becomes a compact status strip instead of a hero. */
+  /* OperationalBanner becomes a compact status strip instead of a hero.
+   * The explicit two-column override wins over the width-container rule that
+   * normally stacks copy and metrics below ~68rem of content width. */
+  .orders-hero:not(.orders-hero--without-metrics) {
+    grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) !important;
+    align-items: center;
+  }
+
   .orders-hero {
     min-height: 2.7rem !important;
     padding: 0.35rem 0.65rem !important;
@@ -53,14 +60,16 @@
   }
 
   .orders-hero__metrics {
+    grid-column: 2 !important;
     min-width: 0 !important;
-    margin-left: 0.55rem;
+    margin: 0 0 0 0.55rem !important;
     gap: 0.24rem;
   }
 
-  .orders-hero__metrics > div {
-    min-height: 1.9rem;
-    padding: 0.22rem 0.42rem;
+  .orders-hero__metrics > div,
+  .orders-hero__status {
+    min-height: 1.9rem !important;
+    padding: 0.22rem 0.42rem !important;
     border-radius: 0.5rem;
   }
 
