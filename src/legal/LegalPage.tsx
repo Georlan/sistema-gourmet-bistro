@@ -23,7 +23,7 @@ function LegalHeader() {
       </a>
       <nav aria-label="Navegação legal">
         <a href="/legal">Legal e privacidade</a>
-        <a href="/contratar/pocket" className="koma-legal-header-cta">Começar no Pocket</a>
+        <a href="/landing#planos" className="koma-legal-header-cta">Ver planos</a>
       </nav>
     </header>
   );
@@ -36,6 +36,7 @@ function LegalFooter() {
       <nav aria-label="Documentos legais">
         <a href="/legal/termos">Termos</a>
         <a href="/legal/privacidade">Privacidade</a>
+        <a href="/legal/suboperadores">Fornecedores</a>
         <a href="/legal/cardapio-termos">Cardápio</a>
       </nav>
     </footer>
@@ -64,7 +65,7 @@ function LegalCenter() {
             <h1>REGRAS CLARAS.<br /><em>SEM LETRAS MIÚDAS.</em></h1>
             <p>
               Aqui ficam as versões públicas dos documentos que regem a contratação do KÔMA,
-              o tratamento de dados e o uso do cardápio digital.
+              o tratamento de dados, os fornecedores relevantes e o uso do cardápio digital.
             </p>
           </div>
           <aside>
@@ -79,7 +80,7 @@ function LegalCenter() {
             <span>01</span>
             <div>
               <h2 id="business-legal-title">PARA RESTAURANTES</h2>
-              <p>Contratação, preço, uso da plataforma e proteção de dados.</p>
+              <p>Contratação, preço, uso da plataforma, fornecedores e proteção de dados.</p>
             </div>
           </div>
           <div className="koma-legal-grid">
@@ -120,11 +121,11 @@ function LegalCenter() {
 
         <section className="koma-legal-contract-cta">
           <div>
-            <span>QUER COMEÇAR?</span>
-            <h2>POCKET A PARTIR DE R$ 109/MÊS.</h2>
-            <p>Revise o plano, leia os documentos e avance para a contratação online.</p>
+            <span>PRONTO PARA AVANÇAR?</span>
+            <h2>ESCOLHA O PLANO QUE FAZ SENTIDO PARA SUA OPERAÇÃO.</h2>
+            <p>Compare Pocket, Pro e Premium, leia os documentos e avance para a contratação online.</p>
           </div>
-          <a href="/contratar/pocket">Começar no Pocket <ArrowRight size={18} aria-hidden="true" /></a>
+          <a href="/landing#planos">Ver planos <ArrowRight size={18} aria-hidden="true" /></a>
         </section>
       </main>
       <LegalFooter />
