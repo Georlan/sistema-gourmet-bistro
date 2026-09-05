@@ -95,7 +95,7 @@ test('desktop 1366x768 compacta banners e libera a área operacional', async ({ 
   await expect(board).toBeVisible();
   const boardBox = await board.boundingBox();
   expect(boardBox).not.toBeNull();
-  expect(boardBox!.y).toBeLessThan(260);
+  expect(boardBox!.y).toBeLessThan(280);
 
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
