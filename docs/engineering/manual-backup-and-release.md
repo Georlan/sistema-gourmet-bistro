@@ -117,8 +117,17 @@ API foi cancelada porque era incompatível com seu volume. O serviço existente
 foi preservado. `Wait for CI=true` e `/health/ready` foram salvos e verificados
 no painel do Kôma. O Railway iniciou uma republicação ao salvar, apesar do
 modificador documentado para apenas aplicar configurações; essa republicação
-foi abortada. A implantação anterior continuou ativa e a rota de prontidão
-continuou respondendo. O código dos PRs permanece fora de produção.
+foi abortada. A primeira checagem ainda encontrou a implantação anterior ativa,
+mas ela foi removida depois e o endereço respondeu HTTP 404. A recuperação foi
+feita republicando a última implantação estável, commit `8c3088a4dac6`; a rota
+de prontidão voltou a responder HTTP 200 com banco saudável. O ajuste operacional
+causou uma interrupção; o código dos PRs permanece fora de produção.
+
+**Regra para este serviço com volume:** publicar somente em janela de manutenção.
+Não confiar no modificador de salvar sem deploy nem usar o cancelamento como
+garantia de continuidade da versão anterior. Antes de desacoplar o volume para
+permitir outra estratégia de publicação, inventariar e copiar seu conteúdo.
+Cancelar o deploy não equivale a restaurar automaticamente a implantação anterior.
 
 As migrações novas convertem sete campos monetários para `Numeric(14,2)`,
 permitem convites sem senha e otimizam a avaliação de contexto de policies RLS.
