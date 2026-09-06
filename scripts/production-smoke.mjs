@@ -70,7 +70,7 @@ async function checkApiReadiness(apiUrl) {
   console.log(`✓ Backend readiness ${response.status} — ${url}${body ? ` — ${body.slice(0, 180)}` : ''}`);
 }
 
-async function checkContractReadiness(apiUrl) {
+async function checkContractReadiness(apiUrl, expectedApiSha) {
   const url = `${apiUrl}/api/contracts/readiness`;
   const response = await request(url, { method: 'GET' });
   assertOk(response, 'Contract readiness');
@@ -88,8 +88,17 @@ async function checkContractReadiness(apiUrl) {
   if (typeof payload?.legalVersion !== 'string' || !payload.legalVersion.trim()) {
     throw new Error('Contract readiness: versão jurídica vigente não foi informada');
   }
+  if (expectedApiSha && payload?.deploymentGitSha !== expectedApiSha) {
+    const actual = typeof payload?.deploymentGitSha === 'string' && payload.deploymentGitSha
+      ? payload.deploymentGitSha.slice(0, 12)
+      : 'ausente';
+    throw new Error(
+      `Contract readiness: deploy ainda não corresponde ao commit esperado ${expectedApiSha.slice(0, 12)} (atual: ${actual})`,
+    );
+  }
 
-  console.log(`✓ Contract readiness ${response.status} — Legal v${payload.legalVersion} — identidade jurídica configurada`);
+  const deploySuffix = expectedApiSha ? ` — deploy ${expectedApiSha.slice(0, 12)}` : '';
+  console.log(`✓ Contract readiness ${response.status} — Legal v${payload.legalVersion} — identidade jurídica configurada${deploySuffix}`);
 }
 
 async function checkFrontend(frontendUrl) {
@@ -139,13 +148,17 @@ async function main() {
   const frontendUrl = normalizeBaseUrl(process.env.KOMA_FRONTEND_URL, DEFAULT_FRONTEND_URL);
   const apiUrl = normalizeBaseUrl(process.env.KOMA_API_URL, DEFAULT_API_URL);
   const corsPath = (process.env.KOMA_CORS_PATH || DEFAULT_CORS_PATH).trim();
+  const expectedApiSha = (process.env.KOMA_EXPECTED_API_SHA || '').trim();
 
   console.log('KÔMA production smoke (somente GET/OPTIONS; nenhuma mutação)');
   console.log(`Frontend: ${frontendUrl}`);
   console.log(`API: ${apiUrl}`);
+  if (expectedApiSha) {
+    console.log(`Commit esperado no backend: ${expectedApiSha.slice(0, 12)}`);
+  }
 
   await checkApiReadiness(apiUrl);
-  await checkContractReadiness(apiUrl);
+  await checkContractReadiness(apiUrl, expectedApiSha);
   await checkFrontend(frontendUrl);
   await checkContractPages(frontendUrl);
   await checkCheckoutCors(apiUrl, frontendUrl, corsPath);
