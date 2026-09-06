@@ -8,7 +8,7 @@ from app.routes.onboarding import _profile_is_configured, _trial_status_payload
 
 
 def test_onboarding_status_route_is_registered_once():
-    paths = [route.path for route in app.routes]
+    paths = [getattr(route, "path", None) for route in app.routes]
     assert paths.count("/api/onboarding/status") == 1
 
 
