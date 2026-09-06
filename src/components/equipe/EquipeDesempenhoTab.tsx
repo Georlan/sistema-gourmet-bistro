@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { AlertTriangle, Calendar as CalendarIcon, Download, Filter, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { PeriodoCalendarioModal } from '../relatorios/PeriodoCalendarioModal';
+import { KomaSnapshotLoading } from '../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from '../relatorios/useReportRealtimeRefresh';
 import { ReportActionBar } from '../relatorios/ReportActionBar';
@@ -74,12 +75,14 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
   showToast,
 }) => {
   const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
-  const [isLoading, setIsLoading] = useState(false);
   const [cargo, setCargo] = useState('atendimento');
+  const snapshotKey = `${dataInicio}:${dataFim}:${cargo}`;
+  const [loadedSnapshotKey, setLoadedSnapshotKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  const [taxaAtiva, setTaxaAtiva] = useState(true);
-  const [taxaPadrao, setTaxaPadrao] = useState(10.0);
+  const [taxaAtiva, setTaxaAtiva] = useState(false);
+  const [taxaPadrao, setTaxaPadrao] = useState(0);
   const [membros, setMembros] = useState<GarcomPerformanceItem[]>([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [chartMetric, setChartMetric] = useState<'faturamento' | 'pedidos'>('faturamento');
@@ -87,6 +90,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
   const fetchDesempenho = useCallback(async () => {
     const requestId = ++requestRef.current;
+    const requestSnapshotKey = `${dataInicio}:${dataFim}:${cargo}`;
     setIsLoading(true);
     setHasError(false);
     try {
@@ -100,10 +104,14 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         `${apiBaseUrl}/relatorios/equipe/desempenho?${params.toString()}`,
         authHeaders,
       );
+      if (!json || typeof json !== 'object' || !Array.isArray(json.membros)) {
+        throw new Error('TEAM_PERFORMANCE_INVALID_RESPONSE');
+      }
       if (requestRef.current === requestId) {
-        setTaxaAtiva(json.taxa_servico_ativa);
-        setTaxaPadrao(json.taxa_servico_padrao);
-        setMembros(json.membros || []);
+        setTaxaAtiva(Boolean(json.taxa_servico_ativa));
+        setTaxaPadrao(Number(json.taxa_servico_padrao || 0));
+        setMembros(json.membros);
+        setLoadedSnapshotKey(requestSnapshotKey);
       }
     } catch (err) {
       console.error('Erro ao carregar desempenho da equipe:', err);
@@ -165,6 +173,19 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
     return { duplicateNames, affectedCount: affectedIds.size };
   }, [membros]);
 
+  if (loadedSnapshotKey !== snapshotKey) {
+    return (
+      <KomaSnapshotLoading
+        testId="team-performance-snapshot-loading"
+        title="Sincronizando desempenho da equipe"
+        description="Carregando os atendimentos reais para este período e função antes de mostrar totais ou uma equipe vazia."
+        error={!isLoading && hasError ? 'Não foi possível carregar o desempenho da equipe.' : null}
+        errorDescription="Ainda não foi possível confirmar este recorte. O KÔMA não vai exibir zeros nem dados de outro filtro como se fossem atuais."
+        onRetry={() => void fetchDesempenho()}
+      />
+    );
+  }
+
   return (
     <div className={"space-y-6 text-left animate-fade-in"}>
       <OperationalBanner
@@ -181,7 +202,6 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
       />
 
       <ReportActionBar info={<span>O valor é atribuído a quem abriu a comanda; use os cargos para não misturar atendimento e caixa.</span>}>
-          {/* Cargo Filter */}
           <div className="relative flex items-center gap-1.5 bg-koma-input border border-koma-border rounded-xl px-3 py-2">
             <Filter size={12} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
             <select
@@ -218,6 +238,13 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           </button>
       </ReportActionBar>
 
+      {hasError && !isLoading && (
+        <div className="flex items-start gap-2 rounded-2xl border border-rose-500/35 bg-rose-500/10 p-3 text-[10px] leading-relaxed text-rose-800 dark:text-rose-200">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span><strong>Não foi possível atualizar este relatório.</strong> O último snapshot válido foi mantido.</span>
+        </div>
+      )}
+
       {identityIssues.affectedCount > 0 && (
         <div className="flex items-start gap-2 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-3 text-[10px] leading-relaxed text-amber-900 dark:text-amber-200">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -225,7 +252,6 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
         </div>
       )}
 
-      {/* Team Charts */}
       {teamChartData.length > 0 && (
           <div className="bg-koma-panel border border-koma-border p-4 sm:p-5 rounded-3xl space-y-4 shadow-xs">
             <div className="flex flex-col gap-3 border-b border-koma-border pb-3 sm:flex-row sm:items-center sm:justify-between">
@@ -253,7 +279,6 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
           </div>
       )}
 
-      {/* Team Performance Table */}
       <div className="bg-koma-panel border border-koma-border rounded-3xl overflow-hidden p-5 space-y-4 shadow-xs">
         <div className="border-b border-koma-border pb-2 flex items-center justify-between">
           <span className="font-serif font-bold text-sm text-koma-foreground">Desempenho por Funcionário</span>
@@ -262,12 +287,7 @@ export const EquipeDesempenhoTab: React.FC<EquipeDesempenhoTabProps> = ({
 
         {isLoading ? (
           <div className="p-12 text-center text-koma-muted text-xs animate-pulse">
-            Carregando desempenho da equipe...
-          </div>
-        ) : hasError ? (
-          <div className="space-y-3 p-12 text-center text-xs text-koma-muted">
-            <p>Não foi possível carregar o desempenho da equipe.</p>
-            <button type="button" onClick={() => void fetchDesempenho()} className="koma-btn-success rounded-xl px-4 py-2 text-[10px] font-bold uppercase">Tentar novamente</button>
+            Atualizando desempenho da equipe...
           </div>
         ) : membros.length === 0 ? (
           <div className="p-12 text-center text-koma-muted text-xs font-medium">
