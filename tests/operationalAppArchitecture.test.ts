@@ -20,7 +20,11 @@ test('App wires persistent operational owners without reacquiring their action b
   for (const declaration of descendants(app).filter(ts.isVariableDeclaration)) {
     if (ts.isIdentifier(declaration.name)) assert.ok(!moved.has(declaration.name.text), declaration.name.text);
   }
-  assert.ok(names.filter(name => name === 'useState').length <= 29);
+  // UNKNOWN e EMPTY são estados distintos no snapshot financeiro. O único
+  // acréscimo permitido no root é o scope de readiness dos pagamentos pendentes;
+  // qualquer novo estado além dele volta a quebrar este budget.
+  assert.match(app.text, /const \[pendingPaymentsLoadedScopeKey, setPendingPaymentsLoadedScopeKey\] = useState\(''\);/);
+  assert.ok(names.filter(name => name === 'useState').length <= 30);
   assert.ok(names.filter(name => name === 'useEffect').length <= 18);
   assert.ok(names.filter(name => name === 'fetch').length <= 15);
   assert.ok(names.filter(name => name === 'operationalFetch').length <= 5);
