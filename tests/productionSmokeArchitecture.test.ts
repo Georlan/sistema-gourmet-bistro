@@ -14,6 +14,8 @@ test('production smoke runs after the main quality gate and waits for the exact 
   assert.match(workflow, /KOMA_EXPECTED_API_SHA:/);
   assert.match(workflow, /workflow_run\.head_sha/);
   assert.match(workflow, /max_attempts=24/);
+  assert.match(workflow, /group: production-smoke-\$\{\{ github\.event_name \}\}/);
+  assert.match(workflow, /cancel-in-progress: true/);
 
   assert.match(readiness, /RAILWAY_GIT_COMMIT_SHA/);
   assert.match(readiness, /"deploymentGitSha": deployment_git_sha/);
