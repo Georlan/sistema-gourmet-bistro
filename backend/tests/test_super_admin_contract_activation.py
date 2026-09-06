@@ -119,8 +119,14 @@ def _accept_contract(client: TestClient) -> str:
     return accepted.json()["protocol"]
 
 
-def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session):
+def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session, monkeypatch):
     client, Session = client_and_session
+    deliveries: list[dict] = []
+    monkeypatch.setattr(
+        super_admin_contracts,
+        "schedule_customer_activation_notification",
+        lambda background_tasks, **kwargs: deliveries.append(kwargs),
+    )
     protocol = _accept_contract(client)
 
     activated = client.post(
@@ -133,7 +139,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     assert body["plan"] == "pocket"
     assert body["billingCycle"] == "mensal"
     assert body["idempotent"] is False
-    assert body["credentialDelivery"] == "pending_notification"
+    assert body["credentialDelivery"] == "whatsapp_scheduled"
     assert body["admin"]["status"] == "pendente_ativacao"
     assert body["trial"]["daysGranted"] == 7
     assert body["subdomain"].endswith(protocol[-12:].lower())
@@ -142,6 +148,14 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     assert "password" not in serialized
     assert "senha" not in serialized
     assert "access_token" not in serialized
+    assert "invitation_token" not in serialized
+    assert "token_convite" not in serialized
+
+    assert len(deliveries) == 1
+    assert deliveries[0]["phone"] == "85999999999"
+    assert deliveries[0]["protocol"] == protocol
+    assert deliveries[0]["invitation_ttl_hours"] == 72
+    assert deliveries[0]["invitation_token"] not in serialized
 
     tenant_id = int(body["restaurantId"])
     db = Session()
@@ -157,6 +171,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
         assert admin_user.cargo == "admin"
         assert admin_user.status == "pendente_ativacao"
         assert admin_user.senha_hash is None
+        assert admin_user.token_convite == deliveries[0]["invitation_token"]
 
         trial = db.execute(select(restaurant_trials)).mappings().one()
         assert trial["restaurante_id"] == tenant_id
@@ -168,6 +183,8 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
         audit = db.execute(select(SuperAdminAuditLog)).scalar_one()
         assert audit.action == "SUPERADMIN_CONTRACT_ACTIVATE"
         assert audit.restaurante_id == tenant_id
+        assert audit.after_data["credential_delivery"] == "whatsapp_scheduled"
+        assert deliveries[0]["invitation_token"] not in json.dumps(audit.after_data)
     finally:
         db.close()
 
@@ -179,6 +196,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     repeated_body = repeated.json()
     assert repeated_body["idempotent"] is True
     assert repeated_body["restaurantId"] == str(tenant_id)
+    assert len(deliveries) == 1
 
     db = Session()
     try:

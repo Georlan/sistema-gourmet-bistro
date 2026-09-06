@@ -8,7 +8,7 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from ..services.contract_notifications import schedule_customer_activation_notification
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .super_admin import get_current_admin
 from .super_admin_onboarding import (
@@ -264,6 +265,7 @@ def _activation_response(
     admin_id: str | None = None,
     trial_ends_at: datetime.datetime | None = None,
     idempotent: bool,
+    credential_delivery: str = "pending_notification",
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "restaurantId": str(tenant_id),
@@ -271,7 +273,7 @@ def _activation_response(
         "plan": str(acceptance["plan"]),
         "billingCycle": str(acceptance["billing_cycle"]),
         "idempotent": idempotent,
-        "credentialDelivery": "pending_notification",
+        "credentialDelivery": credential_delivery,
         "message": (
             "Contratação já estava ativada."
             if idempotent
@@ -366,6 +368,7 @@ def preview_contract(
 def activate_contract(
     protocol: str,
     payload: ContractActivationRequest,
+    background_tasks: BackgroundTasks,
     admin: dict[str, Any] = Depends(get_current_admin),
 ):
     normalized = _normalize_protocol_path(protocol)
@@ -438,6 +441,7 @@ def activate_contract(
 
             now = datetime.datetime.now(datetime.timezone.utc)
             trial_ends_at = now + datetime.timedelta(days=DEFAULT_TRIAL_DAYS)
+            invitation_token = str(uuid.uuid4())
 
             restaurant = Restaurante(
                 id=tenant_id,
@@ -475,7 +479,7 @@ def activate_contract(
                 cargo="admin",
                 status="pendente_ativacao",
                 senha_hash=None,
-                token_convite=str(uuid.uuid4()),
+                token_convite=invitation_token,
                 token_expira_em=now + datetime.timedelta(hours=INVITATION_TTL_HOURS),
             )
             db.add(initial_admin)
@@ -508,12 +512,25 @@ def activate_contract(
                         "admin_user_id": initial_admin.id,
                         "admin_email": admin_email,
                         "admin_status": "pendente_ativacao",
-                        "credential_delivery": "pending_notification",
+                        "credential_delivery": "whatsapp_scheduled",
                         "mercado_pago": "disconnected",
                     },
                 )
             )
             db.commit()
+
+            # The tenant and contract link are already durable at this point. Any
+            # WhatsApp failure stays outside the critical provisioning transaction.
+            if admin_phone:
+                schedule_customer_activation_notification(
+                    background_tasks,
+                    phone=admin_phone,
+                    representative_name=admin_name,
+                    restaurant_name=restaurant_name,
+                    protocol=normalized,
+                    invitation_token=invitation_token,
+                    invitation_ttl_hours=INVITATION_TTL_HOURS,
+                )
 
             logger.info(
                 "SUPERADMIN CONTRACT ACTIVATED tenant=%s protocol=%s actor=%s plan=%s",
@@ -529,6 +546,7 @@ def activate_contract(
                 admin_id=str(initial_admin.id),
                 trial_ends_at=trial_ends_at,
                 idempotent=False,
+                credential_delivery="whatsapp_scheduled",
             )
     except HTTPException:
         if db.in_transaction():
