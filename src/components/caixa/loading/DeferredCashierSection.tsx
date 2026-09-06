@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { FeatureErrorBoundary } from '../../shared/FeatureErrorBoundary';
+import { KomaSnapshotLoading } from '../../shared/KomaSnapshotLoading';
 
 interface Props<P extends object> {
   active: boolean;
@@ -25,11 +26,12 @@ export function DeferredCashierSection<P extends object>({ active, label, load, 
     <div hidden={!active} className={active ? 'contents' : undefined} data-cashier-section={label}>
       <FeatureErrorBoundary label={label}>
         <Suspense
-          fallback={
-            <div role="status" className="p-5 text-koma-muted">
-              Carregando {label}…
-            </div>
-          }
+          fallback={(
+            <KomaSnapshotLoading
+              title={`Preparando ${label}`}
+              description="Carregando este módulo antes de liberar suas ações."
+            />
+          )}
         >
           <Section {...sectionProps} />
         </Suspense>
