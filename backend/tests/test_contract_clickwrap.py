@@ -11,11 +11,11 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.contract_models import ContractAcceptance
+from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.contract_validation import is_valid_cnpj, is_valid_cpf, tax_id_kind
 from app.crypt import decrypt_field
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
-from app.routes import contracts
+from app.routes import contracts, super_admin_contracts
 from app.subscription import (
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
@@ -90,8 +90,10 @@ def client_and_session(monkeypatch):
         poolclass=StaticPool,
     )
     ContractAcceptance.__table__.create(engine)
+    RestaurantContractAcceptance.__table__.create(engine)
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     monkeypatch.setattr(contracts, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(super_admin_contracts, "SessionLocal", TestingSessionLocal)
 
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_NAME", "Prestador de Teste")
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_TAX_ID", VALID_CPF)
@@ -100,6 +102,10 @@ def client_and_session(monkeypatch):
 
     app = FastAPI()
     app.include_router(contracts.router)
+    app.include_router(super_admin_contracts.router, prefix="/api/super-admin")
+    app.dependency_overrides[super_admin_contracts.get_current_admin] = lambda: {
+        "user": "contract-test-superadmin"
+    }
     with TestClient(app) as client:
         yield client, TestingSessionLocal
     engine.dispose()
@@ -164,6 +170,64 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
         assert json.loads(decrypt_field(row.receipt_snapshot_encrypted))["protocol"] == data["protocol"]
     finally:
         db.close()
+
+
+def test_superadmin_inbox_lists_pending_acceptance_without_exposing_full_tax_ids(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+    protocol = accepted.json()["protocol"]
+
+    response = client.get("/api/super-admin/contracts?status=all")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["pendingCount"] == 1
+    assert data["total"] == 1
+    assert data["returned"] == 1
+    item = data["items"][0]
+    assert item["protocol"] == protocol
+    assert item["status"] == "SIGNED_PENDING_ACTIVATION"
+    assert item["plan"] == "pocket"
+    assert item["billingCycle"] == "mensal"
+    assert item["fixedMonthlyPrice"] == "109.00"
+    assert item["contractingPartyTaxIdLast4"] == VALID_CNPJ[-4:]
+    assert item["representativeTaxIdLast4"] == VALID_CPF[-4:]
+    serialized = json.dumps(item)
+    assert VALID_CNPJ not in serialized
+    assert VALID_CPF not in serialized
+
+    db = Session()
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=987,
+                acceptance_id=acceptance.id,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    activated = client.get("/api/super-admin/contracts?status=activated")
+    assert activated.status_code == 200, activated.text
+    activated_data = activated.json()
+    assert activated_data["pendingCount"] == 0
+    assert activated_data["returned"] == 1
+    activated_item = activated_data["items"][0]
+    assert activated_item["status"] == "ACTIVATED"
+    assert activated_item["linkedRestaurantId"] == "987"
+
+
+def test_superadmin_inbox_rejects_unknown_status_filter(client_and_session):
+    client, _ = client_and_session
+    response = client.get("/api/super-admin/contracts?status=magic")
+    assert response.status_code == 422
+    assert "pending" in response.json()["detail"]
 
 
 def test_accept_rejects_invalid_tax_ids(client_and_session):

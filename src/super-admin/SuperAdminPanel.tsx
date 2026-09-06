@@ -15,6 +15,7 @@ import {
   UsersRound,
   X,
   AlertOctagon,
+  ClipboardList,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
 import {
@@ -26,6 +27,10 @@ import {
 import { SuperAdminOverviewTab } from "./SuperAdminOverviewTab";
 import { SuperAdminIncidentCenterTab } from "./SuperAdminIncidentCenterTab";
 import { SuperAdminTenantsTab } from "./SuperAdminTenantsTab";
+import {
+  SuperAdminContractsTab,
+  type ContractInboxItem,
+} from "./SuperAdminContractsTab";
 import { SuperAdminTrialsTab } from "./SuperAdminTrialsTab";
 import { SuperAdminAccessTab } from "./SuperAdminAccessTab";
 import { SuperAdminPaymentsTab } from "./SuperAdminPaymentsTab";
@@ -38,6 +43,7 @@ type TabId =
   | "overview"
   | "incidents"
   | "tenants"
+  | "contracts"
   | "trials"
   | "access"
   | "payments"
@@ -54,6 +60,10 @@ export default function SuperAdminPanel() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantsAvailable, setTenantsAvailable] = useState(false);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
+  const [contracts, setContracts] = useState<ContractInboxItem[]>([]);
+  const [contractsAvailable, setContractsAvailable] = useState(false);
+  const [isLoadingContracts, setIsLoadingContracts] = useState(false);
+  const [pendingContractsCount, setPendingContractsCount] = useState(0);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null; version?: string } | null>(null);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
@@ -112,6 +122,37 @@ export default function SuperAdminPanel() {
     }
   };
 
+  const fetchContracts = async () => {
+    setIsLoadingContracts(true);
+    try {
+      const response = await superAdminFetch("/api/super-admin/contracts?status=all&limit=200");
+      const data = await response.json() as {
+        items?: unknown;
+        pendingCount?: unknown;
+      };
+      if (!Array.isArray(data.items)) {
+        setContracts([]);
+        setPendingContractsCount(0);
+        setContractsAvailable(false);
+        return;
+      }
+      const items = data.items as ContractInboxItem[];
+      setContracts(items);
+      setPendingContractsCount(
+        typeof data.pendingCount === "number"
+          ? data.pendingCount
+          : items.filter(item => item.status === "SIGNED_PENDING_ACTIVATION").length,
+      );
+      setContractsAvailable(true);
+    } catch {
+      setContracts([]);
+      setPendingContractsCount(0);
+      setContractsAvailable(false);
+    } finally {
+      setIsLoadingContracts(false);
+    }
+  };
+
   useEffect(() => {
     publicApiFetch("/health/live")
       .then(res => res.json())
@@ -122,8 +163,14 @@ export default function SuperAdminPanel() {
       }))
       .catch(() => setRuntimeHealth({ status: "unavailable" }));
 
-    fetchTenants();
+    void fetchTenants();
+    void fetchContracts();
     addAuditLog("Sessão autenticada de SuperAdmin iniciada.", "INFO", "AUTH");
+
+    const contractInboxPoll = window.setInterval(() => {
+      void fetchContracts();
+    }, 30_000);
+    return () => window.clearInterval(contractInboxPoll);
   }, []);
 
   const handleToggleTenantStatus = async (
@@ -168,16 +215,17 @@ export default function SuperAdminPanel() {
   };
 
   const navItems = [
-    { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard },
-    { id: "incidents" as TabId, label: "Central de incidentes", icon: AlertOctagon },
-    { id: "tenants" as TabId, label: "Restaurantes", icon: Store },
-    { id: "trials" as TabId, label: "Períodos grátis", icon: Sparkles },
-    { id: "access" as TabId, label: "Acessos e equipe", icon: UsersRound },
-    { id: "payments" as TabId, label: "Pagamentos online", icon: CreditCard },
-    { id: "billing" as TabId, label: "Planos e cobrança", icon: ReceiptText },
-    { id: "operations" as TabId, label: "Operações e manutenção", icon: Wrench },
-    { id: "audit" as TabId, label: "Auditoria", icon: History },
-    { id: "settings" as TabId, label: "Configurações", icon: Settings },
+    { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard, badge: 0 },
+    { id: "incidents" as TabId, label: "Central de incidentes", icon: AlertOctagon, badge: 0 },
+    { id: "tenants" as TabId, label: "Restaurantes", icon: Store, badge: 0 },
+    { id: "contracts" as TabId, label: "Contratações", icon: ClipboardList, badge: pendingContractsCount },
+    { id: "trials" as TabId, label: "Períodos grátis", icon: Sparkles, badge: 0 },
+    { id: "access" as TabId, label: "Acessos e equipe", icon: UsersRound, badge: 0 },
+    { id: "payments" as TabId, label: "Pagamentos online", icon: CreditCard, badge: 0 },
+    { id: "billing" as TabId, label: "Planos e cobrança", icon: ReceiptText, badge: 0 },
+    { id: "operations" as TabId, label: "Operações e manutenção", icon: Wrench, badge: 0 },
+    { id: "audit" as TabId, label: "Auditoria", icon: History, badge: 0 },
+    { id: "settings" as TabId, label: "Configurações", icon: Settings, badge: 0 },
   ];
 
   const backendIsOnline = runtimeHealth?.status === "ok";
@@ -244,7 +292,14 @@ export default function SuperAdminPanel() {
                 return (
                   <button key={item.id} type="button" onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left text-xs font-semibold px-3 py-2.5 rounded-lg transition-all flex items-center justify-between ${isActive ? "bg-[#00b894] text-black font-bold shadow-sm" : "text-koma-secondary hover:bg-koma-page hover:text-koma-foreground"}`}>
                     <div className="flex items-center gap-2.5"><Icon className={`w-4 h-4 ${isActive ? "text-black" : "text-koma-muted"}`} /><span>{item.label}</span></div>
-                    {isActive && <ChevronRight className="w-3.5 h-3.5 text-black" />}
+                    <div className="flex items-center gap-1.5">
+                      {item.badge > 0 && (
+                        <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[9px] font-black ${isActive ? "bg-black/15 text-black" : "bg-amber-950 text-amber-300"}`}>
+                          {item.badge > 99 ? "99+" : item.badge}
+                        </span>
+                      )}
+                      {isActive && <ChevronRight className="w-3.5 h-3.5 text-black" />}
+                    </div>
                   </button>
                 );
               })}
@@ -282,6 +337,15 @@ export default function SuperAdminPanel() {
               isLoading={isLoadingTenants}
               refreshTenants={fetchTenants}
               globalSearch={globalSearch}
+            />
+          )}
+          {activeTab === "contracts" && (
+            <SuperAdminContractsTab
+              items={contracts}
+              isLoading={isLoadingContracts}
+              available={contractsAvailable}
+              globalSearch={globalSearch}
+              refreshContracts={fetchContracts}
             />
           )}
           {activeTab === "trials" && (
