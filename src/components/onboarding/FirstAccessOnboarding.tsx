@@ -20,16 +20,38 @@ type Props = {
   user: Record<string, unknown>;
 };
 
-type Snapshot = {
-  tenantId: string;
-  restaurantName: string;
-  plan: string;
-  trialDays: number;
-  profileConfigured: boolean;
-  hoursConfigured: boolean;
-  catalogConfigured: boolean;
-  mercadoPagoConnected: boolean;
-  firstOrderDetected: boolean;
+type OnboardingStatus = {
+  restaurant: {
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+  };
+  trial: {
+    status: string;
+    startsAt: string | null;
+    endsAt: string | null;
+    daysRemaining: number | null;
+  };
+  payments: {
+    mercadoPagoConnected: boolean;
+  };
+  counts: {
+    products: number;
+    orders: number;
+  };
+  steps: {
+    profile: boolean;
+    hours: boolean;
+    catalog: boolean;
+    mercadoPago: boolean;
+    firstOrder: boolean;
+  };
+  progress: {
+    completed: number;
+    total: number;
+    percent: number;
+  };
 };
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -46,30 +68,6 @@ type SetupStep = {
   icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
-const parseStructured = (value: unknown): unknown => {
-  if (typeof value !== 'string') return value;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
-};
-
-const isNonEmptyArray = (value: unknown) => {
-  const parsed = parseStructured(value);
-  return Array.isArray(parsed) && parsed.length > 0;
-};
-
-const hasProfileData = (config: Record<string, unknown> | null) => Boolean(
-  config?.endereco
-  || config?.subtitulo
-  || config?.sobre_nos
-  || config?.logo_url
-  || config?.banner_url,
-);
-
-const safeArrayLength = (value: unknown) => Array.isArray(value) ? value.length : 0;
-
 const planLabel = (plan: string) => {
   if (plan === 'pocket' || plan === 'pro' || plan === 'premium') {
     return getSubscriptionPlan(plan as SubscriptionPlanId).name;
@@ -77,9 +75,18 @@ const planLabel = (plan: string) => {
   return plan || 'KÔMA';
 };
 
+const trialLabel = (trial: OnboardingStatus['trial']) => {
+  if (trial.status === 'expired' || trial.status === 'ended') return 'Trial encerrado';
+  if (trial.status === 'converted') return 'Plano ativo';
+  if (typeof trial.daysRemaining === 'number') {
+    return trial.daysRemaining === 1 ? '1 dia restante' : `${trial.daysRemaining} dias restantes`;
+  }
+  return 'Trial ativo';
+};
+
 export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [state, setState] = useState<LoadState>('loading');
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<OnboardingStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   const headers = useMemo(() => ({
@@ -87,59 +94,27 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     Accept: 'application/json',
   }), [accessToken]);
 
-  const requestJson = useCallback(async (path: string) => {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
-    if (response.status === 401) {
-      throw new Error('Sua sessão expirou. Entre novamente para continuar.');
-    }
-    if (!response.ok) return null;
-    return response.json().catch(() => null);
-  }, [headers]);
-
   const loadSnapshot = useCallback(async () => {
     setState('loading');
     setErrorMessage('');
     try {
-      const [contract, config, catalog, mercadoPago, orders] = await Promise.all([
-        requestJson('/api/contracts/current'),
-        requestJson('/caixa/configuracoes'),
-        requestJson('/produtos/catalogo'),
-        requestJson('/payments/mercado-pago/status'),
-        requestJson('/comandas/detalhes/todos'),
-      ]);
-
-      const receipt = contract?.receipt ?? null;
-      const commercial = receipt?.commercial ?? null;
-      const restaurantName = String(
-        receipt?.contractingParty?.restaurantName
-        || config?.nome
-        || user?.nome
-        || 'Seu restaurante',
-      );
-      const plan = String(commercial?.plan || config?.plano_efetivo || config?.plano || '');
-      const trialDaysRaw = Number(commercial?.trialDays);
-
-      setSnapshot({
-        tenantId: String(contract?.tenantId || config?.restaurante_id || user?.restaurante_id || ''),
-        restaurantName,
-        plan,
-        trialDays: Number.isFinite(trialDaysRaw) && trialDaysRaw > 0 ? trialDaysRaw : 7,
-        profileConfigured: hasProfileData(config),
-        hoursConfigured: isNonEmptyArray(config?.horarios_funcionamento),
-        catalogConfigured: safeArrayLength(catalog?.produtos) > 0,
-        mercadoPagoConnected: mercadoPago?.connected === true,
-        firstOrderDetected: safeArrayLength(orders) > 0,
+      const response = await fetch(`${API_BASE_URL}/api/onboarding/status`, {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
       });
+      const payload = await response.json().catch(() => null) as OnboardingStatus | { detail?: string } | null;
+      if (!response.ok) {
+        const detail = payload && 'detail' in payload ? payload.detail : null;
+        throw new Error(detail || 'Não foi possível carregar o checklist inicial.');
+      }
+      setSnapshot(payload as OnboardingStatus);
       setState('ready');
     } catch (error) {
       setState('error');
       setErrorMessage(error instanceof Error ? error.message : 'Não foi possível carregar o checklist inicial.');
     }
-  }, [requestJson, user]);
+  }, [headers]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -156,8 +131,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       id: 'profile',
       title: 'Complete os dados do restaurante',
       description: 'Endereço, apresentação, identidade visual e informações que aparecem para seus clientes.',
-      done: snapshot.profileConfigured,
-      actionLabel: snapshot.profileConfigured ? 'Revisar dados' : 'Configurar dados',
+      done: snapshot.steps.profile,
+      actionLabel: snapshot.steps.profile ? 'Revisar dados' : 'Configurar dados',
       tab: 'cardapio_digital',
       subTab: 'cardapio_perfil',
       icon: Store,
@@ -166,8 +141,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       id: 'hours',
       title: 'Defina os horários de funcionamento',
       description: 'O cardápio online usa os horários para saber quando o restaurante pode receber pedidos.',
-      done: snapshot.hoursConfigured,
-      actionLabel: snapshot.hoursConfigured ? 'Revisar horários' : 'Configurar horários',
+      done: snapshot.steps.hours,
+      actionLabel: snapshot.steps.hours ? 'Revisar horários' : 'Configurar horários',
       tab: 'cardapio_digital',
       subTab: 'cardapio_pedidos',
       icon: CalendarClock,
@@ -176,8 +151,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       id: 'catalog',
       title: 'Monte o primeiro cardápio',
       description: 'Crie categorias e produtos. Você pode começar pequeno e completar o restante depois.',
-      done: snapshot.catalogConfigured,
-      actionLabel: snapshot.catalogConfigured ? 'Abrir cardápio' : 'Criar cardápio',
+      done: snapshot.steps.catalog,
+      actionLabel: snapshot.steps.catalog ? 'Abrir cardápio' : 'Criar cardápio',
       tab: 'cardapio',
       subTab: 'produtos',
       icon: UtensilsCrossed,
@@ -186,9 +161,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       id: 'payments',
       title: 'Conecte o Mercado Pago',
       description: 'Necessário apenas para receber Pix online pelo cardápio. Dinheiro e operação local continuam disponíveis sem isso.',
-      done: snapshot.mercadoPagoConnected,
+      done: snapshot.steps.mercadoPago,
       optional: true,
-      actionLabel: snapshot.mercadoPagoConnected ? 'Revisar conexão' : 'Conectar Mercado Pago',
+      actionLabel: snapshot.steps.mercadoPago ? 'Revisar conexão' : 'Conectar Mercado Pago',
       tab: 'cardapio_digital',
       subTab: 'cardapio_pagamentos',
       icon: CreditCard,
@@ -197,17 +172,14 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       id: 'first-order',
       title: 'Faça um primeiro pedido de teste',
       description: 'Passe pelo fluxo de balcão para conferir produto, preparo, pagamento e operação antes de abrir para clientes.',
-      done: snapshot.firstOrderDetected,
+      done: snapshot.steps.firstOrder,
       optional: true,
-      actionLabel: snapshot.firstOrderDetected ? 'Ir para pedidos' : 'Criar pedido de teste',
+      actionLabel: snapshot.steps.firstOrder ? 'Ir para pedidos' : 'Criar pedido de teste',
       tab: 'operacao',
       subTab: 'balcao',
       icon: ShoppingBag,
     },
   ] : [];
-
-  const completed = steps.filter((step) => step.done).length;
-  const progress = steps.length ? Math.round((completed / steps.length) * 100) : 0;
 
   if (state === 'loading') {
     return (
@@ -239,6 +211,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     );
   }
 
+  const restaurantName = snapshot.restaurant.name || String(user?.nome || 'Seu restaurante');
+
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-5">
@@ -249,19 +223,19 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-400">
                   <CheckCircle2 size={13} /> Conta ativada
                 </div>
-                <h1 className="mt-4 text-2xl font-black sm:text-3xl">Bem-vindo ao KÔMA, {snapshot.restaurantName}</h1>
+                <h1 className="mt-4 text-2xl font-black sm:text-3xl">Bem-vindo ao KÔMA, {restaurantName}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-koma-muted">
                   Seu restaurante já pode entrar no sistema. Este checklist só organiza a implantação — nenhuma etapa abaixo bloqueia o uso do Caixa.
                 </p>
               </div>
-              <div className="grid min-w-[220px] grid-cols-2 gap-2">
+              <div className="grid min-w-[250px] grid-cols-2 gap-2">
                 <div className="rounded-2xl border border-koma-border bg-koma-page p-3">
                   <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">Plano</p>
-                  <p className="mt-1 text-sm font-black">{planLabel(snapshot.plan)}</p>
+                  <p className="mt-1 text-sm font-black">{planLabel(snapshot.restaurant.plan)}</p>
                 </div>
                 <div className="rounded-2xl border border-koma-border bg-koma-page p-3">
-                  <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">Trial incluído</p>
-                  <p className="mt-1 text-sm font-black">{snapshot.trialDays} dias</p>
+                  <p className="text-[9px] font-black uppercase tracking-wider text-koma-subtle">Trial</p>
+                  <p className="mt-1 text-sm font-black">{trialLabel(snapshot.trial)}</p>
                 </div>
               </div>
             </div>
@@ -273,7 +247,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <div className="flex items-center gap-2 text-sm font-black">
                   <Sparkles size={16} className="text-emerald-400" /> Implantação inicial
                 </div>
-                <p className="mt-1 text-xs text-koma-muted">{completed} de {steps.length} passos detectados como concluídos</p>
+                <p className="mt-1 text-xs text-koma-muted">{snapshot.progress.completed} de {snapshot.progress.total} passos detectados como concluídos</p>
               </div>
               <button type="button" onClick={() => void loadSnapshot()} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
                 <RefreshCw size={12} /> Atualizar progresso
@@ -281,7 +255,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             </div>
 
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised">
-              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>
 
             <div className="mt-5 space-y-3">
