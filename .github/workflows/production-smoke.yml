@@ -13,6 +13,10 @@ on:
         required: false
         default: https://sistema-gourmet-bistro-production.up.railway.app
         type: string
+  workflow_run:
+    workflows: ["Koma Quality Gate"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -23,20 +27,42 @@ concurrency:
 
 jobs:
   smoke:
-    name: Health + frontend + checkout CORS
+    name: Post-deploy health + contract + checkout CORS
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     env:
-      KOMA_FRONTEND_URL: ${{ inputs.frontend_url || vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://sistema-gourmet-bistro.pages.dev' }}
-      KOMA_API_URL: ${{ inputs.api_url || vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
+      KOMA_FRONTEND_URL: ${{ github.event.inputs.frontend_url || vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://sistema-gourmet-bistro.pages.dev' }}
+      KOMA_API_URL: ${{ github.event.inputs.api_url || vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
+      KOMA_EXPECTED_API_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout expected revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Use Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
       - name: Run non-destructive production smoke
-        run: node scripts/production-smoke.mjs
+        shell: bash
+        run: |
+          if [ -z "$KOMA_EXPECTED_API_SHA" ]; then
+            node scripts/production-smoke.mjs
+            exit $?
+          fi
+
+          max_attempts=24
+          for attempt in $(seq 1 "$max_attempts"); do
+            echo "Tentativa $attempt/$max_attempts aguardando deploy $KOMA_EXPECTED_API_SHA"
+            if node scripts/production-smoke.mjs; then
+              exit 0
+            fi
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              echo "Smoke não convergiu para o deploy esperado dentro da janela."
+              exit 1
+            fi
+            sleep 10
+          done
