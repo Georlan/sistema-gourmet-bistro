@@ -6,8 +6,10 @@ import {
   FileText,
   MessageCircle,
   RefreshCw,
+  Rocket,
   ShieldCheck,
 } from "lucide-react";
+import { superAdminFetch } from "./superAdminApi";
 
 export type ContractInboxStatus = "SIGNED_PENDING_ACTIVATION" | "ACTIVATED";
 
@@ -47,6 +49,14 @@ interface SuperAdminContractsTabProps {
   available: boolean;
   globalSearch: string;
   refreshContracts: () => Promise<void>;
+}
+
+interface ContractActivationResponse {
+  restaurantId: string;
+  protocol: string;
+  idempotent: boolean;
+  credentialDelivery: "pending_notification";
+  message: string;
 }
 
 function formatDate(value: string | null): string {
@@ -95,6 +105,9 @@ export function SuperAdminContractsTab({
   const [view, setView] = useState<"pending" | "all">("pending");
   const [selectedProtocol, setSelectedProtocol] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [activatingProtocol, setActivatingProtocol] = useState<string | null>(null);
+  const [activationNotice, setActivationNotice] = useState<string | null>(null);
+  const [activationError, setActivationError] = useState<string | null>(null);
 
   const pendingCount = items.filter(item => item.status === "SIGNED_PENDING_ACTIVATION").length;
   const activatedCount = items.filter(item => item.status === "ACTIVATED").length;
@@ -128,6 +141,39 @@ export function SuperAdminContractsTab({
     }
   };
 
+  const activateSelected = async () => {
+    if (!selected || selected.status !== "SIGNED_PENDING_ACTIVATION" || activatingProtocol) return;
+    setActivatingProtocol(selected.protocol);
+    setActivationNotice(null);
+    setActivationError(null);
+
+    try {
+      const response = await superAdminFetch(
+        `/api/super-admin/contracts/${encodeURIComponent(selected.protocol)}/activate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: "Ativação de contratação eletrônica pelo Super Admin",
+          }),
+        },
+      );
+      const data = await response.json() as ContractActivationResponse;
+      setActivationNotice(
+        data.idempotent
+          ? `A contratação já estava ativada no restaurante #${data.restaurantId}.`
+          : `Restaurante #${data.restaurantId} ativado. O acesso inicial aguardará envio seguro na etapa de notificações.`,
+      );
+      await refreshContracts();
+    } catch (error) {
+      setActivationError(
+        error instanceof Error ? error.message : "Não foi possível ativar esta contratação.",
+      );
+    } finally {
+      setActivatingProtocol(null);
+    }
+  };
+
   return (
     <section className="space-y-5" aria-labelledby="contracts-inbox-title">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -154,6 +200,17 @@ export function SuperAdminContractsTab({
           Atualizar
         </button>
       </div>
+
+      {activationNotice && (
+        <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-4 text-sm text-emerald-200" role="status">
+          {activationNotice}
+        </div>
+      )}
+      {activationError && (
+        <div className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-4 text-sm text-rose-200" role="alert">
+          {activationError}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
@@ -245,6 +302,17 @@ export function SuperAdminContractsTab({
                   <p className="mt-1 font-mono text-[11px] text-koma-muted">{selected.protocol}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {selected.status === "SIGNED_PENDING_ACTIVATION" && (
+                    <button
+                      type="button"
+                      onClick={() => void activateSelected()}
+                      disabled={activatingProtocol === selected.protocol}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <Rocket className="h-3.5 w-3.5" />
+                      {activatingProtocol === selected.protocol ? "Ativando..." : "Ativar restaurante"}
+                    </button>
+                  )}
                   <button type="button" onClick={() => void copyProtocol()} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-[11px] font-bold text-koma-secondary hover:text-koma-foreground">
                     <Copy className="h-3.5 w-3.5" /> {copied ? "Copiado" : "Copiar protocolo"}
                   </button>
@@ -299,7 +367,7 @@ export function SuperAdminContractsTab({
 
               <div className={`mt-5 rounded-lg border p-3 text-xs ${selected.status === "SIGNED_PENDING_ACTIVATION" ? "border-amber-900/50 bg-amber-950/20 text-amber-200" : "border-emerald-900/50 bg-emerald-950/20 text-emerald-200"}`}>
                 {selected.status === "SIGNED_PENDING_ACTIVATION"
-                  ? "Aceite registrado e aguardando provisionamento. Nenhum restaurante foi criado ou vinculado automaticamente."
+                  ? "Aceite registrado e pronto para provisionamento atômico. A ativação cria tenant, administrador pendente, trial e vínculo contratual sem expor credenciais."
                   : `Aceite vinculado ao restaurante #${selected.linkedRestaurantId ?? "—"} em ${formatDate(selected.linkedAt)}.`}
               </div>
             </article>
