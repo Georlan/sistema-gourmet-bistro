@@ -10,6 +10,7 @@ import { useOperationalCatalog } from './components/app/data/useOperationalCatal
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
+import { OperationalSnapshotLoading } from './components/app/OperationalSnapshotLoading';
 import { KitchenPanel } from './components/KitchenPanel';
 import { KomaLogo } from './components/KomaLogo';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
@@ -151,12 +152,24 @@ export default function App() {
     }
     return 'garcom';
   });
+  const operationalScopeKey = useMemo(
+    () => isAuthenticated && activeWaiterId ? `${portal}:${activeRole}:${activeWaiterId}` : '',
+    [activeRole, activeWaiterId, isAuthenticated, portal],
+  );
+  const operationalScopeKeyRef = useRef(operationalScopeKey);
+  operationalScopeKeyRef.current = operationalScopeKey;
 
   // Listen to URL changes to switch portal dynamically
   const [restauranteConfig, setRestauranteConfig] = useState<any>(null);
   const [pagamentosPendentes, setPagamentosPendentes] = useState<any[]>([]);
+  const [pendingPaymentsLoadedScopeKey, setPendingPaymentsLoadedScopeKey] = useState('');
   const [isWsConnected, setIsWsConnected] = useState<boolean>(false);
   const [waiterAvailable, setWaiterAvailable] = useState<boolean>(true);
+
+  useEffect(() => {
+    setPagamentosPendentes([]);
+    setPendingPaymentsLoadedScopeKey('');
+  }, [operationalScopeKey]);
 
   // Helper to get headers for API calls including JWT
   const getAuthHeaders = useCallback((contentType = "application/json") => {
@@ -249,6 +262,8 @@ export default function App() {
   }, [isAuthenticated]);
 
   const fetchPagamentosPendentes = async () => {
+    const requestScopeKey = operationalScopeKey;
+    if (!requestScopeKey) return;
     try {
       const tokenKey = portal === 'caixa' ? "koma_caixa_token" : "koma_waiter_token";
       const token = localStorage.getItem(tokenKey);
@@ -263,7 +278,9 @@ export default function App() {
       }
       if (res.ok) {
         const data = await res.json();
+        if (requestScopeKey !== operationalScopeKeyRef.current) return;
         setPagamentosPendentes(data);
+        setPendingPaymentsLoadedScopeKey(requestScopeKey);
       }
     } catch (err) {
       console.error("Error fetching pending payments:", err);
@@ -329,15 +346,19 @@ export default function App() {
   }, [activeRole, getAuthHeaders, isAuthenticated, portal]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchConfig();
     fetchTurnoResumo();
-    if (isWsConnected) return;
+  }, [operationalScopeKey, fetchTurnoResumo]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isWsConnected) return;
     const interval = setInterval(() => {
       fetchConfig();
       fetchTurnoResumo();
     }, 15000);
     return () => clearInterval(interval);
-  }, [isWsConnected, fetchTurnoResumo]);
+  }, [isAuthenticated, isWsConnected, operationalScopeKey, fetchTurnoResumo]);
 
   useEffect(() => {
     const handleUrlChange = () => {
@@ -471,7 +492,21 @@ export default function App() {
 
   // 1.5. Dynamic Salon Tables State and Fetcher
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const { salonTables, setSalonTables, fetchTables, handleCreateMesa, handleUpdateMesa, handleDeleteMesa } = useOperationalTables({ setFetchError, getAuthHeaders, handleLogout, showToast });
+  const {
+    salonTables,
+    setSalonTables,
+    fetchTables,
+    handleCreateMesa,
+    handleUpdateMesa,
+    handleDeleteMesa,
+    isTablesLoaded,
+  } = useOperationalTables({
+    setFetchError,
+    getAuthHeaders,
+    handleLogout,
+    showToast,
+    scopeKey: operationalScopeKey,
+  });
 
   // Prevents duplicate API calls when clicking Pronto/Entregar rapidly
   const inflightItemIdsRef = useRef<Set<string>>(new Set());
@@ -496,11 +531,37 @@ export default function App() {
   const [isConfigLoaded, setIsConfigLoaded] = useState(false);
   const { isProductsLoaded, liveProdutos, liveCategorias, fetchLiveCatalog } = useOperationalCatalog({ portal, handleLogout, isAuthenticated, isWsConnected });
 
+  useEffect(() => {
+    setRestauranteConfig(null);
+    setIsConfigLoaded(false);
+  }, [operationalScopeKey]);
+
   // 2. Live products loaded from backend (includes ativo field for availability blocking)
 
   // 2b. Orders loaded from API
 
-  const { orders, setOrders, ordersRef, fetchOrdersFromAPI, fetchOrderByIdFromAPI, handleOptimisticUpdateItemStatus, handleOptimisticAddOrder, handleTransferTableOptimistic } = useOperationalOrders({ liveProdutos, getAuthHeaders, handleLogout, setFetchError });
+  const {
+    orders,
+    setOrders,
+    ordersRef,
+    isOrdersLoaded,
+    fetchOrdersFromAPI,
+    fetchOrderByIdFromAPI,
+    handleOptimisticUpdateItemStatus,
+    handleOptimisticAddOrder,
+    handleTransferTableOptimistic,
+  } = useOperationalOrders({
+    liveProdutos,
+    getAuthHeaders,
+    handleLogout,
+    setFetchError,
+    scopeKey: operationalScopeKey,
+  });
+
+  const isOperationalSnapshotReady = Boolean(operationalScopeKey)
+    && isTablesLoaded
+    && isOrdersLoaded
+    && (!isManagementRole(activeRole) || pendingPaymentsLoadedScopeKey === operationalScopeKey);
 
    // Synchronous guard against double-click race condition
 
@@ -532,13 +593,14 @@ export default function App() {
   });
 
   const handleTableClick = useCallback((tableId: number) => {
+    if (!isOperationalSnapshotReady) return;
     const targetMesaId = ordersRef.current.find(o => o.mesaOrigemId === tableId)?.mesaId;
     if (targetMesaId) {
       setSelectedTableId(targetMesaId);
     } else {
       setSelectedTableId(tableId);
     }
-  }, []);
+  }, [isOperationalSnapshotReady]);
 
   useEffect(() => {
     const key = `koma_${portal}_selected_table_v3`;
@@ -601,6 +663,7 @@ export default function App() {
     let wsUpdateTimeout: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     let currentDelay = 2000;
+    let hasOpenedOnce = false;
 
     type RealtimeRefreshFlags = {
       orders?: boolean;
@@ -665,11 +728,16 @@ export default function App() {
       socket.onopen = () => {
         if (stopped || wsRef.current !== socket) return;
         console.log("WebSocket connection established");
+        const isReconnect = hasOpenedOnce;
+        hasOpenedOnce = true;
         setIsWsConnected(true);
         currentDelay = 2000;
-        fetchTables();
-        fetchOrdersFromAPI();
-        fetchTurnoResumo();
+        if (isReconnect) {
+          fetchTables();
+          fetchOrdersFromAPI();
+          if (isManagementRole(activeRole)) fetchPagamentosPendentes();
+          fetchTurnoResumo();
+        }
         // Reconcilia visões gerenciais após quedas silenciosas de conexão.
         // Os listeners só consultam dados quando a respectiva tela está aberta.
         window.dispatchEvent(new Event('koma_team_updated'));
@@ -940,46 +1008,49 @@ export default function App() {
 
   // 7. Core Order Actions
 
-  // Load active orders from backend API
-
+  // Bootstrap has one owner. WebSocket first-open does not duplicate it; polling is fallback only.
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!operationalScopeKey) return;
     fetchOrdersFromAPI();
     fetchTables();
     if (isManagementRole(activeRole)) {
       fetchPagamentosPendentes();
     }
+  }, [operationalScopeKey]);
 
-    const handleVisibilityChange = () => {
-      if (!document.hidden && isAuthenticated) {
-        fetchOrdersFromAPI();
-        fetchTables();
-        if (isManagementRole(activeRole)) {
-          fetchPagamentosPendentes();
-        }
-      }
-    };
+  useEffect(() => {
+    if (!operationalScopeKey) return;
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    if (isWsConnected) {
-      return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }
-
-    const interval = setInterval(() => {
-      if (document.hidden) return; // Skip polling when tab is in background
+    const refreshOperationalSnapshot = () => {
       fetchOrdersFromAPI();
       fetchTables();
       if (isManagementRole(activeRole)) {
         fetchPagamentosPendentes();
       }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshOperationalSnapshot();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // Once a valid snapshot exists, WebSocket invalidations own realtime refreshes.
+    // Before that, keep a fallback retry even if the socket itself is connected.
+    if (isWsConnected && isOperationalSnapshotReady) {
+      return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    const interval = setInterval(() => {
+      if (document.hidden) return;
+      refreshOperationalSnapshot();
     }, 8000);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       clearInterval(interval);
     };
-  }, [isAuthenticated, isWsConnected, activeRole]);
+  }, [activeRole, isOperationalSnapshotReady, isWsConnected, operationalScopeKey]);
 
   // Login handler
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -1458,8 +1529,10 @@ export default function App() {
   };
 
   const waiterTableRows = useMemo(
-    () => projectWaiterSalonTables(salonTables, orders, pagamentosPendentes, currentTime),
-    [salonTables, orders, pagamentosPendentes, currentTime],
+    () => isOperationalSnapshotReady
+      ? projectWaiterSalonTables(salonTables, orders, pagamentosPendentes, currentTime)
+      : [],
+    [isOperationalSnapshotReady, salonTables, orders, pagamentosPendentes, currentTime],
   );
   // Drawer keeps its historical exclusive counts; the salon filters may overlap.
   const tableCounts = React.useMemo(() => {
@@ -1467,7 +1540,10 @@ export default function App() {
     return { libre: counts.livres, ocupada: counts.ocupadas - counts.prontas, pronto: counts.prontas };
   }, [waiterTableRows]);
 
-  const selectedTable = useMemo(() => salonTables.find(t => t.id === selectedTableId), [salonTables, selectedTableId]);
+  const selectedTable = useMemo(
+    () => isOperationalSnapshotReady ? salonTables.find(t => t.id === selectedTableId) : undefined,
+    [isOperationalSnapshotReady, salonTables, selectedTableId],
+  );
   const selectedTableOrders = useMemo(
     () => selectedTable ? orders.filter(o => o.mesaId === selectedTable.id) : [],
     [orders, selectedTable],
@@ -1498,6 +1574,15 @@ export default function App() {
         }}
         onSubmit={handleLoginSubmit}
       />
+    );
+  }
+
+  if (!isOperationalSnapshotReady) {
+    return (
+      <div className={`min-h-screen w-full bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''}`}>
+        <SupportSessionBanner />
+        <OperationalSnapshotLoading error={fetchError} />
+      </div>
     );
   }
 
@@ -1653,7 +1738,7 @@ export default function App() {
             onTableClick={handleTableClick}
             tableFilter={tableFilter}
             onFilterChange={setTableFilter}
-            showOperationalStatus={restauranteConfig?.perm_garcom_status !== false}
+            showOperationalStatus={isConfigLoaded && restauranteConfig?.perm_garcom_status !== false}
           />
         )}
 

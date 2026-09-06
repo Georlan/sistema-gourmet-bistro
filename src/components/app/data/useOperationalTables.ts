@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import { Table } from '../../../types';
 
@@ -7,7 +7,10 @@ import type {
   OperationalErrorSink,
   OperationalNotice,
 } from '../operationalContracts';
-type BoundaryProps = OperationalRequestContext & OperationalErrorSink & { showToast: OperationalNotice };
+type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
+  showToast: OperationalNotice;
+  scopeKey: string;
+};
 
 /** Owns the shared table snapshot, loading state and catalog mutations. Operational meanings are unchanged. */
 export function useOperationalTables({
@@ -15,16 +18,29 @@ export function useOperationalTables({
   getAuthHeaders,
   handleLogout,
   showToast,
+  scopeKey,
 }: BoundaryProps) {
   const [salonTables, setSalonTables] = useState<Table[]>([]);
+  const [loadedScopeKey, setLoadedScopeKey] = useState('');
 
   const fetchTablesAbortControllerRef = useRef<AbortController | null>(null);
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
+
+  useEffect(() => {
+    fetchTablesAbortControllerRef.current?.abort();
+    fetchTablesAbortControllerRef.current = null;
+    setSalonTables([]);
+    setLoadedScopeKey('');
+  }, [scopeKey]);
 
   const fetchTables = async () => {
+    if (!scopeKey) return;
     if (fetchTablesAbortControllerRef.current) {
       fetchTablesAbortControllerRef.current.abort();
     }
     const controller = new AbortController();
+    const requestScopeKey = scopeKey;
     fetchTablesAbortControllerRef.current = controller;
 
     try {
@@ -39,8 +55,9 @@ export function useOperationalTables({
       }
       if (res.ok) {
         const data = await res.json();
+        if (requestScopeKey !== scopeKeyRef.current) return;
         setSalonTables(data);
-        setIsTablesLoaded(true);
+        setLoadedScopeKey(requestScopeKey);
       } else {
         setFetchError(`Erro HTTP mesas ${res.status}: ${res.statusText}`);
       }
@@ -48,6 +65,10 @@ export function useOperationalTables({
       if (err.name !== 'AbortError') {
         console.error('Error fetching tables', err);
         setFetchError(err.message || String(err));
+      }
+    } finally {
+      if (fetchTablesAbortControllerRef.current === controller) {
+        fetchTablesAbortControllerRef.current = null;
       }
     }
   };
@@ -111,7 +132,7 @@ export function useOperationalTables({
     }
   };
 
-  const [isTablesLoaded, setIsTablesLoaded] = useState(false);
+  const isTablesLoaded = Boolean(scopeKey) && loadedScopeKey === scopeKey;
   return {
     salonTables,
     setSalonTables,
