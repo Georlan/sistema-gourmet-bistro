@@ -30,26 +30,34 @@ test('inventory publishes empty onboarding only after all resources for the view
   );
 });
 
-test('team never renders first-person onboarding before a successful people snapshot', () => {
+test('team never renders first-person onboarding before a successful scoped people snapshot', () => {
   const team = read('src/components/caixa/team/CashierTeam.tsx');
   const roles = read('src/components/equipe/EquipeCargosTab.tsx');
 
   assert.match(team, /hasSystemUsersSnapshot/);
   assert.match(team, /team-snapshot-loading/);
   assert.match(team, /peopleViewActive && hasSystemUsersSnapshot/);
+  assert.match(team, /requestScopeKey/);
+  assert.match(team, /scopeKeyRef\.current !== requestScopeKey/);
   assert.match(roles, /useState\(true\)/);
   assert.match(roles, /team-roles-snapshot-loading/);
 });
 
-test('financial and product reports bind rendered data to the selected query snapshot', () => {
+test('reports bind rendered data to the exact selected query snapshot', () => {
+  const overview = read('src/components/relatorios/RelatoriosVisaoGeralTab.tsx');
   const financial = read('src/components/relatorios/RelatorioFinanceiroTab.tsx');
   const products = read('src/components/relatorios/RelatoriosProdutosTab.tsx');
+  const team = read('src/components/equipe/EquipeDesempenhoTab.tsx');
 
-  assert.match(financial, /loadedSnapshotKey !== snapshotKey/);
+  for (const source of [overview, financial, products, team]) {
+    assert.match(source, /loadedSnapshotKey !== snapshotKey/);
+  }
+  assert.match(overview, /reports-overview-snapshot-loading/);
   assert.match(financial, /financial-report-snapshot-loading/);
-  assert.match(products, /loadedSnapshotKey !== snapshotKey/);
   assert.match(products, /PRODUCT_REPORT_INVALID_RESPONSE/);
   assert.match(products, /products-report-snapshot-loading/);
+  assert.match(team, /TEAM_PERFORMANCE_INVALID_RESPONSE/);
+  assert.match(team, /team-performance-snapshot-loading/);
 });
 
 test('super admin trial and audit summaries distinguish unavailable data from genuine zero', () => {
