@@ -24,11 +24,16 @@ class CapturingStdin(io.BytesIO):
         super().close()
 
 
+class BrokenPipeStdin(CapturingStdin):
+    def write(self, data):
+        raise BrokenPipeError("age rejected stream")
+
+
 class FakeAgeProcess:
-    def __init__(self, command, *, returncode=0):
+    def __init__(self, command, *, returncode=0, stdin=None):
         self.command = command
         self.returncode = returncode
-        self.stdin = CapturingStdin()
+        self.stdin = stdin or CapturingStdin()
         self.stderr = io.BytesIO(b"age test error" if returncode else b"")
         self._polled = None
 
@@ -152,6 +157,31 @@ def test_age_failure_leaves_no_package_that_looks_valid(tmp_path, monkeypatch):
         )
 
     assert processes
+    assert not list(output_dir.glob("*.age"))
+    assert not list(output_dir.glob("*.sha256"))
+    assert not list(output_dir.glob("*.metadata.json"))
+    assert not list(output_dir.glob(".*.tmp"))
+
+
+def test_age_early_rejection_is_wrapped_and_leaves_no_partial_output(tmp_path, monkeypatch):
+    backup_dir = make_backup(tmp_path)
+
+    def fake_popen(command, **kwargs):
+        process = FakeAgeProcess(command, returncode=2, stdin=BrokenPipeStdin())
+        process._polled = 2
+        return process
+
+    monkeypatch.setattr(package_module.shutil, "which", lambda name: "/tools/age")
+    monkeypatch.setattr(package_module.subprocess, "Popen", fake_popen)
+
+    output_dir = tmp_path / "offsite"
+    with pytest.raises(RuntimeError, match="Falha ao preparar pacote criptografado"):
+        package_module.package_backup(
+            backup_dir,
+            output_dir,
+            "recipient-invalido",
+        )
+
     assert not list(output_dir.glob("*.age"))
     assert not list(output_dir.glob("*.sha256"))
     assert not list(output_dir.glob("*.metadata.json"))
