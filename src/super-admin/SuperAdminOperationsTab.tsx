@@ -13,6 +13,7 @@ import {
   HelpCircle,
   CheckCircle2,
 } from "lucide-react";
+import { KomaSnapshotLoading } from "../components/shared/KomaSnapshotLoading";
 import { publicApiFetch, superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import type { IntegrationsHealthStatus } from "./superAdminTypes";
 
@@ -54,7 +55,10 @@ export function SuperAdminOperationsTab({
   const [integrationsHealth, setIntegrationsHealth] = useState<IntegrationsHealthStatus | null>(null);
   const [dnsRecords, setDnsRecords] = useState<DnsRecord[]>([]);
   const [githubRuns, setGithubRuns] = useState<GithubRun[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [dnsSourceAvailable, setDnsSourceAvailable] = useState<boolean | null>(null);
+  const [githubSourceAvailable, setGithubSourceAvailable] = useState<boolean | null>(null);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRestarting, setIsRestarting] = useState(false);
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [operationNotice, setOperationNotice] = useState<string | null>(null);
@@ -81,31 +85,38 @@ export function SuperAdminOperationsTab({
       const res = await superAdminFetch("/api/super-admin/cloudflare/dns");
       if (res.ok) {
         const payload = await res.json();
-        setDnsRecords(Array.isArray(payload) ? payload : payload.result || []);
+        const records = Array.isArray(payload) ? payload : payload?.result;
+        if (!Array.isArray(records)) throw new Error("DNS_INVALID_RESPONSE");
+        setDnsRecords(records);
+        setDnsSourceAvailable(true);
       } else {
-        setDnsRecords([]);
+        setDnsSourceAvailable(false);
       }
     } catch {
-      setDnsRecords([]);
+      setDnsSourceAvailable(false);
     }
 
     try {
       const res = await superAdminFetch("/api/super-admin/github/runs");
       if (res.ok) {
         const payload = await res.json();
-        setGithubRuns(Array.isArray(payload) ? payload : payload.workflow_runs || []);
+        const runs = Array.isArray(payload) ? payload : payload?.workflow_runs;
+        if (!Array.isArray(runs)) throw new Error("GITHUB_RUNS_INVALID_RESPONSE");
+        setGithubRuns(runs);
+        setGithubSourceAvailable(true);
       } else {
-        setGithubRuns([]);
+        setGithubSourceAvailable(false);
       }
     } catch {
-      setGithubRuns([]);
+      setGithubSourceAvailable(false);
     }
 
+    setHasSnapshot(true);
     setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchOperationsData();
+    void fetchOperationsData();
   }, []);
 
   const handleRestart = async () => {
@@ -129,6 +140,16 @@ export function SuperAdminOperationsTab({
   const cloudflareConfigured = integrationsHealth?.cloudflare?.status === "configured_unverified";
   const githubConfigured = integrationsHealth?.github?.status === "configured_unverified";
 
+  if (!hasSnapshot) {
+    return (
+      <KomaSnapshotLoading
+        testId="superadmin-operations-snapshot-loading"
+        title="Sincronizando diagnóstico"
+        description="Consultando backend, integrações, GitHub e DNS antes de classificar disponibilidade ou ausência de dados."
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">
@@ -150,7 +171,7 @@ export function SuperAdminOperationsTab({
             >
               <Power className="w-4 h-4" /> Reiniciar backend
             </button>
-            <button type="button" onClick={fetchOperationsData} disabled={isLoading} className="p-2 bg-koma-page border border-zinc-800 rounded-lg text-koma-secondary disabled:opacity-50" title="Atualizar diagnóstico">
+            <button type="button" onClick={() => void fetchOperationsData()} disabled={isLoading} className="p-2 bg-koma-page border border-zinc-800 rounded-lg text-koma-secondary disabled:opacity-50" title="Atualizar diagnóstico">
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             </button>
           </div>
@@ -184,9 +205,9 @@ export function SuperAdminOperationsTab({
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-4 space-y-2">
           <div className="flex items-center justify-between"><span className="text-xs font-medium text-koma-muted">Cloudflare</span><Globe className="w-4 h-4 text-koma-subtle" /></div>
           <div className="flex items-center gap-2">
-            {dnsRecords.length > 0 ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">API respondeu</span></> : <><HelpCircle className="w-4 h-4 text-zinc-500" /><span className="font-bold text-sm text-koma-muted">{configuredLabel(integrationsHealth?.cloudflare?.status)}</span></>}
+            {dnsSourceAvailable === false ? <><AlertTriangle className="w-4 h-4 text-rose-400" /><span className="font-bold text-sm text-rose-300">Fonte indisponível</span></> : dnsRecords.length > 0 ? <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">API respondeu</span></> : <><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span className="font-bold text-sm text-koma-foreground">API respondeu</span></>}
           </div>
-          <p className="text-[11px] text-koma-subtle">{dnsRecords.length > 0 ? `${dnsRecords.length} registro(s) retornado(s)` : "Sem resposta de DNS carregada"}</p>
+          <p className="text-[11px] text-koma-subtle">{dnsSourceAvailable === false ? "Não foi possível consultar DNS" : dnsRecords.length > 0 ? `${dnsRecords.length} registro(s) retornado(s)` : "Consulta concluída sem registros"}</p>
         </div>
       </div>
 
@@ -194,10 +215,14 @@ export function SuperAdminOperationsTab({
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
             <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2"><GitBranch className="w-4 h-4 text-[#00b894]" /> GitHub Actions</h3>
-            <span className="text-[11px] text-koma-muted">{githubConfigured ? "Configurado" : "Não verificado"}</span>
+            <span className="text-[11px] text-koma-muted">{githubSourceAvailable === false ? "Fonte indisponível" : githubConfigured ? "Configurado" : "Não verificado"}</span>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
-            {githubRuns.length === 0 ? <div className="py-6 text-center text-koma-muted">Nenhum workflow retornado.</div> : githubRuns.slice(0, 5).map(run => (
+            {githubSourceAvailable === false ? (
+              <div className="py-6 text-center text-rose-300">Não foi possível consultar os workflows.</div>
+            ) : githubRuns.length === 0 ? (
+              <div className="py-6 text-center text-koma-muted">Consulta concluída sem workflows retornados.</div>
+            ) : githubRuns.slice(0, 5).map(run => (
               <div key={run.id} className="p-3 bg-koma-page rounded-lg border border-zinc-800 flex items-center justify-between">
                 <div><span className="font-semibold text-koma-foreground">{run.name || "Workflow"}</span><div className="text-[11px] text-koma-muted font-mono">{run.head_branch || "branch não informada"}</div></div>
                 <div className="flex items-center gap-2"><span className="text-[10px] text-koma-secondary">{run.conclusion || run.status || "desconhecido"}</span>{run.html_url && <a href={run.html_url} target="_blank" rel="noopener noreferrer" className="text-koma-subtle hover:text-[#00b894]"><ExternalLink className="w-3.5 h-3.5" /></a>}</div>
@@ -209,10 +234,14 @@ export function SuperAdminOperationsTab({
         <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
             <h3 className="text-sm font-bold text-koma-foreground flex items-center gap-2"><Globe className="w-4 h-4 text-[#00b894]" /> DNS Cloudflare</h3>
-            <span className="text-[11px] text-koma-muted">{cloudflareConfigured ? "Configurado" : "Não verificado"}</span>
+            <span className="text-[11px] text-koma-muted">{dnsSourceAvailable === false ? "Fonte indisponível" : cloudflareConfigured ? "Configurado" : "Não verificado"}</span>
           </div>
           <div className="space-y-2 max-h-60 overflow-y-auto text-xs">
-            {dnsRecords.length === 0 ? <div className="py-6 text-center text-koma-muted">Nenhum registro retornado.</div> : dnsRecords.map(record => (
+            {dnsSourceAvailable === false ? (
+              <div className="py-6 text-center text-rose-300">Não foi possível consultar os registros DNS.</div>
+            ) : dnsRecords.length === 0 ? (
+              <div className="py-6 text-center text-koma-muted">Consulta concluída sem registros DNS.</div>
+            ) : dnsRecords.map(record => (
               <div key={record.id || record.name} className="p-2.5 bg-koma-page rounded-lg border border-zinc-800 flex items-center justify-between"><span className="font-mono text-koma-foreground">{record.name || "sem nome"}</span><span className="text-[10px] text-koma-muted">{record.type || "?"} • {record.proxied ? "proxied" : "DNS only"}</span></div>
             ))}
           </div>
