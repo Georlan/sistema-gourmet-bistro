@@ -4,6 +4,7 @@ const DEFAULT_FRONTEND_URL = 'https://sistema-gourmet-bistro.pages.dev';
 const DEFAULT_API_URL = 'https://sistema-gourmet-bistro-production.up.railway.app';
 const DEFAULT_CORS_PATH = '/cardapio/pedidos';
 const DEFAULT_TIMEOUT_MS = 15_000;
+const CONTRACT_PATHS = ['/contratar/pocket', '/contratar/pro', '/contratar/premium'];
 
 function normalizeBaseUrl(value, fallback) {
   const raw = (value || fallback).trim();
@@ -51,6 +52,16 @@ function assertOk(response, label) {
   }
 }
 
+async function checkHtml(url, label) {
+  const response = await request(url, { method: 'GET' });
+  assertOk(response, label);
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.toLowerCase().includes('text/html')) {
+    throw new Error(`${label}: content-type inesperado: ${contentType || '(ausente)'}`);
+  }
+  console.log(`✓ ${label} ${response.status} — ${url}`);
+}
+
 async function checkApiReadiness(apiUrl) {
   const url = `${apiUrl}/health/ready`;
   const response = await request(url, { method: 'GET' });
@@ -59,14 +70,36 @@ async function checkApiReadiness(apiUrl) {
   console.log(`✓ Backend readiness ${response.status} — ${url}${body ? ` — ${body.slice(0, 180)}` : ''}`);
 }
 
-async function checkFrontend(frontendUrl) {
-  const response = await request(frontendUrl, { method: 'GET' });
-  assertOk(response, 'Frontend');
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.toLowerCase().includes('text/html')) {
-    throw new Error(`Frontend: content-type inesperado: ${contentType || '(ausente)'}`);
+async function checkContractReadiness(apiUrl) {
+  const url = `${apiUrl}/api/contracts/readiness`;
+  const response = await request(url, { method: 'GET' });
+  assertOk(response, 'Contract readiness');
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('Contract readiness: resposta não é JSON válido');
   }
-  console.log(`✓ Frontend ${response.status} — ${frontendUrl}`);
+
+  if (payload?.ready !== true || payload?.providerIdentityConfigured !== true) {
+    throw new Error('Contract readiness: identidade jurídica do prestador não está pronta para emitir comprovantes');
+  }
+  if (typeof payload?.legalVersion !== 'string' || !payload.legalVersion.trim()) {
+    throw new Error('Contract readiness: versão jurídica vigente não foi informada');
+  }
+
+  console.log(`✓ Contract readiness ${response.status} — Legal v${payload.legalVersion} — identidade jurídica configurada`);
+}
+
+async function checkFrontend(frontendUrl) {
+  await checkHtml(frontendUrl, 'Frontend');
+}
+
+async function checkContractPages(frontendUrl) {
+  for (const path of CONTRACT_PATHS) {
+    await checkHtml(`${frontendUrl}${path}`, `Contratação ${path.split('/').at(-1)}`);
+  }
 }
 
 async function checkCheckoutCors(apiUrl, frontendUrl, corsPath) {
@@ -112,7 +145,9 @@ async function main() {
   console.log(`API: ${apiUrl}`);
 
   await checkApiReadiness(apiUrl);
+  await checkContractReadiness(apiUrl);
   await checkFrontend(frontendUrl);
+  await checkContractPages(frontendUrl);
   await checkCheckoutCors(apiUrl, frontendUrl, corsPath);
 
   console.log('✓ Smoke de produção concluído sem falhas.');
