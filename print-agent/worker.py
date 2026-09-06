@@ -6,13 +6,14 @@ Gerencia a execução em loop (polling + heartbeat) com resiliência e idempotê
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock
+from threading import Event, Lock
 from pathlib import Path
 from config import AgentConfig, is_automatic_printer_name
 from api_client import AgentAuthenticationError, KomaApiClient
 from journal import PrintJournal
 from adapters import get_adapter
 from dispatcher import dispatch_claimed_jobs
+from wake_listener import PrintWakeupListener
 
 log = logging.getLogger("print-agent.worker")
 
@@ -208,12 +209,28 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     adapter = get_adapter(config.adapter, output_dir=config.output_dir)
     hardware_lock = Lock()
     maintenance = AgentMaintenance(config, adapter, hardware_lock)
+    wakeup_event = Event()
+    wakeup_listener = None
+    # Focused unit tests run a bounded loop and must never open external
+    # sockets. Production is unbounded, so only the real daemon starts SSE.
+    if max_loops is None and config.agent_token:
+        wakeup_listener = PrintWakeupListener(
+            config.api_url,
+            config.agent_token,
+            wakeup_event,
+        )
+        wakeup_listener.start()
     pending = {}
     ack_future = maintenance_future = None
     ack_items = []
     next_ack_at = last_reconciliation = 0.0
     loop_count = 0
-    log.info("[AGENTE] Transporte independente; polling=%ss, lote=%s", config.poll_interval_seconds, config.claim_batch_size)
+    log.info(
+        "[AGENTE] Transporte independente; polling=%ss, lote=%s, wakeup=%s",
+        config.poll_interval_seconds,
+        config.claim_batch_size,
+        "sse+postgres" if wakeup_listener is not None else "polling",
+    )
 
     def collect_ack():
         nonlocal ack_future, next_ack_at
@@ -234,6 +251,10 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                     loop_count += 1
                     should_wait = True
                     try:
+                        if wakeup_listener is not None and wakeup_listener.authentication_failed.is_set():
+                            raise AgentAuthenticationError(
+                                "A autorização deste computador foi revogada."
+                            )
                         now = time.monotonic()
                         if maintenance_future is not None and maintenance_future.done():
                             completed_maintenance = maintenance_future
@@ -285,7 +306,15 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                     if max_loops is not None and loop_count >= max_loops:
                         break
                     if should_wait:
-                        time.sleep(config.poll_interval_seconds)
+                        wait_seconds = (
+                            wakeup_listener.fallback_poll_seconds(
+                                config.poll_interval_seconds
+                            )
+                            if wakeup_listener is not None
+                            else config.poll_interval_seconds
+                        )
+                        wakeup_event.wait(wait_seconds)
+                        wakeup_event.clear()
             finally:
                 # Bounded HTTP timeouts; leave unacknowledged jobs durable on
                 # disk. Never clear credentials or the journal during shutdown.
@@ -296,6 +325,8 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     except KeyboardInterrupt:
         log.info("[AGENTE] Encerrado; confirmações pendentes permanecem no diário local.")
     finally:
+        if wakeup_listener is not None:
+            wakeup_listener.stop()
         client.session.close()
         ack_client.session.close()
         maintenance.client.session.close()
