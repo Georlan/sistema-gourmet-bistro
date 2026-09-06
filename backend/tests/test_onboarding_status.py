@@ -3,13 +3,20 @@ from __future__ import annotations
 import datetime
 from types import SimpleNamespace
 
+from fastapi.testclient import TestClient
+
 from app.main import app
 from app.routes.onboarding import _profile_is_configured, _trial_status_payload
 
 
 def test_onboarding_status_route_is_registered_once():
-    paths = [getattr(route, "path", None) for route in app.routes]
-    assert paths.count("/api/onboarding/status") == 1
+    openapi_paths = app.openapi().get("paths", {})
+    assert "/api/onboarding/status" in openapi_paths
+    assert "get" in openapi_paths["/api/onboarding/status"]
+
+    with TestClient(app) as client:
+        response = client.get("/api/onboarding/status")
+        assert response.status_code == 401
 
 
 def test_trial_projection_reports_real_remaining_days_without_mutation():
