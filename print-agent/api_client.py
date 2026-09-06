@@ -8,7 +8,7 @@ import requests
 
 log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb"]
-AGENT_VERSION = "2026.09.05.1"
+AGENT_VERSION = "2026.09.05.2"
 
 
 class AgentAuthenticationError(RuntimeError):
