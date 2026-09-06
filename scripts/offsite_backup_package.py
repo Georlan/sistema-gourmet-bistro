@@ -88,7 +88,10 @@ def package_backup(
         raise RuntimeError("Utilitário age não encontrado no PATH.")
 
     archive_path, manifest_path, manifest = validate_backup_dir(backup_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError("Não foi possível criar a pasta de saída do backup.") from exc
 
     stem = backup_dir.resolve().name
     encrypted = output_dir / f"{stem}.tar.gz.age"
@@ -153,15 +156,26 @@ def package_backup(
 
         temporary_encrypted.chmod(0o600)
         os.replace(temporary_encrypted, encrypted)
-    except Exception:
+    except Exception as exc:
         if process is not None and process.poll() is None:
             process.terminate()
             process.wait()
         temporary_encrypted.unlink(missing_ok=True)
         encrypted.unlink(missing_ok=True)
-        raise
+        if isinstance(exc, RuntimeError):
+            raise
+        raise RuntimeError(
+            "Falha ao preparar pacote criptografado; saída parcial removida."
+        ) from exc
 
-    encrypted_digest = sha256_file(encrypted)
+    try:
+        encrypted_digest = sha256_file(encrypted)
+    except OSError as exc:
+        encrypted.unlink(missing_ok=True)
+        raise RuntimeError(
+            "Não foi possível validar o pacote criptografado; saída removida."
+        ) from exc
+
     metadata = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_backup": stem,
@@ -196,7 +210,11 @@ def verify_package(package: Path, checksum: Path) -> None:
     if not package.is_file() or not checksum.is_file():
         raise RuntimeError("Pacote ou arquivo de checksum não encontrado.")
 
-    line = checksum.read_text(encoding="utf-8").strip()
+    try:
+        line = checksum.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise RuntimeError("Não foi possível ler o checksum da cópia externa.") from exc
+
     expected, separator, filename = line.partition("  ")
     if not separator or filename != package.name:
         raise RuntimeError(
@@ -209,7 +227,10 @@ def verify_package(package: Path, checksum: Path) -> None:
     ):
         raise RuntimeError("Checksum SHA-256 inválido.")
 
-    actual = sha256_file(package)
+    try:
+        actual = sha256_file(package)
+    except OSError as exc:
+        raise RuntimeError("Não foi possível ler o pacote da cópia externa.") from exc
     if not hmac.compare_digest(expected, actual):
         raise RuntimeError("SHA-256 do pacote externo não confere.")
 
