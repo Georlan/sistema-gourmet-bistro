@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Calendar as CalendarIcon, RefreshCw, WalletCards } from 'lucide-react';
+import { KomaSnapshotLoading } from '../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
@@ -20,7 +21,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   authHeaders,
 }) => {
   const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -73,6 +74,19 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   const operationalRange = stats?.dia_operacional_inicio && stats?.dia_operacional_fim
     ? `${formatDate(stats.dia_operacional_inicio)} a ${formatDate(stats.dia_operacional_fim)}`
     : `${formatDate(dataInicio)} a ${formatDate(dataFim)}`;
+
+  if (!stats) {
+    return (
+      <KomaSnapshotLoading
+        testId="financial-report-snapshot-loading"
+        title="Sincronizando financeiro"
+        description="Conferindo recebimentos, estornos e meios de pagamento antes de mostrar os valores do período."
+        error={!isLoading ? errorMsg : null}
+        errorDescription="Ainda não foi possível confirmar os valores financeiros. O KÔMA não vai substituir dados desconhecidos por zero."
+        onRetry={() => void fetchFinanceiroData()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5 text-left animate-fade-in">
