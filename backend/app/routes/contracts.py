@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import insert, text
 from sqlalchemy.exc import IntegrityError
@@ -30,6 +30,7 @@ from ..legal_config import (
 )
 from ..models import Usuario
 from ..security import get_current_user
+from ..services.contract_notifications import schedule_contract_accepted_notifications
 from ..subscription import (
     VALID_SUBSCRIPTION_PLANS,
     subscription_annual_monthly_equivalent,
@@ -199,7 +200,11 @@ def _receipt_from_row(row: ContractAcceptance) -> dict[str, Any]:
 
 
 @router.post("/accept", status_code=status.HTTP_201_CREATED)
-def accept_contract(payload: ContractAcceptanceRequest, request: Request):
+def accept_contract(
+    payload: ContractAcceptanceRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
     if not payload.powers_declared:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -248,6 +253,10 @@ def accept_contract(payload: ContractAcceptanceRequest, request: Request):
         billing_amount = fixed_monthly_price
         annual_monthly_equivalent = None
 
+    restaurant_name = _clean_text(payload.restaurant_name)
+    representative_name = _clean_text(payload.representative_name)
+    phone = _clean_text(payload.phone)
+
     receipt: dict[str, Any] = {
         "protocol": protocol,
         "acceptedAtUtc": now.isoformat(),
@@ -262,12 +271,12 @@ def accept_contract(payload: ContractAcceptanceRequest, request: Request):
             "name": _clean_text(payload.contracting_party_name),
             "taxId": contracting_tax_id,
             "taxIdKind": contracting_kind,
-            "restaurantName": _clean_text(payload.restaurant_name),
+            "restaurantName": restaurant_name,
             "email": payload.email,
-            "phone": _clean_text(payload.phone),
+            "phone": phone,
         },
         "representative": {
-            "name": _clean_text(payload.representative_name),
+            "name": representative_name,
             "taxId": representative_tax_id,
             "role": _clean_text(payload.representative_role),
             "powersDeclared": True,
@@ -312,13 +321,13 @@ def accept_contract(payload: ContractAcceptanceRequest, request: Request):
         "contracting_party_name": _clean_text(payload.contracting_party_name),
         "contracting_party_tax_id_encrypted": encrypt_field(contracting_tax_id),
         "contracting_party_tax_id_last4": contracting_tax_id[-4:],
-        "restaurant_name": _clean_text(payload.restaurant_name),
-        "representative_name": _clean_text(payload.representative_name),
+        "restaurant_name": restaurant_name,
+        "representative_name": representative_name,
         "representative_tax_id_encrypted": encrypt_field(representative_tax_id),
         "representative_tax_id_last4": representative_tax_id[-4:],
         "representative_role": _clean_text(payload.representative_role),
         "email": payload.email,
-        "phone": _clean_text(payload.phone),
+        "phone": phone,
         "plan": payload.plan,
         "billing_cycle": payload.billing_cycle,
         "fixed_monthly_price": fixed_monthly_price,
@@ -361,6 +370,18 @@ def accept_contract(payload: ContractAcceptanceRequest, request: Request):
         ) from exc
     finally:
         db.close()
+
+    # WhatsApp is deliberately scheduled only after the immutable evidence commit.
+    # Provider/scheduling failures cannot alter the legal acceptance.
+    schedule_contract_accepted_notifications(
+        background_tasks,
+        restaurant_name=restaurant_name,
+        representative_name=representative_name,
+        phone=phone,
+        plan=payload.plan,
+        billing_cycle=payload.billing_cycle,
+        protocol=protocol,
+    )
 
     return {
         "protocol": protocol,
