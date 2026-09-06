@@ -8,7 +8,10 @@ const parseBackendDateTime = (dateStr: any): number => {
   return parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
 };
 import type { OperationalRequestContext, OperationalErrorSink } from '../operationalContracts';
-type BoundaryProps = OperationalRequestContext & OperationalErrorSink & { liveProdutos: Product[] };
+type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
+  liveProdutos: Product[];
+  scopeKey: string;
+};
 
 /** Owns the shared order snapshot, response mapping, targeted refresh and optimistic overlays. */
 export function useOperationalOrders({
@@ -16,6 +19,7 @@ export function useOperationalOrders({
   getAuthHeaders,
   handleLogout,
   setFetchError,
+  scopeKey,
 }: BoundaryProps) {
   const fetchOrdersAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -26,15 +30,24 @@ export function useOperationalOrders({
     Map<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>
   >(new Map());
 
-  const [isOrdersLoaded, setIsOrdersLoaded] = useState(false);
-
+  const [loadedScopeKey, setLoadedScopeKey] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
-
   const ordersRef = useRef<Order[]>(orders);
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
 
   useEffect(() => {
     ordersRef.current = orders;
   }, [orders]);
+
+  useEffect(() => {
+    fetchOrdersAbortControllerRef.current?.abort();
+    fetchOrdersAbortControllerRef.current = null;
+    targetedOrderRequestRef.current.clear();
+    optimisticItemStatusRef.current.clear();
+    setOrders([]);
+    setLoadedScopeKey('');
+  }, [scopeKey]);
 
   const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
     launchIdentities: readCheckLaunchIdentities(comanda),
@@ -92,10 +105,12 @@ export function useOperationalOrders({
   });
 
   const fetchOrdersFromAPI = async () => {
+    if (!scopeKey) return;
     if (fetchOrdersAbortControllerRef.current) {
       fetchOrdersAbortControllerRef.current.abort();
     }
     const controller = new AbortController();
+    const requestScopeKey = scopeKey;
     fetchOrdersAbortControllerRef.current = controller;
 
     try {
@@ -113,6 +128,7 @@ export function useOperationalOrders({
         return;
       }
       const comandas = await response.json();
+      if (requestScopeKey !== scopeKeyRef.current) return;
       const now = Date.now();
 
       const mappedOrders = comandas.map((comanda: any) => mapBackendComandaToOrder(comanda, now));
@@ -125,11 +141,15 @@ export function useOperationalOrders({
         );
         return [...mappedOrders, ...tempOrders];
       });
-      setIsOrdersLoaded(true);
+      setLoadedScopeKey(requestScopeKey);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error('Connection error to backend:', err);
         setFetchError(`Erro de conexão comandas: ${err.message || String(err)}`);
+      }
+    } finally {
+      if (fetchOrdersAbortControllerRef.current === controller) {
+        fetchOrdersAbortControllerRef.current = null;
       }
     }
   };
@@ -140,7 +160,9 @@ export function useOperationalOrders({
       fetchOrdersFromAPI();
       return;
     }
+    if (!scopeKey) return;
 
+    const requestScopeKey = scopeKey;
     const requestVersion = (targetedOrderRequestRef.current.get(normalizedId) || 0) + 1;
     targetedOrderRequestRef.current.set(normalizedId, requestVersion);
 
@@ -153,6 +175,7 @@ export function useOperationalOrders({
         handleLogout();
         return;
       }
+      if (requestScopeKey !== scopeKeyRef.current) return;
       if (response.status === 404) {
         if (targetedOrderRequestRef.current.get(normalizedId) === requestVersion) {
           setOrders((prevOrders) => prevOrders.filter((order) => String(order.id) !== normalizedId));
@@ -164,7 +187,10 @@ export function useOperationalOrders({
       }
 
       const mappedOrder = mapBackendComandaToOrder(await response.json());
-      if (targetedOrderRequestRef.current.get(normalizedId) !== requestVersion) return;
+      if (
+        requestScopeKey !== scopeKeyRef.current
+        || targetedOrderRequestRef.current.get(normalizedId) !== requestVersion
+      ) return;
 
       setOrders((prevOrders) => {
         const nextOrders = prevOrders.filter(
@@ -178,9 +204,11 @@ export function useOperationalOrders({
         );
         return [...nextOrders, mappedOrder].sort((a, b) => a.timestamp - b.timestamp);
       });
-      setIsOrdersLoaded(true);
+      // A targeted fetch proves only one check. It must never mark the full operational
+      // snapshot as ready; readiness is established exclusively by fetchOrdersFromAPI.
       setFetchError(null);
     } catch (err) {
+      if (requestScopeKey !== scopeKeyRef.current) return;
       console.warn('Falha no refresh direcionado da comanda; reconciliando snapshot completo.', err);
       fetchOrdersFromAPI();
     }
@@ -210,6 +238,8 @@ export function useOperationalOrders({
   const handleTransferTableOptimistic = (sourceTableId: number, targetTableId: number) => {
     setOrders((prev) => prev.map((o) => (o.mesaId === sourceTableId ? { ...o, mesaId: targetTableId } : o)));
   };
+
+  const isOrdersLoaded = Boolean(scopeKey) && loadedScopeKey === scopeKey;
   return {
     orders,
     setOrders,
