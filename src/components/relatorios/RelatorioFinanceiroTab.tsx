@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Calendar as CalendarIcon, RefreshCw, WalletCards } from 'lucide-react';
+import { KomaSnapshotLoading } from '../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
@@ -20,7 +21,9 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   authHeaders,
 }) => {
   const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
-  const [isLoading, setIsLoading] = useState(false);
+  const snapshotKey = `${dataInicio}:${dataFim}`;
+  const [loadedSnapshotKey, setLoadedSnapshotKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
@@ -28,6 +31,7 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
 
   const fetchFinanceiroData = useCallback(async () => {
     const requestId = ++requestRef.current;
+    const requestSnapshotKey = `${dataInicio}:${dataFim}`;
     setIsLoading(true);
     setErrorMsg(null);
     try {
@@ -35,7 +39,11 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
         `${apiBaseUrl}/comandas/estatisticas/geral?data_inicio=${dataInicio}&data_fim=${dataFim}`,
         authHeaders,
       );
-      if (requestRef.current === requestId) setStats(nextStats);
+      if (!nextStats || typeof nextStats !== 'object') throw new Error('FINANCIAL_REPORT_INVALID_RESPONSE');
+      if (requestRef.current === requestId) {
+        setStats(nextStats);
+        setLoadedSnapshotKey(requestSnapshotKey);
+      }
     } catch (error) {
       console.error(error);
       if (requestRef.current === requestId) setErrorMsg('Não foi possível carregar a conciliação financeira.');
@@ -73,6 +81,19 @@ export const RelatorioFinanceiroTab: React.FC<RelatorioFinanceiroTabProps> = ({
   const operationalRange = stats?.dia_operacional_inicio && stats?.dia_operacional_fim
     ? `${formatDate(stats.dia_operacional_inicio)} a ${formatDate(stats.dia_operacional_fim)}`
     : `${formatDate(dataInicio)} a ${formatDate(dataFim)}`;
+
+  if (loadedSnapshotKey !== snapshotKey || !stats) {
+    return (
+      <KomaSnapshotLoading
+        testId="financial-report-snapshot-loading"
+        title="Sincronizando financeiro"
+        description="Conferindo recebimentos, estornos e meios de pagamento antes de mostrar os valores deste período."
+        error={!isLoading ? errorMsg : null}
+        errorDescription="Ainda não foi possível confirmar os valores deste período. O KÔMA não vai substituir dados desconhecidos por zero nem reutilizar outro período como se fosse atual."
+        onRetry={() => void fetchFinanceiroData()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5 text-left animate-fade-in">

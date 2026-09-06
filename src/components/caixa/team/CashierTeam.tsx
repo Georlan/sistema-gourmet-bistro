@@ -3,6 +3,7 @@ import { API } from '../../../config/caixaService';
 import { SystemUser } from '../../../types';
 import { EquipeCargosTab } from '../../equipe/EquipeCargosTab';
 import { EquipePessoasTab } from '../../equipe/EquipePessoasTab';
+import { KomaSnapshotLoading } from '../../shared/KomaSnapshotLoading';
 import type { CashierNotice } from '../cashierContracts';
 
 interface Props {
@@ -14,6 +15,11 @@ interface Props {
   showToast: CashierNotice;
 }
 
+type TeamRequest = {
+  scopeKey: string;
+  promise: Promise<void>;
+};
+
 export default function CashierTeam({
   apiBaseUrl,
   authHeaders,
@@ -23,40 +29,60 @@ export default function CashierTeam({
   showToast,
 }: Props) {
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
-
-  const systemUsersRequestRef = useRef<Promise<void> | null>(null);
+  const [hasSystemUsersSnapshot, setHasSystemUsersSnapshot] = useState(false);
+  const [systemUsersError, setSystemUsersError] = useState<string | null>(null);
+  const scopeKey = `${apiBaseUrl}::${authHeaders.Authorization || authHeaders.authorization || 'anonymous'}`;
+  const scopeKeyRef = useRef(scopeKey);
+  scopeKeyRef.current = scopeKey;
+  const systemUsersRequestRef = useRef<TeamRequest | null>(null);
 
   const fetchSystemUsers = (): Promise<void> => {
-    if (systemUsersRequestRef.current) return systemUsersRequestRef.current;
-    const request = (async () => {
+    const requestScopeKey = scopeKey;
+    const currentRequest = systemUsersRequestRef.current;
+    if (currentRequest?.scopeKey === requestScopeKey) return currentRequest.promise;
+
+    setSystemUsersError(null);
+    const promise = (async () => {
       try {
         const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, { headers: authHeaders });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (Array.isArray(data)) setSystemUsers(data);
+        if (!Array.isArray(data)) throw new Error('TEAM_INVALID_RESPONSE');
+        if (scopeKeyRef.current !== requestScopeKey) return;
+        setSystemUsers(data);
+        setHasSystemUsersSnapshot(true);
       } catch (error) {
+        if (scopeKeyRef.current !== requestScopeKey) return;
         console.error('Error fetching system users:', error);
+        setSystemUsersError('Não foi possível carregar a equipe agora.');
       }
     })();
-    systemUsersRequestRef.current = request;
-    void request.finally(() => {
-      if (systemUsersRequestRef.current === request) systemUsersRequestRef.current = null;
+    systemUsersRequestRef.current = { scopeKey: requestScopeKey, promise };
+    void promise.finally(() => {
+      if (systemUsersRequestRef.current?.promise === promise) systemUsersRequestRef.current = null;
     });
-    return request;
+    return promise;
   };
+
+  useEffect(() => {
+    systemUsersRequestRef.current = null;
+    setSystemUsers([]);
+    setHasSystemUsersSnapshot(false);
+    setSystemUsersError(null);
+  }, [scopeKey]);
 
   useEffect(() => {
     if (activeTab !== 'permissoes_cargos') return;
     const refreshTeam = () => void fetchSystemUsers();
     window.addEventListener('koma_team_updated', refreshTeam);
     return () => window.removeEventListener('koma_team_updated', refreshTeam);
-  }, [activeTab, apiBaseUrl, authHeaders.Authorization]);
+  }, [activeTab, scopeKey]);
 
   useEffect(() => {
     if (activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) {
-      fetchSystemUsers();
+      void fetchSystemUsers();
     }
-  }, [activeTab, activeSubTab]);
+  }, [activeTab, activeSubTab, scopeKey]);
 
   const handleAddUser = async (payload: { nome: string; telefone: string; cargo: string }) => {
     await API.cadastrarFuncionario(payload);
@@ -106,9 +132,21 @@ export default function CashierTeam({
     }
   };
 
+  const peopleViewActive = activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab);
+
   return (
     <>
-      {activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab) && (
+      {peopleViewActive && !hasSystemUsersSnapshot && (
+        <KomaSnapshotLoading
+          testId="team-snapshot-loading"
+          title="Sincronizando equipe"
+          description="Carregando as pessoas e convites reais antes de mostrar contagens ou primeiros passos."
+          error={systemUsersError}
+          errorDescription="Ainda não foi possível confirmar a equipe. O KÔMA não vai assumir que ela está vazia."
+          onRetry={() => void fetchSystemUsers()}
+        />
+      )}
+      {peopleViewActive && hasSystemUsersSnapshot && (
         <EquipePessoasTab
           users={systemUsers}
           onCreate={handleAddUser}

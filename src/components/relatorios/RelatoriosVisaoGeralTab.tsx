@@ -24,6 +24,7 @@ import {
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
 import { VendasDetalhesDrawer, VendaDetalheItem } from './VendasDetalhesDrawer';
 import { MoneyInput } from '../MoneyInput';
+import { KomaSnapshotLoading } from '../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
 import { ReportActionBar } from './ReportActionBar';
@@ -61,9 +62,10 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
   showToast,
 }) => {
   const { dataInicio, dataFim, applyPeriod } = useSharedReportPeriod();
-  const [isLoading, setIsLoading] = useState(false);
+  const snapshotKey = `${dataInicio}:${dataFim}`;
+  const [loadedSnapshotKey, setLoadedSnapshotKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Modals & Drawers
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showVendasDrawer, setShowVendasDrawer] = useState(false);
   const [editingMeta, setEditingMeta] = useState(false);
@@ -77,6 +79,7 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
 
   const fetchVisaoGeral = useCallback(async (inicio = dataInicio, fim = dataFim) => {
     const requestId = ++requestRef.current;
+    const requestSnapshotKey = `${inicio}:${fim}`;
     setIsLoading(true);
     setHasError(false);
     try {
@@ -84,7 +87,11 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         `${apiBaseUrl}/relatorios/visao-geral?data_inicio=${inicio}&data_fim=${fim}`,
         authHeaders,
       );
-      if (requestRef.current === requestId) setData(json);
+      if (!json || typeof json !== 'object') throw new Error('REPORT_OVERVIEW_INVALID_RESPONSE');
+      if (requestRef.current === requestId) {
+        setData(json);
+        setLoadedSnapshotKey(requestSnapshotKey);
+      }
     } catch (err) {
       console.error('Erro ao buscar visão geral:', err);
       if (requestRef.current === requestId) setHasError(true);
@@ -173,7 +180,6 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
     document.body.removeChild(link);
   };
 
-  // Process data for charts
   const vendasPorDiaChartData = (data?.vendas_por_dia || []).map((item: any) => ({
     data: item.data ? item.data.split('-').slice(1).reverse().join('/') : '',
     faturamento: item.total || 0,
@@ -210,6 +216,19 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
       refunds,
     };
   }, [data]);
+
+  if (loadedSnapshotKey !== snapshotKey || !data) {
+    return (
+      <KomaSnapshotLoading
+        testId="reports-overview-snapshot-loading"
+        title="Sincronizando indicadores"
+        description="Carregando os resultados reais deste período antes de mostrar metas, vendas ou gráficos."
+        error={!isLoading && hasError ? 'Não foi possível carregar os indicadores.' : null}
+        errorDescription="Ainda não foi possível confirmar este período. O KÔMA não vai apresentar zeros ou dados de outro período como se fossem atuais."
+        onRetry={() => void fetchVisaoGeral()}
+      />
+    );
+  }
 
   return (
     <div className={"space-y-6 text-left animate-fade-in"}>
@@ -277,8 +296,8 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
             <span className="font-bold text-lg">!</span>
           </div>
           <div className="space-y-1">
-            <h3 className="text-koma-foreground font-bold text-sm">Não foi possível carregar os dados</h3>
-            <p className="text-koma-subtle text-xs">Ocorreu uma falha ao comunicar com o servidor. Por favor, tente novamente.</p>
+            <h3 className="text-koma-foreground font-bold text-sm">Não foi possível atualizar os dados</h3>
+            <p className="text-koma-subtle text-xs">O último snapshot válido foi mantido. Tente atualizar novamente.</p>
           </div>
           <button
             onClick={() => fetchVisaoGeral(dataInicio, dataFim)}
@@ -289,49 +308,46 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         </div>
       )}
 
-      {!hasError && data && (
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Leitura rápida para decisão">
-          <article className={clsx('rounded-2xl border p-4', quickRead.hasPrevious && quickRead.revenueDelta < 0 ? 'border-rose-500/30 bg-rose-500/10' : 'border-koma-border bg-koma-panel')}>
-            <div className="flex items-start gap-3">
-              {quickRead.revenueDelta < 0
-                ? <TrendingDown size={17} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-300" />
-                : <TrendingUp size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />}
-              <div>
-                <strong className="block text-xs text-koma-foreground">
-                  {quickRead.hasPrevious ? `Recebido ${quickRead.revenueDelta >= 0 ? 'subiu' : 'caiu'} ${Math.abs(quickRead.revenueDelta).toLocaleString('pt-BR')}%` : 'Primeiro período comparável'}
-                </strong>
-                <span className="mt-1 block text-[10px] text-koma-muted">
-                  {quickRead.hasPrevious ? `O volume de pedidos variou ${quickRead.ordersDelta >= 0 ? '+' : ''}${quickRead.ordersDelta.toLocaleString('pt-BR')}%.` : 'O próximo período mostrará a evolução dos recebimentos e pedidos.'}
-                </span>
-              </div>
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Leitura rápida para decisão">
+        <article className={clsx('rounded-2xl border p-4', quickRead.hasPrevious && quickRead.revenueDelta < 0 ? 'border-rose-500/30 bg-rose-500/10' : 'border-koma-border bg-koma-panel')}>
+          <div className="flex items-start gap-3">
+            {quickRead.revenueDelta < 0
+              ? <TrendingDown size={17} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-300" />
+              : <TrendingUp size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />}
+            <div>
+              <strong className="block text-xs text-koma-foreground">
+                {quickRead.hasPrevious ? `Recebido ${quickRead.revenueDelta >= 0 ? 'subiu' : 'caiu'} ${Math.abs(quickRead.revenueDelta).toLocaleString('pt-BR')}%` : 'Primeiro período comparável'}
+              </strong>
+              <span className="mt-1 block text-[10px] text-koma-muted">
+                {quickRead.hasPrevious ? `O volume de pedidos variou ${quickRead.ordersDelta >= 0 ? '+' : ''}${quickRead.ordersDelta.toLocaleString('pt-BR')}%.` : 'O próximo período mostrará a evolução dos recebimentos e pedidos.'}
+              </span>
             </div>
-          </article>
+          </div>
+        </article>
 
-          <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
-            <div className="flex items-start gap-3">
-              <Clock size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
-              <div>
-                <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : 'Sem horário de pico'}</strong>
-                <span className="mt-1 block text-[10px] text-koma-muted">
-                  {quickRead.peak ? `${quickRead.peak.total_pedidos} conta${quickRead.peak.total_pedidos === 1 ? '' : 's'} recebida${quickRead.peak.total_pedidos === 1 ? '' : 's'} nessa faixa; planeje a equipe para esse momento.` : 'Ainda não há vendas suficientes no período para orientar a escala.'}
-                </span>
-              </div>
+        <article className="rounded-2xl border border-koma-border bg-koma-panel p-4">
+          <div className="flex items-start gap-3">
+            <Clock size={17} className="mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+            <div>
+              <strong className="block text-xs text-koma-foreground">{quickRead.peak ? `Pico de movimento às ${quickRead.peak.hora}` : 'Sem horário de pico'}</strong>
+              <span className="mt-1 block text-[10px] text-koma-muted">
+                {quickRead.peak ? `${quickRead.peak.total_pedidos} conta${quickRead.peak.total_pedidos === 1 ? '' : 's'} recebida${quickRead.peak.total_pedidos === 1 ? '' : 's'} nessa faixa; planeje a equipe para esse momento.` : 'Ainda não há vendas suficientes no período para orientar a escala.'}
+              </span>
             </div>
-          </article>
+          </div>
+        </article>
 
-          <article className={clsx('rounded-2xl border p-4', quickRead.refunds > 0 ? 'border-rose-500/30 bg-rose-500/10' : 'border-koma-border bg-koma-panel')}>
-            <div className="flex items-start gap-3">
-              <ShieldCheck size={17} className={quickRead.refunds > 0 ? 'mt-0.5 shrink-0 text-rose-600 dark:text-rose-300' : 'mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300'} />
-              <div>
-                <strong className="block text-xs text-koma-foreground">{quickRead.refunds > 0 ? `${quickRead.refundRate.toFixed(1).replace('.', ',')}% devolvido` : 'Nenhum estorno no período'}</strong>
-                <span className="mt-1 block text-[10px] text-koma-muted">{quickRead.refunds > 0 ? `${formatMoney(quickRead.refunds)} em estornos pedem revisão.` : 'A receita líquida não sofreu redução por devoluções.'}</span>
-              </div>
+        <article className={clsx('rounded-2xl border p-4', quickRead.refunds > 0 ? 'border-rose-500/30 bg-rose-500/10' : 'border-koma-border bg-koma-panel')}>
+          <div className="flex items-start gap-3">
+            <ShieldCheck size={17} className={quickRead.refunds > 0 ? 'mt-0.5 shrink-0 text-rose-600 dark:text-rose-300' : 'mt-0.5 shrink-0 text-emerald-700 dark:text-emerald-300'} />
+            <div>
+              <strong className="block text-xs text-koma-foreground">{quickRead.refunds > 0 ? `${quickRead.refundRate.toFixed(1).replace('.', ',')}% devolvido` : 'Nenhum estorno no período'}</strong>
+              <span className="mt-1 block text-[10px] text-koma-muted">{quickRead.refunds > 0 ? `${formatMoney(quickRead.refunds)} em estornos pedem revisão.` : 'A receita líquida não sofreu redução por devoluções.'}</span>
             </div>
-          </article>
-        </section>
-      )}
+          </div>
+        </article>
+      </section>
 
-      {/* Meta Mensal Block */}
       <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4 shadow-xs">
         <div className="flex justify-between items-center border-b border-koma-border pb-3">
           <div className="flex items-center gap-2">
@@ -348,33 +364,12 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                 aria-label="Meta mensal"
                 className="px-2.5 py-1 bg-koma-input border border-koma-border rounded-xl text-koma-foreground font-mono text-[10px] w-28 outline-none focus:border-emerald-500/50"
               />
-              <button
-                type="button"
-                onClick={handleSaveMeta}
-                className="px-3 py-1 koma-btn-success rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer shadow-xs"
-              >
-                Salvar
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingMeta(false)}
-                className="px-2 py-1 bg-koma-raised text-koma-muted hover:text-koma-foreground rounded-lg text-[9px] font-bold"
-              >
-                X
-              </button>
+              <button type="button" onClick={handleSaveMeta} className="px-3 py-1 koma-btn-success rounded-lg text-[9px] font-extrabold uppercase transition-all cursor-pointer shadow-xs">Salvar</button>
+              <button type="button" onClick={() => setEditingMeta(false)} className="px-2 py-1 bg-koma-raised text-koma-muted hover:text-koma-foreground rounded-lg text-[9px] font-bold">X</button>
             </div>
           ) : (
             (data?.meta_mensal || 0) > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setNewMetaInput(Number(data?.meta_mensal || 0));
-                  setEditingMeta(true);
-                }}
-                className="px-3 py-1 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer"
-              >
-                Configurar Meta
-              </button>
+              <button type="button" onClick={() => { setNewMetaInput(Number(data?.meta_mensal || 0)); setEditingMeta(true); }} className="px-3 py-1 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all cursor-pointer">Configurar Meta</button>
             )
           )}
         </div>
@@ -382,86 +377,38 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
         {(data?.meta_mensal || 0) <= 0 && !editingMeta ? (
           <div className="py-6 text-center space-y-3">
             <p className="text-xs text-koma-muted font-medium">Defina uma meta para acompanhar o ritmo do mês.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setNewMetaInput('');
-                setEditingMeta(true);
-              }}
-              className="px-5 py-2.5 koma-btn-success rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2 shadow-xs"
-            >
-              <Target size={15} />
-              <span>Definir Meta Mensal</span>
-            </button>
+            <button type="button" onClick={() => { setNewMetaInput(''); setEditingMeta(true); }} className="px-5 py-2.5 koma-btn-success rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer inline-flex items-center gap-2 shadow-xs"><Target size={15} /><span>Definir Meta Mensal</span></button>
           </div>
         ) : (
           <>
             <div className="space-y-2">
               <div className="flex justify-between items-center text-[10px] font-mono">
-                <span className="text-koma-subtle">
-                  Realizado: <strong className="text-koma-foreground">{formatMoney(data?.meta_realizada)}</strong>
-                </span>
-                <span className="text-emerald-700 dark:text-emerald-400 font-bold">
-                  {data?.meta_percentual ?? 0}% Alcançado
-                </span>
-                <span className="text-koma-subtle">
-                  Meta: <strong className="text-koma-foreground">{formatMoney(data?.meta_mensal)}</strong>
-                </span>
+                <span className="text-koma-subtle">Realizado: <strong className="text-koma-foreground">{formatMoney(data?.meta_realizada)}</strong></span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-bold">{data?.meta_percentual ?? 0}% Alcançado</span>
+                <span className="text-koma-subtle">Meta: <strong className="text-koma-foreground">{formatMoney(data?.meta_mensal)}</strong></span>
               </div>
-
-              <div className="w-full h-3 bg-koma-input border border-koma-border rounded-full overflow-hidden p-0.5">
-                <div
-                  className="h-full bg-[#10b981] rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, data?.meta_percentual || 0)}%` }}
-                />
-              </div>
+              <div className="w-full h-3 bg-koma-input border border-koma-border rounded-full overflow-hidden p-0.5"><div className="h-full bg-[#10b981] rounded-full transition-all duration-500" style={{ width: `${Math.min(100, data?.meta_percentual || 0)}%` }} /></div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[10px]">
-              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1">
-                <span className="text-koma-subtle text-[8px] font-bold uppercase tracking-wider block">Valor Restante</span>
-                <strong className="text-sm font-mono text-koma-foreground block">
-                  {formatMoney(data?.meta_restante)}
-                </strong>
-              </div>
-              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1">
-                <span className="text-koma-subtle text-[8px] font-bold uppercase tracking-wider block">Projeção no Ritmo Atual</span>
-                <strong className="text-sm font-mono text-emerald-400 block">
-                  {formatMoney(data?.meta_projecao)}
-                </strong>
-              </div>
-              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1">
-                <span className="text-koma-subtle text-[8px] font-bold uppercase tracking-wider block">Média Diária Necessária</span>
-                <strong className="text-sm font-mono text-amber-400 block">
-                  {formatMoney(data?.meta_media_diaria_necessaria)} / dia
-                </strong>
-              </div>
+              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1"><span className="text-koma-subtle text-[8px] font-bold uppercase tracking-wider block">Valor Restante</span><strong className="text-sm font-mono text-koma-foreground block">{formatMoney(data?.meta_restante)}</strong></div>
+              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1"><span className="text-koma-subtle text-[8px] font-bold uppercase tracking-wider block">Projeção no Ritmo Atual</span><strong className="text-sm font-mono text-emerald-400 block">{formatMoney(data?.meta_projecao)}</strong></div>
+              <div className="bg-koma-raised/60 border border-koma-border/60 p-3 rounded-2xl space-y-1"><span className="text-koma-subtle text-[8px] font-bold uppercase tracking-wider block">Média Diária Necessária</span><strong className="text-sm font-mono text-amber-400 block">{formatMoney(data?.meta_media_diaria_necessaria)} / dia</strong></div>
             </div>
           </>
         )}
       </div>
 
-      {/* Visão Gráfica: Evolução Diária & Horários de Pico */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
           <div className="flex justify-between items-center border-b border-koma-border pb-3">
-            <div className="flex items-center gap-2">
-              <TrendingUp size={16} className="text-emerald-700 dark:text-emerald-400" />
-                <span className="font-serif font-bold text-sm text-koma-foreground">Recebimentos líquidos por dia</span>
-            </div>
+            <div className="flex items-center gap-2"><TrendingUp size={16} className="text-emerald-700 dark:text-emerald-400" /><span className="font-serif font-bold text-sm text-koma-foreground">Recebimentos líquidos por dia</span></div>
             <span className="text-[10px] text-koma-subtle">Receita líquida por dia</span>
           </div>
-
           <div className="h-64 w-full pt-2">
             {vendasPorDiaChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={vendasPorDiaChartData} margin={{ top: 10, right: 10, left: 12, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
+                  <defs><linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4} /><stop offset="95%" stopColor="#10b981" stopOpacity={0.0} /></linearGradient></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--koma-border-default)" vertical={false} opacity={0.6} />
                   <XAxis dataKey="data" stroke="var(--koma-text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="var(--koma-text-muted)" fontSize={11} width={58} tickLine={false} axisLine={false} tickFormatter={(v) => Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} />
@@ -469,18 +416,12 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   <Area type="monotone" dataKey="faturamento" name="Recebido (R$)" stroke="#059669" strokeWidth={2.5} fillOpacity={1} fill="url(#emeraldGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Sem dados no período</div>
-            )}
+            ) : <div className="h-full flex items-center justify-center text-xs text-koma-muted">Sem dados no período</div>}
           </div>
         </div>
 
         <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-4 shadow-xs">
-          <div className="flex items-center gap-2 border-b border-koma-border pb-3">
-            <Clock size={16} className="text-emerald-700 dark:text-emerald-400" />
-            <span className="font-serif font-bold text-sm text-koma-foreground">Movimento por horário</span>
-          </div>
-
+          <div className="flex items-center gap-2 border-b border-koma-border pb-3"><Clock size={16} className="text-emerald-700 dark:text-emerald-400" /><span className="font-serif font-bold text-sm text-koma-foreground">Movimento por horário</span></div>
           <div className="h-64 w-full pt-2">
             {horariosPicoChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -492,105 +433,46 @@ export const RelatoriosVisaoGeralTab: React.FC<RelatoriosVisaoGeralTabProps> = (
                   <Bar dataKey="pedidos" name="Pedidos atendidos" fill="#059669" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-xs text-koma-muted">Nenhum pedido registrado nos horários</div>
-            )}
+            ) : <div className="h-full flex items-center justify-center text-xs text-koma-muted">Nenhum pedido registrado nos horários</div>}
           </div>
         </div>
       </div>
 
       <details className="group overflow-hidden rounded-3xl border border-koma-border bg-koma-panel shadow-xs">
-        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-bold text-koma-foreground transition-colors hover:bg-koma-raised/60">
-          <span>Ver detalhamento em tabelas</span>
-          <span className="text-[10px] font-medium text-koma-muted group-open:hidden">Abrir</span>
-          <span className="hidden text-[10px] font-medium text-koma-muted group-open:inline">Recolher</span>
-        </summary>
-      <div className="grid grid-cols-1 gap-4 border-t border-koma-border p-3 sm:p-4 lg:grid-cols-2">
-        <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 sm:space-y-4 shadow-xs">
-          <div className="flex justify-between items-center border-b border-koma-border pb-2">
-            <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento dos Pedidos por Dia</span>
+        <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-bold text-koma-foreground transition-colors hover:bg-koma-raised/60"><span>Ver detalhamento em tabelas</span><span className="text-[10px] font-medium text-koma-muted group-open:hidden">Abrir</span><span className="hidden text-[10px] font-medium text-koma-muted group-open:inline">Recolher</span></summary>
+        <div className="grid grid-cols-1 gap-4 border-t border-koma-border p-3 sm:p-4 lg:grid-cols-2">
+          <div className="bg-koma-panel border border-koma-border p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 sm:space-y-4 shadow-xs">
+            <div className="flex justify-between items-center border-b border-koma-border pb-2"><span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento dos Pedidos por Dia</span></div>
+            <div className="overflow-x-auto border border-koma-border rounded-xl sm:rounded-2xl">
+              <table className="w-full text-left text-[10px]">
+                <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0"><tr><th className="p-2.5 sm:p-3">Data</th><th className="p-2.5 sm:p-3 font-mono text-center">Qtd Pedidos</th><th className="p-2.5 sm:p-3 font-mono text-right">Recebido</th></tr></thead>
+                <tbody className="divide-y divide-koma-border">
+                  {(data?.vendas_por_dia || []).map((v: any) => {
+                    const parts = (v.data || '').split('-');
+                    const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : v.data;
+                    return <tr key={v.data} className="hover:bg-koma-raised/50 transition-colors"><td className="p-2.5 sm:p-3 font-mono font-semibold text-koma-foreground">{formattedDate}</td><td className="p-2.5 sm:p-3 font-mono text-center font-bold text-koma-foreground">{v.quantidade_pedidos}</td><td className="p-2.5 sm:p-3 font-mono text-right font-extrabold text-emerald-700 dark:text-emerald-400">{formatMoney(v.total)}</td></tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="overflow-x-auto border border-koma-border rounded-xl sm:rounded-2xl">
-            <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
-                <tr>
-                  <th className="p-2.5 sm:p-3">Data</th>
-                  <th className="p-2.5 sm:p-3 font-mono text-center">Qtd Pedidos</th>
-                  <th className="p-2.5 sm:p-3 font-mono text-right">Recebido</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-koma-border">
-                {(data?.vendas_por_dia || []).map((v: any) => {
-                  const parts = (v.data || '').split('-');
-                  const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : v.data;
-                  return (
-                    <tr key={v.data} className="hover:bg-koma-raised/50 transition-colors">
-                      <td className="p-2.5 sm:p-3 font-mono font-semibold text-koma-foreground">{formattedDate}</td>
-                      <td className="p-2.5 sm:p-3 font-mono text-center font-bold text-koma-foreground">{v.quantidade_pedidos}</td>
-                      <td className="p-2.5 sm:p-3 font-mono text-right font-extrabold text-emerald-700 dark:text-emerald-400">
-                        {formatMoney(v.total)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
+            <div className="flex items-center gap-2 border-b border-koma-border pb-2"><Clock size={16} className="text-emerald-700 dark:text-emerald-400" /><span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento por Faixa Horária</span></div>
+            <div className="overflow-x-auto border border-koma-border rounded-2xl">
+              <table className="w-full text-left text-[10px]">
+                <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0"><tr><th className="p-3">Horário</th><th className="p-3 font-mono text-center">Total Pedidos</th><th className="p-3 font-mono text-right">Recebido</th></tr></thead>
+                <tbody className="divide-y divide-koma-border">
+                  {(data?.horarios_pico || []).filter((h: any) => h.total_pedidos > 0).map((h: any) => <tr key={h.hora} className="hover:bg-koma-raised/50 transition-colors"><td className="p-3 font-mono font-bold text-koma-foreground">{h.hora}</td><td className="p-3 font-mono text-center text-koma-foreground font-bold">{h.total_pedidos}</td><td className="p-3 font-mono text-right font-bold text-emerald-400">{formatMoney(h.faturamento)}</td></tr>)}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-
-        <div className="bg-koma-panel border border-koma-border p-5 rounded-3xl space-y-4">
-          <div className="flex items-center gap-2 border-b border-koma-border pb-2">
-            <Clock size={16} className="text-emerald-700 dark:text-emerald-400" />
-            <span className="font-serif font-bold text-sm text-koma-foreground">Detalhamento por Faixa Horária</span>
-          </div>
-
-          <div className="overflow-x-auto border border-koma-border rounded-2xl">
-            <table className="w-full text-left text-[10px]">
-              <thead className="bg-koma-raised border-b border-koma-border text-koma-subtle uppercase tracking-wider font-bold sticky top-0">
-                <tr>
-                  <th className="p-3">Horário</th>
-                  <th className="p-3 font-mono text-center">Total Pedidos</th>
-                  <th className="p-3 font-mono text-right">Recebido</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-koma-border">
-                {(data?.horarios_pico || [])
-                  .filter((h: any) => h.total_pedidos > 0)
-                  .map((h: any) => (
-                    <tr key={h.hora} className="hover:bg-koma-raised/50 transition-colors">
-                      <td className="p-3 font-mono font-bold text-koma-foreground">{h.hora}</td>
-                      <td className="p-3 font-mono text-center text-koma-foreground font-bold">{h.total_pedidos}</td>
-                      <td className="p-3 font-mono text-right font-bold text-emerald-400">
-                        {formatMoney(h.faturamento)}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
       </details>
 
-      {showCalendarModal && (
-        <PeriodoCalendarioModal
-          onClose={() => setShowCalendarModal(false)}
-          dataInicio={dataInicio}
-          dataFim={dataFim}
-          onApply={handleApplyPeriod}
-        />
-      )}
-
-      {showVendasDrawer && (
-        <VendasDetalhesDrawer
-          onClose={() => setShowVendasDrawer(false)}
-          vendas={vendasDetalhes}
-          isLoading={isLoadingVendas}
-          dataInicio={dataInicio}
-          dataFim={dataFim}
-        />
-      )}
+      {showCalendarModal && <PeriodoCalendarioModal onClose={() => setShowCalendarModal(false)} dataInicio={dataInicio} dataFim={dataFim} onApply={handleApplyPeriod} />}
+      {showVendasDrawer && <VendasDetalhesDrawer onClose={() => setShowVendasDrawer(false)} vendas={vendasDetalhes} isLoading={isLoadingVendas} dataInicio={dataInicio} dataFim={dataFim} />}
     </div>
   );
 };

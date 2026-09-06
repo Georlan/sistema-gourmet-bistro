@@ -13,6 +13,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react';
+import { KomaSnapshotLoading } from '../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../shared/OperationalBanner';
 
 interface CargoPermissoesItem {
@@ -36,7 +37,6 @@ interface EquipeCargosTabProps {
 import { canonicalRoleSlug, ROLE_META, ROLE_ORDER } from './teamRoles';
 
 type PermissionKey = keyof CargoPermissoesItem['permissoes'];
-
 
 const PERMISSIONS: { key: PermissionKey; label: string; icon: React.ElementType }[] = [
   { key: 'pedidos', label: 'Pedidos', icon: ShoppingCart },
@@ -92,7 +92,7 @@ function canonicalizeRoles(items: CargoPermissoesItem[]): CargoPermissoesItem[] 
 
 export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, authHeaders }) => {
   const [cargos, setCargos] = useState<CargoPermissoesItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const authorization = authHeaders.Authorization;
 
@@ -121,6 +121,16 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
 
   const totalPeople = useMemo(() => cargos.reduce((total, cargo) => total + cargo.total_funcionarios, 0), [cargos]);
   const rolesInUse = useMemo(() => cargos.filter((cargo) => cargo.total_funcionarios > 0).length, [cargos]);
+
+  if (isLoading && cargos.length === 0) {
+    return (
+      <KomaSnapshotLoading
+        testId="team-roles-snapshot-loading"
+        title="Sincronizando funções e acessos"
+        description="Carregando as permissões reais antes de mostrar funções, vínculos e contagens."
+      />
+    );
+  }
 
   return (
     <div className="space-y-4 text-left animate-fade-in">
@@ -155,12 +165,6 @@ export const EquipeCargosTab: React.FC<EquipeCargosTabProps> = ({ apiBaseUrl, au
           <AlertTriangle size={22} className="text-rose-700 dark:text-rose-300" />
           <div><p className="text-sm font-bold text-koma-foreground">Não foi possível carregar os acessos</p><p className="mt-1 text-[10px] text-koma-muted">Confira a conexão e tente novamente.</p></div>
           <button type="button" onClick={() => void fetchCargos(true)} className="koma-btn-secondary px-4 py-2 text-[10px] font-bold">Tentar novamente</button>
-        </section>
-      )}
-
-      {isLoading && cargos.length === 0 && (
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="Carregando funções">
-          {[0, 1, 2].map((item) => <div key={item} className="h-44 animate-pulse rounded-3xl border border-koma-border bg-koma-panel" />)}
         </section>
       )}
 

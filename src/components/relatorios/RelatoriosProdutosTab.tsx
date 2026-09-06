@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { BarChart2, Calendar as CalendarIcon, Download, Info, Search } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { PeriodoCalendarioModal } from './PeriodoCalendarioModal';
+import { KomaSnapshotLoading } from '../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { fetchReportJson, useReportRealtimeRefresh } from './useReportRealtimeRefresh';
 import { ReportActionBar } from './ReportActionBar';
@@ -57,7 +58,9 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   const [buscaAplicada, setBuscaAplicada] = useState('');
   const [categoriaId, setCategoriaId] = useState('');
   const [chartMetric, setChartMetric] = useState<'quantidade' | 'valor'>('quantidade');
-  const [isLoading, setIsLoading] = useState(false);
+  const snapshotKey = `${dataInicio}:${dataFim}:${ordenacao}:${buscaAplicada}:${categoriaId}`;
+  const [loadedSnapshotKey, setLoadedSnapshotKey] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [produtos, setProdutos] = useState<ProdutoRelatorioItem[]>([]);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -65,6 +68,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
 
   const fetchProdutosReport = useCallback(async () => {
     const requestId = ++requestRef.current;
+    const requestSnapshotKey = `${dataInicio}:${dataFim}:${ordenacao}:${buscaAplicada}:${categoriaId}`;
     setIsLoading(true);
     setHasError(false);
     try {
@@ -73,7 +77,8 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
       if (categoriaId) url += `&categoria_id=${categoriaId}`;
 
       const json = await fetchReportJson<any[]>(url, authHeaders);
-      const normalized: ProdutoRelatorioItem[] = (Array.isArray(json) ? json : []).map((row: any) => ({
+      if (!Array.isArray(json)) throw new Error('PRODUCT_REPORT_INVALID_RESPONSE');
+      const normalized: ProdutoRelatorioItem[] = json.map((row: any) => ({
         ranking: Number(row.ranking || 0),
         produto_id: row.produto_id,
         produto_nome: row.produto_nome,
@@ -88,7 +93,10 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
         margem_contribuicao_estimada: row.margem_contribuicao_estimada == null ? null : Number(row.margem_contribuicao_estimada),
         margem_percentual_estimada: row.margem_percentual_estimada == null ? null : Number(row.margem_percentual_estimada),
       }));
-      if (requestRef.current === requestId) setProdutos(normalized);
+      if (requestRef.current === requestId) {
+        setProdutos(normalized);
+        setLoadedSnapshotKey(requestSnapshotKey);
+      }
     } catch (error) {
       console.error('Erro ao carregar relatório de produtos:', error);
       if (requestRef.current === requestId) setHasError(true);
@@ -146,6 +154,19 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
   const produtosComCusto = useMemo(() => produtos.filter((item) => item.quantidade_consumida > 0 && item.ficha_tecnica_configurada).length, [produtos]);
   const chartTitle = chartMetric === 'quantidade' ? 'Produtos mais consumidos' : 'Maior valor de consumo';
 
+  if (loadedSnapshotKey !== snapshotKey) {
+    return (
+      <KomaSnapshotLoading
+        testId="products-report-snapshot-loading"
+        title="Sincronizando produtos"
+        description="Carregando o consumo real para este período e filtros antes de mostrar totais ou uma lista vazia."
+        error={!isLoading && hasError ? 'Não foi possível carregar o consumo de produtos.' : null}
+        errorDescription="Ainda não foi possível confirmar este relatório. O KÔMA não vai tratar uma resposta desconhecida como zero consumo."
+        onRetry={() => void fetchProdutosReport()}
+      />
+    );
+  }
+
   return (
     <div className={"space-y-5 text-left animate-fade-in"}>
       <OperationalBanner
@@ -178,7 +199,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
 
       {hasError && !isLoading && (
         <div className="mx-auto my-6 max-w-md space-y-3 rounded-3xl border border-rose-900/50 bg-koma-panel p-8 text-center">
-          <h3 className="text-sm font-bold text-koma-foreground">Não foi possível carregar o consumo de produtos</h3>
+          <h3 className="text-sm font-bold text-koma-foreground">Não foi possível atualizar o consumo de produtos</h3>
           <button onClick={fetchProdutosReport} className="cursor-pointer rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-500">Tentar novamente</button>
         </div>
       )}
@@ -239,7 +260,7 @@ export const RelatoriosProdutosTab: React.FC<RelatoriosProdutosTabProps> = ({
 
       <div className="overflow-hidden rounded-3xl border border-koma-border bg-koma-panel shadow-xs">
         {isLoading ? (
-          <div className="p-12 text-center text-xs text-koma-muted animate-pulse">Carregando consumo de produtos...</div>
+          <div className="p-12 text-center text-xs text-koma-muted animate-pulse">Atualizando consumo de produtos...</div>
         ) : produtos.length === 0 ? (
           <div className="p-12 text-center text-xs font-medium text-koma-muted">Nenhum produto encontrado para os filtros selecionados.</div>
         ) : (
