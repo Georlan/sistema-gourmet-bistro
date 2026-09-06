@@ -142,3 +142,18 @@ test("falha de suspensão não possui mutação local e o painel não simula fee
   assert.match(suspensionCatch, /return false/);
   assert.doesNotMatch(source, /failedWebhooks|webhooksAvailable|handleForceConfirmWebhook/);
 });
+
+test("painel expõe inbox de contratações real com badge e sem simular ativações", () => {
+  const panel = readFileSync(new URL("../src/super-admin/SuperAdminPanel.tsx", import.meta.url), "utf8");
+  const inbox = readFileSync(new URL("../src/super-admin/SuperAdminContractsTab.tsx", import.meta.url), "utf8");
+
+  assert.match(panel, /label: "Contratações"/);
+  assert.match(panel, /\/api\/super-admin\/contracts\?status=all&limit=200/);
+  assert.match(panel, /pendingContractsCount/);
+  assert.match(panel, /30_000/);
+  assert.match(inbox, /SIGNED_PENDING_ACTIVATION/);
+  assert.match(inbox, /Aguardando ativação/);
+  assert.match(inbox, /Evidência jurídica/);
+  assert.match(inbox, /Nenhum restaurante foi criado ou vinculado automaticamente/);
+  assert.doesNotMatch(inbox, /Ativar restaurante/);
+});
