@@ -7,6 +7,7 @@ import { EstoqueHistoricoTab } from '../../estoque/EstoqueHistoricoTab';
 import { EstoqueIngredientesTab } from '../../estoque/EstoqueIngredientesTab';
 import { FichaTecnicaModal } from '../../estoque/FichaTecnicaModal';
 import { MovimentacaoEstoqueModal } from '../../estoque/MovimentacaoEstoqueModal';
+import { KomaSnapshotLoading } from '../../shared/KomaSnapshotLoading';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CashierNotice } from '../cashierContracts';
 import { formatCompactCurrency } from '../cashierPresentation';
@@ -52,6 +53,9 @@ export default function CashierInventory({
     setFichasTecnicas,
     estoqueInsights,
     refreshInventory,
+    isCurrentViewReady,
+    currentViewError,
+    refreshCurrentView,
   } = useCashierInventoryData({ apiBaseUrl, authHeaders, activeTab, activeSubTab });
 
   const {
@@ -131,6 +135,19 @@ export default function CashierInventory({
     handleSaveDistribuidor,
     handleDeleteDistribuidor,
   } = useCashierSupplierEditor({ apiBaseUrl, authHeaders, refreshInventory });
+
+  if (activeTab === 'estoque' && !isCurrentViewReady) {
+    return (
+      <KomaSnapshotLoading
+        testId="inventory-snapshot-loading"
+        title="Sincronizando estoque"
+        description="Carregando os dados reais desta área antes de mostrar saldos, históricos ou primeiros passos."
+        error={currentViewError}
+        errorDescription="Ainda não foi possível confirmar o estado do estoque. Nenhum saldo vazio ou primeiro cadastro será presumido."
+        onRetry={() => void refreshCurrentView()}
+      />
+    );
+  }
 
   return (
     <>
