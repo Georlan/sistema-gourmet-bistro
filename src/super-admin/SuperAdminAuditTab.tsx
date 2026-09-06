@@ -10,6 +10,7 @@ import {
   FileText,
   AlertCircle,
 } from "lucide-react";
+import { KomaSnapshotLoading } from "../components/shared/KomaSnapshotLoading";
 import type { SuperAdminAuditLogEntry } from "./superAdminTypes";
 import { superAdminFetch, superAdminErrorMessage } from "./superAdminApi";
 
@@ -28,7 +29,8 @@ export interface SuperAdminAuditTabProps {
 
 export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
   const [auditLogs, setAuditLogs] = useState<SuperAdminAuditLogEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionFilter, setActionFilter] = useState<string>("ALL");
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
@@ -42,24 +44,23 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
         const data = await res.json();
         if (Array.isArray(data)) {
           setAuditLogs(data);
+          setHasSnapshot(true);
         } else {
-          setAuditLogs([]);
+          throw new Error("Formato inválido da trilha de auditoria.");
         }
       } else {
         const errPayload = await res.json().catch(() => null);
         setError(errPayload?.detail || "Falha ao carregar trilha de auditoria.");
-        setAuditLogs([]);
       }
     } catch (err) {
       setError(superAdminErrorMessage(err));
-      setAuditLogs([]);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAuditLogs();
+    void fetchAuditLogs();
   }, []);
 
   const filteredLogs = auditLogs.filter(log => {
@@ -106,9 +107,21 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
     return Number.isNaN(d.getTime()) ? isoString : d.toLocaleString("pt-BR");
   };
 
+  if (!hasSnapshot) {
+    return (
+      <KomaSnapshotLoading
+        testId="superadmin-audit-snapshot-loading"
+        title="Sincronizando auditoria"
+        description="Carregando a trilha persistente antes de concluir que não existem registros."
+        error={!isLoading ? error : null}
+        errorDescription="Ainda não foi possível confirmar a trilha de auditoria. Nenhum histórico vazio será presumido."
+        onRetry={() => void fetchAuditLogs()}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -135,7 +148,7 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
 
             <button
               type="button"
-              onClick={fetchAuditLogs}
+              onClick={() => void fetchAuditLogs()}
               disabled={isLoading}
               className="p-2 bg-koma-page border border-zinc-800 hover:border-zinc-700 rounded-lg text-koma-secondary hover:text-koma-foreground transition-colors disabled:opacity-50 cursor-pointer"
               title="Atualizar trilha de auditoria"
@@ -153,13 +166,12 @@ export function SuperAdminAuditTab({ }: SuperAdminAuditTabProps) {
         )}
       </div>
 
-      {/* Logs Table / List */}
       <div className="bg-koma-card border border-[#1e293b] rounded-xl p-5 shadow-sm">
         {filteredLogs.length === 0 ? (
           <div className="py-12 text-center space-y-2">
             <ShieldCheck className="w-8 h-8 text-[#00b894] mx-auto opacity-80" />
             <p className="text-xs font-semibold text-koma-foreground">
-              {isLoading ? "Carregando auditoria..." : "Nenhum registro de auditoria encontrado"}
+              Nenhum registro de auditoria encontrado
             </p>
             <p className="text-[11px] text-koma-muted">
               Mutações administrativas realizadas no Super Admin são persistidas no banco e exibidas aqui.
