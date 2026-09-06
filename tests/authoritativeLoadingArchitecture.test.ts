@@ -60,14 +60,18 @@ test('reports bind rendered data to the exact selected query snapshot', () => {
   assert.match(team, /team-performance-snapshot-loading/);
 });
 
-test('super admin trial and audit summaries distinguish unavailable data from genuine zero', () => {
+test('super admin summaries and diagnostics distinguish unavailable data from genuine zero', () => {
   const trials = read('src/super-admin/SuperAdminTrialsTab.tsx');
   const audit = read('src/super-admin/SuperAdminAuditTab.tsx');
+  const operations = read('src/super-admin/SuperAdminOperationsTab.tsx');
 
-  for (const source of [trials, audit]) {
+  for (const source of [trials, audit, operations]) {
     assert.match(source, /hasSnapshot/);
     assert.match(source, /KomaSnapshotLoading/);
   }
   assert.ok(trials.indexOf('if (!hasSnapshot)') < trials.indexOf('summary.active'));
   assert.ok(audit.indexOf('if (!hasSnapshot)') < audit.indexOf('filteredLogs.length === 0'));
+  assert.match(operations, /superadmin-operations-snapshot-loading/);
+  assert.match(operations, /dnsSourceAvailable === false/);
+  assert.match(operations, /githubSourceAvailable === false/);
 });
