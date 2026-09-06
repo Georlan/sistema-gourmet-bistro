@@ -136,3 +136,66 @@ def notify_customer_activation(
         message=message,
         context="entrega de primeiro acesso KÔMA",
     )
+
+
+def schedule_contract_accepted_notifications(
+    background_tasks,
+    *,
+    restaurant_name: str,
+    representative_name: str,
+    phone: str,
+    plan: str,
+    billing_cycle: str,
+    protocol: str,
+) -> None:
+    """Schedules both post-acceptance notifications without risking the acceptance."""
+    try:
+        background_tasks.add_task(
+            notify_owner_new_contract,
+            restaurant_name=restaurant_name,
+            representative_name=representative_name,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            protocol=protocol,
+        )
+        background_tasks.add_task(
+            notify_customer_contract_accepted,
+            phone=phone,
+            representative_name=representative_name,
+            restaurant_name=restaurant_name,
+            plan=plan,
+            protocol=protocol,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Contract acceptance notification scheduling failed reason=%s",
+            type(exc).__name__,
+        )
+
+
+def schedule_customer_activation_notification(
+    background_tasks,
+    *,
+    phone: str,
+    representative_name: str,
+    restaurant_name: str,
+    protocol: str,
+    invitation_token: str,
+    invitation_ttl_hours: int,
+) -> None:
+    """Schedules first-access delivery after provisioning is already committed."""
+    try:
+        background_tasks.add_task(
+            notify_customer_activation,
+            phone=phone,
+            representative_name=representative_name,
+            restaurant_name=restaurant_name,
+            protocol=protocol,
+            invitation_token=invitation_token,
+            invitation_ttl_hours=invitation_ttl_hours,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Contract activation notification scheduling failed reason=%s",
+            type(exc).__name__,
+        )
