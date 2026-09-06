@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter
 
 from ..legal_config import (
@@ -23,10 +25,13 @@ def get_contract_readiness() -> dict[str, object]:
     else:
         provider_identity_configured = True
 
+    deployment_git_sha = (os.getenv("RAILWAY_GIT_COMMIT_SHA") or "").strip() or None
+
     return {
         "ready": provider_identity_configured,
         "providerIdentityConfigured": provider_identity_configured,
         "legalVersion": LEGAL_VERSION,
         "legalSourceCommit": LEGAL_SOURCE_COMMIT,
         "legalSourceBlobSha": LEGAL_SOURCE_BLOB_SHA,
+        "deploymentGitSha": deployment_git_sha,
     }
