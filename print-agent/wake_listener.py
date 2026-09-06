@@ -159,7 +159,7 @@ class PrintWakeupListener:
                     response.raise_for_status()
 
                     for event_name, data in iter_sse_events(
-                        response.iter_lines(decode_unicode=True)
+                        response.iter_lines(chunk_size=1, decode_unicode=True)
                     ):
                         if self._stop.is_set():
                             break
