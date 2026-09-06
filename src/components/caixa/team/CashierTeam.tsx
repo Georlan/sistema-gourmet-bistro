@@ -3,6 +3,7 @@ import { API } from '../../../config/caixaService';
 import { SystemUser } from '../../../types';
 import { EquipeCargosTab } from '../../equipe/EquipeCargosTab';
 import { EquipePessoasTab } from '../../equipe/EquipePessoasTab';
+import { KomaSnapshotLoading } from '../../shared/KomaSnapshotLoading';
 import type { CashierNotice } from '../cashierContracts';
 
 interface Props {
@@ -23,19 +24,25 @@ export default function CashierTeam({
   showToast,
 }: Props) {
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
-
+  const [hasSystemUsersSnapshot, setHasSystemUsersSnapshot] = useState(false);
+  const [systemUsersError, setSystemUsersError] = useState<string | null>(null);
   const systemUsersRequestRef = useRef<Promise<void> | null>(null);
+  const scopeKey = `${apiBaseUrl}::${authHeaders.Authorization || authHeaders.authorization || 'anonymous'}`;
 
   const fetchSystemUsers = (): Promise<void> => {
     if (systemUsersRequestRef.current) return systemUsersRequestRef.current;
+    setSystemUsersError(null);
     const request = (async () => {
       try {
         const res = await fetch(`${apiBaseUrl}/caixa/funcionarios`, { headers: authHeaders });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (Array.isArray(data)) setSystemUsers(data);
+        if (!Array.isArray(data)) throw new Error('TEAM_INVALID_RESPONSE');
+        setSystemUsers(data);
+        setHasSystemUsersSnapshot(true);
       } catch (error) {
         console.error('Error fetching system users:', error);
+        setSystemUsersError('Não foi possível carregar a equipe agora.');
       }
     })();
     systemUsersRequestRef.current = request;
@@ -46,6 +53,12 @@ export default function CashierTeam({
   };
 
   useEffect(() => {
+    setSystemUsers([]);
+    setHasSystemUsersSnapshot(false);
+    setSystemUsersError(null);
+  }, [scopeKey]);
+
+  useEffect(() => {
     if (activeTab !== 'permissoes_cargos') return;
     const refreshTeam = () => void fetchSystemUsers();
     window.addEventListener('koma_team_updated', refreshTeam);
@@ -54,9 +67,9 @@ export default function CashierTeam({
 
   useEffect(() => {
     if (activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) {
-      fetchSystemUsers();
+      void fetchSystemUsers();
     }
-  }, [activeTab, activeSubTab]);
+  }, [activeTab, activeSubTab, scopeKey]);
 
   const handleAddUser = async (payload: { nome: string; telefone: string; cargo: string }) => {
     await API.cadastrarFuncionario(payload);
@@ -106,9 +119,21 @@ export default function CashierTeam({
     }
   };
 
+  const peopleViewActive = activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab);
+
   return (
     <>
-      {activeTab === 'permissoes_cargos' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab) && (
+      {peopleViewActive && !hasSystemUsersSnapshot && (
+        <KomaSnapshotLoading
+          testId="team-snapshot-loading"
+          title="Sincronizando equipe"
+          description="Carregando as pessoas e convites reais antes de mostrar contagens ou primeiros passos."
+          error={systemUsersError}
+          errorDescription="Ainda não foi possível confirmar a equipe. O KÔMA não vai assumir que ela está vazia."
+          onRetry={() => void fetchSystemUsers()}
+        />
+      )}
+      {peopleViewActive && hasSystemUsersSnapshot && (
         <EquipePessoasTab
           users={systemUsers}
           onCreate={handleAddUser}
