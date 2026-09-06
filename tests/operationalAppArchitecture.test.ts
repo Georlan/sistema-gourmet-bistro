@@ -21,7 +21,7 @@ test('App wires persistent operational owners without reacquiring their action b
     if (ts.isIdentifier(declaration.name)) assert.ok(!moved.has(declaration.name.text), declaration.name.text);
   }
   assert.ok(names.filter(name => name === 'useState').length <= 29);
-  assert.ok(names.filter(name => name === 'useEffect').length <= 15);
+  assert.ok(names.filter(name => name === 'useEffect').length <= 18);
   assert.ok(names.filter(name => name === 'fetch').length <= 15);
   assert.ok(names.filter(name => name === 'operationalFetch').length <= 5);
 });
@@ -61,6 +61,51 @@ test('catalog listeners and polling keep their cleanup next to their owner', () 
     assert.ok(connectivity.includes(`addEventListener('${event}', ${callback})`));
     assert.ok(connectivity.includes(`removeEventListener('${event}', ${callback})`));
   }
+});
+
+test('operational bootstrap treats partial resources as unknown and first websocket open does not reacquire them', () => {
+  const source = app.text;
+  assert.match(source, /const operationalScopeKey = useMemo/);
+  assert.match(source, /isTablesLoaded/);
+  assert.match(source, /isOrdersLoaded/);
+  assert.match(source, /const isOperationalSnapshotReady = Boolean\(operationalScopeKey\)/);
+  assert.match(source, /if \(!isOperationalSnapshotReady\)[\s\S]*<OperationalSnapshotLoading/);
+
+  const effects = calls(app).filter(call => call.expression.getText() === 'useEffect').map(call => call.getText());
+  const bootstrap = effects.find(effect =>
+    effect.includes('if (!operationalScopeKey) return;')
+    && effect.includes('fetchOrdersFromAPI();')
+    && effect.includes('fetchTables();')
+    && !effect.includes('setInterval'),
+  );
+  assert.ok(bootstrap, 'bootstrap effect must own the first operational snapshot');
+  assert.doesNotMatch(bootstrap!, /isWsConnected/);
+
+  const websocket = effects.find(effect => effect.includes('WebSocket connection established'))!;
+  assert.match(websocket, /const isReconnect = hasOpenedOnce;/);
+  assert.match(websocket, /if \(isReconnect\)\s*\{[\s\S]*fetchTables\(\);[\s\S]*fetchOrdersFromAPI\(\);/);
+
+  const fallback = effects.find(effect =>
+    effect.includes('refreshOperationalSnapshot') && effect.includes('setInterval'),
+  )!;
+  assert.match(fallback, /isWsConnected && isOperationalSnapshotReady/);
+  assert.match(fallback, /clearInterval\(interval\)/);
+});
+
+test('only a full scoped order snapshot can establish order readiness', () => {
+  const orders = read('src/components/app/data/useOperationalOrders.ts').text;
+  assert.match(orders, /const isOrdersLoaded = Boolean\(scopeKey\) && loadedScopeKey === scopeKey/);
+
+  const fullStart = orders.indexOf('const fetchOrdersFromAPI');
+  const targetedStart = orders.indexOf('const fetchOrderByIdFromAPI');
+  const optimisticStart = orders.indexOf('const handleOptimisticUpdateItemStatus');
+  assert.ok(fullStart >= 0 && targetedStart > fullStart && optimisticStart > targetedStart);
+  assert.match(orders.slice(fullStart, targetedStart), /setLoadedScopeKey\(requestScopeKey\)/);
+  assert.doesNotMatch(orders.slice(targetedStart, optimisticStart), /setLoadedScopeKey/);
+
+  const tables = read('src/components/app/data/useOperationalTables.ts').text;
+  assert.match(tables, /const isTablesLoaded = Boolean\(scopeKey\) && loadedScopeKey === scopeKey/);
+  assert.match(tables, /requestScopeKey !== scopeKeyRef\.current/);
 });
 
 test('remote order and item IDs stay in private Map caches, never object properties', () => {
