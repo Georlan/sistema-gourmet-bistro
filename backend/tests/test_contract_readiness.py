@@ -24,6 +24,7 @@ def _client() -> TestClient:
 def test_contract_readiness_fails_closed_without_provider_identity(monkeypatch):
     for name in LEGAL_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("RAILWAY_GIT_COMMIT_SHA", raising=False)
 
     with _client() as client:
         response = client.get("/api/contracts/readiness")
@@ -35,16 +36,19 @@ def test_contract_readiness_fails_closed_without_provider_identity(monkeypatch):
         "legalVersion": LEGAL_VERSION,
         "legalSourceCommit": LEGAL_SOURCE_COMMIT,
         "legalSourceBlobSha": LEGAL_SOURCE_BLOB_SHA,
+        "deploymentGitSha": None,
     }
 
 
 def test_contract_readiness_exposes_no_sensitive_provider_data(monkeypatch):
     test_tax_id = "52998224725"
     test_address = "Endereço jurídico de teste, 100"
+    deployed_sha = "0123456789abcdef0123456789abcdef01234567"
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_NAME", "Prestador de Teste")
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_TAX_ID", test_tax_id)
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_ADDRESS", test_address)
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_LOCATION", "Limoeiro do Norte/CE")
+    monkeypatch.setenv("RAILWAY_GIT_COMMIT_SHA", deployed_sha)
 
     with _client() as client:
         response = client.get("/api/contracts/readiness")
@@ -54,6 +58,7 @@ def test_contract_readiness_exposes_no_sensitive_provider_data(monkeypatch):
     assert payload["ready"] is True
     assert payload["providerIdentityConfigured"] is True
     assert payload["legalVersion"] == LEGAL_VERSION
+    assert payload["deploymentGitSha"] == deployed_sha
     assert test_tax_id not in response.text
     assert test_address not in response.text
     assert "Prestador de Teste" not in response.text
