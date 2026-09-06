@@ -25,7 +25,10 @@ test('App wires persistent operational owners without reacquiring their action b
   // qualquer novo estado além dele volta a quebrar este budget.
   assert.match(app.text, /const \[pendingPaymentsLoadedScopeKey, setPendingPaymentsLoadedScopeKey\] = useState\(''\);/);
   assert.ok(names.filter(name => name === 'useState').length <= 30);
-  assert.ok(names.filter(name => name === 'useEffect').length <= 18);
+  // O lifecycle foi separado de propósito: invalidação de escopo, bootstrap e
+  // fallback de polling não podem voltar a ser um único efeito que reacquire dados
+  // quando o WebSocket muda. Os testes abaixo validam essas fronteiras nominalmente.
+  assert.ok(names.filter(name => name === 'useEffect').length <= 19);
   assert.ok(names.filter(name => name === 'fetch').length <= 15);
   assert.ok(names.filter(name => name === 'operationalFetch').length <= 5);
 });
