@@ -22,8 +22,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-smoke
-  cancel-in-progress: false
+  group: production-smoke-${{ github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
