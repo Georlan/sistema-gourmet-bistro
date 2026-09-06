@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarClock, RefreshCw, Search, Sparkles } from "lucide-react";
+import { KomaSnapshotLoading } from "../components/shared/KomaSnapshotLoading";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { Tenant } from "./superAdminTypes";
@@ -46,7 +47,8 @@ function statusClasses(status: TrialStatus) {
 
 export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: SuperAdminTrialsTabProps) {
   const [trials, setTrials] = useState<TrialRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasSnapshot, setHasSnapshot] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [localSearch, setLocalSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -63,8 +65,8 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
       const payload = await response.json();
       if (!Array.isArray(payload)) throw new Error("A API retornou um formato inválido para os períodos grátis.");
       setTrials(payload as TrialRecord[]);
+      setHasSnapshot(true);
     } catch (requestError) {
-      setTrials([]);
       setError(superAdminErrorMessage(requestError));
     } finally {
       setIsLoading(false);
@@ -95,6 +97,19 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
     await loadTrials();
     refreshTenants();
   };
+
+  if (!hasSnapshot) {
+    return (
+      <KomaSnapshotLoading
+        testId="superadmin-trials-snapshot-loading"
+        title="Sincronizando períodos grátis"
+        description="Carregando o estado real dos trials antes de mostrar totais e vencimentos."
+        error={!isLoading ? error : null}
+        errorDescription="Ainda não foi possível confirmar os períodos grátis. O KÔMA não vai presumir totais zerados."
+        onRetry={() => void loadTrials()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -127,8 +142,6 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
 
         {error ? (
           <div className="p-8 text-center text-xs text-rose-300"><p>{error}</p><button type="button" onClick={() => void loadTrials()} className="mt-3 rounded border border-rose-800 px-3 py-1.5 font-semibold">Tentar novamente</button></div>
-        ) : isLoading && trials.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 p-12 text-xs text-koma-muted"><RefreshCw className="h-4 w-4 animate-spin" /> Carregando períodos grátis...</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
