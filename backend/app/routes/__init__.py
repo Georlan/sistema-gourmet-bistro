@@ -22,12 +22,14 @@ _super_admin.router.include_router(_super_admin_incidents_router)
 _super_admin.router.include_router(_super_admin_contracts_router)
 
 # `websocket.router` é um router raiz sem prefixo já incluído explicitamente pelo
-# main. Usamos esse ponto de composição para registrar /api/contracts sem alterar
-# a ordem histórica dos routers do runtime.
+# main. Usamos esse ponto de composição para registrar rotas auxiliares sem
+# alterar a ordem histórica dos routers do runtime.
 from . import websocket as _root_router  # noqa: E402
 from .contracts import router as _contracts_router  # noqa: E402
+from .onboarding import router as _onboarding_router  # noqa: E402
 
 _root_router.router.include_router(_contracts_router)
+_root_router.router.include_router(_onboarding_router)
 
 # O Print Agent continua com um único owner HTTP no main. O sub-router adiciona
 # apenas o plano de transporte SSE; claim, fila e regras físicas permanecem no
