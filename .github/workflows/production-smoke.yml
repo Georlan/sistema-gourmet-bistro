@@ -1,0 +1,42 @@
+name: Production smoke (non-destructive)
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_url:
+        description: URL pública do frontend
+        required: false
+        default: https://sistema-gourmet-bistro.pages.dev
+        type: string
+      api_url:
+        description: URL pública do backend
+        required: false
+        default: https://sistema-gourmet-bistro-production.up.railway.app
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Health + frontend + checkout CORS
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      KOMA_FRONTEND_URL: ${{ inputs.frontend_url || vars.KOMA_PRODUCTION_FRONTEND_URL || 'https://sistema-gourmet-bistro.pages.dev' }}
+      KOMA_API_URL: ${{ inputs.api_url || vars.KOMA_PRODUCTION_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run non-destructive production smoke
+        run: node scripts/production-smoke.mjs
