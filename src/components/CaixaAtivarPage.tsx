@@ -4,20 +4,27 @@ import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
 import { saveOperatorSession } from '../utils/authSession';
 import { authFetch, authRequestErrorMessage } from '../utils/authRequest';
+import { FirstAccessOnboarding } from './onboarding/FirstAccessOnboarding';
 
 interface CaixaAtivarPageProps {
   token?: string | null;
 }
 
+type ActivatedSession = {
+  accessToken: string;
+  user: Record<string, unknown>;
+};
+
 export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   const tokenConvite = token || new URLSearchParams(window.location.search).get('token') || '';
-  
+
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmaSenha, setConfirmaSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
+  const [activatedSession, setActivatedSession] = useState<ActivatedSession | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +59,8 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
         body: JSON.stringify({
           token_convite: tokenConvite,
           email: email.trim().toLowerCase(),
-          senha: senha
-        })
+          senha,
+        }),
       });
 
       if (!res.ok) {
@@ -62,16 +69,24 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
       }
 
       const data = await res.json().catch(() => ({}));
+      const sessionUser = data.usuario || data.garcom || { role: 'operador' };
+      const accessToken = typeof data.access_token === 'string' ? data.access_token : '';
+      const userRole = String(sessionUser?.role || sessionUser?.cargo || 'garcom').toLowerCase();
+
       setSucesso(true);
 
-      // Armazenar a sessão do operador com validade de 24 horas
-      if (data.access_token) {
-        saveOperatorSession(data.access_token, data.usuario || { role: 'operador' });
+      if (accessToken) {
+        saveOperatorSession(accessToken, sessionUser);
       }
 
-      const userRole = (data.usuario?.role || data.usuario?.cargo || data.garcom?.role || 'garcom').toLowerCase();
+      // O primeiro administrador não cai mais em um Caixa vazio sem contexto.
+      // A ativação já terminou e a sessão foi persistida; daqui em diante o
+      // checklist é apenas orientação e pode ser pulado a qualquer momento.
+      if (accessToken && (userRole === 'admin' || userRole === 'gerente')) {
+        setActivatedSession({ accessToken, user: sessionUser });
+        return;
+      }
 
-      // Redirecionamento reativo direto após 1.5s
       setTimeout(() => {
         if (userRole === 'garcom') {
           window.location.href = '/?view=garcom';
@@ -79,36 +94,41 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
           window.location.href = '/?view=caixa';
         }
       }, 1500);
-
-    } catch (err: any) {
+    } catch (err: unknown) {
       setErrorMsg(authRequestErrorMessage(err, 'Erro ao ativar conta.'));
     } finally {
       setLoading(false);
     }
   };
 
+  if (activatedSession) {
+    return (
+      <FirstAccessOnboarding
+        accessToken={activatedSession.accessToken}
+        user={activatedSession.user}
+      />
+    );
+  }
+
   return (
-    <div className={"min-h-screen bg-koma-page text-koma-foreground flex items-center justify-center p-4 font-sans"}>
-      <div className={"w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-8 shadow-2xl space-y-6"}>
-        
-        {/* Brand Header */}
+    <div className="min-h-screen bg-koma-page text-koma-foreground flex items-center justify-center p-4 font-sans">
+      <div className="w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-8 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl mb-1 text-emerald-400">
             <ShieldCheck size={32} />
           </div>
           <h1 className="text-2xl font-serif font-bold text-koma-foreground tracking-tight">Ative sua Conta</h1>
-          <p className="text-xs text-koma-subtle font-medium">Cadastre sua nova senha de acesso ao Kôma Bistrô</p>
+          <p className="text-xs text-koma-subtle font-medium">Cadastre sua nova senha de acesso ao KÔMA</p>
         </div>
 
         {sucesso ? (
           <div className="p-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center space-y-3 animate-scale-in">
             <CheckCircle size={40} className="mx-auto text-emerald-400" />
-            <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Conta Ativada com Sucesso!</h3>
-            <p className="text-xs text-koma-secondary">Você será redirecionado automaticamente para o seu painel de trabalho...</p>
+            <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Conta ativada com sucesso!</h3>
+            <p className="text-xs text-koma-secondary">Preparando seu painel de trabalho…</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            
             {errorMsg && (
               <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2 text-rose-400 text-xs font-semibold animate-scale-in">
                 <AlertCircle size={16} className="shrink-0" />
@@ -179,15 +199,13 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
                 'w-full', 'py-3', 'bg-[#10b981]', 'hover:bg-[#059669]', 'text-[#121214]',
                 'font-bold', 'text-xs', 'uppercase', 'tracking-wider', 'rounded-xl',
                 'transition-all', 'cursor-pointer', 'shadow-lg', 'shadow-emerald-950/20',
-                loading && 'opacity-50 cursor-not-allowed'
+                loading && 'opacity-50 cursor-not-allowed',
               )}
             >
               {loading ? 'Ativando...' : 'Salvar Senha e Entrar'}
             </button>
-
           </form>
         )}
-
       </div>
     </div>
   );
