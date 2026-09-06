@@ -28,3 +28,11 @@ from . import websocket as _root_router  # noqa: E402
 from .contracts import router as _contracts_router  # noqa: E402
 
 _root_router.router.include_router(_contracts_router)
+
+# O Print Agent continua com um único owner HTTP no main. O sub-router adiciona
+# apenas o plano de transporte SSE; claim, fila e regras físicas permanecem no
+# router canônico de print_agents e no Core Universal de Impressão.
+from . import print_agents as _print_agents  # noqa: E402
+from .print_agent_events import router as _print_agent_events_router  # noqa: E402
+
+_print_agents.router.include_router(_print_agent_events_router)
