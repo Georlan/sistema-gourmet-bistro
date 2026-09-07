@@ -28,6 +28,8 @@ export interface StoredOrder {
   fechado?: boolean;
   itens?: StoredOrderItem[];
   created_at?: string;
+  tracking_token?: string;
+  tracking_url?: string;
 }
 
 export function normalizeOrderStatus(value: string | undefined): string {
@@ -122,6 +124,8 @@ export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
           tipo: String(order.tipo || "Retirada"),
           total: Number(order.total || 0),
           status: String(order.status || "pendente"),
+          tracking_token: order.tracking_token ? String(order.tracking_token) : undefined,
+          tracking_url: order.tracking_url ? String(order.tracking_url) : undefined,
         });
       }
     });
@@ -149,6 +153,8 @@ export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
         tipo: String(rawLegacy.tipo || "Retirada"),
         total: Number(rawLegacy.total || 0),
         status: String(rawLegacy.status || "pendente"),
+        tracking_token: rawLegacy.tracking_token ? String(rawLegacy.tracking_token) : undefined,
+        tracking_url: rawLegacy.tracking_url ? String(rawLegacy.tracking_url) : undefined,
       });
     }
   }

@@ -100,7 +100,7 @@ def _order_total(comanda: Comanda) -> float:
     return round(max(0.0, itens_total + taxa - desconto_cupom - desconto_cashback), 2)
 
 
-def _existing_order_response(db: Session, comanda: Comanda) -> dict[str, Any]:
+def _existing_order_response(db: Session, comanda: Comanda, tracking_token: str | None = None) -> dict[str, Any]:
     intent = db.query(OnlinePaymentIntent).filter(
         OnlinePaymentIntent.restaurante_id == comanda.restaurante_id,
         OnlinePaymentIntent.comanda_id == comanda.id,
@@ -124,6 +124,8 @@ def _existing_order_response(db: Session, comanda: Comanda) -> dict[str, Any]:
         "cliente_id": comanda.cliente_id,
         "total": _order_total(comanda),
         "mensagem": "Pedido já cadastrado com sucesso!",
+        "tracking_token": tracking_token,
+        "tracking_url": f"/acompanhar/{tracking_token}" if tracking_token else None,
         "pagamento": (
             OnlinePaymentService.public_payload(intent)
             if intent else {"status": "pendente_no_atendimento", "cobranca_online": False}
@@ -449,6 +451,19 @@ class CardapioWebAdapter:
             numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
             cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
             payment_intent = None
+            tracking_token = None
+
+            try:
+                from ...services.order_chat_service import create_conversation_for_order
+                _conv, tracking_token = create_conversation_for_order(
+                    db,
+                    restaurante_id=rest_id,
+                    pedido_id=order_dto.comanda_id,
+                )
+                if not (online_payment or is_scheduled):
+                    db.commit()
+            except Exception:
+                logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
 
             if is_scheduled:
                 if comanda is None or normalized_schedule is None:
@@ -605,6 +620,8 @@ class CardapioWebAdapter:
             "scheduled_for": normalized_schedule.isoformat() if normalized_schedule is not None else None,
             "delivery_status": "agendado" if is_scheduled else None,
             "total": float(order_dto.total),
+            "tracking_token": tracking_token,
+            "tracking_url": f"/acompanhar/{tracking_token}" if tracking_token else None,
             "pagamento": (
                 OnlinePaymentService.public_payload(payment_intent)
                 if online_payment and payment_intent is not None

@@ -37,6 +37,7 @@ const LandingPage = React.lazy(() => import('./landing/LandingPage'));
 const SuperAdminGate = React.lazy(() => import('./super-admin/SuperAdminGate').then(module => ({ default: module.SuperAdminGate })));
 const CaixaAtivarPage = React.lazy(() => import('./components/CaixaAtivarPage').then(module => ({ default: module.CaixaAtivarPage })));
 const MotoboyPwaPage = React.lazy(() => import('./components/MotoboyPwaPage').then(module => ({ default: module.MotoboyPwaPage })));
+const OrderTrackingPage = React.lazy(() => import('./cardapio/OrderTrackingPage').then(module => ({ default: module.OrderTrackingPage })));
 
 const MemoizedCaixaPanel = React.lazy(() =>
   import('./components/CaixaPanel').then(module => ({
@@ -98,6 +99,14 @@ export default function App() {
                     window.location.search.includes('view=landing');
   if (isLanding) {
     return <AppRouteBoundary label="apresentação"><LandingPage /></AppRouteBoundary>;
+  }
+
+  // Detect Order Tracking Page (/acompanhar or ?view=acompanhar)
+  const isAcompanhar = window.location.pathname.startsWith('/acompanhar') ||
+                       window.location.search.includes('view=acompanhar');
+  if (isAcompanhar) {
+    const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
+    return <AppRouteBoundary label="acompanhamento"><OrderTrackingPage token={tokenFromUrl} /></AppRouteBoundary>;
   }
 
   // Detect if access is client cardapio (online menu)

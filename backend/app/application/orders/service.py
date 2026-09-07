@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+import logging
 from typing import Any, Optional, Sequence
 import uuid
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from ...domain.orders.events import (
     OrderAccepted,
@@ -101,6 +104,16 @@ def _parse_troco_para_float(val: Any) -> float | None:
         return float(raw)
     except ValueError:
         return None
+
+
+def _emit_chat_status_event(db: Session, restaurant_id: int, comanda_id: str, status: str | None) -> None:
+    if not status:
+        return
+    try:
+        from ...services.order_chat_service import post_system_order_event
+        post_system_order_event(db, restaurant_id, comanda_id, status)
+    except Exception:
+        logger.debug("Chat status event not emitted for order %s", comanda_id)
 
 
 class OrderApplicationService:
@@ -682,6 +695,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
+        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
+
         if commit:
             db.commit()
             db.refresh(comanda)
@@ -743,6 +758,8 @@ class OrderApplicationService:
             aggregate_type="order",
             aggregate_id=str(eid["order_id"]),
         )
+
+        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
 
         if commit:
             db.commit()
@@ -818,6 +835,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
+        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
+
         if commit:
             db.commit()
             db.refresh(comanda)
@@ -882,6 +901,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
+        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
+
         if commit:
             db.commit()
             db.refresh(comanda)
@@ -941,6 +962,8 @@ class OrderApplicationService:
             aggregate_type="order",
             aggregate_id=str(eid["order_id"]),
         )
+
+        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
 
         if commit:
             db.commit()
@@ -1018,6 +1041,8 @@ class OrderApplicationService:
             aggregate_type="order",
             aggregate_id=str(eid["order_id"]),
         )
+
+        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
 
         if commit:
             db.commit()

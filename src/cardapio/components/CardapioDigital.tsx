@@ -38,6 +38,8 @@ interface CreatedOrder {
   total?: number;
   pagamento?: OnlinePaymentResponse;
   scheduled_for?: string | null;
+  tracking_token?: string;
+  tracking_url?: string;
 }
 
 interface OnlinePaymentResponse {
@@ -410,6 +412,8 @@ export default function CardapioDigital({
           quantidade: item.quantity,
           observacao: item.notes,
         })),
+        tracking_token: data.tracking_token,
+        tracking_url: data.tracking_url,
       };
       try {
         saveStoredOrder(orderObj);
@@ -424,6 +428,8 @@ export default function CardapioDigital({
         total: orderTotal,
         pagamento: data.pagamento,
         scheduled_for: confirmedSchedule,
+        tracking_token: data.tracking_token,
+        tracking_url: data.tracking_url,
       });
     } catch (error) {
       console.warn("Falha ao registrar pedido no backend:", error);
@@ -541,9 +547,25 @@ export default function CardapioDigital({
               </div>
 
               <div className="mt-6 w-full max-w-sm space-y-2">
-                <button type="button" onClick={handleFinish} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600"><CheckCircle2 className="h-4 w-4" /> Acompanhar pedido</button>
-                {activeBrand.phone && (
-                  <button type="button" onClick={() => { const itensStr = cart.map((item) => `${item.quantity}x ${item.product.name}`).join(", "); const msg = buildPedidoConfirmadoMsg(customerName, itensStr, createdOrder.total ?? estimatedTotal); openWhatsAppMessage(String(activeBrand.phone), msg); }} className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 text-[10px] font-bold text-koma-secondary transition hover:border-emerald-500/30 hover:text-emerald-500"><MessageCircle className="h-4 w-4" /> Falar com o restaurante</button>
+                {createdOrder.tracking_url ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleFinish();
+                      window.location.href = createdOrder.tracking_url!;
+                    }}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Acompanhar pedido ao vivo
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleFinish}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600"
+                  >
+                    <CheckCircle2 className="h-4 w-4" /> Acompanhar pedido
+                  </button>
                 )}
               </div>
             </div>

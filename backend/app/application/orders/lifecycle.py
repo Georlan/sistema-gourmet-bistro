@@ -163,6 +163,17 @@ class OrderLifecycleCoordinator:
             if comanda.fechado_em is None:
                 comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
+        try:
+            from ...services.order_chat_service import post_system_order_event
+            post_system_order_event(
+                db,
+                restaurante_id=restaurant_id,
+                pedido_id=comanda.id,
+                new_status=comanda.delivery_status,
+            )
+        except Exception:
+            logger.debug("Chat event not emitted for comanda %s", comanda.id)
+
         if commit:
             db.commit()
             db.refresh(comanda)

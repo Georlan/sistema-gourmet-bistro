@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Lock, Maximize2, Menu, Minimize2 } from 'lucide-react';
+import { Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getSubscriptionPlan,
@@ -27,6 +27,8 @@ import { useCheckoutController } from './caixa/checkout/useCheckoutController';
 import { useCashierCustomers } from './caixa/customers/useCashierCustomers';
 import { CashierKitchen } from './caixa/kitchen/CashierKitchen';
 import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
+import { CashierConversationsDrawer } from './caixa/chat/CashierConversationsDrawer';
+import { useCashierChat } from './caixa/chat/useCashierChat';
 import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
@@ -151,6 +153,14 @@ export function CaixaPanel({
     null,
   );
   const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
+
+  // Chat & Comunicação com Clientes (Fonte da verdade KÔMA)
+  const {
+    isChatDrawerOpen,
+    setIsChatDrawerOpen,
+    chatUnreadCount,
+    setChatUnreadCount,
+  } = useCashierChat(apiBaseUrl);
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastData({ msg, type });
@@ -728,8 +738,30 @@ export function CaixaPanel({
               </h2>
             </div>
 
-            {/* Botão MODO PDV / FULLSCREEN */}
+            {/* Botões do Topbar: Conversas e Modo PDV */}
             <div className={"flex items-center gap-2 shrink-0"}>
+              <button
+                type="button"
+                onClick={() => setIsChatDrawerOpen(true)}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border relative',
+                  chatUnreadCount > 0
+                    ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-300 hover:bg-emerald-500/25'
+                    : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground',
+                )}
+                title="Conversas dos Pedidos"
+                aria-label="Abrir conversas dos pedidos"
+                id="btn-caixa-conversas-drawer"
+              >
+                <MessageSquare size={15} />
+                <span className={"hidden sm:inline"}>Conversas</span>
+                {chatUnreadCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-black text-[10px] font-black leading-tight">
+                    {chatUnreadCount}
+                  </span>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={toggleFullscreen}
@@ -1454,6 +1486,20 @@ export function CaixaPanel({
           soundEnabled={soundEnabled}
           toggleSound={toggleSound}
           playOrderAlert={playOrderAlert}
+        />
+
+        {/* GAVETA DE CONVERSAS DOS PEDIDOS COM CLIENTES */}
+        <CashierConversationsDrawer
+          isOpen={isChatDrawerOpen}
+          onClose={() => setIsChatDrawerOpen(false)}
+          onInspectOrder={(pedidoId) => {
+            handleSidebarNavigation('vendas_pedidos');
+            const target = deliveryOrders.find((o) => o.id === pedidoId);
+            if (target) {
+              openDeliveryOrderDetails(target);
+            }
+          }}
+          onUnreadCountChange={(count) => setChatUnreadCount(count)}
         />
       </SidebarProvider>
     </div>
