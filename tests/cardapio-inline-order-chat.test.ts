@@ -8,7 +8,8 @@ const panel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
 const header = source('../src/cardapio/components/CardapioHeader.tsx');
 
 test('chat do pedido permanece dentro do cardapio em vez de navegar para outra pagina', () => {
-  assert.match(drawer, /setChatOrderId\(order\.id\)/);
+  assert.match(drawer, /openChat\(order\.id\)/);
+  assert.match(drawer, /setChatOrderId\(orderId\)/);
   assert.match(drawer, /<CardapioOrderChatPanel/);
   assert.doesNotMatch(drawer, /href=\{order\.tracking_url \|\| `\/acompanhar\//);
 });
