@@ -228,6 +228,12 @@ class Settings:
     KOMA_WHATSAPP_AUTOMATION_ENABLED: bool = (
         os.getenv("KOMA_WHATSAPP_AUTOMATION_ENABLED", "false").lower() == "true"
     )
+
+    # SaaS Billing Enforcement Toggle (Default: False)
+    # Quando habilitado, a ativação de novos contratos exige billing ready
+    KOMA_SAAS_BILLING_ENFORCEMENT_ENABLED: bool = (
+        os.getenv("KOMA_SAAS_BILLING_ENFORCEMENT_ENABLED", "false").lower() == "true"
+    )
     KOMA_WHATSAPP_PROVIDER: str = os.getenv(
         "KOMA_WHATSAPP_PROVIDER",
         "evolution",
