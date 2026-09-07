@@ -10,7 +10,7 @@ import {
   Info,
   Instagram,
   MapPin,
-  Package,
+  MessageCircle,
   Phone,
   Search,
   Share2,
@@ -177,13 +177,13 @@ export default function CardapioHeader({
                 <button
                   type="button"
                   onClick={onOrdersClick}
-                  className="cardapio-public-icon-button is-orders relative"
-                  title="Meus Pedidos"
-                  aria-label={`Meus Pedidos${activeOrdersCount > 0 ? `, ${activeOrdersCount} em andamento` : ""}`}
+                  className="cardapio-public-account-button"
+                  title="Abrir acompanhamento e chat dos pedidos"
+                  aria-label={`Abrir acompanhamento e chat dos pedidos${activeOrdersCount > 0 ? `, ${activeOrdersCount} em andamento` : ""}`}
                   id="btn-my-orders-header"
                 >
-                  <Package size={17} />
-                  {activeOrdersCount > 0 && <span>{activeOrdersCount > 99 ? "99+" : activeOrdersCount}</span>}
+                  <MessageCircle size={15} />
+                  <span>{activeOrdersCount > 0 ? `Pedido / Chat${activeOrdersCount > 1 ? ` (${activeOrdersCount})` : ""}` : "Meus pedidos"}</span>
                 </button>
               )}
               <button
