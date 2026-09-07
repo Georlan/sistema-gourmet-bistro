@@ -154,3 +154,28 @@ test('removeStoredOrder remove o pedido específico e atualiza a chave legada', 
   const legacy = JSON.parse(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)!);
   assert.equal(legacy.id, 'p-1');
 });
+
+test('saveStoredOrder e loadStoredOrders preservam tracking_token e tracking_url com segurança', () => {
+  const orderWithTracking: StoredOrder = {
+    id: 'comanda-1048',
+    numero_pedido: 1048,
+    timestamp: Date.now(),
+    restaurante_id: 1,
+    tipo: 'Delivery',
+    total: 85.5,
+    idempotency_key: 'tracking-comanda-1048',
+    status: 'pendente',
+    tracking_token: 'sec_tok_xyz1234567890abcdef',
+    tracking_url: '/acompanhar/sec_tok_xyz1234567890abcdef',
+  };
+
+  saveStoredOrder(orderWithTracking);
+
+  const loaded = loadStoredOrders(1);
+  assert.equal(loaded.length, 1);
+  assert.equal(loaded[0].id, 'comanda-1048');
+  assert.equal(loaded[0].numero_pedido, 1048);
+  assert.equal(loaded[0].tracking_token, 'sec_tok_xyz1234567890abcdef');
+  assert.equal(loaded[0].tracking_url, '/acompanhar/sec_tok_xyz1234567890abcdef');
+});
+

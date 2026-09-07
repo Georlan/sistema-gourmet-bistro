@@ -212,21 +212,32 @@ export default function CardapioOrdersDrawer({
 
                         {/* Ação rápida */}
                         <div className="mt-3 flex items-center justify-between border-t border-koma-border/60 pt-2.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectOrder(order.id);
-                              onClose();
-                            }}
-                            className={clsx(
-                              "rounded-xl px-3 py-1.5 text-[10px] font-black transition",
-                              isSelected
-                                ? "bg-emerald-500 text-white"
-                                : "border border-koma-border bg-koma-card text-koma-secondary hover:text-white",
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSelectOrder(order.id);
+                                onClose();
+                              }}
+                              className={clsx(
+                                "rounded-xl px-3 py-1.5 text-[10px] font-black transition",
+                                isSelected
+                                  ? "bg-emerald-500 text-white"
+                                  : "border border-koma-border bg-koma-card text-koma-secondary hover:text-white",
+                              )}
+                            >
+                              {isSelected ? "Acompanhando no topo" : "Ver no topo"}
+                            </button>
+
+                            {(order.tracking_url || order.tracking_token) && (
+                              <a
+                                href={order.tracking_url || `/acompanhar/${order.tracking_token}`}
+                                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black text-emerald-400 hover:bg-emerald-500/20 transition"
+                              >
+                                Chat & Status
+                              </a>
                             )}
-                          >
-                            {isSelected ? "Acompanhando no topo" : "Ver no topo"}
-                          </button>
+                          </div>
                         </div>
                       </div>
                     );

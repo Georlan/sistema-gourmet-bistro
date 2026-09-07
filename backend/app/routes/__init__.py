@@ -29,12 +29,16 @@ from .contracts import router as _contracts_router  # noqa: E402
 from .contract_readiness import router as _contract_readiness_router  # noqa: E402
 from .onboarding import router as _onboarding_router  # noqa: E402
 from .saas_billing import router as _saas_billing_router, webhook_router as _saas_webhook_router  # noqa: E402
+from .order_tracking import router as _order_tracking_router  # noqa: E402
+from .caixa_chat import router as _caixa_chat_router  # noqa: E402
 
 _root_router.router.include_router(_contracts_router)
 _root_router.router.include_router(_contract_readiness_router)
 _root_router.router.include_router(_onboarding_router)
 _root_router.router.include_router(_saas_billing_router)
 _root_router.router.include_router(_saas_webhook_router)
+_root_router.router.include_router(_order_tracking_router)
+_root_router.router.include_router(_caixa_chat_router)
 
 # O Print Agent continua com um único owner HTTP no main. O sub-router adiciona
 # apenas o plano de transporte SSE; claim, fila e regras físicas permanecem no
