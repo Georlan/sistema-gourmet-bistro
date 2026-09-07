@@ -234,6 +234,24 @@ class Settings:
     KOMA_SAAS_BILLING_ENFORCEMENT_ENABLED: bool = (
         os.getenv("KOMA_SAAS_BILLING_ENFORCEMENT_ENABLED", "false").lower() == "true"
     )
+
+    # Mercado Pago SaaS Billing (Plataforma KÔMA - Assinaturas Recorrentes)
+    KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN: str = (
+        os.getenv("KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN")
+        or os.getenv("KOMA_SAAS_MP_ACCESS_TOKEN")
+        or ""
+    ).strip()
+    KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY: str = (
+        os.getenv("KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY")
+        or os.getenv("KOMA_SAAS_MP_PUBLIC_KEY")
+        or ""
+    ).strip()
+    KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET: str = (
+        os.getenv("KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET")
+        or os.getenv("KOMA_SAAS_MP_WEBHOOK_SECRET")
+        or ""
+    ).strip()
+
     KOMA_WHATSAPP_PROVIDER: str = os.getenv(
         "KOMA_WHATSAPP_PROVIDER",
         "evolution",

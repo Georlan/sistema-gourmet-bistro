@@ -443,6 +443,34 @@ def require_roles(*allowed_roles: str):
     return role_checker
 
 
+def require_active_subscription(
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Dependency que valida o direito de acesso e faturamento (entitlement) do tenant.
+    Permite acesso se a assinatura estiver ativa, em período de teste ou dentro do período de graça.
+    Se o acesso não for permitido, lança HTTP 402 Payment Required.
+    """
+    from .services.billing_service import resolve_tenant_entitlement
+
+    user_role = (current_user.role or current_user.cargo or "").lower().strip()
+    if user_role == "superadmin":
+        return current_user
+
+    entitlement = resolve_tenant_entitlement(db, current_user.restaurante_id)
+    if not entitlement.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "message": "Assinatura do restaurante requer regularização financeira.",
+                "reason": entitlement.reason,
+                "billing_status": entitlement.billing_status,
+            },
+        )
+    return current_user
+
+
 def create_motoboy_token(motoboy_id: int, restaurante_id: int, jti: str) -> str:
     """Cria um token JWT temporário seguro para o PWA do Motoboy com TTL de 4 horas e JTI de controle."""
     expire = datetime.now(timezone.utc) + timedelta(hours=4)

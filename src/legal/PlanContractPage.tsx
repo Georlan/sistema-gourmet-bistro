@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, Copy, ExternalLink, Printer } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Copy, CreditCard, ExternalLink, Printer, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 import { API_BASE_URL } from '../config/api';
 import {
@@ -144,6 +145,28 @@ export default function PlanContractPage() {
   const [receipt, setReceipt] = useState<ContractReceipt | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const [billingMethod, setBillingMethod] = useState<'credit_card' | 'pix'>('credit_card');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [cardExp, setCardExp] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardDoc, setCardDoc] = useState('');
+  const [isSubmittingBilling, setIsSubmittingBilling] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [activationResult, setActivationResult] = useState<{
+    restaurantId: string;
+    slug: string;
+    trialDays: number;
+    trialEndsAt: string;
+  } | null>(null);
+  const [pixData, setPixData] = useState<{
+    paymentId: string;
+    qrCode: string | null;
+    qrCodeBase64: string | null;
+    ticketUrl: string | null;
+    expiresAt: string | null;
+  } | null>(null);
+
   useEffect(() => {
     document.title = plan ? `Contratar ${plan.name} | KÔMA` : 'Escolher plano | KÔMA';
     window.scrollTo(0, 0);
@@ -238,6 +261,101 @@ export default function PlanContractPage() {
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       setCopied(false);
+    }
+  };
+
+  const handleSetupBilling = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!receipt) return;
+    setIsSubmittingBilling(true);
+    setBillingError(null);
+
+    try {
+      if (billingMethod === 'credit_card') {
+        let cardTokenId = '';
+        const mpPublicKey = (import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY as string | undefined)?.trim();
+        const cleanCardNumber = cardNumber.replace(/\D/g, '');
+        const [expMonth, expYear] = cardExp.split('/').map(v => v.trim());
+        const cleanDoc = (cardDoc || form.representativeTaxId || form.taxId).replace(/\D/g, '');
+
+        if (mpPublicKey && (mpPublicKey.startsWith('TEST-') || mpPublicKey.startsWith('APP_USR-'))) {
+          const mpResponse = await fetch(
+            `https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(mpPublicKey)}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                card_number: cleanCardNumber,
+                expiration_month: parseInt(expMonth || '0', 10),
+                expiration_year: expYear?.length === 2 ? parseInt(`20${expYear}`, 10) : parseInt(expYear || '0', 10),
+                security_code: cardCvv.trim(),
+                cardholder: {
+                  name: (cardHolder || form.responsibleName).trim(),
+                  identification: {
+                    type: cleanDoc.length > 11 ? 'CNPJ' : 'CPF',
+                    number: cleanDoc,
+                  },
+                },
+              }),
+            }
+          );
+          const mpData = await mpResponse.json().catch(() => null);
+          if (!mpResponse.ok || !mpData?.id) {
+            const errDetail = mpData?.message || mpData?.cause?.[0]?.description || 'Erro ao processar cartão junto ao Mercado Pago.';
+            throw new Error(errDetail);
+          }
+          cardTokenId = mpData.id;
+        } else {
+          cardTokenId = `mock-card-token-${Date.now()}`;
+        }
+
+        const setupResponse = await fetch(`${API_BASE_URL}/api/contracts/${receipt.protocol}/billing/setup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payment_method_type: 'credit_card',
+            card_token_id: cardTokenId,
+            payer_email: form.email.trim(),
+          }),
+        });
+        const setupPayload = await setupResponse.json().catch(() => null);
+        if (!setupResponse.ok) {
+          throw new Error(setupPayload?.detail || 'Falha ao autorizar pagamento do plano.');
+        }
+
+        setActivationResult({
+          restaurantId: setupPayload.restaurantId,
+          slug: setupPayload.slug,
+          trialDays: setupPayload.trialDays || 7,
+          trialEndsAt: setupPayload.trialEndsAt,
+        });
+        window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 50);
+      } else if (billingMethod === 'pix') {
+        const setupResponse = await fetch(`${API_BASE_URL}/api/contracts/${receipt.protocol}/billing/setup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            payment_method_type: 'pix',
+            payer_email: form.email.trim(),
+          }),
+        });
+        const setupPayload = await setupResponse.json().catch(() => null);
+        if (!setupResponse.ok) {
+          throw new Error(setupPayload?.detail || 'Falha ao gerar Pix para o plano.');
+        }
+        setPixData({
+          paymentId: setupPayload.paymentId,
+          qrCode: setupPayload.qrCode,
+          qrCodeBase64: setupPayload.qrCodeBase64,
+          ticketUrl: setupPayload.ticketUrl,
+          expiresAt: setupPayload.expiresAt,
+        });
+        window.setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 50);
+      }
+    } catch (err) {
+      setBillingError(err instanceof Error ? err.message : 'Erro ao processar pagamento.');
+    } finally {
+      setIsSubmittingBilling(false);
     }
   };
 
@@ -383,11 +501,227 @@ export default function PlanContractPage() {
         </form>
 
         {receipt && (
-          <section className="koma-contract-panel" aria-labelledby="receipt-title">
-            <div className="koma-contract-topline">
-              <span className="koma-legal-kicker">COMPROVANTE ELETRÔNICO</span>
-              <span>Legal v{receipt.documents.version}</span>
-            </div>
+          <>
+            {activationResult ? (
+              <section className="koma-contract-panel" style={{ border: '1px solid #0bd6ad', background: 'rgba(11,214,173,.05)' }}>
+                <div className="koma-contract-topline">
+                  <span className="koma-legal-kicker">RESTAURANTE ATIVADO</span>
+                  <span style={{ color: '#0bd6ad' }}>7 DIAS GRÁTIS ATIVOS</span>
+                </div>
+                <div className="koma-contract-status" style={{ border: '1px solid #0bd6ad', color: '#0bd6ad' }} role="status">
+                  <CheckCircle2 size={20} aria-hidden="true" />
+                  <strong>Tudo pronto! Seu restaurante já foi provisionado e ativado.</strong>
+                </div>
+                <h2 style={{ marginTop: '1rem', fontSize: '1.8rem' }}>Acesso liberado ao KÔMA</h2>
+                <p style={{ color: '#b9c2be' }}>
+                  Seu período de 7 dias grátis está em vigor até <strong>{formatReceiptDate(activationResult.trialEndsAt)}</strong>.
+                  Nenhum valor foi debitado hoje. Enviamos seu link exclusivo de primeiro acesso por WhatsApp para <strong>{receipt.contractingParty.phone}</strong>.
+                </p>
+                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#080b0a', border: '1px solid rgba(255,255,255,.1)' }}>
+                  <p style={{ margin: '0 0 .5rem', fontSize: '.85rem', color: '#889590' }}>Subdomínio do estabelecimento:</p>
+                  <code style={{ fontSize: '1.1rem', color: '#0bd6ad' }}>https://{activationResult.slug}.koma.com.br</code>
+                </div>
+                <div style={{ marginTop: '1.5rem' }}>
+                  <a href="/ativar" className="koma-contract-action" style={{ textAlign: 'center' }}>
+                    Concluir Primeiro Acesso <ArrowRight size={17} aria-hidden="true" />
+                  </a>
+                </div>
+              </section>
+            ) : pixData ? (
+              <section className="koma-contract-panel" style={{ border: '1px solid #0bd6ad' }}>
+                <div className="koma-contract-topline">
+                  <span className="koma-legal-kicker">PAGAMENTO PIX ANUAL</span>
+                  <span>AGUARDANDO COMPENSAÇÃO</span>
+                </div>
+                <h2>Pague o Pix para ativar seu restaurante</h2>
+                <p>Escaneie o QR Code abaixo ou copie a chave copia-e-cola no app do seu banco. A ativação do KÔMA é automática após a confirmação.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', margin: '1.5rem 0' }}>
+                  {pixData.qrCode && (
+                    <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
+                      <QRCodeSVG value={pixData.qrCode} size={200} />
+                    </div>
+                  )}
+                  {pixData.qrCode && (
+                    <button
+                      type="button"
+                      className="koma-contract-action"
+                      style={{ maxWidth: '320px' }}
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(pixData.qrCode || '');
+                        setCopied(true);
+                        window.setTimeout(() => setCopied(false), 1500);
+                      }}
+                    >
+                      <Copy size={16} /> {copied ? 'Código Pix copiado!' : 'Copiar código Pix'}
+                    </button>
+                  )}
+                </div>
+                <p className="koma-contract-note">
+                  Assim que o pagamento for liquidado, você receberá a notificação de confirmação e as credenciais de primeiro acesso via WhatsApp no número cadastrado.
+                </p>
+              </section>
+            ) : (
+              <section className="koma-contract-panel" aria-labelledby="billing-setup-title">
+                <div className="koma-contract-topline">
+                  <span className="koma-legal-kicker">ETAPA 2 · FORMA DE PAGAMENTO</span>
+                  <span>7 DIAS GRÁTIS</span>
+                </div>
+                <h2 id="billing-setup-title">Configurar pagamento do plano</h2>
+                <p>
+                  Para ativar seu restaurante e iniciar a degustação de 7 dias grátis, configure o pagamento seguro via Mercado Pago. Nenhum valor será debitado do cartão durante o período de testes.
+                </p>
+
+                {isYearly && (
+                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setBillingMethod('credit_card')}
+                      style={{
+                        flex: 1,
+                        padding: '1rem',
+                        border: billingMethod === 'credit_card' ? '2px solid #0bd6ad' : '1px solid rgba(255,255,255,.15)',
+                        background: billingMethod === 'credit_card' ? 'rgba(11,214,173,.08)' : '#080b0a',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '.5rem',
+                      }}
+                    >
+                      <CreditCard size={18} /> Cartão de crédito (7 dias grátis)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBillingMethod('pix')}
+                      style={{
+                        flex: 1,
+                        padding: '1rem',
+                        border: billingMethod === 'pix' ? '2px solid #0bd6ad' : '1px solid rgba(255,255,255,.15)',
+                        background: billingMethod === 'pix' ? 'rgba(11,214,173,.08)' : '#080b0a',
+                        color: 'white',
+                        cursor: 'pointer',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '.5rem',
+                      }}
+                    >
+                      <QrCode size={18} /> Pix anual antecipado
+                    </button>
+                  </div>
+                )}
+
+                <form onSubmit={handleSetupBilling}>
+                  {billingMethod === 'credit_card' ? (
+                    <div className="koma-contract-fields">
+                      <div className="koma-contract-field koma-contract-field--full">
+                        <label htmlFor="card-number">Número do cartão</label>
+                        <input
+                          id="card-number"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0000 0000 0000 0000"
+                          value={cardNumber}
+                          onChange={(e) => setCardNumber(e.target.value)}
+                          required
+                          disabled={isSubmittingBilling}
+                        />
+                      </div>
+                      <div className="koma-contract-field koma-contract-field--full">
+                        <label htmlFor="card-holder">Nome impresso no cartão</label>
+                        <input
+                          id="card-holder"
+                          type="text"
+                          placeholder="Nome como consta no cartão"
+                          value={cardHolder}
+                          onChange={(e) => setCardHolder(e.target.value)}
+                          required
+                          disabled={isSubmittingBilling}
+                        />
+                      </div>
+                      <div className="koma-contract-field">
+                        <label htmlFor="card-exp">Validade (MM/AA)</label>
+                        <input
+                          id="card-exp"
+                          type="text"
+                          placeholder="MM/AA"
+                          maxLength={5}
+                          value={cardExp}
+                          onChange={(e) => setCardExp(e.target.value)}
+                          required
+                          disabled={isSubmittingBilling}
+                        />
+                      </div>
+                      <div className="koma-contract-field">
+                        <label htmlFor="card-cvv">Código de segurança (CVV)</label>
+                        <input
+                          id="card-cvv"
+                          type="password"
+                          inputMode="numeric"
+                          placeholder="123"
+                          maxLength={4}
+                          value={cardCvv}
+                          onChange={(e) => setCardCvv(e.target.value)}
+                          required
+                          disabled={isSubmittingBilling}
+                        />
+                      </div>
+                      <div className="koma-contract-field koma-contract-field--full">
+                        <label htmlFor="card-doc">CPF ou CNPJ do titular do cartão</label>
+                        <input
+                          id="card-doc"
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="CPF ou CNPJ do titular"
+                          value={cardDoc}
+                          onChange={(e) => setCardDoc(e.target.value)}
+                          disabled={isSubmittingBilling}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '1rem', background: '#080b0a', border: '1px solid rgba(255,255,255,.1)' }}>
+                      <p style={{ margin: 0, color: '#b9c2be' }}>
+                        No pagamento anual via Pix, você aproveita o desconto de 10% com cobrança única à vista. O QR Code será gerado na próxima tela.
+                      </p>
+                    </div>
+                  )}
+
+                  {billingError && (
+                    <div className="koma-contract-status" style={{ borderColor: '#ff4d4f', color: '#ff4d4f' }} role="alert">
+                      <strong>Erro ao configurar pagamento:</strong> {billingError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="koma-contract-action"
+                    disabled={isSubmittingBilling || (billingMethod === 'credit_card' && (!cardNumber || !cardExp || !cardCvv))}
+                  >
+                    {isSubmittingBilling
+                      ? 'Processando com Mercado Pago…'
+                      : billingMethod === 'credit_card'
+                      ? 'Autorizar cartão e ativar 7 dias grátis'
+                      : 'Gerar Pix para ativação anual'}
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </button>
+                  <p className="koma-contract-note">
+                    {billingMethod === 'credit_card'
+                      ? 'R$ 0,00 debitados hoje. Seu período gratuito expira em 7 dias. Você pode cancelar a assinatura a qualquer momento antes do primeiro débito.'
+                      : 'O restaurante será ativado imediatamente assim que a compensação do Pix for confirmada pelo Banco Central.'}
+                  </p>
+                </form>
+              </section>
+            )}
+
+            <section className="koma-contract-panel" aria-labelledby="receipt-title">
+              <div className="koma-contract-topline">
+                <span className="koma-legal-kicker">COMPROVANTE ELETRÔNICO</span>
+                <span>Legal v{receipt.documents.version}</span>
+              </div>
             <div className="koma-contract-status" role="status">
               <CheckCircle2 size={18} aria-hidden="true" />
               <strong>Contratação registrada.</strong> Guarde o protocolo abaixo; ele será vinculado ao seu restaurante no provisionamento.
@@ -424,9 +758,16 @@ export default function PlanContractPage() {
               <button type="button" className="koma-contract-action" onClick={() => void copyProtocol()}><Copy size={16} /> {copied ? 'Protocolo copiado' : 'Copiar protocolo'}</button>
               <button type="button" className="koma-contract-action" onClick={() => window.print()}><Printer size={16} /> Imprimir / salvar em PDF</button>
             </div>
-            <p className="koma-contract-note">A cobrança inicial permanece manual. Este comprovante registra o aceite e não significa que já houve débito ou pagamento da mensalidade.</p>
+            <p className="koma-contract-note">
+              {activationResult
+                ? 'Assinatura configurada via cartão de crédito no Mercado Pago. Período gratuito de 7 dias ativo.'
+                : pixData
+                ? 'Aguardando compensação do pagamento Pix para ativação definitiva.'
+                : 'Configure acima o método de pagamento para ativação imediata do seu restaurante.'}
+            </p>
           </section>
-        )}
+        </>
+      )}
       </main>
 
       <footer className="koma-legal-footer">
