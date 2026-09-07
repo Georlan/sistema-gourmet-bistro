@@ -96,7 +96,8 @@ def get_billing_setup_by_provider_sub(db: Session, provider: str, sub_id: str) -
         db.query(SaaSBillingSetup)
         .filter(
             SaaSBillingSetup.provider == provider,
-            SaaSBillingSetup.provider_subscription_id == sub_id,
+            (SaaSBillingSetup.provider_subscription_id == sub_id)
+            | (SaaSBillingSetup.provider_payment_method_reference == sub_id),
         )
         .one_or_none()
     )

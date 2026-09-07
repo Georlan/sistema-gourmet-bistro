@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import SessionLocal, get_db
 from ..models import Restaurante
-from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import (
     get_billing_setup,
     get_billing_setup_by_provider_sub,
@@ -206,6 +206,7 @@ def setup_contract_billing(
             payment_method_type="pix",
             status="pending",
             provider_payment_method_reference=payment_id,
+            provider_subscription_id=payment_id,
             billing_cycle="annual",
         )
         db.commit()
@@ -328,22 +329,28 @@ async def mercado_pago_saas_webhook(
     elif "payment" in event_type:
         payment_id = data_id
         if payment_id:
-            setup = (
-                db.query(SaaSBillingSetup)
-                .filter(SaaSBillingSetup.provider_payment_method_reference == payment_id)
-                .one_or_none()
-            )
-            if setup and setup.status == "pending":
-                # Marca setup como pronto
-                setup.status = "ready"
-                setup.updated_at = datetime.datetime.now(datetime.timezone.utc)
+            billing = get_billing_setup_by_provider_sub(db, "mercado_pago", payment_id)
+            if billing and billing.status == "pending":
+                # Marca setup como pronto via upsert_billing_setup
+                upsert_billing_setup(
+                    db,
+                    protocol=billing.protocol,
+                    contract_acceptance_id=billing.contract_acceptance_id,
+                    provider=billing.provider,
+                    payment_method_type=billing.payment_method_type,
+                    status="ready",
+                    provider_customer_id=billing.provider_customer_id,
+                    provider_payment_method_reference=billing.provider_payment_method_reference,
+                    provider_subscription_id=billing.provider_subscription_id,
+                    billing_cycle=billing.billing_cycle,
+                )
                 db.commit()
 
                 # Se o restaurante ainda não estava ativado, ativa-o agora!
-                if not setup.restaurante_id:
-                    acceptance = resolve_activation_acceptance(db, setup.protocol)
+                if not billing.restaurante_id:
+                    acceptance = resolve_activation_acceptance(db, billing.protocol)
                     if acceptance:
-                        billing_setup_data = get_billing_setup(db, setup.protocol)
+                        billing_setup_data = get_billing_setup(db, billing.protocol)
                         provision_restaurant_for_contract(
                             db,
                             acceptance=acceptance,
@@ -352,6 +359,6 @@ async def mercado_pago_saas_webhook(
                             reason="Ativação automática pós-confirmação de pagamento Pix anual via webhook",
                             background_tasks=background_tasks,
                         )
-                        logger.info("Tenant activated via Pix approval webhook for protocol %s", setup.protocol)
+                        logger.info("Tenant activated via Pix approval webhook for protocol %s", billing.protocol)
 
     return {"status": "received"}
