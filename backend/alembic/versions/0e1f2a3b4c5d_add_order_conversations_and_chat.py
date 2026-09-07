@@ -71,7 +71,7 @@ def upgrade() -> None:
         sa.Column("conversation_id", sa.String(length=36), nullable=False),
         sa.Column("pedido_id", sa.String(length=64), nullable=False),
         sa.Column("sender_type", sa.String(length=20), nullable=False),
-        sa.Column("sender_user_id", sa.Integer(), nullable=True),
+        sa.Column("sender_user_id", sa.String(), nullable=True),
         sa.Column("body", sa.Text(), nullable=False),
         sa.Column("event_key", sa.String(length=64), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
