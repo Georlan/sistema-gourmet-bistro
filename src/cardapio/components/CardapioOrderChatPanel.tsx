@@ -24,6 +24,7 @@ interface TrackingPayload {
   closed_at?: string | null;
   conversa?: {
     closed_at?: string | null;
+    unread_count?: number;
   } | null;
 }
 
@@ -119,14 +120,14 @@ export default function CardapioOrderChatPanel({
     }
   }, [apiRoot]);
 
+  const markRead = useCallback(() => {
+    if (!apiRoot || document.visibilityState !== "visible") return;
+    void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
+  }, [apiRoot]);
+
   useEffect(() => {
     void refresh();
     if (!apiRoot) return;
-
-    const markRead = () => {
-      void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
-    };
-    markRead();
 
     const interval = window.setInterval(() => void refresh(), 6000);
     let source: EventSource | null = null;
@@ -164,6 +165,13 @@ export default function CardapioOrderChatPanel({
       source?.close();
     };
   }, [apiRoot, order.status, order.tipo, refresh]);
+
+  useEffect(() => {
+    markRead();
+    const handleVisibility = () => markRead();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [markRead, messages.length]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -281,7 +289,7 @@ export default function CardapioOrderChatPanel({
         )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5">
+      <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
         {loading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-koma-muted">Carregando conversa…</div>
         ) : messages.length === 0 ? (
