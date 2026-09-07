@@ -85,11 +85,14 @@ def consultar_pedido_por_token(
                 "id": it.id,
                 "nome": it.produto.nome if it.produto else "Item",
                 "quantidade": 1,
+                "preco_unitario": float(it.preco_unit or 0.0),
                 "observacao": it.observacao,
             }
             for it in comanda.itens
+            if it.status != "cancelado"
         ]
 
+        closed_at_iso = closed_at.isoformat() if closed_at else None
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
@@ -100,6 +103,7 @@ def consultar_pedido_por_token(
             "bairro": getattr(comanda, "delivery_bairro", None),
             "fechada": bool(comanda.fechada),
             "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
+            "closed_at": closed_at_iso,
             "itens": itens_payload,
             "restaurante": {
                 "id": restaurante.id if restaurante else restaurante_id,
@@ -109,7 +113,7 @@ def consultar_pedido_por_token(
             },
             "conversa": {
                 "id": conversation_id,
-                "closed_at": closed_at.isoformat() if closed_at else None,
+                "closed_at": closed_at_iso,
             },
         }
 
@@ -211,7 +215,6 @@ async def stream_eventos_pedido(
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_conversation(conversation_id)
         try:
-            # Evento inicial de confirmação de conexão
             yield _sse_event("connected", {"conversation_id": conversation_id})
 
             while not await request.is_disconnected():
@@ -219,7 +222,6 @@ async def stream_eventos_pedido(
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(payload["event"], payload["data"])
                 except asyncio.TimeoutError:
-                    # Keepalive para manter a conexão aberta em proxies
                     yield ": keepalive\n\n"
         finally:
             order_chat_hub.unsubscribe_conversation(conversation_id, sub_id)

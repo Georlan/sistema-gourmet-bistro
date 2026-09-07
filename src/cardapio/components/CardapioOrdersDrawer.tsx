@@ -7,6 +7,7 @@ import React from "react";
 import {
   CheckCircle2,
   Clock3,
+  MessageCircle,
   Package,
   RefreshCw,
   Trash2,
@@ -21,6 +22,7 @@ import {
   orderStatusLabel,
   orderStep,
 } from "../orderTracking";
+import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
 
 interface CardapioOrdersDrawerProps {
   isOpen: boolean;
@@ -33,6 +35,15 @@ interface CardapioOrdersDrawerProps {
   isRefreshing?: boolean;
 }
 
+function deliveryOrderStep(status?: string): number {
+  const normalized = String(status || "").toLocaleLowerCase("pt-BR");
+  if (normalized.includes("final") || normalized.includes("entreg")) return 5;
+  if (normalized.includes("trans") || normalized.includes("saiu")) return 4;
+  if (normalized.includes("pronto")) return 3;
+  if (normalized.includes("produ") || normalized.includes("prepar")) return 2;
+  return 1;
+}
+
 export default function CardapioOrdersDrawer({
   isOpen,
   onClose,
@@ -43,10 +54,13 @@ export default function CardapioOrdersDrawer({
   onRemoveOrder,
   isRefreshing = false,
 }: CardapioOrdersDrawerProps) {
+  const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const activeOrders = orders.filter((order) => !isTerminalStatus(order.status));
   const finishedOrders = orders.filter((order) => isTerminalStatus(order.status));
+  const chatOrder = chatOrderId ? orders.find((order) => order.id === chatOrderId) || null : null;
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val || 0);
@@ -61,6 +75,28 @@ export default function CardapioOrdersDrawer({
     }).format(new Date(timestamp));
   };
 
+  if (chatOrder) {
+    return (
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop">
+        <div
+          className="flex h-full w-full max-w-md flex-col bg-koma-card text-koma-foreground shadow-2xl transition-transform duration-300"
+          role="dialog"
+          aria-label={`Chat do Pedido #${chatOrder.numero_pedido}`}
+          id="orders-drawer-panel"
+        >
+          <CardapioOrderChatPanel
+            order={chatOrder}
+            onBack={() => setChatOrderId(null)}
+            onClose={() => {
+              setChatOrderId(null);
+              onClose();
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop">
       <div
@@ -69,7 +105,6 @@ export default function CardapioOrdersDrawer({
         aria-label="Meus Pedidos"
         id="orders-drawer-panel"
       >
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-koma-border p-4 sm:p-5">
           <div className="flex items-center gap-2.5">
             <Package className="h-5 w-5 text-emerald-400" />
@@ -105,7 +140,6 @@ export default function CardapioOrdersDrawer({
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
           {orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -119,7 +153,6 @@ export default function CardapioOrdersDrawer({
             </div>
           ) : (
             <>
-              {/* Pedidos em andamento */}
               {activeOrders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -130,10 +163,10 @@ export default function CardapioOrdersDrawer({
 
                   {activeOrders.map((order) => {
                     const rejected = isRejectedStatus(order.status);
-                    const step = orderStep(order.status);
                     const isDelivery = String(order.tipo || "").toLocaleLowerCase("pt-BR").includes("delivery");
+                    const step = isDelivery ? deliveryOrderStep(order.status) : orderStep(order.status);
                     const steps = isDelivery
-                      ? ["Recebido", "Preparo", "Saiu", "Entregue"]
+                      ? ["Recebido", "Preparo", "Pronto", "Saiu", "Entregue"]
                       : ["Recebido", "Preparo", "Pronto", "Concluído"];
                     const isSelected = selectedOrderId === order.id;
 
@@ -177,7 +210,6 @@ export default function CardapioOrdersDrawer({
                           </div>
                         </div>
 
-                        {/* Itens resumo */}
                         {Array.isArray(order.itens) && order.itens.length > 0 && (
                           <div className="mt-2.5 space-y-0.5 border-t border-koma-border/60 pt-2 text-[10px] text-koma-muted">
                             {order.itens.slice(0, 3).map((item, idx) => (
@@ -193,9 +225,11 @@ export default function CardapioOrdersDrawer({
                           </div>
                         )}
 
-                        {/* Barra de progresso */}
                         {!rejected && (
-                          <div className="mt-3 grid grid-cols-4 gap-1 border-t border-koma-border/60 pt-2.5">
+                          <div className={clsx(
+                            "mt-3 grid gap-1 border-t border-koma-border/60 pt-2.5",
+                            isDelivery ? "grid-cols-5" : "grid-cols-4",
+                          )}>
                             {steps.map((label, idx) => {
                               const passed = step >= idx + 1;
                               return (
@@ -210,9 +244,8 @@ export default function CardapioOrdersDrawer({
                           </div>
                         )}
 
-                        {/* Ação rápida */}
                         <div className="mt-3 flex items-center justify-between border-t border-koma-border/60 pt-2.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
                               onClick={() => {
@@ -230,12 +263,14 @@ export default function CardapioOrdersDrawer({
                             </button>
 
                             {(order.tracking_url || order.tracking_token) && (
-                              <a
-                                href={order.tracking_url || `/acompanhar/${order.tracking_token}`}
-                                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black text-emerald-400 hover:bg-emerald-500/20 transition"
+                              <button
+                                type="button"
+                                onClick={() => setChatOrderId(order.id)}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black text-emerald-400 transition hover:bg-emerald-500/20"
                               >
+                                <MessageCircle className="h-3.5 w-3.5" />
                                 Chat & Status
-                              </a>
+                              </button>
                             )}
                           </div>
                         </div>
@@ -245,7 +280,6 @@ export default function CardapioOrdersDrawer({
                 </div>
               )}
 
-              {/* Histórico / Concluídos */}
               {finishedOrders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -296,17 +330,28 @@ export default function CardapioOrdersDrawer({
                           </div>
                         </div>
 
-                        <div className="mt-2.5 flex items-center justify-between border-t border-koma-border/40 pt-2 text-[10px]">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectOrder(order.id);
-                              onClose();
-                            }}
-                            className="text-koma-muted hover:text-white"
-                          >
-                            Ver detalhes
-                          </button>
+                        <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-koma-border/40 pt-2 text-[10px]">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSelectOrder(order.id);
+                                onClose();
+                              }}
+                              className="text-koma-muted hover:text-white"
+                            >
+                              Ver detalhes
+                            </button>
+                            {(order.tracking_url || order.tracking_token) && (
+                              <button
+                                type="button"
+                                onClick={() => setChatOrderId(order.id)}
+                                className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300"
+                              >
+                                <MessageCircle className="h-3 w-3" /> Chat
+                              </button>
+                            )}
+                          </div>
                           <button
                             type="button"
                             onClick={() => onRemoveOrder(order.id)}
