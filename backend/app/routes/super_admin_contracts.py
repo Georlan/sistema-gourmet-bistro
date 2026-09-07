@@ -21,6 +21,7 @@ from ..services.billing_service import (
     get_billing_setup,
     is_billing_enforcement_enabled,
     is_billing_ready,
+    link_billing_setup_to_tenant,
 )
 from ..services.contract_notifications import schedule_customer_activation_notification
 from ..subscription import VALID_SUBSCRIPTION_PLANS
@@ -107,6 +108,9 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     billing_status = str(row.get("billing_status") or "pending").strip().lower()
     billing_provider = row.get("billing_provider")
     payment_method_type = row.get("payment_method_type")
+    enforcement_enabled = is_billing_enforcement_enabled()
+    is_ready = (billing_status == "ready")
+    activation_eligible = (linked_restaurante_id is None) and (not enforcement_enabled or is_ready)
     return {
         "acceptanceId": str(row["acceptance_id"]),
         "protocol": str(row["protocol"]),
@@ -114,6 +118,8 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
         "billingStatus": billing_status,
         "billingProvider": str(billing_provider) if billing_provider else None,
         "paymentMethodType": str(payment_method_type) if payment_method_type else None,
+        "billingEnforcementEnabled": enforcement_enabled,
+        "activationEligible": activation_eligible,
         "acceptedAt": _datetime_text(row.get("accepted_at")),
         "restaurantName": str(row.get("restaurant_name") or ""),
         "contractingPartyName": str(row.get("contracting_party_name") or ""),
@@ -427,6 +433,9 @@ def preview_contract(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Aceite contratual não encontrado.",
             )
+        billing_status = str(acceptance.get("billing_status") or "pending").strip().lower()
+        enforcement_enabled = is_billing_enforcement_enabled()
+        is_ready = (billing_status == "ready")
         return {
             "protocol": acceptance["protocol"],
             "plan": acceptance["plan"],
@@ -434,9 +443,11 @@ def preview_contract(
             "restaurantName": acceptance["restaurant_name"],
             "contractingPartyName": acceptance["contracting_party_name"],
             "email": acceptance["email"],
-            "billingStatus": acceptance.get("billing_status") or "pending",
+            "billingStatus": billing_status,
             "billingProvider": acceptance.get("billing_provider"),
             "paymentMethodType": acceptance.get("payment_method_type"),
+            "billingEnforcementEnabled": enforcement_enabled,
+            "activationEligible": not enforcement_enabled or is_ready,
         }
     finally:
         db.close()
@@ -539,6 +550,7 @@ def activate_contract(
                 slug=slug,
                 plano=plan,
                 saas_status="active",
+                billing_mode="subscription",
             )
             db.add(restaurant)
             db.flush()
@@ -585,26 +597,25 @@ def activate_contract(
 
             billing_setup = get_billing_setup(db, normalized)
             if billing_setup is not None:
-                billing_setup.restaurante_id = tenant_id
-                billing_setup.updated_at = now
-                db.add(billing_setup)
+                link_billing_setup_to_tenant(db, normalized, tenant_id)
 
-            canonical_sub = SaaSSubscription(
-                restaurante_id=tenant_id,
-                provider=billing_setup.provider if billing_setup else "manual",
-                provider_customer_id=billing_setup.provider_customer_id if billing_setup else None,
-                provider_subscription_id=billing_setup.provider_subscription_id if billing_setup else None,
-                payment_method_type=billing_setup.payment_method_type if billing_setup else None,
-                status="trialing",
-                billing_cycle=acceptance["billing_cycle"],
-                trial_started_at=now,
-                trial_ends_at=trial_ends_at,
-                current_period_start=now,
-                current_period_end=trial_ends_at,
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(canonical_sub)
+            if billing_setup is not None and billing_setup.status == "ready":
+                canonical_sub = SaaSSubscription(
+                    restaurante_id=tenant_id,
+                    provider=billing_setup.provider,
+                    provider_customer_id=billing_setup.provider_customer_id,
+                    provider_subscription_id=billing_setup.provider_subscription_id,
+                    payment_method_type=billing_setup.payment_method_type,
+                    status="trialing",
+                    billing_cycle=acceptance["billing_cycle"],
+                    trial_started_at=now,
+                    trial_ends_at=trial_ends_at,
+                    current_period_start=now,
+                    current_period_end=trial_ends_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+                db.add(canonical_sub)
 
             db.add(
                 SuperAdminAuditLog(

@@ -20,6 +20,8 @@ export interface ContractInboxItem {
   billingStatus?: "pending" | "ready" | "failed" | "canceled";
   billingProvider?: string | null;
   paymentMethodType?: string | null;
+  billingEnforcementEnabled?: boolean;
+  activationEligible?: boolean;
   acceptedAt: string | null;
   restaurantName: string;
   contractingPartyName: string;
@@ -316,14 +318,23 @@ export function SuperAdminContractsTab({
                     <button
                       type="button"
                       onClick={() => void activateSelected()}
-                      disabled={activatingProtocol === selected.protocol || selected.billingStatus === "pending" || selected.billingStatus === "failed"}
-                      title={selected.billingStatus === "pending" || selected.billingStatus === "failed" ? "Aguardando confirmação da forma de pagamento pelo restaurante" : undefined}
+                      disabled={
+                        activatingProtocol === selected.protocol ||
+                        (selected.activationEligible !== undefined
+                          ? !selected.activationEligible
+                          : (selected.billingStatus === "pending" || selected.billingStatus === "failed"))
+                      }
+                      title={
+                        (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
+                          ? "Aguardando confirmação da forma de pagamento pelo restaurante"
+                          : undefined
+                      }
                       className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Rocket className="h-3.5 w-3.5" />
                       {activatingProtocol === selected.protocol
                         ? "Ativando..."
-                        : selected.billingStatus === "pending" || selected.billingStatus === "failed"
+                        : (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
                         ? "Aguardando pagamento"
                         : "Ativar restaurante"}
                     </button>

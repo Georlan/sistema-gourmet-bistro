@@ -210,10 +210,14 @@ def test_backward_compatibility_when_enforcement_disabled(client_and_session, mo
         "is_billing_enforcement_enabled",
         lambda: False,
     )
+    monkeypatch.setattr(
+        "app.services.billing_service.is_billing_enforcement_enabled",
+        lambda: False,
+    )
 
     protocol = _accept_contract(client, "Bistrô Legado")
 
-    # Ativação deve suceder mesmo sem setup de billing prévio
+    # Ativação deve suceder mesmo sem setup de billing prévio quando enforcement estiver False
     response = client.post(
         f"/api/super-admin/contracts/{protocol}/activate",
         json={"reason": "Ativação em ambiente com enforcement desativado"},
@@ -222,14 +226,40 @@ def test_backward_compatibility_when_enforcement_disabled(client_and_session, mo
     restaurant_id = int(response.json()["restaurantId"])
 
     with Session() as db:
-        # Tenant foi criado
+        # Tenant foi criado com billing_mode='subscription'
         restaurante = db.query(Restaurante).filter_by(id=restaurant_id).one()
         assert restaurante.saas_status == "active"
+        assert restaurante.billing_mode == "subscription"
 
-        # Assinatura canônica padrão nasce como trialing
-        sub = db.query(SaaSSubscription).filter_by(restaurante_id=restaurant_id).one()
-        assert sub.status == "trialing"
-        assert sub.provider == "manual"
+        # Eliminação de assinatura fake: SEM billing pronto, nenhuma SaaSSubscription é criada
+        sub = db.query(SaaSSubscription).filter_by(restaurante_id=restaurant_id).one_or_none()
+        assert sub is None
+
+        # Entitlement resolve como transicional quando enforcement está desligado
+        entitlement = resolve_tenant_entitlement(db, restaurant_id)
+        assert entitlement.allowed is True
+        assert entitlement.reason == "enforcement_disabled_transitional"
+
+    # Agora simula ativação do enforcement: restaurante novo sem assinatura deve falhar closed
+    monkeypatch.setattr(
+        "app.services.billing_service.is_billing_enforcement_enabled",
+        lambda: True,
+    )
+    with Session() as db:
+        entitlement_blocked = resolve_tenant_entitlement(db, restaurant_id)
+        assert entitlement_blocked.allowed is False
+        assert entitlement_blocked.reason == "subscription_required"
+        assert entitlement_blocked.billing_status == "subscription_required"
+
+        # Já restaurantes legados continuam permitidos mesmo com enforcement True
+        r_legacy = Restaurante(id=999, nome="Legado", slug="legado", plano="pro", saas_status="active", billing_mode="legacy")
+        db.add(r_legacy)
+        db.commit()
+
+        legacy_entitlement = resolve_tenant_entitlement(db, 999)
+        assert legacy_entitlement.allowed is True
+        assert legacy_entitlement.reason == "legacy_grandfathered"
+        assert legacy_entitlement.billing_status == "active"
 
 
 def test_super_admin_inbox_and_preview_expose_billing_metadata(client_and_session):
@@ -265,6 +295,8 @@ def test_super_admin_inbox_and_preview_expose_billing_metadata(client_and_sessio
 
     assert items[p1]["billingStatus"] == "ready"
     assert items[p1]["paymentMethodType"] == "credit_card"
+    assert "activationEligible" in items[p1]
+    assert "billingEnforcementEnabled" in items[p1]
 
     assert items[p2]["billingStatus"] == "pending"
     assert items[p2]["paymentMethodType"] == "pix"
@@ -272,6 +304,8 @@ def test_super_admin_inbox_and_preview_expose_billing_metadata(client_and_sessio
     preview = client.get(f"/api/super-admin/contracts/preview/{p1}")
     assert preview.status_code == 200
     assert preview.json()["billingStatus"] == "ready"
+    assert "activationEligible" in preview.json()
+    assert "billingEnforcementEnabled" in preview.json()
 
 
 def test_entitlement_resolution_lifecycle(client_and_session):

@@ -30,12 +30,17 @@ class Restaurante(Base):
             "saas_status IN ('active', 'suspended')",
             name="ck_restaurantes_saas_status",
         ),
+        CheckConstraint(
+            "billing_mode IN ('subscription', 'legacy')",
+            name="ck_restaurantes_billing_mode",
+        ),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     nome = Column(String, nullable=False)
     plano = Column(String, default="pocket", nullable=False)
     slug = Column(String, nullable=True)
+    billing_mode = Column(String(20), default="subscription", server_default="subscription", nullable=False)
     logo_url = Column(String, nullable=True)
     banner_url = Column(String, nullable=True)
     cardapio_logo_path = Column(String, nullable=True)
