@@ -522,8 +522,8 @@ export default function CardapioCartDrawer({
               {/* Section 1: Cart Items */}
               <section>
                 <div className="mb-2.5 flex items-center justify-between">
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">1. Seu pedido</h3>
-                  <span className="text-[10px] font-bold text-koma-subtle">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">1. Seu pedido</h3>
+                  <span className="text-xs font-bold text-koma-subtle">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
                 </div>
                 <div className="space-y-2.5">
                   {cart.map((item) => {
@@ -537,11 +537,11 @@ export default function CardapioCartDrawer({
                     });
 
                     return (
-                      <div key={item.id} className="flex items-start gap-3 rounded-2xl border border-koma-border bg-koma-card p-3" id={`cart-item-${item.id}`}>
+                      <div key={item.id} className="flex items-start gap-3 rounded-2xl border border-koma-border bg-koma-card p-3.5" id={`cart-item-${item.id}`}>
                         <img
                           src={getProductImageUrl(item.product.image)}
                           alt={item.product.name}
-                          className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                          className="h-16 w-16 shrink-0 rounded-xl object-cover bg-white/5"
                           crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           onError={(event) => {
@@ -550,12 +550,12 @@ export default function CardapioCartDrawer({
                           }}
                         />
                         <div className="min-w-0 flex-1">
-                          <h4 className="truncate text-xs font-black text-koma-foreground">{item.product.name}</h4>
-                          {optionNames.length > 0 && <p className="mt-0.5 truncate text-[10px] text-koma-muted">{optionNames.join(", ")}</p>}
-                          {item.notes && <p className="mt-1.5 line-clamp-2 text-[10px] leading-relaxed text-amber-500">Obs.: {item.notes}</p>}
-                          <strong className="mt-2 block text-xs text-emerald-500">{formatPrice(unitPrice * item.quantity)}</strong>
+                          <h4 className="truncate text-sm font-bold text-koma-foreground">{item.product.name}</h4>
+                          {optionNames.length > 0 && <p className="mt-0.5 truncate text-xs text-koma-muted">{optionNames.join(", ")}</p>}
+                          {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
+                          <strong className="mt-2 block text-sm font-black text-emerald-400">{formatPrice(unitPrice * item.quantity)}</strong>
                         </div>
-                        <div className="flex shrink-0 flex-col items-end gap-2">
+                        <div className="flex shrink-0 flex-col items-end gap-2.5">
                           <button type="button" onClick={() => onRemoveItem(item.id)} className="grid h-8 w-8 place-items-center rounded-lg text-koma-subtle transition hover:bg-rose-500/10 hover:text-rose-400" aria-label={`Remover ${item.product.name}`}>
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -616,7 +616,7 @@ export default function CardapioCartDrawer({
 
               {/* Section 2: Delivery Method & Address & Bairro */}
               <section className="border-t border-koma-border pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">2. Como quer receber?</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</h3>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button type="button" aria-pressed={deliveryMethod === "pickup"} onClick={() => { setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
@@ -675,7 +675,7 @@ export default function CardapioCartDrawer({
 
               {/* Section 3: Cupons & Descontos */}
               <section className="border-t border-koma-border pt-5">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted mb-2.5">3. Descontos & Benefícios</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted mb-2.5">3. Descontos & Benefícios</h3>
                 
                 {/* Coupon Box */}
                 {appliedCoupon ? (
@@ -751,7 +751,7 @@ export default function CardapioCartDrawer({
 
               {/* Section 4: Forma de Pagamento & Troco */}
               <section className="border-t border-koma-border pt-5" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">4. Como quer pagar?</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">4. Como quer pagar?</h3>
                 <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">Pix é pago agora e só libera o pedido após confirmação. Dinheiro e cartão são pagos pessoalmente {deliveryMethod === "delivery" ? "na entrega" : "na retirada"}.</p>
                 
                 <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
@@ -830,7 +830,7 @@ export default function CardapioCartDrawer({
 
               {/* Section 5: Identification */}
               <section className="border-t border-koma-border pt-5">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">5. Identificação</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">5. Identificação</h3>
                 {user ? (
                   <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.07] p-3.5">
                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
@@ -849,7 +849,7 @@ export default function CardapioCartDrawer({
                       <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
                       <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); clearValidation("input-guest-phone"); }} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-phone" /></span>
                     </label>
-                    {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-[10px] font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-500">Quer acumular pontos de fidelidade? <strong className="text-emerald-500">Identifique-se aqui.</strong></button>}
+                    {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">Quer acumular pontos de fidelidade? <strong className="text-emerald-400">Entrar na conta.</strong></button>}
                   </div>
                 )}
                 {paymentDetail === "pix" && (

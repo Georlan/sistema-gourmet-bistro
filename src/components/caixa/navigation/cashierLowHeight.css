@@ -48,7 +48,7 @@
 
   .orders-eyebrow,
   .orders-hero__copy > p:last-child,
-  .orders-hero h1 em {
+  .orders-workspace .orders-hero h1 em {
     display: none;
   }
 

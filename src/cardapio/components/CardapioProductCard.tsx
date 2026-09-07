@@ -21,15 +21,33 @@ export default function CardapioProductCard({
   onFastAdd,
 }: CardapioProductCardProps) {
   const available = product.isAvailable !== false;
+  const hasModifiers = Boolean(
+    (product.modifiers && product.modifiers.length > 0) ||
+    (product.modifierGroups && product.modifierGroups.length > 0)
+  );
+
   const formattedPrice = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(product.price);
 
+  const handleAction = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!available) return;
+    if (hasModifiers) {
+      onSelectProduct(product);
+    } else {
+      onFastAdd(product);
+    }
+  };
+
   return (
     <article
       className={`cardapio-product-card group relative ${available ? "is-available" : "is-unavailable"}`}
       id={`product-card-${product.id}`}
+      onClick={() => {
+        if (available) onSelectProduct(product);
+      }}
     >
       {available && (
         <button
@@ -50,6 +68,11 @@ export default function CardapioProductCard({
                 Esgotado
               </span>
             )}
+            {available && hasModifiers && (
+              <span className="rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-400/90">
+                Opções
+              </span>
+            )}
           </div>
           {product.description && (
             <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-400 font-normal">
@@ -63,16 +86,14 @@ export default function CardapioProductCard({
             {available && (
               <button
                 type="button"
-                onClick={() => {
-                  onFastAdd(product);
-                }}
+                onClick={handleAction}
                 className="cardapio-product-card__add inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-sm cursor-pointer"
                 id={`btn-fast-add-${product.id}`}
-                title={`Adicionar ${product.name}`}
-                aria-label={`Adicionar ${product.name} à sacola`}
+                title={hasModifiers ? `Personalizar ${product.name}` : `Adicionar ${product.name}`}
+                aria-label={hasModifiers ? `Personalizar ${product.name}` : `Adicionar ${product.name} à sacola`}
               >
                 <Plus size={14} className="stroke-[2.5]" />
-                <span>Adicionar</span>
+                <span>{hasModifiers ? "Opções" : "Adicionar"}</span>
               </button>
             )}
           </div>

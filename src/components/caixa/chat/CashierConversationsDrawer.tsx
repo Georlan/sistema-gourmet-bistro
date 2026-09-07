@@ -171,7 +171,9 @@ export function CashierConversationsDrawer({
   // Se abrir e houver conversas mas nenhuma selecionada no desktop, seleciona a primeira
   useEffect(() => {
     if (isOpen && !selectedId && conversations.length > 0) {
-      setSelectedId(conversations[0].id);
+      if (typeof window !== 'undefined' && window.innerWidth >= 640) {
+        setSelectedId(conversations[0].id);
+      }
     }
   }, [isOpen, selectedId, conversations]);
 

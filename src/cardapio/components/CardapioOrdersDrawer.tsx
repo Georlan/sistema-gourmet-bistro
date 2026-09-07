@@ -34,6 +34,7 @@ interface CardapioOrdersDrawerProps {
   onRefresh: () => void;
   onRemoveOrder: (orderId: string) => void;
   isRefreshing?: boolean;
+  hasFloatingCart?: boolean;
 }
 
 function deliveryOrderStep(status?: string): number {
@@ -68,6 +69,7 @@ export default function CardapioOrdersDrawer({
   onRefresh,
   onRemoveOrder,
   isRefreshing = false,
+  hasFloatingCart = false,
 }: CardapioOrdersDrawerProps) {
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
   const [floatingOpen, setFloatingOpen] = React.useState(false);
@@ -212,7 +214,13 @@ export default function CardapioOrdersDrawer({
     if (!preferredChatOrder) return null;
 
     return (
-      <div className="fixed bottom-20 right-4 z-40 sm:right-5" id="floating-order-chat-container">
+      <div
+        className={clsx(
+          "fixed right-4 z-40 sm:right-5 transition-all duration-300",
+          hasFloatingCart ? "bottom-24" : "bottom-5"
+        )}
+        id="floating-order-chat-container"
+      >
         <button
           type="button"
           onClick={openFloatingChat}

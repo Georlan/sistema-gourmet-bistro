@@ -202,9 +202,11 @@ export default function CardapioHeader({
                 onClick={onAuthClick}
                 className="cardapio-public-account-button"
                 id={user ? "btn-user-profile" : "btn-login-trigger"}
+                title={user ? user.name || "Perfil" : "Entrar na conta"}
+                aria-label={user ? user.name || "Perfil" : "Entrar na conta"}
               >
                 <UserRound size={15} />
-                <span>{user ? user.name?.split(" ")[0] || "Perfil" : "Identificar"}</span>
+                <span>{user ? user.name?.split(" ")[0] || "Perfil" : "Entrar"}</span>
               </button>
             </div>
           </div>
