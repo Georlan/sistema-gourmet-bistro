@@ -16,6 +16,13 @@ from sqlalchemy.exc import IntegrityError
 from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from ..services.billing_service import (
+    get_billing_setup,
+    is_billing_enforcement_enabled,
+    is_billing_ready,
+    link_billing_setup_to_tenant,
+)
 from ..services.contract_notifications import schedule_customer_activation_notification
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .super_admin import get_current_admin
@@ -98,10 +105,21 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     operational_status = (
         "ACTIVATED" if linked_restaurante_id is not None else "SIGNED_PENDING_ACTIVATION"
     )
+    billing_status = str(row.get("billing_status") or "pending").strip().lower()
+    billing_provider = row.get("billing_provider")
+    payment_method_type = row.get("payment_method_type")
+    enforcement_enabled = is_billing_enforcement_enabled()
+    is_ready = (billing_status == "ready")
+    activation_eligible = (linked_restaurante_id is None) and (not enforcement_enabled or is_ready)
     return {
         "acceptanceId": str(row["acceptance_id"]),
         "protocol": str(row["protocol"]),
         "status": operational_status,
+        "billingStatus": billing_status,
+        "billingProvider": str(billing_provider) if billing_provider else None,
+        "paymentMethodType": str(payment_method_type) if payment_method_type else None,
+        "billingEnforcementEnabled": enforcement_enabled,
+        "activationEligible": activation_eligible,
         "acceptedAt": _datetime_text(row.get("accepted_at")),
         "restaurantName": str(row.get("restaurant_name") or ""),
         "contractingPartyName": str(row.get("contracting_party_name") or ""),
@@ -137,6 +155,13 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _ensure_sqlite_billing_tables(db) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        SaaSBillingSetup.__table__.create(bind, checkfirst=True)
+        SaaSSubscription.__table__.create(bind, checkfirst=True)
+
+
 def _list_acceptances(db, limit: int) -> list[dict[str, Any]]:
     if db.get_bind().dialect.name == "postgresql":
         rows = db.execute(
@@ -147,18 +172,23 @@ def _list_acceptances(db, limit: int) -> list[dict[str, Any]]:
         ).mappings().all()
         return [_admin_inbox_item(dict(row)) for row in rows]
 
+    _ensure_sqlite_billing_tables(db)
     rows = (
-        db.query(ContractAcceptance, RestaurantContractAcceptance)
+        db.query(ContractAcceptance, RestaurantContractAcceptance, SaaSBillingSetup)
         .outerjoin(
             RestaurantContractAcceptance,
             RestaurantContractAcceptance.acceptance_id == ContractAcceptance.id,
+        )
+        .outerjoin(
+            SaaSBillingSetup,
+            SaaSBillingSetup.protocol == ContractAcceptance.protocol,
         )
         .order_by(ContractAcceptance.accepted_at.desc())
         .limit(limit)
         .all()
     )
     result: list[dict[str, Any]] = []
-    for acceptance, link in rows:
+    for acceptance, link, billing in rows:
         result.append(
             _admin_inbox_item(
                 {
@@ -186,6 +216,9 @@ def _list_acceptances(db, limit: int) -> list[dict[str, Any]]:
                     "privacy_hash": acceptance.privacy_hash,
                     "linked_restaurante_id": link.restaurante_id if link else None,
                     "linked_at": link.linked_at if link else None,
+                    "billing_status": billing.status if billing else "pending",
+                    "billing_provider": billing.provider if billing else None,
+                    "payment_method_type": billing.payment_method_type if billing else None,
                 }
             )
         )
@@ -200,15 +233,33 @@ def _resolve_acceptance(db, protocol: str) -> dict[str, Any] | None:
             ),
             {"protocol": protocol},
         ).mappings().one_or_none()
-        return dict(row) if row else None
+        if not row:
+            return None
+        res = dict(row)
+        billing = get_billing_setup(db, protocol)
+        if billing:
+            res["billing_status"] = billing.status
+            res["billing_provider"] = billing.provider
+            res["payment_method_type"] = billing.payment_method_type
+        else:
+            res["billing_status"] = "pending"
+            res["billing_provider"] = None
+            res["payment_method_type"] = None
+        return res
 
-    acceptance = (
-        db.query(ContractAcceptance)
+    _ensure_sqlite_billing_tables(db)
+    row = (
+        db.query(ContractAcceptance, SaaSBillingSetup)
+        .outerjoin(
+            SaaSBillingSetup,
+            SaaSBillingSetup.protocol == ContractAcceptance.protocol,
+        )
         .filter(ContractAcceptance.protocol == protocol)
         .one_or_none()
     )
-    if acceptance is None:
+    if row is None:
         return None
+    acceptance, billing = row
     return {
         "acceptance_id": acceptance.id,
         "protocol": acceptance.protocol,
@@ -217,6 +268,9 @@ def _resolve_acceptance(db, protocol: str) -> dict[str, Any] | None:
         "restaurant_name": acceptance.restaurant_name,
         "contracting_party_name": acceptance.contracting_party_name,
         "email": acceptance.email,
+        "billing_status": billing.status if billing else "pending",
+        "billing_provider": billing.provider if billing else None,
+        "payment_method_type": billing.payment_method_type if billing else None,
     }
 
 
@@ -228,20 +282,38 @@ def _resolve_activation_acceptance(db, protocol: str) -> dict[str, Any] | None:
             ),
             {"protocol": protocol},
         ).mappings().one_or_none()
-        return dict(row) if row else None
+        if not row:
+            return None
+        res = dict(row)
+        if "billing_status" not in res or not res["billing_status"]:
+            billing = get_billing_setup(db, protocol)
+            if billing:
+                res["billing_status"] = billing.status
+                res["billing_provider"] = billing.provider
+                res["payment_method_type"] = billing.payment_method_type
+            else:
+                res["billing_status"] = "pending"
+                res["billing_provider"] = None
+                res["payment_method_type"] = None
+        return res
 
+    _ensure_sqlite_billing_tables(db)
     row = (
-        db.query(ContractAcceptance, RestaurantContractAcceptance)
+        db.query(ContractAcceptance, RestaurantContractAcceptance, SaaSBillingSetup)
         .outerjoin(
             RestaurantContractAcceptance,
             RestaurantContractAcceptance.acceptance_id == ContractAcceptance.id,
+        )
+        .outerjoin(
+            SaaSBillingSetup,
+            SaaSBillingSetup.protocol == ContractAcceptance.protocol,
         )
         .filter(ContractAcceptance.protocol == protocol)
         .one_or_none()
     )
     if row is None:
         return None
-    acceptance, link = row
+    acceptance, link, billing = row
     return {
         "acceptance_id": acceptance.id,
         "protocol": acceptance.protocol,
@@ -254,6 +326,9 @@ def _resolve_activation_acceptance(db, protocol: str) -> dict[str, Any] | None:
         "phone": acceptance.phone,
         "linked_restaurante_id": link.restaurante_id if link else None,
         "linked_at": link.linked_at if link else None,
+        "billing_status": billing.status if billing else "pending",
+        "billing_provider": billing.provider if billing else None,
+        "payment_method_type": billing.payment_method_type if billing else None,
     }
 
 
@@ -294,6 +369,12 @@ def _activation_response(
             "daysGranted": DEFAULT_TRIAL_DAYS,
             "endsAt": trial_ends_at.isoformat(),
         }
+    if acceptance.get("billing_status"):
+        payload["billingStatus"] = acceptance["billing_status"]
+    if acceptance.get("billing_provider"):
+        payload["billingProvider"] = acceptance["billing_provider"]
+    if acceptance.get("payment_method_type"):
+        payload["paymentMethodType"] = acceptance["payment_method_type"]
     return payload
 
 
@@ -352,6 +433,9 @@ def preview_contract(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Aceite contratual não encontrado.",
             )
+        billing_status = str(acceptance.get("billing_status") or "pending").strip().lower()
+        enforcement_enabled = is_billing_enforcement_enabled()
+        is_ready = (billing_status == "ready")
         return {
             "protocol": acceptance["protocol"],
             "plan": acceptance["plan"],
@@ -359,6 +443,11 @@ def preview_contract(
             "restaurantName": acceptance["restaurant_name"],
             "contractingPartyName": acceptance["contracting_party_name"],
             "email": acceptance["email"],
+            "billingStatus": billing_status,
+            "billingProvider": acceptance.get("billing_provider"),
+            "paymentMethodType": acceptance.get("payment_method_type"),
+            "billingEnforcementEnabled": enforcement_enabled,
+            "activationEligible": not enforcement_enabled or is_ready,
         }
     finally:
         db.close()
@@ -390,6 +479,12 @@ def activate_contract(
                 acceptance,
                 int(existing_tenant_id),
                 idempotent=True,
+            )
+
+        if is_billing_enforcement_enabled() and not is_billing_ready(db, normalized):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A ativação do restaurante exige forma de pagamento configurada e confirmada (billing ready).",
             )
 
         plan = str(acceptance.get("plan") or "").strip().lower()
@@ -433,6 +528,12 @@ def activate_contract(
                     idempotent=True,
                 )
 
+            if is_billing_enforcement_enabled() and not is_billing_ready(db, normalized):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A ativação do restaurante exige forma de pagamento configurada e confirmada (billing ready).",
+                )
+
             if _slug_owner_id(db, slug) is not None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -449,6 +550,7 @@ def activate_contract(
                 slug=slug,
                 plano=plan,
                 saas_status="active",
+                billing_mode="subscription",
             )
             db.add(restaurant)
             db.flush()
@@ -492,6 +594,29 @@ def activate_contract(
                 linked_at=now,
             )
             db.add(link)
+
+            billing_setup = get_billing_setup(db, normalized)
+            if billing_setup is not None:
+                link_billing_setup_to_tenant(db, normalized, tenant_id)
+
+            if billing_setup is not None and billing_setup.status == "ready":
+                canonical_sub = SaaSSubscription(
+                    restaurante_id=tenant_id,
+                    provider=billing_setup.provider,
+                    provider_customer_id=billing_setup.provider_customer_id,
+                    provider_subscription_id=billing_setup.provider_subscription_id,
+                    payment_method_type=billing_setup.payment_method_type,
+                    status="trialing",
+                    billing_cycle=acceptance["billing_cycle"],
+                    trial_started_at=now,
+                    trial_ends_at=trial_ends_at,
+                    current_period_start=now,
+                    current_period_end=trial_ends_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+                db.add(canonical_sub)
+
             db.add(
                 SuperAdminAuditLog(
                     restaurante_id=tenant_id,
@@ -506,6 +631,9 @@ def activate_contract(
                         "slug": slug,
                         "plan": plan,
                         "billing_cycle": acceptance["billing_cycle"],
+                        "billing_status": latest.get("billing_status") or (billing_setup.status if billing_setup else "pending"),
+                        "billing_provider": latest.get("billing_provider") or (billing_setup.provider if billing_setup else None),
+                        "payment_method_type": latest.get("payment_method_type") or (billing_setup.payment_method_type if billing_setup else None),
                         "trial_status": "active",
                         "trial_days": DEFAULT_TRIAL_DAYS,
                         "trial_ends_at": trial_ends_at.isoformat(),
@@ -540,7 +668,7 @@ def activate_contract(
                 plan,
             )
             return _activation_response(
-                acceptance,
+                latest,
                 tenant_id,
                 slug=slug,
                 admin_id=str(initial_admin.id),

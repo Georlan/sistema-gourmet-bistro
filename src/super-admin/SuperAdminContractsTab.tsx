@@ -17,6 +17,11 @@ export interface ContractInboxItem {
   acceptanceId: string;
   protocol: string;
   status: ContractInboxStatus;
+  billingStatus?: "pending" | "ready" | "failed" | "canceled";
+  billingProvider?: string | null;
+  paymentMethodType?: string | null;
+  billingEnforcementEnabled?: boolean;
+  activationEligible?: boolean;
   acceptedAt: string | null;
   restaurantName: string;
   contractingPartyName: string;
@@ -277,9 +282,16 @@ export function SuperAdminContractsTab({
                       <strong className="block truncate text-sm text-koma-foreground">{item.restaurantName}</strong>
                       <span className="mt-1 block truncate text-[11px] text-koma-muted">{item.contractingPartyName}</span>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wide ${item.status === "SIGNED_PENDING_ACTIVATION" ? "bg-amber-950 text-amber-300" : "bg-emerald-950 text-emerald-300"}`}>
-                      {item.status === "SIGNED_PENDING_ACTIVATION" ? "Pendente" : "Vinculada"}
-                    </span>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wide ${item.status === "SIGNED_PENDING_ACTIVATION" ? "bg-amber-950 text-amber-300" : "bg-emerald-950 text-emerald-300"}`}>
+                        {item.status === "SIGNED_PENDING_ACTIVATION" ? "Pendente" : "Vinculada"}
+                      </span>
+                      {item.status === "SIGNED_PENDING_ACTIVATION" && (
+                        <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide border ${item.billingStatus === "ready" ? "border-emerald-700/60 bg-emerald-950/40 text-emerald-300" : "border-amber-700/60 bg-amber-950/40 text-amber-300"}`}>
+                          {item.billingStatus === "ready" ? "Billing pronto" : "Aguardando pagamento"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 text-[10px] text-koma-muted">
                     <span className="font-mono">{item.protocol}</span>
@@ -306,11 +318,25 @@ export function SuperAdminContractsTab({
                     <button
                       type="button"
                       onClick={() => void activateSelected()}
-                      disabled={activatingProtocol === selected.protocol}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-wait disabled:opacity-60"
+                      disabled={
+                        activatingProtocol === selected.protocol ||
+                        (selected.activationEligible !== undefined
+                          ? !selected.activationEligible
+                          : (selected.billingStatus === "pending" || selected.billingStatus === "failed"))
+                      }
+                      title={
+                        (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
+                          ? "Aguardando confirmação da forma de pagamento pelo restaurante"
+                          : undefined
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Rocket className="h-3.5 w-3.5" />
-                      {activatingProtocol === selected.protocol ? "Ativando..." : "Ativar restaurante"}
+                      {activatingProtocol === selected.protocol
+                        ? "Ativando..."
+                        : (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
+                        ? "Aguardando pagamento"
+                        : "Ativar restaurante"}
                     </button>
                   )}
                   <button type="button" onClick={() => void copyProtocol()} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-[11px] font-bold text-koma-secondary hover:text-koma-foreground">
@@ -352,6 +378,18 @@ export function SuperAdminContractsTab({
                 <div><span className="block text-[9px] font-bold uppercase text-koma-muted">Taxa online</span><strong className="mt-1 block text-sm text-koma-foreground">{formatRate(selected.marketplaceRate)}</strong></div>
               </div>
 
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-b border-zinc-800 pb-4 text-xs">
+                <span className="text-[10px] font-black uppercase tracking-wider text-koma-muted">Status do billing:</span>
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide border ${selected.billingStatus === "ready" ? "border-emerald-700/60 bg-emerald-950/40 text-emerald-300" : "border-amber-700/60 bg-amber-950/40 text-amber-300"}`}>
+                  {selected.billingStatus === "ready" ? "Confirmado (Pronto para ativação)" : "Pendente (Aguardando forma de pagamento)"}
+                </span>
+                {selected.paymentMethodType && (
+                  <span className="text-[10px] text-koma-secondary">
+                    Método: <strong className="uppercase text-koma-foreground">{selected.paymentMethodType}</strong>
+                  </span>
+                )}
+              </div>
+
               <div className="mt-5">
                 <div className="flex items-center justify-between gap-3">
                   <h4 className="text-[10px] font-black uppercase tracking-wider text-koma-muted">Evidência jurídica</h4>
@@ -365,9 +403,11 @@ export function SuperAdminContractsTab({
                 </div>
               </div>
 
-              <div className={`mt-5 rounded-lg border p-3 text-xs ${selected.status === "SIGNED_PENDING_ACTIVATION" ? "border-amber-900/50 bg-amber-950/20 text-amber-200" : "border-emerald-900/50 bg-emerald-950/20 text-emerald-200"}`}>
+              <div className={`mt-5 rounded-lg border p-3 text-xs ${selected.status === "SIGNED_PENDING_ACTIVATION" ? (selected.billingStatus === "ready" ? "border-emerald-900/50 bg-emerald-950/20 text-emerald-200" : "border-amber-900/50 bg-amber-950/20 text-amber-200") : "border-emerald-900/50 bg-emerald-950/20 text-emerald-200"}`}>
                 {selected.status === "SIGNED_PENDING_ACTIVATION"
-                  ? "Aceite registrado e pronto para provisionamento atômico. A ativação cria tenant, administrador pendente, trial e vínculo contratual sem expor credenciais."
+                  ? selected.billingStatus === "ready"
+                    ? "Aceite registrado e forma de pagamento pronta. Pronto para provisionamento atômico sem expor credenciais."
+                    : "Aceite registrado, aguardando forma de pagamento. A ativação cria tenant, administrador pendente, trial e vínculo contratual sem expor credenciais assim que o billing estiver pronto."
                   : `Aceite vinculado ao restaurante #${selected.linkedRestaurantId ?? "—"} em ${formatDate(selected.linkedAt)}.`}
               </div>
             </article>
