@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db, tenant_session_scope
@@ -80,6 +81,27 @@ def consultar_pedido_por_token(
             .first()
         )
 
+        conversation = (
+            db.query(OrderConversation)
+            .filter(
+                OrderConversation.restaurante_id == restaurante_id,
+                OrderConversation.id == conversation_id,
+            )
+            .first()
+        )
+        customer_unread_count = 0
+        if conversation:
+            unread_query = db.query(func.count(OrderMessage.id)).filter(
+                OrderMessage.restaurante_id == restaurante_id,
+                OrderMessage.conversation_id == conversation_id,
+                OrderMessage.sender_type == "staff",
+            )
+            if conversation.customer_last_read_at:
+                unread_query = unread_query.filter(
+                    OrderMessage.created_at > conversation.customer_last_read_at
+                )
+            customer_unread_count = int(unread_query.scalar() or 0)
+
         itens_payload = [
             {
                 "id": it.id,
@@ -114,6 +136,7 @@ def consultar_pedido_por_token(
             "conversa": {
                 "id": conversation_id,
                 "closed_at": closed_at_iso,
+                "unread_count": customer_unread_count,
             },
         }
 
