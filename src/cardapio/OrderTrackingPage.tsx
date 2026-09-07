@@ -502,8 +502,8 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
             </div>
           ) : (
             <div className="relative">
-              {/* Barra de progresso para desktop */}
-              <div className="hidden md:grid grid-cols-5 gap-2 relative">
+              {/* Barra de progresso responsiva (mobile e desktop) */}
+              <div className="grid grid-cols-5 gap-1 sm:gap-2 relative">
                 {timelineSteps.map((step, idx) => {
                   const isPassed = idx < currentStep;
                   const isCurrent = idx === currentStep;
@@ -511,7 +511,7 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
                     <div key={step.label} className="flex flex-col items-center text-center relative">
                       <div
                         className={clsx(
-                          "w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all mb-2 z-10",
+                          "w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all mb-1.5 sm:mb-2 z-10",
                           isPassed
                             ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
                             : isCurrent
@@ -519,52 +519,17 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
                             : "bg-zinc-800 text-zinc-500 border border-zinc-700",
                         )}
                       >
-                        {isPassed ? <Check size={16} /> : idx + 1}
+                        {isPassed ? <Check size={14} /> : idx + 1}
                       </div>
                       <span
                         className={clsx(
-                          "text-xs font-semibold block mb-0.5",
+                          "text-[10px] sm:text-xs font-semibold block leading-tight",
                           isCurrent ? "text-emerald-400" : isPassed ? "text-zinc-200" : "text-zinc-500",
                         )}
                       >
                         {step.label}
                       </span>
-                      <span className="text-[10px] text-zinc-500 max-w-[120px] leading-tight">
-                        {step.desc}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Linha vertical para mobile */}
-              <div className="md:hidden flex flex-col gap-4 pl-2 border-l-2 border-zinc-800 ml-4">
-                {timelineSteps.map((step, idx) => {
-                  const isPassed = idx < currentStep;
-                  const isCurrent = idx === currentStep;
-                  return (
-                    <div key={step.label} className="relative pl-6">
-                      <div
-                        className={clsx(
-                          "absolute -left-[25px] top-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all",
-                          isPassed
-                            ? "bg-emerald-500 text-black"
-                            : isCurrent
-                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500 ring-2 ring-emerald-500/20 animate-pulse"
-                            : "bg-zinc-800 text-zinc-500",
-                        )}
-                      >
-                        {isPassed ? <Check size={12} /> : idx + 1}
-                      </div>
-                      <span
-                        className={clsx(
-                          "text-xs font-semibold block",
-                          isCurrent ? "text-emerald-400" : isPassed ? "text-zinc-200" : "text-zinc-500",
-                        )}
-                      >
-                        {step.label}
-                      </span>
-                      <span className="text-[11px] text-zinc-400 block mt-0.5">
+                      <span className="hidden sm:block text-[10px] text-zinc-500 max-w-[120px] leading-tight mt-0.5">
                         {step.desc}
                       </span>
                     </div>

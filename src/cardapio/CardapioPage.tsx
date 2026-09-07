@@ -7,7 +7,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   Clock3,
+  MapPin,
   RefreshCw,
+  Search,
   ShoppingBag,
   XCircle,
 } from "lucide-react";
@@ -21,6 +23,7 @@ import {
   SocialNetwork,
   getProductImageUrl,
   getRestaurantAssetUrl,
+  LOCAL_LOGO_PLACEHOLDER,
 } from "./CardapioTypes";
 import CardapioHeader from "./components/CardapioHeader";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
@@ -758,17 +761,60 @@ export default function CardapioPage() {
 
         <section className="relative h-48 overflow-hidden rounded-3xl border border-koma-border sm:h-60" id="brand-banner-hero">
           <img src={activeBrand.bannerImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-emerald-950/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-emerald-950/40" />
           <div className="relative flex h-full items-end justify-between gap-4 p-5 sm:p-7">
-            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-              <img src={activeBrand.logo} alt={activeBrand.name} className="h-14 w-14 shrink-0 rounded-2xl border border-white/20 bg-white object-contain p-1 sm:h-16 sm:w-16" />
+            <div className="flex min-w-0 items-center gap-3.5 sm:gap-4">
+              <img
+                src={activeBrand.logo}
+                alt={activeBrand.name}
+                className="h-14 w-14 shrink-0 rounded-2xl border border-white/20 bg-white object-contain p-1 shadow-lg sm:h-16 sm:w-16"
+                onError={(event) => {
+                  event.currentTarget.onerror = null;
+                  event.currentTarget.src = LOCAL_LOGO_PLACEHOLDER;
+                }}
+              />
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-black text-white sm:text-2xl">{activeBrand.name}</h1>
-                {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/70">{activeBrand.slogan}</p>}
+                {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/75 sm:text-sm">{activeBrand.slogan}</p>}
+                {activeBrand.address && (
+                  <button
+                    type="button"
+                    onClick={() => setIsStoreInfoOpen(true)}
+                    className="mt-1.5 flex items-center gap-1.5 text-left text-xs font-semibold text-emerald-300/90 transition hover:text-emerald-200"
+                  >
+                    <MapPin className="h-3 w-3 shrink-0" />
+                    <span className="truncate max-w-xs">{activeBrand.address}</span>
+                  </button>
+                )}
               </div>
             </div>
-            <button type="button" onClick={() => setIsStoreInfoOpen(true)} className={clsx("shrink-0 rounded-full border px-3 py-2 text-[10px] font-black backdrop-blur", activeBrand.storeStatus === "closed" ? "border-rose-400/30 bg-rose-500/15 text-rose-200" : activeBrand.storeStatus === "open" ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200" : "border-amber-400/30 bg-amber-500/15 text-amber-100")}>
-              {activeBrand.storeStatus === "closed" ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados") : activeBrand.storeStatus === "open" ? "Aberto para pedidos" : "Ver horários"}
+            <button
+              type="button"
+              onClick={() => setIsStoreInfoOpen(true)}
+              className={clsx(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-black backdrop-blur transition hover:scale-105",
+                activeBrand.storeStatus === "closed"
+                  ? "border-rose-400/30 bg-rose-500/20 text-rose-200"
+                  : activeBrand.storeStatus === "open"
+                    ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200"
+                    : "border-amber-400/30 bg-amber-500/20 text-amber-100"
+              )}
+            >
+              <span className={clsx(
+                "h-2 w-2 rounded-full shrink-0",
+                activeBrand.storeStatus === "open"
+                  ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                  : activeBrand.storeStatus === "closed"
+                    ? "bg-rose-400"
+                    : "bg-amber-400"
+              )} />
+              <span>
+                {activeBrand.storeStatus === "closed"
+                  ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados")
+                  : activeBrand.storeStatus === "open"
+                    ? "Aberto para pedidos"
+                    : "Ver horários"}
+              </span>
             </button>
           </div>
         </section>
@@ -795,8 +841,25 @@ export default function CardapioPage() {
 
         <div className="flex flex-col gap-9" id="catalog-feed">
           {visibleCategories.length === 0 ? (
-            <div className="rounded-2xl border border-koma-border bg-koma-card p-10 text-center text-xs text-koma-muted">
-              {activeBrand.products.length === 0 ? "Este restaurante ainda não publicou produtos." : "Nenhum item encontrado para sua busca."}
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-koma-border bg-koma-card p-10 text-center">
+              {searchQuery ? (
+                <>
+                  <div className="grid h-12 w-12 place-items-center rounded-2xl border border-koma-border bg-koma-panel text-koma-muted mb-3">
+                    <Search className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm font-black text-koma-foreground">Nenhum item encontrado para "{searchQuery}"</p>
+                  <p className="mt-1 text-xs text-koma-muted max-w-sm">Tente buscar por outros termos ou limpe o campo para ver o cardápio completo.</p>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-4 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/25 transition"
+                  >
+                    Limpar busca
+                  </button>
+                </>
+              ) : (
+                <p className="text-xs text-koma-muted">Este restaurante ainda não publicou produtos no cardápio.</p>
+              )}
             </div>
           ) : visibleCategories.map((category) => {
             const products = activeBrand.products.filter((product) => (
@@ -937,6 +1000,7 @@ export default function CardapioPage() {
           }
         }}
         isRefreshing={isRefreshingOrders}
+        hasFloatingCart={cartCount > 0 && !isCartOpen}
       />
     </div>
   );
