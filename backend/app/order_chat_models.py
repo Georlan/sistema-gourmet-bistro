@@ -99,7 +99,7 @@ class OrderMessage(Base):
     )
     pedido_id = Column(String(64), nullable=False)
     sender_type = Column(String(20), nullable=False)  # customer | staff | system
-    sender_user_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
+    sender_user_id = Column(String, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     body = Column(Text, nullable=False)
     event_key = Column(String(64), nullable=True)
     created_at = Column(
