@@ -62,7 +62,7 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     checkoutSummary: 'Pagamento anual antecipado com ativação após confirmação.',
     landingSummary: 'Pix anual à vista, com ativação após confirmação.',
     previewTitle: 'Pix anual à vista · em validação',
-    previewDescription: 'O fluxo final gerará QR Code e Pix copia e cola do total anual selecionado e só ativará o restaurante após confirmação do pagamento. Enquanto estiver em validação, este item é apenas informativo e não gera cobrança.',
+    previewDescription: 'O fluxo final gerará QR Code e Pix copia e cola do total anual selecionado e só ativará o restaurante após confirmação do pagamento. Este preview não gera cobrança enquanto o método estiver em validação.',
     selectable: false,
   },
   {
