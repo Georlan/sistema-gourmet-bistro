@@ -239,10 +239,10 @@ function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
 }
 
 /**
- * Projeção mínima persistente. Dados pessoais, itens comprados e URLs que
- * duplicam segredos não pertencem ao armazenamento durável do navegador.
- * Quando há tracking_token, a idempotency key também deixa de ser necessária
- * para acompanhar o pedido e não é persistida.
+ * Projeção mínima limitada à sessão da aba. Dados pessoais, itens comprados,
+ * URLs que duplicam segredos e identificadores de tracking não devem sobreviver
+ * ao fechamento da sessão do navegador. Quando há tracking_token, a idempotency
+ * key também deixa de ser necessária para acompanhar o pedido.
  */
 function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrder | null {
   if (!order?.id || now - Number(order.timestamp || 0) > ACTIVE_ORDER_TTL_MS) return null;
@@ -267,8 +267,28 @@ function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrde
   };
 }
 
+function getSessionOrderStorage(): Storage | null {
+  return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+}
+
+function getLegacyDurableStorage(): Storage | null {
+  return typeof localStorage !== "undefined" ? localStorage : null;
+}
+
+function removeDurableOrderCopies(): void {
+  const durable = getLegacyDurableStorage();
+  if (!durable) return;
+  try {
+    durable.removeItem(ACTIVE_ORDERS_STORAGE_KEY);
+    durable.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
+  } catch {
+    // Best effort: nunca bloqueia o fluxo do pedido por falha de storage.
+  }
+}
+
 function persistStoredOrders(orders: StoredOrder[]): void {
-  if (typeof localStorage === "undefined") return;
+  const storage = getSessionOrderStorage();
+  if (!storage) return;
   const now = Date.now();
   const minimal = orders
     .map((order) => minimalPersistedOrder(order, now))
@@ -276,27 +296,31 @@ function persistStoredOrders(orders: StoredOrder[]): void {
     .slice(0, 20);
 
   try {
-    localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(minimal));
+    storage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(minimal));
   } catch (error) {
-    console.warn("Falha ao salvar koma_active_orders:", error);
+    console.warn("Falha ao salvar koma_active_orders na sessão:", error);
   }
 
   try {
     const latestActive = minimal.find((item) => !resolveOrderState(item).terminal) || minimal[0];
     if (latestActive) {
-      localStorage.setItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY, JSON.stringify(latestActive));
+      storage.setItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY, JSON.stringify(latestActive));
     } else {
-      localStorage.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
+      storage.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
     }
   } catch (error) {
-    console.warn("Falha ao sincronizar koma_active_order:", error);
+    console.warn("Falha ao sincronizar koma_active_order na sessão:", error);
   }
+
+  // Migração one-way: versões antigas gravavam tracking_token/idempotency_key
+  // em localStorage. Assim que uma versão nova toca no histórico, apaga as cópias.
+  removeDurableOrderCopies();
 }
 
 /**
- * Carrega pedidos locais e migra silenciosamente versões antigas para a
- * projeção mínima. O tracking token opaco é o único segredo persistido para
- * pedidos modernos; idempotency key fica apenas para compatibilidade legada.
+ * Carrega pedidos da sessão atual e migra silenciosamente registros antigos do
+ * localStorage. O segredo de tracking fica apenas em sessionStorage e deixa de
+ * sobreviver ao fechamento da aba/janela.
  */
 export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
   const now = Date.now();
@@ -308,24 +332,25 @@ export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
     if (normalized) ordersMap.set(normalized.id, normalized);
   };
 
-  const rawList = safeParseJson<StoredOrder[]>(
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY)
-      : null,
-  );
-  if (Array.isArray(rawList)) rawList.forEach(accept);
+  const session = getSessionOrderStorage();
+  const durable = getLegacyDurableStorage();
 
-  const rawLegacy = safeParseJson<StoredOrder>(
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)
-      : null,
-  );
-  if (rawLegacy && !ordersMap.has(String(rawLegacy.id || ""))) accept(rawLegacy);
+  const sessionList = safeParseJson<StoredOrder[]>(session?.getItem(ACTIVE_ORDERS_STORAGE_KEY) || null);
+  if (Array.isArray(sessionList)) sessionList.forEach(accept);
+
+  const sessionLegacy = safeParseJson<StoredOrder>(session?.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY) || null);
+  if (sessionLegacy && !ordersMap.has(String(sessionLegacy.id || ""))) accept(sessionLegacy);
+
+  // Compatibilidade de migração: lê localStorage uma única vez, sanitiza e move.
+  const durableList = safeParseJson<StoredOrder[]>(durable?.getItem(ACTIVE_ORDERS_STORAGE_KEY) || null);
+  if (Array.isArray(durableList)) durableList.forEach(accept);
+
+  const durableLegacy = safeParseJson<StoredOrder>(durable?.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY) || null);
+  if (durableLegacy && !ordersMap.has(String(durableLegacy.id || ""))) accept(durableLegacy);
 
   const allOrders = Array.from(ordersMap.values()).sort(
     (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
   );
-  // Também limpa PII/detalhes deixados por versões antigas no primeiro acesso.
   persistStoredOrders(allOrders);
 
   if (typeof restaurantId === "number" && Number.isFinite(restaurantId)) {
@@ -335,7 +360,7 @@ export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
 }
 
 export function saveStoredOrder(order: StoredOrder): void {
-  if (typeof localStorage === "undefined" || !order?.id) return;
+  if (!getSessionOrderStorage() || !order?.id) return;
   const current = loadStoredOrders();
   const filtered = current.filter((item) => item.id !== String(order.id));
   persistStoredOrders([order, ...filtered]);
@@ -345,7 +370,7 @@ export function updateStoredOrderStatus(
   orderId: string,
   updates: Partial<StoredOrder>,
 ): void {
-  if (typeof localStorage === "undefined" || !orderId) return;
+  if (!getSessionOrderStorage() || !orderId) return;
 
   const current = loadStoredOrders();
   const index = current.findIndex((item) => item.id === orderId);
@@ -356,13 +381,15 @@ export function updateStoredOrderStatus(
 }
 
 export function removeStoredOrder(orderId: string): void {
-  if (typeof localStorage === "undefined" || !orderId) return;
+  if (!getSessionOrderStorage() || !orderId) return;
   const filtered = loadStoredOrders().filter((item) => item.id !== orderId);
   persistStoredOrders(filtered);
 }
 
 export function clearAllStoredOrders(restaurantId?: number): void {
-  if (typeof localStorage === "undefined") return;
+  const session = getSessionOrderStorage();
+  const durable = getLegacyDurableStorage();
+  if (!session && !durable) return;
 
   if (typeof restaurantId === "number" && Number.isFinite(restaurantId)) {
     const remaining = loadStoredOrders().filter((item) => item.restaurante_id !== restaurantId);
@@ -371,8 +398,10 @@ export function clearAllStoredOrders(restaurantId?: number): void {
   }
 
   try {
-    localStorage.removeItem(ACTIVE_ORDERS_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
+    session?.removeItem(ACTIVE_ORDERS_STORAGE_KEY);
+    session?.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
+    durable?.removeItem(ACTIVE_ORDERS_STORAGE_KEY);
+    durable?.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
   } catch {
     // Ignora erro
   }
