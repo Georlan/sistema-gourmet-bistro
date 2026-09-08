@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -24,8 +25,18 @@ class SaasMercadoPagoService:
     API_URL = "https://api.mercadopago.com"
 
     def __init__(self, access_token: str | None = None):
-        self.access_token = (access_token or settings.KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN).strip()
+        configured_token = settings.KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN if access_token is None else access_token
+        self.access_token = configured_token.strip()
+        self.environment = os.getenv("ENVIRONMENT", "production").strip().lower()
         self.is_mock = not self.access_token or self.access_token.startswith("mock") or self.access_token == "test"
+        self.mock_allowed = self.environment in {"test", "development"}
+
+    def _ensure_provider_ready(self) -> None:
+        if self.is_mock and not self.mock_allowed:
+            raise SaasMercadoPagoError(
+                "Integração de cobrança SaaS do Mercado Pago não configurada para este ambiente.",
+                status_code=503,
+            )
 
     def _client(self) -> httpx.Client:
         return httpx.Client(
@@ -53,6 +64,7 @@ class SaasMercadoPagoService:
         Cria uma assinatura recorrente (preapproval) no Mercado Pago com período de trial gratuito.
         O trial inicia imediatamente na autorização do gateway (Arquitetura B).
         """
+        self._ensure_provider_ready()
         cycle_normalized = billing_cycle.strip().lower()
         is_annual = cycle_normalized in ("anual", "annual")
         frequency = 12 if is_annual else 1
@@ -123,6 +135,7 @@ class SaasMercadoPagoService:
 
     def get_preapproval(self, preapproval_id: str) -> dict[str, Any]:
         """Consulta dados e status de um preapproval no Mercado Pago."""
+        self._ensure_provider_ready()
         if self.is_mock:
             return {
                 "id": preapproval_id,
@@ -144,6 +157,7 @@ class SaasMercadoPagoService:
 
     def cancel_preapproval(self, preapproval_id: str) -> dict[str, Any]:
         """Cancela uma assinatura preapproval no Mercado Pago."""
+        self._ensure_provider_ready()
         if self.is_mock:
             return {"id": preapproval_id, "status": "cancelled"}
 
@@ -173,6 +187,7 @@ class SaasMercadoPagoService:
         Cria um pagamento Pix antecipado para contratação do plano anual.
         Retorna id do pagamento, QR code e payload copia-e-cola.
         """
+        self._ensure_provider_ready()
         if self.is_mock:
             mock_payment_id = f"mock-pix-{uuid.uuid4().hex[:10]}"
             qr_emv = f"00020126580014br.gov.bcb.pix0136{uuid.uuid4()}5204000053039865802BR5913KOMA PLATAFORMA6009FORTALEZA62070503***6304ABCD"
@@ -231,6 +246,32 @@ class SaasMercadoPagoService:
             logger.error("Network error connecting to Mercado Pago payments API: %s", exc)
             raise SaasMercadoPagoError("Erro de comunicação ao gerar pagamento Pix.") from exc
 
+    def get_payment(self, payment_id: str) -> dict[str, Any]:
+        """Consulta o pagamento no gateway antes de qualquer ativação baseada em webhook."""
+        self._ensure_provider_ready()
+        if self.is_mock:
+            # Em testes o estado aprovado precisa ser declarado explicitamente via monkeypatch.
+            # O fallback seguro é pending para impedir ativação acidental por um evento sintético.
+            return {
+                "id": payment_id,
+                "status": "pending",
+                "payment_method_id": "pix",
+                "external_reference": None,
+                "transaction_amount": None,
+            }
+
+        try:
+            with self._client() as client:
+                resp = client.get(f"/v1/payments/{payment_id}")
+                if resp.status_code >= 400:
+                    raise SaasMercadoPagoError(
+                        f"Consulta de pagamento falhou ({resp.status_code}).",
+                        status_code=resp.status_code,
+                    )
+                return resp.json()
+        except httpx.RequestError as exc:
+            raise SaasMercadoPagoError("Erro de comunicação ao consultar pagamento.") from exc
+
     @staticmethod
     def verify_webhook_signature(
         *,
@@ -240,8 +281,9 @@ class SaasMercadoPagoService:
     ) -> bool:
         secret = settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET
         if not secret:
-            # Em modo teste/desenvolvimento sem segredo configurado, aceita para facilitar mocks
-            return True
+            # Mocks sem segredo são permitidos somente fora de produção.
+            environment = os.getenv("ENVIRONMENT", "production").strip().lower()
+            return environment in {"test", "development"}
         return verify_mercado_pago_signature(
             signature_header=signature_header,
             request_id=request_id,

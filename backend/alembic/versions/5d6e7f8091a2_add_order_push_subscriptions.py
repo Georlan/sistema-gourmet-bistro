@@ -1,15 +1,15 @@
 """add order push subscriptions
 
-Revision ID: 4c5d6e7f8091
-Revises: 3b4c5d6e7f80
+Revision ID: 5d6e7f8091a2
+Revises: 4c5d6e7f8091
 Create Date: 2026-09-08 22:10:00.000000
 
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "4c5d6e7f8091"
-down_revision = "3b4c5d6e7f80"
+revision = "5d6e7f8091a2"
+down_revision = "4c5d6e7f8091"
 branch_labels = None
 depends_on = None
 
