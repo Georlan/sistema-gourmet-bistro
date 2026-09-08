@@ -1,8 +1,9 @@
 import { API_BASE_URL } from './api';
 import { SystemUser } from '../types';
+import { getOperatorAccessToken } from '../utils/authSession';
 
 const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('koma_caixa_token') || localStorage.getItem('token') || localStorage.getItem('koma_waiter_token');
+  const token = getOperatorAccessToken();
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 

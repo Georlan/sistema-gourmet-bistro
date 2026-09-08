@@ -12,7 +12,9 @@ export interface OperatorSession {
 const SESSION_KEY = 'koma_operator_session';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-// Salva a sessão do operador com 24 horas de validade
+// Salva a sessão do operador com 24 horas de validade.
+// A chave genérica `token` foi aposentada: ela duplicava o bearer token sem
+// escopo e podia ser lida por fluxos que não sabiam a qual portal pertencia.
 export function saveOperatorSession(token: string, user: any): void {
   const session: OperatorSession = {
     token,
@@ -21,10 +23,9 @@ export function saveOperatorSession(token: string, user: any): void {
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   localStorage.setItem('koma_caixa_token', token);
-  localStorage.setItem('token', token);
-  // O app operacional e o WebSocket compartilham estas chaves legadas.
-  // Mantê-las sincronizadas evita uma sessão HTTP válida sem identidade para
-  // o canal em tempo real após login, ativação do caixa ou atualização.
+  localStorage.removeItem('token');
+  // O app operacional e o WebSocket ainda compartilham estas chaves legadas.
+  // Elas serão retiradas na fase seguinte, junto da migração para sessão HttpOnly.
   if (user?.id != null) {
     localStorage.setItem('koma_caixa_id', String(user.id));
   }
@@ -36,12 +37,14 @@ export function saveOperatorSession(token: string, user: any): void {
   }
 }
 
-// Recupera a sessão do operador e limpa automaticamente se tiver mais de 24h
+// Recupera a sessão do operador e limpa automaticamente se tiver mais de 24h.
 export function getOperatorSession(): OperatorSession | null {
+  // Limpa o alias genérico deixado por versões antigas assim que o app inicia.
+  localStorage.removeItem('token');
   const rawSession = localStorage.getItem(SESSION_KEY);
   if (!rawSession) {
-    // Fallback para tokens legados sem expiração
-    const legacyToken = localStorage.getItem('koma_caixa_token') || localStorage.getItem('token');
+    // Fallback temporário somente para a chave escopada do Caixa.
+    const legacyToken = localStorage.getItem('koma_caixa_token');
     if (legacyToken) {
       const legacySession: OperatorSession = {
         token: legacyToken,
@@ -56,8 +59,7 @@ export function getOperatorSession(): OperatorSession | null {
 
   try {
     const session: OperatorSession = JSON.parse(rawSession);
-    
-    // Verifica se a sessão expirou
+
     if (Date.now() > session.expiresAt) {
       console.warn("⚠️ Sessão de operador expirada (mais de 24h). Efetuando logout...");
       clearOperatorSession();
@@ -69,6 +71,10 @@ export function getOperatorSession(): OperatorSession | null {
     clearOperatorSession();
     return null;
   }
+}
+
+export function getOperatorAccessToken(): string {
+  return getOperatorSession()?.token || localStorage.getItem('koma_waiter_token') || '';
 }
 
 // Limpa a sessão no logout ou expiração

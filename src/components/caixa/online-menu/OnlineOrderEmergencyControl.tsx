@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, PauseCircle, PlayCircle, X } from 'lucide-react
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../../../config/api';
+import { getOperatorAccessToken } from '../../../utils/authSession';
 
 type OperationalStatus = {
   paused: boolean;
@@ -30,10 +31,7 @@ const PAUSE_REASONS = [
 ] as const;
 
 const getAuthHeaders = (): Record<string, string> => {
-  const token =
-    localStorage.getItem('koma_caixa_token') ||
-    localStorage.getItem('token') ||
-    localStorage.getItem('koma_waiter_token');
+  const token = getOperatorAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
