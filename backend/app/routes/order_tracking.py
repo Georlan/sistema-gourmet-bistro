@@ -5,6 +5,7 @@ Segurança P0:
 - Nenhuma exposição de IDs sequenciais ou enumeração de pedidos.
 - Zero dependência de autenticação do cliente.
 - Isolamento multi-tenant garantido por tenant_session_scope.
+- Flood de mensagens limitado por conversa e IP, com chaves persistidas somente em hash.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from ..services.order_chat_service import (
     send_customer_message,
     serialize_message,
 )
+from ..services.public_orders import client_ip, consume_rate_limit
 
 router = APIRouter(prefix="/api/cardapio/pedidos/acompanhar", tags=["Cardapio - Acompanhamento"])
 
@@ -47,40 +49,21 @@ def consultar_pedido_por_token(
     token: str,
     db: Session = Depends(get_db),
 ):
-    """Retorna os dados consolidados do pedido para a página pública de acompanhamento.
-
-    Retorna 404 (sem vazar se o pedido existe ou não) caso o token seja inválido.
-    """
     resolved = resolve_public_tracking(db, token)
     if not resolved:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
     restaurante_id, conversation_id, pedido_id, closed_at = resolved
-
     with tenant_session_scope(db, restaurante_id):
         comanda = (
             db.query(Comanda)
-            .filter(
-                Comanda.restaurante_id == restaurante_id,
-                Comanda.id == pedido_id,
-            )
+            .filter(Comanda.restaurante_id == restaurante_id, Comanda.id == pedido_id)
             .first()
         )
         if not comanda:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido não encontrado.",
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
-        restaurante = (
-            db.query(Restaurante)
-            .filter(Restaurante.id == restaurante_id)
-            .first()
-        )
-
+        restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
         conversation = (
             db.query(OrderConversation)
             .filter(
@@ -97,9 +80,7 @@ def consultar_pedido_por_token(
                 OrderMessage.sender_type == "staff",
             )
             if conversation.customer_last_read_at:
-                unread_query = unread_query.filter(
-                    OrderMessage.created_at > conversation.customer_last_read_at
-                )
+                unread_query = unread_query.filter(OrderMessage.created_at > conversation.customer_last_read_at)
             customer_unread_count = int(unread_query.scalar() or 0)
 
         itens_payload = [
@@ -142,20 +123,11 @@ def consultar_pedido_por_token(
 
 
 @router.get("/{token}/messages", summary="Histórico de mensagens da conversa do pedido")
-def listar_mensagens_do_pedido(
-    token: str,
-    db: Session = Depends(get_db),
-):
-    """Retorna as mensagens (cliente, restaurante e sistema) da conversa do pedido."""
+def listar_mensagens_do_pedido(token: str, db: Session = Depends(get_db)):
     resolved = resolve_public_tracking(db, token)
     if not resolved:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado.",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
-
     with tenant_session_scope(db, restaurante_id):
         messages = (
             db.query(OrderMessage)
@@ -173,19 +145,39 @@ def listar_mensagens_do_pedido(
 def enviar_mensagem_do_cliente(
     token: str,
     payload: CustomerMessagePayload,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Envia uma mensagem de texto do cliente final para a comanda."""
     resolved = resolve_public_tracking(db, token)
     if not resolved:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
 
     restaurante_id, conversation_id, pedido_id, _closed_at = resolved
-
     with tenant_session_scope(db, restaurante_id):
+        # A conversa é a primeira barreira: 20 mensagens/min evita rajadas de
+        # scripts usando um token obtido. O IP é uma segunda barreira mais larga
+        # para evitar um emissor saturar várias conversas ao mesmo tempo.
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="order_chat_customer_conversation",
+            raw_key=conversation_id,
+            max_requests=20,
+            window_seconds=60,
+            detail="Muitas mensagens em pouco tempo. Aguarde um instante para continuar.",
+        )
+        db.commit()
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="order_chat_customer_ip",
+            raw_key=client_ip(request),
+            max_requests=60,
+            window_seconds=5 * 60,
+            detail="Muitas mensagens em pouco tempo. Aguarde um instante para continuar.",
+        )
+        db.commit()
+
         msg = send_customer_message(
             db,
             restaurante_id=restaurante_id,
@@ -199,20 +191,11 @@ def enviar_mensagem_do_cliente(
 
 
 @router.post("/{token}/read", summary="Marca mensagens como lidas pelo cliente")
-def marcar_mensagens_lidas_cliente(
-    token: str,
-    db: Session = Depends(get_db),
-):
-    """Atualiza o timestamp de leitura do cliente na conversa."""
+def marcar_mensagens_lidas_cliente(token: str, db: Session = Depends(get_db)):
     resolved = resolve_public_tracking(db, token)
     if not resolved:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado.",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
-
     with tenant_session_scope(db, restaurante_id):
         mark_customer_read(db, restaurante_id, conversation_id)
         db.commit()
@@ -225,25 +208,19 @@ async def stream_eventos_pedido(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Conexão Server-Sent Events (SSE) para atualização instantânea de mensagens e status."""
     resolved = resolve_public_tracking(db, token)
     if not resolved:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pedido não encontrado.",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     _restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
 
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_conversation(conversation_id)
         try:
             yield _sse_event("connected", {"conversation_id": conversation_id})
-
             while not await request.is_disconnected():
                 try:
-                    payload = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    yield _sse_event(payload["event"], payload["data"])
+                    event_payload = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield _sse_event(event_payload["event"], event_payload["data"])
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         finally:
