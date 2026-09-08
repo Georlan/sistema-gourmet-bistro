@@ -9,7 +9,6 @@ import {
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
 import { getSubscriptionPaymentOptions } from '../../config/subscriptionPaymentOptions';
-import '../paymentOptions.css';
 
 const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   stage: string;
@@ -39,8 +38,8 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
-  const billingCycle = isYearly ? 'anual' : 'mensal';
-  const paymentOptions = getSubscriptionPaymentOptions(billingCycle);
+  const billing = isYearly ? 'anual' : 'mensal';
+  const paymentOptions = getSubscriptionPaymentOptions(billing);
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
@@ -165,7 +164,7 @@ export function Plans() {
               </div>
 
               <a
-                href={`/contratar/${plan.id}?cobranca=${billingCycle}`}
+                href={`/contratar/${plan.id}?cobranca=${billing}`}
                 className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}
               >
                 CONTRATAR {planLabel}
