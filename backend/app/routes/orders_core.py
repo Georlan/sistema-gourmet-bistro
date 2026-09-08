@@ -670,12 +670,24 @@ def update_item_details(
     comanda = db.query(Comanda).filter(
         Comanda.restaurante_id == restaurante_id,
         Comanda.id == item.comanda_id,
-    ).first()
+    ).with_for_update().first()
+    # Serialize lifecycle checks with closing the check, then refresh the item.
+    item = db.query(Item).filter(
+        Item.restaurante_id == restaurante_id, Item.id == item_id,
+    ).with_for_update().populate_existing().first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item não encontrado")
     if comanda and comanda.fechada:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não é possível editar itens de uma comanda já fechada"
         )
+
+    if update_data.observacao is not None:
+        if not comanda or item.status != "preparando" or item.pago:
+            raise HTTPException(status_code=409, detail="A observação só pode ser alterada durante o preparo de um item não pago.")
+        if len(update_data.observacao) > 1000:
+            raise HTTPException(status_code=422, detail="A observação deve ter no máximo 1000 caracteres.")
 
     try:
         if update_data.observacao is not None:

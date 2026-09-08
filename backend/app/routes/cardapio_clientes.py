@@ -60,11 +60,6 @@ router = APIRouter(
 
 _GENERIC_OTP_ERROR = "Código inválido ou expirado. Solicite um novo código."
 
-# Gap conhecido documentado:
-# Recuperação de senha por e-mail transacional (SendGrid, SES, Resend ou SMTP)
-# pendente de definição de provedor e infraestrutura de e-mail.
-# NUNCA implementar reset sem token seguro enviado para canal verificado.
-PASSWORD_RECOVERY = "PENDENTE"
 
 
 def _utcnow() -> datetime.datetime:
@@ -104,6 +99,7 @@ def customer_token_scope(
         ) from exc
 
     with tenant_session_scope(db, claims.restaurante_id):
+        authenticated_customer(db, raw_token=raw_token, expected_restaurante_id=claims.restaurante_id)
         yield claims
 
 

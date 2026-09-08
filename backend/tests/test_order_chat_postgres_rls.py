@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import text
 
 from app.database import SessionLocal, tenant_session_scope
-from app.models import Comanda, Restaurante
+from app.models import Comanda, Restaurante, Usuario
 from app.order_chat_models import OrderConversation, OrderMessage
 from app.security import create_access_token
 
@@ -28,7 +28,9 @@ def _seed_tenants():
             if not db.query(Restaurante).filter(Restaurante.id == TENANT_A).first():
                 db.add(Restaurante(id=TENANT_A, nome="Restaurante RLS A", slug="rls-a"))
                 db.flush()
-                db.add(Comanda(id="comanda-rls-a", restaurante_id=TENANT_A, numero_pedido=101, tipo="Delivery"))
+                db.add(Usuario(id="chat-rls-staff-a", restaurante_id=TENANT_A, nome="Staff A", cargo="caixa", role="caixa", status="ativo"))
+                db.flush()
+                db.add(Comanda(id="comanda-rls-a", restaurante_id=TENANT_A, garcom_id="chat-rls-staff-a", numero_pedido=101, tipo="Delivery"))
                 db.flush()
             db.commit()
 
@@ -36,7 +38,9 @@ def _seed_tenants():
             if not db.query(Restaurante).filter(Restaurante.id == TENANT_B).first():
                 db.add(Restaurante(id=TENANT_B, nome="Restaurante RLS B", slug="rls-b"))
                 db.flush()
-                db.add(Comanda(id="comanda-rls-b", restaurante_id=TENANT_B, numero_pedido=201, tipo="Retirada"))
+                db.add(Usuario(id="chat-rls-staff-b", restaurante_id=TENANT_B, nome="Staff B", cargo="caixa", role="caixa", status="ativo"))
+                db.flush()
+                db.add(Comanda(id="comanda-rls-b", restaurante_id=TENANT_B, garcom_id="chat-rls-staff-b", numero_pedido=201, tipo="Retirada"))
                 db.flush()
             db.commit()
 

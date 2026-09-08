@@ -160,7 +160,7 @@ export function CaixaPanel({
     setIsChatDrawerOpen,
     chatUnreadCount,
     setChatUnreadCount,
-  } = useCashierChat(apiBaseUrl);
+  } = useCashierChat(apiBaseUrl, authHeaders.Authorization || "");
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastData({ msg, type });
@@ -260,6 +260,7 @@ export function CaixaPanel({
     handleMarkTableItemsReady,
     handleAdvanceDigitalOrder,
     handleAdvanceSelectedKanbanOrder,
+    saveItemObservation,
     handleReprintSelectedKanbanProduction,
     handlePrintSelectedKanbanTable,
     handlePrintSelectedKanbanValues,
@@ -750,13 +751,13 @@ export function CaixaPanel({
                     : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground',
                 )}
                 title="Conversas dos Pedidos"
-                aria-label="Abrir conversas dos pedidos"
+                aria-label={`Abrir conversas dos pedidos${chatUnreadCount > 0 ? `, ${chatUnreadCount} mensagens não lidas` : ""}`}
                 id="btn-caixa-conversas-drawer"
               >
                 <MessageSquare size={15} />
-                <span className={"hidden sm:inline"}>Conversas</span>
+                <span>Conversas</span>
                 {chatUnreadCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-black text-[10px] font-black leading-tight">
+                  <span role="status" aria-live="polite" className="px-1.5 py-0.2 rounded-full bg-emerald-500 text-black text-[10px] font-black leading-tight">
                     {chatUnreadCount}
                   </span>
                 )}
@@ -1402,6 +1403,7 @@ export function CaixaPanel({
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
+            saveObservation={saveItemObservation}
             tableMovement={selectedKanbanOrder.contextoSalao ? getTableMovementContext(selectedKanbanOrder) : undefined}
             salonActions={selectedSalonCard ? {
               addConsumption: () => {
@@ -1490,6 +1492,8 @@ export function CaixaPanel({
 
         {/* GAVETA DE CONVERSAS DOS PEDIDOS COM CLIENTES */}
         <CashierConversationsDrawer
+          key={authHeaders.Authorization}
+          authorization={authHeaders.Authorization || ""}
           isOpen={isChatDrawerOpen}
           onClose={() => setIsChatDrawerOpen(false)}
           onInspectOrder={(pedidoId) => {
@@ -1499,7 +1503,7 @@ export function CaixaPanel({
               openDeliveryOrderDetails(target);
             }
           }}
-          onUnreadCountChange={(count) => setChatUnreadCount(count)}
+          onUnreadCountChange={setChatUnreadCount}
         />
       </SidebarProvider>
     </div>

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -44,4 +46,7 @@ def authenticated_customer(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessão de cliente inválida ou expirada.",
         )
+    reset_at = cliente.password_reset_at
+    if reset_at and claims.issued_at <= reset_at.replace(tzinfo=timezone.utc).timestamp():
+        raise HTTPException(status_code=401, detail="Sua senha foi alterada. Entre novamente.")
     return claims, cliente

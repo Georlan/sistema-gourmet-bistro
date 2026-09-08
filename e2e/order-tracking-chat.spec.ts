@@ -123,7 +123,7 @@ async function setupChatRoutes(page: Page) {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ unread_count: unread }),
+        body: JSON.stringify({ total_unread: unread }),
       });
     }
 
@@ -344,6 +344,8 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     // Mensagem do cliente deve aparecer no feed de chat
     await expect(page.getByText('Por favor enviar talheres descartáveis')).toBeVisible();
     await expect(page.getByText('Você')).toBeVisible();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('koma_active_orders') || '[]'));
+    expect(saved.find((order: { id: string }) => order.id === orderId)?.tracking_token).toBe(trackingToken);
   });
 
   test('caixa visualiza notificação de conversa, abre drawer e responde ao cliente', async ({
@@ -370,9 +372,15 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     // 2. Localiza o botão "Conversas" com badge de não lidas
     const conversasBtn = page.getByRole('button', { name: /Conversas/i });
     await expect(conversasBtn).toBeVisible();
+    await expect(conversasBtn.getByRole("status")).toHaveText(/[1-9]/);
 
     // Abre a gaveta de conversas
     await conversasBtn.click();
+    if ((page.viewportSize()?.width || 0) > 768) {
+      await page.locator('#cashier-chat-overlay').click({ position: { x: 4, y: 100 } });
+      await expect(page.locator('#cashier-chat-panel')).toHaveCount(0);
+      await conversasBtn.click();
+    }
 
     // 3. Gaveta de conversas exibe a conversa do Pedido #4321
     const convCard = page.getByRole('button', { name: /Pedido #4321/i });
@@ -397,4 +405,26 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await expect(page.locator('div.rounded-2xl').filter({ hasText: 'Confirmado! Talheres descartáveis adicionados ao pedido.' })).toBeVisible();
     await expect(page.getByText('Equipe Caixa')).toBeVisible();
   });
+});
+
+
+test('card do Caixa permite salvar a observação durante o preparo', async ({ page }) => {
+  await seedCashierSession(page);
+  await setupChatRoutes(page);
+  let update: unknown;
+  await page.route('**/comandas/itens/item-1', async route => {
+    update = route.request().postDataJSON();
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'item-1', observacao: 'Sem sal' }) });
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.getByRole('heading', { name: 'Vendas', exact: true })).toBeVisible();
+  if ((page.viewportSize()?.width || 0) < 768) await page.getByRole('tab', { name: /Balcão/ }).click();
+  await page.getByRole('button', { name: /delivery pedido 4321, ver detalhes/i }).click();
+  const input = page.getByLabel('Observação — Pizza Margherita');
+  await expect(input).toHaveValue('Sem cebola');
+  await input.fill('Sem sal');
+  await page.getByRole('button', { name: 'Salvar observação', exact: true }).click();
+  await expect(page.getByText('Observação salva.', { exact: true })).toBeVisible();
+  expect(update).toEqual({ observacao: 'Sem sal' });
+  await expect(page.locator('.orders-detail-modal__observation')).toHaveText('Sem sal');
 });

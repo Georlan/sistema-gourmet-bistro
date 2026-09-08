@@ -261,7 +261,7 @@ export default function CardapioCartDrawer({
     if (!allProducts || allProducts.length === 0) return [];
     const cartProductIds = new Set(cart.map((item) => item.product.id));
     return allProducts
-      .filter((p) => !cartProductIds.has(p.id) && p.isAvailable !== false)
+      .filter((p) => !cartProductIds.has(p.id) && p.isAvailable !== false && !p.modifiers?.length && !p.modifierGroups?.length && /bebida|sobremesa|suco|refrigerante|cerveja|drink|doce|sorvete/.test(p.category.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()))
       .slice(0, 4);
   }, [allProducts, cart]);
 
@@ -580,7 +580,7 @@ export default function CardapioCartDrawer({
                 <section className="border-t border-koma-border pt-4">
                   <div className="flex items-center gap-1.5 mb-2.5">
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Que tal adicionar?</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Uma bebida ou sobremesa para acompanhar?</h3>
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
                     {upsellSuggestions.map((prod) => (

@@ -194,6 +194,7 @@ export default function CardapioOrdersDrawer({
 
   const closeDrawer = React.useCallback(() => {
     setFloatingOpen(false);
+    setChatOrderId(null);
     onClose();
   }, [onClose]);
 
@@ -282,7 +283,7 @@ export default function CardapioOrdersDrawer({
 
   if (chatOrder) {
     return (
-      <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop">
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop" onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
         <div
           className="flex h-full w-full max-w-md flex-col bg-koma-card text-koma-foreground shadow-2xl transition-transform duration-300"
           role="dialog"
@@ -300,7 +301,7 @@ export default function CardapioOrdersDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop">
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop" onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
       <div
         className="flex h-full w-full max-w-md flex-col bg-koma-card text-koma-foreground shadow-2xl transition-transform duration-300"
         role="dialog"

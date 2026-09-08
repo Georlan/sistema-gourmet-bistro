@@ -94,6 +94,9 @@ def normalize_supabase_url(raw: str, environment: str) -> str:
 
 
 class Settings:
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "")
+    PASSWORD_RECOVERY_ENABLED: bool = os.getenv("PASSWORD_RECOVERY_ENABLED", "false").lower() == "true"
     PROJECT_NAME: str = "Haute Cuisine Controller - Kôma"
     PROJECT_VERSION: str = "3.5"
     

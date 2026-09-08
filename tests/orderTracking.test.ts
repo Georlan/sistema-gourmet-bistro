@@ -12,6 +12,7 @@ import {
   orderStep,
   removeStoredOrder,
   saveStoredOrder,
+  fetchOrderLiveStatus,
 } from '../src/cardapio/orderTracking';
 
 // Mock localStorage in global scope for node:test environment
@@ -179,3 +180,19 @@ test('saveStoredOrder e loadStoredOrders preservam tracking_token e tracking_url
   assert.equal(loaded[0].tracking_url, '/acompanhar/sec_tok_xyz1234567890abcdef');
 });
 
+
+
+test('retorno do tracking consulta o token seguro em vez de chave artificial', async () => {
+  const originalFetch = globalThis.fetch;
+  let requested = '';
+  globalThis.fetch = (async (url: string) => {
+    requested = url;
+    return new Response(JSON.stringify({ id: 'order-1', status: 'producao', restaurante: { id: 2 }, itens: [{ nome: 'Suco', observacao: 'Sem gelo' }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const updated = await fetchOrderLiveStatus({ id: 'order-1', numero_pedido: 1, timestamp: Date.now(), restaurante_id: 2, tipo: 'Retirada', total: 10, idempotency_key: 'tracking-order-1', tracking_token: 'opaque/secure' }, 'https://example.test');
+    assert.equal(requested, 'https://example.test/api/cardapio/pedidos/acompanhar/opaque%2Fsecure');
+    assert.equal(updated?.status, 'producao');
+    assert.equal(updated?.itens?.[0].observacao, 'Sem gelo');
+  } finally { globalThis.fetch = originalFetch; }
+});

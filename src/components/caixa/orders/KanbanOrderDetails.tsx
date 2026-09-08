@@ -14,6 +14,9 @@ import { formatBackendTime } from '../../../utils/dateTime';
 import { formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 
 export interface KanbanDetailSourceItem {
+  readonly id?: string;
+  readonly lancamentoId?: string;
+  readonly pago?: boolean;
   readonly nome?: string;
   readonly produto?: { readonly nome?: string };
   readonly observacao?: string;
@@ -52,6 +55,7 @@ export interface KanbanDetailOrder {
 
 export interface KanbanOrderDetailsProps {
   readonly order: KanbanDetailOrder;
+  readonly saveObservation?: (itemId: string, observation: string) => Promise<void>;
   readonly tableMovement?: CashierTableCard['tableMovement'];
   readonly salonActions?: {
     readonly addConsumption: () => void;
@@ -107,7 +111,7 @@ function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): Kanba
 
 
 /** Modal UI only; owner callbacks preserve failure handling and close-on-success behavior. */
-export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actions, salonActions, tableMovement }: KanbanOrderDetailsProps) {
+export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actions, salonActions, tableMovement, saveObservation }: KanbanOrderDetailsProps) {
   const { targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId,
     isTransferring: isTransferringTable, tables: salonTables } = transfer;
   const selectedDetailItems = selectedKanbanOrder
@@ -222,6 +226,9 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
               {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
             </div>
           )}
+          {saveObservation && selectedKanbanOrder.itens.filter(item => item.id && item.status === 'preparando' && !item.pago).map(item => (
+            <ItemObservationEditor key={item.id} item={item} save={saveObservation} />
+          ))}
           <div className="space-y-2">
             <div className="orders-detail-modal__section-title">
               <span>Itens do pedido</span>
@@ -337,4 +344,22 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
       </div>
     </div>
   );
+}
+
+function ItemObservationEditor({ item, save }: { item: KanbanDetailSourceItem; save: (id: string, observation: string) => Promise<void> }) {
+  const [value, setValue] = React.useState(item.observacao || '');
+  const [saving, setSaving] = React.useState(false);
+  const [message, setMessage] = React.useState('');
+  return <div className="rounded-xl border border-koma-border p-3 space-y-2">
+    <label className="block text-xs text-koma-foreground">Observação — {item.nome || item.produto?.nome || 'Item'}
+      <textarea value={value} maxLength={1000} disabled={saving} onChange={event => { setValue(event.target.value); setMessage(''); }} className="mt-2 block w-full rounded-lg border border-koma-border bg-koma-card p-2" />
+    </label>
+    <button type="button" disabled={saving || value === (item.observacao || '')} onClick={async () => {
+      setSaving(true); setMessage('');
+      try { await save(String(item.id), value); setMessage('Observação salva.'); }
+      catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível salvar.'); }
+      finally { setSaving(false); }
+    }} className="text-xs font-bold text-emerald-500 disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar observação'}</button>
+    {message && <p role="status" className="text-xs">{message}</p>}
+  </div>;
 }

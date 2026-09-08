@@ -59,6 +59,8 @@ def _order(order_id: str, phone: str = "11998887777"):
                 Comanda(
                     id=order_id,
                     restaurante_id=RID,
+                    garcom_id=ADMIN_ID,
+                    numero_pedido=db.query(Comanda).filter(Comanda.restaurante_id == RID).count() + 1,
                     identificador="Cliente Reject",
                     tipo="Retirada",
                     delivery_status="pendente",

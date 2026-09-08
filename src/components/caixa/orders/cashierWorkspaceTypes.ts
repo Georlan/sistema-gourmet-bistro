@@ -6,6 +6,7 @@ export interface DeliveryOrderView {
   cliente: string;
   telefone: string;
   itens: string;
+  detailItems?: readonly import("./KanbanOrderDetails").KanbanDetailSourceItem[];
   total: number;
   canal: 'ifood' | 'site' | 'whats' | 'smartpos';
   origemOperacional: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';

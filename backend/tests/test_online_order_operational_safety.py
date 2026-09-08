@@ -94,6 +94,8 @@ def _add_order(
     order = Comanda(
         id=order_id,
         restaurante_id=RID,
+        garcom_id=ADMIN_ID,
+        numero_pedido=db.query(Comanda).filter(Comanda.restaurante_id == RID).count() + 1,
         tipo="Retirada",
         identificador="Cliente Safety",
         delivery_status=status_value,

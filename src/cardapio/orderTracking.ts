@@ -322,7 +322,9 @@ export async function fetchOrderLiveStatus(
   apiBaseUrl: string,
 ): Promise<StoredOrder | null> {
   const key = String(order.idempotency_key || "").trim();
-  const url = `${apiBaseUrl}/cardapio/pedidos/${encodeURIComponent(order.id)}/status?key=${encodeURIComponent(key)}`;
+  const url = order.tracking_token
+    ? `${apiBaseUrl}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(order.tracking_token)}`
+    : `${apiBaseUrl}/cardapio/pedidos/${encodeURIComponent(order.id)}/status?key=${encodeURIComponent(key)}`;
 
   const response = await fetch(url, { cache: "no-store" });
   if (response.status === 404) {
@@ -334,7 +336,7 @@ export async function fetchOrderLiveStatus(
 
   const data = await response.json();
   const rawStatus = String(data.status || order.status || "pendente");
-  const isClosed = Boolean(data.fechada || data.fechado);
+  const isClosed = Boolean(data.fechada || data.fechado || data.closed_at);
   const finalStatus = isClosed && !isRejectedStatus(rawStatus) ? "finalizado" : rawStatus;
 
   const updated: StoredOrder = {

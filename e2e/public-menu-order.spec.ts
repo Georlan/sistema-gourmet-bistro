@@ -54,6 +54,7 @@ type CapturedOrder = {
 };
 
 type BackendOptions = {
+  menu?: Pick<typeof basePublicMenuPayload, "produtos" | "categorias">;
   statusOverride?: string;
   orderStatus?: string;
   orderClosed?: boolean;
@@ -84,6 +85,7 @@ async function mockPublicMenuBackend(
         contentType: 'application/json',
         body: JSON.stringify({
           ...basePublicMenuPayload,
+          ...options.menu,
           restaurante: {
             ...basePublicMenuPayload.restaurante,
             ...options.restaurant,
@@ -173,6 +175,15 @@ test('cartão do produto mantém detalhes e adição como controles separados', 
   await page.getByRole('button', { name: 'Fechar detalhes do produto' }).click();
 
   await card.getByRole('button', { name: 'Adicionar Pizza Margherita à sacola' }).click();
+  const closeCart = page.getByRole('button', { name: 'Fechar sacola' });
+  if (await closeCart.isVisible()) await closeCart.click();
+  await card.locator('#btn-fast-inc-101').click();
+  if (await closeCart.isVisible()) await closeCart.click();
+  await expect(card.locator('#qty-101')).toHaveText('2');
+  await expect(page.getByRole('button', { name: 'Fechar detalhes do produto' })).toHaveCount(0);
+  await card.locator('#btn-fast-dec-101').click();
+  await expect(card.locator('#qty-101')).toHaveText('1');
+  await expect(page.getByRole('button', { name: 'Fechar detalhes do produto' })).toHaveCount(0);
   await openCart(page);
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
   expect(capturedOrders).toHaveLength(0);
@@ -460,4 +471,61 @@ test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', asy
   await expect(page.locator('#orders-drawer-panel')).toBeVisible();
   await expect(page.getByText('Meus Pedidos', { exact: true })).toBeVisible();
   await expect(page.getByText('Em andamento (2)')).toBeVisible();
+});
+
+
+test('observação do produto chega à revisão e ao envio', async ({ page }) => {
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders);
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.getByRole('button', { name: /Pizza Margherita.*ver detalhes/ }).click();
+  await page.locator('#notes-textarea').fill('Sem manjericão');
+  await page.getByRole('button', { name: /Adicionar/ }).last().click();
+  await openCart(page);
+  await expect(page.getByText('Obs.: Sem manjericão')).toBeVisible();
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Ana Teste');
+  await page.getByPlaceholder('(00) 00000-0000').fill('85999999999');
+  await page.getByRole('button', { name: /Retirada/ }).click();
+  await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+  await expect(page.getByText('Obs.: Sem manjericão')).toBeVisible();
+  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await expect.poll(() => capturedOrders.length).toBe(1);
+  expect(capturedOrders[0].itens?.[0]).toMatchObject({ observacao: 'Sem manjericão' });
+});
+
+
+test('recuperação do cardápio envia o restaurante e mantém visitante disponível quando envio está desligado', async ({ page }) => {
+  await mockPublicMenuBackend(page, []);
+  let submitted: unknown;
+  await page.route('**/auth/password-recovery/request', async route => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Recuperação de senha indisponível no momento. Tente novamente mais tarde.' }) });
+  });
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.getByRole('button', { name: 'Entrar na conta' }).click();
+  await page.getByRole('button', { name: 'Esqueci minha senha' }).click();
+  await page.getByLabel('E-mail da conta', { exact: true }).fill('customer@example.test');
+  await page.getByRole('button', { name: 'Enviar link de recuperação' }).click();
+  await expect(page.getByRole('status')).toContainText('indisponível');
+  expect(submitted).toEqual({ kind: 'customer', email: 'customer@example.test', restaurante_id: 2 });
+  await expect(page.getByText('Você também pode continuar seu pedido como visitante.')).toBeVisible();
+});
+
+test('sugestões usam bebidas e sobremesas do catálogo real e adicionam sem erro', async ({ page }) => {
+  const product = basePublicMenuPayload.produtos[0];
+  await mockPublicMenuBackend(page, [], { menu: {
+    categorias: [...basePublicMenuPayload.categorias, { id: 11, nome: 'Bebidas' }, { id: 12, nome: 'Sobremesas' }],
+    produtos: [product, { ...product, id: 102, nome: 'Suco de laranja', categoria_id: 11 }, { ...product, id: 103, nome: 'Pudim', categoria_id: 12 }],
+  } });
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  const suggestions = page.getByRole('heading', { name: 'Uma bebida ou sobremesa para acompanhar?' }).locator('../..');
+  await expect(suggestions).toContainText('Suco de laranja');
+  await expect(suggestions).toContainText('Pudim');
+  await expect(suggestions).not.toContainText('Pizza Margherita');
+  await suggestions.getByRole('button', { name: 'Adicionar', exact: true }).first().click();
+  await expect(suggestions).not.toContainText('Suco de laranja');
+  await expect(page.getByText('Suco de laranja', { exact: true }).last()).toBeVisible();
 });

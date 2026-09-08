@@ -1269,6 +1269,7 @@ class Cliente(Base):
     endereco = Column(String, nullable=True)
     email = Column(String, nullable=True, index=True)
     senha_hash = Column(String, nullable=True)
+    password_reset_at = Column(DateTime(timezone=True), nullable=True)
     saldo_pontos = Column(Integer, default=0, nullable=False)
     saldo_cashback = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))

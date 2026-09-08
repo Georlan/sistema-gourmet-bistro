@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db, tenant_session_scope
-from app.models import Categoria, Cliente, Comanda, Item, Lancamento, Produto, Restaurante, Usuario
+from app.models import PublicRateLimit, Categoria, Cliente, Comanda, Item, Lancamento, Produto, Restaurante, Usuario
 from app.order_chat_models import OrderConversation, OrderMessage
 from app.routes.caixa_chat import router as caixa_chat_router
 from app.routes.order_tracking import router as order_tracking_router
@@ -47,6 +47,7 @@ def client_and_session():
     Item.__table__.create(engine)
     OrderConversation.__table__.create(engine)
     OrderMessage.__table__.create(engine)
+    PublicRateLimit.__table__.create(engine)
 
     SessionTesting = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = SessionTesting()
