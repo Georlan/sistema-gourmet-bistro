@@ -70,10 +70,13 @@ export function SuperAdminSupportModal({
         reason: data.reason,
         expiresAt: data.expires_at,
       };
-      localStorage.setItem(
+      // Motivo, operador e restaurante são contexto temporário de suporte.
+      // Não devem sobreviver ao encerramento da sessão/aba do navegador.
+      sessionStorage.setItem(
         SUPPORT_SESSION_STORAGE_KEY,
         JSON.stringify(sessionData)
       );
+      localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
 
       saveOperatorSession(data.access_token, {
         id: `support:${data.operator}`,
