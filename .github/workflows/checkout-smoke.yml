@@ -1,0 +1,55 @@
+name: Checkout Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/legal/PlanContractPage.tsx'
+      - 'src/legal/planSubscriptionFlow.css'
+      - 'src/config/subscriptionPlans.ts'
+      - 'src/main.tsx'
+      - 'e2e/plan-subscription-flow.spec.ts'
+      - '.github/workflows/checkout-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/legal/PlanContractPage.tsx'
+      - 'src/legal/planSubscriptionFlow.css'
+      - 'src/config/subscriptionPlans.ts'
+      - 'src/main.tsx'
+      - 'e2e/plan-subscription-flow.spec.ts'
+      - '.github/workflows/checkout-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  checkout-smoke:
+    name: Checkout browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run checkout smoke
+        env:
+          KOMA_E2E_PORT: '4284'
+        run: npm run test:e2e -- e2e/plan-subscription-flow.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: checkout-smoke-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
