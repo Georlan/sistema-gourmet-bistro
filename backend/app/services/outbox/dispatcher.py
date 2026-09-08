@@ -11,6 +11,7 @@ import httpx
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from ...database import tenant_session_scope
 from ...models import ConfiguracaoRestaurante, IntegrationOutbox
 from .signer import build_webhook_headers
 
@@ -246,12 +247,16 @@ def dispatch_single_claimed_snapshot(
         return False
 
     # Web Push é transporte interno do KÔMA: não deve cair no webhook configurado
-    # pelo restaurante. O mesmo mecanismo de claim/retry/dead-letter continua
-    # sendo usado, preservando durabilidade sem bloquear o ciclo do pedido.
+    # pelo restaurante. FORCE RLS exige que o worker entre explicitamente no
+    # tenant do evento antes de ler/decriptar as subscriptions.
     if str(snapshot.get("event_name") or "").startswith("koma.push."):
         try:
             from ..web_push import dispatch_order_push_event
-            dispatch_order_push_event(db, snapshot)
+            with tenant_session_scope(db, int(rid)):
+                dispatch_order_push_event(db, snapshot)
+                # last_sent_at/disabled (404/410) precisam ser duráveis antes de
+                # o escopo temporário restaurar o tenant e fazer rollback residual.
+                db.commit()
             settle_outbox_event(
                 db,
                 outbox_id,
