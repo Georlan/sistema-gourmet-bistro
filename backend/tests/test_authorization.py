@@ -507,7 +507,8 @@ def test_admin_creates_only_pending_invite_in_own_tenant(monkeypatch):
     assert "token_convite" not in created
     assert len(mensagens) == 1
     assert mensagens[0][0] == "81999998877"
-    assert "/ativar?token=" in mensagens[0][1]
+    assert "/ativar#token=" in mensagens[0][1]
+    assert "/ativar?token=" not in mensagens[0][1]
 
     with TestingSessionLocal() as db:
         saved = db.get(Usuario, created["id"])

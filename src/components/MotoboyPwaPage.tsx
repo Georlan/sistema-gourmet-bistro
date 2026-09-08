@@ -25,6 +25,27 @@ interface MotoboyProfile {
   telefone: string;
 }
 
+const DELIVERY_TOKEN_SESSION_KEY = 'koma_entregador_session_token';
+const DELIVERY_TOKEN_HEADER = 'X-Koma-Delivery-Token';
+
+function bootstrapDeliveryToken(): string {
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const queryParams = new URLSearchParams(window.location.search);
+  const tokenFromFragment = hashParams.get('token')?.trim() || '';
+  // Compatibilidade temporária para links antigos já enviados. O segredo é removido
+  // antes de qualquer chamada de rede e nunca volta para query string da API.
+  const legacyQueryToken = queryParams.get('token')?.trim() || '';
+  const token = tokenFromFragment || legacyQueryToken || sessionStorage.getItem(DELIVERY_TOKEN_SESSION_KEY)?.trim() || '';
+
+  if (tokenFromFragment || legacyQueryToken) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  if (token) {
+    sessionStorage.setItem(DELIVERY_TOKEN_SESSION_KEY, token);
+  }
+  return token;
+}
+
 export function MotoboyPwaPage() {
   const [token, setToken] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -35,14 +56,13 @@ export function MotoboyPwaPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = searchParams.get('token');
-    if (tokenFromUrl) {
-      setToken(tokenFromUrl);
-      carregarDadosPainel(tokenFromUrl);
+    const accessToken = bootstrapDeliveryToken();
+    if (accessToken) {
+      setToken(accessToken);
+      void carregarDadosPainel(accessToken);
     } else {
       setLoading(false);
-      setErrorMsg('Token de acesso não fornecido na URL. Utilize o link enviado pelo caixa do restaurante.');
+      setErrorMsg('Token de acesso não fornecido. Utilize o link enviado pelo caixa do restaurante.');
     }
   }, []);
 
@@ -55,7 +75,9 @@ export function MotoboyPwaPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/motoboys/painel-entregador?token=${encodeURIComponent(authToken)}`);
+      const res = await fetch(`${API_BASE_URL}/comandas/motoboys/painel-entregador`, {
+        headers: { [DELIVERY_TOKEN_HEADER]: authToken },
+      });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.detail || 'Falha ao carregar painel do entregador');
@@ -74,8 +96,9 @@ export function MotoboyPwaPage() {
     if (!token) return;
     setConfirmingId(comandaId);
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/motoboys/pedidos/${comandaId}/confirmar-entrega?token=${encodeURIComponent(token)}`, {
+      const res = await fetch(`${API_BASE_URL}/comandas/motoboys/pedidos/${comandaId}/confirmar-entrega`, {
         method: 'POST',
+        headers: { [DELIVERY_TOKEN_HEADER]: token },
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

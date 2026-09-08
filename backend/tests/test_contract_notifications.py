@@ -183,7 +183,8 @@ def test_activation_token_is_used_for_delivery_but_never_logged(monkeypatch, cap
     assert delivered is True
     assert len(sent) == 1
     assert token in sent[0][1]
-    assert "/ativar?token=" in sent[0][1]
+    assert "/ativar#token=" in sent[0][1]
+    assert "/ativar?token=" not in sent[0][1]
     assert token not in caplog.text
     assert "85999999999" not in caplog.text
 
