@@ -71,11 +71,7 @@ test('caixa normaliza role legado pelo cargo, persiste sessão e não vaza para 
     token: localStorage.getItem('koma_caixa_token'),
     role: localStorage.getItem('koma_caixa_role'),
     operatorRole: JSON.parse(localStorage.getItem('koma_operator_session') || 'null')?.user?.role ?? null,
-  }))).toEqual({
-    token: 'cashier-persist-token',
-    role: 'caixa',
-    operatorRole: 'caixa',
-  });
+  }))).toEqual({ token: 'cashier-persist-token', role: 'caixa', operatorRole: 'caixa' });
   await page.reload();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
   await page.goto('/?view=garcom');
@@ -90,8 +86,7 @@ test('login duplicado pede estabelecimento e repete com restaurante_id explícit
     if (!body.restaurante_id) {
       await route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({
         detail: {
-          code: 'restaurant_selection_required',
-          message: 'Selecione o estabelecimento para continuar.',
+          code: 'restaurant_selection_required', message: 'Selecione o estabelecimento para continuar.',
           restaurante_ids: [1, 2],
           restaurantes: [
             { id: 1, nome: 'Bagueteria e Pastelaria Pôr do sol' },
@@ -144,7 +139,7 @@ test('SuperAdmin mantém token na sessão da aba após reload', async ({ page })
   await expect(page.locator('#superadmin-login')).toHaveCount(0);
 });
 
-test('Cardápio restaura sessão de cliente por restaurante em reloads', async ({ page }) => {
+test('Cardápio migra sessão de cliente para armazenamento limitado à aba e sobrevive a reload', async ({ page }) => {
   let profileReads = 0;
   await page.addInitScript(() => {
     localStorage.setItem('koma_customer_session:1', JSON.stringify({
@@ -177,8 +172,12 @@ test('Cardápio restaura sessão de cliente por restaurante em reloads', async (
 
   await page.goto('/?view=cardapio&restaurante_id=1');
   await expect.poll(() => profileReads).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_customer_session:1'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
+
   const beforeReload = profileReads;
   await page.reload();
   await expect.poll(() => profileReads).toBeGreaterThan(beforeReload);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_customer_session:1'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
 });
