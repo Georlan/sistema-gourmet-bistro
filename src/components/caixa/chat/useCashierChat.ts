@@ -103,6 +103,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
       setChatUnreadStatus('healthy');
     } catch (error) {
       if (generation !== requestGeneration.current) return;
+      // UNKNOWN nunca vira ZERO: preserva o último snapshot válido.
       setChatUnreadStatus('degraded');
       reportUnreadFailure(error);
     }
