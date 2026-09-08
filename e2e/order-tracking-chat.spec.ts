@@ -64,6 +64,42 @@ async function setupChatRoutes(page: Page) {
     const { pathname } = url;
     const method = request.method();
 
+    if (pathname === '/api/cardapio-digital/public' && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          restaurante: {
+            id: 99001,
+            nome: 'Bistrô Gourmet E2E',
+            subtitulo: '',
+            logo_url: '',
+            banner_url: '',
+            socials: {},
+            horarios_funcionamento: [],
+            formas_pagamento_aceitas: [],
+            status_override: 'Forçado Aberto',
+            aceitando_pedidos: true,
+            delivery_ativo: true,
+            pagamento_online_ativo: false,
+          },
+          categorias: [{ id: 1, nome: 'Pizzas' }],
+          produtos: [
+            {
+              id: '101',
+              nome: 'Pizza Margherita',
+              descricao: 'Pizza de teste',
+              preco: 48,
+              categoria_id: 1,
+              imagem_url: '',
+              imagens_galeria: [],
+              grupos_modificadores: [],
+            },
+          ],
+        }),
+      });
+    }
+
     // 1. Order Tracking Public Endpoints
     if (pathname === `/api/cardapio/pedidos/acompanhar/${trackingToken}` && method === 'GET') {
       return route.fulfill({
@@ -314,26 +350,29 @@ async function seedCashierSession(page: Page) {
 }
 
 test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
-  test('cliente acompanha pedido e conversa com restaurante via chat próprio', async ({
+  test('link legado leva o cliente ao acompanhamento lateral no cardápio', async ({
     page,
   }) => {
     await setupChatRoutes(page);
 
-    // 1. Cliente acessa a página pública de acompanhamento com seu token
     await page.goto(`/acompanhar/${trackingToken}`);
+    await page.waitForURL(/\/cardapio\?restaurante_id=99001/);
 
-    // Verifica que o cabeçalho e dados do pedido estão visíveis
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('koma_active_orders') || '[]'));
+    expect(saved.find((order: { id: string }) => order.id === orderId)?.tracking_token).toBe(trackingToken);
+
+    const floatingChat = page.locator('#floating-order-chat-trigger');
+    await expect(floatingChat).toBeVisible();
+    await floatingChat.click();
+
     await expect(page.getByText('Pedido #4321')).toBeVisible();
-    await expect(page.getByText('Pizza Margherita')).toBeVisible();
-    await expect(page.getByText('Rua das Flores, 123')).toBeVisible();
+    await expect(page.getByText(/1x Pizza Margherita/)).toBeVisible();
 
-    // Verifica que a timeline canônica está visível
+    await page.getByRole('button', { name: 'Chat & Status' }).click();
+    await expect(page.getByText('Pedido #4321')).toBeVisible();
     await expect(page.getByText('Em preparo').first()).toBeVisible();
-
-    // Mensagem de sistema inicial deve estar visível
     await expect(page.getByText('Pedido recebido pelo restaurante.')).toBeVisible();
 
-    // 2. Cliente envia uma mensagem no chat
     const customerInput = page.getByPlaceholder(/Envie uma mensagem para a equipe/i);
     await expect(customerInput).toBeVisible();
     await customerInput.fill('Por favor enviar talheres descartáveis');
@@ -341,11 +380,8 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     const sendButton = page.getByTitle(/Enviar mensagem/i);
     await sendButton.click();
 
-    // Mensagem do cliente deve aparecer no feed de chat
     await expect(page.getByText('Por favor enviar talheres descartáveis')).toBeVisible();
     await expect(page.getByText('Você')).toBeVisible();
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('koma_active_orders') || '[]'));
-    expect(saved.find((order: { id: string }) => order.id === orderId)?.tracking_token).toBe(trackingToken);
   });
 
   test('caixa visualiza notificação de conversa, abre drawer e responde ao cliente', async ({
