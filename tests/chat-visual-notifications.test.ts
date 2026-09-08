@@ -55,3 +55,13 @@ test('drawer do Caixa protege seleção contra respostas HTTP atrasadas e não i
   assert.doesNotMatch(cashierDrawer, /dangerouslySetInnerHTML/);
   assert.match(cashierDrawer, /\{message\.body\}/);
 });
+
+test('read_update do Caixa não recarrega a thread nem dispara nova marcação de leitura', () => {
+  assert.match(cashierDrawer, /case 'read_update':/);
+  const readUpdateBlock = cashierDrawer.split("case 'read_update':")[1]?.split('default:')[0] ?? '';
+  assert.doesNotMatch(readUpdateBlock, /loadMessages/);
+  assert.doesNotMatch(readUpdateBlock, /markConversationRead/);
+  assert.match(cashierDrawer, /background:\s*true,\s*markRead:\s*false/);
+  assert.match(cashierDrawer, /case 'new_message':/);
+  assert.match(cashierDrawer, /items\.some\(\(item\) => item\.id === message\.id\)/);
+});

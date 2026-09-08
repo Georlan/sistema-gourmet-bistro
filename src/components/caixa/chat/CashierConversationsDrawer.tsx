@@ -59,6 +59,15 @@ interface MessageState {
   items: CaixaChatMessage[];
 }
 
+interface FetchConversationsOptions {
+  background?: boolean;
+}
+
+interface LoadMessagesOptions {
+  background?: boolean;
+  markRead?: boolean;
+}
+
 export function CashierConversationsDrawer({
   isOpen,
   authorization,
@@ -79,6 +88,8 @@ export function CashierConversationsDrawer({
   const selectedIdRef = useRef<string | null>(null);
   const messageGenerationRef = useRef(0);
   const messageAbortRef = useRef<AbortController | null>(null);
+  const visibleMessageLoadRef = useRef(false);
+  const markReadInFlightRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -109,10 +120,10 @@ export function CashierConversationsDrawer({
     }
   }, []);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async ({ background = false }: FetchConversationsOptions = {}) => {
     if (!authorization) return;
     try {
-      setLoadingList(true);
+      if (!background) setLoadingList(true);
       const response = await fetch(`${API_BASE_URL}/api/caixa/conversas`, {
         headers: { Authorization: authorization },
         cache: 'no-store',
@@ -131,19 +142,44 @@ export function CashierConversationsDrawer({
     } catch (error) {
       console.warn('Erro ao listar conversas do Caixa:', error);
     } finally {
-      setLoadingList(false);
+      if (!background) setLoadingList(false);
     }
   }, [authorization]);
 
-  const loadMessages = useCallback(async (conversationId: string) => {
+  const markConversationRead = useCallback(async (conversationId: string) => {
+    if (!authorization || markReadInFlightRef.current.has(conversationId)) return;
+
+    markReadInFlightRef.current.add(conversationId);
+    setConversations((current) => current.map((conversation) => (
+      conversation.id === conversationId ? { ...conversation, unread_count: 0 } : conversation
+    )));
+
+    try {
+      await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
+        method: 'POST',
+        headers: { Authorization: authorization },
+      });
+    } catch {
+      // O próximo snapshot autoritativo da lista restaura o badge se a marcação falhar.
+    } finally {
+      markReadInFlightRef.current.delete(conversationId);
+    }
+  }, [authorization]);
+
+  const loadMessages = useCallback(async (
+    conversationId: string,
+    { background = false, markRead = true }: LoadMessagesOptions = {},
+  ) => {
     if (!authorization) return;
+    if (background && visibleMessageLoadRef.current) return;
 
     const generation = ++messageGenerationRef.current;
     messageAbortRef.current?.abort();
     const controller = new AbortController();
     messageAbortRef.current = controller;
 
-    if (selectedIdRef.current === conversationId) {
+    if (!background && selectedIdRef.current === conversationId) {
+      visibleMessageLoadRef.current = true;
       setLoadingMessages(true);
       setMessageState((current) => current.conversationId === conversationId
         ? current
@@ -173,26 +209,22 @@ export function CashierConversationsDrawer({
       }
 
       setMessageState({ conversationId, items: Array.isArray(items) ? items : [] });
-      setConversations((current) => current.map((conversation) => (
-        conversation.id === conversationId ? { ...conversation, unread_count: 0 } : conversation
-      )));
+      if (markRead) void markConversationRead(conversationId);
 
-      void fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
-        method: 'POST',
-        headers: { Authorization: authorization },
-      }).catch(() => {});
-
-      window.setTimeout(() => scrollToBottom(false), 50);
+      if (!background) {
+        window.setTimeout(() => scrollToBottom(false), 50);
+      }
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         console.warn('Erro ao carregar mensagens da conversa:', error);
       }
     } finally {
-      if (generation === messageGenerationRef.current) {
+      if (!background && generation === messageGenerationRef.current) {
+        visibleMessageLoadRef.current = false;
         setLoadingMessages(false);
       }
     }
-  }, [authorization, scrollToBottom]);
+  }, [authorization, markConversationRead, scrollToBottom]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -228,18 +260,64 @@ export function CashierConversationsDrawer({
       }
     };
 
-    const refreshSelected = () => {
+    const refreshSelectedInBackground = () => {
       const current = selectedIdRef.current;
-      if (current) void loadMessages(current);
+      if (current) {
+        void loadMessages(current, { background: true, markRead: false });
+      }
     };
 
     const startFallback = () => {
       if (fallbackInterval !== null) return;
       fallbackInterval = window.setInterval(() => {
         if (document.hidden) return;
-        void fetchConversations();
-        refreshSelected();
+        void fetchConversations({ background: true });
+        refreshSelectedInBackground();
       }, 15000);
+    };
+
+    const appendRealtimeMessage = (data: Record<string, unknown> | null) => {
+      const eventConversationId = typeof data?.conversation_id === 'string'
+        ? data.conversation_id
+        : null;
+      const messageId = typeof data?.id === 'string' ? data.id : null;
+      const pedidoId = typeof data?.pedido_id === 'string' ? data.pedido_id : null;
+      const senderType = data?.sender_type;
+      const body = typeof data?.body === 'string' ? data.body : null;
+
+      if (
+        !eventConversationId
+        || !messageId
+        || !pedidoId
+        || !body
+        || (senderType !== 'system' && senderType !== 'customer' && senderType !== 'staff')
+      ) {
+        return;
+      }
+
+      const message: CaixaChatMessage = {
+        id: messageId,
+        conversation_id: eventConversationId,
+        pedido_id: pedidoId,
+        sender_type: senderType,
+        sender_user_id: typeof data?.sender_user_id === 'number' ? data.sender_user_id : null,
+        body,
+        event_key: typeof data?.event_key === 'string' ? data.event_key : null,
+        created_at: typeof data?.created_at === 'string' ? data.created_at : null,
+      };
+
+      if (selectedIdRef.current === eventConversationId) {
+        setMessageState((current) => {
+          const items = current.conversationId === eventConversationId ? current.items : [];
+          if (items.some((item) => item.id === message.id)) return current;
+          return { conversationId: eventConversationId, items: [...items, message] };
+        });
+        window.setTimeout(() => scrollToBottom(true), 50);
+
+        if (senderType === 'customer' && document.visibilityState === 'visible') {
+          void markConversationRead(eventConversationId);
+        }
+      }
     };
 
     const connect = () => {
@@ -251,12 +329,33 @@ export function CashierConversationsDrawer({
         onOpen: stopFallback,
         onEvent: ({ event, data }) => {
           if (event === 'connected') return;
-          void fetchConversations();
+
           const eventConversationId = typeof data?.conversation_id === 'string'
             ? data.conversation_id
             : null;
-          if (eventConversationId && selectedIdRef.current === eventConversationId) {
-            void loadMessages(eventConversationId);
+
+          switch (event) {
+            case 'new_message':
+              appendRealtimeMessage(data);
+              void fetchConversations({ background: true });
+              return;
+
+            case 'status_changed':
+              void fetchConversations({ background: true });
+              return;
+
+            case 'read_update':
+              if (eventConversationId && data?.reader === 'staff') {
+                setConversations((current) => current.map((conversation) => (
+                  conversation.id === eventConversationId
+                    ? { ...conversation, unread_count: 0 }
+                    : conversation
+                )));
+              }
+              return;
+
+            default:
+              void fetchConversations({ background: true });
           }
         },
       }).catch((error) => {
@@ -274,7 +373,7 @@ export function CashierConversationsDrawer({
       stopFallback();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
     };
-  }, [isOpen, authorization, fetchConversations, loadMessages]);
+  }, [isOpen, authorization, fetchConversations, loadMessages, markConversationRead, scrollToBottom]);
 
   useEffect(() => () => {
     messageGenerationRef.current += 1;
