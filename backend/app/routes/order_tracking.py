@@ -33,12 +33,32 @@ from ..services.order_chat_service import (
 )
 from ..services.order_state_contract import build_order_state_contract
 from ..services.public_orders import client_ip, consume_rate_limit
+from ..services.web_push import (
+    disable_order_push_subscription,
+    get_web_push_config,
+    upsert_order_push_subscription,
+)
 
 router = APIRouter(prefix="/api/cardapio/pedidos/acompanhar", tags=["Cardapio - Acompanhamento"])
 
 
 class CustomerMessagePayload(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000, description="Texto da mensagem")
+
+
+class PushSubscriptionKeysPayload(BaseModel):
+    p256dh: str = Field(..., min_length=16, max_length=512)
+    auth: str = Field(..., min_length=8, max_length=256)
+
+
+class PushSubscriptionPayload(BaseModel):
+    endpoint: str = Field(..., min_length=16, max_length=4096)
+    expirationTime: int | None = None
+    keys: PushSubscriptionKeysPayload
+
+
+class PushUnsubscribePayload(BaseModel):
+    endpoint: str = Field(..., min_length=16, max_length=4096)
 
 
 def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
@@ -216,6 +236,102 @@ def marcar_mensagens_lidas_cliente(token: str, db: Session = Depends(get_db)):
         mark_customer_read(db, restaurante_id, conversation_id)
         db.commit()
         return {"status": "ok"}
+
+
+@router.get("/{token}/push-config", summary="Configuração pública de Web Push para este pedido")
+def obter_configuracao_push(token: str, db: Session = Depends(get_db)):
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    config = get_web_push_config()
+    return {
+        "enabled": config.ready,
+        "publicKey": config.public_key if config.ready else "",
+    }
+
+
+@router.put("/{token}/push-subscription", summary="Ativa avisos Web Push para o pedido")
+def ativar_push_do_pedido(
+    token: str,
+    payload: PushSubscriptionPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    config = get_web_push_config()
+    if not config.ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Notificações fora do navegador ainda não estão disponíveis.",
+        )
+
+    restaurante_id, conversation_id, pedido_id, _closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="order_push_subscription_conversation",
+            raw_key=conversation_id,
+            max_requests=10,
+            window_seconds=5 * 60,
+            detail="Muitas alterações de notificação. Aguarde alguns instantes.",
+        )
+        db.commit()
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="order_push_subscription_ip",
+            raw_key=client_ip(request),
+            max_requests=30,
+            window_seconds=10 * 60,
+            detail="Muitas alterações de notificação. Aguarde alguns instantes.",
+        )
+        db.commit()
+        upsert_order_push_subscription(
+            db,
+            restaurante_id=restaurante_id,
+            conversation_id=conversation_id,
+            pedido_id=pedido_id,
+            endpoint=payload.endpoint,
+            p256dh=payload.keys.p256dh,
+            auth=payload.keys.auth,
+        )
+        db.commit()
+        return {"status": "enabled"}
+
+
+@router.delete("/{token}/push-subscription", summary="Desativa avisos Web Push para o pedido")
+def desativar_push_do_pedido(
+    token: str,
+    payload: PushUnsubscribePayload,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+    restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="order_push_unsubscribe_ip",
+            raw_key=client_ip(request),
+            max_requests=30,
+            window_seconds=10 * 60,
+            detail="Muitas alterações de notificação. Aguarde alguns instantes.",
+        )
+        db.commit()
+        disabled = disable_order_push_subscription(
+            db,
+            restaurante_id=restaurante_id,
+            conversation_id=conversation_id,
+            endpoint=payload.endpoint,
+        )
+        db.commit()
+        return {"status": "disabled", "changed": disabled}
 
 
 @router.get("/{token}/events", summary="Stream SSE de status e chat do pedido")
