@@ -13,6 +13,7 @@ import {
 import { API_BASE_URL } from '../config/api';
 import type { SmartPosSession } from './smartPosSession';
 import { operationalFetch } from '../utils/operationalRequest';
+import { createSecureIdempotencyKey } from '../utils/secureIdempotency';
 
 
 type Mesa = {
@@ -70,13 +71,6 @@ const captureLabels: Record<Captura, string> = {
 const activeItems = (comandas: Comanda[]) => comandas.flatMap((comanda) =>
   (comanda.itens || []).filter((item) => item.status !== 'cancelado'),
 );
-
-const makeIdempotencyKey = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `smartpos-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
-};
 
 export default function SmartPosPaymentFlow({
   session,
@@ -179,10 +173,10 @@ export default function SmartPosPaymentFlow({
     if (!method || !captureMode || amountCents <= 0) return;
     setIsSubmitting(true);
     setError('');
-    const key = idempotencyKey || makeIdempotencyKey();
-    if (!idempotencyKey) setIdempotencyKey(key);
 
     try {
+      const key = idempotencyKey || createSecureIdempotencyKey('smartpos');
+      if (!idempotencyKey) setIdempotencyKey(key);
       const response = await operationalFetch(`${API_BASE_URL}/auth/smartpos/payment-intents`, {
         method: 'POST',
         headers: {
