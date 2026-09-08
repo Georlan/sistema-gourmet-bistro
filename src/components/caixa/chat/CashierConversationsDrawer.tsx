@@ -68,6 +68,22 @@ interface LoadMessagesOptions {
   markRead?: boolean;
 }
 
+const QUICK_REPLIES = [
+  'Estamos preparando seu pedido.',
+  'Está quase pronto.',
+  'Seu pedido está pronto para retirada.',
+  'Seu pedido saiu para entrega.',
+] as const;
+
+const conversationTimestamp = (conversation: CaixaConversationItem) => {
+  const source = conversation.last_message?.created_at || conversation.updated_at;
+  const parsed = source ? Date.parse(source) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const isWaitingForStaff = (conversation: CaixaConversationItem) =>
+  conversation.last_message?.sender_type === 'customer';
+
 export function CashierConversationsDrawer({
   isOpen,
   authorization,
@@ -95,6 +111,16 @@ export function CashierConversationsDrawer({
     selectedIdRef.current = selectedId;
   }, [selectedId]);
 
+  const sortedConversations = useMemo(() => [...conversations].sort((a, b) => {
+    const unreadPriority = Number(b.unread_count > 0) - Number(a.unread_count > 0);
+    if (unreadPriority !== 0) return unreadPriority;
+
+    const waitingPriority = Number(isWaitingForStaff(b)) - Number(isWaitingForStaff(a));
+    if (waitingPriority !== 0) return waitingPriority;
+
+    return conversationTimestamp(b) - conversationTimestamp(a);
+  }), [conversations]);
+
   const selectedConv = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || null,
     [conversations, selectedId],
@@ -107,9 +133,23 @@ export function CashierConversationsDrawer({
     [conversations],
   );
 
+  const waitingForStaffCount = useMemo(
+    () => conversations.filter(isWaitingForStaff).length,
+    [conversations],
+  );
+
   useEffect(() => {
     if (isOpen && !loadingList) onUnreadCountChange?.(totalUnread);
   }, [isOpen, loadingList, totalUnread, onUnreadCountChange]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (chatScrollRef.current) {
@@ -226,6 +266,12 @@ export function CashierConversationsDrawer({
     }
   }, [authorization, markConversationRead, scrollToBottom]);
 
+  const openConversation = useCallback((conversationId: string) => {
+    selectedIdRef.current = conversationId;
+    setSelectedId(conversationId);
+    setErrorText(null);
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
     void fetchConversations();
@@ -237,13 +283,12 @@ export function CashierConversationsDrawer({
   }, [isOpen, selectedId, loadMessages]);
 
   useEffect(() => {
-    if (isOpen && !selectedId && conversations.length > 0) {
+    if (isOpen && !selectedId && sortedConversations.length > 0) {
       if (typeof window !== 'undefined' && window.innerWidth >= 640) {
-        selectedIdRef.current = conversations[0].id;
-        setSelectedId(conversations[0].id);
+        openConversation(sortedConversations[0].id);
       }
     }
-  }, [isOpen, selectedId, conversations]);
+  }, [isOpen, selectedId, sortedConversations, openConversation]);
 
   useEffect(() => {
     if (!isOpen || !authorization) return;
@@ -380,8 +425,7 @@ export function CashierConversationsDrawer({
     messageAbortRef.current?.abort();
   }, []);
 
-  const handleSendReply = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const sendReply = useCallback(async () => {
     if (!selectedId || !replyText.trim() || sending) return;
 
     const targetConversationId = selectedId;
@@ -435,47 +479,66 @@ export function CashierConversationsDrawer({
     } finally {
       setSending(false);
     }
+  }, [authorization, replyText, selectedId, sending, scrollToBottom]);
+
+  const handleSendReply = (event: React.FormEvent) => {
+    event.preventDefault();
+    void sendReply();
+  };
+
+  const handleReplyKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void sendReply();
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex justify-end bg-black/65 backdrop-blur-sm animate-fade-in"
       id="cashier-chat-overlay"
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div
-        className="flex h-full w-full max-w-3xl flex-col bg-zinc-950 text-zinc-100 border-l border-zinc-800 shadow-2xl animate-scale-up"
+        className="flex h-full w-full max-w-5xl flex-col bg-zinc-950 text-zinc-100 border-l border-zinc-800 shadow-2xl animate-scale-up"
         role="dialog"
+        aria-modal="true"
         aria-label="Central de Mensagens dos Pedidos"
         id="cashier-chat-panel"
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4 bg-zinc-900/60">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-4 sm:px-5 py-3.5 bg-zinc-900/70">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
               <MessageSquare size={20} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white">Conversas dos Pedidos</h2>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-bold text-white">Central de Conversas</h2>
                 {totalUnread > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black">
-                    {totalUnread} novas
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black" aria-live="polite">
+                    {totalUnread} não lidas
+                  </span>
+                )}
+                {waitingForStaffCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full border border-amber-400/30 bg-amber-400/10 text-amber-300 text-[10px] font-bold">
+                    {waitingForStaffCount} aguardando resposta
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-400">Atendimento direto cliente ↔ restaurante sem intermediários</p>
+              <p className="truncate text-xs text-zinc-400">Mensagens priorizadas por atenção e atividade recente</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => void fetchConversations()}
               disabled={loadingList}
               className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white transition disabled:opacity-50"
               title="Atualizar conversas"
+              aria-label="Atualizar conversas"
             >
               <RefreshCw size={16} className={clsx(loadingList && 'animate-spin text-emerald-400')} />
             </button>
@@ -483,7 +546,8 @@ export function CashierConversationsDrawer({
               type="button"
               onClick={onClose}
               className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white transition"
-              title="Fechar gaveta"
+              title="Fechar conversas"
+              aria-label="Fechar conversas"
             >
               <X size={18} />
             </button>
@@ -493,59 +557,74 @@ export function CashierConversationsDrawer({
         <div className="flex-1 flex overflow-hidden">
           <div
             className={clsx(
-              'w-full sm:w-80 border-r border-zinc-800 flex flex-col bg-zinc-900/40 overflow-y-auto',
+              'w-full sm:w-96 border-r border-zinc-800 flex flex-col bg-zinc-900/45 overflow-y-auto',
               selectedId ? 'hidden sm:flex' : 'flex',
             )}
           >
-            {conversations.length === 0 ? (
+            <div className="sticky top-0 z-10 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                Não lidas primeiro · depois aguardando resposta
+              </p>
+            </div>
+
+            {sortedConversations.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs">
                 <MessageSquare size={32} className="opacity-20 mb-3" />
                 <p>Nenhuma conversa ativa no momento.</p>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-800/60">
-                {conversations.map((conversation) => {
+              <div className="divide-y divide-zinc-800/70">
+                {sortedConversations.map((conversation) => {
                   const isSelected = conversation.id === selectedId;
+                  const awaitingReply = isWaitingForStaff(conversation);
                   return (
                     <button
                       key={conversation.id}
                       type="button"
-                      onClick={() => {
-                        selectedIdRef.current = conversation.id;
-                        setSelectedId(conversation.id);
-                      }}
+                      onClick={() => openConversation(conversation.id)}
                       className={clsx(
-                        'w-full text-left p-3.5 transition flex flex-col gap-1.5',
+                        'relative w-full text-left p-3.5 transition flex flex-col gap-1.5 border-l-4',
                         isSelected
-                          ? 'bg-emerald-500/10 border-l-4 border-emerald-500'
-                          : 'hover:bg-zinc-800/50',
+                          ? 'bg-emerald-500/10 border-emerald-400'
+                          : conversation.unread_count > 0
+                            ? 'bg-emerald-500/[0.06] border-emerald-500/50 hover:bg-emerald-500/10'
+                            : 'border-transparent hover:bg-zinc-800/50',
                       )}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <span className="text-xs font-bold text-white">Pedido #{conversation.numero_pedido || '—'}</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium capitalize">
                             {conversation.tipo_pedido}
                           </span>
                         </div>
                         {conversation.unread_count > 0 && (
-                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center animate-pulse">
+                          <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black flex items-center justify-center">
                             {conversation.unread_count}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-300 font-medium truncate max-w-[140px]">{conversation.cliente_nome}</span>
-                        <span className="text-[10px] text-zinc-500 capitalize">{conversation.status_pedido}</span>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="text-zinc-200 font-semibold truncate">{conversation.cliente_nome}</span>
+                        <span className="text-[10px] text-zinc-500 capitalize shrink-0">{conversation.status_pedido}</span>
                       </div>
 
+                      {awaitingReply && (
+                        <span className="w-fit rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300">
+                          Cliente aguardando resposta
+                        </span>
+                      )}
+
                       {conversation.last_message && (
-                        <p className="text-[11px] text-zinc-400 line-clamp-1 break-words">
+                        <p className={clsx(
+                          'text-[11px] line-clamp-2 break-words leading-relaxed',
+                          awaitingReply ? 'text-zinc-200' : 'text-zinc-400',
+                        )}>
                           {conversation.last_message.sender_type === 'staff' ? (
                             <span className="text-zinc-500">Você: </span>
                           ) : conversation.last_message.sender_type === 'customer' ? (
-                            <span className="text-emerald-400 font-medium">Cliente: </span>
+                            <span className="text-emerald-400 font-semibold">Cliente: </span>
                           ) : null}
                           {conversation.last_message.body}
                         </p>
@@ -559,14 +638,14 @@ export function CashierConversationsDrawer({
 
           <div
             className={clsx(
-              'flex-1 flex flex-col bg-zinc-950',
+              'flex-1 flex flex-col bg-zinc-950 min-w-0',
               !selectedId ? 'hidden sm:flex items-center justify-center' : 'flex',
             )}
           >
             {selectedConv ? (
               <>
-                <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/40">
-                  <div className="flex items-center gap-3">
+                <div className="px-4 sm:px-5 py-3 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-900/45">
+                  <div className="flex min-w-0 items-center gap-3">
                     <button
                       type="button"
                       onClick={() => {
@@ -576,18 +655,22 @@ export function CashierConversationsDrawer({
                         setSelectedId(null);
                       }}
                       className="sm:hidden p-1 text-zinc-400 hover:text-white"
+                      aria-label="Voltar para conversas"
                     >
                       ←
                     </button>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-bold text-white">Pedido #{selectedConv.numero_pedido || '—'}</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 capitalize">
                           {selectedConv.status_pedido}
                         </span>
+                        {isWaitingForStaff(selectedConv) && (
+                          <span className="text-[10px] font-bold text-amber-300">aguardando sua resposta</span>
+                        )}
                       </div>
-                      <span className="text-xs text-zinc-400">
-                        {selectedConv.cliente_nome} · R$ {selectedConv.total_pedido.toFixed(2)}
+                      <span className="block truncate text-xs text-zinc-400">
+                        {selectedConv.cliente_nome} · {selectedConv.tipo_pedido} · R$ {selectedConv.total_pedido.toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -599,15 +682,15 @@ export function CashierConversationsDrawer({
                         onInspectOrder(selectedConv.pedido_id);
                         onClose();
                       }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition shrink-0"
                     >
-                      <span>Ver Pedido</span>
+                      <span className="hidden sm:inline">Ver pedido</span>
                       <ExternalLink size={13} />
                     </button>
                   )}
                 </div>
 
-                <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3">
+                <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 scroll-smooth">
                   {loadingMessages ? (
                     <div className="h-full flex items-center justify-center">
                       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -616,13 +699,14 @@ export function CashierConversationsDrawer({
                     <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs text-center p-4">
                       <MessageSquare size={24} className="opacity-30 mb-2" />
                       <p>Nenhuma mensagem registrada para este pedido.</p>
+                      <p className="mt-1 text-[10px] text-zinc-600">Use uma resposta rápida ou escreva abaixo.</p>
                     </div>
                   ) : (
                     messages.map((message) => {
                       if (message.sender_type === 'system') {
                         return (
                           <div key={message.id} className="flex justify-center my-2">
-                            <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium whitespace-pre-wrap break-words">
+                            <span className="max-w-[90%] px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium whitespace-pre-wrap break-words text-center">
                               {message.body}
                             </span>
                           </div>
@@ -634,7 +718,7 @@ export function CashierConversationsDrawer({
                         <div
                           key={message.id}
                           className={clsx(
-                            'flex flex-col max-w-[80%]',
+                            'flex flex-col max-w-[86%] sm:max-w-[76%]',
                             isStaff ? 'ml-auto items-end' : 'mr-auto items-start',
                           )}
                         >
@@ -643,10 +727,10 @@ export function CashierConversationsDrawer({
                           </span>
                           <div
                             className={clsx(
-                              'rounded-2xl px-3.5 py-2 text-xs leading-relaxed break-words whitespace-pre-wrap',
+                              'rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed break-words whitespace-pre-wrap shadow-sm',
                               isStaff
-                                ? 'bg-emerald-600 text-white rounded-tr-none'
-                                : 'bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-tl-none',
+                                ? 'bg-emerald-600 text-white rounded-tr-sm'
+                                : 'bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-tl-sm',
                             )}
                           >
                             {message.body}
@@ -665,38 +749,63 @@ export function CashierConversationsDrawer({
                   )}
                 </div>
 
-                <div className="p-3 border-t border-zinc-800 bg-zinc-900/60">
+                <div className="border-t border-zinc-800 bg-zinc-900/75 p-3">
+                  <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Respostas rápidas">
+                    {QUICK_REPLIES.map((reply) => (
+                      <button
+                        key={reply}
+                        type="button"
+                        onClick={() => setReplyText(reply)}
+                        disabled={sending}
+                        className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
+                        title={`Usar resposta: ${reply}`}
+                      >
+                        {reply}
+                      </button>
+                    ))}
+                  </div>
+
                   {errorText && (
                     <div className="text-[11px] text-rose-400 mb-1.5 px-1 flex items-center gap-1">
                       <AlertCircle size={12} />
                       <span>{errorText}</span>
                     </div>
                   )}
-                  <form onSubmit={handleSendReply} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={replyText}
-                      onChange={(event) => setReplyText(event.target.value)}
-                      placeholder="Responder ao cliente..."
-                      maxLength={1000}
-                      disabled={sending}
-                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 transition"
-                    />
+
+                  <form onSubmit={handleSendReply} className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <textarea
+                        value={replyText}
+                        onChange={(event) => setReplyText(event.target.value)}
+                        onKeyDown={handleReplyKeyDown}
+                        placeholder="Responder ao cliente..."
+                        maxLength={1000}
+                        rows={2}
+                        disabled={sending}
+                        className="min-h-[46px] max-h-32 w-full resize-y bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 transition"
+                      />
+                      <div className="mt-1 flex items-center justify-between px-1 text-[9px] text-zinc-600">
+                        <span>Enter envia · Shift+Enter quebra linha</span>
+                        <span>{replyText.length}/1000</span>
+                      </div>
+                    </div>
                     <button
                       type="submit"
                       disabled={sending || !replyText.trim()}
-                      className="w-9 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center disabled:opacity-40 disabled:hover:bg-emerald-600 transition shrink-0"
+                      className="mb-4 w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 flex items-center justify-center disabled:opacity-40 disabled:hover:bg-emerald-500 transition shrink-0"
                       title="Enviar resposta"
+                      aria-label="Enviar resposta"
                     >
-                      <Send size={15} />
+                      <Send size={16} />
                     </button>
                   </form>
                 </div>
               </>
             ) : (
-              <div className="text-zinc-500 text-xs flex flex-col items-center">
+              <div className="text-zinc-500 text-xs flex flex-col items-center text-center px-6">
                 <MessageSquare size={32} className="opacity-20 mb-2" />
-                <p>Selecione um pedido para visualizar o chat.</p>
+                <p className="font-semibold text-zinc-400">Selecione uma conversa</p>
+                <p className="mt-1 text-[10px]">As mensagens não lidas e clientes aguardando resposta aparecem primeiro.</p>
               </div>
             )}
           </div>
