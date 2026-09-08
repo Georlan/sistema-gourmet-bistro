@@ -9,10 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...models import PublicRateLimit
 from ..customer_auth import hash_public_rate_key
-from ..online_order_control import (
-    auto_pause_if_capacity_reached,
-    customer_is_blocked,
-)
+from ..online_order_control import customer_is_blocked
 
 MAX_PUBLIC_ORDER_UNITS = 200
 PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
@@ -38,11 +35,7 @@ def consume_rate_limit(
     window_seconds: int,
     detail: str | None = None,
 ) -> None:
-    """Consome uma cota de rate limit e persiste no banco.
-
-    A chave recebida nunca é persistida em claro: ``hash_public_rate_key`` gera
-    o fingerprint tenant/scoped antes da consulta/insert.
-    """
+    """Consome uma cota e persiste somente o fingerprint da chave."""
     now = datetime.datetime.now(datetime.timezone.utc)
     key_hash = hash_public_rate_key(restaurante_id, scope, raw_key)
     rate = (
@@ -110,34 +103,19 @@ def enforce_public_order_rate_limits(
     restaurante_id: int,
     telefone: str,
 ) -> None:
-    """Aplica barreiras antes da transação crítica de criação do pedido.
+    """Aplica bloqueio de cliente e quotas antes da transação do pedido.
 
-    Ordem intencional:
-    1. bloqueio tenant-local do cliente;
-    2. pausa manual/auto-pausa por capacidade;
-    3. quotas por telefone e IP.
-
-    A auto-pausa e as quotas são commitadas antes da transação do pedido para
-    sobreviver ao rollback posterior do adapter. Isso garante que uma pausa
-    confirmada entre duas requisições passe a valer imediatamente na borda.
+    O gate exato de capacidade fica dentro da transação de criação da comanda,
+    onde consegue manter o lock até o commit e evitar corrida em N-1/N.
     """
     if customer_is_blocked(
         db,
         restaurante_id=restaurante_id,
         telefone=telefone,
     ):
-        # Mensagem deliberadamente neutra: não revela regra antifraude, motivo,
-        # duração ou existência de um bloqueio administrativo.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Não foi possível receber um novo pedido com estes dados neste momento.",
-        )
-
-    if auto_pause_if_capacity_reached(db, restaurante_id=restaurante_id):
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Novos pedidos estão temporariamente pausados. Tente novamente mais tarde.",
         )
 
     consume_rate_limit(
