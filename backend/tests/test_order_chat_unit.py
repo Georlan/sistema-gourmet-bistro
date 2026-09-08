@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import datetime
-import uuid
-from fastapi import FastAPI, HTTPException
+
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base, get_db, tenant_session_scope
+from app.database import Base, get_db
 from app.models import PublicRateLimit, Categoria, Cliente, Comanda, Item, Lancamento, Produto, Restaurante, Usuario
 from app.order_chat_models import OrderConversation, OrderMessage
 from app.routes.caixa_chat import router as caixa_chat_router
@@ -17,15 +17,13 @@ from app.routes.order_tracking import router as order_tracking_router
 from app.security import create_access_token
 from app.session_models import UserSessionVersion
 from app.services.order_chat_service import (
+    LEGACY_ESCAPED_BODY_FORMAT,
+    PLAIN_TEXT_BODY_FORMAT,
     create_conversation_for_order,
     get_caixa_unread_summary,
     list_caixa_conversations,
-    mark_customer_read,
-    mark_staff_read,
     post_system_order_event,
-    resolve_public_tracking,
-    send_customer_message,
-    send_staff_message,
+    serialize_message,
 )
 
 
@@ -151,8 +149,13 @@ def _seed_data(db):
     return rest_a, rest_b, user_a, user_b, comanda_a, comanda_b
 
 
+def _staff_headers(user: Usuario) -> dict[str, str]:
+    token = create_access_token(subject=str(user.id), restaurante_id=user.restaurante_id, role="caixa")
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_create_conversation_is_unique_per_order(client_and_session):
-    client, session = client_and_session
+    _client, session = client_and_session
     _seed_data(session)
 
     conv1, token1 = create_conversation_for_order(session, 1, "comanda-101")
@@ -162,15 +165,14 @@ def test_create_conversation_is_unique_per_order(client_and_session):
     assert conv1.pedido_id == "comanda-101"
     assert conv1.restaurante_id == 1
 
-    # Segunda tentativa para o mesmo pedido retorna a mesma conversa e token=None
     conv2, token2 = create_conversation_for_order(session, 1, "comanda-101")
     assert conv2.id == conv1.id
     assert token2 is None
 
-    # Mensagem de sistema inicial deve existir
     msgs = session.query(OrderMessage).filter(OrderMessage.conversation_id == conv1.id).all()
     assert len(msgs) == 1
     assert msgs[0].sender_type == "system"
+    assert msgs[0].body_format == PLAIN_TEXT_BODY_FORMAT
     assert "recebido" in msgs[0].body.lower()
 
 
@@ -180,7 +182,6 @@ def test_public_tracking_resolution_and_anti_enumeration(client_and_session):
     _conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
     session.commit()
 
-    # 1. Token válido -> retorna dados públicos do pedido sem expor segredos
     resp = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}")
     assert resp.status_code == 200
     data = resp.json()
@@ -193,15 +194,12 @@ def test_public_tracking_resolution_and_anti_enumeration(client_and_session):
     assert data["itens"][0]["nome"] == "Risoto Trufado"
     assert data["restaurante"]["nome"] == "Bistrô Alpha"
 
-    # 2. Token inválido -> 404 sem revelar existência do pedido
     resp_invalid = client.get("/api/cardapio/pedidos/acompanhar/invalid-token-123456789")
     assert resp_invalid.status_code == 404
     assert resp_invalid.json()["detail"] == "Pedido não encontrado."
 
-    # 3. Enumeração por ID sequencial ou ID de comanda deve falhar (404)
     resp_enum = client.get("/api/cardapio/pedidos/acompanhar/comanda-101")
     assert resp_enum.status_code == 404
-
     resp_enum_num = client.get("/api/cardapio/pedidos/acompanhar/1048")
     assert resp_enum_num.status_code == 404
 
@@ -211,12 +209,8 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
     conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
     session.commit()
+    headers_staff = _staff_headers(user_a)
 
-    # Staff token para Caixa (restaurante 1, user_id=10)
-    staff_token = create_access_token(subject=str(user_a.id), restaurante_id=1, role="caixa")
-    headers_staff = {"Authorization": f"Bearer {staff_token}"}
-
-    # 1. Cliente envia mensagem
     resp_client_msg = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
         json={"body": "Olá! Poderia caprichar no queijo, por favor?"},
@@ -226,7 +220,6 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     assert msg_data["sender_type"] == "customer"
     assert "queijo" in msg_data["body"]
 
-    # 2. Caixa lista conversas e verifica não lida
     resp_caixa_list = client.get("/api/caixa/conversas", headers=headers_staff)
     assert resp_caixa_list.status_code == 200
     conversas = resp_caixa_list.json()
@@ -236,25 +229,19 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     assert conversas[0]["unread_count"] == 1
     assert conversas[0]["last_message"]["sender_type"] == "customer"
 
-    # Badge global de não lidas no Caixa
     resp_badge = client.get("/api/caixa/conversas/unread-count", headers=headers_staff)
     assert resp_badge.status_code == 200
     assert resp_badge.json()["total_unread"] == 1
 
-    # 3. Operador do Caixa visualiza mensagens e marca como lida
     resp_caixa_msgs = client.get(f"/api/caixa/conversas/{conv.id}/messages", headers=headers_staff)
     assert resp_caixa_msgs.status_code == 200
-    # Inicial de sistema + mensagem do cliente = 2
     assert len(resp_caixa_msgs.json()) == 2
 
     resp_read = client.post(f"/api/caixa/conversas/{conv.id}/read", headers=headers_staff)
     assert resp_read.status_code == 200
-
-    # Badge zera após leitura da equipe
     resp_badge_after = client.get("/api/caixa/conversas/unread-count", headers=headers_staff)
     assert resp_badge_after.json()["total_unread"] == 0
 
-    # 4. Operador responde ao cliente
     resp_reply = client.post(
         f"/api/caixa/conversas/{conv.id}/messages",
         headers=headers_staff,
@@ -263,7 +250,6 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     assert resp_reply.status_code == 200
     assert resp_reply.json()["sender_type"] == "staff"
 
-    # 5. Cliente lista mensagens e vê a resposta
     resp_client_msgs = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert resp_client_msgs.status_code == 200
     msgs = resp_client_msgs.json()
@@ -272,76 +258,109 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     assert "avisamos a cozinha" in msgs[-1]["body"]
 
 
-def test_system_status_messages_and_idempotency(client_and_session):
+def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(client_and_session):
+    client, session = client_and_session
+    _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
+    conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+    headers_staff = _staff_headers(user_a)
+
+    customer_message = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json={"body": "Mensagem antes do encerramento"},
+    )
+    assert customer_message.status_code == 200
+    assert get_caixa_unread_summary(session, 1) == 1
+
+    msg1 = post_system_order_event(session, 1, "comanda-101", "producao")
+    session.commit()
+    assert msg1 is not None
+    assert "preparo" in msg1.body.lower()
+    msg1_dup = post_system_order_event(session, 1, "comanda-101", "producao")
+    session.commit()
+    assert msg1_dup.id == msg1.id
+
+    msg2 = post_system_order_event(session, 1, "comanda-101", "pronto")
+    session.commit()
+    assert "pronto" in msg2.body.lower()
+    msg3 = post_system_order_event(session, 1, "comanda-101", "transito")
+    session.commit()
+    assert "saiu para entrega" in msg3.body.lower()
+
+    before_close = datetime.datetime.now(datetime.timezone.utc)
+    msg4 = post_system_order_event(session, 1, "comanda-101", "finalizado")
+    session.commit()
+    assert "concluído" in msg4.body.lower()
+    session.refresh(conv)
+    assert conv.closed_at is not None
+    closed_at = conv.closed_at
+    if closed_at.tzinfo is None:
+        closed_at = closed_at.replace(tzinfo=datetime.timezone.utc)
+    assert closed_at >= before_close - datetime.timedelta(seconds=1)
+    assert closed_at <= datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=1)
+
+    resp_customer = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json={"body": "Ainda consigo escrever?"},
+    )
+    assert resp_customer.status_code == 409
+
+    resp_staff = client.post(
+        f"/api/caixa/conversas/{conv.id}/messages",
+        headers=headers_staff,
+        json={"body": "Resposta depois de finalizado"},
+    )
+    assert resp_staff.status_code == 409
+
+    assert list_caixa_conversations(session, 1) == []
+    assert get_caixa_unread_summary(session, 1) == 0
+
+    history = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
+    assert history.status_code == 200
+    assert len(history.json()) == 6
+
+
+def test_message_body_is_plain_text_and_legacy_rows_are_decoded_at_boundary(client_and_session):
     client, session = client_and_session
     _seed_data(session)
     conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
     session.commit()
 
-    # 1. Simula transição para 'producao'
-    msg1 = post_system_order_event(session, 1, "comanda-101", "producao")
-    session.commit()
-    assert msg1 is not None
-    assert msg1.sender_type == "system"
-    assert "preparo" in msg1.body.lower()
-
-    # 2. Retry / idempotência: chamar novamente com 'producao' não duplica a mensagem
-    msg1_dup = post_system_order_event(session, 1, "comanda-101", "producao")
-    session.commit()
-    assert msg1_dup.id == msg1.id
-
-    # 3. Transição para 'pronto'
-    msg2 = post_system_order_event(session, 1, "comanda-101", "pronto")
-    session.commit()
-    assert "pronto" in msg2.body.lower()
-
-    # 4. Transição para 'transito'
-    msg3 = post_system_order_event(session, 1, "comanda-101", "transito")
-    session.commit()
-    assert "saiu para entrega" in msg3.body.lower()
-
-    # 5. Transição para 'finalizado' (define closed_at)
-    msg4 = post_system_order_event(session, 1, "comanda-101", "finalizado")
-    session.commit()
-    assert "concluído" in msg4.body.lower()
-
-    session.refresh(conv)
-    assert conv.closed_at is not None
-
-    # Consulta mensagens pelo cliente
-    resp = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
-    assert resp.status_code == 200
-    msgs = resp.json()
-    # order_created + producao + pronto + transito + finalizado = 5 mensagens
-    assert len(msgs) == 5
-
-
-def test_xss_sanitization_and_input_limits(client_and_session):
-    client, session = client_and_session
-    _seed_data(session)
-    _conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
-    session.commit()
-
-    # 1. Mensagem com HTML e script malicioso é escapada
-    xss_payload = "<script>alert('xss')</script><b>Negrito</b>"
+    xss_payload = "<script>alert('xss')</script><b>Negrito</b> & café"
     resp = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
         json={"body": xss_payload},
     )
     assert resp.status_code == 200
-    saved_body = resp.json()["body"]
-    assert "<script>" not in saved_body
-    assert "&lt;script&gt;" in saved_body
-    assert "&lt;b&gt;Negrito&lt;/b&gt;" in saved_body
+    assert resp.json()["body"] == xss_payload
 
-    # 2. Mensagem vazia ou apenas espaços é rejeitada (422)
+    persisted = (
+        session.query(OrderMessage)
+        .filter(OrderMessage.id == resp.json()["id"])
+        .one()
+    )
+    assert persisted.body == xss_payload
+    assert persisted.body_format == PLAIN_TEXT_BODY_FORMAT
+
+    legacy = OrderMessage(
+        id="legacy-message-1",
+        restaurante_id=1,
+        conversation_id=conv.id,
+        pedido_id="comanda-101",
+        sender_type="staff",
+        body="5 &lt; 7 &amp; café",
+        body_format=LEGACY_ESCAPED_BODY_FORMAT,
+        created_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    session.add(legacy)
+    session.commit()
+    assert serialize_message(legacy)["body"] == "5 < 7 & café"
+
     resp_empty = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
         json={"body": "    "},
     )
     assert resp_empty.status_code == 422
-
-    # 3. Mensagem excedendo 1000 caracteres é rejeitada (422)
     resp_huge = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
         json={"body": "A" * 1001},
@@ -352,19 +371,13 @@ def test_xss_sanitization_and_input_limits(client_and_session):
 def test_tenant_isolation_staff_cannot_access_other_tenant_conversation(client_and_session):
     client, session = client_and_session
     _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
-    conv_a, _token_a = create_conversation_for_order(session, 1, "comanda-101")
+    _conv_a, _token_a = create_conversation_for_order(session, 1, "comanda-101")
     conv_b, _token_b = create_conversation_for_order(session, 2, "comanda-201")
     session.commit()
+    headers_a = _staff_headers(user_a)
 
-    # Operador do Restaurante 1 (Alpha, user_id=10)
-    staff_token_a = create_access_token(subject=str(user_a.id), restaurante_id=1, role="caixa")
-    headers_a = {"Authorization": f"Bearer {staff_token_a}"}
-
-    # Operador A tenta acessar a conversa do Restaurante 2 (Beta) -> 404
     resp = client.get(f"/api/caixa/conversas/{conv_b.id}/messages", headers=headers_a)
     assert resp.status_code == 404
-
-    # Operador A tenta responder na conversa do Restaurante 2 -> 404
     resp_reply = client.post(
         f"/api/caixa/conversas/{conv_b.id}/messages",
         headers=headers_a,
@@ -373,17 +386,27 @@ def test_tenant_isolation_staff_cannot_access_other_tenant_conversation(client_a
     assert resp_reply.status_code == 404
 
 
-def test_closed_conversation_rejects_new_customer_messages(client_and_session):
+def test_any_existing_closed_at_is_read_only_for_customer_and_staff(client_and_session):
     client, session = client_and_session
-    _seed_data(session)
+    _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
     conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
-    # Força conversa como já encerrada
-    conv.closed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+    # Compatibilidade: versões antigas agendavam closed_at duas horas no futuro.
+    # Qualquer closed_at existente agora significa histórico read-only.
+    conv.closed_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)
     session.commit()
+    headers_staff = _staff_headers(user_a)
 
-    resp = client.post(
+    resp_customer = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
         json={"body": "Ainda posso alterar o pedido?"},
     )
-    assert resp.status_code == 409
-    assert "encerrado" in resp.json()["detail"].lower()
+    assert resp_customer.status_code == 409
+    assert "encerrado" in resp_customer.json()["detail"].lower()
+
+    resp_staff = client.post(
+        f"/api/caixa/conversas/{conv.id}/messages",
+        headers=headers_staff,
+        json={"body": "Ainda posso responder?"},
+    )
+    assert resp_staff.status_code == 409
+    assert "encerrado" in resp_staff.json()["detail"].lower()
