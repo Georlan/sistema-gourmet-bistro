@@ -64,6 +64,17 @@ if (isPublicMenuRoute()) {
   initializeKomaTheme();
 }
 
+// O service worker não possui fetch/cache handler: registrá-lo globalmente é
+// seguro para o Vite e não solicita permissão. A permissão de notificação só é
+// pedida depois de gesto explícito do cliente no acompanhamento do pedido.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/koma-sw.js", { scope: "/" }).catch((error: unknown) => {
+      console.warn("[push] Service Worker indisponível.", error);
+    });
+  }, { once: true });
+}
+
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 if (sentryDsn) {
   void import("@sentry/react").then((Sentry) => {
