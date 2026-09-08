@@ -355,8 +355,9 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await page.goto(`/acompanhar/${trackingToken}`);
     await page.waitForURL(/\/cardapio\?restaurante_id=99001/);
 
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('koma_active_orders') || '[]'));
+    const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_active_orders') || '[]'));
     expect(saved.find((order: { id: string }) => order.id === orderId)?.tracking_token).toBe(trackingToken);
+    expect(await page.evaluate(() => localStorage.getItem('koma_active_orders'))).toBeNull();
 
     const floatingChat = page.locator('#floating-order-chat-trigger');
     await expect(floatingChat).toBeVisible();
