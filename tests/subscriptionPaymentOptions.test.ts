@@ -6,7 +6,7 @@ import {
   getSubscriptionPaymentOptions,
 } from '../src/config/subscriptionPaymentOptions';
 
-test('mensal expõe cartão disponível e próximos meios sem torná-los selecionáveis', () => {
+test('mensal expõe cartão em validação e próximos meios sem marcar cobrança como disponível', () => {
   const options = getSubscriptionPaymentOptions('mensal');
   assert.deepEqual(options.map((option) => option.id), [
     'credit_card',
@@ -14,7 +14,9 @@ test('mensal expõe cartão disponível e próximos meios sem torná-los selecio
     'nupay',
     'mercado_pago',
   ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), ['credit_card']);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), []);
+  assert.equal(getSubscriptionPaymentOption('credit_card').status, 'validating');
+  assert.match(getSubscriptionPaymentOption('credit_card').label, /em validação/);
   assert.equal(getSubscriptionPaymentOption('pix_automatic').status, 'coming_soon');
 });
 
@@ -27,7 +29,7 @@ test('anual expõe pix, nupay, mercado pago e parcelamento sem boleto', () => {
     'mercado_pago',
     'annual_installments',
   ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), ['credit_card']);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), []);
   assert.equal(getSubscriptionPaymentOption('pix_annual').status, 'validating');
   assert.equal(getSubscriptionPaymentOption('pix_annual').label, 'Pix');
   assert.equal(getSubscriptionPaymentOption('annual_installments').status, 'study');
