@@ -26,6 +26,7 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expect(annualBilling).toHaveAttribute('aria-checked', 'true');
     await expect(page).toHaveURL(/\/contratar\/premium\?cobranca=anual$/);
     await expect(page.getByText('Economize 10%', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Valor mensal equivalente não representa 12 parcelas/)).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByRole('heading', { name: 'Ative seu restaurante.' })).toBeVisible();
@@ -68,6 +69,30 @@ test.describe('checkout público de adesão KÔMA', () => {
     await page.getByRole('button', { name: /^Pix Automático\b/ }).click();
     await expect(page.getByText('Pix Automático · em breve', { exact: true })).toBeVisible();
     await expect(page.getByText(/Não usaremos comprovante de Pix agendado/)).toBeVisible();
+
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('landing usa os mesmos status de pagamento do checkout', async ({ page }) => {
+    await page.goto('/landing#planos');
+
+    const paymentOptions = page.getByLabel('Formas de pagamento da adesão');
+    await expect(paymentOptions.getByText('Cartão de crédito', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('Pix Automático', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('NuPay', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('Mercado Pago', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('Pix anual à vista', { exact: true })).toHaveCount(0);
+    await expect(paymentOptions.getByText('Disponível', { exact: true })).toHaveCount(1);
+
+    const billingSwitch = page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' });
+    await billingSwitch.getByRole('button', { name: /^Anual\b/ }).click();
+
+    await expect(paymentOptions.getByText('Pix anual à vista', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('Anual parcelado no cartão', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('Boleto bancário', { exact: true })).toBeVisible();
+    await expect(paymentOptions.getByText('Em validação', { exact: true })).toHaveCount(1);
+    await expect(paymentOptions.getByText('Em estudo', { exact: true })).toHaveCount(2);
+    await expect(page.getByText(/não 12 parcelas/)).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
   });
