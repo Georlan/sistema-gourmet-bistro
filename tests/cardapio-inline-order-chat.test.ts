@@ -37,6 +37,8 @@ test('link legado de acompanhamento restaura o pedido e volta ao cardapio', () =
 });
 
 test('modal deixa explicito que somente o cardapio online sera pausado', () => {
+  assert.match(emergencyControl, /createPortal\(/);
+  assert.match(emergencyControl, /document\.body/);
   assert.match(emergencyControl, /z-\[9999\]/);
   assert.match(emergencyControl, /Pausar apenas o cardápio online\?/);
   assert.match(emergencyControl, /O restaurante continua operando normalmente/);
