@@ -52,12 +52,9 @@ export function mapCustomerProfile(payload: CustomerProfileApi): CustomerProfile
   };
 }
 
-export function loadCustomerSession(
-  restaurantId: string | number,
-): CustomerSession | null {
+function validCustomerSession(raw: string | null): CustomerSession | null {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(sessionKey(restaurantId));
-    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CustomerSession>;
     if (
       typeof parsed.token !== "string"
@@ -65,13 +62,40 @@ export function loadCustomerSession(
       || !parsed.profile
       || typeof parsed.profile.id !== "string"
       || normalizeBrazilianPhone(parsed.profile.phone || "").length < 10
-    ) {
-      localStorage.removeItem(sessionKey(restaurantId));
-      return null;
-    }
+    ) return null;
     return parsed as CustomerSession;
   } catch {
-    localStorage.removeItem(sessionKey(restaurantId));
+    return null;
+  }
+}
+
+/**
+ * Sessão de cliente é limitada à aba. Isso preserva reload/navegação da SPA,
+ * mas evita deixar token + nome/telefone/e-mail/endereço/saldos no disco via
+ * localStorage. A sessão HttpOnly é a etapa final; até lá, sessionStorage reduz
+ * a persistência sem quebrar o fluxo atual baseado em header.
+ */
+export function loadCustomerSession(
+  restaurantId: string | number,
+): CustomerSession | null {
+  const key = sessionKey(restaurantId);
+  try {
+    const current = validCustomerSession(sessionStorage.getItem(key));
+    if (current) {
+      localStorage.removeItem(key);
+      return current;
+    }
+    sessionStorage.removeItem(key);
+
+    // Migração única de clientes que ainda têm a sessão antiga persistida.
+    const legacy = validCustomerSession(localStorage.getItem(key));
+    localStorage.removeItem(key);
+    if (!legacy) return null;
+    sessionStorage.setItem(key, JSON.stringify(legacy));
+    return legacy;
+  } catch {
+    try { sessionStorage.removeItem(key); } catch { /* Ignore */ }
+    try { localStorage.removeItem(key); } catch { /* Ignore */ }
     return null;
   }
 }
@@ -80,9 +104,14 @@ export function saveCustomerSession(
   restaurantId: string | number,
   session: CustomerSession,
 ): void {
-  localStorage.setItem(sessionKey(restaurantId), JSON.stringify(session));
+  const key = sessionKey(restaurantId);
+  sessionStorage.setItem(key, JSON.stringify(session));
+  // Limpa qualquer cópia persistente deixada por versões anteriores.
+  localStorage.removeItem(key);
 }
 
 export function clearCustomerSession(restaurantId: string | number): void {
-  localStorage.removeItem(sessionKey(restaurantId));
+  const key = sessionKey(restaurantId);
+  sessionStorage.removeItem(key);
+  localStorage.removeItem(key);
 }
