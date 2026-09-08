@@ -5,6 +5,7 @@ import test from "node:test";
 const sw = readFileSync("public/koma-sw.js", "utf8");
 const manifest = readFileSync("public/manifest.webmanifest", "utf8");
 const pushUi = readFileSync("src/cardapio/components/CardapioPushNotifications.tsx", "utf8");
+const ordersDrawer = readFileSync("src/cardapio/components/CardapioOrdersDrawer.tsx", "utf8");
 const main = readFileSync("src/main.tsx", "utf8");
 
 test("Web Push só pede permissão depois de ação explícita do cliente", () => {
@@ -37,4 +38,14 @@ test("desativar um pedido não cancela a PushSubscription global", () => {
   // apenas que não existe chamada executável (await/void/.then) de unsubscribe().
   assert.match(pushUi, /Não chamamos PushSubscription\.unsubscribe/);
   assert.doesNotMatch(pushUi, /(?:await|void|\.then\()[\s\S]{0,40}\.unsubscribe\(\)/);
+});
+
+test("clique da notificação abre diretamente o chat do pedido sem expor tracking token", () => {
+  assert.match(sw, /#koma-order=\$\{encodeURIComponent\(pedidoId\)\}/);
+  assert.match(sw, /KOMA_PUSH_OPEN_ORDER/);
+  assert.match(ordersDrawer, /requestedPushOrderFromHash/);
+  assert.match(ordersDrawer, /KOMA_PUSH_OPEN_ORDER/);
+  assert.match(ordersDrawer, /openChat\(order\.id\)/);
+  assert.match(ordersDrawer, /setFloatingOpen\(true\)/);
+  assert.doesNotMatch(sw, /tracking[_-]?token|acompanhar\//i);
 });
