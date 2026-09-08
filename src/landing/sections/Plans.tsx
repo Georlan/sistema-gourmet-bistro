@@ -8,7 +8,6 @@ import {
   getSubscriptionPricing,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
-import { getSubscriptionPaymentOptions } from '../../config/subscriptionPaymentOptions';
 
 const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   stage: string;
@@ -39,7 +38,6 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
   const billing = isYearly ? 'anual' : 'mensal';
-  const paymentOptions = getSubscriptionPaymentOptions(billing);
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
@@ -75,30 +73,9 @@ export function Plans() {
         </div>
         <p>
           {isYearly
-            ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. É uma referência de preço, não 12 parcelas; a cobrança do anual é única enquanto o parcelamento estiver em estudo.`
+            ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. É apenas uma referência de preço; as condições de pagamento são apresentadas na contratação.`
             : 'Pague mês a mês, sem taxa de implantação.'}
         </p>
-      </div>
-
-      <div className="koma-plans-payment-options" aria-label="Formas de pagamento da adesão">
-        <div className="koma-plans-payment-options-head">
-          <div>
-            <span>FORMAS DE PAGAMENTO</span>
-            <strong>{isYearly ? 'Escolha como pretende pagar o plano anual.' : 'Mais liberdade para começar no mensal.'}</strong>
-          </div>
-          <p>Os mesmos status exibidos aqui aparecem no checkout. Só opções marcadas como <b>Disponível</b> podem gerar cobrança.</p>
-        </div>
-        <div className="koma-plans-payment-options-grid">
-          {paymentOptions.map((option) => (
-            <div className={`koma-plans-payment-option is-${option.status}`} key={option.id}>
-              <div>
-                <strong>{option.label}</strong>
-                <small>{option.landingSummary}</small>
-              </div>
-              <span>{option.statusLabel}</span>
-            </div>
-          ))}
-        </div>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -132,7 +109,7 @@ export function Plans() {
               </div>
               <p className="koma-plan-billing-note">
                 {isYearly
-                  ? `${formatCurrency(pricing.annualTotal)} por ano · cobrança anual única enquanto parcelamento estiver em estudo`
+                  ? `${formatCurrency(pricing.annualTotal)} por ano · condições de pagamento exibidas na contratação`
                   : 'Sem taxa de implantação'}
               </p>
               {isYearly && (
@@ -173,7 +150,7 @@ export function Plans() {
           );
         })}
       </div>
-      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. A disponibilidade de cada meio de pagamento segue o status exibido acima e no checkout; opções futuras não geram cobrança. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
+      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. As formas e condições de pagamento são apresentadas na etapa de contratação. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
     </section>
   );
 }
