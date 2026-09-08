@@ -26,6 +26,7 @@ from app.services.billing_service import (
     is_billing_ready,
     resolve_tenant_entitlement,
 )
+from app.subscription import subscription_annual_total
 
 VALID_CPF = "52998224725"
 VALID_CNPJ = "11222333000181"
@@ -78,6 +79,16 @@ def _contract_payload(plan: str = "pro", billing_cycle: str = "mensal") -> dict[
         "legal_source_commit": LEGAL_SOURCE_COMMIT,
         "legal_source_blob_sha": LEGAL_SOURCE_BLOB_SHA,
         "documents": _documents(),
+    }
+
+
+def _verified_pix_payment(payment_id: str, protocol: str, plan: str = "pocket") -> dict[str, Any]:
+    return {
+        "id": payment_id,
+        "status": "approved",
+        "payment_method_id": "pix",
+        "external_reference": protocol,
+        "transaction_amount": float(subscription_annual_total(plan)),
     }
 
 
@@ -256,7 +267,7 @@ def test_pix_billing_setup_requires_annual_cycle(client_and_session):
         assert setup.restaurante_id is None
 
 
-def test_webhook_pix_approval_activates_tenant(client_and_session):
+def test_webhook_pix_approval_activates_tenant_only_after_provider_verification(client_and_session, monkeypatch):
     client, Session = client_and_session
     accept_resp = client.post("/api/contracts/accept", json=_contract_payload("pocket", "anual"))
     protocol = accept_resp.json()["protocol"]
@@ -266,8 +277,12 @@ def test_webhook_pix_approval_activates_tenant(client_and_session):
         json={"payment_method_type": "pix"},
     )
     payment_id = setup_resp.json()["paymentId"]
+    monkeypatch.setattr(
+        saas_billing.default_saas_mp_service,
+        "get_payment",
+        lambda provider_payment_id: _verified_pix_payment(provider_payment_id, protocol, "pocket"),
+    )
 
-    # Simula webhook do Mercado Pago informando payment.approved
     webhook_payload = {
         "action": "payment.updated",
         "type": "payment",
@@ -278,6 +293,8 @@ def test_webhook_pix_approval_activates_tenant(client_and_session):
         json=webhook_payload,
     )
     assert resp_wh.status_code == 200
+    assert resp_wh.json()["activated"] is True
+    assert resp_wh.json()["paymentStatus"] == "approved"
 
     with Session() as db:
         setup = get_billing_setup(db, protocol)
@@ -290,6 +307,109 @@ def test_webhook_pix_approval_activates_tenant(client_and_session):
         ).one()
         assert sub.status == "active"
         assert sub.payment_method_type == "pix"
+        rest = db.query(Restaurante).filter(Restaurante.id == setup.restaurante_id).one()
+        assert rest.slug
+
+    status_resp = client.get(f"/api/contracts/{protocol}/billing/status")
+    assert status_resp.status_code == 200
+    status_data = status_resp.json()
+    assert status_data["isActivated"] is True
+    assert status_data["slug"]
+
+
+def test_webhook_pix_pending_provider_status_does_not_activate(client_and_session):
+    client, Session = client_and_session
+    accept_resp = client.post("/api/contracts/accept", json=_contract_payload("pro", "anual"))
+    protocol = accept_resp.json()["protocol"]
+    setup_resp = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "pix"},
+    )
+    payment_id = setup_resp.json()["paymentId"]
+
+    resp_wh = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook",
+        json={"type": "payment", "action": "payment.updated", "data": {"id": payment_id}},
+    )
+    assert resp_wh.status_code == 200
+    assert resp_wh.json()["activated"] is False
+    assert resp_wh.json()["paymentStatus"] == "pending"
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup.status == "pending"
+        assert setup.restaurante_id is None
+        assert db.query(SaaSSubscription).count() == 0
+
+
+def test_webhook_pix_rejects_reference_mismatch(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    accept_resp = client.post("/api/contracts/accept", json=_contract_payload("pocket", "anual"))
+    protocol = accept_resp.json()["protocol"]
+    setup_resp = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "pix"},
+    )
+    payment_id = setup_resp.json()["paymentId"]
+    monkeypatch.setattr(
+        saas_billing.default_saas_mp_service,
+        "get_payment",
+        lambda provider_payment_id: {
+            **_verified_pix_payment(provider_payment_id, protocol, "pocket"),
+            "external_reference": "KOMA-CTR-20000101-AAAAAAAAAAAA",
+        },
+    )
+
+    resp_wh = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook",
+        json={"type": "payment", "data": {"id": payment_id}},
+    )
+    assert resp_wh.status_code == 200
+    assert resp_wh.json() == {
+        "status": "received",
+        "activated": False,
+        "reason": "external_reference_mismatch",
+    }
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup.status == "pending"
+        assert setup.restaurante_id is None
+
+
+def test_webhook_pix_rejects_amount_mismatch(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    accept_resp = client.post("/api/contracts/accept", json=_contract_payload("premium", "anual"))
+    protocol = accept_resp.json()["protocol"]
+    setup_resp = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "pix"},
+    )
+    payment_id = setup_resp.json()["paymentId"]
+    monkeypatch.setattr(
+        saas_billing.default_saas_mp_service,
+        "get_payment",
+        lambda provider_payment_id: {
+            **_verified_pix_payment(provider_payment_id, protocol, "premium"),
+            "transaction_amount": 1.00,
+        },
+    )
+
+    resp_wh = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook",
+        json={"type": "payment", "data": {"id": payment_id}},
+    )
+    assert resp_wh.status_code == 200
+    assert resp_wh.json() == {
+        "status": "received",
+        "activated": False,
+        "reason": "amount_mismatch",
+    }
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup.status == "pending"
+        assert setup.restaurante_id is None
 
 
 def test_operational_paywall_blocks_suspended_and_expired(client_and_session):
