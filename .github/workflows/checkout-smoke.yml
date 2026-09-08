@@ -7,6 +7,7 @@ on:
     paths:
       - 'src/legal/PlanContractPage.tsx'
       - 'src/legal/planSubscriptionFlow.css'
+      - 'src/legal/paymentOptionsCatalog.css'
       - 'src/config/subscriptionPlans.ts'
       - 'src/main.tsx'
       - 'e2e/plan-subscription-flow.spec.ts'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'src/legal/PlanContractPage.tsx'
       - 'src/legal/planSubscriptionFlow.css'
+      - 'src/legal/paymentOptionsCatalog.css'
       - 'src/config/subscriptionPlans.ts'
       - 'src/main.tsx'
       - 'e2e/plan-subscription-flow.spec.ts'

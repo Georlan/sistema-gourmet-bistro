@@ -6,7 +6,7 @@ async function expectNoHorizontalOverflow(page: import('@playwright/test').Page)
 }
 
 test.describe('checkout público de adesão KÔMA', () => {
-  test('seleciona plano e ciclo, sincroniza a URL e expõe somente pagamentos suportados', async ({ page }) => {
+  test('seleciona plano e ciclo, sincroniza a URL e separa método ativo de previews', async ({ page }) => {
     await page.goto('/contratar');
 
     await expect(page.getByRole('heading', { name: 'Escolha o KÔMA certo para sua operação.' })).toBeVisible();
@@ -30,18 +30,26 @@ test.describe('checkout público de adesão KÔMA', () => {
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByRole('heading', { name: 'Ative seu restaurante.' })).toBeVisible();
 
-    const paymentGroup = page.getByRole('radiogroup', { name: 'Forma de pagamento' });
+    const paymentGroup = page.getByRole('radiogroup', { name: 'Forma de pagamento disponível' });
     await expect(paymentGroup.getByRole('radio', { name: /^Cartão de crédito\b/ })).toBeVisible();
-    const pix = paymentGroup.getByRole('radio', { name: /^Pix anual à vista\b/ });
-    await expect(pix).toBeVisible();
-    await pix.click();
-    await expect(page.getByText('O Pix anual é pagamento antecipado.', { exact: true })).toBeVisible();
+    await expect(paymentGroup.getByRole('radio')).toHaveCount(1);
+
+    const pixPreview = page.getByRole('button', { name: /^Pix anual à vista\b/ });
+    await expect(pixPreview).toBeVisible();
+    await expect(page.getByRole('button', { name: /^NuPay\b/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Mercado Pago\b/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Anual parcelado no cartão\b/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Boleto bancário\b/ })).toBeVisible();
+
+    await pixPreview.click();
+    await expect(page.getByText('Pix anual à vista · em validação', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Este preview não gera cobrança/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
 
     await expectNoHorizontalOverflow(page);
   });
 
-  test('mensal não oferece Pix e preserva o trial de cartão sem mensalidade fixa', async ({ page }) => {
+  test('mensal preserva o trial e apresenta Pix Automático e NuPay como próximos meios', async ({ page }) => {
     await page.goto('/contratar/pocket?cobranca=mensal');
 
     const planGroup = page.getByRole('radiogroup', { name: 'Escolha um plano KÔMA' });
@@ -49,10 +57,17 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expect(page.getByText('7 dias sem mensalidade fixa no cartão.', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Continuar' }).click();
-    const paymentGroup = page.getByRole('radiogroup', { name: 'Forma de pagamento' });
+    const paymentGroup = page.getByRole('radiogroup', { name: 'Forma de pagamento disponível' });
     await expect(paymentGroup.getByRole('radio', { name: /^Cartão de crédito\b/ })).toBeVisible();
-    await expect(paymentGroup.getByText('Pix anual à vista')).toHaveCount(0);
+    await expect(paymentGroup.getByRole('radio')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: /^Pix Automático\b/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^NuPay\b/ })).toBeVisible();
+    await expect(page.getByText('Pix anual à vista')).toHaveCount(0);
     await expect(page.getByText('7 dias sem mensalidade fixa. A taxa por pedidos online pagos continua aplicável.', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: /^Pix Automático\b/ }).click();
+    await expect(page.getByText('Pix Automático · em breve', { exact: true })).toBeVisible();
+    await expect(page.getByText(/Não usaremos comprovante de Pix agendado/)).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
   });
