@@ -68,11 +68,7 @@ def renew_outbox_claim_lease(
     outbox_id: str,
     worker_id: Optional[str] = None,
 ) -> bool:
-    """Renova atômica e imediatamente o lease do claim antes de disparar a requisição HTTP.
-
-    Retorna True se o lease continua sob posse do worker_id e foi renovado para now().
-    Retorna False se o claim expirou/foi recuperado por outro processo (evitando duplicatas).
-    """
+    """Renova atômica e imediatamente o lease do claim antes de disparar a requisição HTTP."""
     now = datetime.datetime.now(datetime.timezone.utc)
     query = db.query(IntegrationOutbox).filter(
         IntegrationOutbox.id == outbox_id,
@@ -93,11 +89,7 @@ def claim_outbox_batch(
     worker_id: Optional[str] = None,
     restaurant_id: Optional[int] = None,
 ) -> list[dict[str, Any]]:
-    """Fase 1: Transação atômica curta de claim com SKIP LOCKED e commit imediato.
-    
-    Garante que workers simultâneos recebam conjuntos estritamente disjuntos de eventos
-    sem manter locks de linha do PostgreSQL durante as requisições HTTP de envio.
-    """
+    """Fase 1: claim curto com SKIP LOCKED; HTTP fica fora de locks de banco."""
     now = datetime.datetime.now(datetime.timezone.utc)
     wid = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
 
@@ -142,7 +134,6 @@ def claim_outbox_batch(
         ev.locked_at = now
         ev.locked_by = wid
 
-    # Commit imediato do claim para liberar os locks de banco
     db.commit()
     return snapshots
 
@@ -158,7 +149,7 @@ def settle_outbox_event(
     last_error: Optional[str] = None,
     worker_id: Optional[str] = None,
 ) -> bool:
-    """Fase 3: Liquidação atômica e rápida do evento após a tentativa de entrega HTTP."""
+    """Fase 3: liquidação curta após a tentativa de entrega."""
     query = db.query(IntegrationOutbox).filter(IntegrationOutbox.id == outbox_id)
     if worker_id is not None:
         query = query.filter(IntegrationOutbox.locked_by == worker_id)
@@ -186,6 +177,54 @@ def settle_outbox_event(
     return True
 
 
+def _settle_dispatch_failure(
+    db: Session,
+    snapshot: dict[str, Any],
+    exc: Exception,
+    *,
+    response_status_code: Optional[int] = None,
+) -> None:
+    """Aplica a mesma política de retry/dead-letter a webhooks e push interno."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    new_attempts = int(snapshot["attempts"]) + 1
+    max_attempts = int(snapshot["max_attempts"])
+    outbox_id = str(snapshot["id"])
+    worker_id = snapshot.get("locked_by")
+
+    if new_attempts >= max_attempts:
+        logger.error(
+            "[OUTBOX DEAD LETTER] Evento %s (%s) atingiu limite de %d tentativas: %s",
+            snapshot["event_id"], snapshot["event_name"], max_attempts, exc,
+        )
+        settle_outbox_event(
+            db,
+            outbox_id,
+            status="dead_letter",
+            attempts=new_attempts,
+            response_status_code=response_status_code,
+            last_error=str(exc)[:500],
+            worker_id=worker_id,
+        )
+        return
+
+    delay = _calculate_backoff_seconds(new_attempts)
+    next_retry = now + datetime.timedelta(seconds=delay)
+    logger.warning(
+        "[OUTBOX RETRY] Evento %s falhou (tentativa %d/%d). Próximo retry em %ds: %s",
+        snapshot["event_id"], new_attempts, max_attempts, delay, exc,
+    )
+    settle_outbox_event(
+        db,
+        outbox_id,
+        status="failed",
+        attempts=new_attempts,
+        next_retry_at=next_retry,
+        response_status_code=response_status_code,
+        last_error=str(exc)[:500],
+        worker_id=worker_id,
+    )
+
+
 def dispatch_single_claimed_snapshot(
     db: Session,
     snapshot: dict[str, Any],
@@ -193,14 +232,11 @@ def dispatch_single_claimed_snapshot(
     client: Optional[httpx.Client] = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> bool:
-    """Fase 2: Envio HTTP executado completamente fora de qualquer lock de banco."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    """Fase 2: entrega HTTP/Web Push completamente fora do lock de claim."""
     rid = snapshot["restaurante_id"]
     outbox_id = snapshot["id"]
     worker_id = snapshot.get("locked_by")
 
-    # Renova o lease atômico antes de iniciar a conexão HTTP.
-    # Se o evento foi recuperado por timeout/crash durante a espera na fila local, aborta o disparo.
     if not renew_outbox_claim_lease(db, outbox_id, worker_id):
         logger.warning(
             "[OUTBOX LEASE ABORT] Claim %s não pertence mais ao worker %s ou expirou. Abortando envio duplicado.",
@@ -208,6 +244,26 @@ def dispatch_single_claimed_snapshot(
             worker_id,
         )
         return False
+
+    # Web Push é transporte interno do KÔMA: não deve cair no webhook configurado
+    # pelo restaurante. O mesmo mecanismo de claim/retry/dead-letter continua
+    # sendo usado, preservando durabilidade sem bloquear o ciclo do pedido.
+    if str(snapshot.get("event_name") or "").startswith("koma.push."):
+        try:
+            from ..web_push import dispatch_order_push_event
+            dispatch_order_push_event(db, snapshot)
+            settle_outbox_event(
+                db,
+                outbox_id,
+                status="delivered",
+                response_status_code=204,
+                last_error=None,
+                worker_id=worker_id,
+            )
+            return True
+        except Exception as exc:
+            _settle_dispatch_failure(db, snapshot, exc)
+            return False
 
     config = (
         db.query(ConfiguracaoRestaurante)
@@ -219,7 +275,6 @@ def dispatch_single_claimed_snapshot(
     webhook_secret = (config.webhook_secret or "").strip() if config else ""
     webhook_ativo = bool(config.webhook_ativo) if config else False
 
-    # Se webhook inativo ou não configurado, consideramos entregue/ignorado
     if not webhook_ativo or not webhook_url:
         settle_outbox_event(
             db,
@@ -255,51 +310,9 @@ def dispatch_single_claimed_snapshot(
                 worker_id=worker_id,
             )
             return True
-        else:
-            raise RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
-
+        raise RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
     except Exception as exc:
-        new_attempts = snapshot["attempts"] + 1
-        max_attempts = snapshot["max_attempts"]
-
-        if new_attempts >= max_attempts:
-            logger.error(
-                "[OUTBOX DEAD LETTER] Evento %s (%s) atingiu limite de %d tentativas: %s",
-                snapshot["event_id"],
-                snapshot["event_name"],
-                max_attempts,
-                exc,
-            )
-            settle_outbox_event(
-                db,
-                outbox_id,
-                status="dead_letter",
-                attempts=new_attempts,
-                response_status_code=resp_code,
-                last_error=str(exc)[:500],
-                worker_id=worker_id,
-            )
-        else:
-            delay = _calculate_backoff_seconds(new_attempts)
-            next_retry = now + datetime.timedelta(seconds=delay)
-            logger.warning(
-                "[OUTBOX RETRY] Evento %s falhou (tentativa %d/%d). Próximo retry em %ds: %s",
-                snapshot["event_id"],
-                new_attempts,
-                max_attempts,
-                delay,
-                exc,
-            )
-            settle_outbox_event(
-                db,
-                outbox_id,
-                status="failed",
-                attempts=new_attempts,
-                next_retry_at=next_retry,
-                response_status_code=resp_code,
-                last_error=str(exc)[:500],
-                worker_id=worker_id,
-            )
+        _settle_dispatch_failure(db, snapshot, exc, response_status_code=resp_code)
         return False
     finally:
         if close_client:
@@ -347,7 +360,7 @@ def dispatch_pending_outbox_events(
     client: Optional[httpx.Client] = None,
     restaurant_id: Optional[int] = None,
 ) -> dict[str, int]:
-    """Fluxo completo de processamento: recuperação de stale claims -> claim atômico -> envio desacoplado."""
+    """Recupera claims, reivindica lote e despacha cada snapshot."""
     stats = {
         "claimed": 0,
         "delivered": 0,
@@ -357,7 +370,6 @@ def dispatch_pending_outbox_events(
         "total": 0,
     }
 
-    # 1. Recupera claims abandonados/stale antes do próximo ciclo
     recovered = recover_stale_outbox_claims(
         db,
         stale_timeout_seconds=stale_timeout_seconds,
@@ -365,7 +377,6 @@ def dispatch_pending_outbox_events(
     )
     stats["recovered_stale"] = recovered
 
-    # 2. Reivindica lote exclusivo e comita o lock de linha
     claimed_snapshots = claim_outbox_batch(
         db,
         batch_size=batch_size,
@@ -378,7 +389,6 @@ def dispatch_pending_outbox_events(
     if not claimed_snapshots:
         return stats
 
-    # 3. Dispara cada snapshot fora de locks de banco
     for snapshot in claimed_snapshots:
         success = dispatch_single_claimed_snapshot(
             db,
@@ -388,7 +398,6 @@ def dispatch_pending_outbox_events(
         if success:
             stats["delivered"] += 1
         else:
-            # Verifica se o evento caiu em dead_letter ou failed
             ev = db.query(IntegrationOutbox).filter(IntegrationOutbox.id == snapshot["id"]).first()
             if ev and ev.status == "dead_letter":
                 stats["dead_letter"] += 1
