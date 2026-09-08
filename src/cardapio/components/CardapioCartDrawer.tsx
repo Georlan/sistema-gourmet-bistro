@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
+import { loadGuestCheckoutContact, saveGuestCheckoutContact } from "../guestCheckoutSession";
 import { API_BASE_URL } from "../../config/api";
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
@@ -83,9 +84,6 @@ const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 }).format(value);
-
-const guestContactKey = (restaurantId: string | number) =>
-  `koma_guest_checkout:${String(restaurantId)}`;
 
 export default function CardapioCartDrawer({
   cart,
@@ -182,30 +180,25 @@ export default function CardapioCartDrawer({
       return;
     }
 
-    try {
-      const raw = localStorage.getItem(guestContactKey(restaurantId));
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { name?: string; phone?: string; email?: string; address?: string };
-      setGuestName(String(parsed.name || ""));
-      setGuestPhone(formatBrazilianPhone(String(parsed.phone || "")));
-      setGuestEmail(String(parsed.email || ""));
-      setAddress(String(parsed.address || ""));
-    } catch {
-      // Ignore
-    }
+    const parsed = loadGuestCheckoutContact(restaurantId);
+    if (!parsed) return;
+    setGuestName(parsed.name);
+    setGuestPhone(formatBrazilianPhone(parsed.phone));
+    setGuestEmail(parsed.email);
+    setAddress(parsed.address);
   }, [restaurantId, user]);
 
   useEffect(() => {
     if (user) return;
     try {
-      localStorage.setItem(guestContactKey(restaurantId), JSON.stringify({
+      saveGuestCheckoutContact(restaurantId, {
         name: guestName.trim(),
         phone: normalizeBrazilianPhone(guestPhone),
         email: guestEmail.trim().toLowerCase(),
         address: address.trim(),
-      }));
+      });
     } catch {
-      // Ignore
+      // Storage can be unavailable in hardened/private browser contexts.
     }
   }, [address, guestEmail, guestName, guestPhone, restaurantId, user]);
 
