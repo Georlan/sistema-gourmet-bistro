@@ -13,22 +13,28 @@ import {
   saveStoredOrder,
 } from '../src/cardapio/orderTracking';
 
-const mockStorage: Record<string, string> = {};
-(globalThis as any).localStorage = {
-  getItem: (key: string) => mockStorage[key] || null,
-  setItem: (key: string, value: string) => {
-    mockStorage[key] = String(value);
-  },
-  removeItem: (key: string) => {
-    delete mockStorage[key];
-  },
-  clear: () => {
-    Object.keys(mockStorage).forEach((k) => delete mockStorage[k]);
-  },
-};
+function createMockStorage() {
+  const values: Record<string, string> = {};
+  return {
+    getItem: (key: string) => values[key] || null,
+    setItem: (key: string, value: string) => {
+      values[key] = String(value);
+    },
+    removeItem: (key: string) => {
+      delete values[key];
+    },
+    clear: () => {
+      Object.keys(values).forEach((key) => delete values[key]);
+    },
+  };
+}
+
+(globalThis as any).localStorage = createMockStorage();
+(globalThis as any).sessionStorage = createMockStorage();
 
 beforeEach(() => {
   (globalThis as any).localStorage.clear();
+  (globalThis as any).sessionStorage.clear();
 });
 
 test('fallback canônico usa mapa exato sem aceitar substrings parecidas', () => {
@@ -68,7 +74,7 @@ test('resolveOrderState prefere contrato retornado pelo backend', () => {
   assert.equal(state.progress_step, 5);
 });
 
-test('loadStoredOrders migra com sucesso da chave legada koma_active_order', () => {
+test('loadStoredOrders migra chave legada do localStorage para a sessão', () => {
   localStorage.setItem(
     LEGACY_ACTIVE_ORDER_STORAGE_KEY,
     JSON.stringify({
@@ -88,9 +94,11 @@ test('loadStoredOrders migra com sucesso da chave legada koma_active_order', () 
   assert.equal(orders[0].id, 'pedido-legado-1');
   assert.equal(orders[0].numero_pedido, 101);
   assert.equal(orders[0].total, 35.5);
+  assert.equal(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY), null);
+  assert.ok(sessionStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY));
 });
 
-test('saveStoredOrder adiciona múltiplos pedidos e preserva compatibilidade com koma_active_order', () => {
+test('saveStoredOrder adiciona múltiplos pedidos somente na sessão', () => {
   const order1: StoredOrder = {
     id: 'p-1', numero_pedido: '1', timestamp: Date.now() - 1000,
     restaurante_id: 1, tipo: 'Retirada', total: 20, idempotency_key: 'k-1', status: 'producao',
@@ -108,12 +116,14 @@ test('saveStoredOrder adiciona múltiplos pedidos e preserva compatibilidade com
   assert.equal(loaded[0].id, 'p-2');
   assert.equal(loaded[1].id, 'p-1');
 
-  const legacyRaw = localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
+  const legacyRaw = sessionStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
   assert.ok(legacyRaw);
   assert.equal(JSON.parse(legacyRaw!).id, 'p-2');
+  assert.equal(localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY), null);
+  assert.equal(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY), null);
 });
 
-test('removeStoredOrder remove o pedido específico e atualiza a chave legada', () => {
+test('removeStoredOrder remove o pedido específico e atualiza a chave legada da sessão', () => {
   const order1: StoredOrder = {
     id: 'p-1', numero_pedido: '1', timestamp: Date.now() - 1000,
     restaurante_id: 1, tipo: 'Retirada', total: 20, idempotency_key: 'k-1', status: 'producao',
@@ -130,10 +140,10 @@ test('removeStoredOrder remove o pedido específico e atualiza a chave legada', 
   const remaining = loadStoredOrders(1);
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0].id, 'p-1');
-  assert.equal(JSON.parse(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)!).id, 'p-1');
+  assert.equal(JSON.parse(sessionStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)!).id, 'p-1');
 });
 
-test('pedido moderno persiste somente token opaco e remove duplicatas de segredo', () => {
+test('pedido moderno mantém token opaco somente na sessão e remove duplicatas de segredo', () => {
   const orderWithTracking: StoredOrder = {
     id: 'comanda-1048',
     numero_pedido: 1048,
@@ -154,9 +164,11 @@ test('pedido moderno persiste somente token opaco e remove duplicatas de segredo
   assert.equal(loaded[0].tracking_token, 'sec_tok_xyz1234567890abcdef');
   assert.equal(loaded[0].tracking_url, undefined);
   assert.equal(loaded[0].idempotency_key, '');
+  assert.match(sessionStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '', /sec_tok_xyz1234567890abcdef/);
+  assert.equal(localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY), null);
 });
 
-test('localStorage não guarda PII nem detalhes de compra de pedidos modernos', () => {
+test('storage de pedidos não guarda PII nem detalhes de compra', () => {
   saveStoredOrder({
     id: 'private-order',
     numero_pedido: 77,
@@ -173,7 +185,7 @@ test('localStorage não guarda PII nem detalhes de compra de pedidos modernos', 
     tracking_url: '/acompanhar/opaque-tracking-token',
   });
 
-  const raw = localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
+  const raw = sessionStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
   assert.match(raw, /opaque-tracking-token/);
   assert.doesNotMatch(raw, /Pessoa Privada/);
   assert.doesNotMatch(raw, /85999999999/);
@@ -181,9 +193,10 @@ test('localStorage não guarda PII nem detalhes de compra de pedidos modernos', 
   assert.doesNotMatch(raw, /Sem cebola/);
   assert.doesNotMatch(raw, /should-not-persist-with-token/);
   assert.doesNotMatch(raw, /tracking_url/);
+  assert.equal(localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY), null);
 });
 
-test('leitura de registro antigo apaga PII e converte tracking_url para token', () => {
+test('leitura de registro antigo apaga cópia durável e converte tracking_url para token de sessão', () => {
   localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify([{
     id: 'legacy-private', numero_pedido: 8, timestamp: Date.now(), restaurante_id: 1,
     cliente_nome: 'Nome legado', cliente_telefone: '85111111111', tipo: 'Retirada', total: 12,
@@ -195,9 +208,24 @@ test('leitura de registro antigo apaga PII e converte tracking_url para token', 
   assert.equal(loaded[0].tracking_token, 'legacy/opaque');
   assert.equal(loaded[0].idempotency_key, '');
 
-  const migrated = localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
+  assert.equal(localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY), null);
+  const migrated = sessionStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
   assert.doesNotMatch(migrated, /Nome legado|85111111111|Item legado|legacy-key|tracking_url/);
   assert.match(migrated, /legacy\\\/opaque|legacy\/opaque/);
+});
+
+test('tracking secret deixa de existir quando a sessão da aba termina', () => {
+  saveStoredOrder({
+    id: 'session-order', numero_pedido: 9, timestamp: Date.now(), restaurante_id: 1,
+    tipo: 'Delivery', total: 40, idempotency_key: '', status: 'pendente',
+    tracking_token: 'session-only-secret',
+  });
+  assert.equal(loadStoredOrders(1).length, 1);
+
+  sessionStorage.clear();
+
+  assert.deepEqual(loadStoredOrders(1), []);
+  assert.equal(localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY), null);
 });
 
 test('tracking seguro prefere state do backend e token opaco', async () => {
