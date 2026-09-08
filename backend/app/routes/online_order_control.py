@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,7 @@ from ..services.online_order_control import (
     resume_online_orders,
     update_capacity,
 )
+from ..websocket_manager import manager
 
 router = APIRouter(prefix="/api/online-orders", tags=["Online Order Operational Control"])
 
@@ -57,6 +58,14 @@ def _authorized_operator(
     return current_user
 
 
+def _notify_public_menu(background_tasks: BackgroundTasks, restaurante_id: int) -> None:
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "config_updated", "source": "online_order_control"},
+        restaurante_id,
+    )
+
+
 @router.get("/control")
 def get_online_order_control(
     db: Session = Depends(get_db),
@@ -65,13 +74,14 @@ def get_online_order_control(
     del current_user
     rid = require_tenant_id()
     result = operational_status(db, rid)
-    db.commit()  # persiste a linha default criada na primeira leitura
+    db.commit()
     return result
 
 
 @router.post("/pause")
 def pause_orders(
     payload: PauseOrdersPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(_authorized_operator),
 ):
@@ -84,12 +94,15 @@ def pause_orders(
         duration_minutes=payload.duration_minutes,
     )
     db.commit()
-    return operational_status(db, rid)
+    result = operational_status(db, rid)
+    _notify_public_menu(background_tasks, rid)
+    return result
 
 
 @router.post("/resume")
 def resume_orders(
     payload: ResumeOrdersPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(_authorized_operator),
 ):
@@ -101,12 +114,15 @@ def resume_orders(
         reason=payload.reason,
     )
     db.commit()
-    return operational_status(db, rid)
+    result = operational_status(db, rid)
+    _notify_public_menu(background_tasks, rid)
+    return result
 
 
 @router.put("/capacity")
 def configure_capacity(
     payload: CapacityPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(_authorized_operator),
 ):
@@ -119,7 +135,9 @@ def configure_capacity(
         auto_pause=payload.auto_pause,
     )
     db.commit()
-    return operational_status(db, rid)
+    result = operational_status(db, rid)
+    _notify_public_menu(background_tasks, rid)
+    return result
 
 
 @router.get("/blocks")
@@ -138,8 +156,6 @@ def list_customer_blocks(
         .order_by(OnlineOrderCustomerBlock.created_at.desc())
         .all()
     )
-    # Não devolvemos fingerprint do telefone. A UI não precisa conhecer o
-    # mecanismo antifraude nem qualquer dado sensível adicional.
     return [
         {
             "id": block.id,
