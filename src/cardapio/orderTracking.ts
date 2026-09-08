@@ -222,99 +222,123 @@ function safeParseJson<T>(raw: string | null): T | null {
   }
 }
 
+function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
+  const direct = String(order.tracking_token || "").trim();
+  if (direct) return direct;
+  const legacyUrl = String(order.tracking_url || "").trim();
+  if (!legacyUrl) return "";
+  const marker = "/acompanhar/";
+  const markerIndex = legacyUrl.lastIndexOf(marker);
+  if (markerIndex < 0) return "";
+  const encoded = legacyUrl.slice(markerIndex + marker.length).split(/[?#]/, 1)[0];
+  try {
+    return decodeURIComponent(encoded || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Carrega todos os pedidos armazenados localmente, unificando a chave moderna
- * de múltiplos pedidos (`koma_active_orders`) e o fallback legado (`koma_active_order`).
+ * Projeção mínima persistente. Dados pessoais, itens comprados e URLs que
+ * duplicam segredos não pertencem ao armazenamento durável do navegador.
+ * Quando há tracking_token, a idempotency key também deixa de ser necessária
+ * para acompanhar o pedido e não é persistida.
+ */
+function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrder | null {
+  if (!order?.id || now - Number(order.timestamp || 0) > ACTIVE_ORDER_TTL_MS) return null;
+
+  const trackingToken = trackingTokenFromOrder(order);
+  const legacyKey = String(order.idempotency_key || "").trim();
+  if (!trackingToken && !legacyKey) return null;
+
+  return {
+    id: String(order.id),
+    numero_pedido: order.numero_pedido ?? order.id,
+    timestamp: Number(order.timestamp || now),
+    restaurante_id: Number(order.restaurante_id),
+    tipo: String(order.tipo || "Retirada"),
+    total: Number(order.total || 0),
+    idempotency_key: trackingToken ? "" : legacyKey,
+    status: String(order.status || "pendente"),
+    state: isOrderStateContract(order.state) ? order.state : undefined,
+    fechado: Boolean(order.fechado),
+    created_at: order.created_at ? String(order.created_at) : undefined,
+    tracking_token: trackingToken || undefined,
+  };
+}
+
+function persistStoredOrders(orders: StoredOrder[]): void {
+  if (typeof localStorage === "undefined") return;
+  const now = Date.now();
+  const minimal = orders
+    .map((order) => minimalPersistedOrder(order, now))
+    .filter((order): order is StoredOrder => Boolean(order))
+    .slice(0, 20);
+
+  try {
+    localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(minimal));
+  } catch (error) {
+    console.warn("Falha ao salvar koma_active_orders:", error);
+  }
+
+  try {
+    const latestActive = minimal.find((item) => !resolveOrderState(item).terminal) || minimal[0];
+    if (latestActive) {
+      localStorage.setItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY, JSON.stringify(latestActive));
+    } else {
+      localStorage.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.warn("Falha ao sincronizar koma_active_order:", error);
+  }
+}
+
+/**
+ * Carrega pedidos locais e migra silenciosamente versões antigas para a
+ * projeção mínima. O tracking token opaco é o único segredo persistido para
+ * pedidos modernos; idempotency key fica apenas para compatibilidade legada.
  */
 export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
   const now = Date.now();
   const ordersMap = new Map<string, StoredOrder>();
+
+  const accept = (candidate: StoredOrder | null | undefined) => {
+    if (!candidate) return;
+    const normalized = minimalPersistedOrder(candidate, now);
+    if (normalized) ordersMap.set(normalized.id, normalized);
+  };
 
   const rawList = safeParseJson<StoredOrder[]>(
     typeof localStorage !== "undefined"
       ? localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY)
       : null,
   );
-  if (Array.isArray(rawList)) {
-    rawList.forEach((order) => {
-      if (
-        order?.id &&
-        order.idempotency_key &&
-        now - Number(order.timestamp || 0) <= ACTIVE_ORDER_TTL_MS
-      ) {
-        ordersMap.set(String(order.id), {
-          ...order,
-          id: String(order.id),
-          numero_pedido: order.numero_pedido ?? order.id,
-          timestamp: Number(order.timestamp || now),
-          restaurante_id: Number(order.restaurante_id),
-          tipo: String(order.tipo || "Retirada"),
-          total: Number(order.total || 0),
-          status: String(order.status || "pendente"),
-          state: isOrderStateContract(order.state) ? order.state : undefined,
-          tracking_token: order.tracking_token ? String(order.tracking_token) : undefined,
-          tracking_url: order.tracking_url ? String(order.tracking_url) : undefined,
-        });
-      }
-    });
-  }
+  if (Array.isArray(rawList)) rawList.forEach(accept);
 
   const rawLegacy = safeParseJson<StoredOrder>(
     typeof localStorage !== "undefined"
       ? localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)
       : null,
   );
-  if (
-    rawLegacy?.id &&
-    rawLegacy.idempotency_key &&
-    now - Number(rawLegacy.timestamp || 0) <= ACTIVE_ORDER_TTL_MS
-  ) {
-    const id = String(rawLegacy.id);
-    if (!ordersMap.has(id)) {
-      ordersMap.set(id, {
-        ...rawLegacy,
-        id,
-        numero_pedido: rawLegacy.numero_pedido ?? id,
-        timestamp: Number(rawLegacy.timestamp || now),
-        restaurante_id: Number(rawLegacy.restaurante_id),
-        tipo: String(rawLegacy.tipo || "Retirada"),
-        total: Number(rawLegacy.total || 0),
-        status: String(rawLegacy.status || "pendente"),
-        state: isOrderStateContract(rawLegacy.state) ? rawLegacy.state : undefined,
-        tracking_token: rawLegacy.tracking_token ? String(rawLegacy.tracking_token) : undefined,
-        tracking_url: rawLegacy.tracking_url ? String(rawLegacy.tracking_url) : undefined,
-      });
-    }
-  }
+  if (rawLegacy && !ordersMap.has(String(rawLegacy.id || ""))) accept(rawLegacy);
 
-  let list = Array.from(ordersMap.values());
+  const allOrders = Array.from(ordersMap.values()).sort(
+    (a, b) => (b.timestamp || 0) - (a.timestamp || 0),
+  );
+  // Também limpa PII/detalhes deixados por versões antigas no primeiro acesso.
+  persistStoredOrders(allOrders);
+
   if (typeof restaurantId === "number" && Number.isFinite(restaurantId)) {
-    list = list.filter((item) => item.restaurante_id === restaurantId);
+    return allOrders.filter((item) => item.restaurante_id === restaurantId);
   }
-  return list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  return allOrders;
 }
 
 export function saveStoredOrder(order: StoredOrder): void {
   if (typeof localStorage === "undefined" || !order?.id) return;
-
   const current = loadStoredOrders();
-  const filtered = current.filter((item) => item.id !== order.id);
-  const updatedList = [order, ...filtered].slice(0, 20);
-
-  try {
-    localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(updatedList));
-  } catch (error) {
-    console.warn("Falha ao salvar koma_active_orders:", error);
-  }
-
-  try {
-    const latestActive = updatedList.find((item) => !resolveOrderState(item).terminal) || updatedList[0];
-    if (latestActive) {
-      localStorage.setItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY, JSON.stringify(latestActive));
-    }
-  } catch (error) {
-    console.warn("Falha ao sincronizar koma_active_order:", error);
-  }
+  const filtered = current.filter((item) => item.id !== String(order.id));
+  persistStoredOrders([order, ...filtered]);
 }
 
 export function updateStoredOrderStatus(
@@ -327,67 +351,22 @@ export function updateStoredOrderStatus(
   const index = current.findIndex((item) => item.id === orderId);
   if (index === -1) return;
 
-  const updatedOrder = { ...current[index], ...updates };
-  current[index] = updatedOrder;
-
-  try {
-    localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(current));
-  } catch (error) {
-    console.warn("Falha ao atualizar status em koma_active_orders:", error);
-  }
-
-  try {
-    const legacy = safeParseJson<StoredOrder>(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY));
-    if (legacy?.id === orderId) {
-      localStorage.setItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY, JSON.stringify(updatedOrder));
-    }
-  } catch (error) {
-    console.warn("Falha ao atualizar koma_active_order:", error);
-  }
+  current[index] = { ...current[index], ...updates };
+  persistStoredOrders(current);
 }
 
 export function removeStoredOrder(orderId: string): void {
   if (typeof localStorage === "undefined" || !orderId) return;
-
-  const current = loadStoredOrders();
-  const filtered = current.filter((item) => item.id !== orderId);
-
-  try {
-    localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(filtered));
-  } catch (error) {
-    console.warn("Falha ao remover de koma_active_orders:", error);
-  }
-
-  try {
-    const legacy = safeParseJson<StoredOrder>(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY));
-    if (legacy?.id === orderId) {
-      const nextActive = filtered.find((item) => !resolveOrderState(item).terminal) || filtered[0];
-      if (nextActive) {
-        localStorage.setItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY, JSON.stringify(nextActive));
-      } else {
-        localStorage.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
-      }
-    }
-  } catch (error) {
-    console.warn("Falha ao remover de koma_active_order:", error);
-  }
+  const filtered = loadStoredOrders().filter((item) => item.id !== orderId);
+  persistStoredOrders(filtered);
 }
 
 export function clearAllStoredOrders(restaurantId?: number): void {
   if (typeof localStorage === "undefined") return;
 
   if (typeof restaurantId === "number" && Number.isFinite(restaurantId)) {
-    const current = loadStoredOrders();
-    const remaining = current.filter((item) => item.restaurante_id !== restaurantId);
-    try {
-      localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify(remaining));
-    } catch {
-      // Ignora erro
-    }
-    const legacy = safeParseJson<StoredOrder>(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY));
-    if (legacy && legacy.restaurante_id === restaurantId) {
-      localStorage.removeItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
-    }
+    const remaining = loadStoredOrders().filter((item) => item.restaurante_id !== restaurantId);
+    persistStoredOrders(remaining);
     return;
   }
 

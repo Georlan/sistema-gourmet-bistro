@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 
 import {
+  ACTIVE_ORDERS_STORAGE_KEY,
   LEGACY_ACTIVE_ORDER_STORAGE_KEY,
   StoredOrder,
   fallbackOrderState,
@@ -39,7 +40,6 @@ test('fallback canônico usa mapa exato sem aceitar substrings parecidas', () =>
   assert.equal(fallbackOrderState('recusado', 'Delivery').rejected, true);
   assert.equal(fallbackOrderState('cancelado', 'Retirada').rejected, true);
 
-  // Um texto arbitrário que apenas contém uma palavra conhecida não pode mudar o estado.
   assert.equal(fallbackOrderState('pedido-finalizado-talvez', 'Delivery').status, 'pending');
   assert.equal(fallbackOrderState('preparando-depois', 'Delivery').status, 'pending');
 });
@@ -92,24 +92,12 @@ test('loadStoredOrders migra com sucesso da chave legada koma_active_order', () 
 
 test('saveStoredOrder adiciona múltiplos pedidos e preserva compatibilidade com koma_active_order', () => {
   const order1: StoredOrder = {
-    id: 'p-1',
-    numero_pedido: '1',
-    timestamp: Date.now() - 1000,
-    restaurante_id: 1,
-    tipo: 'Retirada',
-    total: 20,
-    idempotency_key: 'k-1',
-    status: 'producao',
+    id: 'p-1', numero_pedido: '1', timestamp: Date.now() - 1000,
+    restaurante_id: 1, tipo: 'Retirada', total: 20, idempotency_key: 'k-1', status: 'producao',
   };
   const order2: StoredOrder = {
-    id: 'p-2',
-    numero_pedido: '2',
-    timestamp: Date.now(),
-    restaurante_id: 1,
-    tipo: 'Delivery',
-    total: 50,
-    idempotency_key: 'k-2',
-    status: 'pendente',
+    id: 'p-2', numero_pedido: '2', timestamp: Date.now(),
+    restaurante_id: 1, tipo: 'Delivery', total: 50, idempotency_key: 'k-2', status: 'pendente',
   };
 
   saveStoredOrder(order1);
@@ -122,46 +110,30 @@ test('saveStoredOrder adiciona múltiplos pedidos e preserva compatibilidade com
 
   const legacyRaw = localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
   assert.ok(legacyRaw);
-  const legacy = JSON.parse(legacyRaw!);
-  assert.equal(legacy.id, 'p-2');
+  assert.equal(JSON.parse(legacyRaw!).id, 'p-2');
 });
 
 test('removeStoredOrder remove o pedido específico e atualiza a chave legada', () => {
   const order1: StoredOrder = {
-    id: 'p-1',
-    numero_pedido: '1',
-    timestamp: Date.now() - 1000,
-    restaurante_id: 1,
-    tipo: 'Retirada',
-    total: 20,
-    idempotency_key: 'k-1',
-    status: 'producao',
+    id: 'p-1', numero_pedido: '1', timestamp: Date.now() - 1000,
+    restaurante_id: 1, tipo: 'Retirada', total: 20, idempotency_key: 'k-1', status: 'producao',
   };
   const order2: StoredOrder = {
-    id: 'p-2',
-    numero_pedido: '2',
-    timestamp: Date.now(),
-    restaurante_id: 1,
-    tipo: 'Delivery',
-    total: 50,
-    idempotency_key: 'k-2',
-    status: 'finalizado',
+    id: 'p-2', numero_pedido: '2', timestamp: Date.now(),
+    restaurante_id: 1, tipo: 'Delivery', total: 50, idempotency_key: 'k-2', status: 'finalizado',
   };
 
   saveStoredOrder(order1);
   saveStoredOrder(order2);
-
   removeStoredOrder('p-2');
 
   const remaining = loadStoredOrders(1);
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0].id, 'p-1');
-
-  const legacy = JSON.parse(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)!);
-  assert.equal(legacy.id, 'p-1');
+  assert.equal(JSON.parse(localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY)!).id, 'p-1');
 });
 
-test('saveStoredOrder e loadStoredOrders preservam tracking do pedido durante compatibilidade', () => {
+test('pedido moderno persiste somente token opaco e remove duplicatas de segredo', () => {
   const orderWithTracking: StoredOrder = {
     id: 'comanda-1048',
     numero_pedido: 1048,
@@ -180,7 +152,52 @@ test('saveStoredOrder e loadStoredOrders preservam tracking do pedido durante co
   const loaded = loadStoredOrders(1);
   assert.equal(loaded.length, 1);
   assert.equal(loaded[0].tracking_token, 'sec_tok_xyz1234567890abcdef');
-  assert.equal(loaded[0].tracking_url, '/acompanhar/sec_tok_xyz1234567890abcdef');
+  assert.equal(loaded[0].tracking_url, undefined);
+  assert.equal(loaded[0].idempotency_key, '');
+});
+
+test('localStorage não guarda PII nem detalhes de compra de pedidos modernos', () => {
+  saveStoredOrder({
+    id: 'private-order',
+    numero_pedido: 77,
+    timestamp: Date.now(),
+    restaurante_id: 1,
+    cliente_nome: 'Pessoa Privada',
+    cliente_telefone: '85999999999',
+    tipo: 'Delivery',
+    total: 55,
+    idempotency_key: 'should-not-persist-with-token',
+    status: 'pendente',
+    itens: [{ nome: 'Pedido secreto', quantidade: 2, observacao: 'Sem cebola' }],
+    tracking_token: 'opaque-tracking-token',
+    tracking_url: '/acompanhar/opaque-tracking-token',
+  });
+
+  const raw = localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
+  assert.match(raw, /opaque-tracking-token/);
+  assert.doesNotMatch(raw, /Pessoa Privada/);
+  assert.doesNotMatch(raw, /85999999999/);
+  assert.doesNotMatch(raw, /Pedido secreto/);
+  assert.doesNotMatch(raw, /Sem cebola/);
+  assert.doesNotMatch(raw, /should-not-persist-with-token/);
+  assert.doesNotMatch(raw, /tracking_url/);
+});
+
+test('leitura de registro antigo apaga PII e converte tracking_url para token', () => {
+  localStorage.setItem(ACTIVE_ORDERS_STORAGE_KEY, JSON.stringify([{
+    id: 'legacy-private', numero_pedido: 8, timestamp: Date.now(), restaurante_id: 1,
+    cliente_nome: 'Nome legado', cliente_telefone: '85111111111', tipo: 'Retirada', total: 12,
+    idempotency_key: 'legacy-key', itens: [{ nome: 'Item legado', quantidade: 1 }],
+    tracking_url: '/acompanhar/legacy%2Fopaque', status: 'pendente',
+  }]));
+
+  const loaded = loadStoredOrders(1);
+  assert.equal(loaded[0].tracking_token, 'legacy/opaque');
+  assert.equal(loaded[0].idempotency_key, '');
+
+  const migrated = localStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
+  assert.doesNotMatch(migrated, /Nome legado|85111111111|Item legado|legacy-key|tracking_url/);
+  assert.match(migrated, /legacy\\\/opaque|legacy\/opaque/);
 });
 
 test('tracking seguro prefere state do backend e token opaco', async () => {
@@ -192,16 +209,9 @@ test('tracking seguro prefere state do backend e token opaco', async () => {
       id: 'order-1',
       status: 'producao',
       state: {
-        status: 'ready',
-        phase: 'ready',
-        label: 'Pronto',
-        fulfillment: 'pickup',
-        terminal: false,
-        rejected: false,
-        can_chat: true,
-        can_cancel: false,
-        progress_step: 3,
-        progress_total: 4,
+        status: 'ready', phase: 'ready', label: 'Pronto', fulfillment: 'pickup',
+        terminal: false, rejected: false, can_chat: true, can_cancel: false,
+        progress_step: 3, progress_total: 4,
       },
       restaurante: { id: 2 },
       itens: [{ nome: 'Suco', observacao: 'Sem gelo' }],
@@ -209,13 +219,8 @@ test('tracking seguro prefere state do backend e token opaco', async () => {
   }) as typeof fetch;
   try {
     const updated = await fetchOrderLiveStatus({
-      id: 'order-1',
-      numero_pedido: 1,
-      timestamp: Date.now(),
-      restaurante_id: 2,
-      tipo: 'Retirada',
-      total: 10,
-      idempotency_key: 'tracking-order-1',
+      id: 'order-1', numero_pedido: 1, timestamp: Date.now(), restaurante_id: 2,
+      tipo: 'Retirada', total: 10, idempotency_key: 'tracking-order-1',
       tracking_token: 'opaque/secure',
     }, 'https://example.test');
 
