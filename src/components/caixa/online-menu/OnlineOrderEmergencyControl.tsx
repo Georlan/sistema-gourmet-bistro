@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { AlertTriangle, Loader2, PauseCircle, PlayCircle, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../../../config/api';
 
 type OperationalStatus = {
@@ -115,42 +116,8 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
 
   if (!authorized) return null;
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          setError('');
-          setDialogOpen(true);
-        }}
-        className={clsx(
-          'w-full rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99]',
-          statusData?.paused
-            ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15'
-            : highDemand
-              ? 'border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15'
-              : 'border-rose-500/30 bg-rose-500/[0.07] text-rose-200 hover:bg-rose-500/12',
-          mobile ? '' : 'group-data-[collapsible=icon]:px-2',
-        )}
-        title={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
-        aria-label={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
-        id="online-orders-emergency-trigger"
-      >
-        <div className="flex items-center gap-2.5">
-          {statusData?.paused ? <PlayCircle size={17} /> : <PauseCircle size={17} />}
-          <div className="min-w-0 flex-1">
-            <strong className="block truncate text-[11px] font-black">
-              {statusData?.paused ? 'Cardápio online pausado' : highDemand ? 'Alta demanda' : 'Pausar cardápio online'}
-            </strong>
-            <small className="block truncate text-[9px] opacity-75">
-              {capacity ? `${active}/${capacity} pedidos ativos` : `${active} pedidos ativos`}
-            </small>
-          </div>
-          {highDemand && !statusData?.paused && <AlertTriangle size={15} className="shrink-0" />}
-        </div>
-      </button>
-
-      {dialogOpen && (
+  const dialog = dialogOpen && typeof document !== 'undefined'
+    ? createPortal(
         <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="presentation">
           <section
             role="dialog"
@@ -221,8 +188,46 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
               </button>
             </div>
           </section>
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setError('');
+          setDialogOpen(true);
+        }}
+        className={clsx(
+          'w-full rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99]',
+          statusData?.paused
+            ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15'
+            : highDemand
+              ? 'border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15'
+              : 'border-rose-500/30 bg-rose-500/[0.07] text-rose-200 hover:bg-rose-500/12',
+          mobile ? '' : 'group-data-[collapsible=icon]:px-2',
+        )}
+        title={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+        aria-label={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+        id="online-orders-emergency-trigger"
+      >
+        <div className="flex items-center gap-2.5">
+          {statusData?.paused ? <PlayCircle size={17} /> : <PauseCircle size={17} />}
+          <div className="min-w-0 flex-1">
+            <strong className="block truncate text-[11px] font-black">
+              {statusData?.paused ? 'Cardápio online pausado' : highDemand ? 'Alta demanda' : 'Pausar cardápio online'}
+            </strong>
+            <small className="block truncate text-[9px] opacity-75">
+              {capacity ? `${active}/${capacity} pedidos ativos` : `${active} pedidos ativos`}
+            </small>
+          </div>
+          {highDemand && !statusData?.paused && <AlertTriangle size={15} className="shrink-0" />}
         </div>
-      )}
+      </button>
+      {dialog}
     </>
   );
 }
