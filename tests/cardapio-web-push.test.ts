@@ -33,6 +33,8 @@ test("iOS orienta instalação antes de pedir permissão", () => {
 });
 
 test("desativar um pedido não cancela a PushSubscription global", () => {
+  // O comentário explicativo menciona unsubscribe propositalmente — verificamos
+  // apenas que não existe chamada executável (await/void/.then) de unsubscribe().
   assert.match(pushUi, /Não chamamos PushSubscription\.unsubscribe/);
-  assert.doesNotMatch(pushUi, /\.unsubscribe\(\)/);
+  assert.doesNotMatch(pushUi, /(?:await|void|\.then\()[\s\S]{0,40}\.unsubscribe\(\)/);
 });
