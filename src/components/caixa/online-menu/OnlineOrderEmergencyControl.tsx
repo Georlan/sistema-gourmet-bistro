@@ -132,15 +132,15 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
               : 'border-rose-500/30 bg-rose-500/[0.07] text-rose-200 hover:bg-rose-500/12',
           mobile ? '' : 'group-data-[collapsible=icon]:px-2',
         )}
-        title={statusData?.paused ? 'Reabrir pedidos online' : 'Pausar pedidos online'}
-        aria-label={statusData?.paused ? 'Reabrir pedidos online' : 'Pausar pedidos online'}
+        title={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+        aria-label={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
         id="online-orders-emergency-trigger"
       >
         <div className="flex items-center gap-2.5">
           {statusData?.paused ? <PlayCircle size={17} /> : <PauseCircle size={17} />}
           <div className="min-w-0 flex-1">
             <strong className="block truncate text-[11px] font-black">
-              {statusData?.paused ? 'Pedidos online pausados' : highDemand ? 'Alta demanda' : 'Pausar pedidos online'}
+              {statusData?.paused ? 'Cardápio online pausado' : highDemand ? 'Alta demanda' : 'Pausar cardápio online'}
             </strong>
             <small className="block truncate text-[9px] opacity-75">
               {capacity ? `${active}/${capacity} pedidos ativos` : `${active} pedidos ativos`}
@@ -151,23 +151,23 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
       </button>
 
       {dialogOpen && (
-        <div className="fixed inset-0 z-[120] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="presentation">
+        <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="presentation">
           <section
             role="dialog"
             aria-modal="true"
-            aria-label={statusData?.paused ? 'Reabrir pedidos online' : 'Pausar pedidos online'}
+            aria-label={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
             className="w-full max-w-md rounded-3xl border border-zinc-700 bg-zinc-950 p-5 text-zinc-100 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">Controle operacional</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">Cardápio online</span>
                 <h2 className="mt-1 text-lg font-black">
-                  {statusData?.paused ? 'Reabrir pedidos online?' : 'Pausar novos pedidos?'}
+                  {statusData?.paused ? 'Reabrir o cardápio online?' : 'Pausar apenas o cardápio online?'}
                 </h2>
                 <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">
                   {statusData?.paused
-                    ? 'O Cardápio voltará a aceitar novos pedidos conforme horários e demais regras do restaurante.'
-                    : 'Pedidos já recebidos continuam no Caixa, acompanhamento e chat. Apenas novas compras serão interrompidas.'}
+                    ? 'O cardápio online voltará a aceitar novas compras conforme horários e demais regras. Caixa e operação do restaurante não são alterados.'
+                    : 'O restaurante continua operando normalmente. Caixa, pedidos já recebidos, acompanhamento e chat continuam ativos. Só novas compras pelo cardápio online serão bloqueadas.'}
                 </p>
               </div>
               <button type="button" onClick={() => setDialogOpen(false)} className="rounded-xl border border-zinc-800 p-2 text-zinc-400 hover:text-white" aria-label="Fechar">
@@ -217,7 +217,7 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
                 className={clsx('flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-xl text-xs font-black text-white disabled:opacity-50', statusData?.paused ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-rose-600 hover:bg-rose-500')}
               >
                 {loading && <Loader2 size={15} className="animate-spin" />}
-                {statusData?.paused ? 'Reabrir pedidos' : 'Pausar agora'}
+                {statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
               </button>
             </div>
           </section>
