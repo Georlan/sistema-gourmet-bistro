@@ -65,3 +65,22 @@ test('read_update do Caixa não recarrega a thread nem dispara nova marcação d
   assert.match(cashierDrawer, /case 'new_message':/);
   assert.match(cashierDrawer, /items\.some\(\(item\) => item\.id === message\.id\)/);
 });
+
+test('central do Caixa prioriza atenção, oferece respostas rápidas e composer multilinha', () => {
+  assert.match(cashierDrawer, /sortedConversations/);
+  assert.match(cashierDrawer, /isWaitingForStaff/);
+  assert.match(cashierDrawer, /aguardando resposta/);
+  assert.match(cashierDrawer, /QUICK_REPLIES/);
+  assert.match(cashierDrawer, /Estamos preparando seu pedido\./);
+  assert.match(cashierDrawer, /textarea/);
+  assert.match(cashierDrawer, /Enter envia · Shift\+Enter quebra linha/);
+  assert.match(cashierDrawer, /aria-modal="true"/);
+});
+
+test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigido', () => {
+  assert.match(cashierDrawer, /event\.target === event\.currentTarget/);
+  assert.match(cashierDrawer, /event\.key === 'Escape'/);
+  assert.match(cashierDrawer, /case 'new_message':/);
+  assert.match(cashierDrawer, /case 'status_changed':/);
+  assert.match(cashierDrawer, /case 'read_update':/);
+});
