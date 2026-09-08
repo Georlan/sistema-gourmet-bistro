@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import datetime
+from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..models import Comanda
@@ -14,9 +15,12 @@ from ..online_order_control_models import (
     OnlineOrderCustomerBlock,
     OnlineOrderOperationalAudit,
 )
+from ..scheduled_models import ScheduledOrder
 from .clientes import normalizar_telefone_cliente
 from .customer_auth import hash_public_rate_key
 
+# Estados que ainda ocupam a capacidade operacional do restaurante.
+# ``transito`` já saiu da cozinha; finalizado/recusado também não contam.
 ACTIVE_OPERATIONAL_STATUSES = ("analise", "pendente", "producao", "pronto")
 
 
@@ -65,12 +69,19 @@ def is_effectively_paused(
 
 
 def operational_counts(db: Session, restaurante_id: int) -> dict[str, int]:
+    """Conta somente pedidos liberados para operação, não agendados futuros."""
+    unreleased_schedule = db.query(ScheduledOrder.id).filter(
+        ScheduledOrder.restaurante_id == restaurante_id,
+        ScheduledOrder.comanda_id == Comanda.id,
+        ScheduledOrder.released_at.is_(None),
+    ).exists()
     rows = (
         db.query(Comanda.delivery_status, func.count(Comanda.id))
         .filter(
             Comanda.restaurante_id == restaurante_id,
             Comanda.fechada.is_(False),
             Comanda.delivery_status.in_(ACTIVE_OPERATIONAL_STATUSES),
+            ~unreleased_schedule,
         )
         .group_by(Comanda.delivery_status)
         .all()
@@ -222,24 +233,49 @@ def update_capacity(
     return control
 
 
-def auto_pause_if_capacity_reached(
+@dataclass(frozen=True)
+class CapacityGateResult:
+    blocked: bool
+    state_changed: bool = False
+    reason: str | None = None
+
+
+def capacity_gate_before_order(
     db: Session,
     *,
     restaurante_id: int,
-) -> bool:
-    """Fail-closed ao receber nova tentativa quando auto-pausa está habilitada.
+) -> CapacityGateResult:
+    """Serializa a entrada quando auto-pausa está habilitada.
 
-    Esta função é chamada na borda pública antes de criar a comanda. A linha de
-    controle é travada e a pausa é persistida antes de devolver o bloqueio.
+    Com auto-pausa desligada, ``max_active_orders`` é apenas referência/alerta e
+    não impede vendas. Com auto-pausa ligada, a linha de controle permanece
+    bloqueada até o commit da criação do pedido. Assim duas requisições em 29/30
+    não passam simultaneamente: a segunda espera o commit da primeira, enxerga
+    30/30 e persiste a pausa antes de ser rejeitada.
     """
-    control = get_or_create_control(db, restaurante_id, for_update=True)
+    snapshot = db.query(OnlineOrderControl).filter(
+        OnlineOrderControl.restaurante_id == restaurante_id,
+    ).first()
+    if snapshot is None:
+        return CapacityGateResult(blocked=False)
+    if is_effectively_paused(snapshot):
+        return CapacityGateResult(blocked=True, reason="paused")
+    if not snapshot.auto_pause or not snapshot.max_active_orders:
+        return CapacityGateResult(blocked=False)
+
+    control = (
+        db.query(OnlineOrderControl)
+        .filter(OnlineOrderControl.restaurante_id == restaurante_id)
+        .with_for_update()
+        .one()
+    )
     if is_effectively_paused(control):
-        return True
-    if not control.auto_pause or not control.max_active_orders:
-        return False
+        return CapacityGateResult(blocked=True, reason="paused")
+
     counts = operational_counts(db, restaurante_id)
     if counts["active"] < int(control.max_active_orders):
-        return False
+        # Não commit aqui: o lock precisa sobreviver até o commit da criação.
+        return CapacityGateResult(blocked=False)
 
     before = operational_status(db, restaurante_id)
     control.paused = True
@@ -258,7 +294,11 @@ def auto_pause_if_capacity_reached(
         before_data=before,
         after_data=after,
     )
-    return True
+    return CapacityGateResult(
+        blocked=True,
+        state_changed=True,
+        reason="capacity",
+    )
 
 
 def block_from_order(
@@ -361,9 +401,7 @@ def customer_is_blocked(
     identity_filters = [OnlineOrderCustomerBlock.phone_hash == phone_hash]
     if cliente_id:
         identity_filters.append(OnlineOrderCustomerBlock.cliente_id == cliente_id)
-    from sqlalchemy import or_
-    query = query.filter(or_(*identity_filters))
-    blocks = query.all()
+    blocks = query.filter(or_(*identity_filters)).all()
     for block in blocks:
         expires_at = _aware(block.expires_at)
         if expires_at is None or expires_at > now:
