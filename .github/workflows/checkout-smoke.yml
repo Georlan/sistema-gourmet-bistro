@@ -9,7 +9,12 @@ on:
       - 'src/legal/planSubscriptionFlow.css'
       - 'src/legal/paymentOptionsCatalog.css'
       - 'src/config/subscriptionPlans.ts'
+      - 'src/config/subscriptionPaymentOptions.ts'
+      - 'src/landing/sections/Plans.tsx'
+      - 'src/landing/paymentOptions.css'
       - 'src/main.tsx'
+      - 'tests/planSubscriptionFlow.test.ts'
+      - 'tests/subscriptionPaymentOptions.test.ts'
       - 'e2e/plan-subscription-flow.spec.ts'
       - '.github/workflows/checkout-smoke.yml'
   push:
@@ -19,7 +24,12 @@ on:
       - 'src/legal/planSubscriptionFlow.css'
       - 'src/legal/paymentOptionsCatalog.css'
       - 'src/config/subscriptionPlans.ts'
+      - 'src/config/subscriptionPaymentOptions.ts'
+      - 'src/landing/sections/Plans.tsx'
+      - 'src/landing/paymentOptions.css'
       - 'src/main.tsx'
+      - 'tests/planSubscriptionFlow.test.ts'
+      - 'tests/subscriptionPaymentOptions.test.ts'
       - 'e2e/plan-subscription-flow.spec.ts'
       - '.github/workflows/checkout-smoke.yml'
 
@@ -43,6 +53,8 @@ jobs:
         run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Run checkout unit coverage
+        run: npx tsx --test tests/planSubscriptionFlow.test.ts tests/subscriptionPaymentOptions.test.ts
       - name: Run checkout smoke
         env:
           KOMA_E2E_PORT: '4284'

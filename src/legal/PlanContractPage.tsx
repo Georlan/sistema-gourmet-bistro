@@ -23,6 +23,11 @@ import { QRCodeSVG } from 'qrcode.react';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 import { API_BASE_URL } from '../config/api';
 import {
+  getSubscriptionPaymentOption,
+  getSubscriptionPaymentOptions,
+  type SubscriptionPaymentOptionId,
+} from '../config/subscriptionPaymentOptions';
+import {
   SUBSCRIPTION_PLANS,
   formatCurrency,
   formatPercentage,
@@ -96,7 +101,7 @@ type ContractReceipt = {
 };
 
 type BillingMethod = 'credit_card' | 'pix';
-type PaymentPreview = 'pix_annual' | 'pix_automatic' | 'nupay' | 'mercado_pago' | 'boleto' | 'annual_installments';
+type PaymentPreview = SubscriptionPaymentOptionId;
 
 type ActivationResult = {
   restaurantId: string;
@@ -171,6 +176,12 @@ function contractErrorMessage(detail: unknown): string {
   return 'Não foi possível registrar a contratação.';
 }
 
+function PaymentOptionIcon({ optionId }: { optionId: SubscriptionPaymentOptionId }) {
+  if (optionId === 'pix_annual' || optionId === 'pix_automatic') return <QrCode size={18} />;
+  if (optionId === 'boleto') return <FileText size={18} />;
+  return <CreditCard size={18} />;
+}
+
 export default function PlanContractPage() {
   const initialPlanId = useMemo(resolvePlanId, []);
   const initialBillingCycle = useMemo<'mensal' | 'anual'>(
@@ -205,6 +216,8 @@ export default function PlanContractPage() {
     [selectedPlanId],
   );
   const pricing = useMemo(() => getSubscriptionPricing(plan.price), [plan.price]);
+  const paymentOptions = useMemo(() => getSubscriptionPaymentOptions(billingCycle), [billingCycle]);
+  const creditCardOption = useMemo(() => getSubscriptionPaymentOption('credit_card'), []);
   const now = useMemo(() => new Date(), []);
   const reminderDate = useMemo(() => addDays(now, 5), [now]);
   const renewalDate = useMemo(() => addDays(now, 7), [now]);
@@ -239,44 +252,13 @@ export default function PlanContractPage() {
   const nextChargeAmount = billingCycle === 'anual' ? pricing.annualTotal : pricing.monthly;
 
   const paymentPreviewDetails = useMemo(() => {
-    if (paymentPreview === 'pix_annual') {
-      return {
-        title: 'Pix anual à vista · em validação',
-        text: `O fluxo final gerará QR Code e Pix copia e cola de ${formatCurrency(pricing.annualTotal)} e só ativará o restaurante após confirmação do pagamento. Este preview não gera cobrança.`
-      };
-    }
-    if (paymentPreview === 'pix_automatic') {
-      return {
-        title: 'Pix Automático · em breve',
-        text: 'O cliente autorizará a recorrência uma vez no banco e as mensalidades futuras serão cobradas conforme o ciclo. Não usaremos comprovante de Pix agendado como confirmação de pagamento.'
-      };
-    }
-    if (paymentPreview === 'nupay') {
-      return {
-        title: 'NuPay · em breve',
-        text: 'A ideia é autorizar a compra pelo app do Nubank, sem digitar dados do cartão no KÔMA. Parcelamento só será exibido quando vier das condições reais do provedor.'
-      };
-    }
-    if (paymentPreview === 'mercado_pago') {
-      return {
-        title: 'Mercado Pago · em breve',
-        text: 'Vamos avaliar saldo, carteira e crédito oferecido pelo próprio Mercado Pago. O KÔMA não vai subsidiar juros ou financiamento para oferecer esta opção.'
-      };
-    }
-    if (paymentPreview === 'boleto') {
-      return {
-        title: 'Boleto anual · em estudo',
-        text: `Opção pensada para clientes empresariais que preferem pagamento bancário do anual. A ativação ocorrerá somente após liquidação de ${formatCurrency(pricing.annualTotal)}.`
-      };
-    }
-    if (paymentPreview === 'annual_installments') {
-      return {
-        title: 'Anual parcelado no cartão · em estudo',
-        text: 'Vamos mostrar apenas parcelamentos cujos juros e condições sejam assumidos pelo comprador ou pelo provedor. Por enquanto, o KÔMA não subsidiará 12x sem juros.'
-      };
-    }
-    return null;
-  }, [paymentPreview, pricing.annualTotal]);
+    if (!paymentPreview) return null;
+    const option = getSubscriptionPaymentOption(paymentPreview);
+    return {
+      title: option.previewTitle,
+      text: option.previewDescription,
+    };
+  }, [paymentPreview]);
 
   useEffect(() => {
     document.title = `Contratar ${plan.name} | KÔMA`;
@@ -645,7 +627,7 @@ export default function PlanContractPage() {
                 <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}>
                   <span>Anual <em>Economize 10%</em></span>
                   <strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong>
-                  <small>{formatCurrency(pricing.annualTotal)} no ano · economia de {formatCurrency(pricing.annualSavings)}.</small>
+                  <small>{formatCurrency(pricing.annualTotal)} no ano · economia de {formatCurrency(pricing.annualSavings)}. Valor mensal equivalente não representa 12 parcelas.</small>
                 </button>
               </div>
 
@@ -666,7 +648,7 @@ export default function PlanContractPage() {
               <div className="koma-sub-heading">
                 <span className="koma-sub-eyebrow">02 · DADOS E PAGAMENTO</span>
                 <h1>Ative seu restaurante.</h1>
-                <p>Use o método disponível agora ou explore as próximas formas de pagamento que estamos preparando para reduzir atrito na adesão.</p>
+                <p>Use um método disponível agora ou explore as próximas formas de pagamento. Landing e checkout usam o mesmo catálogo de disponibilidade.</p>
               </div>
 
               {error && <div className="koma-sub-error" role="alert"><Info size={18} /> {error}</div>}
@@ -733,14 +715,14 @@ export default function PlanContractPage() {
                 <section className="koma-sub-section-card">
                   <div className="koma-sub-section-title">
                     <span><CreditCard size={18} /></span>
-                    <div><h2>Forma de pagamento</h2><p>O cartão é o método ativo hoje. Opções em validação aparecem como preview e nunca geram cobrança enquanto estiverem marcadas como indisponíveis.</p></div>
+                    <div><h2>Forma de pagamento</h2><p>Somente métodos marcados como Disponível podem gerar cobrança. Os demais são previews informativos do roadmap de pagamentos.</p></div>
                   </div>
 
                   <div className="koma-sub-methods" role="radiogroup" aria-label="Forma de pagamento disponível">
                     <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => { setBillingMethod('credit_card'); setPaymentPreview(null); }}>
                       <span className="koma-sub-method-radio" />
                       <CreditCard size={19} />
-                      <div><strong>Cartão de crédito</strong><small>{billingCycle === 'anual' ? `R$ 0 hoje · ${formatCurrency(pricing.annualTotal)} após 7 dias` : `R$ 0 hoje · ${formatCurrency(pricing.monthly)} após 7 dias`}</small></div>
+                      <div><strong>{creditCardOption.label}</strong><small>{billingCycle === 'anual' ? `R$ 0 hoje · ${formatCurrency(pricing.annualTotal)} após 7 dias` : `R$ 0 hoje · ${formatCurrency(pricing.monthly)} após 7 dias`}</small></div>
                     </button>
                   </div>
 
@@ -772,47 +754,24 @@ export default function PlanContractPage() {
                   <div className="koma-sub-coming-payments" aria-label="Próximas formas de pagamento">
                     <div className="koma-sub-coming-head">
                       <strong>Mais formas para facilitar a adesão</strong>
-                      <small>Você pode abrir os previews. Nenhuma opção abaixo cria pagamento real ainda.</small>
+                      <small>O status vem do catálogo canônico. Previews indisponíveis nunca criam pagamento real.</small>
                     </div>
                     <div className="koma-sub-coming-grid">
-                      {billingCycle === 'anual' && (
-                        <button type="button" className={`koma-sub-coming-method ${paymentPreview === 'pix_annual' ? 'is-previewing' : ''}`} aria-pressed={paymentPreview === 'pix_annual'} onClick={() => setPaymentPreview('pix_annual')}>
-                          <QrCode size={18} />
-                          <span><strong>Pix anual à vista</strong><small>{formatCurrency(pricing.annualTotal)} antecipado · ativação após confirmação</small></span>
-                          <em className="koma-sub-method-badge">Em validação</em>
-                        </button>
-                      )}
-                      {billingCycle === 'mensal' && (
-                        <button type="button" className={`koma-sub-coming-method ${paymentPreview === 'pix_automatic' ? 'is-previewing' : ''}`} aria-pressed={paymentPreview === 'pix_automatic'} onClick={() => setPaymentPreview('pix_automatic')}>
-                          <QrCode size={18} />
-                          <span><strong>Pix Automático</strong><small>Autorização única para cobranças mensais recorrentes</small></span>
-                          <em className="koma-sub-method-badge">Em breve</em>
-                        </button>
-                      )}
-                      <button type="button" className={`koma-sub-coming-method ${paymentPreview === 'nupay' ? 'is-previewing' : ''}`} aria-pressed={paymentPreview === 'nupay'} onClick={() => setPaymentPreview('nupay')}>
-                        <CreditCard size={18} />
-                        <span><strong>NuPay</strong><small>Autorize pelo app Nubank sem digitar cartão</small></span>
-                        <em className="koma-sub-method-badge">Em breve</em>
-                      </button>
-                      <button type="button" className={`koma-sub-coming-method ${paymentPreview === 'mercado_pago' ? 'is-previewing' : ''}`} aria-pressed={paymentPreview === 'mercado_pago'} onClick={() => setPaymentPreview('mercado_pago')}>
-                        <CreditCard size={18} />
-                        <span><strong>Mercado Pago</strong><small>Carteira, saldo ou crédito conforme disponibilidade do provedor</small></span>
-                        <em className="koma-sub-method-badge">Em breve</em>
-                      </button>
-                      {billingCycle === 'anual' && (
-                        <button type="button" className={`koma-sub-coming-method ${paymentPreview === 'annual_installments' ? 'is-previewing' : ''}`} aria-pressed={paymentPreview === 'annual_installments'} onClick={() => setPaymentPreview('annual_installments')}>
-                          <CreditCard size={18} />
-                          <span><strong>Anual parcelado no cartão</strong><small>Parcelas com juros/condições do emissor, sem subsídio KÔMA</small></span>
-                          <em className="koma-sub-method-badge is-study">Em estudo</em>
-                        </button>
-                      )}
-                      {billingCycle === 'anual' && (
-                        <button type="button" className={`koma-sub-coming-method ${paymentPreview === 'boleto' ? 'is-previewing' : ''}`} aria-pressed={paymentPreview === 'boleto'} onClick={() => setPaymentPreview('boleto')}>
-                          <FileText size={18} />
-                          <span><strong>Boleto bancário</strong><small>Alternativa empresarial para pagamento anual antecipado</small></span>
-                          <em className="koma-sub-method-badge is-study">Em estudo</em>
-                        </button>
-                      )}
+                      {paymentOptions
+                        .filter((option) => option.id !== 'credit_card')
+                        .map((option) => (
+                          <button
+                            type="button"
+                            key={option.id}
+                            className={`koma-sub-coming-method ${paymentPreview === option.id ? 'is-previewing' : ''}`}
+                            aria-pressed={paymentPreview === option.id}
+                            onClick={() => setPaymentPreview(option.id)}
+                          >
+                            <PaymentOptionIcon optionId={option.id} />
+                            <span><strong>{option.label}</strong><small>{option.checkoutSummary}</small></span>
+                            <em className={`koma-sub-method-badge ${option.status === 'study' ? 'is-study' : ''}`}>{option.statusLabel}</em>
+                          </button>
+                        ))}
                     </div>
                     {paymentPreviewDetails && (
                       <div className="koma-sub-payment-preview" role="status">
