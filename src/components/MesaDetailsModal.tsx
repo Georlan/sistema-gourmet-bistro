@@ -4,6 +4,7 @@ import { splitOrdersByLaunch } from '../domain/orderLots';
 import { buildLaunchIdentityMap, getOrderCheckId, type LaunchIdentityMap, type TableFamilySnapshot } from '../domain/orderIdentity';
 import { deriveTableOperationalState } from '../domain/operationalState';
 import { API_BASE_URL } from '../config/api';
+import { getOperationalAccessToken, getOperatorAccessToken } from '../utils/authSession';
 
 /**
  * Adaptador operacional da tela de mesa.
@@ -22,9 +23,9 @@ const currentAuthToken = (): string | null => {
     || params.get('view') === 'gerencia'
     || hash === '#caixa'
     || hash === '#gerencia';
-  return localStorage.getItem(management ? 'koma_caixa_token' : 'koma_waiter_token')
-    || localStorage.getItem('koma_caixa_token')
-    || localStorage.getItem('koma_waiter_token');
+  return getOperationalAccessToken(management ? 'caixa' : 'garcom')
+    || getOperatorAccessToken()
+    || null;
 };
 
 export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {

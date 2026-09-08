@@ -9,6 +9,8 @@ export interface OperatorSession {
   expiresAt: number; // Timestamp de expiração em milissegundos
 }
 
+export type OperationalPortal = 'caixa' | 'garcom';
+
 const SESSION_KEY = 'koma_operator_session';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
@@ -71,6 +73,13 @@ export function getOperatorSession(): OperatorSession | null {
     clearOperatorSession();
     return null;
   }
+}
+
+export function getOperationalAccessToken(portal: OperationalPortal): string {
+  if (portal === 'garcom') {
+    return localStorage.getItem('koma_waiter_token') || '';
+  }
+  return getOperatorSession()?.token || localStorage.getItem('koma_caixa_token') || '';
 }
 
 export function getOperatorAccessToken(): string {
