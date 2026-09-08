@@ -12,7 +12,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..application.orders.lifecycle import OrderLifecycleCoordinator
 from ..database import get_db, require_tenant_id
+from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..models import Comanda, Usuario
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..security import require_roles
@@ -48,6 +50,12 @@ class BlockCustomerPayload(BaseModel):
     duration_hours: Literal[24, 168, 720] | None = None
 
 
+class RejectOrderPayload(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
+    block_customer: bool = False
+    block_duration_hours: Literal[24, 168, 720] | None = None
+
+
 class ReleaseBlockPayload(BaseModel):
     reason: str = Field(default="Bloqueio removido pela operação", min_length=3, max_length=240)
 
@@ -62,6 +70,14 @@ def _notify_public_menu(background_tasks: BackgroundTasks, restaurante_id: int) 
     background_tasks.add_task(
         manager.broadcast,
         {"event": "config_updated", "source": "online_order_control"},
+        restaurante_id,
+    )
+
+
+def _notify_orders(background_tasks: BackgroundTasks, restaurante_id: int) -> None:
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "tables_updated", "source": "online_order_control"},
         restaurante_id,
     )
 
@@ -138,6 +154,63 @@ def configure_capacity(
     result = operational_status(db, rid)
     _notify_public_menu(background_tasks, rid)
     return result
+
+
+@router.post("/orders/{comanda_id}/reject")
+def reject_online_order(
+    comanda_id: str,
+    payload: RejectOrderPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(_authorized_operator),
+):
+    """Recusa via lifecycle canônico e persiste o motivo real da operação.
+
+    O bloqueio opcional usa a mesma identidade tenant-local do pedido. Não há
+    writer paralelo de ``delivery_status`` e não há dependência de WhatsApp.
+    """
+    rid = require_tenant_id()
+    try:
+        transition = OrderLifecycleCoordinator.transition_check_status(
+            db,
+            restaurant_id=rid,
+            comanda_id=comanda_id,
+            target_status="recusado",
+            operator_user_id=str(current_user.id),
+            reason=payload.reason.strip(),
+            commit=False,
+        )
+        block = None
+        if payload.block_customer:
+            block = block_from_order(
+                db,
+                restaurante_id=rid,
+                comanda=transition.comanda,
+                actor_user_id=str(current_user.id),
+                reason=payload.reason.strip(),
+                duration_hours=payload.block_duration_hours,
+            )
+        db.commit()
+    except InvalidOrderTransitionError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except (OrderValidationError, ValueError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    _notify_orders(background_tasks, rid)
+    return {
+        "status": "rejected",
+        "comanda_id": transition.comanda.id,
+        "reason": payload.reason.strip(),
+        "customer_block_id": block.id if block is not None else None,
+    }
 
 
 @router.get("/blocks")
