@@ -6,52 +6,58 @@ const planContract = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
 const planStyles = readFileSync('src/legal/planSubscriptionFlow.css', 'utf8');
 const main = readFileSync('src/main.tsx', 'utf8');
 
-test('fluxo moderno de inscricao em planos esta disponivel para /contratar', () => {
+test('fluxo unificado de contratação está disponível em /contratar', () => {
   assert.match(main, /pathname\.startsWith\("\/contratar"\)/);
-  assert.match(planContract, /Escolha um plano/);
-  assert.match(planContract, /Experimente o.*grátis/);
-  assert.match(planContract, /Recorrente/);
-  assert.match(planContract, /Único/);
+  assert.match(planContract, /01 · PLANO E COBRANÇA/);
+  assert.match(planContract, /02 · DADOS E PAGAMENTO/);
+  assert.match(planContract, /SUBSCRIPTION_PLANS\.map/);
 });
 
-test('etapa 1 exibe as opcoes de cobranca mensal e anuais com trial de 7 dias', () => {
-  assert.match(planContract, /Plano mensal/);
-  assert.match(planContract, /Plano anual \(pagamento único\)/);
-  assert.match(planContract, /Plano anual \(parcelado em 12x\)/);
-  assert.match(planContract, /Aproveite grátis por 7 dias, cancele quando quiser/);
-  assert.match(planContract, /Vamos te lembrar antes do fim do seu período de teste/);
-  assert.match(planContract, /Próximo/);
+test('seleção comercial usa somente ciclos suportados pelo backend', () => {
+  assert.match(planContract, /'mensal' \| 'anual'/);
+  assert.match(planContract, /Economize 10%/);
+  assert.match(planContract, /annualMonthlyEquivalent/);
+  assert.match(planContract, /annualSavings/);
+  assert.doesNotMatch(planContract, /anual_12x/);
+  assert.doesNotMatch(planContract, /Plano anual \(parcelado em 12x\)/);
 });
 
-test('etapa 2 oferece cartao, nupay, pix automatico e mercado pago com tratamento de erro', () => {
-  assert.match(planContract, /Cartão de crédito ou débito/);
-  assert.match(planContract, /NuPay/);
-  assert.match(planContract, /Pix Automático/);
-  assert.match(planContract, /mercado pago/);
-  assert.match(planContract, /Faça um teste gratuito/);
-  assert.match(planContract, /Não foi possível processar o seu pagamento/);
+test('checkout expõe apenas pagamentos implementados no backend', () => {
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix'/);
+  assert.match(planContract, /Cartão de crédito/);
+  assert.match(planContract, /Pix anual à vista/);
+  assert.match(planContract, /payment_method_type: 'credit_card'/);
+  assert.match(planContract, /payment_method_type: 'pix'/);
+  assert.doesNotMatch(planContract, /NuPay/);
+  assert.doesNotMatch(planContract, /Pix Automático/);
+  assert.doesNotMatch(planContract, /mercado_pago.*BillingMethod/);
 });
 
-test('modal de conexao qr code mercado pago e pix esta disponivel', () => {
-  assert.match(planContract, /Conexão com Mercado Pago/);
-  assert.match(planContract, /Escaneie o QR Code para conectar com KÔMA BR/);
-  assert.match(planContract, /Não feche esta janela até concluir a conexão/);
-  assert.match(planContract, /QRCodeSVG/);
-  assert.match(planContract, /continuar neste navegador/);
+test('pix fica restrito ao anual antecipado e cartão preserva trial', () => {
+  assert.match(planContract, /billingCycle === 'anual'/);
+  assert.match(planContract, /O Pix anual é pagamento antecipado/);
+  assert.match(planContract, /7 dias sem mensalidade fixa/);
+  assert.match(planContract, /taxa KÔMA sobre pedidos online continua aplicável/);
 });
 
-test('timeline de degustacao calcula hoje, lembrete e renovacao dinamicamente', () => {
-  assert.match(planContract, /Hoje/);
-  assert.match(planContract, /Tenha acesso grátis a tudo que o.*oferece/);
-  assert.match(planContract, /Enviaremos um lembrete quando seu período de teste estiver prestes a terminar/);
-  assert.match(planContract, /Seu plano será renovado automaticamente/);
-  assert.match(planContract, /A pagar hoje/);
-  assert.match(planContract, /Teste grátis de 7 dias/);
+test('CNPJ exige representante pessoa física e CPF usa o próprio titular', () => {
+  assert.match(planContract, /contractingTaxKind === 'cnpj'/);
+  assert.match(planContract, /Responsável pelo aceite/);
+  assert.match(planContract, /isValidCpf\(representativeTaxId\)/);
+  assert.match(planContract, /Titular da contratação/);
 });
 
-test('estilos do fluxo moderno estao integrados', () => {
-  assert.match(planStyles, /\.koma-sub-wrapper/);
+test('checkout não fabrica slug e mantém comprovante técnico acessível', () => {
+  assert.match(planContract, /payload\.slug \|\| undefined/);
+  assert.doesNotMatch(planContract, /toLowerCase\(\)\.replace\(\/\[\^a-z0-9\]\//);
+  assert.match(planContract, /Comprovante de Contratação e Licenciamento Eletrônico/);
+  assert.match(planContract, /Imprimir \/ salvar em PDF/);
+});
+
+test('identidade visual do checkout usa tokens KÔMA', () => {
+  assert.match(planStyles, /--koma-bg: #070908/);
+  assert.match(planStyles, /--koma-accent: #0bd6ad/);
+  assert.match(planStyles, /\.koma-sub-plan-grid/);
   assert.match(planStyles, /\.koma-sub-timeline/);
-  assert.match(planStyles, /\.koma-sub-cards/);
-  assert.match(planStyles, /\.koma-sub-modal/);
+  assert.doesNotMatch(planStyles, /#7c3aed/i);
 });
