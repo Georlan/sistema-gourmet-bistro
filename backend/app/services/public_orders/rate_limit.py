@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ...models import PublicRateLimit
 from ..customer_auth import hash_public_rate_key
-from ..online_order_control import customer_is_blocked
+from ..online_order_control import capacity_gate_before_order, customer_is_blocked
 
 MAX_PUBLIC_ORDER_UNITS = 200
 PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
@@ -103,10 +103,13 @@ def enforce_public_order_rate_limits(
     restaurante_id: int,
     telefone: str,
 ) -> None:
-    """Aplica bloqueio de cliente e quotas antes da transação do pedido.
+    """Aplica bloqueio, quotas e o gate serializado de capacidade.
 
-    O gate exato de capacidade fica dentro da transação de criação da comanda,
-    onde consegue manter o lock até o commit e evitar corrida em N-1/N.
+    As quotas são commitadas primeiro. Em seguida, quando auto-pausa está ativa,
+    ``capacity_gate_before_order`` adquire ``FOR UPDATE`` na linha operacional e
+    NÃO commita se houver vaga. O WebAdapter continua usando a mesma sessão e
+    mantém esse lock até o commit da própria criação da comanda. Isso impede que
+    duas compras concorrentes em 29/30 ocupem simultaneamente a 30ª vaga.
     """
     if customer_is_blocked(
         db,
@@ -137,3 +140,17 @@ def enforce_public_order_rate_limits(
         window_seconds=PUBLIC_ORDER_RATE_WINDOW_SECONDS,
     )
     db.commit()
+
+    gate = capacity_gate_before_order(db, restaurante_id=restaurante_id)
+    if gate.blocked:
+        if gate.state_changed:
+            # Auto-pausa precisa sobreviver ao rollback do adapter que ocorre ao
+            # transformar a barreira em HTTP 409.
+            db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Novos pedidos estão temporariamente pausados. Tente novamente mais tarde.",
+        )
+    # Se gate.blocked == False e auto_pause estiver habilitada, há um lock vivo
+    # deliberado. NÃO adicionar commit aqui; a transação canônica do pedido é a
+    # dona desse commit e libera o slot/lock de forma atômica.
