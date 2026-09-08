@@ -11,6 +11,7 @@ EMERGENCY_MIGRATION = (
 ).read_text(encoding="utf-8")
 
 
+# Regressão: startup não pode voltar a atuar como uma segunda ferramenta de migration.
 def test_startup_does_not_patch_schema_with_manual_alter_table():
     assert "ALTER TABLE comandas ADD COLUMN mesa_transferida_de" not in MAIN_SOURCE
     assert "Adicionando coluna 'mesa_transferida_de'" not in MAIN_SOURCE
