@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const makeStorage = () => {
@@ -77,4 +78,12 @@ test('clearing guest checkout contact erases both current and legacy storage', a
 
   assert.equal(localStorage.getItem(key), null);
   assert.equal(sessionStorage.getItem(key), null);
+});
+
+test('cart drawer no longer reads or writes guest PII through localStorage directly', () => {
+  const source = readFileSync('src/cardapio/components/CardapioCartDrawer.tsx', 'utf8');
+  assert.match(source, /loadGuestCheckoutContact/);
+  assert.match(source, /saveGuestCheckoutContact/);
+  assert.doesNotMatch(source, /localStorage\./);
+  assert.doesNotMatch(source, /koma_guest_checkout/);
 });
