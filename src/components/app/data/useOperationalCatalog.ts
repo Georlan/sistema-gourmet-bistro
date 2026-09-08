@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { normalizeCatalogSnapshot, type CatalogSnapshot } from '../../../catalog/catalog';
 import { API_BASE_URL } from '../../../config/api';
+import { getOperationalAccessToken } from '../../../utils/authSession';
 
 import type { OperationalRequestContext } from '../operationalContracts';
 const EMPTY_CATALOG: CatalogSnapshot = { produtos: [], categorias: [] };
@@ -17,8 +18,7 @@ export function useOperationalCatalog({
   isAuthenticated,
   isWsConnected,
 }: BoundaryProps) {
-  const tokenKey = portal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
-  const token = isAuthenticated ? localStorage.getItem(tokenKey) : null;
+  const token = isAuthenticated ? getOperationalAccessToken(portal) : '';
   const scope = token ? `${portal}:${token}` : null;
   const [snapshot, setSnapshot] = useState<{ scope: string; data: CatalogSnapshot } | null>(null);
   const catalogAbortRef = useRef<AbortController | null>(null);
@@ -32,7 +32,8 @@ export function useOperationalCatalog({
     const controller = new AbortController();
     catalogAbortRef.current = controller;
     const isCurrent = () => !controller.signal.aborted
-      && requestId === catalogRequestRef.current && localStorage.getItem(tokenKey) === token;
+      && requestId === catalogRequestRef.current
+      && getOperationalAccessToken(portal) === token;
     try {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       let payload: unknown;
@@ -80,7 +81,7 @@ export function useOperationalCatalog({
         console.error('Error fetching live catalog', err);
       }
     }
-  }, [scope, token, tokenKey, handleLogout]);
+  }, [scope, token, portal, handleLogout]);
 
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 

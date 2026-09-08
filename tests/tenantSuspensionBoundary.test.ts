@@ -27,10 +27,11 @@ test('boundary detecta suspensão no backend e revalida a sessão periodicamente
   assert.match(boundary, /window\.addEventListener\('focus'/);
 });
 
-test('boundary cobre tokens operacionais sem sequestrar Super Admin ou cardápio público', () => {
-  for (const tokenKey of ['koma_caixa_token', 'koma_waiter_token', 'koma_smartpos_session']) {
-    assert.match(boundary, new RegExp(tokenKey));
-  }
+test('boundary cobre autenticação operacional sem voltar a ler aliases legados diretamente', () => {
+  assert.match(boundary, /getOperatorAccessToken\(\)/);
+  assert.match(boundary, /koma_smartpos_session/);
+  assert.doesNotMatch(boundary, /localStorage\.getItem\(['"]koma_caixa_token['"]\)/);
+  assert.doesNotMatch(boundary, /localStorage\.getItem\(['"]koma_waiter_token['"]\)/);
   assert.match(main, /TenantSuspensionBoundary/);
   assert.match(main, /pathname\.startsWith\("\/super-admin"\)/);
   assert.match(main, /pathname\.startsWith\("\/c\/"\)/);

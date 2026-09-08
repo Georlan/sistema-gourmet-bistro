@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Clock, LogOut, ShieldAlert } from "lucide-react";
-import { clearOperatorSession } from "../../utils/authSession";
+import { clearOperatorSession, getOperatorAccessToken } from "../../utils/authSession";
 import {
   SUPPORT_SESSION_STORAGE_KEY,
   type StoredSupportSession,
@@ -51,9 +51,7 @@ export function SupportSessionBanner() {
     setIsEnding(true);
 
     try {
-      const token =
-        localStorage.getItem("koma_caixa_token") ||
-        localStorage.getItem("token");
+      const token = getOperatorAccessToken();
 
       if (token) {
         await fetch(`${API_BASE_URL}/api/super-admin/support/end-current`, {

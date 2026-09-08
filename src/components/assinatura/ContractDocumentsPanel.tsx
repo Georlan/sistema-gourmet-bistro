@@ -17,6 +17,7 @@ import {
   SubscriptionPlanId,
   getSubscriptionPlan,
 } from '../../config/subscriptionPlans';
+import { getOperatorAccessToken } from '../../utils/authSession';
 
 type ContractDocumentRef = {
   slug: string;
@@ -153,7 +154,7 @@ export const ContractDocumentsPanel: React.FC = () => {
     setErrorMessage('');
     setCopied(false);
 
-    const token = localStorage.getItem('koma_caixa_token');
+    const token = getOperatorAccessToken();
     if (!token) {
       setState('error');
       setErrorMessage('Sua sessão de Caixa não está disponível. Entre novamente para consultar o contrato.');

@@ -13,7 +13,8 @@ test('assinatura expõe sub-aba de contrato e documentos', () => {
 
 test('segunda via consulta apenas o contrato do tenant autenticado', () => {
   assert.match(contractPanel, /\/api\/contracts\/current/);
-  assert.match(contractPanel, /koma_caixa_token/);
+  assert.match(contractPanel, /getOperatorAccessToken\(\)/);
+  assert.doesNotMatch(contractPanel, /koma_caixa_token/);
   assert.match(contractPanel, /Authorization: `Bearer \$\{token\}`/);
   assert.match(contractPanel, /cache: 'no-store'/);
   assert.match(contractPanel, /response\.status === 404/);
