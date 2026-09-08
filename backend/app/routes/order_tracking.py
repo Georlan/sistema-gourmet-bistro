@@ -31,6 +31,7 @@ from ..services.order_chat_service import (
     send_customer_message,
     serialize_message,
 )
+from ..services.order_state_contract import build_order_state_contract
 from ..services.public_orders import client_ip, consume_rate_limit
 
 router = APIRouter(prefix="/api/cardapio/pedidos/acompanhar", tags=["Cardapio - Acompanhamento"])
@@ -42,6 +43,15 @@ class CustomerMessagePayload(BaseModel):
 
 def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
     return f"event: {event_name}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
+
+
+def _effective_tracking_status(comanda: Comanda) -> str:
+    raw_status = (comanda.delivery_status or "pendente").strip().lower()
+    if raw_status in {"recusado", "rejected", "cancelado", "cancelled"}:
+        return raw_status
+    if comanda.fechada:
+        return "finalizado"
+    return raw_status
 
 
 @router.get("/{token}", summary="Consulta segura dos dados de acompanhamento do pedido")
@@ -96,10 +106,18 @@ def consultar_pedido_por_token(
         ]
 
         closed_at_iso = closed_at.isoformat() if closed_at else None
+        effective_status = _effective_tracking_status(comanda)
+        state_contract = build_order_state_contract(
+            effective_status,
+            comanda.tipo,
+            conversation_closed=closed_at is not None,
+        )
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
-            "status": comanda.delivery_status or "pendente",
+            # Compatibilidade legada. Clientes novos devem consumir `state`.
+            "status": effective_status,
+            "state": state_contract,
             "tipo": comanda.tipo or "Delivery",
             "total": compute_comanda_total(comanda),
             "endereco_entrega": getattr(comanda, "delivery_endereco", None),
@@ -118,6 +136,7 @@ def consultar_pedido_por_token(
                 "id": conversation_id,
                 "closed_at": closed_at_iso,
                 "unread_count": customer_unread_count,
+                "can_chat": state_contract["can_chat"],
             },
         }
 
@@ -154,9 +173,6 @@ def enviar_mensagem_do_cliente(
 
     restaurante_id, conversation_id, pedido_id, _closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
-        # A conversa é a primeira barreira: 20 mensagens/min evita rajadas de
-        # scripts usando um token obtido. O IP é uma segunda barreira mais larga
-        # para evitar um emissor saturar várias conversas ao mesmo tempo.
         consume_rate_limit(
             db,
             restaurante_id=restaurante_id,

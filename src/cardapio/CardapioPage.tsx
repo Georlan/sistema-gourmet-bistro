@@ -54,10 +54,7 @@ import {
   refreshAllStoredOrders,
   removeStoredOrder,
   clearAllStoredOrders,
-  isTerminalStatus,
-  isRejectedStatus,
-  orderStatusLabel,
-  orderStep,
+  resolveOrderState,
 } from "./orderTracking";
 
 const KOMA_PRIMARY = "#00b894";
@@ -155,7 +152,7 @@ export default function CardapioPage() {
   }, []);
 
   const activeOrders = useMemo(
-    () => storedOrders.filter((order) => !isTerminalStatus(order.status)),
+    () => storedOrders.filter((order) => !resolveOrderState(order).terminal),
     [storedOrders],
   );
 
@@ -656,11 +653,13 @@ export default function CardapioPage() {
     );
   }
 
-  const terminal = activeOrder ? isTerminalStatus(activeOrder.status) : false;
-  const rejected = activeOrder ? isRejectedStatus(activeOrder.status) : false;
-  const currentStep = activeOrder ? orderStep(activeOrder.status) : 1;
-  const trackingSteps = activeOrder?.tipo?.toLocaleLowerCase("pt-BR").includes("delivery")
-    ? ["Recebido", "Em preparo", "Saiu para entrega", "Concluído"]
+  const activeState = activeOrder ? resolveOrderState(activeOrder) : null;
+  const terminal = activeState?.terminal ?? false;
+  const rejected = activeState?.rejected ?? false;
+  const currentStep = activeState?.progress_step ?? 1;
+  const isDeliveryOrder = activeState?.fulfillment === "delivery";
+  const trackingSteps = isDeliveryOrder
+    ? ["Recebido", "Em preparo", "Pronto", "Saiu para entrega", "Concluído"]
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
 
   return (
@@ -695,18 +694,17 @@ export default function CardapioPage() {
           </div>
         )}
 
-        {activeOrder && (
+        {activeOrder && activeState && (
           <section className={clsx(
             "rounded-2xl border p-4 shadow-lg transition-all",
             rejected ? "border-rose-500/30 bg-rose-500/[0.07]" : terminal ? "border-emerald-500/30 bg-emerald-500/[0.07]" : "border-emerald-500/25 bg-koma-card",
           )} id="active-order-banner">
-            {/* Multi-order switcher if more than 1 order exists */}
             {storedOrders.length > 1 && (
               <div className="mb-3 flex items-center justify-between border-b border-koma-border/60 pb-2.5">
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
                   {storedOrders.map((ord) => {
                     const isSelected = ord.id === activeOrder.id;
-                    const isOrdActive = !isTerminalStatus(ord.status);
+                    const isOrdActive = !resolveOrderState(ord).terminal;
                     return (
                       <button
                         key={ord.id}
@@ -760,7 +758,7 @@ export default function CardapioPage() {
                       </button>
                     )}
                   </div>
-                  <h2 className="mt-1 text-base font-black text-koma-foreground">{orderStatusLabel(activeOrder.status)}</h2>
+                  <h2 className="mt-1 text-base font-black text-koma-foreground">{activeState.label}</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
                     {rejected
                       ? "O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser."
@@ -771,7 +769,7 @@ export default function CardapioPage() {
                           : "O restaurante já atualizou o andamento do seu pedido."}
                   </p>
                   <p className="mt-1 text-[10px] text-koma-subtle">
-                    {activeOrder.tipo?.toLocaleLowerCase("pt-BR").includes("delivery") ? "Delivery" : "Retirada"} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
+                    {isDeliveryOrder ? "Delivery" : "Retirada"} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
                   </p>
                 </div>
               </div>
@@ -793,7 +791,7 @@ export default function CardapioPage() {
             </div>
 
             {!rejected && (
-              <div className="mt-4 grid grid-cols-4 gap-1.5 border-t border-koma-border pt-3">
+              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}>
                 {trackingSteps.map((label, index) => {
                   const step = index + 1;
                   const passed = currentStep >= step;

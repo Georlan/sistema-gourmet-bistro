@@ -16,15 +16,22 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
-import { StoredOrder } from "../orderTracking";
+import {
+  OrderStateContract,
+  StoredOrder,
+  fallbackOrderState,
+  isOrderStateContract,
+} from "../orderTracking";
 
 interface TrackingPayload {
   status: string;
+  state?: OrderStateContract;
   tipo: string;
   closed_at?: string | null;
   conversa?: {
     closed_at?: string | null;
     unread_count?: number;
+    can_chat?: boolean;
   } | null;
 }
 
@@ -63,16 +70,6 @@ function formatTime(value?: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-}
-
-function journeyStep(status: string, isDelivery: boolean): number {
-  const normalized = (status || "").toLocaleLowerCase("pt-BR");
-  if (normalized.includes("recus") || normalized.includes("cancel")) return -1;
-  if (normalized.includes("final") || normalized.includes("entreg")) return isDelivery ? 5 : 4;
-  if (normalized.includes("trans") || normalized.includes("saiu")) return isDelivery ? 4 : 3;
-  if (normalized.includes("pronto")) return 3;
-  if (normalized.includes("produ") || normalized.includes("prepar")) return 2;
-  return 1;
 }
 
 export default function CardapioOrderChatPanel({
@@ -157,18 +154,10 @@ export default function CardapioOrderChatPanel({
           startFallback();
         }
       });
-      source.addEventListener("status", (event: MessageEvent) => {
-        try {
-          const payload = JSON.parse(event.data) as { status?: string; closed_at?: string | null };
-          setTracking((current) => ({
-            status: payload.status || current?.status || order.status || "pendente",
-            tipo: current?.tipo || order.tipo || "Retirada",
-            closed_at: payload.closed_at ?? current?.closed_at ?? null,
-            conversa: current?.conversa,
-          }));
-        } catch {
-          startFallback();
-        }
+      // O evento SSE sinaliza a mudança; o GET continua sendo a fonte do
+      // contrato `state`, evitando reimplementar a máquina de estados no cliente.
+      source.addEventListener("status", () => {
+        void refresh();
       });
     } catch {
       source = null;
@@ -179,7 +168,7 @@ export default function CardapioOrderChatPanel({
       stopFallback();
       source?.close();
     };
-  }, [apiRoot, order.status, order.tipo, refresh]);
+  }, [apiRoot, refresh]);
 
   useEffect(() => {
     markRead();
@@ -193,17 +182,21 @@ export default function CardapioOrderChatPanel({
     scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  const status = tracking?.status || order.status || "pendente";
-  const isDelivery = String(tracking?.tipo || order.tipo || "")
-    .toLocaleLowerCase("pt-BR")
-    .includes("delivery");
-  const currentStep = journeyStep(status, isDelivery);
-  const rejected = currentStep === -1;
+  const rawStatus = tracking?.status || order.status || "pendente";
+  const rawType = tracking?.tipo || order.tipo || "Retirada";
+  const state = isOrderStateContract(tracking?.state)
+    ? tracking.state
+    : isOrderStateContract(order.state)
+      ? order.state
+      : fallbackOrderState(rawStatus, rawType);
+  const isDelivery = state.fulfillment === "delivery";
+  const currentStep = state.progress_step;
+  const rejected = state.rejected;
   const steps = isDelivery
     ? ["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"]
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
   const closedAt = tracking?.closed_at || tracking?.conversa?.closed_at || null;
-  const isClosed = Boolean(closedAt);
+  const isClosed = Boolean(closedAt) || !state.can_chat || tracking?.conversa?.can_chat === false;
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -283,7 +276,7 @@ export default function CardapioOrderChatPanel({
             </div>
             <div>
               <span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Status atual</span>
-              <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : "text-emerald-400")}>{status}</p>
+              <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : "text-emerald-400")}>{state.label}</p>
             </div>
           </div>
           <span className="text-[10px] font-bold text-koma-muted">{isDelivery ? "Delivery" : "Retirada"}</span>

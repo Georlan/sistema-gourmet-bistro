@@ -2,20 +2,16 @@ import assert from 'node:assert/strict';
 import test, { beforeEach } from 'node:test';
 
 import {
-  ACTIVE_ORDERS_STORAGE_KEY,
   LEGACY_ACTIVE_ORDER_STORAGE_KEY,
   StoredOrder,
-  isRejectedStatus,
-  isTerminalStatus,
-  loadStoredOrders,
-  orderStatusLabel,
-  orderStep,
-  removeStoredOrder,
-  saveStoredOrder,
+  fallbackOrderState,
   fetchOrderLiveStatus,
+  loadStoredOrders,
+  removeStoredOrder,
+  resolveOrderState,
+  saveStoredOrder,
 } from '../src/cardapio/orderTracking';
 
-// Mock localStorage in global scope for node:test environment
 const mockStorage: Record<string, string> = {};
 (globalThis as any).localStorage = {
   getItem: (key: string) => mockStorage[key] || null,
@@ -34,32 +30,42 @@ beforeEach(() => {
   (globalThis as any).localStorage.clear();
 });
 
-test('status helpers categorizam corretamente estados canônicos', () => {
-  assert.equal(isTerminalStatus('pendente'), false);
-  assert.equal(isTerminalStatus('producao'), false);
-  assert.equal(isTerminalStatus('pronto'), false);
-  assert.equal(isTerminalStatus('transito'), false);
-  assert.equal(isTerminalStatus('finalizado'), true);
-  assert.equal(isTerminalStatus('entregue'), true);
-  assert.equal(isTerminalStatus('recusado'), true);
-  assert.equal(isTerminalStatus('cancelado'), true);
+test('fallback canônico usa mapa exato sem aceitar substrings parecidas', () => {
+  assert.equal(fallbackOrderState('pendente', 'Retirada').status, 'pending');
+  assert.equal(fallbackOrderState('producao', 'Retirada').phase, 'preparing');
+  assert.equal(fallbackOrderState('pronto', 'Retirada').progress_step, 3);
+  assert.equal(fallbackOrderState('transito', 'Delivery').progress_step, 4);
+  assert.equal(fallbackOrderState('finalizado', 'Delivery').terminal, true);
+  assert.equal(fallbackOrderState('recusado', 'Delivery').rejected, true);
+  assert.equal(fallbackOrderState('cancelado', 'Retirada').rejected, true);
 
-  assert.equal(isRejectedStatus('recusado'), true);
-  assert.equal(isRejectedStatus('cancelado'), true);
-  assert.equal(isRejectedStatus('producao'), false);
+  // Um texto arbitrário que apenas contém uma palavra conhecida não pode mudar o estado.
+  assert.equal(fallbackOrderState('pedido-finalizado-talvez', 'Delivery').status, 'pending');
+  assert.equal(fallbackOrderState('preparando-depois', 'Delivery').status, 'pending');
+});
 
-  assert.equal(orderStatusLabel('pendente'), 'Aguardando aceite');
-  assert.equal(orderStatusLabel('producao'), 'Em preparo');
-  assert.equal(orderStatusLabel('pronto'), 'Pronto');
-  assert.equal(orderStatusLabel('transito'), 'Saiu para entrega');
-  assert.equal(orderStatusLabel('finalizado'), 'Concluído');
-  assert.equal(orderStatusLabel('recusado'), 'Pedido não aceito');
+test('resolveOrderState prefere contrato retornado pelo backend', () => {
+  const state = resolveOrderState({
+    status: 'pendente',
+    tipo: 'Retirada',
+    state: {
+      status: 'completed',
+      phase: 'completed',
+      label: 'Concluído',
+      fulfillment: 'delivery',
+      terminal: true,
+      rejected: false,
+      can_chat: false,
+      can_cancel: false,
+      progress_step: 5,
+      progress_total: 5,
+    },
+  });
 
-  assert.equal(orderStep('pendente'), 1);
-  assert.equal(orderStep('producao'), 2);
-  assert.equal(orderStep('pronto'), 3);
-  assert.equal(orderStep('transito'), 3);
-  assert.equal(orderStep('finalizado'), 4);
+  assert.equal(state.status, 'completed');
+  assert.equal(state.fulfillment, 'delivery');
+  assert.equal(state.terminal, true);
+  assert.equal(state.progress_step, 5);
 });
 
 test('loadStoredOrders migra com sucesso da chave legada koma_active_order', () => {
@@ -111,10 +117,9 @@ test('saveStoredOrder adiciona múltiplos pedidos e preserva compatibilidade com
 
   const loaded = loadStoredOrders(1);
   assert.equal(loaded.length, 2);
-  assert.equal(loaded[0].id, 'p-2'); // mais recente
+  assert.equal(loaded[0].id, 'p-2');
   assert.equal(loaded[1].id, 'p-1');
 
-  // Checa se a chave legada foi mantida
   const legacyRaw = localStorage.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY);
   assert.ok(legacyRaw);
   const legacy = JSON.parse(legacyRaw!);
@@ -156,7 +161,7 @@ test('removeStoredOrder remove o pedido específico e atualiza a chave legada', 
   assert.equal(legacy.id, 'p-1');
 });
 
-test('saveStoredOrder e loadStoredOrders preservam tracking_token e tracking_url com segurança', () => {
+test('saveStoredOrder e loadStoredOrders preservam tracking do pedido durante compatibilidade', () => {
   const orderWithTracking: StoredOrder = {
     id: 'comanda-1048',
     numero_pedido: 1048,
@@ -174,25 +179,51 @@ test('saveStoredOrder e loadStoredOrders preservam tracking_token e tracking_url
 
   const loaded = loadStoredOrders(1);
   assert.equal(loaded.length, 1);
-  assert.equal(loaded[0].id, 'comanda-1048');
-  assert.equal(loaded[0].numero_pedido, 1048);
   assert.equal(loaded[0].tracking_token, 'sec_tok_xyz1234567890abcdef');
   assert.equal(loaded[0].tracking_url, '/acompanhar/sec_tok_xyz1234567890abcdef');
 });
 
-
-
-test('retorno do tracking consulta o token seguro em vez de chave artificial', async () => {
+test('tracking seguro prefere state do backend e token opaco', async () => {
   const originalFetch = globalThis.fetch;
   let requested = '';
   globalThis.fetch = (async (url: string) => {
     requested = url;
-    return new Response(JSON.stringify({ id: 'order-1', status: 'producao', restaurante: { id: 2 }, itens: [{ nome: 'Suco', observacao: 'Sem gelo' }] }), { status: 200 });
+    return new Response(JSON.stringify({
+      id: 'order-1',
+      status: 'producao',
+      state: {
+        status: 'ready',
+        phase: 'ready',
+        label: 'Pronto',
+        fulfillment: 'pickup',
+        terminal: false,
+        rejected: false,
+        can_chat: true,
+        can_cancel: false,
+        progress_step: 3,
+        progress_total: 4,
+      },
+      restaurante: { id: 2 },
+      itens: [{ nome: 'Suco', observacao: 'Sem gelo' }],
+    }), { status: 200 });
   }) as typeof fetch;
   try {
-    const updated = await fetchOrderLiveStatus({ id: 'order-1', numero_pedido: 1, timestamp: Date.now(), restaurante_id: 2, tipo: 'Retirada', total: 10, idempotency_key: 'tracking-order-1', tracking_token: 'opaque/secure' }, 'https://example.test');
+    const updated = await fetchOrderLiveStatus({
+      id: 'order-1',
+      numero_pedido: 1,
+      timestamp: Date.now(),
+      restaurante_id: 2,
+      tipo: 'Retirada',
+      total: 10,
+      idempotency_key: 'tracking-order-1',
+      tracking_token: 'opaque/secure',
+    }, 'https://example.test');
+
     assert.equal(requested, 'https://example.test/api/cardapio/pedidos/acompanhar/opaque%2Fsecure');
-    assert.equal(updated?.status, 'producao');
+    assert.equal(updated?.state?.status, 'ready');
+    assert.equal(updated?.state?.progress_step, 3);
     assert.equal(updated?.itens?.[0].observacao, 'Sem gelo');
-  } finally { globalThis.fetch = originalFetch; }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
