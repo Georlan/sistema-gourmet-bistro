@@ -31,7 +31,7 @@ export type SubscriptionPaymentOption = {
 export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] = [
   {
     id: 'credit_card',
-    label: 'Cartão de crédito',
+    label: 'Cartão de crédito · em validação',
     status: 'validating',
     statusLabel: 'Em validação',
     billingCycles: ['mensal', 'anual'],
