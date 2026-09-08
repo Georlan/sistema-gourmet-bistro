@@ -3,6 +3,7 @@ import { LockKeyhole, LogOut, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '../../config/api';
 import { KomaLogo } from '../KomaLogo';
 import { clearOperatorSession, getOperatorAccessToken } from '../../utils/authSession';
+import { clearSmartPosSession, getSmartPosSession } from '../../smartpos/smartPosSession';
 
 type TenantAccessState = 'idle' | 'checking' | 'active' | 'suspended';
 
@@ -15,14 +16,7 @@ const STATUS_PROBE_INTERVAL_MS = 5_000;
 const TOKEN_DISCOVERY_INTERVAL_MS = 500;
 
 function readSmartPosToken(): string {
-  try {
-    const raw = localStorage.getItem('koma_smartpos_session');
-    if (!raw) return '';
-    const parsed = JSON.parse(raw) as { token?: unknown } | null;
-    return typeof parsed?.token === 'string' ? parsed.token.trim() : '';
-  } catch {
-    return '';
-  }
+  return getSmartPosSession()?.token?.trim() || '';
 }
 
 function readOperationalToken(): string {
@@ -46,6 +40,7 @@ async function responseSignalsSuspension(response: Response): Promise<boolean> {
 
 function clearOperationalAuthentication() {
   clearOperatorSession();
+  clearSmartPosSession();
   for (const key of [
     'koma_waiter_token',
     'koma_waiter_id',
@@ -54,7 +49,6 @@ function clearOperationalAuthentication() {
     'koma_token',
     'koma_user_id',
     'koma_user_name',
-    'koma_smartpos_session',
   ]) {
     localStorage.removeItem(key);
   }
