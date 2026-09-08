@@ -12,7 +12,8 @@ export type SubscriptionPaymentOptionId =
   | 'pix_automatic'
   | 'nupay'
   | 'mercado_pago'
-  | 'annual_installments';
+  | 'annual_installments'
+  | 'boleto';
 
 export type SubscriptionPaymentOption = {
   id: SubscriptionPaymentOptionId;
