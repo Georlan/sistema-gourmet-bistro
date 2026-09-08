@@ -6,7 +6,7 @@ import {
   getSubscriptionPaymentOptions,
 } from '../src/config/subscriptionPaymentOptions';
 
-test('mensal expõe cartão disponível e próximos meios sem torná-los selecionáveis', () => {
+test('mensal expõe cartão em validação e próximos meios sem marcar cobrança como disponível', () => {
   const options = getSubscriptionPaymentOptions('mensal');
   assert.deepEqual(options.map((option) => option.id), [
     'credit_card',
@@ -14,11 +14,13 @@ test('mensal expõe cartão disponível e próximos meios sem torná-los selecio
     'nupay',
     'mercado_pago',
   ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), ['credit_card']);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), []);
+  assert.equal(getSubscriptionPaymentOption('credit_card').status, 'validating');
+  assert.match(getSubscriptionPaymentOption('credit_card').label, /em validação/);
   assert.equal(getSubscriptionPaymentOption('pix_automatic').status, 'coming_soon');
 });
 
-test('anual expõe variedade sem prometer parcelamento ou pix antes da homologação', () => {
+test('anual expõe pix, nupay, mercado pago e parcelamento sem boleto', () => {
   const options = getSubscriptionPaymentOptions('anual');
   assert.deepEqual(options.map((option) => option.id), [
     'credit_card',
@@ -26,12 +28,11 @@ test('anual expõe variedade sem prometer parcelamento ou pix antes da homologa�
     'nupay',
     'mercado_pago',
     'annual_installments',
-    'boleto',
   ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), ['credit_card']);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), []);
   assert.equal(getSubscriptionPaymentOption('pix_annual').status, 'validating');
+  assert.equal(getSubscriptionPaymentOption('pix_annual').label, 'Pix');
   assert.equal(getSubscriptionPaymentOption('annual_installments').status, 'study');
-  assert.equal(getSubscriptionPaymentOption('boleto').status, 'study');
 });
 
 test('somente opções explicitamente disponíveis podem ser selecionadas', () => {
@@ -41,4 +42,12 @@ test('somente opções explicitamente disponíveis podem ser selecionadas', () =
       assert.equal(option.selectable, option.status === 'available');
     }
   }
+});
+
+test('roadmap não promete liquidação NuPay no Mercado Pago nem subsídio de juros', () => {
+  const nupay = getSubscriptionPaymentOption('nupay');
+  const installments = getSubscriptionPaymentOption('annual_installments');
+  assert.match(nupay.previewDescription, /integração própria/);
+  assert.match(nupay.previewDescription, /Não vamos assumir que o valor liquida na conta Mercado Pago/);
+  assert.match(installments.previewDescription, /sem o KÔMA bancar os juros/);
 });
