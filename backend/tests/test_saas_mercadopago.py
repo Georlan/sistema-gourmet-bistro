@@ -72,6 +72,55 @@ def test_mock_service_creates_annual_pix():
     assert res["ticket_url"].endswith(res["id"] + "/ticket")
 
 
+def test_mock_provider_fails_closed_in_production(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    service = SaasMercadoPagoService("mock-token")
+    assert service.is_mock is True
+    assert service.mock_allowed is False
+
+    with pytest.raises(SaasMercadoPagoError, match="não configurada"):
+        service.create_preapproval(
+            protocol="KOMA-CTR-20260907-FAILCLOSED01",
+            plan="pro",
+            billing_cycle="mensal",
+            amount=Decimal("209.00"),
+            card_token_id="token_card_123",
+            payer_email="cliente@example.com",
+        )
+
+    with pytest.raises(SaasMercadoPagoError, match="não configurada"):
+        service.create_annual_pix(
+            protocol="KOMA-CTR-20260907-FAILCLOSED02",
+            plan="pro",
+            amount=Decimal("2257.20"),
+            payer_email="cliente@example.com",
+            payer_name="Cliente Teste",
+            payer_tax_id="52998224725",
+        )
+
+
+def test_webhook_without_secret_is_rejected_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "")
+    monkeypatch.setenv("ENVIRONMENT", "production")
+
+    assert SaasMercadoPagoService.verify_webhook_signature(
+        signature_header="",
+        request_id="request-production",
+        data_id="payment-production",
+    ) is False
+
+
+def test_webhook_without_secret_remains_available_for_test_mocks(monkeypatch):
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "")
+    monkeypatch.setenv("ENVIRONMENT", "test")
+
+    assert SaasMercadoPagoService.verify_webhook_signature(
+        signature_header="",
+        request_id="request-test",
+        data_id="payment-test",
+    ) is True
+
+
 def test_webhook_signature_verification(monkeypatch):
     secret = "test_webhook_secret_key_12345"
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", secret)

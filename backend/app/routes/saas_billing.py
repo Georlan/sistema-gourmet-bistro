@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import logging
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
@@ -34,6 +35,7 @@ router = APIRouter(prefix="/api/contracts", tags=["SaaS Billing"])
 webhook_router = APIRouter(prefix="/api/integrations/saas-billing/mercado-pago", tags=["SaaS Billing Webhook"])
 
 _PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
+_MONEY_QUANTUM = Decimal("0.01")
 
 
 class SaasBillingSetupRequest(BaseModel):
@@ -60,6 +62,13 @@ def _normalize_protocol(protocol: str) -> str:
             detail="Protocolo contratual inválido.",
         )
     return norm
+
+
+def _normalized_money(value: object) -> Decimal | None:
+    try:
+        return Decimal(str(value)).quantize(_MONEY_QUANTUM)
+    except (InvalidOperation, TypeError, ValueError):
+        return None
 
 
 @router.post("/{protocol}/billing/setup")
@@ -240,6 +249,10 @@ def get_contract_billing_status(
 
     billing = get_billing_setup(db, normalized_protocol)
     linked_tenant_id = acceptance.get("linked_restaurante_id")
+    restaurant_slug = None
+    if linked_tenant_id is not None:
+        restaurant = db.query(Restaurante).filter(Restaurante.id == linked_tenant_id).one_or_none()
+        restaurant_slug = str(restaurant.slug) if restaurant and restaurant.slug else None
 
     return {
         "protocol": normalized_protocol,
@@ -248,6 +261,7 @@ def get_contract_billing_status(
         "paymentMethodType": billing.payment_method_type if billing else None,
         "isActivated": linked_tenant_id is not None,
         "restaurantId": str(linked_tenant_id) if linked_tenant_id else None,
+        "slug": restaurant_slug,
     }
 
 
@@ -262,6 +276,8 @@ async def mercado_pago_saas_webhook(
     """
     Webhook dedicado para notificações de assinaturas e cobrança SaaS do KÔMA.
     Reconcilia status de preapprovals e pagamentos Pix em saas_subscriptions e saas_billing_setups.
+    O evento de pagamento é apenas um gatilho: a ativação só ocorre depois de consultar
+    o pagamento diretamente no Mercado Pago e confirmar status, referência, método e valor.
     """
     try:
         payload = await request.json()
@@ -331,7 +347,69 @@ async def mercado_pago_saas_webhook(
         if payment_id:
             billing = get_billing_setup_by_provider_sub(db, "mercado_pago", payment_id)
             if billing and billing.status == "pending":
-                # Marca setup como pronto via upsert_billing_setup
+                if billing.payment_method_type != "pix" or billing.billing_cycle not in ("annual", "anual"):
+                    logger.warning(
+                        "Ignoring payment webhook for incompatible billing setup protocol=%s method=%s cycle=%s",
+                        billing.protocol,
+                        billing.payment_method_type,
+                        billing.billing_cycle,
+                    )
+                    return {"status": "received", "activated": False, "reason": "incompatible_billing_setup"}
+
+                try:
+                    provider_payment = default_saas_mp_service.get_payment(payment_id)
+                except SaasMercadoPagoError as exc:
+                    logger.warning("Could not verify Mercado Pago payment %s: %s", payment_id, exc)
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Não foi possível confirmar o pagamento junto ao gateway.",
+                    ) from exc
+
+                provider_status = str(provider_payment.get("status") or "").strip().lower()
+                if provider_status != "approved":
+                    logger.info(
+                        "Payment %s not approved yet (status=%s); tenant remains pending",
+                        payment_id,
+                        provider_status or "unknown",
+                    )
+                    return {
+                        "status": "received",
+                        "activated": False,
+                        "paymentStatus": provider_status or "unknown",
+                    }
+
+                provider_method = str(provider_payment.get("payment_method_id") or "").strip().lower()
+                if provider_method != "pix":
+                    logger.warning("Ignoring payment %s because provider method is %s", payment_id, provider_method or "unknown")
+                    return {"status": "received", "activated": False, "reason": "payment_method_mismatch"}
+
+                provider_reference = str(provider_payment.get("external_reference") or "").strip().upper()
+                if provider_reference != billing.protocol:
+                    logger.warning(
+                        "Ignoring payment %s due external reference mismatch expected=%s got=%s",
+                        payment_id,
+                        billing.protocol,
+                        provider_reference or "empty",
+                    )
+                    return {"status": "received", "activated": False, "reason": "external_reference_mismatch"}
+
+                acceptance = resolve_activation_acceptance(db, billing.protocol)
+                if acceptance is None:
+                    logger.warning("Billing acceptance disappeared before Pix activation protocol=%s", billing.protocol)
+                    return {"status": "received", "activated": False, "reason": "acceptance_not_found"}
+
+                plan = str(acceptance.get("plan") or "pro").lower()
+                expected_amount = _normalized_money(subscription_annual_total(plan))
+                provider_amount = _normalized_money(provider_payment.get("transaction_amount"))
+                if provider_amount is None or expected_amount is None or provider_amount != expected_amount:
+                    logger.warning(
+                        "Ignoring payment %s due amount mismatch expected=%s got=%s",
+                        payment_id,
+                        expected_amount,
+                        provider_amount,
+                    )
+                    return {"status": "received", "activated": False, "reason": "amount_mismatch"}
+
                 upsert_billing_setup(
                     db,
                     protocol=billing.protocol,
@@ -346,19 +424,18 @@ async def mercado_pago_saas_webhook(
                 )
                 db.commit()
 
-                # Se o restaurante ainda não estava ativado, ativa-o agora!
                 if not billing.restaurante_id:
-                    acceptance = resolve_activation_acceptance(db, billing.protocol)
-                    if acceptance:
-                        billing_setup_data = get_billing_setup(db, billing.protocol)
-                        provision_restaurant_for_contract(
-                            db,
-                            acceptance=acceptance,
-                            billing_setup=billing_setup_data,
-                            actor="saas_webhook",
-                            reason="Ativação automática pós-confirmação de pagamento Pix anual via webhook",
-                            background_tasks=background_tasks,
-                        )
-                        logger.info("Tenant activated via Pix approval webhook for protocol %s", billing.protocol)
+                    billing_setup_data = get_billing_setup(db, billing.protocol)
+                    provision_restaurant_for_contract(
+                        db,
+                        acceptance=acceptance,
+                        billing_setup=billing_setup_data,
+                        actor="saas_webhook",
+                        reason="Ativação automática pós-confirmação verificada de pagamento Pix anual via Mercado Pago",
+                        background_tasks=background_tasks,
+                    )
+                    logger.info("Tenant activated via verified Pix approval for protocol %s", billing.protocol)
+
+                return {"status": "received", "activated": True, "paymentStatus": provider_status}
 
     return {"status": "received"}
