@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LockKeyhole, LogOut, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '../../config/api';
 import { KomaLogo } from '../KomaLogo';
-import { clearOperatorSession } from '../../utils/authSession';
+import { clearOperatorSession, getOperatorAccessToken } from '../../utils/authSession';
 
 type TenantAccessState = 'idle' | 'checking' | 'active' | 'suspended';
 
@@ -26,11 +26,7 @@ function readSmartPosToken(): string {
 }
 
 function readOperationalToken(): string {
-  for (const key of ['koma_caixa_token', 'koma_waiter_token', 'token', 'koma_token']) {
-    const value = localStorage.getItem(key)?.trim();
-    if (value) return value;
-  }
-  return readSmartPosToken();
+  return getOperatorAccessToken() || readSmartPosToken();
 }
 
 async function responseSignalsSuspension(response: Response): Promise<boolean> {
