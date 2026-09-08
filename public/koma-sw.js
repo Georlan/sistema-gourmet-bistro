@@ -44,17 +44,17 @@ self.addEventListener("notificationclick", (event) => {
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const existing = windows.find((client) => {
       try {
-        const url = new URL(client.url);
-        return url.origin === self.location.origin && (
-          url.pathname.startsWith("/cardapio")
-          || url.searchParams.get("view") === "cardapio"
-        );
+        return new URL(client.url).origin === self.location.origin;
       } catch {
         return false;
       }
     });
 
     if (existing) {
+      // Navegar é intencional: garante que um cliente que estava em outra tela
+      // volte ao Cardápio. O hash carrega somente o id do pedido, nunca o
+      // tracking token/capability URL.
+      if ("navigate" in existing) await existing.navigate(target);
       await existing.focus();
       existing.postMessage({
         type: "KOMA_PUSH_OPEN_ORDER",
