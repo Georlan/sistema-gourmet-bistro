@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Coins, KeyRound, Phone, RefreshCw, Sparkles, User, X } from "lucide-react";
+import { ArrowRight, Coins, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
 import {
@@ -25,95 +25,112 @@ export default function CardapioAuthModal({
   onClose,
   onLoginSuccess,
 }: CardapioAuthModalProps) {
-  const [phone, setPhone] = useState("");
+  const [tab, setTab] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState<"identify" | "verify">("identify");
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isResending, setIsResending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const normalizedPhone = normalizeBrazilianPhone(phone);
-  const cleanName = name.trim();
   const numericRestaurantId = Number(restaurantId);
 
-  const validatePhone = () => {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!Number.isInteger(numericRestaurantId) || numericRestaurantId <= 0) {
       setErrorMessage("Não foi possível identificar o restaurante.");
-      return false;
-    }
-    if (normalizedPhone.length < 10 || normalizedPhone.length > 11) {
-      setErrorMessage("Informe um celular válido com DDD.");
-      return false;
-    }
-    return true;
-  };
-
-  const requestCode = async (resend = false) => {
-    if (!validatePhone()) return;
-    resend ? setIsResending(true) : setIsSubmitting(true);
-    setErrorMessage("");
-    try {
-      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/solicitar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restaurante_id: numericRestaurantId,
-          telefone: normalizedPhone,
-        }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(data?.detail || "Não foi possível enviar o código agora.");
-      }
-      setStep("verify");
-      setCode("");
-    } catch (error) {
-      setErrorMessage(authRequestErrorMessage(error, "Falha ao enviar o código."));
-    } finally {
-      setIsSubmitting(false);
-      setIsResending(false);
-    }
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (step === "identify") {
-      await requestCode();
       return;
     }
-
-    if (!/^\d{6}$/.test(code)) {
-      setErrorMessage("Digite os 6 números do código recebido.");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setErrorMessage("Informe um e-mail válido.");
       return;
     }
-    if (cleanName.length < 2) {
-      setErrorMessage("Informe seu nome para personalizarmos seu atendimento.");
+    if (!password) {
+      setErrorMessage("Informe sua senha.");
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage("");
+
     try {
-      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/otp/verificar`, {
+      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurante_id: numericRestaurantId,
-          telefone: normalizedPhone,
-          codigo: code,
-          nome: cleanName,
-          endereco: "",
+          email: cleanEmail,
+          senha: password,
         }),
       });
+
       const data = await response.json().catch(() => null);
       if (!response.ok || !data?.access_token || !data?.cliente) {
-        throw new Error(data?.detail || "Código inválido ou expirado.");
+        throw new Error(data?.detail || "E-mail ou senha incorretos.");
       }
+
       onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
       onClose();
     } catch (error) {
-      setErrorMessage(authRequestErrorMessage(error, "Não foi possível confirmar o código."));
+      setErrorMessage(authRequestErrorMessage(error, "Falha ao realizar login."));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!Number.isInteger(numericRestaurantId) || numericRestaurantId <= 0) {
+      setErrorMessage("Não foi possível identificar o restaurante.");
+      return;
+    }
+    const cleanName = name.trim();
+    if (cleanName.length < 2) {
+      setErrorMessage("Informe seu nome completo.");
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setErrorMessage("Informe um e-mail válido.");
+      return;
+    }
+    const cleanPhone = normalizeBrazilianPhone(phone);
+    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+      setErrorMessage("Informe um celular com DDD (10 ou 11 dígitos).");
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMessage("A senha deve conter no mínimo 6 caracteres.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurante_id: numericRestaurantId,
+          nome: cleanName,
+          email: cleanEmail,
+          telefone: cleanPhone,
+          senha: password,
+          endereco: "",
+        }),
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.access_token || !data?.cliente) {
+        throw new Error(data?.detail || "Falha ao criar conta.");
+      }
+
+      onLoginSuccess(mapCustomerProfile(data.cliente), String(data.access_token));
+      onClose();
+    } catch (error) {
+      setErrorMessage(authRequestErrorMessage(error, "Não foi possível criar sua conta agora."));
     } finally {
       setIsSubmitting(false);
     }
@@ -145,141 +162,216 @@ export default function CardapioAuthModal({
         {/* Header com Ícone e Benefícios */}
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-inner">
-            {step === "identify" ? <Coins className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
+            {tab === "login" ? <Coins className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
           </div>
           <div>
             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
-              {step === "identify" ? "Clube de Vantagens" : "Verificação Rápida"}
+              Clube de Vantagens
             </span>
             <h2 className="font-display text-lg font-black tracking-tight text-white">
-              {step === "identify" ? "Acesse seus Benefícios" : "Confirme seu WhatsApp"}
+              {tab === "login" ? "Entrar na Minha Conta" : "Criar Minha Conta"}
             </h2>
           </div>
         </div>
 
-        <p className="mt-3 text-xs leading-relaxed text-gray-300">
-          {step === "identify"
-            ? "Ganhe cashback em cada pedido, resgate cupons exclusivos e acompanhe seu histórico."
-            : `Enviamos um código de 6 dígitos via WhatsApp para ${formatBrazilianPhone(normalizedPhone)}.`}
+        <p className="mt-2.5 text-xs leading-relaxed text-gray-300">
+          Acumule pontos e cashback em cada pedido, acompanhe o status em tempo real e salve seus endereços.
         </p>
 
-        {/* Indicador de Etapas */}
-        <div className="mt-4 flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full bg-emerald-500 transition-all duration-300" />
-          <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step === "verify" ? "bg-emerald-500" : "bg-white/10"}`} />
+        {/* Seletor de Abas (Entrar / Criar Conta) */}
+        <div className="mt-4 flex rounded-xl bg-white/5 p-1 border border-white/10">
+          <button
+            type="button"
+            onClick={() => {
+              setTab("login");
+              setErrorMessage("");
+            }}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              tab === "login"
+                ? "bg-emerald-500 text-white shadow-md"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Entrar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab("register");
+              setErrorMessage("");
+            }}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              tab === "register"
+                ? "bg-emerald-500 text-white shadow-md"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            Criar Conta
+          </button>
         </div>
 
         {errorMessage && (
-          <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400 animate-fade-in" role="alert">
+          <div
+            className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400 animate-fade-in"
+            role="alert"
+          >
             <p>{errorMessage}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4" id="auth-form-input">
-          {step === "identify" ? (
+        {/* Formulário de Login */}
+        {tab === "login" ? (
+          <form onSubmit={handleLogin} className="mt-4 space-y-3.5" id="auth-login-form">
             <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-gray-300">Seu WhatsApp (com DDD)</span>
+              <span className="mb-1.5 block text-xs font-bold text-gray-300">Seu e-mail</span>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  autoFocus
+                  autoComplete="email"
+                  placeholder="exemplo@email.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  required
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold text-gray-300">Sua senha</span>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  required
+                />
+              </div>
+            </label>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+            >
+              <span>{isSubmitting ? "Entrando..." : "Entrar"}</span>
+              {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+            </button>
+          </form>
+        ) : (
+          /* Formulário de Cadastro */
+          <form onSubmit={handleRegister} className="mt-4 space-y-3" id="auth-register-form">
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-gray-300">Nome completo</span>
+              <div className="relative">
+                <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  autoComplete="name"
+                  placeholder="Como podemos te chamar?"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  required
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-gray-300">E-mail</span>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errorMessage) setErrorMessage("");
+                  }}
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  required
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-gray-300">Celular / WhatsApp (com DDD)</span>
               <div className="relative">
                 <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   type="tel"
-                  autoFocus
                   inputMode="numeric"
                   autoComplete="tel"
                   placeholder="(11) 99999-9999"
                   value={phone}
-                  onChange={(event) => {
-                    setPhone(formatBrazilianPhone(event.target.value));
+                  onChange={(e) => {
+                    setPhone(formatBrazilianPhone(e.target.value));
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  required
                 />
               </div>
             </label>
-          ) : (
-            <>
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold text-gray-300">Código de 6 dígitos</span>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-gray-300">Criar senha</span>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="text"
-                  autoFocus
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={code}
-                  onChange={(event) => {
-                    setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
                     if (errorMessage) setErrorMessage("");
                   }}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-center font-mono text-xl tracking-[0.4em] text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  className="h-10 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                  required
                 />
-              </label>
+              </div>
+            </label>
 
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold text-gray-300">Como podemos te chamar?</span>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    maxLength={100}
-                    autoComplete="name"
-                    placeholder="Seu nome ou apelido"
-                    value={name}
-                    onChange={(event) => {
-                      setName(event.target.value);
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                    className="h-12 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  />
-                </div>
-              </label>
-            </>
-          )}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+            >
+              <span>{isSubmitting ? "Cadastrando..." : "Cadastrar e Acessar"}</span>
+              {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+            </button>
+          </form>
+        )}
 
+        {/* Continuar como visitante */}
+        <div className="text-center pt-3 mt-1 border-t border-white/5">
           <button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400 hover:shadow-emerald-500/30 disabled:cursor-wait disabled:opacity-60 cursor-pointer"
+            type="button"
+            onClick={onClose}
+            className="text-xs font-semibold text-gray-400 hover:text-gray-200 transition underline underline-offset-4 cursor-pointer"
           >
-            <span>{isSubmitting ? "Aguarde..." : step === "identify" ? "Acessar Benefícios" : "Confirmar e Entrar"}</span>
-            {!isSubmitting && <ArrowRight className="h-4 w-4" />}
+            Continuar sem criar conta (comprar como visitante)
           </button>
-
-          {step === "verify" ? (
-            <div className="flex items-center justify-between pt-1 text-xs">
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("identify");
-                  setErrorMessage("");
-                }}
-                className="inline-flex items-center gap-1 font-semibold text-gray-400 hover:text-white transition cursor-pointer"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Trocar número
-              </button>
-              <button
-                type="button"
-                disabled={isResending}
-                onClick={() => void requestCode(true)}
-                className="inline-flex items-center gap-1 font-semibold text-emerald-400 hover:text-emerald-300 disabled:opacity-50 transition cursor-pointer"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isResending ? "animate-spin" : ""}`} />
-                Reenviar código
-              </button>
-            </div>
-          ) : (
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-xs font-semibold text-gray-400 hover:text-gray-200 transition underline underline-offset-4 cursor-pointer"
-              >
-                Continuar sem me identificar por enquanto
-              </button>
-            </div>
-          )}
-        </form>
+        </div>
       </div>
     </div>
   );

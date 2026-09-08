@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Coins, LogOut, MapPin, Phone, ShieldCheck, User, X } from "lucide-react";
+import { Coins, LogOut, Mail, MapPin, Phone, ShieldCheck, User, X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import {
   CustomerProfile,
@@ -252,6 +252,15 @@ export default function CardapioUserProfileModal({
               </div>
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+                {user.email && (
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[9px] uppercase tracking-wider text-koma-muted font-bold">E-mail</p>
+                      <p className="text-xs text-koma-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-start gap-3">
                   <Phone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <div>

@@ -21,16 +21,21 @@ from ..config import settings
 from ..database import get_db, tenant_session_scope
 from ..models import Cliente, OtpChallenge, PublicRateLimit
 from ..schemas import (
+    CustomerLoginRequest,
     CustomerOtpRequest,
     CustomerOtpVerify,
     CustomerProfileResponse,
     CustomerProfileUpdate,
+    CustomerRegisterRequest,
     CustomerSessionResponse,
 )
+from ..security import get_password_hash, verify_password
 from ..services.clientes import (
     buscar_cliente_por_id,
     buscar_cliente_por_telefone,
     cadastrar_ou_atualizar_cliente,
+    normalizar_nome_cliente,
+    normalizar_telefone_cliente,
 )
 from ..services.customer_auth import (
     CustomerTokenClaims,
@@ -65,6 +70,7 @@ def _profile(cliente: Cliente) -> CustomerProfileResponse:
         id=cliente.id,
         nome=cliente.nome,
         telefone=cliente.telefone,
+        email=cliente.email,
         endereco=cliente.endereco or "",
         saldo_pontos=int(cliente.saldo_pontos or 0),
         saldo_cashback=float(cliente.saldo_cashback or 0),
@@ -93,6 +99,161 @@ def customer_token_scope(
 
     with tenant_session_scope(db, claims.restaurante_id):
         yield claims
+
+
+@router.post(
+    "/cadastro",
+    response_model=CustomerSessionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_customer(
+    payload: CustomerRegisterRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
+        _consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="customer_register_ip",
+            raw_key=_client_ip(request),
+            max_requests=20,
+            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+        )
+
+        try:
+            telefone_normalizado = normalizar_telefone_cliente(payload.telefone)
+            nome_normalizado = normalizar_nome_cliente(payload.nome)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+        email_normalizado = payload.email.strip().lower()
+        if len(payload.senha) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A senha deve conter no mínimo 6 caracteres.",
+            )
+
+        # 1. Verificar se já existe cliente com este e-mail neste restaurante
+        cliente_por_email = db.query(Cliente).filter(
+            Cliente.restaurante_id == restaurante_id,
+            Cliente.email == email_normalizado,
+        ).first()
+
+        if cliente_por_email is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Já existe uma conta com este e-mail neste restaurante. Faça login.",
+            )
+
+        # 2. Verificar se já existe cliente com este telefone
+        cliente_por_tel = db.query(Cliente).filter(
+            Cliente.restaurante_id == restaurante_id,
+            Cliente.telefone == telefone_normalizado,
+        ).with_for_update().first()
+
+        senha_hasheada = get_password_hash(payload.senha)
+        created = False
+
+        if cliente_por_tel is not None:
+            if cliente_por_tel.senha_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Este telefone já possui conta cadastrada. Faça login com seu e-mail.",
+                )
+            cliente_por_tel.email = email_normalizado
+            cliente_por_tel.senha_hash = senha_hasheada
+            cliente_por_tel.nome = nome_normalizado
+            if payload.endereco:
+                cliente_por_tel.endereco = payload.endereco.strip()
+            cliente = cliente_por_tel
+        else:
+            import uuid
+            cliente = Cliente(
+                id=str(uuid.uuid4()),
+                restaurante_id=restaurante_id,
+                telefone=telefone_normalizado,
+                nome=nome_normalizado,
+                email=email_normalizado,
+                senha_hash=senha_hasheada,
+                endereco=(payload.endereco or "").strip() or None,
+                saldo_pontos=0,
+                saldo_cashback=0.0,
+            )
+            db.add(cliente)
+            created = True
+
+        db.commit()
+        db.refresh(cliente)
+
+        access_token = create_customer_access_token(
+            cliente_id=cliente.id,
+            restaurante_id=restaurante_id,
+        )
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "customers_updated",
+                "detail": {
+                    "action": "created" if created else "updated",
+                    "cliente_id": cliente.id,
+                },
+            },
+            restaurante_id,
+            target_audience="internal",
+        )
+        return CustomerSessionResponse(
+            access_token=access_token,
+            cliente=_profile(cliente),
+        )
+
+
+@router.post(
+    "/login",
+    response_model=CustomerSessionResponse,
+)
+def login_customer(
+    payload: CustomerLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
+        _consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="customer_login_ip",
+            raw_key=_client_ip(request),
+            max_requests=30,
+            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+        )
+
+        email_normalizado = payload.email.strip().lower()
+        cliente = db.query(Cliente).filter(
+            Cliente.restaurante_id == restaurante_id,
+            Cliente.email == email_normalizado,
+        ).first()
+
+        if cliente is None or not cliente.senha_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="E-mail ou senha incorretos.",
+            )
+
+        if not verify_password(payload.senha, cliente.senha_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="E-mail ou senha incorretos.",
+            )
+
+        access_token = create_customer_access_token(
+            cliente_id=cliente.id,
+            restaurante_id=restaurante_id,
+        )
+        return CustomerSessionResponse(
+            access_token=access_token,
+            cliente=_profile(cliente),
+        )
 
 
 @router.post(

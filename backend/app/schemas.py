@@ -828,9 +828,54 @@ class CustomerProfileResponse(BaseModel):
     id: str
     nome: str
     telefone: str
+    email: Optional[str] = None
     endereco: str = ""
     saldo_pontos: int = 0
     saldo_cashback: float = 0.0
+
+
+class CustomerRegisterRequest(BaseModel):
+    restaurante_id: int
+    nome: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=5, max_length=150)
+    senha: str = Field(min_length=6, max_length=128)
+    telefone: str = Field(min_length=10, max_length=20)
+    endereco: Optional[str] = Field(default="", max_length=300)
+
+    @field_validator("nome")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        name = " ".join(value.strip().split())
+        if len(name) < 2:
+            raise ValueError("Nome do cliente inválido.")
+        return name
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email or "." not in email:
+            raise ValueError("E-mail inválido.")
+        return email
+
+    @field_validator("endereco")
+    @classmethod
+    def normalize_address(cls, value: Optional[str]) -> str:
+        return (value or "").strip()
+
+
+class CustomerLoginRequest(BaseModel):
+    restaurante_id: int
+    email: str = Field(min_length=5, max_length=150)
+    senha: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        email = value.strip().lower()
+        if "@" not in email or "." not in email:
+            raise ValueError("E-mail inválido.")
+        return email
 
 
 class CustomerSessionResponse(BaseModel):

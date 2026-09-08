@@ -4,21 +4,25 @@
  */
 
 import React from "react";
-import { Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
 import "../cardapioTone.css";
 
 interface CardapioProductCardProps {
   key?: React.Key;
   product: Product;
+  cartQuantity?: number;
   onSelectProduct: (product: Product) => void;
   onFastAdd: (product: Product) => void;
+  onFastRemove?: (product: Product) => void;
 }
 
 export default function CardapioProductCard({
   product,
+  cartQuantity = 0,
   onSelectProduct,
   onFastAdd,
+  onFastRemove,
 }: CardapioProductCardProps) {
   const available = product.isAvailable !== false;
   const hasModifiers = Boolean(
@@ -84,17 +88,67 @@ export default function CardapioProductCard({
               {formattedPrice}
             </strong>
             {available && (
-              <button
-                type="button"
-                onClick={handleAction}
-                className="cardapio-product-card__add inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-sm cursor-pointer"
-                id={`btn-fast-add-${product.id}`}
-                title={hasModifiers ? `Personalizar ${product.name}` : `Adicionar ${product.name}`}
-                aria-label={hasModifiers ? `Personalizar ${product.name}` : `Adicionar ${product.name} à sacola`}
-              >
-                <Plus size={14} className="stroke-[2.5]" />
-                <span>{hasModifiers ? "Opções" : "Adicionar"}</span>
-              </button>
+              hasModifiers ? (
+                <button
+                  type="button"
+                  onClick={handleAction}
+                  className="cardapio-product-card__add relative z-10 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-sm cursor-pointer"
+                  id={`btn-fast-add-${product.id}`}
+                  title={`Personalizar ${product.name}`}
+                  aria-label={`Personalizar ${product.name}`}
+                >
+                  <Plus size={14} className="stroke-[2.5]" />
+                  <span>Opções</span>
+                </button>
+              ) : cartQuantity > 0 ? (
+                <div
+                  className="cardapio-product-card__stepper relative z-10 inline-flex items-center gap-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 p-0.5 shadow-sm"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFastRemove?.(product);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-white transition hover:bg-white/20 active:scale-95 cursor-pointer"
+                    id={`btn-fast-dec-${product.id}`}
+                    aria-label={`Diminuir ${product.name}`}
+                  >
+                    <Minus size={13} className="stroke-[2.5]" />
+                  </button>
+                  <span
+                    className="min-w-[1.25rem] text-center text-xs font-black text-emerald-400"
+                    id={`qty-${product.id}`}
+                  >
+                    {cartQuantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onFastAdd(product);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 text-white transition hover:bg-emerald-400 active:scale-95 shadow-sm cursor-pointer"
+                    id={`btn-fast-inc-${product.id}`}
+                    aria-label={`Aumentar ${product.name}`}
+                  >
+                    <Plus size={13} className="stroke-[2.5]" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAction}
+                  className="cardapio-product-card__add relative z-10 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-sm cursor-pointer"
+                  id={`btn-fast-add-${product.id}`}
+                  title={`Adicionar ${product.name}`}
+                  aria-label={`Adicionar ${product.name} à sacola`}
+                >
+                  <Plus size={14} className="stroke-[2.5]" />
+                  <span>Adicionar</span>
+                </button>
+              )
             )}
           </div>
         </div>
