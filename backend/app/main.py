@@ -158,15 +158,8 @@ async def run_migrations_on_startup():
         print("[ALEMBIC] Rodando upgrade heads...")
         command.upgrade(alembic_cfg, "heads")
         print("[ALEMBIC] Migrações concluídas com sucesso.")
-
-        with migration_engine.connect() as conn:
-            insp = sa_inspect(conn)
-            if insp.has_table("comandas"):
-                columns = {column["name"] for column in insp.get_columns("comandas")}
-                if "mesa_transferida_de" not in columns:
-                    print("[DATABASE] Adicionando coluna 'mesa_transferida_de' na tabela comandas...")
-                    conn.execute(sa.text("ALTER TABLE comandas ADD COLUMN mesa_transferida_de INTEGER;"))
-                    conn.commit()
+        # Não repare esquema manualmente depois do upgrade. Toda alteração de
+        # DDL pertence a uma revisão Alembic versionada e auditável.
     except Exception as exc:
         print(f"[ALEMBIC] Erro ao rodar migrações automáticas: {exc}")
         import traceback
