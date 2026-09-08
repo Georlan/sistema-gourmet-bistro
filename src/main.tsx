@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import "./components/auth/passwordRecoveryToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
@@ -43,7 +44,8 @@ function bypassTenantSuspensionBoundary(): boolean {
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
 
-  return isPublicMenuRoute()
+  return pathname === "/recuperar-senha"
+    || isPublicMenuRoute()
     || isPublicCommercialRoute()
     || pathname.startsWith("/super-admin")
     || pathname.startsWith("/ativar")
@@ -81,7 +83,9 @@ const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar/");
 
 const RootApp = React.lazy(
-  isSmartPosRoute
+  pathname === "/recuperar-senha"
+    ? () => import("./components/auth/PasswordResetPage")
+    : isSmartPosRoute
     ? () => import("./smartpos/SmartPosPage")
     : isLegalRoute
       ? () => import("./legal/LegalPage")

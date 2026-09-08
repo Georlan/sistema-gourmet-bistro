@@ -161,23 +161,21 @@ def schedule_is_open(
     return False if parsed_any else None
 
 
-def _infer_open_cash_shift(restaurante: Any) -> bool:
-    """Detecta turno aberto quando o restaurante veio anexado a uma sessão ORM.
+def _restaurant_session(restaurante: Any):
+    try:
+        return object_session(restaurante)
+    except UnmappedInstanceError:
+        return None
 
-    A rota pública já carrega o Restaurante pela sessão tenant-aware. Manter a
-    detecção aqui deixa a precedência da política centralizada e preserva
-    chamadas unitárias com objetos simples, que continuam assumindo caixa
-    fechado quando não há sessão disponível.
-    """
+
+def _infer_open_cash_shift(restaurante: Any) -> bool:
+    """Detecta turno aberto quando o restaurante veio anexado a uma sessão ORM."""
 
     restaurante_id = getattr(restaurante, "id", None)
     if not restaurante_id:
         return False
 
-    try:
-        db = object_session(restaurante)
-    except UnmappedInstanceError:
-        return False
+    db = _restaurant_session(restaurante)
     if db is None:
         return False
 
@@ -185,6 +183,29 @@ def _infer_open_cash_shift(restaurante: Any) -> bool:
         CaixaTurno.restaurante_id == restaurante_id,
         CaixaTurno.status == "aberto",
     ).first() is not None
+
+
+def _infer_emergency_pause(restaurante: Any, *, now: datetime.datetime | None = None) -> bool:
+    """Consulta a pausa operacional dedicada sem alterar estado.
+
+    O motivo interno não é propagado ao público. A política expõe somente uma
+    mensagem neutra; o motivo e o ator ficam no controle/auditoria do tenant.
+    """
+
+    restaurante_id = getattr(restaurante, "id", None)
+    if not restaurante_id:
+        return False
+    db = _restaurant_session(restaurante)
+    if db is None:
+        return False
+
+    from ..online_order_control_models import OnlineOrderControl
+    from .online_order_control import is_effectively_paused
+
+    control = db.query(OnlineOrderControl).filter(
+        OnlineOrderControl.restaurante_id == restaurante_id,
+    ).first()
+    return is_effectively_paused(control, now=now)
 
 
 def evaluate_online_order_policy(
@@ -198,10 +219,11 @@ def evaluate_online_order_policy(
     """Calcula se o servidor aceita um novo pedido e qual taxa deve aplicar.
 
     Precedência operacional:
-    1. Forçado Fechado bloqueia sempre;
-    2. Forçado Aberto ignora apenas a agenda;
-    3. Caixa aberto ignora apenas a agenda;
-    4. sem override operacional, vale o horário cadastrado.
+    1. Pausa de emergência dedicada bloqueia sempre;
+    2. Forçado Fechado bloqueia sempre;
+    3. Forçado Aberto ignora apenas a agenda;
+    4. Caixa aberto ignora apenas a agenda;
+    5. sem override operacional, vale o horário cadastrado.
 
     Restrições específicas, como delivery desativado, continuam valendo mesmo
     com caixa aberto.
@@ -213,10 +235,17 @@ def evaluate_online_order_policy(
         if configuracao is not None
         else True
     )
-    # Bancos legados podem conter NULL antes do default atual. Somente False
-    # explícito representa uma decisão do restaurante de desligar o delivery.
     delivery_enabled = configured_delivery is not False
     pickup_enabled = True
+
+    if _infer_emergency_pause(restaurante, now=now):
+        return OnlineOrderPolicy(
+            accepting_orders=False,
+            delivery_enabled=delivery_enabled,
+            pickup_enabled=pickup_enabled,
+            reason="Pedidos temporariamente pausados. Tente novamente em alguns minutos.",
+            source="operational_pause",
+        )
 
     if "forcado fechado" in override or override == "fechado":
         return OnlineOrderPolicy(

@@ -1,3 +1,4 @@
+import { PasswordRecoveryHelp } from "../components/auth/PasswordRecoveryHelp";
 import React, { useEffect, useState } from "react";
 import { LockKeyhole, LogIn } from "lucide-react";
 import SuperAdminPanel from "./SuperAdminPanel";
@@ -104,6 +105,7 @@ export function SuperAdminGate() {
             </p>
           )}
 
+          <PasswordRecoveryHelp />
           <button
             type="submit"
             disabled={isSubmitting || !username.trim() || !password}

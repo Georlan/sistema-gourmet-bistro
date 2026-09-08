@@ -24,6 +24,7 @@ CUSTOMER_TOKEN_TYPE = "customer"
 class CustomerTokenClaims:
     cliente_id: str
     restaurante_id: int
+    issued_at: float = 0
 
 
 def _hmac_hex(purpose: str, value: str) -> str:
@@ -81,7 +82,7 @@ def create_customer_access_token(
         "restaurante_id": restaurante_id,
         "type": CUSTOMER_TOKEN_TYPE,
         "role": CUSTOMER_TOKEN_TYPE,
-        "iat": now,
+        "iat": now.timestamp(),
         "exp": now + timedelta(minutes=expire_minutes),
         "jti": secrets.token_hex(16),
     }
@@ -120,4 +121,5 @@ def decode_customer_access_token(token: str) -> CustomerTokenClaims:
     return CustomerTokenClaims(
         cliente_id=cliente_id,
         restaurante_id=restaurante_id,
+        issued_at=float(payload.get("iat") or 0),
     )

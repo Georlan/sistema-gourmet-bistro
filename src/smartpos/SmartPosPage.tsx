@@ -1,3 +1,4 @@
+import { PasswordRecoveryHelp } from "../components/auth/PasswordRecoveryHelp";
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -548,6 +549,7 @@ export default function SmartPosPage() {
                 <span className="text-xs font-bold">Senha</span>
                 <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required className="min-h-12 rounded-xl border border-koma-border bg-koma-surface px-4 text-sm outline-none focus:border-koma-accent" />
               </label>
+              <PasswordRecoveryHelp />
               {loginError && <p role="alert" className="rounded-xl border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-300">{loginError}</p>}
               <button type="submit" disabled={isLoggingIn} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-koma-accent px-4 text-sm font-black text-black disabled:cursor-wait disabled:opacity-60">
                 {isLoggingIn && <Loader2 size={17} className="animate-spin" aria-hidden="true" />}

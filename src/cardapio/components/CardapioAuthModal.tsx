@@ -1,3 +1,4 @@
+import { PasswordRecoveryHelp } from "../../components/auth/PasswordRecoveryHelp";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -265,19 +266,7 @@ export default function CardapioAuthModal({
               </div>
             </label>
 
-            <div className="flex justify-end pt-0.5">
-              <button
-                type="button"
-                onClick={() =>
-                  setErrorMessage(
-                    "Recuperação de senha temporariamente indisponível. Fale diretamente com o restaurante.",
-                  )
-                }
-                className="text-[11px] text-gray-400 hover:text-gray-200 transition underline underline-offset-2 cursor-pointer"
-              >
-                Esqueci minha senha
-              </button>
-            </div>
+            <PasswordRecoveryHelp customer restaurantId={restaurantId} />
 
             <button
               type="submit"

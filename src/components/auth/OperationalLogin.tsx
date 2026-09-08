@@ -1,3 +1,4 @@
+import { PasswordRecoveryHelp } from "./PasswordRecoveryHelp";
 import React from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { KomaLogo } from '../KomaLogo';
@@ -100,6 +101,8 @@ export function OperationalLogin({
                 className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
               />
             </div>
+
+            <PasswordRecoveryHelp restaurantId={restaurantId} />
 
             {restaurantOptions.length > 0 && (
               <div className="space-y-1.5">

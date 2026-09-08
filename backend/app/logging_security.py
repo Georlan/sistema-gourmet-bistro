@@ -10,7 +10,11 @@ _SENSITIVE_QUERY_VALUE = re.compile(
 )
 
 
+_TRACKING_PATH_TOKEN = re.compile(r"(/(?:api/cardapio/pedidos/)?acompanhar/)[^/\s?\"']+", flags=re.IGNORECASE)
+
+
 def redact_sensitive_query_values(value: str) -> str:
+    value = _TRACKING_PATH_TOKEN.sub(r"\1[REDACTED]", value)
     return _SENSITIVE_QUERY_VALUE.sub(r"\1[REDACTED]", value)
 
 

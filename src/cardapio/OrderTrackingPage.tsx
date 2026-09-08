@@ -170,6 +170,7 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
           tipo: orderData.tipo,
           total: orderData.total,
           idempotency_key: `tracking-${orderData.id}`,
+          tracking_token: currentToken,
           status: orderData.status,
           itens: orderData.itens.map((it) => ({
             id: it.id,

@@ -530,8 +530,9 @@ export default function CardapioPage() {
   const handleAddToCart = (
     product: Product,
     quantity: number,
-    selectedOptions: Record<string, ProductOption[]>,
-    notes: string,
+    selectedOptions: Record<string, ProductOption[]> = {},
+    notes: string = "",
+    revealCart = true,
   ) => {
     if (!orderingEnabled) {
       setNotice(`${orderingMessage} Você ainda pode consultar os produtos.`);
@@ -556,7 +557,7 @@ export default function CardapioPage() {
     } else {
       showNotification(`${product.name} adicionado à sacola`);
     }
-    if (window.innerWidth >= 1024) setIsCartOpen(true);
+    if (revealCart && window.innerWidth >= 1024) setIsCartOpen(true);
   };
 
   const handleFastAdd = (product: Product) => {
@@ -565,7 +566,7 @@ export default function CardapioPage() {
       (product.modifierGroups && product.modifierGroups.length > 0)
     );
     if (hasModifiers) setSelectedProduct(product);
-    else handleAddToCart(product, 1, {}, "");
+    else handleAddToCart(product, 1, {}, "", false);
   };
 
   const handleFastRemove = (product: Product) => {

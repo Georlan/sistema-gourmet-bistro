@@ -55,7 +55,7 @@ jobs:
       - name: Run merge smoke matrix
         env:
           KOMA_E2E_PORT: '4283'
-        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts e2e/app-recovery.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts e2e/app-recovery.spec.ts e2e/public-menu-order.spec.ts e2e/order-tracking-chat.spec.ts e2e/password-recovery.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v6
@@ -184,6 +184,8 @@ jobs:
         run: >-
           python -m pytest
           backend/tests/test_super_admin_incidents_postgres.py
+          backend/tests/test_order_chat_postgres_rls.py
+          backend/tests/test_password_recovery_postgres.py
           backend/tests/test_b14_operational_smoke_postgres.py
           backend/tests/test_atendimento_concurrency_postgres.py
           backend/tests/test_first_client_payment_simulation.py

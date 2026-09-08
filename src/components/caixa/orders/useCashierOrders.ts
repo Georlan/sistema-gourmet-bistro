@@ -94,8 +94,8 @@ export function useCashierOrders({
       const isDigitalScope = cancelConsumptionTarget.scope === 'digital';
       const response = isDigitalScope
         ? await fetch(
-            `${apiBaseUrl}/comandas/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/delivery/status?status_novo=recusado`,
-            { method: 'PUT', headers: authHeaders }
+            `${apiBaseUrl}/api/online-orders/orders/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/reject`,
+            { method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelTableReason.trim() }) }
           )
         : await fetch(
             `${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`,
@@ -294,6 +294,7 @@ export function useCashierOrders({
       cliente: c.identificador || 'Cliente Sem Nome',
       telefone: c.delivery_telefone || '',
       itens: itensStr,
+      detailItems: activeItems,
       total: total,
       canal: canal,
       origemOperacional,
@@ -366,7 +367,7 @@ export function useCashierOrders({
           pago: it.pago,
           lancamentoId: it.lancamentoId || it.lancamento_id,
         }))
-      : order.itens.split(' + ').map((itStr: string) => {
+      : order.detailItems || order.itens.split(' + ').map((itStr: string) => {
           const match = itStr.match(/^(\d+)x\s+(.+)$/);
           return {
             nome: match ? match[2] : itStr,
@@ -677,8 +678,22 @@ export function useCashierOrders({
 
   const handleCancelSelectedKanbanOrder = () => openCancelOrderConfirmation(selectedKanbanOrder);
 
+  const saveItemObservation = async (itemId: string, observation: string) => {
+    const response = await fetch(`${apiBaseUrl}/comandas/itens/${encodeURIComponent(itemId)}`, {
+      method: 'PUT',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ observacao: observation }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar a observação.');
+    setSelectedKanbanOrder((current: any) => current ? { ...current, itens: current.itens.map((item: any) =>
+      String(item.id) === itemId ? { ...item, observacao: data.observacao } : item) } : current);
+    await onRefreshOrders();
+  };
+
   return {
     selectedKanbanOrder,
+    saveItemObservation,
     setSelectedKanbanOrder,
     cancelConsumptionTarget,
     setCancelConsumptionTarget,

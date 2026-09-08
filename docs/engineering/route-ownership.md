@@ -110,3 +110,8 @@ Relatórios browser: `../route-validation-production` e `../route-validation-res
 As evidências acima foram coletadas antes da publicação. O resultado do CI e o
 estado de integração devem ser consultados na PR desta branch; este documento
 não comprova merge nem deploy.
+
+Recuperação de senha: `routes/password_recovery.py` é o único responsável por
+`POST /auth/password-recovery/request` e `POST /auth/password-recovery/confirm`.
+O serviço `services/password_recovery.py` concentra tokens e transporte Resend;
+nenhuma tela de login cria lógica própria de reset.

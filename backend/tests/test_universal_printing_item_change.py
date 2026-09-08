@@ -340,3 +340,19 @@ def test_item_change_action_rejects_every_non_item_source(source_type):
         assert _jobs() == []
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("item_status,paid", [("pronto", False), ("entregue", False), ("cancelado", False), ("preparando", True)])
+def test_observation_rejects_completed_or_paid_item(item_status, paid):
+    item_id = DESTINATIONS["bar"][2]
+    db = SessionLocal(restaurante_id=TENANT_ID)
+    try:
+        item = db.query(Item).filter(Item.id == item_id).one()
+        item.status = item_status
+        item.pago = paid
+        db.commit()
+    finally:
+        db.close()
+    response = client.put(f"/comandas/itens/{item_id}", headers=_headers(), json={"observacao": "Alteração tardia"})
+    assert response.status_code == 409, response.text
+    assert not _jobs()

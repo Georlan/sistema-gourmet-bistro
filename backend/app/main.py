@@ -359,6 +359,8 @@ app.add_middleware(
 
 # Explicit composition: each HTTP operation has one registered owner.
 app.include_router(auth.router)
+from .routes import password_recovery
+app.include_router(password_recovery.router)
 app.include_router(products.router)
 app.include_router(atendimentos.router)
 app.include_router(atendimento_printing.router)

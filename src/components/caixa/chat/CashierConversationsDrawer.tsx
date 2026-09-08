@@ -50,25 +50,20 @@ export interface CaixaChatMessage {
 
 interface CashierConversationsDrawerProps {
   isOpen: boolean;
+  authorization: string;
   onClose: () => void;
   onInspectOrder?: (pedidoId: string) => void;
   onUnreadCountChange?: (count: number) => void;
 }
 
-const getAuthHeaders = (): Record<string, string> => {
-  const token =
-    localStorage.getItem('koma_caixa_token') ||
-    localStorage.getItem('token') ||
-    localStorage.getItem('koma_waiter_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
 export function CashierConversationsDrawer({
   isOpen,
+  authorization,
   onClose,
   onInspectOrder,
   onUnreadCountChange,
 }: CashierConversationsDrawerProps) {
+  const getAuthHeaders = () => ({ Authorization: authorization });
   const [conversations, setConversations] = useState<CaixaConversationItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<CaixaChatMessage[]>([]);
@@ -93,8 +88,8 @@ export function CashierConversationsDrawer({
   );
 
   useEffect(() => {
-    onUnreadCountChange?.(totalUnread);
-  }, [totalUnread, onUnreadCountChange]);
+    if (isOpen && !loadingList) onUnreadCountChange?.(totalUnread);
+  }, [isOpen, loadingList, totalUnread, onUnreadCountChange]);
 
   const scrollToBottom = useCallback((smooth = true) => {
     if (chatScrollRef.current) {
@@ -263,6 +258,7 @@ export function CashierConversationsDrawer({
     <div
       className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in"
       id="cashier-chat-overlay"
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div
         className="flex h-full w-full max-w-3xl flex-col bg-zinc-950 text-zinc-100 border-l border-zinc-800 shadow-2xl animate-scale-up"

@@ -3,6 +3,7 @@ import { SlidersHorizontal, X } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
 import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
+import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
@@ -111,6 +112,7 @@ export function CashierMobileSidebar({
             </SidebarContent>
 
             <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
+              {hasOnlineMenu && <OnlineOrderEmergencyControl mobile />}
               <CashierSidebarFooter
                 mobile
                 changeFontSize={changeFontSize}

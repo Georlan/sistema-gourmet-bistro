@@ -38,11 +38,7 @@ export default function CardapioProductCard({
   const handleAction = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!available) return;
-    if (hasModifiers) {
-      onSelectProduct(product);
-    } else {
-      onFastAdd(product);
-    }
+    onFastAdd(product);
   };
 
   return (
@@ -57,7 +53,7 @@ export default function CardapioProductCard({
         <button
           type="button"
           className="cardapio-product-card__details-hitbox"
-          onClick={() => onSelectProduct(product)}
+          onClick={(event) => { event.stopPropagation(); onSelectProduct(product); }}
           aria-label={`${product.name}, ${formattedPrice}, ver detalhes`}
         />
       )}
@@ -89,17 +85,7 @@ export default function CardapioProductCard({
             </strong>
             {available && (
               hasModifiers ? (
-                <button
-                  type="button"
-                  onClick={handleAction}
-                  className="cardapio-product-card__add relative z-10 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 px-3 py-1.5 text-xs font-bold text-emerald-400 hover:text-white transition-all shadow-sm cursor-pointer"
-                  id={`btn-fast-add-${product.id}`}
-                  title={`Personalizar ${product.name}`}
-                  aria-label={`Personalizar ${product.name}`}
-                >
-                  <Plus size={14} className="stroke-[2.5]" />
-                  <span>Opções</span>
-                </button>
+                <span className="text-xs font-bold text-emerald-400">Escolher opções</span>
               ) : cartQuantity > 0 ? (
                 <div
                   className="cardapio-product-card__stepper relative z-10 inline-flex items-center gap-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 p-0.5 shadow-sm"

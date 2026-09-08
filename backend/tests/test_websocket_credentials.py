@@ -44,3 +44,10 @@ def test_redaction_is_case_insensitive_and_preserves_non_secret_query_values():
     assert result == (
         "/socket?restaurante_id=2&Access_Token=[REDACTED]&screen=caixa"
     )
+
+
+def test_tracking_path_tokens_are_redacted_in_access_logs():
+    for suffix in ("", "/messages", "/events"):
+        path = f"/api/cardapio/pedidos/acompanhar/private-token{suffix}"
+        assert redact_sensitive_query_values(path) == f"/api/cardapio/pedidos/acompanhar/[REDACTED]{suffix}"
+    assert redact_sensitive_query_values('/acompanhar/private-token') == '/acompanhar/[REDACTED]'

@@ -870,3 +870,9 @@
     border-radius: 10px;
   }
 }
+
+/* Quantity controls must receive clicks above the card details hitbox. */
+.cardapio-product-card__stepper,
+.cardapio-product-card__stepper button {
+  pointer-events: auto;
+}
