@@ -9,6 +9,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from '../../ui/sidebar';
+import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
@@ -91,6 +92,7 @@ export function CashierDesktopSidebar({
       </SidebarContent>
 
       <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
+        {hasOnlineMenu && <OnlineOrderEmergencyControl />}
         <CashierSidebarFooter
           changeFontSize={changeFontSize}
           fontSize={fontSize}
