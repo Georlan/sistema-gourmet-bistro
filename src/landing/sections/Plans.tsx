@@ -8,6 +8,8 @@ import {
   getSubscriptionPricing,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
+import { getSubscriptionPaymentOptions } from '../../config/subscriptionPaymentOptions';
+import '../paymentOptions.css';
 
 const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   stage: string;
@@ -37,6 +39,8 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
+  const billingCycle = isYearly ? 'anual' : 'mensal';
+  const paymentOptions = getSubscriptionPaymentOptions(billingCycle);
 
   return (
     <section className="koma-plans-section koma-plans-section--simple" id="planos" aria-labelledby="plans-title">
@@ -70,7 +74,32 @@ export function Plans() {
             Anual <span>{ANNUAL_DISCOUNT_RATE * 100}% OFF</span>
           </button>
         </div>
-        <p>{isYearly ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. Cobrança anual.` : 'Pague mês a mês, sem taxa de implantação'}</p>
+        <p>
+          {isYearly
+            ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. É uma referência de preço, não 12 parcelas; a cobrança do anual é única enquanto o parcelamento estiver em estudo.`
+            : 'Pague mês a mês, sem taxa de implantação.'}
+        </p>
+      </div>
+
+      <div className="koma-plans-payment-options" aria-label="Formas de pagamento da adesão">
+        <div className="koma-plans-payment-options-head">
+          <div>
+            <span>FORMAS DE PAGAMENTO</span>
+            <strong>{isYearly ? 'Escolha como pretende pagar o plano anual.' : 'Mais liberdade para começar no mensal.'}</strong>
+          </div>
+          <p>Os mesmos status exibidos aqui aparecem no checkout. Só opções marcadas como <b>Disponível</b> podem gerar cobrança.</p>
+        </div>
+        <div className="koma-plans-payment-options-grid">
+          {paymentOptions.map((option) => (
+            <div className={`koma-plans-payment-option is-${option.status}`} key={option.id}>
+              <div>
+                <strong>{option.label}</strong>
+                <small>{option.landingSummary}</small>
+              </div>
+              <span>{option.statusLabel}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -78,7 +107,6 @@ export function Plans() {
           const pricing = getSubscriptionPricing(plan.price);
           const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
           const presentation = PLAN_PRESENTATION[plan.id];
-          const billing = isYearly ? 'anual' : 'mensal';
           const planLabel = plan.name.replace('Kôma ', '').toUpperCase();
 
           return (
@@ -101,11 +129,11 @@ export function Plans() {
                     maximumFractionDigits: 2,
                   })}
                 </strong>
-                <small>/mês</small>
+                <small>{isYearly ? '/mês equiv.' : '/mês'}</small>
               </div>
               <p className="koma-plan-billing-note">
                 {isYearly
-                  ? `${formatCurrency(pricing.annualTotal)} por ano · sem taxa de implantação`
+                  ? `${formatCurrency(pricing.annualTotal)} por ano · cobrança anual única enquanto parcelamento estiver em estudo`
                   : 'Sem taxa de implantação'}
               </p>
               {isYearly && (
@@ -137,7 +165,7 @@ export function Plans() {
               </div>
 
               <a
-                href={`/contratar/${plan.id}?cobranca=${billing}`}
+                href={`/contratar/${plan.id}?cobranca=${billingCycle}`}
                 className={`koma-btn ${plan.recommended ? 'koma-btn--primary' : 'koma-btn--outline-dark'}`}
               >
                 CONTRATAR {planLabel}
@@ -146,7 +174,7 @@ export function Plans() {
           );
         })}
       </div>
-      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. A disponibilidade do pagamento online depende da ativação da conta do provedor. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
+      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. A disponibilidade de cada meio de pagamento segue o status exibido acima e no checkout; opções futuras não geram cobrança. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
     </section>
   );
 }
