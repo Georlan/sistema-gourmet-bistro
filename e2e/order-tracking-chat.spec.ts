@@ -100,7 +100,6 @@ async function setupChatRoutes(page: Page) {
       });
     }
 
-    // 1. Order Tracking Public Endpoints
     if (pathname === `/api/cardapio/pedidos/acompanhar/${trackingToken}` && method === 'GET') {
       return route.fulfill({
         status: 200,
@@ -151,7 +150,6 @@ async function setupChatRoutes(page: Page) {
       });
     }
 
-    // 2. Caixa Staff Endpoints
     if (pathname === '/api/caixa/conversas/unread-count' && method === 'GET') {
       const unread = chatMessages.filter(
         (m) => m.sender_type === 'customer'
@@ -224,7 +222,6 @@ async function setupChatRoutes(page: Page) {
       });
     }
 
-    // Standard Caixa operation mocks
     if (pathname === '/comandas/delivery/ativos' || pathname === '/comandas/detalhes/todos') {
       return route.fulfill({
         status: 200,
@@ -365,29 +362,30 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await expect(floatingChat).toBeVisible();
     await floatingChat.click();
 
-    await expect(page.getByText('Pedido #4321')).toBeVisible();
-    await expect(page.getByText(/1x Pizza Margherita/)).toBeVisible();
+    const ordersDrawer = page.getByLabel('Meus Pedidos');
+    await expect(ordersDrawer.getByText('Pedido #4321')).toBeVisible();
+    await expect(ordersDrawer.getByText(/1x Pizza Margherita/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Chat & Status' }).click();
-    await expect(page.getByText('Pedido #4321')).toBeVisible();
-    await expect(page.getByText('Em preparo').first()).toBeVisible();
-    await expect(page.getByText('Pedido recebido pelo restaurante.')).toBeVisible();
+    await ordersDrawer.getByRole('button', { name: 'Chat & Status' }).click();
+    const inlineChat = page.locator('#inline-order-chat-panel');
+    await expect(inlineChat.getByText('Pedido #4321')).toBeVisible();
+    await expect(inlineChat.getByText('Em preparo').first()).toBeVisible();
+    await expect(inlineChat.getByText('Pedido recebido pelo restaurante.')).toBeVisible();
 
-    const customerInput = page.getByPlaceholder(/Envie uma mensagem para a equipe/i);
+    const customerInput = inlineChat.getByPlaceholder(/Envie uma mensagem para a equipe/i);
     await expect(customerInput).toBeVisible();
     await customerInput.fill('Por favor enviar talheres descartáveis');
 
-    const sendButton = page.getByTitle(/Enviar mensagem/i);
+    const sendButton = inlineChat.getByTitle(/Enviar mensagem/i);
     await sendButton.click();
 
-    await expect(page.getByText('Por favor enviar talheres descartáveis')).toBeVisible();
-    await expect(page.getByText('Você')).toBeVisible();
+    await expect(inlineChat.getByText('Por favor enviar talheres descartáveis')).toBeVisible();
+    await expect(inlineChat.getByText('Você')).toBeVisible();
   });
 
   test('caixa visualiza notificação de conversa, abre drawer e responde ao cliente', async ({
     page,
   }) => {
-    // Garante que há uma mensagem do cliente pendente
     if (!chatMessages.some((m) => m.sender_type === 'customer')) {
       chatMessages.push({
         id: 'msg-cust-init',
@@ -402,15 +400,12 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await seedCashierSession(page);
     await setupChatRoutes(page);
 
-    // 1. Caixa acessa o painel operacional
     await page.goto('/?view=caixa');
 
-    // 2. Localiza o botão "Conversas" com badge de não lidas
     const conversasBtn = page.getByRole('button', { name: /Conversas/i });
     await expect(conversasBtn).toBeVisible();
     await expect(conversasBtn.getByRole("status")).toHaveText(/[1-9]/);
 
-    // Abre a gaveta de conversas
     await conversasBtn.click();
     if ((page.viewportSize()?.width || 0) > 768) {
       await page.locator('#cashier-chat-overlay').click({ position: { x: 4, y: 100 } });
@@ -418,18 +413,14 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
       await conversasBtn.click();
     }
 
-    // 3. Gaveta de conversas exibe a conversa do Pedido #4321
     const convCard = page.getByRole('button', { name: /Pedido #4321/i });
     await expect(convCard).toBeVisible();
     await expect(convCard).toContainText('Ana Teste');
 
-    // Clica para abrir o thread
     await convCard.click();
 
-    // Verifica que a mensagem enviada pelo cliente está no histórico (dentro do balão de chat)
     await expect(page.locator('div.rounded-2xl').filter({ hasText: 'Por favor enviar talheres descartáveis' })).toBeVisible();
 
-    // 4. Caixa responde ao cliente
     const staffInput = page.getByPlaceholder(/Responder ao cliente/i);
     await expect(staffInput).toBeVisible();
     await staffInput.fill('Confirmado! Talheres descartáveis adicionados ao pedido.');
@@ -437,7 +428,6 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     const replyButton = page.getByTitle(/Enviar resposta/i);
     await replyButton.click();
 
-    // Verifica que a resposta da equipe foi postada
     await expect(page.locator('div.rounded-2xl').filter({ hasText: 'Confirmado! Talheres descartáveis adicionados ao pedido.' })).toBeVisible();
     await expect(page.getByText('Equipe Caixa')).toBeVisible();
   });
