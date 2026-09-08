@@ -80,7 +80,7 @@ if (sentryDsn) {
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
-const isPlanContractRoute = pathname.startsWith("/contratar/");
+const isPlanContractRoute = pathname.startsWith("/contratar");
 
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
