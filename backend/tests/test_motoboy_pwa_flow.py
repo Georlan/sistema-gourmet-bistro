@@ -5,10 +5,15 @@ from app.main import app
 from app.security import create_access_token, create_motoboy_token, verify_motoboy_token
 from app.database import SessionLocal
 from app.models import Usuario, Motoboy, Comanda, Item, Produto, Restaurante, Lancamento, Categoria
+
 def get_auth_headers(client, username, password):
     resp = client.post("/auth/login", json={"username": username, "password": password})
     assert resp.status_code == 200, f"Login falhou para {username}: {resp.text}"
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+def delivery_headers(token: str) -> dict[str, str]:
+    return {"X-Koma-Delivery-Token": token}
 
 
 def test_gerar_link_motoboy_flow():
@@ -35,13 +40,16 @@ def test_gerar_link_motoboy_flow():
             db.add(mb)
             db.commit()
 
-    # 1. Gerar link para o motoboy 10
+    # 1. Gerar link para o motoboy 10. Segredos de browser ficam no fragment,
+    # que não é enviado ao servidor no request HTTP inicial.
     response = client.post("/comandas/motoboys/10/gerar-link", headers=headers)
     assert response.status_code == 200, response.text
     data = response.json()
     assert "token" in data
     assert "link" in data
-    assert "/entregador?token=" in data["link"]
+    assert "/entregador#token=" in data["link"]
+    assert "?token=" not in data["link"]
+    assert "?token=" not in data["link_publico"]
     assert data["motoboy_nome"] == "Carlos Entregador"
 
     token = data["token"]
@@ -107,8 +115,8 @@ def test_gerar_link_motoboy_flow():
         db.add_all([item1, item2])
         db.commit()
 
-    # 4. Acessar painel do entregador com token
-    resp_painel = client.get(f"/comandas/motoboys/painel-entregador?token={token}")
+    # 4. Acessar painel do entregador com header dedicado.
+    resp_painel = client.get("/comandas/motoboys/painel-entregador", headers=delivery_headers(token))
     assert resp_painel.status_code == 200, resp_painel.text
     painel_data = resp_painel.json()
     assert painel_data["motoboy"]["nome"] == "Carlos Entregador"
@@ -122,10 +130,22 @@ def test_gerar_link_motoboy_flow():
     assert entrega["total"] == 77.50  # 70 + 7.50
     assert entrega["valor_a_cobrar"] == 77.50
 
-    # 5. Entregador confirma a entrega
-    resp_confirm = client.post(f"/comandas/motoboys/pedidos/{cmd_id}/confirmar-entrega?token={token}")
+    # Query string deixa de ser credencial aceita.
+    query_attempt = client.get(f"/comandas/motoboys/painel-entregador?token={token}")
+    assert query_attempt.status_code == 422
+
+    # 5. Entregador confirma a entrega com o mesmo header.
+    resp_confirm = client.post(
+        f"/comandas/motoboys/pedidos/{cmd_id}/confirmar-entrega",
+        headers=delivery_headers(token),
+    )
     assert resp_confirm.status_code == 200, resp_confirm.text
     assert resp_confirm.json()["status"] == "sucesso"
+
+    confirm_query_attempt = client.post(
+        f"/comandas/motoboys/pedidos/{cmd_id}/confirmar-entrega?token={token}"
+    )
+    assert confirm_query_attempt.status_code == 422
 
     # 6. Verificar comanda fechada e finalizada no banco
     with SessionLocal() as db:
@@ -134,7 +154,10 @@ def test_gerar_link_motoboy_flow():
         assert c_check.fechada is True
 
     # 7. Testar token inválido
-    resp_invalid = client.get("/comandas/motoboys/painel-entregador?token=invalid_token_xyz")
+    resp_invalid = client.get(
+        "/comandas/motoboys/painel-entregador",
+        headers=delivery_headers("invalid_token_xyz"),
+    )
     assert resp_invalid.status_code == 401
 
     # 8. Testar revogação de token por geração de novo link
@@ -145,12 +168,12 @@ def test_gerar_link_motoboy_flow():
     assert token2 != token1
 
     # Token1 antigo deve retornar 401 por estar revogado
-    resp_old = client.get(f"/comandas/motoboys/painel-entregador?token={token1}")
+    resp_old = client.get("/comandas/motoboys/painel-entregador", headers=delivery_headers(token1))
     assert resp_old.status_code == 401
     assert "revogado" in resp_old.json()["detail"].lower()
 
     # Token2 novo deve funcionar
-    resp_new = client.get(f"/comandas/motoboys/painel-entregador?token={token2}")
+    resp_new = client.get("/comandas/motoboys/painel-entregador", headers=delivery_headers(token2))
     assert resp_new.status_code == 200
 
     # 9. Testar revogação manual de token
@@ -158,7 +181,6 @@ def test_gerar_link_motoboy_flow():
     assert resp_revoke.status_code == 200
 
     # Token2 agora deve ser rejeitado
-    resp_revoked2 = client.get(f"/comandas/motoboys/painel-entregador?token={token2}")
+    resp_revoked2 = client.get("/comandas/motoboys/painel-entregador", headers=delivery_headers(token2))
     assert resp_revoked2.status_code == 401
     assert "revogado" in resp_revoked2.json()["detail"].lower()
-

@@ -7,7 +7,7 @@ rotas de delivery/retirada deste módulo não escrevem estado de pedido
 
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ..application.orders.lifecycle import (
@@ -22,6 +22,7 @@ from ..application.printing import (
     PrintingApplicationService,
     UniversalPrintingError,
 )
+from ..config import settings
 from ..database import current_restaurante_id, get_db, require_tenant_id
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..domain.orders.types import (
@@ -35,17 +36,51 @@ from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_
 from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..services.shifts import require_open_cash_shift
 from ..websocket_manager import manager
+from . import orders_core as _orders_core
 
 # Compatibilidade Python explícita para os adapters e callbacks ainda em migração.
 from .orders_core import (
     _agendar_notificacao_whatsapp_status,
-    _criar_acesso_motoboy,
+    _criar_acesso_motoboy as _legacy_criar_acesso_motoboy,
     criar_venda_direta,
     gerar_novo_numero_pedido,
     lancar_itens,
     logger,
     router,
 )
+
+
+def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
+    """Mantém a emissão legada, mas nunca devolve segredo em query string."""
+    acesso = _legacy_criar_acesso_motoboy(db, motoboy, rest_id)
+    token = str(acesso["token"])
+    acesso["link"] = f"/entregador#token={token}"
+    acesso["link_publico"] = f"{settings.KOMA_PUBLIC_APP_URL}/entregador#token={token}"
+    return acesso
+
+
+# O endpoint do Core antigo declarava `token` como query param. Enquanto o Core
+# é decomposto, substituímos somente a rota HTTP registrada por uma versão que
+# aceita o segredo em header. Chamadas Python internas continuam reutilizando a
+# validação canônica existente.
+_orders_core._criar_acesso_motoboy = _criar_acesso_motoboy
+router.routes[:] = [
+    route
+    for route in router.routes
+    if not (
+        getattr(route, "path", None) == "/comandas/motoboys/painel-entregador"
+        and "GET" in (getattr(route, "methods", None) or set())
+    )
+]
+
+
+@router.get("/motoboys/painel-entregador")
+def painel_entregador_header(
+    request: Request,
+    token: str = Header(..., alias="X-Koma-Delivery-Token"),
+    db: Session = Depends(get_db),
+):
+    return _orders_core.painel_entregador(token=token, request=request, db=db)
 
 
 def _canonical_target_or_422(raw_status: str) -> str:
@@ -375,12 +410,12 @@ def despachar_delivery(
 @router.post("/motoboys/pedidos/{comanda_id}/confirmar-entrega")
 def confirmar_entrega_motoboy(
     comanda_id: str,
-    token: str,
     request: Request,
     background_tasks: BackgroundTasks,
+    token: str = Header(..., alias="X-Koma-Delivery-Token"),
     db: Session = Depends(get_db),
 ):
-    """Confirma a entrega usando a mesma autoridade canônica de lifecycle."""
+    """Confirma a entrega usando token somente em header dedicado."""
     motoboy_rate_limiter.check(request)
     token_data = verify_motoboy_token(token, db)
     motoboy_id = token_data["motoboy_id"]

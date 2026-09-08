@@ -240,7 +240,8 @@ def test_despachar_enfileira_notificacao_transito(monkeypatch):
     assert len(chamadas) == 2
     assert chamadas[0][0] == "81988880000"
     assert "NOVA ENTREGA" in chamadas[0][1]
-    assert "/entregador?token=" in chamadas[0][1]
+    assert "/entregador#token=" in chamadas[0][1]
+    assert "/entregador?token=" not in chamadas[0][1]
     assert chamadas[1][0] == TELEFONE
     assert "entrega" in chamadas[1][1].lower()
 

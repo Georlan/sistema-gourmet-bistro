@@ -245,7 +245,7 @@ def agendar_convite_equipe_task(
     nome_restaurante: str,
     token_convite: str,
 ) -> None:
-    link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar?token={token_convite}"
+    link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar#token={token_convite}"
     conteudo = (
         f"Olá, {nome_pessoa}! Você foi convidado para trabalhar no "
         f"*{nome_restaurante}*.\n\nCrie sua senha e ative sua conta: {link}\n\n"

@@ -124,7 +124,7 @@ def notify_customer_activation(
     The invitation token is used only to build the outbound link. It is never
     logged or returned by this module.
     """
-    link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar?token={invitation_token}"
+    link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar#token={invitation_token}"
     message = (
         f"🚀 Olá, {representative_name}! O *{restaurant_name}* já está ativo no KÔMA.\n\n"
         f"Protocolo: {protocol}\n"

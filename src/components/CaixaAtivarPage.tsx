@@ -15,8 +15,24 @@ type ActivatedSession = {
   user: Record<string, unknown>;
 };
 
+function bootstrapInvitationToken(tokenProp?: string | null): string {
+  const fragmentToken = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token')?.trim() || '';
+  // Compatibilidade temporária para convites emitidos antes da migração para fragment.
+  const legacyQueryToken = new URLSearchParams(window.location.search).get('token')?.trim() || '';
+  const token = fragmentToken || tokenProp?.trim() || legacyQueryToken;
+
+  if (fragmentToken || legacyQueryToken) {
+    const query = new URLSearchParams(window.location.search);
+    query.delete('token');
+    const safeQuery = query.toString();
+    const safeUrl = `${window.location.pathname}${safeQuery ? `?${safeQuery}` : ''}`;
+    window.history.replaceState(null, '', safeUrl);
+  }
+  return token;
+}
+
 export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
-  const tokenConvite = token || new URLSearchParams(window.location.search).get('token') || '';
+  const [tokenConvite] = useState(() => bootstrapInvitationToken(token));
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
