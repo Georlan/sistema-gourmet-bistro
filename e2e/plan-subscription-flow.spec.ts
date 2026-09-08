@@ -77,12 +77,13 @@ test.describe('checkout público de adesão KÔMA', () => {
     await page.goto('/landing#planos');
 
     const paymentOptions = page.getByLabel('Formas de pagamento da adesão');
+    const statusBadges = paymentOptions.locator('.koma-plans-payment-option > span');
     await expect(paymentOptions.getByText('Cartão de crédito', { exact: true })).toBeVisible();
     await expect(paymentOptions.getByText('Pix Automático', { exact: true })).toBeVisible();
     await expect(paymentOptions.getByText('NuPay', { exact: true })).toBeVisible();
     await expect(paymentOptions.getByText('Mercado Pago', { exact: true })).toBeVisible();
     await expect(paymentOptions.getByText('Pix anual à vista', { exact: true })).toHaveCount(0);
-    await expect(paymentOptions.getByText('Disponível', { exact: true })).toHaveCount(1);
+    await expect(statusBadges.filter({ hasText: /^Disponível$/ })).toHaveCount(1);
 
     const billingSwitch = page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' });
     await billingSwitch.getByRole('button', { name: /^Anual\b/ }).click();
@@ -90,8 +91,8 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expect(paymentOptions.getByText('Pix anual à vista', { exact: true })).toBeVisible();
     await expect(paymentOptions.getByText('Anual parcelado no cartão', { exact: true })).toBeVisible();
     await expect(paymentOptions.getByText('Boleto bancário', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('Em validação', { exact: true })).toHaveCount(1);
-    await expect(paymentOptions.getByText('Em estudo', { exact: true })).toHaveCount(2);
+    await expect(statusBadges.filter({ hasText: /^Em validação$/ })).toHaveCount(1);
+    await expect(statusBadges.filter({ hasText: /^Em estudo$/ })).toHaveCount(2);
     await expect(page.getByText(/não 12 parcelas/)).toBeVisible();
 
     await expectNoHorizontalOverflow(page);
