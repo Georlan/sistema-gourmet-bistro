@@ -5,6 +5,7 @@ import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
 import { OnlineMenuOrdersSettings } from './OnlineMenuOrdersSettings';
 import { OnlineMenuPaymentSettings } from './OnlineMenuPaymentSettings';
 import { OnlineMenuQrLinks } from './OnlineMenuQrLinks';
+import { OnlineOrderCapacitySettings } from './OnlineOrderCapacitySettings';
 
 interface Props {
   apiBaseUrl: string;
@@ -136,11 +137,14 @@ export default function CashierOnlineMenu({
 
   if (activeSection === 'pedidos') {
     content = (
-      <OnlineMenuOrdersSettings
-        apiBaseUrl={apiBaseUrl}
-        authHeaders={authHeaders}
-        publicMenuUrl={publicMenuUrl}
-      />
+      <>
+        <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+        <OnlineMenuOrdersSettings
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          publicMenuUrl={publicMenuUrl}
+        />
+      </>
     );
   } else if (activeSection === 'entrega') {
     content = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
