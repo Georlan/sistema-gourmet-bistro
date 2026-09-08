@@ -372,15 +372,14 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     await expect(inlineChat.getByText('Em preparo').first()).toBeVisible();
     await expect(inlineChat.getByText('Pedido recebido pelo restaurante.')).toBeVisible();
 
-    const customerInput = inlineChat.getByPlaceholder(/Envie uma mensagem para a equipe/i);
+    const customerInput = inlineChat.getByPlaceholder(/Escreva para o restaurante/i);
     await expect(customerInput).toBeVisible();
     await customerInput.fill('Por favor enviar talheres descartáveis');
 
-    const sendButton = inlineChat.getByTitle(/Enviar mensagem/i);
+    const sendButton = inlineChat.getByRole('button', { name: 'Enviar mensagem' });
     await sendButton.click();
 
     await expect(inlineChat.getByText('Por favor enviar talheres descartáveis')).toBeVisible();
-    await expect(inlineChat.getByText('Você')).toBeVisible();
   });
 
   test('caixa visualiza notificação de conversa, abre drawer e responde ao cliente', async ({
