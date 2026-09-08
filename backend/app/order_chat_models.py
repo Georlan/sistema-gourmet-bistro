@@ -2,6 +2,7 @@ import datetime
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -124,4 +125,70 @@ class OrderMessage(Base):
 
     conversation = relationship("OrderConversation", back_populates="messages")
     sender_user = relationship("Usuario", foreign_keys=[sender_user_id])
+    restaurante = relationship("Restaurante", foreign_keys=[restaurante_id])
+
+
+class OrderPushSubscription(Base):
+    """Associação segura entre uma assinatura Web Push e um pedido.
+
+    O endpoint Web Push e as chaves de criptografia são capability URLs/segredos e
+    permanecem cifrados em repouso. ``endpoint_hash`` existe somente para
+    deduplicação/lookup e nunca substitui o endpoint no transporte.
+    """
+
+    __tablename__ = "order_push_subscriptions"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "endpoint_hash",
+            name="uq_order_push_subscriptions_conv_endpoint",
+        ),
+        Index(
+            "ix_order_push_subscriptions_tenant_order",
+            "restaurante_id",
+            "pedido_id",
+        ),
+        Index("ix_order_push_subscriptions_endpoint_hash", "endpoint_hash"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    conversation_id = Column(
+        String(36),
+        ForeignKey("order_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pedido_id = Column(
+        String(64),
+        ForeignKey("comandas.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    endpoint_hash = Column(String(64), nullable=False)
+    endpoint_ciphertext = Column(Text, nullable=False)
+    p256dh_ciphertext = Column(Text, nullable=False)
+    auth_ciphertext = Column(Text, nullable=False)
+    enabled = Column(Boolean, nullable=False, default=True, server_default="1")
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    last_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    conversation = relationship("OrderConversation", foreign_keys=[conversation_id])
+    comanda = relationship("Comanda", foreign_keys=[pedido_id])
     restaurante = relationship("Restaurante", foreign_keys=[restaurante_id])
