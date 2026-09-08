@@ -1,14 +1,18 @@
-"""Rate limiting para requisições e pedidos públicos do cardápio digital."""
+"""Rate limiting e barreiras operacionais para pedidos públicos do cardápio digital."""
 
 from __future__ import annotations
 
 import datetime
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ...models import PublicRateLimit
 from ..customer_auth import hash_public_rate_key
+from ..online_order_control import (
+    auto_pause_if_capacity_reached,
+    customer_is_blocked,
+)
 
 MAX_PUBLIC_ORDER_UNITS = 200
 PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
@@ -36,11 +40,8 @@ def consume_rate_limit(
 ) -> None:
     """Consome uma cota de rate limit e persiste no banco.
 
-    Protege a criação inicial contra corrida concorrente:
-    - Tenta INSERT dentro de savepoint (begin_nested);
-    - Em IntegrityError de corrida, faz rollback do savepoint e
-      recarrega a linha vencedora FOR UPDATE;
-    - Continua a contabilização normalmente.
+    A chave recebida nunca é persistida em claro: ``hash_public_rate_key`` gera
+    o fingerprint tenant/scoped antes da consulta/insert.
     """
     now = datetime.datetime.now(datetime.timezone.utc)
     key_hash = hash_public_rate_key(restaurante_id, scope, raw_key)
@@ -56,8 +57,6 @@ def consume_rate_limit(
     )
 
     if rate is None:
-        # Primeira requisição para esta chave: tentar INSERT com savepoint
-        # para proteger contra corrida de duas transações simultâneas.
         try:
             nested = db.begin_nested()
             candidate = PublicRateLimit(
@@ -72,8 +71,6 @@ def consume_rate_limit(
             return
         except IntegrityError:
             nested.rollback()
-            # Corrida: outra transação inseriu primeiro.
-            # Recarregar a linha vencedora FOR UPDATE.
             rate = (
                 db.query(PublicRateLimit)
                 .filter(
@@ -85,7 +82,6 @@ def consume_rate_limit(
                 .first()
             )
             if rate is None:
-                # Não deveria acontecer, mas garante segurança.
                 raise  # pragma: no cover
 
     janela_iniciada = rate.janela_iniciada_em
@@ -99,7 +95,6 @@ def consume_rate_limit(
         return
 
     if rate.requisicoes >= max_requests:
-        from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=detail or "Limite de pedidos excedido temporariamente. Tente novamente mais tarde.",
@@ -115,11 +110,36 @@ def enforce_public_order_rate_limits(
     restaurante_id: int,
     telefone: str,
 ) -> None:
-    """Persiste limites antes da transação do pedido para resistir a payloads inválidos.
+    """Aplica barreiras antes da transação crítica de criação do pedido.
 
-    Ownership transacional: este serviço é o dono dos commits de rate limit.
-    Callers NÃO devem fazer commit adicional após chamar esta função.
+    Ordem intencional:
+    1. bloqueio tenant-local do cliente;
+    2. pausa manual/auto-pausa por capacidade;
+    3. quotas por telefone e IP.
+
+    A auto-pausa e as quotas são commitadas antes da transação do pedido para
+    sobreviver ao rollback posterior do adapter. Isso garante que uma pausa
+    confirmada entre duas requisições passe a valer imediatamente na borda.
     """
+    if customer_is_blocked(
+        db,
+        restaurante_id=restaurante_id,
+        telefone=telefone,
+    ):
+        # Mensagem deliberadamente neutra: não revela regra antifraude, motivo,
+        # duração ou existência de um bloqueio administrativo.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não foi possível receber um novo pedido com estes dados neste momento.",
+        )
+
+    if auto_pause_if_capacity_reached(db, restaurante_id=restaurante_id):
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Novos pedidos estão temporariamente pausados. Tente novamente mais tarde.",
+        )
+
     consume_rate_limit(
         db,
         restaurante_id=restaurante_id,
