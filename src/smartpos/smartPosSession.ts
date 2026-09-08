@@ -13,8 +13,23 @@ export interface SmartPosSession {
   expiresAt: number;
 }
 
-const SMARTPOS_SESSION_KEY = 'koma_smartpos_session';
+export const SMARTPOS_SESSION_KEY = 'koma_smartpos_session';
 const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function getSessionStorage(): Storage | null {
+  return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
+}
+
+function getLegacyStorage(): Storage | null {
+  return typeof localStorage !== 'undefined' ? localStorage : null;
+}
+
+function persistSession(session: SmartPosSession): void {
+  const scoped = getSessionStorage();
+  const durable = getLegacyStorage();
+  scoped?.setItem(SMARTPOS_SESSION_KEY, JSON.stringify(session));
+  durable?.removeItem(SMARTPOS_SESSION_KEY);
+}
 
 export function saveSmartPosSession(token: string, user: SmartPosUser): SmartPosSession {
   const session: SmartPosSession = {
@@ -23,12 +38,16 @@ export function saveSmartPosSession(token: string, user: SmartPosUser): SmartPos
     expiresAt: Date.now() + SESSION_MAX_AGE_MS,
   };
 
-  localStorage.setItem(SMARTPOS_SESSION_KEY, JSON.stringify(session));
+  persistSession(session);
   return session;
 }
 
 export function getSmartPosSession(): SmartPosSession | null {
-  const raw = localStorage.getItem(SMARTPOS_SESSION_KEY);
+  const scoped = getSessionStorage();
+  const durable = getLegacyStorage();
+  const scopedRaw = scoped?.getItem(SMARTPOS_SESSION_KEY) || null;
+  const legacyRaw = durable?.getItem(SMARTPOS_SESSION_KEY) || null;
+  const raw = scopedRaw || legacyRaw;
   if (!raw) return null;
 
   try {
@@ -46,6 +65,8 @@ export function getSmartPosSession(): SmartPosSession | null {
       return null;
     }
 
+    // Migração one-way: versões antigas persistiam o bearer em localStorage.
+    if (!scopedRaw || legacyRaw) persistSession(session);
     return session;
   } catch {
     clearSmartPosSession();
@@ -54,5 +75,6 @@ export function getSmartPosSession(): SmartPosSession | null {
 }
 
 export function clearSmartPosSession(): void {
-  localStorage.removeItem(SMARTPOS_SESSION_KEY);
+  getSessionStorage()?.removeItem(SMARTPOS_SESSION_KEY);
+  getLegacyStorage()?.removeItem(SMARTPOS_SESSION_KEY);
 }
