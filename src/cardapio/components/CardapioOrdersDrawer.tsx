@@ -18,10 +18,7 @@ import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
 import {
   StoredOrder,
-  isRejectedStatus,
-  isTerminalStatus,
-  orderStatusLabel,
-  orderStep,
+  resolveOrderState,
 } from "../orderTracking";
 import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
 
@@ -35,15 +32,6 @@ interface CardapioOrdersDrawerProps {
   onRemoveOrder: (orderId: string) => void;
   isRefreshing?: boolean;
   hasFloatingCart?: boolean;
-}
-
-function deliveryOrderStep(status?: string): number {
-  const normalized = String(status || "").toLocaleLowerCase("pt-BR");
-  if (normalized.includes("final") || normalized.includes("entreg")) return 5;
-  if (normalized.includes("trans") || normalized.includes("saiu")) return 4;
-  if (normalized.includes("pronto")) return 3;
-  if (normalized.includes("produ") || normalized.includes("prepar")) return 2;
-  return 1;
 }
 
 function resolveTrackingToken(order: StoredOrder): string | null {
@@ -160,11 +148,11 @@ export default function CardapioOrdersDrawer({
   );
 
   const activeOrders = React.useMemo(
-    () => orders.filter((order) => !isTerminalStatus(order.status)).sort(sortUnreadFirst),
+    () => orders.filter((order) => !resolveOrderState(order).terminal).sort(sortUnreadFirst),
     [orders, sortUnreadFirst],
   );
   const finishedOrders = React.useMemo(
-    () => orders.filter((order) => isTerminalStatus(order.status)).sort(sortUnreadFirst),
+    () => orders.filter((order) => resolveOrderState(order).terminal).sort(sortUnreadFirst),
     [orders, sortUnreadFirst],
   );
 
@@ -172,7 +160,7 @@ export default function CardapioOrdersDrawer({
   const preferredChatOrder = React.useMemo(
     () => ordersWithChat.find((order) => unreadFor(order.id) > 0)
       || ordersWithChat.find((order) => order.id === selectedOrderId)
-      || ordersWithChat.find((order) => !isTerminalStatus(order.status))
+      || ordersWithChat.find((order) => !resolveOrderState(order).terminal)
       || ordersWithChat[0]
       || null,
     [ordersWithChat, selectedOrderId, unreadFor],
@@ -216,8 +204,9 @@ export default function CardapioOrdersDrawer({
     if (!activeOrderForFab) return null;
 
     const displayOrder = activeOrderForFab;
-    const isChatAvailable = Boolean(resolveTrackingToken(displayOrder));
-    const statusText = orderStatusLabel(displayOrder.status);
+    const displayState = resolveOrderState(displayOrder);
+    const isChatAvailable = Boolean(resolveTrackingToken(displayOrder)) && displayState.can_chat;
+    const statusText = displayState.label;
 
     return (
       <div
@@ -377,9 +366,10 @@ export default function CardapioOrdersDrawer({
                   </div>
 
                   {activeOrders.map((order) => {
-                    const rejected = isRejectedStatus(order.status);
-                    const isDelivery = String(order.tipo || "").toLocaleLowerCase("pt-BR").includes("delivery");
-                    const step = isDelivery ? deliveryOrderStep(order.status) : orderStep(order.status);
+                    const state = resolveOrderState(order);
+                    const rejected = state.rejected;
+                    const isDelivery = state.fulfillment === "delivery";
+                    const step = state.progress_step;
                     const steps = isDelivery
                       ? ["Recebido", "Preparo", "Pronto", "Saiu", "Entregue"]
                       : ["Recebido", "Preparo", "Pronto", "Concluído"];
@@ -421,7 +411,7 @@ export default function CardapioOrdersDrawer({
                                 )}
                               </div>
                               <span className="mt-0.5 block text-[11px] font-bold text-emerald-400">
-                                {unread > 0 ? "O restaurante respondeu" : orderStatusLabel(order.status)}
+                                {unread > 0 ? "O restaurante respondeu" : state.label}
                               </span>
                             </div>
                           </div>
@@ -488,7 +478,7 @@ export default function CardapioOrdersDrawer({
                               {isSelected ? "Acompanhando no topo" : "Ver no topo"}
                             </button>
 
-                            {(order.tracking_url || order.tracking_token) && (
+                            {(order.tracking_url || order.tracking_token) && state.can_chat && (
                               <button
                                 type="button"
                                 onClick={() => openChat(order.id)}
@@ -520,8 +510,9 @@ export default function CardapioOrdersDrawer({
                   </div>
 
                   {finishedOrders.map((order) => {
-                    const rejected = isRejectedStatus(order.status);
-                    const isDelivery = String(order.tipo || "").toLocaleLowerCase("pt-BR").includes("delivery");
+                    const state = resolveOrderState(order);
+                    const rejected = state.rejected;
+                    const isDelivery = state.fulfillment === "delivery";
                     const unread = unreadFor(order.id);
 
                     return (
@@ -561,7 +552,7 @@ export default function CardapioOrdersDrawer({
                                 )}
                               </div>
                               <span className={clsx("mt-0.5 block text-[10px] font-bold", rejected ? "text-rose-400" : "text-emerald-400")}>
-                                {unread > 0 ? "Nova resposta do restaurante" : orderStatusLabel(order.status)}
+                                {unread > 0 ? "Nova resposta do restaurante" : state.label}
                               </span>
                             </div>
                           </div>

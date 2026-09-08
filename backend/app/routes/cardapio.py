@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, current_restaurante_id, tenant_session_scope
 from ..models import Comanda, OnlinePaymentIntent
 from ..schemas import CardapioPedidoCreate
+from ..services.order_state_contract import build_order_state_contract
 from ..services.public_orders import (
     MAX_PUBLIC_ORDERS_PER_IP,
     MAX_PUBLIC_ORDERS_PER_PHONE,
@@ -199,10 +200,19 @@ def consultar_status_pedido_publico(
         if payment_intent is not None and payment_intent.status != "approved":
             status_retorno = "aguardando_pagamento"
 
+        state_contract = build_order_state_contract(
+            status_retorno,
+            comanda.tipo,
+            conversation_closed=bool(comanda.fechada),
+            scheduled_pending=status_retorno == "agendado",
+            payment_pending=status_retorno == "aguardando_pagamento",
+        )
+
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
             "status": status_retorno,
+            "state": state_contract,
             "tipo": comanda.tipo,
             "total": _order_total(comanda),
             "fechada": comanda.fechada,
