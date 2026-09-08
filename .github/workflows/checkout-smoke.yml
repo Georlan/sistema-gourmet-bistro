@@ -54,7 +54,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Run checkout unit coverage
-        run: npm run test:unit -- tests/planSubscriptionFlow.test.ts tests/subscriptionPaymentOptions.test.ts
+        run: npx tsx --test tests/planSubscriptionFlow.test.ts tests/subscriptionPaymentOptions.test.ts
       - name: Run checkout smoke
         env:
           KOMA_E2E_PORT: '4284'
