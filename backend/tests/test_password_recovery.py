@@ -127,9 +127,11 @@ def test_disabled_sender_and_missing_configuration_fail_closed(setup, monkeypatc
 def test_resend_adapter_uses_configured_sender_and_never_logs_payload(setup, monkeypatch, caplog):
     post = Mock(return_value=Mock(is_success=False, status_code=503))
     monkeypatch.setattr(recovery.httpx, 'post', post)
-    recovery.send_recovery_email('private@example.test', 'private-secret')
+    recovery.send_recovery_email('private@example.test', 'private-secret', 'Restaurante\n1')
     args, kwargs = post.call_args
     assert args[0] == 'https://api.resend.com/emails'
     assert kwargs['json']['from'] == settings.EMAIL_FROM
+    assert kwargs['json']['subject'] == 'KÔMA — recuperar sua senha — Restaurante 1'
+    assert kwargs['json']['text'].startswith('Restaurante: Restaurante 1\n\n')
     assert '/recuperar-senha#token=private-secret' in kwargs['json']['text']
     assert 'private' not in caplog.text
