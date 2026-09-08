@@ -1,0 +1,24 @@
+{
+  "name": "KÔMA — Pedidos",
+  "short_name": "KÔMA",
+  "description": "Acompanhe seu pedido e converse com o restaurante pelo KÔMA.",
+  "start_url": "/cardapio",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090a0f",
+  "theme_color": "#090a0f",
+  "icons": [
+    {
+      "src": "/koma-logo-on-dark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-koma.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
