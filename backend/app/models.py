@@ -1267,6 +1267,8 @@ class Cliente(Base):
     telefone = Column(String, nullable=False)
     nome = Column(String, nullable=False)
     endereco = Column(String, nullable=True)
+    email = Column(String, nullable=True, index=True)
+    senha_hash = Column(String, nullable=True)
     saldo_pontos = Column(Integer, default=0, nullable=False)
     saldo_cashback = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -1278,6 +1280,7 @@ class Cliente(Base):
             name='uq_clientes_restaurante_id_id',
         ),
         UniqueConstraint('restaurante_id', 'telefone', name='uq_restaurante_cliente_telefone'),
+        UniqueConstraint('restaurante_id', 'email', name='uq_restaurante_cliente_email'),
         CheckConstraint(
             "saldo_cashback >= 0",
             name="ck_clientes_cashback_nonnegative_finite",

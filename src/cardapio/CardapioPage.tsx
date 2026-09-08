@@ -141,7 +141,18 @@ export default function CardapioPage() {
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recentAddedCountRef = useRef(0);
   const isProgrammaticScroll = useRef(false);
+
+  const showNotification = useCallback((message: string) => {
+    setNotice(message);
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => {
+      setNotice("");
+      recentAddedCountRef.current = 0;
+    }, 1800);
+  }, []);
 
   const activeOrders = useMemo(
     () => storedOrders.filter((order) => !isTerminalStatus(order.status)),
@@ -539,13 +550,42 @@ export default function CardapioPage() {
       }
       return [...current, { id: itemId, product, quantity, selectedOptions, notes }];
     });
-    setNotice(`${product.name} foi adicionado à sacola.`);
+    recentAddedCountRef.current += quantity;
+    if (recentAddedCountRef.current > 1) {
+      showNotification(`${recentAddedCountRef.current} itens adicionados à sacola`);
+    } else {
+      showNotification(`${product.name} adicionado à sacola`);
+    }
     if (window.innerWidth >= 1024) setIsCartOpen(true);
   };
 
   const handleFastAdd = (product: Product) => {
-    if (product.modifiers?.length) setSelectedProduct(product);
+    const hasModifiers = Boolean(
+      (product.modifiers && product.modifiers.length > 0) ||
+      (product.modifierGroups && product.modifierGroups.length > 0)
+    );
+    if (hasModifiers) setSelectedProduct(product);
     else handleAddToCart(product, 1, {}, "");
+  };
+
+  const handleFastRemove = (product: Product) => {
+    const targetItemId = `${product.id}--`;
+    setCart((current) => {
+      const existing = current.find((item) => item.id === targetItemId);
+      if (!existing) return current;
+      if (existing.quantity <= 1) {
+        return current.filter((item) => item.id !== targetItemId);
+      }
+      return current.map((item) =>
+        item.id === targetItemId ? { ...item, quantity: item.quantity - 1 } : item
+      );
+    });
+  };
+
+  const getProductCartQuantity = (productId: string | number) => {
+    const targetItemId = `${productId}--`;
+    const item = cart.find((i) => i.id === targetItemId);
+    return item ? item.quantity : 0;
   };
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
@@ -640,8 +680,17 @@ export default function CardapioPage() {
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
         {notice && !isCartOpen && !isCheckoutOpen && (
-          <div className="fixed bottom-5 left-1/2 z-[70] max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-emerald-500/25 bg-[#102019] px-4 py-3 text-center text-[10px] font-bold text-emerald-200 shadow-2xl" role="status" onClick={() => setNotice("")}>
-            {notice}
+          <div
+            className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
+            role="status"
+            aria-live="polite"
+            onClick={() => {
+              setNotice("");
+              recentAddedCountRef.current = 0;
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            <span>{notice}</span>
           </div>
         )}
 
@@ -874,7 +923,14 @@ export default function CardapioPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {products.map((product) => (
-                    <CardapioProductCard key={product.id} product={product} onSelectProduct={setSelectedProduct} onFastAdd={handleFastAdd} />
+                    <CardapioProductCard
+                      key={product.id}
+                      product={product}
+                      cartQuantity={getProductCartQuantity(product.id)}
+                      onSelectProduct={setSelectedProduct}
+                      onFastAdd={handleFastAdd}
+                      onFastRemove={handleFastRemove}
+                    />
                   ))}
                 </div>
               </section>

@@ -2,6 +2,7 @@ export interface CustomerProfile {
   id: string;
   name: string;
   phone: string;
+  email?: string;
   address: string;
   points: number;
   cashback: number;
@@ -16,6 +17,7 @@ interface CustomerProfileApi {
   id: string;
   nome: string;
   telefone: string;
+  email?: string;
   endereco?: string;
   saldo_pontos?: number;
   saldo_cashback?: number;
@@ -43,6 +45,7 @@ export function mapCustomerProfile(payload: CustomerProfileApi): CustomerProfile
     id: String(payload.id),
     name: String(payload.nome || ""),
     phone: normalizeBrazilianPhone(payload.telefone || ""),
+    email: payload.email ? String(payload.email) : undefined,
     address: String(payload.endereco || ""),
     points: Number(payload.saldo_pontos || 0),
     cashback: Number(payload.saldo_cashback || 0),

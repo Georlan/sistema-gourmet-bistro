@@ -486,8 +486,8 @@ export default function CardapioDigital({
   const createdScheduleLabel = formatScheduledDate(createdOrder?.scheduled_for);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/75 p-0 sm:items-center sm:p-4 animate-fade-in" id="cardapio-checkout-overlay">
-      <div className="relative flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[30px] border border-koma-border bg-koma-panel text-koma-foreground shadow-2xl sm:rounded-[30px] animate-scale-up" id="checkout-card">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-black/80 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in" id="cardapio-checkout-overlay">
+      <div className="relative flex h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-koma-border bg-koma-panel text-koma-foreground shadow-2xl sm:rounded-[28px] animate-scale-up" id="checkout-card">
         {!createdOrder && (
           <header className="shrink-0 border-b border-koma-border px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
@@ -509,7 +509,7 @@ export default function CardapioDigital({
           </header>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 pb-8 sm:p-6 overscroll-contain no-scrollbar">
           {createdOrder ? (
             <div className="flex flex-col items-center justify-center py-7 text-center sm:py-10 animate-scale-up">
               <div className="grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-500"><CheckCircle2 className="h-9 w-9" /></div>
@@ -624,7 +624,7 @@ export default function CardapioDigital({
         </div>
 
         {!createdOrder && (
-          <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 sm:px-6 sm:py-5">
+          <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
             <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>

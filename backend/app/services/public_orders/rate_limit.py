@@ -32,6 +32,7 @@ def consume_rate_limit(
     raw_key: str,
     max_requests: int,
     window_seconds: int,
+    detail: str | None = None,
 ) -> None:
     """Consome uma cota de rate limit e persiste no banco.
 
@@ -101,7 +102,7 @@ def consume_rate_limit(
         from fastapi import HTTPException, status
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Limite de pedidos excedido temporariamente. Tente novamente mais tarde.",
+            detail=detail or "Limite de pedidos excedido temporariamente. Tente novamente mais tarde.",
         )
 
     rate.requisicoes += 1

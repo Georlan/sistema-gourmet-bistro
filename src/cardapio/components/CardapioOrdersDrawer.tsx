@@ -211,47 +211,70 @@ export default function CardapioOrdersDrawer({
   };
 
   if (!drawerOpen) {
-    if (!preferredChatOrder) return null;
+    const activeOrderForFab = preferredChatOrder || activeOrders[0] || null;
+    if (!activeOrderForFab) return null;
+
+    const displayOrder = activeOrderForFab;
+    const isChatAvailable = Boolean(resolveTrackingToken(displayOrder));
+    const statusText = orderStatusLabel(displayOrder.status);
 
     return (
       <div
         className={clsx(
-          "fixed right-4 z-40 sm:right-5 transition-all duration-300",
-          hasFloatingCart ? "bottom-24" : "bottom-5"
+          "fixed right-4 z-40 sm:right-6 transition-all duration-300 pointer-events-auto",
+          hasFloatingCart
+            ? "bottom-24"
+            : "bottom-5 sm:bottom-6 pb-[env(safe-area-inset-bottom,0px)]"
         )}
         id="floating-order-chat-container"
       >
         <button
           type="button"
-          onClick={openFloatingChat}
+          onClick={() => {
+            if (totalUnread > 0 && preferredChatOrder) {
+              openFloatingChat();
+            } else {
+              setFloatingOpen(true);
+            }
+          }}
           className={clsx(
-            "group relative flex min-h-12 items-center gap-2 rounded-full border border-emerald-400/35 bg-[#102019] px-3.5 py-3 text-emerald-100 shadow-2xl shadow-black/40 backdrop-blur transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-[#153026]",
-            totalUnread > 0 && "ring-4 ring-emerald-500/15",
+            "group relative flex min-h-12 items-center gap-2.5 rounded-full border border-emerald-500/40 bg-[#0d1612]/95 px-3.5 py-2 text-emerald-100 shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-[#13261c] active:scale-95 cursor-pointer",
+            totalUnread > 0 ? "ring-4 ring-emerald-500/20" : ""
           )}
           id="floating-order-chat-trigger"
           aria-label={totalUnread > 0
             ? `Abrir chat do pedido, ${totalUnread} ${totalUnread === 1 ? "mensagem nova" : "mensagens novas"}`
             : "Abrir chat do pedido"}
         >
-          {totalUnread > 0 && (
-            <span className="absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-emerald-400 px-1.5 text-[10px] font-black text-black shadow-lg animate-pulse">
+          {totalUnread > 0 ? (
+            <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-emerald-400 px-1 text-[10px] font-black text-black shadow-lg animate-pulse">
               {totalUnread > 99 ? "99+" : totalUnread}
+            </span>
+          ) : (
+            <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
             </span>
           )}
           <span className={clsx(
-            "grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-white",
-            totalUnread > 0 && "animate-pulse",
+            "grid h-8 w-8 place-items-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 shrink-0",
+            totalUnread > 0 && "animate-pulse"
           )}>
-            <MessageCircle className="h-4 w-4" />
+            {isChatAvailable ? <MessageCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
           </span>
-          <span className="hidden pr-1 text-left sm:block">
-            <strong className="block text-[11px] font-black">
-              {totalUnread > 0 ? "Nova mensagem" : "Chat do pedido"}
-            </strong>
-            <small className="block text-[9px] text-emerald-200/70">
-              Fale com o restaurante
-            </small>
-          </span>
+          <div className="text-left pr-1">
+            <div className="flex items-center gap-1.5">
+              <span className="block text-[9px] font-black uppercase tracking-wider text-emerald-400">
+                Pedido #{displayOrder.numero_pedido}
+              </span>
+              <strong className="text-[10px] font-black text-emerald-300">
+                {totalUnread > 0 ? "Nova mensagem" : "Chat do pedido"}
+              </strong>
+            </div>
+            <span className="block text-[11px] font-bold text-white leading-tight">
+              {statusText} · <small className="text-[9px] text-emerald-200/70 font-normal">Fale com o restaurante</small>
+            </span>
+          </div>
         </button>
       </div>
     );
