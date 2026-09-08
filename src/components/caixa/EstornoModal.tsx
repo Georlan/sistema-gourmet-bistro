@@ -8,6 +8,7 @@ import {
   obterPagamentoEstornavel,
 } from '../../config/caixaService';
 import { formatBackendDateTime } from '../../utils/dateTime';
+import { createSecureIdempotencyKey } from '../../utils/secureIdempotency';
 
 interface EstornoModalProps {
   onClose: () => void;
@@ -168,12 +169,9 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
           .filter(origin => origin.valor > 0)
       : [];
 
-    const idempotencyKey = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? `refund-${crypto.randomUUID()}`
-      : `refund-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
     try {
       setSubmitting(true);
+      const idempotencyKey = createSecureIdempotencyKey('refund');
       await estornarPagamento(selected.id, {
         valor: refundValue,
         motivo: reason.trim(),

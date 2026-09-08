@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { isCashierTableOrder as isTableCheckoutOrder } from '../../../domain/cashierOrderProjection';
 import type { Order, OrderItem } from '../../../types';
 import { operationalFetch } from '../../../utils/operationalRequest';
+import { createSecureIdempotencyKey } from '../../../utils/secureIdempotency';
 import type { CaixaPanelProps, CashierNotice, LoyaltyCustomer } from '../cashierContracts';
 import type {
   CashierTableCard,
@@ -194,13 +195,10 @@ export function useCheckoutController({
 
   const [paymentCPF, setPaymentCPF] = useState('');
 
-  // Generate idempotency key when checkout order changes
+  // A chave é criada somente no início da operação. Assim, ausência de CSPRNG
+  // vira erro controlado dentro do fluxo financeiro em vez de exceção de render/effect.
   useEffect(() => {
-    if (selectedOrder) {
-      setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
-    } else {
-      setIdempotencyKey('');
-    }
+    setIdempotencyKey('');
   }, [selectedOrder]);
 
   // Auto-initialize paymentValor when checkout modal opens. Mesas priorizam itens prontos;
@@ -251,7 +249,8 @@ export function useCheckoutController({
 
       const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];
       const isMesaPayment = isTableCheckoutOrder(selectedOrder);
-      const effectiveIdempotencyKey = idempotencyKey || `idem-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+      const effectiveIdempotencyKey = idempotencyKey || createSecureIdempotencyKey('idem');
+      if (!idempotencyKey) setIdempotencyKey(effectiveIdempotencyKey);
 
       if (selectedItemIds.length > 0) {
         const totalSelecionado = getSelectedItemsTotal(selectedOrder, selectedItemIds);
@@ -383,7 +382,7 @@ export function useCheckoutController({
       setPaymentValor('');
       setPaymentCPF('');
       setSelectedItemIds([]);
-      setIdempotencyKey(`idem-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+      setIdempotencyKey('');
 
       setSelectedOrder(null);
       setShowCheckoutModal(false);

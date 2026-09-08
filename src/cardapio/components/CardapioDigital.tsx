@@ -21,6 +21,7 @@ import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
+import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
@@ -80,11 +81,7 @@ const ORDER_REQUEST_TIMEOUT_MS = 15_000;
 const SCHEDULE_MIN_LEAD_MS = 30 * 60 * 1000;
 const SCHEDULE_MAX_HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
 
-const createIdempotencyKey = () => (
-  typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `ik-${Date.now()}-${Math.random().toString(36).substring(2, 12)}`
-);
+const createIdempotencyKey = () => createSecureIdempotencyKey("order");
 
 const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -347,7 +344,14 @@ export default function CardapioDigital({
       scheduled_for: scheduledForIso || null,
     };
     const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
-    const idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);
+    let idempotencyKey: string;
+    try {
+      idempotencyKey = resolvePersistentIdempotencyKey(fingerprint);
+    } catch (error) {
+      console.warn("Não foi possível criar uma chave de idempotência segura:", error);
+      setErrorMessage("Não foi possível iniciar o pedido com segurança. Atualize o navegador e tente novamente.");
+      return;
+    }
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
