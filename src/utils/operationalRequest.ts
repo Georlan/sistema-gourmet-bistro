@@ -1,3 +1,5 @@
+import { createSecureIdempotencyKey } from './secureIdempotency';
+
 export const OPERATION_TIMEOUT_MS = 20_000;
 
 export class OperationalRequestTimeoutError extends Error {
@@ -27,10 +29,7 @@ export async function operationalFetch(
 }
 
 export function makeOperationKey(prefix: string) {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  return createSecureIdempotencyKey(prefix);
 }
 
 type PendingOperation = {
