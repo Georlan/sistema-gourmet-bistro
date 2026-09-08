@@ -1,0 +1,149 @@
+.koma-sub-coming-payments {
+  margin-top: 1.15rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.koma-sub-coming-head {
+  margin-bottom: 0.8rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.koma-sub-coming-head strong {
+  display: block;
+  color: #dce4e0;
+  font-size: 0.82rem;
+}
+
+.koma-sub-coming-head small {
+  color: #74817b;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.koma-sub-coming-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.koma-sub-coming-method {
+  min-width: 0;
+  min-height: 82px;
+  padding: 0.9rem 1rem;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.7rem;
+  text-align: left;
+  color: #c8d2cd;
+  background: #080b0a;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.koma-sub-coming-method:hover,
+.koma-sub-coming-method.is-previewing {
+  border-color: rgba(11, 214, 173, 0.42);
+  background: rgba(11, 214, 173, 0.035);
+}
+
+.koma-sub-coming-method > svg {
+  margin-top: 2px;
+  color: var(--koma-accent);
+}
+
+.koma-sub-coming-method > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.22rem;
+}
+
+.koma-sub-coming-method strong {
+  color: #edf2ef;
+  font-size: 0.8rem;
+}
+
+.koma-sub-coming-method small {
+  color: #74817b;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.koma-sub-method-badge {
+  padding: 0.22rem 0.42rem;
+  color: #06251e;
+  background: #7fe7cf;
+  border-radius: 999px;
+  font-size: 0.53rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.koma-sub-method-badge.is-study {
+  color: #c7d1cc;
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.koma-sub-payment-preview {
+  margin-top: 0.8rem;
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 0.75rem;
+  color: #c6d0cb;
+  border: 1px solid rgba(11, 214, 173, 0.24);
+  background: linear-gradient(180deg, rgba(11, 214, 173, 0.065), rgba(11, 214, 173, 0.025));
+  border-radius: 8px;
+}
+
+.koma-sub-payment-preview > svg {
+  color: var(--koma-accent);
+}
+
+.koma-sub-payment-preview strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #f0f5f2;
+  font-size: 0.82rem;
+}
+
+.koma-sub-payment-preview p {
+  margin: 0;
+  color: #84918b;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.koma-sub-payment-preview b {
+  color: #b9c5bf;
+}
+
+@media (max-width: 760px) {
+  .koma-sub-coming-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .koma-sub-coming-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .koma-sub-coming-head small {
+    text-align: left;
+  }
+
+  .koma-sub-coming-method {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+  }
+}
