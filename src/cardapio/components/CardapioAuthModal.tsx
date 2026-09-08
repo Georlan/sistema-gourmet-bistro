@@ -20,6 +20,10 @@ interface CardapioAuthModalProps {
   onLoginSuccess: (profile: CustomerProfile, token: string) => void;
 }
 
+// Gap conhecido documentado:
+// Recuperação de senha por e-mail transacional pendente de provedor.
+export const PASSWORD_RECOVERY = "PENDENTE";
+
 export default function CardapioAuthModal({
   restaurantId,
   onClose,
@@ -100,8 +104,8 @@ export default function CardapioAuthModal({
       setErrorMessage("Informe um celular com DDD (10 ou 11 dígitos).");
       return;
     }
-    if (password.length < 6) {
-      setErrorMessage("A senha deve conter no mínimo 6 caracteres.");
+    if (password.length < 8) {
+      setErrorMessage("A senha deve conter no mínimo 8 caracteres.");
       return;
     }
 
@@ -261,6 +265,20 @@ export default function CardapioAuthModal({
               </div>
             </label>
 
+            <div className="flex justify-end pt-0.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setErrorMessage(
+                    "Recuperação de senha temporariamente indisponível. Fale diretamente com o restaurante.",
+                  )
+                }
+                className="text-[11px] text-gray-400 hover:text-gray-200 transition underline underline-offset-2 cursor-pointer"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={isSubmitting}
@@ -339,7 +357,7 @@ export default function CardapioAuthModal({
                 <input
                   type="password"
                   autoComplete="new-password"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);

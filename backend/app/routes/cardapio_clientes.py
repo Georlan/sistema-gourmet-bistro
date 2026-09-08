@@ -60,6 +60,12 @@ router = APIRouter(
 
 _GENERIC_OTP_ERROR = "Código inválido ou expirado. Solicite um novo código."
 
+# Gap conhecido documentado:
+# Recuperação de senha por e-mail transacional (SendGrid, SES, Resend ou SMTP)
+# pendente de definição de provedor e infraestrutura de e-mail.
+# NUNCA implementar reset sem token seguro enviado para canal verificado.
+PASSWORD_RECOVERY = "PENDENTE"
+
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
@@ -113,15 +119,6 @@ def register_customer(
     db: Session = Depends(get_db),
 ):
     with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
-        _consume_rate_limit(
-            db,
-            restaurante_id=restaurante_id,
-            scope="customer_register_ip",
-            raw_key=_client_ip(request),
-            max_requests=20,
-            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
-        )
-
         try:
             telefone_normalizado = normalizar_telefone_cliente(payload.telefone)
             nome_normalizado = normalizar_nome_cliente(payload.nome)
@@ -129,11 +126,50 @@ def register_customer(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
         email_normalizado = payload.email.strip().lower()
-        if len(payload.senha) < 6:
+        if len(payload.senha) < 8:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="A senha deve conter no mínimo 6 caracteres.",
+                detail="A senha deve conter no mínimo 8 caracteres.",
             )
+        if len(payload.senha) > 128:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A senha deve conter no máximo 128 caracteres.",
+            )
+
+        # Rate limits persistidos por IP, por e-mail e por telefone
+        _consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="customer_register_ip",
+            raw_key=_client_ip(request),
+            max_requests=20,
+            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+            detail="Muitas tentativas de cadastro a partir deste IP. Tente novamente mais tarde.",
+        )
+        db.commit()
+
+        _consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="customer_register_account",
+            raw_key=email_normalizado,
+            max_requests=5,
+            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+            detail="Muitas tentativas de cadastro para este e-mail. Tente novamente mais tarde.",
+        )
+        db.commit()
+
+        _consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="customer_register_phone",
+            raw_key=telefone_normalizado,
+            max_requests=5,
+            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+            detail="Muitas tentativas de cadastro para este telefone. Tente novamente mais tarde.",
+        )
+        db.commit()
 
         # 1. Verificar se já existe cliente com este e-mail neste restaurante
         cliente_por_email = db.query(Cliente).filter(
@@ -148,42 +184,35 @@ def register_customer(
             )
 
         # 2. Verificar se já existe cliente com este telefone
+        # REGRA DE SEGURANÇA (Anti-Account Takeover):
+        # NUNCA adotar cliente guest silenciosamente apenas pelo telefone.
+        # Sem canal verificado (SMS/WhatsApp OTP), conhecer o telefone de outra pessoa
+        # NÃO dá direito a reivindicar histórico/saldo antigo.
         cliente_por_tel = db.query(Cliente).filter(
             Cliente.restaurante_id == restaurante_id,
             Cliente.telefone == telefone_normalizado,
         ).with_for_update().first()
 
-        senha_hasheada = get_password_hash(payload.senha)
-        created = False
-
         if cliente_por_tel is not None:
-            if cliente_por_tel.senha_hash:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Este telefone já possui conta cadastrada. Faça login com seu e-mail.",
-                )
-            cliente_por_tel.email = email_normalizado
-            cliente_por_tel.senha_hash = senha_hasheada
-            cliente_por_tel.nome = nome_normalizado
-            if payload.endereco:
-                cliente_por_tel.endereco = payload.endereco.strip()
-            cliente = cliente_por_tel
-        else:
-            import uuid
-            cliente = Cliente(
-                id=str(uuid.uuid4()),
-                restaurante_id=restaurante_id,
-                telefone=telefone_normalizado,
-                nome=nome_normalizado,
-                email=email_normalizado,
-                senha_hash=senha_hasheada,
-                endereco=(payload.endereco or "").strip() or None,
-                saldo_pontos=0,
-                saldo_cashback=0.0,
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este telefone já está associado a um cadastro neste restaurante.",
             )
-            db.add(cliente)
-            created = True
 
+        import uuid
+        senha_hasheada = get_password_hash(payload.senha)
+        cliente = Cliente(
+            id=str(uuid.uuid4()),
+            restaurante_id=restaurante_id,
+            telefone=telefone_normalizado,
+            nome=nome_normalizado,
+            email=email_normalizado,
+            senha_hash=senha_hasheada,
+            endereco=(payload.endereco or "").strip() or None,
+            saldo_pontos=0,
+            saldo_cashback=0.0,
+        )
+        db.add(cliente)
         db.commit()
         db.refresh(cliente)
 
@@ -196,7 +225,7 @@ def register_customer(
             {
                 "event": "customers_updated",
                 "detail": {
-                    "action": "created" if created else "updated",
+                    "action": "created",
                     "cliente_id": cliente.id,
                 },
             },
@@ -219,6 +248,9 @@ def login_customer(
     db: Session = Depends(get_db),
 ):
     with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
+        email_normalizado = payload.email.strip().lower()
+
+        # Rate limits persistidos por IP e por conta (e-mail)
         _consume_rate_limit(
             db,
             restaurante_id=restaurante_id,
@@ -226,9 +258,21 @@ def login_customer(
             raw_key=_client_ip(request),
             max_requests=30,
             window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+            detail="Muitas tentativas de login a partir deste IP. Tente novamente mais tarde.",
         )
+        db.commit()
 
-        email_normalizado = payload.email.strip().lower()
+        _consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="customer_login_account",
+            raw_key=email_normalizado,
+            max_requests=5,
+            window_seconds=settings.CUSTOMER_OTP_WINDOW_SECONDS,
+            detail="Muitas tentativas de login para este e-mail. Tente novamente mais tarde.",
+        )
+        db.commit()
+
         cliente = db.query(Cliente).filter(
             Cliente.restaurante_id == restaurante_id,
             Cliente.email == email_normalizado,
