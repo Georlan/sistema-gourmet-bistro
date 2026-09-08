@@ -1,0 +1,87 @@
+#btn-caixa-conversas-drawer {
+  isolation: isolate;
+}
+
+#btn-caixa-conversas-drawer[aria-label*="mensagens não lidas"] {
+  border-color: rgba(52, 211, 153, 0.9) !important;
+  background:
+    radial-gradient(circle at 18% 15%, rgba(110, 231, 183, 0.18), transparent 44%),
+    linear-gradient(135deg, rgba(5, 150, 105, 0.96), rgba(6, 95, 70, 0.98)) !important;
+  color: #ecfdf5 !important;
+  box-shadow:
+    0 0 0 1px rgba(52, 211, 153, 0.28),
+    0 0 22px rgba(16, 185, 129, 0.28),
+    0 8px 22px rgba(0, 0, 0, 0.24);
+  transform: translateY(-1px);
+  animation: koma-chat-attention 1.9s ease-in-out infinite;
+}
+
+#btn-caixa-conversas-drawer[aria-label*="mensagens não lidas"]::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  z-index: -1;
+  border: 1px solid rgba(52, 211, 153, 0.42);
+  border-radius: 0.95rem;
+  pointer-events: none;
+  animation: koma-chat-attention-ring 1.9s ease-out infinite;
+}
+
+#btn-caixa-conversas-drawer[aria-label*="mensagens não lidas"] span[role="status"] {
+  min-width: 1.3rem;
+  height: 1.3rem;
+  padding-inline: 0.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fbbf24 !important;
+  color: #111827 !important;
+  box-shadow: 0 0 0 2px rgba(9, 12, 10, 0.75), 0 0 14px rgba(251, 191, 36, 0.3);
+  animation: koma-chat-badge-pop 1.9s ease-in-out infinite;
+}
+
+/* A prioridade continua existindo, mas sem repetir um estado amarelo em toda a inbox. */
+#cashier-chat-panel .text-amber-300,
+#cashier-chat-panel .sticky.top-0.z-10 {
+  display: none !important;
+}
+
+@keyframes koma-chat-attention {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(52, 211, 153, 0.28),
+      0 0 18px rgba(16, 185, 129, 0.2),
+      0 8px 22px rgba(0, 0, 0, 0.24);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(110, 231, 183, 0.55),
+      0 0 30px rgba(16, 185, 129, 0.42),
+      0 10px 26px rgba(0, 0, 0, 0.28);
+  }
+}
+
+@keyframes koma-chat-attention-ring {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.98);
+  }
+  75%, 100% {
+    opacity: 0;
+    transform: scale(1.14);
+  }
+}
+
+@keyframes koma-chat-badge-pop {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #btn-caixa-conversas-drawer[aria-label*="mensagens não lidas"],
+  #btn-caixa-conversas-drawer[aria-label*="mensagens não lidas"]::before,
+  #btn-caixa-conversas-drawer[aria-label*="mensagens não lidas"] span[role="status"] {
+    animation: none !important;
+  }
+}
