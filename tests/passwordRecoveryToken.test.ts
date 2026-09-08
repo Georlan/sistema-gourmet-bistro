@@ -9,7 +9,7 @@ test('consumes reset token from fragment and removes it immediately', () => {
   const location = { pathname: '/recuperar-senha', hash: '#token=secret-token&source=email' };
   const history = { replaceState: (...args: unknown[]) => { calls.push(args); } };
 
-  assert.equal(consumeRecoveryTokenFromLocation(location as Location, history as History), 'secret-token');
+  assert.equal(consumeRecoveryTokenFromLocation(location, history), 'secret-token');
   assert.deepEqual(calls, [[null, '', '/recuperar-senha']]);
 });
 
@@ -18,7 +18,7 @@ test('does not consume fragments outside the password reset route', () => {
   const location = { pathname: '/caixa', hash: '#token=secret-token' };
   const history = { replaceState: () => { cleared = true; } };
 
-  assert.equal(consumeRecoveryTokenFromLocation(location as Location, history as History), '');
+  assert.equal(consumeRecoveryTokenFromLocation(location, history), '');
   assert.equal(cleared, false);
 });
 
