@@ -35,16 +35,16 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expect(paymentGroup.getByRole('radio', { name: /^Cartão de crédito\b/ })).toBeVisible();
     await expect(paymentGroup.getByRole('radio')).toHaveCount(1);
 
-    const pixPreview = page.getByRole('button', { name: /^Pix anual à vista\b/ });
+    const pixPreview = page.getByRole('button', { name: /^Pix\b/ });
     await expect(pixPreview).toBeVisible();
     await expect(page.getByRole('button', { name: /^NuPay\b/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Mercado Pago\b/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Anual parcelado no cartão\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Boleto bancário\b/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Boleto bancário\b/ })).toHaveCount(0);
 
     await pixPreview.click();
-    await expect(page.getByText('Pix anual à vista · em validação', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Este preview não gera cobrança/)).toBeVisible();
+    await expect(page.getByText('Pix · em validação', { exact: true })).toBeVisible();
+    await expect(page.getByText(/só será ativado depois da confirmação real do pagamento/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
 
     await expectNoHorizontalOverflow(page);
@@ -63,7 +63,7 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expect(paymentGroup.getByRole('radio')).toHaveCount(1);
     await expect(page.getByRole('button', { name: /^Pix Automático\b/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^NuPay\b/ })).toBeVisible();
-    await expect(page.getByText('Pix anual à vista')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Pix\b/ })).toHaveCount(1);
     await expect(page.getByText('7 dias sem mensalidade fixa. A taxa por pedidos online pagos continua aplicável.', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: /^Pix Automático\b/ }).click();
@@ -73,27 +73,21 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expectNoHorizontalOverflow(page);
   });
 
-  test('landing usa os mesmos status de pagamento do checkout', async ({ page }) => {
+  test('landing mantém foco em plano e preço sem expor roadmap de pagamentos', async ({ page }) => {
     await page.goto('/landing#planos');
 
-    const paymentOptions = page.getByLabel('Formas de pagamento da adesão');
-    const statusBadges = paymentOptions.locator('.koma-plans-payment-option > span');
-    await expect(paymentOptions.getByText('Cartão de crédito', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('Pix Automático', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('NuPay', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('Mercado Pago', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('Pix anual à vista', { exact: true })).toHaveCount(0);
-    await expect(statusBadges.filter({ hasText: /^Disponível$/ })).toHaveCount(1);
+    await expect(page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' })).toBeVisible();
+    await expect(page.getByLabel('Formas de pagamento da adesão')).toHaveCount(0);
+    await expect(page.getByText('FORMAS DE PAGAMENTO', { exact: true })).toHaveCount(0);
 
     const billingSwitch = page.getByRole('group', { name: 'Escolha entre cobrança mensal ou anual' });
     await billingSwitch.getByRole('button', { name: /^Anual\b/ }).click();
 
-    await expect(paymentOptions.getByText('Pix anual à vista', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('Anual parcelado no cartão', { exact: true })).toBeVisible();
-    await expect(paymentOptions.getByText('Boleto bancário', { exact: true })).toBeVisible();
-    await expect(statusBadges.filter({ hasText: /^Em validação$/ })).toHaveCount(1);
-    await expect(statusBadges.filter({ hasText: /^Em estudo$/ })).toHaveCount(2);
-    await expect(page.getByText(/não 12 parcelas/)).toBeVisible();
+    await expect(page.getByText(/É apenas uma referência de preço/)).toBeVisible();
+    await expect(page.getByText(/condições de pagamento são apresentadas na contratação/)).toBeVisible();
+    await expect(page.getByText('Pix', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('NuPay', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Boleto bancário', { exact: true })).toHaveCount(0);
 
     await expectNoHorizontalOverflow(page);
   });
