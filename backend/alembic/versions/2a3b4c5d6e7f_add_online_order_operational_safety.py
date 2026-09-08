@@ -140,6 +140,12 @@ def upgrade() -> None:
                 REVOKE ALL ON TABLE public.online_order_operational_audit FROM PUBLIC;
                 REVOKE ALL ON TABLE public.online_order_operational_audit FROM koma_app;
                 GRANT SELECT, INSERT ON TABLE public.online_order_operational_audit TO koma_app;
+
+                IF to_regclass('public.online_order_operational_audit_id_seq') IS NOT NULL THEN
+                    REVOKE ALL ON SEQUENCE public.online_order_operational_audit_id_seq FROM PUBLIC;
+                    REVOKE ALL ON SEQUENCE public.online_order_operational_audit_id_seq FROM koma_app;
+                    GRANT USAGE, SELECT ON SEQUENCE public.online_order_operational_audit_id_seq TO koma_app;
+                END IF;
             END IF;
         END
         $$;
