@@ -82,8 +82,9 @@ class OrderChatHub:
         conversation_id: str,
         message_data: dict[str, Any],
     ) -> None:
-        self.broadcast_to_conversation(conversation_id, "message", message_data)
-        self.broadcast_to_caixa(restaurante_id, "new_message", message_data)
+        enriched = {**message_data, "conversation_id": conversation_id}
+        self.broadcast_to_conversation(conversation_id, "message", enriched)
+        self.broadcast_to_caixa(restaurante_id, "new_message", enriched)
 
     def publish_status(
         self,
@@ -91,8 +92,9 @@ class OrderChatHub:
         conversation_id: str,
         status_data: dict[str, Any],
     ) -> None:
-        self.broadcast_to_conversation(conversation_id, "status", status_data)
-        self.broadcast_to_caixa(restaurante_id, "status_changed", status_data)
+        enriched = {**status_data, "conversation_id": conversation_id}
+        self.broadcast_to_conversation(conversation_id, "status", enriched)
+        self.broadcast_to_caixa(restaurante_id, "status_changed", enriched)
 
     def publish_read(
         self,
@@ -100,8 +102,9 @@ class OrderChatHub:
         conversation_id: str,
         read_data: dict[str, Any],
     ) -> None:
-        self.broadcast_to_conversation(conversation_id, "read_update", read_data)
-        self.broadcast_to_caixa(restaurante_id, "read_update", read_data)
+        enriched = {**read_data, "conversation_id": conversation_id}
+        self.broadcast_to_conversation(conversation_id, "read_update", enriched)
+        self.broadcast_to_caixa(restaurante_id, "read_update", enriched)
 
 
 order_chat_hub = OrderChatHub()

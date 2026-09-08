@@ -6,21 +6,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
-  Clock,
   ExternalLink,
   MessageSquare,
-  Package,
   RefreshCw,
   Send,
-  User,
   X,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../../../config/api';
+import { consumeCashierChatEvents } from './cashierChatRealtime';
 
 export interface CaixaConversationItem {
-  id: string; // conversation_id
-  pedido_id: string; // comanda_id
+  id: string;
+  pedido_id: string;
   numero_pedido: number | null;
   cliente_nome: string;
   tipo_pedido: string;
@@ -56,6 +54,11 @@ interface CashierConversationsDrawerProps {
   onUnreadCountChange?: (count: number) => void;
 }
 
+interface MessageState {
+  conversationId: string | null;
+  items: CaixaChatMessage[];
+}
+
 export function CashierConversationsDrawer({
   isOpen,
   authorization,
@@ -63,27 +66,33 @@ export function CashierConversationsDrawer({
   onInspectOrder,
   onUnreadCountChange,
 }: CashierConversationsDrawerProps) {
-  const getAuthHeaders = () => ({ Authorization: authorization });
   const [conversations, setConversations] = useState<CaixaConversationItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<CaixaChatMessage[]>([]);
+  const [messageState, setMessageState] = useState<MessageState>({ conversationId: null, items: [] });
   const [loadingList, setLoadingList] = useState<boolean>(false);
   const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
-
   const [replyText, setReplyText] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+  const messageGenerationRef = useRef(0);
+  const messageAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   const selectedConv = useMemo(
-    () => conversations.find((c) => c.id === selectedId) || null,
+    () => conversations.find((conversation) => conversation.id === selectedId) || null,
     [conversations, selectedId],
   );
 
+  const messages = messageState.conversationId === selectedId ? messageState.items : [];
+
   const totalUnread = useMemo(
-    () => conversations.reduce((acc, c) => acc + (c.unread_count || 0), 0),
+    () => conversations.reduce((acc, conversation) => acc + (conversation.unread_count || 0), 0),
     [conversations],
   );
 
@@ -100,153 +109,230 @@ export function CashierConversationsDrawer({
     }
   }, []);
 
-  // Busca lista de conversas
   const fetchConversations = useCallback(async () => {
+    if (!authorization) return;
     try {
       setLoadingList(true);
-      const res = await fetch(`${API_BASE_URL}/api/caixa/conversas`, {
-        headers: getAuthHeaders(),
+      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas`, {
+        headers: { Authorization: authorization },
+        cache: 'no-store',
       });
-      if (res.ok) {
-        const data: CaixaConversationItem[] = await res.json();
-        setConversations(data);
+      if (!response.ok) {
+        throw new Error(`Falha ao listar conversas (${response.status}).`);
       }
-    } catch (err) {
-      console.warn('Erro ao listar conversas do Caixa:', err);
+      const data: CaixaConversationItem[] = await response.json();
+      setConversations(data);
+      const currentSelection = selectedIdRef.current;
+      if (currentSelection && !data.some((conversation) => conversation.id === currentSelection)) {
+        selectedIdRef.current = null;
+        setSelectedId(null);
+        setMessageState({ conversationId: null, items: [] });
+      }
+    } catch (error) {
+      console.warn('Erro ao listar conversas do Caixa:', error);
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [authorization]);
 
-  // Busca mensagens da conversa selecionada e marca como lida
-  const loadMessages = useCallback(
-    async (convId: string) => {
-      try {
-        setLoadingMessages(true);
-        const [msgsRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/caixa/conversas/${convId}/messages`, {
-            headers: getAuthHeaders(),
-          }),
-          fetch(`${API_BASE_URL}/api/caixa/conversas/${convId}/read`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-          }).catch(() => {}),
-        ]);
+  const loadMessages = useCallback(async (conversationId: string) => {
+    if (!authorization) return;
 
-        if (msgsRes.ok) {
-          const msgs: CaixaChatMessage[] = await msgsRes.json();
-          setMessages(msgs);
-          // Zera unread na lista local
-          setConversations((prev) =>
-            prev.map((c) => (c.id === convId ? { ...c, unread_count: 0 } : c)),
-          );
-          setTimeout(() => scrollToBottom(false), 50);
-        }
-      } catch (err) {
-        console.warn('Erro ao carregar mensagens da conversa:', err);
-      } finally {
+    const generation = ++messageGenerationRef.current;
+    messageAbortRef.current?.abort();
+    const controller = new AbortController();
+    messageAbortRef.current = controller;
+
+    if (selectedIdRef.current === conversationId) {
+      setLoadingMessages(true);
+      setMessageState((current) => current.conversationId === conversationId
+        ? current
+        : { conversationId, items: [] });
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`,
+        {
+          headers: { Authorization: authorization },
+          cache: 'no-store',
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) {
+        throw new Error(`Falha ao carregar conversa (${response.status}).`);
+      }
+      const items: CaixaChatMessage[] = await response.json();
+
+      if (
+        controller.signal.aborted
+        || generation !== messageGenerationRef.current
+        || selectedIdRef.current !== conversationId
+      ) {
+        return;
+      }
+
+      setMessageState({ conversationId, items: Array.isArray(items) ? items : [] });
+      setConversations((current) => current.map((conversation) => (
+        conversation.id === conversationId ? { ...conversation, unread_count: 0 } : conversation
+      )));
+
+      void fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
+        method: 'POST',
+        headers: { Authorization: authorization },
+      }).catch(() => {});
+
+      window.setTimeout(() => scrollToBottom(false), 50);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        console.warn('Erro ao carregar mensagens da conversa:', error);
+      }
+    } finally {
+      if (generation === messageGenerationRef.current) {
         setLoadingMessages(false);
       }
-    },
-    [scrollToBottom],
-  );
+    }
+  }, [authorization, scrollToBottom]);
 
-  // Inicialização ao abrir gaveta
   useEffect(() => {
     if (!isOpen) return;
-    fetchConversations();
+    void fetchConversations();
   }, [isOpen, fetchConversations]);
 
-  // Carrega mensagens ao mudar conversa selecionada
   useEffect(() => {
     if (!isOpen || !selectedId) return;
-    loadMessages(selectedId);
+    void loadMessages(selectedId);
   }, [isOpen, selectedId, loadMessages]);
 
-  // Se abrir e houver conversas mas nenhuma selecionada no desktop, seleciona a primeira
   useEffect(() => {
     if (isOpen && !selectedId && conversations.length > 0) {
       if (typeof window !== 'undefined' && window.innerWidth >= 640) {
+        selectedIdRef.current = conversations[0].id;
         setSelectedId(conversations[0].id);
       }
     }
   }, [isOpen, selectedId, conversations]);
 
-  // Polling e SSE quando aberto
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !authorization) return;
 
-    const interval = setInterval(() => {
-      fetchConversations();
-      if (selectedId) {
-        fetch(`${API_BASE_URL}/api/caixa/conversas/${selectedId}/messages`, {
-          headers: getAuthHeaders(),
-        })
-          .then((r) => (r.ok ? r.json() : []))
-          .then((data: CaixaChatMessage[]) => {
-            if (Array.isArray(data) && data.length > 0) {
-              setMessages(data);
-            }
-          })
-          .catch(() => {});
+    const controller = new AbortController();
+    let fallbackInterval: number | null = null;
+    let reconnectTimer: number | null = null;
+    let stopped = false;
+
+    const stopFallback = () => {
+      if (fallbackInterval !== null) {
+        window.clearInterval(fallbackInterval);
+        fallbackInterval = null;
       }
-    }, 6000);
+    };
 
-    return () => clearInterval(interval);
-  }, [isOpen, selectedId, fetchConversations]);
+    const refreshSelected = () => {
+      const current = selectedIdRef.current;
+      if (current) void loadMessages(current);
+    };
 
-  // Envio de resposta pelo Caixa
-  const handleSendReply = async (e: React.FormEvent) => {
-    e.preventDefault();
+    const startFallback = () => {
+      if (fallbackInterval !== null) return;
+      fallbackInterval = window.setInterval(() => {
+        if (document.hidden) return;
+        void fetchConversations();
+        refreshSelected();
+      }, 15000);
+    };
+
+    const connect = () => {
+      if (stopped || controller.signal.aborted) return;
+      void consumeCashierChatEvents({
+        url: `${API_BASE_URL}/api/caixa/conversas/events`,
+        authorization,
+        signal: controller.signal,
+        onOpen: stopFallback,
+        onEvent: ({ event, data }) => {
+          if (event === 'connected') return;
+          void fetchConversations();
+          const eventConversationId = typeof data?.conversation_id === 'string'
+            ? data.conversation_id
+            : null;
+          if (eventConversationId && selectedIdRef.current === eventConversationId) {
+            void loadMessages(eventConversationId);
+          }
+        },
+      }).catch((error) => {
+        if (stopped || controller.signal.aborted) return;
+        console.warn('Realtime do chat do Caixa degradado; usando polling de fallback:', error);
+        startFallback();
+        reconnectTimer = window.setTimeout(connect, 5000);
+      });
+    };
+
+    connect();
+    return () => {
+      stopped = true;
+      controller.abort();
+      stopFallback();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+    };
+  }, [isOpen, authorization, fetchConversations, loadMessages]);
+
+  useEffect(() => () => {
+    messageGenerationRef.current += 1;
+    messageAbortRef.current?.abort();
+  }, []);
+
+  const handleSendReply = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!selectedId || !replyText.trim() || sending) return;
 
+    const targetConversationId = selectedId;
     setSending(true);
     setErrorText(null);
     const bodyToSend = replyText.trim();
 
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/caixa/conversas/${selectedId}/messages`,
+      const response = await fetch(
+        `${API_BASE_URL}/api/caixa/conversas/${targetConversationId}/messages`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...getAuthHeaders(),
+            Authorization: authorization,
           },
           body: JSON.stringify({ body: bodyToSend }),
         },
       );
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Erro ao enviar resposta.');
       }
 
-      const sentMsg: CaixaChatMessage = await res.json();
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === sentMsg.id)) return prev;
-        return [...prev, sentMsg];
-      });
-      setReplyText('');
-      // Atualiza preview na lista de conversas
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === selectedId
-            ? {
-                ...c,
-                last_message: {
-                  id: sentMsg.id,
-                  sender_type: sentMsg.sender_type,
-                  body: sentMsg.body,
-                  created_at: sentMsg.created_at || null,
-                },
-              }
-            : c,
-        ),
-      );
-      setTimeout(() => scrollToBottom(true), 50);
-    } catch (err: any) {
-      setErrorText(err?.message || 'Falha ao enviar resposta.');
+      const sentMessage: CaixaChatMessage = await response.json();
+      if (selectedIdRef.current === targetConversationId) {
+        setMessageState((current) => {
+          const items = current.conversationId === targetConversationId ? current.items : [];
+          if (items.some((message) => message.id === sentMessage.id)) return current;
+          return { conversationId: targetConversationId, items: [...items, sentMessage] };
+        });
+        setReplyText('');
+        window.setTimeout(() => scrollToBottom(true), 50);
+      }
+      setConversations((current) => current.map((conversation) => (
+        conversation.id === targetConversationId
+          ? {
+              ...conversation,
+              last_message: {
+                id: sentMessage.id,
+                sender_type: sentMessage.sender_type,
+                body: sentMessage.body,
+                created_at: sentMessage.created_at || null,
+              },
+            }
+          : conversation
+      )));
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : 'Falha ao enviar resposta.');
     } finally {
       setSending(false);
     }
@@ -266,7 +352,6 @@ export function CashierConversationsDrawer({
         aria-label="Central de Mensagens dos Pedidos"
         id="cashier-chat-panel"
       >
-        {/* Drawer Header */}
         <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4 bg-zinc-900/60">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold">
@@ -274,33 +359,26 @@ export function CashierConversationsDrawer({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-white">
-                  Conversas dos Pedidos
-                </h2>
+                <h2 className="text-base font-bold text-white">Conversas dos Pedidos</h2>
                 {totalUnread > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black">
                     {totalUnread} novas
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-400">
-                Atendimento direto cliente ↔ restaurante sem intermediários
-              </p>
+              <p className="text-xs text-zinc-400">Atendimento direto cliente ↔ restaurante sem intermediários</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={fetchConversations}
+              onClick={() => void fetchConversations()}
               disabled={loadingList}
               className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white transition disabled:opacity-50"
               title="Atualizar conversas"
             >
-              <RefreshCw
-                size={16}
-                className={clsx(loadingList && 'animate-spin text-emerald-400')}
-              />
+              <RefreshCw size={16} className={clsx(loadingList && 'animate-spin text-emerald-400')} />
             </button>
             <button
               type="button"
@@ -313,9 +391,7 @@ export function CashierConversationsDrawer({
           </div>
         </div>
 
-        {/* Content Body: Two Columns */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Coluna Esquerda: Lista de Conversas (w-72 ou full se mobile sem seleção) */}
           <div
             className={clsx(
               'w-full sm:w-80 border-r border-zinc-800 flex flex-col bg-zinc-900/40 overflow-y-auto',
@@ -329,13 +405,16 @@ export function CashierConversationsDrawer({
               </div>
             ) : (
               <div className="divide-y divide-zinc-800/60">
-                {conversations.map((conv) => {
-                  const isSelected = conv.id === selectedId;
+                {conversations.map((conversation) => {
+                  const isSelected = conversation.id === selectedId;
                   return (
                     <button
-                      key={conv.id}
+                      key={conversation.id}
                       type="button"
-                      onClick={() => setSelectedId(conv.id)}
+                      onClick={() => {
+                        selectedIdRef.current = conversation.id;
+                        setSelectedId(conversation.id);
+                      }}
                       className={clsx(
                         'w-full text-left p-3.5 transition flex flex-col gap-1.5',
                         isSelected
@@ -345,37 +424,31 @@ export function CashierConversationsDrawer({
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white">
-                            Pedido #{conv.numero_pedido || '—'}
-                          </span>
+                          <span className="text-xs font-bold text-white">Pedido #{conversation.numero_pedido || '—'}</span>
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-medium">
-                            {conv.tipo_pedido}
+                            {conversation.tipo_pedido}
                           </span>
                         </div>
-                        {conv.unread_count > 0 && (
+                        {conversation.unread_count > 0 && (
                           <span className="w-5 h-5 rounded-full bg-emerald-500 text-black text-[10px] font-black flex items-center justify-center animate-pulse">
-                            {conv.unread_count}
+                            {conversation.unread_count}
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-300 font-medium truncate max-w-[140px]">
-                          {conv.cliente_nome}
-                        </span>
-                        <span className="text-[10px] text-zinc-500 capitalize">
-                          {conv.status_pedido}
-                        </span>
+                        <span className="text-zinc-300 font-medium truncate max-w-[140px]">{conversation.cliente_nome}</span>
+                        <span className="text-[10px] text-zinc-500 capitalize">{conversation.status_pedido}</span>
                       </div>
 
-                      {conv.last_message && (
+                      {conversation.last_message && (
                         <p className="text-[11px] text-zinc-400 line-clamp-1 break-words">
-                          {conv.last_message.sender_type === 'staff' ? (
+                          {conversation.last_message.sender_type === 'staff' ? (
                             <span className="text-zinc-500">Você: </span>
-                          ) : conv.last_message.sender_type === 'customer' ? (
+                          ) : conversation.last_message.sender_type === 'customer' ? (
                             <span className="text-emerald-400 font-medium">Cliente: </span>
                           ) : null}
-                          {conv.last_message.body}
+                          {conversation.last_message.body}
                         </p>
                       )}
                     </button>
@@ -385,7 +458,6 @@ export function CashierConversationsDrawer({
             )}
           </div>
 
-          {/* Coluna Direita: Conversa Ativa */}
           <div
             className={clsx(
               'flex-1 flex flex-col bg-zinc-950',
@@ -394,21 +466,23 @@ export function CashierConversationsDrawer({
           >
             {selectedConv ? (
               <>
-                {/* Header da conversa ativa */}
                 <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/40">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => setSelectedId(null)}
+                      onClick={() => {
+                        selectedIdRef.current = null;
+                        messageGenerationRef.current += 1;
+                        messageAbortRef.current?.abort();
+                        setSelectedId(null);
+                      }}
                       className="sm:hidden p-1 text-zinc-400 hover:text-white"
                     >
                       ←
                     </button>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-white">
-                          Pedido #{selectedConv.numero_pedido || '—'}
-                        </h3>
+                        <h3 className="text-sm font-bold text-white">Pedido #{selectedConv.numero_pedido || '—'}</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 capitalize">
                           {selectedConv.status_pedido}
                         </span>
@@ -434,11 +508,7 @@ export function CashierConversationsDrawer({
                   )}
                 </div>
 
-                {/* Feed de mensagens */}
-                <div
-                  ref={chatScrollRef}
-                  className="flex-1 p-4 overflow-y-auto space-y-3"
-                >
+                <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3">
                   {loadingMessages ? (
                     <div className="h-full flex items-center justify-center">
                       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -449,21 +519,21 @@ export function CashierConversationsDrawer({
                       <p>Nenhuma mensagem registrada para este pedido.</p>
                     </div>
                   ) : (
-                    messages.map((msg) => {
-                      if (msg.sender_type === 'system') {
+                    messages.map((message) => {
+                      if (message.sender_type === 'system') {
                         return (
-                          <div key={msg.id} className="flex justify-center my-2">
-                            <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium">
-                              {msg.body}
+                          <div key={message.id} className="flex justify-center my-2">
+                            <span className="px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium whitespace-pre-wrap break-words">
+                              {message.body}
                             </span>
                           </div>
                         );
                       }
 
-                      const isStaff = msg.sender_type === 'staff';
+                      const isStaff = message.sender_type === 'staff';
                       return (
                         <div
-                          key={msg.id}
+                          key={message.id}
                           className={clsx(
                             'flex flex-col max-w-[80%]',
                             isStaff ? 'ml-auto items-end' : 'mr-auto items-start',
@@ -474,16 +544,17 @@ export function CashierConversationsDrawer({
                           </span>
                           <div
                             className={clsx(
-                              'rounded-2xl px-3.5 py-2 text-xs leading-relaxed break-words',
+                              'rounded-2xl px-3.5 py-2 text-xs leading-relaxed break-words whitespace-pre-wrap',
                               isStaff
                                 ? 'bg-emerald-600 text-white rounded-tr-none'
                                 : 'bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-tl-none',
                             )}
-                            dangerouslySetInnerHTML={{ __html: msg.body }}
-                          />
-                          {msg.created_at && (
+                          >
+                            {message.body}
+                          </div>
+                          {message.created_at && (
                             <span className="text-[9px] text-zinc-600 mt-0.5 px-1 font-mono">
-                              {new Date(msg.created_at).toLocaleTimeString([], {
+                              {new Date(message.created_at).toLocaleTimeString([], {
                                 hour: '2-digit',
                                 minute: '2-digit',
                               })}
@@ -495,7 +566,6 @@ export function CashierConversationsDrawer({
                   )}
                 </div>
 
-                {/* Input de resposta */}
                 <div className="p-3 border-t border-zinc-800 bg-zinc-900/60">
                   {errorText && (
                     <div className="text-[11px] text-rose-400 mb-1.5 px-1 flex items-center gap-1">
@@ -507,7 +577,7 @@ export function CashierConversationsDrawer({
                     <input
                       type="text"
                       value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
+                      onChange={(event) => setReplyText(event.target.value)}
                       placeholder="Responder ao cliente..."
                       maxLength={1000}
                       disabled={sending}

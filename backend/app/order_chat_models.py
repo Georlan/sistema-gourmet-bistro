@@ -31,6 +31,12 @@ class OrderConversation(Base):
         UniqueConstraint("public_access_token_hash", name="uq_order_conversations_token_hash"),
         Index("ix_order_conversations_token_hash", "public_access_token_hash", unique=True),
         Index("ix_order_conversations_tenant_updated", "restaurante_id", "updated_at"),
+        Index(
+            "ix_order_conversations_tenant_open_updated",
+            "restaurante_id",
+            "closed_at",
+            "updated_at",
+        ),
         Index("ix_order_conversations_pedido_id", "pedido_id"),
     )
 
@@ -101,6 +107,14 @@ class OrderMessage(Base):
     sender_type = Column(String(20), nullable=False)  # customer | staff | system
     sender_user_id = Column(String, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     body = Column(Text, nullable=False)
+    # Mensagens históricas eram persistidas com html.escape(). O formato explícito
+    # permite decodificá-las na borda sem continuar armazenando entidades HTML.
+    body_format = Column(
+        String(32),
+        nullable=False,
+        default="plain_text_v2",
+        server_default="plain_text_v2",
+    )
     event_key = Column(String(64), nullable=True)
     created_at = Column(
         DateTime(timezone=True),

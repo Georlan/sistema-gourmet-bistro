@@ -129,10 +129,24 @@ export default function CardapioOrderChatPanel({
     void refresh();
     if (!apiRoot) return;
 
-    const interval = window.setInterval(() => void refresh(), 6000);
     let source: EventSource | null = null;
+    let fallbackInterval: number | null = null;
+
+    const stopFallback = () => {
+      if (fallbackInterval !== null) {
+        window.clearInterval(fallbackInterval);
+        fallbackInterval = null;
+      }
+    };
+    const startFallback = () => {
+      if (fallbackInterval !== null) return;
+      fallbackInterval = window.setInterval(() => void refresh(), 15000);
+    };
+
     try {
       source = new EventSource(`${apiRoot}/events`);
+      source.onopen = stopFallback;
+      source.onerror = startFallback;
       source.addEventListener("message", (event: MessageEvent) => {
         try {
           const incoming = JSON.parse(event.data) as TrackingMessage;
@@ -140,7 +154,7 @@ export default function CardapioOrderChatPanel({
             ? current
             : [...current, incoming]);
         } catch {
-          // Polling cobre qualquer evento malformado/transitório.
+          startFallback();
         }
       });
       source.addEventListener("status", (event: MessageEvent) => {
@@ -153,15 +167,16 @@ export default function CardapioOrderChatPanel({
             conversa: current?.conversa,
           }));
         } catch {
-          // Polling cobre qualquer evento malformado/transitório.
+          startFallback();
         }
       });
     } catch {
       source = null;
+      startFallback();
     }
 
     return () => {
-      window.clearInterval(interval);
+      stopFallback();
       source?.close();
     };
   }, [apiRoot, order.status, order.tipo, refresh]);
@@ -188,7 +203,7 @@ export default function CardapioOrderChatPanel({
     ? ["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"]
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
   const closedAt = tracking?.closed_at || tracking?.conversa?.closed_at || null;
-  const isClosed = Boolean(closedAt && Date.now() > new Date(closedAt).getTime());
+  const isClosed = Boolean(closedAt);
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
