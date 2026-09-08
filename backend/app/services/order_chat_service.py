@@ -1,7 +1,7 @@
 """Serviço de domínio para Gerenciamento de Chat e Acompanhamento de Pedidos.
 
 Centraliza regras de criação de conversas por comanda, segurança de tokens públicos
-de alta entropia (SHA-256), sanitização de texto, idempotência de mensagens de sistema,
+de alta entropia (SHA-256), validação de texto, idempotência de mensagens de sistema,
 ciclo de vida (closed_at) e controle de mensagens lidas/não lidas (read tracking).
 """
 
@@ -15,11 +15,10 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, text
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, text
+from sqlalchemy.orm import Session, joinedload
 
-from ..database import tenant_session_scope
-from ..models import Comanda, Usuario
+from ..models import Comanda
 from ..order_chat_models import OrderConversation, OrderMessage
 from .order_chat_hub import order_chat_hub
 
@@ -32,17 +31,9 @@ CANONICAL_STATUS_MESSAGES = {
     "recusado": "O restaurante não conseguiu aceitar este pedido.",
 }
 
-# Janela de tolerância de pós-venda após comanda finalizada: 2 horas
-POST_SALE_WINDOW_HOURS = 2
-
-
-def _ensure_utc(dt: datetime.datetime | None) -> datetime.datetime | None:
-    """Garante que o objeto datetime possua timezone UTC para comparações seguras."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=datetime.timezone.utc)
-    return dt.astimezone(datetime.timezone.utc)
+TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado"})
+LEGACY_ESCAPED_BODY_FORMAT = "html_escaped_v1"
+PLAIN_TEXT_BODY_FORMAT = "plain_text_v2"
 
 
 def compute_comanda_total(comanda: Comanda | None) -> float:
@@ -73,7 +64,12 @@ def generate_secure_tracking_token() -> tuple[str, str]:
 
 
 def sanitize_message_body(raw_body: str) -> str:
-    """Sanitiza o corpo da mensagem: remove espaços extras, valida tamanho e neutraliza HTML/XSS."""
+    """Valida e normaliza texto sem persistir entidades HTML.
+
+    Segurança de apresentação pertence ao renderer: consumidores web devem renderizar
+    ``body`` como texto React, nunca como HTML confiável. Mensagens históricas escapadas
+    são identificadas por ``body_format`` e decodificadas somente na serialização.
+    """
     if not raw_body or not isinstance(raw_body, str):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -90,8 +86,21 @@ def sanitize_message_body(raw_body: str) -> str:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A mensagem pode conter no máximo 1000 caracteres.",
         )
-    # Neutraliza qualquer marcação HTML para prevenir XSS
-    return html.escape(trimmed)
+    return trimmed
+
+
+def assert_conversation_writable(conv: OrderConversation) -> None:
+    """Barreira única de escrita para cliente e equipe.
+
+    ``closed_at`` deixa de representar uma janela futura de pós-venda: qualquer valor
+    não nulo significa histórico read-only. Isso também encerra imediatamente as
+    conversas antigas que ainda carregavam um ``closed_at`` agendado no futuro.
+    """
+    if conv.closed_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O atendimento deste pedido já foi encerrado.",
+        )
 
 
 def create_conversation_for_order(
@@ -129,7 +138,6 @@ def create_conversation_for_order(
     db.add(conv)
     db.flush()
 
-    # Mensagem de boas-vindas / registro inicial do sistema
     initial_msg = OrderMessage(
         id=str(uuid.uuid4()),
         restaurante_id=restaurante_id,
@@ -137,6 +145,7 @@ def create_conversation_for_order(
         pedido_id=pedido_id,
         sender_type="system",
         body="Seu pedido foi recebido pelo restaurante.",
+        body_format=PLAIN_TEXT_BODY_FORMAT,
         event_key="order_created",
         created_at=now,
     )
@@ -198,11 +207,7 @@ def post_system_order_event(
     pedido_id: str,
     new_status: str,
 ) -> OrderMessage | None:
-    """Emite uma mensagem automática de transição da máquina de estados do pedido.
-
-    Garante idempotência estrita via event_key para que múltiplos retries ou chamadas
-    repetidas de transição não dupliquem mensagens no feed.
-    """
+    """Emite uma mensagem automática de transição da máquina de estados do pedido."""
     conv = (
         db.query(OrderConversation)
         .filter(
@@ -217,7 +222,6 @@ def post_system_order_event(
     norm_status = (new_status or "").strip().lower()
     event_key = f"status:{norm_status}"
 
-    # Idempotência: verifica se a mensagem deste status já foi registrada
     existing_msg = (
         db.query(OrderMessage)
         .filter(
@@ -242,6 +246,7 @@ def post_system_order_event(
         pedido_id=pedido_id,
         sender_type="system",
         body=body,
+        body_format=PLAIN_TEXT_BODY_FORMAT,
         event_key=event_key,
         created_at=now,
     )
@@ -249,13 +254,10 @@ def post_system_order_event(
         with db.begin_nested():
             db.add(msg)
             conv.updated_at = now
-            # Se status for terminal, agenda/aplica o encerramento da conversa
-            if norm_status in {"finalizado", "recusado"} and conv.closed_at is None:
-                conv.closed_at = now + datetime.timedelta(hours=POST_SALE_WINDOW_HOURS)
+            if norm_status in TERMINAL_ORDER_STATUSES:
+                conv.closed_at = now
             db.flush()
     except Exception:
-        # Em concorrência massiva, outra transação pode ter inserido o mesmo event_key
-        # simultaneamente. O savepoint interno neutraliza o erro sem corromper a sessão.
         existing = (
             db.query(OrderMessage)
             .filter(
@@ -273,7 +275,11 @@ def post_system_order_event(
     order_chat_hub.publish_status(
         restaurante_id,
         conv.id,
-        {"status": norm_status, "body": body, "closed_at": conv.closed_at.isoformat() if conv.closed_at else None},
+        {
+            "status": norm_status,
+            "body": body,
+            "closed_at": conv.closed_at.isoformat() if conv.closed_at else None,
+        },
     )
 
     return msg
@@ -287,7 +293,7 @@ def send_customer_message(
     raw_body: str,
 ) -> OrderMessage:
     """Valida e persiste uma mensagem enviada pelo cliente no Cardápio."""
-    sanitized_body = sanitize_message_body(raw_body)
+    body = sanitize_message_body(raw_body)
     now = datetime.datetime.now(datetime.timezone.utc)
 
     conv = (
@@ -303,15 +309,8 @@ def send_customer_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversa não encontrada.",
         )
+    assert_conversation_writable(conv)
 
-    closed_at_utc = _ensure_utc(conv.closed_at)
-    if closed_at_utc and now > closed_at_utc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="O atendimento deste pedido já foi encerrado.",
-        )
-
-    # Rate limiting: max 10 mensagens do cliente por minuto na mesma conversa
     one_minute_ago = now - datetime.timedelta(minutes=1)
     recent_count = (
         db.query(func.count(OrderMessage.id))
@@ -336,7 +335,8 @@ def send_customer_message(
         pedido_id=pedido_id,
         sender_type="customer",
         sender_user_id=None,
-        body=sanitized_body,
+        body=body,
+        body_format=PLAIN_TEXT_BODY_FORMAT,
         created_at=now,
     )
     db.add(msg)
@@ -358,7 +358,7 @@ def send_staff_message(
     raw_body: str,
 ) -> OrderMessage:
     """Valida e persiste uma resposta enviada pelo atendente/operador do Caixa."""
-    sanitized_body = sanitize_message_body(raw_body)
+    body = sanitize_message_body(raw_body)
     now = datetime.datetime.now(datetime.timezone.utc)
 
     conv = (
@@ -374,6 +374,7 @@ def send_staff_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversa não encontrada.",
         )
+    assert_conversation_writable(conv)
 
     msg = OrderMessage(
         id=str(uuid.uuid4()),
@@ -382,7 +383,8 @@ def send_staff_message(
         pedido_id=conv.pedido_id,
         sender_type="staff",
         sender_user_id=user_id,
-        body=sanitized_body,
+        body=body,
+        body_format=PLAIN_TEXT_BODY_FORMAT,
         created_at=now,
     )
     db.add(msg)
@@ -447,14 +449,17 @@ def mark_staff_read(
 
 
 def serialize_message(msg: OrderMessage) -> dict[str, Any]:
-    """Serializa com segurança uma mensagem para retorno de API."""
+    """Serializa mensagem como texto; converte somente o legado HTML-escaped."""
+    body = msg.body
+    if getattr(msg, "body_format", None) == LEGACY_ESCAPED_BODY_FORMAT:
+        body = html.unescape(body)
     return {
         "id": msg.id,
         "conversation_id": msg.conversation_id,
         "pedido_id": msg.pedido_id,
         "sender_type": msg.sender_type,
         "sender_user_id": msg.sender_user_id,
-        "body": msg.body,
+        "body": body,
         "event_key": msg.event_key,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
@@ -464,44 +469,74 @@ def list_caixa_conversations(
     db: Session,
     restaurante_id: int,
 ) -> list[dict[str, Any]]:
-    """Lista as conversas ativas do restaurante com dados do pedido, preview e contagem de não lidas."""
+    """Lista conversas ativas sem consultas N+1 por thread."""
     conversations = (
         db.query(OrderConversation)
-        .filter(OrderConversation.restaurante_id == restaurante_id)
+        .options(
+            joinedload(OrderConversation.comanda).joinedload(Comanda.cliente),
+            joinedload(OrderConversation.comanda).joinedload(Comanda.itens),
+        )
+        .filter(
+            OrderConversation.restaurante_id == restaurante_id,
+            OrderConversation.closed_at.is_(None),
+        )
         .order_by(OrderConversation.updated_at.desc())
         .limit(50)
         .all()
     )
+    if not conversations:
+        return []
+
+    conversation_ids = [conv.id for conv in conversations]
+
+    unread_rows = (
+        db.query(OrderMessage.conversation_id, func.count(OrderMessage.id))
+        .join(OrderConversation, OrderConversation.id == OrderMessage.conversation_id)
+        .filter(
+            OrderConversation.restaurante_id == restaurante_id,
+            OrderConversation.closed_at.is_(None),
+            OrderMessage.conversation_id.in_(conversation_ids),
+            OrderMessage.sender_type == "customer",
+            or_(
+                OrderConversation.staff_last_read_at.is_(None),
+                OrderMessage.created_at > OrderConversation.staff_last_read_at,
+            ),
+        )
+        .group_by(OrderMessage.conversation_id)
+        .all()
+    )
+    unread_by_conversation = {
+        str(conversation_id): int(count or 0)
+        for conversation_id, count in unread_rows
+    }
+
+    ranked_messages = (
+        db.query(
+            OrderMessage.id.label("message_id"),
+            OrderMessage.conversation_id.label("conversation_id"),
+            func.row_number()
+            .over(
+                partition_by=OrderMessage.conversation_id,
+                order_by=(OrderMessage.created_at.desc(), OrderMessage.id.desc()),
+            )
+            .label("row_number"),
+        )
+        .filter(OrderMessage.conversation_id.in_(conversation_ids))
+        .subquery()
+    )
+    last_messages = (
+        db.query(OrderMessage)
+        .join(ranked_messages, OrderMessage.id == ranked_messages.c.message_id)
+        .filter(ranked_messages.c.row_number == 1)
+        .all()
+    )
+    last_by_conversation = {msg.conversation_id: msg for msg in last_messages}
 
     results: list[dict[str, Any]] = []
-
     for conv in conversations:
-        comanda = (
-            db.query(Comanda)
-            .filter(
-                Comanda.restaurante_id == restaurante_id,
-                Comanda.id == conv.pedido_id,
-            )
-            .first()
-        )
+        comanda = conv.comanda
+        last_msg = last_by_conversation.get(conv.id)
 
-        last_msg = (
-            db.query(OrderMessage)
-            .filter(OrderMessage.conversation_id == conv.id)
-            .order_by(OrderMessage.created_at.desc())
-            .first()
-        )
-
-        # Mensagens não lidas pela equipe: enviadas pelo cliente após staff_last_read_at
-        unread_query = db.query(func.count(OrderMessage.id)).filter(
-            OrderMessage.conversation_id == conv.id,
-            OrderMessage.sender_type == "customer",
-        )
-        if conv.staff_last_read_at:
-            unread_query = unread_query.filter(OrderMessage.created_at > conv.staff_last_read_at)
-        unread_count = unread_query.scalar() or 0
-
-        # Nome seguro do cliente (ou identificador resumido)
         client_name = "Cliente"
         if comanda:
             try:
@@ -520,8 +555,8 @@ def list_caixa_conversations(
             "tipo_pedido": comanda.tipo if comanda else "Delivery",
             "status_pedido": comanda.delivery_status if comanda else "pendente",
             "total_pedido": compute_comanda_total(comanda),
-            "unread_count": unread_count,
-            "closed_at": conv.closed_at.isoformat() if conv.closed_at else None,
+            "unread_count": unread_by_conversation.get(conv.id, 0),
+            "closed_at": None,
             "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
             "last_message": serialize_message(last_msg) if last_msg else None,
         })
@@ -530,19 +565,20 @@ def list_caixa_conversations(
 
 
 def get_caixa_unread_summary(db: Session, restaurante_id: int) -> int:
-    """Calcula o total global de mensagens não lidas de clientes pendentes de leitura pela equipe."""
-    conversations = (
-        db.query(OrderConversation)
-        .filter(OrderConversation.restaurante_id == restaurante_id)
-        .all()
-    )
-    total_unread = 0
-    for conv in conversations:
-        q = db.query(func.count(OrderMessage.id)).filter(
-            OrderMessage.conversation_id == conv.id,
+    """Calcula não lidas em uma única query agregada e apenas no hot path ativo."""
+    total = (
+        db.query(func.count(OrderMessage.id))
+        .join(OrderConversation, OrderConversation.id == OrderMessage.conversation_id)
+        .filter(
+            OrderConversation.restaurante_id == restaurante_id,
+            OrderConversation.closed_at.is_(None),
             OrderMessage.sender_type == "customer",
+            or_(
+                OrderConversation.staff_last_read_at.is_(None),
+                OrderMessage.created_at > OrderConversation.staff_last_read_at,
+            ),
         )
-        if conv.staff_last_read_at:
-            q = q.filter(OrderMessage.created_at > conv.staff_last_read_at)
-        total_unread += (q.scalar() or 0)
-    return total_unread
+        .scalar()
+        or 0
+    )
+    return int(total)
