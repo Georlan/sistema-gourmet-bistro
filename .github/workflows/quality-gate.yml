@@ -17,7 +17,7 @@ permissions:
 jobs:
   frontend:
     name: Frontend typecheck + unit + build
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, koma-ci]
     timeout-minutes: 12
     steps:
       - name: Checkout
@@ -38,7 +38,7 @@ jobs:
 
   browser:
     name: Browser regression matrix
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, koma-ci]
     timeout-minutes: 12
     steps:
       - name: Checkout
@@ -67,7 +67,7 @@ jobs:
 
   backend:
     name: Backend full + critical regression gate
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, koma-ci]
     timeout-minutes: 25
     env:
       ENVIRONMENT: test
@@ -107,7 +107,7 @@ jobs:
 
   security:
     name: postgres-security-audit
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, koma-ci]
     timeout-minutes: 20
     services:
       postgres:
