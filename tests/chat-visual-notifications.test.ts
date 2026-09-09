@@ -29,7 +29,8 @@ test('gatilho flutuante continua visível e clicável mesmo sem pedido ou login'
 });
 
 test('novos pedidos deixam de emitir tracking_url legado para o cliente', () => {
-  assert.match(cardapioRoute, /response\["tracking_url"\] = None/);
+  assert.match(cardapioRoute, /response\.pop\("tracking_url", None\)/);
+  assert.doesNotMatch(cardapioRoute, /response\["tracking_url"\]\s*=\s*None/);
   assert.match(cardapioRoute, /tracking_url é legado/);
 });
 
