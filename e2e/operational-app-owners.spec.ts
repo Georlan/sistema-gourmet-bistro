@@ -70,7 +70,7 @@ test('refresh direcionado trata IDs como dados e descarta respostas antigas', as
 test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição', async ({ page }) => {
   await setup(page);
   const writes: any[] = [];
-  await page.route('**/comandas/cmd-e2e-7/lancamentos', async route => {
+  await page.route('**/cardapio/modificadores/lancamentos/cmd-e2e-7', async route => {
     writes.push(route.request().postDataJSON());
     await route.fulfill({ status: writes.length === 1 ? 503 : 200, json: writes.length === 1 ? { detail: 'Falha controlada' } : { dispensado_impressao: true } });
   });
@@ -81,7 +81,8 @@ test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição
   await expect.poll(() => writes.length).toBe(1);
   await expect(page.locator('#modal-outer-overlay')).toBeVisible();
   await reviewDraft(page);
-  await expect(page.getByPlaceholder('Ex: sem cebola, molho à parte...')).toHaveValue('Sem cebola');
+  // The review cart owns the persisted observation; the product-config placeholder is not rendered here.
+  await expect(page.getByPlaceholder('Observação de preparo...').first()).toHaveValue('Sem cebola');
   await page.reload();
   // The selected table is restored asynchronously; do not click its card behind the restored modal.
   await expect(page.locator('#modal-outer-overlay')).toBeVisible();
@@ -93,7 +94,7 @@ test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição
   expect(writes[1]).toEqual(writes[0]);
   expect(writes[0].idempotency_key).toEqual(expect.any(String));
   expect(writes[0].garcom_id).toBe('waiter-app-owner');
-  expect(writes[0].itens).toEqual(Array.from({ length: 2 }, () => ({ produto_id: '101', observacao: 'Sem cebola', cliente_nome: 'Cliente de teste' })));
+  expect(writes[0].itens).toEqual(Array.from({ length: 2 }, () => ({ produto_id: '101', observacao: 'Sem cebola', cliente_nome: 'Cliente de teste', modificador_ids: [] })));
 });
 
 test('envio pendente bloqueia outro lançamento e preserva rascunhos de outras mesas', async ({ page }) => {
@@ -101,7 +102,7 @@ test('envio pendente bloqueia outro lançamento e preserva rascunhos de outras m
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
   let writes = 0;
-  await page.route('**/comandas/cmd-e2e-7/lancamentos', async route => {
+  await page.route('**/cardapio/modificadores/lancamentos/cmd-e2e-7', async route => {
     writes++;
     await pending;
     await route.fulfill({ status: 503, json: { detail: 'Envio recusado no teste' } });
