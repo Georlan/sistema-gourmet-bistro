@@ -102,8 +102,13 @@ def criar_pedido_online(
         alias="X-Idempotency-Key",
     ),
 ):
-    """Cria um pedido público via WebAdapter (Strangler canônico)."""
-    return CardapioWebAdapter.handle_create_public_order(
+    """Cria um pedido público via WebAdapter (Strangler canônico).
+
+    Novos clientes permanecem no próprio Cardápio. O tracking_token segue
+    disponível para Chat & Status, mas tracking_url é legado e não é mais
+    emitido para iniciar novas navegações em /acompanhar.
+    """
+    response = CardapioWebAdapter.handle_create_public_order(
         payload=payload,
         request=request,
         background_tasks=background_tasks,
@@ -111,6 +116,10 @@ def criar_pedido_online(
         customer_token=customer_token,
         request_idempotency_key=request_idempotency_key,
     )
+    if isinstance(response, dict):
+        response = dict(response)
+        response.pop("tracking_url", None)
+    return response
 
 
 def _resolve_public_order_tenant(db: Session, comanda_id: str, key: str) -> int | None:

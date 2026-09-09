@@ -1,6 +1,11 @@
 name: Print agent
 on:
   pull_request:
+    paths:
+      - 'print-agent/**'
+      - 'INSTALAR-KOMA-WINDOWS.cmd'
+      - 'VERIFICAR-KOMA-WINDOWS.cmd'
+      - '.github/workflows/print-agent.yml'
   workflow_dispatch:
 permissions:
   contents: read

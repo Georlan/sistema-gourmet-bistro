@@ -89,3 +89,12 @@ test('identidade visual continua KÔMA e catálogo do checkout é responsivo', (
   assert.match(paymentCatalogStyles, /\.koma-sub-payment-preview/);
   assert.match(paymentCatalogStyles, /@media \(max-width: 760px\)/);
 });
+
+test('primeiro acesso após contratação utiliza fragment #token= e possui fallback seguro', () => {
+  assert.match(planContract, /activationToken\?: string/);
+  assert.match(planContract, /activationToken:\s*payload\.activationToken/);
+  assert.match(planContract, /\/ativar#token=\$\{encodeURIComponent\(activationResult\.activationToken\)\}/);
+  assert.doesNotMatch(planContract, /href=["']\/ativar["']/);
+  assert.doesNotMatch(planContract, /\/ativar\?token=/);
+  assert.match(planContract, /Seu acesso está sendo preparado\. Utilize o convite enviado ao responsável\./);
+});

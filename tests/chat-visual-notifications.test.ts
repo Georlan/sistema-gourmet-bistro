@@ -5,10 +5,12 @@ import test from 'node:test';
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const drawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 const clientPanel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
+const legacyTrackingPage = source('../src/cardapio/OrderTrackingPage.tsx');
 const cashierDrawer = source('../src/components/caixa/chat/CashierConversationsDrawer.tsx');
 const cashierHook = source('../src/components/caixa/chat/useCashierChat.ts');
 const cashierRealtime = source('../src/components/caixa/chat/cashierChatRealtime.ts');
 const trackingRoute = source('../backend/app/routes/order_tracking.py');
+const cardapioRoute = source('../backend/app/routes/cardapio.py');
 
 test('cardapio mantém um gatilho flutuante de chat dentro da própria página', () => {
   assert.match(drawer, /floating-order-chat-trigger/);
@@ -16,6 +18,29 @@ test('cardapio mantém um gatilho flutuante de chat dentro da própria página',
   assert.match(drawer, /Fale com o restaurante/);
   assert.match(drawer, /setFloatingOpen\(true\)/);
   assert.match(drawer, /onClose=\{closeDrawer\}/);
+});
+
+test('gatilho flutuante continua visível e clicável mesmo sem pedido ou login', () => {
+  assert.match(drawer, /Pedidos & chat/);
+  assert.match(drawer, /Acompanhe seus pedidos/);
+  assert.match(drawer, /Abrir pedidos e chat/);
+  assert.doesNotMatch(drawer, /if \(!activeOrderForFab\) return null/);
+  assert.match(drawer, /Nenhum pedido por aqui ainda/);
+  assert.match(drawer, /Este atalho continua disponível mesmo sem login/);
+});
+
+test('novos pedidos deixam de emitir tracking_url legado para o cliente', () => {
+  assert.match(cardapioRoute, /response\.pop\("tracking_url", None\)/);
+  assert.doesNotMatch(cardapioRoute, /response\["tracking_url"\]\s*=\s*None/);
+  assert.match(cardapioRoute, /tracking_url é legado/);
+});
+
+test('link legado é recuperado silenciosamente e abre o pedido/chat exato no cardápio', () => {
+  assert.doesNotMatch(legacyTrackingPage, /Abrindo seu pedido no cardápio/);
+  assert.doesNotMatch(legacyTrackingPage, /animate-spin/);
+  assert.doesNotMatch(legacyTrackingPage, /tracking_url:\s*`\/acompanhar/);
+  assert.match(legacyTrackingPage, /#koma-order=\$\{encodeURIComponent\(pedidoId\)\}/);
+  assert.match(legacyTrackingPage, /aria-busy="true"/);
 });
 
 test('cliente recebe badge visual de mensagens não lidas do restaurante', () => {
