@@ -37,7 +37,7 @@ permissions:
 jobs:
   checkout-smoke:
     name: Checkout browser smoke
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, koma-ci]
     timeout-minutes: 10
     steps:
       - name: Checkout
