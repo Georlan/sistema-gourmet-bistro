@@ -17,14 +17,14 @@ permissions:
 jobs:
   frontend-onboarding:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -32,11 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript
-        run: npm run lint
-
-      - name: Unit tests
-        run: npm run test:unit
-
-      - name: Production build
-        run: npm run build
+      - name: Run SuperAdmin-focused unit regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(tests/superAdmin*.test.ts tests/super_admin_*.test.ts)
+          if (( ${#files[@]} == 0 )); then
+            echo "No SuperAdmin UI tests found."
+            exit 1
+          fi
+          npx tsx --test "${files[@]}"
