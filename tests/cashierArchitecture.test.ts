@@ -107,7 +107,9 @@ test('each owned listener and interval is paired with cleanup in its own effect'
     }
   }
   assert.ok(subscriptions >= 19, 'Do not accidentally stop scanning subscriptions');
-  assert.equal(intervals, 3);
+  // The orders owner now owns a visible-tab reconciliation interval in addition
+  // to the three existing owner intervals. Cleanup is still verified above.
+  assert.equal(intervals, 4);
 });
 
 test('settings and inventory compose persistent owners instead of acquiring HTTP or financial state', () => {
