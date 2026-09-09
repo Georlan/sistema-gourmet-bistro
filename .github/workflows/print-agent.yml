@@ -1,6 +1,8 @@
 name: Print agent
 on:
   pull_request:
+    paths:
+      - 'print-agent/**'
   workflow_dispatch:
 permissions:
   contents: read
