@@ -12,8 +12,12 @@ from ..database import get_db, tenant_session_scope
 from ..models import Cliente, Usuario, Restaurante
 from ..security import IPRateLimiter, get_password_hash, revoke_user_sessions
 from ..services.password_recovery import (
-    decode_recovery_token, identity_proof, issue_recovery_token,
-    recovery_available, send_recovery_email,
+    decode_recovery_token,
+    identity_proof,
+    issue_recovery_token,
+    recovery_available,
+    send_recovery_email,
+    send_staff_recovery_email,
 )
 from ..services.public_orders import consume_rate_limit, client_ip
 from .auth import _lookup_users_before_tenant
@@ -51,38 +55,84 @@ class RecoveryConfirm(BaseModel):
 
 
 @router.post('/request', status_code=202)
-def request_recovery(payload: RecoveryRequest, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def request_recovery(
+    payload: RecoveryRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     request_limiter.check(request)
     if not recovery_available():
         raise HTTPException(503, 'Recuperação de senha indisponível no momento. Tente novamente mais tarde.')
+
     if payload.kind == 'customer':
         if payload.restaurante_id is None:
             raise HTTPException(422, 'Abra a recuperação pelo cardápio do restaurante.')
         candidates = [{'restaurante_id': payload.restaurante_id}]
     else:
         candidates = _lookup_users_before_tenant(db, payload.email, payload.restaurante_id)
+
+    staff_options: list[dict[str, str]] = []
+    recipient_email: str | None = None
+
     for candidate in candidates:
         rid = candidate['restaurante_id']
         with tenant_session_scope(db, rid):
             model = Cliente if payload.kind == 'customer' else Usuario
-            query = db.query(model).filter(model.restaurante_id == rid, func.lower(model.email) == payload.email)
+            query = db.query(model).filter(
+                model.restaurante_id == rid,
+                func.lower(model.email) == payload.email,
+            )
             if payload.kind == 'staff':
                 query = query.filter(Usuario.id == candidate['id'], Usuario.status == 'ativo')
             account = query.first()
             if not account or not account.senha_hash:
-                continue  # Guest records are never adopted by password recovery.
+                continue  # Guest/inactive records are never adopted by password recovery.
+
             try:
-                consume_rate_limit(db, restaurante_id=rid, scope='password_recovery_email', raw_key=payload.email,
-                    max_requests=3, window_seconds=900)
-                consume_rate_limit(db, restaurante_id=rid, scope='password_recovery_ip', raw_key=client_ip(request),
-                    max_requests=10, window_seconds=900)
+                consume_rate_limit(
+                    db,
+                    restaurante_id=rid,
+                    scope='password_recovery_email',
+                    raw_key=payload.email,
+                    max_requests=3,
+                    window_seconds=900,
+                )
+                consume_rate_limit(
+                    db,
+                    restaurante_id=rid,
+                    scope='password_recovery_ip',
+                    raw_key=client_ip(request),
+                    max_requests=10,
+                    window_seconds=900,
+                )
                 db.commit()
             except HTTPException:
                 db.rollback()
                 continue  # Same public response for unknown, throttled and existing accounts.
+
             token = issue_recovery_token(account, payload.kind)
-            restaurant_name = db.query(Restaurante.nome).filter(Restaurante.id == rid).scalar() or "KÔMA"
-            background_tasks.add_task(send_recovery_email, account.email, token, restaurant_name)
+            restaurant_name = db.query(Restaurante.nome).filter(Restaurante.id == rid).scalar() or 'KÔMA'
+
+            if payload.kind == 'staff' and payload.restaurante_id is None:
+                recipient_email = recipient_email or str(account.email)
+                staff_options.append({
+                    'restaurant_name': str(restaurant_name),
+                    'token': token,
+                })
+            else:
+                background_tasks.add_task(
+                    send_recovery_email,
+                    account.email,
+                    token,
+                    restaurant_name,
+                )
+
+    # Sem tenant explícito, uma caixa postal pode representar várias contas ativas.
+    # Entregamos um único e-mail; associações de tenant nunca aparecem no HTTP 202.
+    if payload.kind == 'staff' and payload.restaurante_id is None and staff_options and recipient_email:
+        background_tasks.add_task(send_staff_recovery_email, recipient_email, staff_options)
+
     return {'message': GENERIC_MESSAGE}
 
 
@@ -96,11 +146,18 @@ def confirm_recovery(payload: RecoveryConfirm, request: Request, db: Session = D
     rid = claims['restaurante_id']
     with tenant_session_scope(db, rid):
         model = Cliente if claims['kind'] == 'customer' else Usuario
-        account = db.query(model).filter(model.restaurante_id == rid, model.id == claims['sub']).with_for_update().first()
-        if (not account or not account.senha_hash or
-            (claims['kind'] == 'staff' and account.status != 'ativo') or
-            not hmac.compare_digest(identity_proof(account), str(claims['proof']))):
+        account = db.query(model).filter(
+            model.restaurante_id == rid,
+            model.id == claims['sub'],
+        ).with_for_update().first()
+        if (
+            not account
+            or not account.senha_hash
+            or (claims['kind'] == 'staff' and account.status != 'ativo')
+            or not hmac.compare_digest(identity_proof(account), str(claims['proof']))
+        ):
             raise HTTPException(400, INVALID_LINK)
+
         # Changing the hash invalidates every outstanding recovery token under the same row lock.
         account.senha_hash = get_password_hash(payload.password)
         if claims['kind'] == 'staff':
