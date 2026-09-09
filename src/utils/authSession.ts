@@ -21,6 +21,7 @@ export type OperationalPortal = 'caixa' | 'garcom';
 
 const SESSION_KEY = 'koma_operator_session';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const STORAGE_BOUNDARY_FLAG = '__komaOperationalSessionStorageScoped';
 
 const CAIXA_KEYS = [
   'koma_caixa_token',
@@ -46,6 +47,11 @@ function durableStorage(): Storage | null {
   return typeof localStorage !== 'undefined' ? localStorage : null;
 }
 
+function isStorageBoundaryInstalled(): boolean {
+  return typeof window !== 'undefined'
+    && (window as unknown as Record<string, unknown>)[STORAGE_BOUNDARY_FLAG] === true;
+}
+
 function minimalOperatorIdentity(user: any): OperatorIdentitySnapshot {
   const snapshot: OperatorIdentitySnapshot = {};
   if (user?.id != null) snapshot.id = user.id;
@@ -63,9 +69,14 @@ function removeEverywhere(key: string): void {
   try { durableStorage()?.removeItem(key); } catch { /* best effort */ }
 }
 
+function removeLegacyDurableCopy(key: string): void {
+  if (isStorageBoundaryInstalled()) return;
+  try { durableStorage()?.removeItem(key); } catch { /* best effort */ }
+}
+
 function writeScoped(key: string, value: string): void {
   scopedStorage()?.setItem(key, value);
-  try { durableStorage()?.removeItem(key); } catch { /* best effort */ }
+  removeLegacyDurableCopy(key);
 }
 
 function readScopedWithLegacyMigration(key: string): string | null {
@@ -73,7 +84,7 @@ function readScopedWithLegacyMigration(key: string): string | null {
   const durable = durableStorage();
   const current = scoped?.getItem(key) || null;
   if (current != null) {
-    try { durable?.removeItem(key); } catch { /* best effort */ }
+    removeLegacyDurableCopy(key);
     return current;
   }
 
@@ -81,10 +92,12 @@ function readScopedWithLegacyMigration(key: string): string | null {
   if (legacy == null) return null;
   try {
     scoped?.setItem(key, legacy);
-    durable?.removeItem(key);
+    if (!isStorageBoundaryInstalled()) durable?.removeItem(key);
   } catch {
     // Se sessionStorage estiver indisponível, não prolonga a cópia durável.
-    try { durable?.removeItem(key); } catch { /* best effort */ }
+    if (!isStorageBoundaryInstalled()) {
+      try { durable?.removeItem(key); } catch { /* best effort */ }
+    }
     return null;
   }
   return legacy;
