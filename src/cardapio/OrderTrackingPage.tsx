@@ -69,6 +69,7 @@ function scrubTrackingCapabilityFromAddressBar(): void {
 export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) {
   const token = useMemo(() => resolveTrackingToken(propToken), [propToken]);
   const [error, setError] = useState("");
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!token) {
@@ -134,7 +135,7 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, retryNonce]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-koma-page p-6 text-koma-foreground">
@@ -145,7 +146,10 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
             <p className="mt-2 text-xs leading-relaxed text-koma-muted">{error}</p>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                setError("");
+                setRetryNonce((current) => current + 1);
+              }}
               className="mt-5 h-10 rounded-xl border border-koma-border px-4 text-xs font-bold text-koma-secondary transition hover:text-white"
             >
               Tentar novamente
