@@ -1,15 +1,7 @@
 name: SuperAdmin Onboarding UI Targeted
 
 on:
-  pull_request:
-    paths:
-      - "src/super-admin/**"
-      - "src/config/subscriptionPlans.ts"
-      - "tests/superAdmin*.test.ts"
-      - "tests/super_admin_*.test.ts"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/superadmin-onboarding-ui-targeted.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
