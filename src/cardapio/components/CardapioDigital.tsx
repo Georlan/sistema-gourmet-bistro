@@ -137,7 +137,7 @@ export default function CardapioDigital({
   const [errorMessage, setErrorMessage] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [orderingBlock, setOrderingBlock] = useState<OrderingBlockInfo | null>(null);
-  const [checkingOrderingBlock, setCheckingOrderingBlock] = useState(true);
+  const [checkingOrderingBlock, setCheckingOrderingBlock] = useState(() => typeof window !== "undefined");
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -171,7 +171,7 @@ export default function CardapioDigital({
   useEffect(() => {
     let cancelled = false;
     setCheckingOrderingBlock(true);
-    void resolveOrderingBlockForCurrentSession(activeBrand.id)
+    void resolveOrderingBlockForCurrentSession(activeBrand.id, API_BASE_URL)
       .then((block) => {
         if (!cancelled) setOrderingBlock(block);
       })
@@ -406,7 +406,7 @@ export default function CardapioDigital({
         throw new Error("Sua identificação expirou. Você pode tentar novamente sem perder a sacola.");
       }
       if (response.status === 409 && String(data?.detail || "") === BLOCKED_ORDER_GENERIC_DETAIL) {
-        const block = await resolveOrderingBlockForCurrentSession(activeBrand.id);
+        const block = await resolveOrderingBlockForCurrentSession(activeBrand.id, API_BASE_URL);
         if (block) {
           setOrderingBlock(block);
           return;
