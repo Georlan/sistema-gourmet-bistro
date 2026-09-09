@@ -29,7 +29,9 @@ test('boundary detecta suspensão no backend e revalida a sessão periodicamente
 
 test('boundary cobre autenticação operacional sem voltar a ler aliases legados diretamente', () => {
   assert.match(boundary, /getOperatorAccessToken\(\)/);
-  assert.match(boundary, /koma_smartpos_session/);
+  assert.match(boundary, /getSmartPosSession\(\)/);
+  assert.match(boundary, /clearSmartPosSession\(\)/);
+  assert.doesNotMatch(boundary, /localStorage\.getItem\(['"]koma_smartpos_session['"]\)/);
   assert.doesNotMatch(boundary, /localStorage\.getItem\(['"]koma_caixa_token['"]\)/);
   assert.doesNotMatch(boundary, /localStorage\.getItem\(['"]koma_waiter_token['"]\)/);
   assert.match(main, /TenantSuspensionBoundary/);
