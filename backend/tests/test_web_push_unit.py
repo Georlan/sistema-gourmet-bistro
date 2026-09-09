@@ -33,7 +33,27 @@ def test_endpoint_hash_is_deterministic_without_exposing_endpoint():
     assert len(digest) == 64
 
 
-def test_staff_message_push_never_contains_message_body():
+def test_message_preview_is_direct_but_redacts_sensitive_patterns():
+    preview = web_push.sanitize_message_preview(
+        "Pode vir buscar. Meu telefone é +55 (11) 99999-8888 e a chave pix: segredo@example.com"
+    )
+    assert "Pode vir buscar" in preview
+    assert "99999" not in preview
+    assert "segredo@example.com" not in preview
+    assert "[telefone]" in preview
+    assert "[dado protegido]" in preview or "[e-mail]" in preview
+
+
+def test_message_preview_redacts_address_and_truncates():
+    preview = web_push.sanitize_message_preview(
+        "Entregar na Rua das Flores 123, bloco 2. " + ("mensagem longa " * 30)
+    )
+    assert "Rua das Flores" not in preview
+    assert "[endereço]" in preview
+    assert len(preview) <= web_push.MESSAGE_PREVIEW_MAX_CHARS
+
+
+def test_staff_message_push_uses_preview_without_token_or_outbox_body():
     comanda = SimpleNamespace(
         id="order-1",
         restaurante_id=7,
@@ -47,13 +67,35 @@ def test_staff_message_push_never_contains_message_body():
             "conversation_id": "conv-1",
             "kind": "message",
             "status": None,
+            "message_id": "message-1",
         }
     }
-    payload = web_push._notification_for(snapshot, comanda)
-    assert payload["title"] == "KÔMA • Pedido #15"
-    assert payload["body"] == "O restaurante enviou uma nova mensagem."
+    payload = web_push._notification_for(snapshot, comanda, message_body="vem ca")
+    assert payload["title"] == "Nova mensagem • Pedido #15"
+    assert payload["body"] == "vem ca"
     assert payload["data"]["pedidoId"] == "order-1"
+    assert payload["data"]["kind"] == "message"
+    assert payload["actions"][0]["title"] == "Abrir conversa"
+    assert payload["tag"].endswith("-message")
+    assert "message_body" not in snapshot["payload"]
     assert "token" not in str(payload).lower()
+
+
+def test_status_notification_uses_stable_tag_and_human_status():
+    pickup = SimpleNamespace(id="p1", restaurante_id=1, numero_pedido=18, tipo="Retirada")
+    preparing = {"payload": {"kind": "status", "status": "producao", "conversation_id": "c"}}
+    ready = {"payload": {"kind": "status", "status": "pronto", "conversation_id": "c"}}
+
+    first = web_push._notification_for(preparing, pickup)
+    second = web_push._notification_for(ready, pickup)
+
+    assert first["tag"] == second["tag"]
+    assert first["tag"].endswith("-status")
+    assert "Em preparo" in first["title"]
+    assert "Pronto" in second["title"]
+    assert "retirada" in second["body"].lower()
+    assert second["actions"][0]["title"] == "Acompanhar pedido"
+    assert second["renotify"] is True
 
 
 def test_ready_notification_differs_by_fulfillment():
