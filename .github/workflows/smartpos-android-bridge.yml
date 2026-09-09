@@ -6,11 +6,6 @@ on:
     paths:
       - 'smartpos-android/**'
       - '.github/workflows/smartpos-android-bridge.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'smartpos-android/**'
-      - '.github/workflows/smartpos-android-bridge.yml'
   workflow_dispatch:
 
 permissions:
