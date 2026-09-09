@@ -1,18 +1,7 @@
 name: Online Menu Delivery Targeted
 
 on:
-  pull_request:
-    paths:
-      - "backend/app/routes/caixa.py"
-      - "backend/app/application/orders/**"
-      - "backend/app/services/online_order_policy.py"
-      - "backend/tests/test_delivery_config_persistence_contract.py"
-      - "backend/tests/test_online_order_server_authority.py"
-      - "backend/tests/test_checkout_advanced.py"
-      - "src/components/caixa/navigation/cashierNavigation.ts"
-      - "src/components/caixa/online-menu/**"
-      - "tests/onlineMenuSectionNavigation.test.ts"
-      - ".github/workflows/online-menu-delivery-targeted.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
