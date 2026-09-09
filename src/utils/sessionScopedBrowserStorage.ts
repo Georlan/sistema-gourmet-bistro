@@ -6,6 +6,12 @@
  * migração estrutural termina, esses nomes são redirecionados para sessionStorage
  * no boundary do navegador. Valores duráveis de versões antigas são migrados uma
  * única vez e removidos do disco.
+ *
+ * Importante: não dependemos da identidade (`this === localStorage`) do wrapper
+ * WebIDL de Storage. Chromium pode entregar receivers diferentes entre acessos;
+ * para as chaves explicitamente listadas abaixo, tanto chamadas via localStorage
+ * quanto via sessionStorage convergem para a mesma área de sessão. As operações
+ * internas usam os métodos originais para não recursar.
  */
 
 const OPERATIONAL_SESSION_KEYS = new Set([
@@ -56,7 +62,7 @@ export function installSessionScopedBrowserStorage(): void {
   OPERATIONAL_SESSION_KEYS.forEach(migrate);
 
   Storage.prototype.getItem = function getItem(key: string): string | null {
-    if (this === durable && isOperationalSessionKey(key)) {
+    if (isOperationalSessionKey(key)) {
       migrate(key);
       return originalGetItem.call(scoped, key);
     }
@@ -64,7 +70,7 @@ export function installSessionScopedBrowserStorage(): void {
   };
 
   Storage.prototype.setItem = function setItem(key: string, value: string): void {
-    if (this === durable && isOperationalSessionKey(key)) {
+    if (isOperationalSessionKey(key)) {
       originalSetItem.call(scoped, key, String(value));
       originalRemoveItem.call(durable, key);
       return;
@@ -73,7 +79,7 @@ export function installSessionScopedBrowserStorage(): void {
   };
 
   Storage.prototype.removeItem = function removeItem(key: string): void {
-    if (this === durable && isOperationalSessionKey(key)) {
+    if (isOperationalSessionKey(key)) {
       originalRemoveItem.call(scoped, key);
       originalRemoveItem.call(durable, key);
       return;
