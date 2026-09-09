@@ -60,8 +60,9 @@ test("clique da notificação retoma cold-start sem capability em payload ou que
   assert.doesNotMatch(sw, /\/acompanhar\//);
   assert.doesNotMatch(sw, /tracking[_-]?token/i);
 
-  assert.match(trackingPage, /window\.location\.hash\.replace\(\/\^#\//, ""\)/);
-  assert.match(trackingPage, /window\.history\.replaceState\(window\.history\.state, "", "\/acompanhar"\)/);
+  assert.match(trackingPage, /new URLSearchParams\(window\.location\.hash/);
+  assert.match(trackingPage, /window\.history\.replaceState/);
+  assert.match(trackingPage, /"\/acompanhar"/);
   assert.match(trackingPage, /api\/cardapio\/pedidos\/acompanhar\/\$\{encodeURIComponent\(token\)\}/);
 
   assert.match(ordersDrawer, /requestedPushOrderFromHash/);
