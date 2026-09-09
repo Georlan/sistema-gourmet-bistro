@@ -407,8 +407,14 @@ export function useCashierOrders({
         headers: authHeaders,
       });
       if (res.ok) {
-        fetchDeliveryOrders();
-        onRefreshOrders();
+        const updatedComanda = await res.json().catch(() => null);
+        if (updatedComanda) {
+          const projected = mapComandaToDeliveryView(updatedComanda);
+          setDeliveryOrders((current) =>
+            current.map((order) => (String(order.id) === String(orderId) ? projected : order))
+          );
+        }
+        void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
         showToast('Status atualizado e cliente avisado automaticamente!');
         return true;
       } else {
@@ -474,7 +480,7 @@ export function useCashierOrders({
     }
   };
 
-  const handleFecharDelivery = async (orderId: string) => {
+  const handleFecharDelivery = async (orderId: string): Promise<boolean> => {
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
         method: 'PUT',
@@ -483,23 +489,24 @@ export function useCashierOrders({
       if (res.ok) {
         showToast('Comanda de delivery encerrada com sucesso!');
         setSelectedKanbanOrder(null);
-        fetchDeliveryOrders();
-        onRefreshOrders();
-      } else {
-        showToast('Erro ao fechar comanda.', 'error');
+        setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(orderId)));
+        void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
+        return true;
       }
+      showToast('Erro ao fechar comanda.', 'error');
+      return false;
     } catch (err) {
       console.error(err);
       showToast('Erro de conexão ao finalizar pedido.', 'error');
+      return false;
     }
   };
 
   const handleRecusarPedido = async (orderId: string) => {
     await handleUpdateDeliveryStatus(orderId, 'recusado');
   };
-
   const handleFinalizarPedido = async (orderId: string) => {
-    await handleFecharDelivery(orderId);
+    return handleFecharDelivery(orderId);
   };
 
   const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
@@ -588,7 +595,7 @@ export function useCashierOrders({
   const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
     if (isLoading) return;
     const isDeliveryOrder = order.modalidade === 'delivery';
-    handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
+    await handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
   };
 
   const handleAdvanceSelectedKanbanOrder = async () => {

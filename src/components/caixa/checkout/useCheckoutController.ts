@@ -29,9 +29,20 @@ type Props = Pick<
   getSmartPosCardState: (order: Order) => SmartPosCardState | null;
   setSmartPosRecoveryError: (value: string) => void;
   fetchTurno: () => Promise<void>;
-  handleFecharDelivery: (id: string) => Promise<void>;
-  handleFinalizarPedido: (id: string) => Promise<void>;
+  handleFecharDelivery: (id: string) => Promise<boolean>;
+  handleFinalizarPedido: (id: string) => Promise<boolean>;
 };
+
+export function shouldAutoCloseDigitalOrderAfterPayment(order: Order, selectedItemIds: readonly string[]): boolean {
+  if (isTableCheckoutOrder(order)) return false;
+  const activeUnpaidItemIds = order.itens
+    .filter((item) => !item.pago && (item.status as string) !== 'cancelado')
+    .map((item) => item.id);
+  return (
+    activeUnpaidItemIds.length > 0 &&
+    activeUnpaidItemIds.every((itemId) => selectedItemIds.includes(itemId))
+  );
+}
 
 /** Owns checkout state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCheckoutController({
@@ -249,6 +260,7 @@ export function useCheckoutController({
 
       const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];
       const isMesaPayment = isTableCheckoutOrder(selectedOrder);
+      const shouldCloseDigitalOrder = shouldAutoCloseDigitalOrderAfterPayment(selectedOrder, selectedItemIds);
       const effectiveIdempotencyKey = idempotencyKey || createSecureIdempotencyKey('idem');
       if (!idempotencyKey) setIdempotencyKey(effectiveIdempotencyKey);
 
@@ -379,6 +391,16 @@ export function useCheckoutController({
         }
       }
 
+      if (shouldCloseDigitalOrder) {
+        const closed = await handleFecharDelivery(selectedOrder.id);
+        if (!closed) {
+          showToast(
+            'Pagamento recebido, mas o pedido não fechou automaticamente. Finalize o card sem lançar outro pagamento.',
+            'error'
+          );
+        }
+      }
+
       setPaymentValor('');
       setPaymentCPF('');
       setSelectedItemIds([]);
@@ -505,7 +527,7 @@ export function useCheckoutController({
         .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
       setPaymentValor(sub);
     } else {
-      handleFinalizarPedido(order.id);
+      void handleFinalizarPedido(order.id);
     }
   };
 
