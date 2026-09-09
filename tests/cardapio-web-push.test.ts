@@ -9,6 +9,8 @@ const pushResumeStore = readFileSync("src/cardapio/pushResumeStore.ts", "utf8");
 const trackingPage = readFileSync("src/cardapio/OrderTrackingPage.tsx", "utf8");
 const ordersDrawer = readFileSync("src/cardapio/components/CardapioOrdersDrawer.tsx", "utf8");
 const main = readFileSync("src/main.tsx", "utf8");
+const webPushBackend = readFileSync("backend/app/services/web_push.py", "utf8");
+const caixaChat = readFileSync("backend/app/routes/caixa_chat.py", "utf8");
 
 test("Web Push só pede permissão depois de ação explícita do cliente", () => {
   assert.match(pushUi, /onClick=\{\(\) => void enable\(\)\}/);
@@ -23,6 +25,31 @@ test("service worker não intercepta fetch/cache do cardápio", () => {
   assert.match(sw, /\/cardapio\?restaurante_id=/);
 });
 
+test("service worker usa actions, renotify e categorias separadas", () => {
+  assert.match(sw, /actions,/);
+  assert.match(sw, /renotify: payload\.renotify !== false/);
+  assert.match(sw, /Abrir conversa/);
+  assert.match(sw, /Acompanhar pedido/);
+  assert.match(webPushBackend, /-message'/);
+  assert.match(webPushBackend, /-status'/);
+  assert.match(webPushBackend, /tag.*koma-order-/s);
+});
+
+test("status do pedido usa tag estável e chat não sobrescreve status", () => {
+  assert.match(webPushBackend, /status e chat nunca se sobrescrevem/i);
+  assert.match(webPushBackend, /'message' if kind == 'message' else 'status'/);
+  assert.match(webPushBackend, /"renotify": True/);
+  assert.match(webPushBackend, /"vibrate": vibration/);
+});
+
+test("preview de mensagem é resolvido no dispatcher sem copiar body para outbox", () => {
+  assert.match(caixaChat, /message_id=msg\.id/);
+  assert.match(webPushBackend, /payload\["message_id"\]/);
+  assert.match(webPushBackend, /message_body = message\.body/);
+  assert.doesNotMatch(caixaChat, /message_body=payload\.body|body=payload\.body/);
+  assert.match(webPushBackend, /sanitize_message_preview/);
+});
+
 test("PWA mantém experiência standalone sem substituir o cardápio", () => {
   const parsed = JSON.parse(manifest) as { display?: string; start_url?: string };
   assert.equal(parsed.display, "standalone");
@@ -35,8 +62,6 @@ test("iOS orienta instalação antes de pedir permissão", () => {
 });
 
 test("desativar um pedido não cancela a PushSubscription global", () => {
-  // O comentário explicativo menciona unsubscribe propositalmente — verificamos
-  // apenas que não existe chamada executável (await/void/.then) de unsubscribe().
   assert.match(pushUi, /Não chamamos PushSubscription\.unsubscribe/);
   assert.doesNotMatch(pushUi, /(?:await|void|\.then\()[\s\S]{0,40}\.unsubscribe\(\)/);
 });
