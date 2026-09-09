@@ -157,6 +157,7 @@ def test_retention_purges_only_expired_closed_target_tenant_rows_and_preserves_o
             now=now,
         )
         db.commit()
+        db.expire_all()
 
         assert stats == {
             "conversations_deleted": 1,
@@ -215,6 +216,7 @@ def test_retention_is_batch_bounded_and_disabled_worker_is_noop():
             now=now,
         )
         db.commit()
+        db.expire_all()
         assert stats["conversations_deleted"] == 2
         assert db.query(OrderConversation).filter(
             OrderConversation.restaurante_id == 9201
