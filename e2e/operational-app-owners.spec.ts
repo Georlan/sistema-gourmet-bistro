@@ -81,7 +81,7 @@ test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição
   await expect.poll(() => writes.length).toBe(1);
   await expect(page.locator('#modal-outer-overlay')).toBeVisible();
   await reviewDraft(page);
-  await expect(page.getByPlaceholder('Ex: sem cebola, mal passado, molho à parte...')).toHaveValue('Sem cebola');
+  await expect(page.getByPlaceholder('Observação de preparo...').first()).toHaveValue('Sem cebola');
   await page.reload();
   // The selected table is restored asynchronously; do not click its card behind the restored modal.
   await expect(page.locator('#modal-outer-overlay')).toBeVisible();
