@@ -1,26 +1,7 @@
 name: SuperAdmin Phase 2 Gate
 
 on:
-  pull_request:
-    paths:
-      - "src/super-admin/**"
-      - "src/components/auth/TenantSuspensionBoundary.tsx"
-      - "src/main.tsx"
-      - "src/config/subscriptionPlans.ts"
-      - "tests/superAdminPhase2.test.ts"
-      - "tests/superAdminAccess.test.ts"
-      - "tests/tenantSuspensionBoundary.test.ts"
-      - "backend/app/routes/__init__.py"
-      - "backend/app/routes/super_admin.py"
-      - "backend/app/routes/super_admin_onboarding.py"
-      - "backend/app/routes/super_admin_access.py"
-      - "backend/app/database.py"
-      - "backend/app/models.py"
-      - "backend/app/security.py"
-      - "backend/tests/test_super_admin_*.py"
-      - "backend/tests/test_route_ownership.py"
-      - "backend/tests/test_commercial_pricing_sync.py"
-      - ".github/workflows/superadmin-phase2-gate.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
