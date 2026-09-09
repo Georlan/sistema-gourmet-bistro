@@ -78,7 +78,7 @@ test('getOperatorSession sanitiza sessão legada com PII no primeiro acesso', ()
   assert.doesNotMatch(migrated, /legacy@example\.test|85111111111|Endereço antigo/);
 });
 
-test('sessão expirada é removida junto dos aliases operacionais do caixa', () => {
+test('sessão expirada é removida junto de todos os aliases operacionais', () => {
   localStorage.setItem('koma_operator_session', JSON.stringify({
     token: 'expired-token',
     expiresAt: Date.now() - 1,
@@ -86,21 +86,39 @@ test('sessão expirada é removida junto dos aliases operacionais do caixa', () 
   }));
   localStorage.setItem('koma_caixa_token', 'expired-token');
   localStorage.setItem('koma_caixa_id', 'expired-user');
+  localStorage.setItem('koma_waiter_token', 'stale-waiter-token');
+  localStorage.setItem('koma_waiter_id', 'stale-waiter');
 
   assert.equal(getOperatorSession(), null);
   assert.equal(localStorage.getItem('koma_operator_session'), null);
   assert.equal(localStorage.getItem('koma_caixa_token'), null);
   assert.equal(localStorage.getItem('koma_caixa_id'), null);
+  assert.equal(localStorage.getItem('koma_waiter_token'), null);
+  assert.equal(localStorage.getItem('koma_waiter_id'), null);
 });
 
-test('clearOperatorSession remove snapshot e aliases sem tocar outras preferências', () => {
+test('clearOperatorSession remove credenciais de caixa e garçom sem tocar preferências', () => {
   localStorage.setItem('koma_operator_session', '{"token":"x"}');
   localStorage.setItem('koma_caixa_token', 'x');
+  localStorage.setItem('koma_caixa_id', 'cashier-1');
+  localStorage.setItem('koma_waiter_token', 'waiter-x');
+  localStorage.setItem('koma_waiter_id', 'waiter-1');
+  localStorage.setItem('koma_waiter_name', 'Garçom QA');
+  localStorage.setItem('koma_user_role', 'garcom');
   localStorage.setItem('koma_settings_vFinal_v3', '{"tema":"claro"}');
 
   clearOperatorSession();
 
-  assert.equal(localStorage.getItem('koma_operator_session'), null);
-  assert.equal(localStorage.getItem('koma_caixa_token'), null);
+  for (const key of [
+    'koma_operator_session',
+    'koma_caixa_token',
+    'koma_caixa_id',
+    'koma_waiter_token',
+    'koma_waiter_id',
+    'koma_waiter_name',
+    'koma_user_role',
+  ]) {
+    assert.equal(localStorage.getItem(key), null);
+  }
   assert.ok(localStorage.getItem('koma_settings_vFinal_v3'));
 });
