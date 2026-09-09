@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -19,10 +20,11 @@ from sqlalchemy.orm import Session
 
 from ..crypt import decrypt_field, encrypt_field
 from ..models import Comanda
-from ..order_chat_models import OrderConversation, OrderPushSubscription
+from ..order_chat_models import OrderConversation, OrderMessage, OrderPushSubscription
 from .outbox.publisher import enqueue_outbox_event_in_session
 
 PUSH_STATUS_EVENTS = frozenset({"producao", "pronto", "transito", "recusado", "finalizado"})
+MESSAGE_PREVIEW_MAX_CHARS = 140
 
 
 @dataclass(frozen=True)
@@ -86,6 +88,36 @@ def validate_push_endpoint(raw_endpoint: str) -> str:
             detail="Endpoint de notificação inválido.",
         )
     return endpoint
+
+
+def sanitize_message_preview(raw_body: str | None) -> str:
+    """Cria preview útil para lock screen sem repetir dados evidentemente sensíveis."""
+    text = " ".join(str(raw_body or "").split()).strip()
+    if not text:
+        return ""
+
+    # Capability/credenciais e links nunca devem aparecer na tela bloqueada.
+    text = re.sub(r"https?://\S+|www\.\S+", "[link]", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", "[e-mail]", text)
+    text = re.sub(r"\beyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b", "[dado protegido]", text)
+
+    # Telefones, documentos/cartões e chaves/identificadores longos.
+    text = re.sub(r"(?<!\w)(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?9?\d{4}[-\s]?\d{4}(?!\w)", "[telefone]", text)
+    text = re.sub(r"(?<!\d)(?:\d[ .-]?){11,19}(?!\d)", "[dado protegido]", text)
+    text = re.sub(r"\b(?:pix|chave\s+pix)\s*[:=-]?\s*\S+", "Pix [dado protegido]", text, flags=re.IGNORECASE)
+
+    # Endereços explícitos comuns: preserva o contexto da frase sem expor o local.
+    text = re.sub(
+        r"\b(?:rua|r\.|avenida|av\.|travessa|alameda|rodovia|estrada)\s+[^,.;]{3,80}",
+        "[endereço]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(r"\s{2,}", " ", text).strip()
+
+    if len(text) > MESSAGE_PREVIEW_MAX_CHARS:
+        text = text[: MESSAGE_PREVIEW_MAX_CHARS - 1].rstrip() + "…"
+    return text
 
 
 def upsert_order_push_subscription(
@@ -171,8 +203,13 @@ def enqueue_order_push_event(
     conversation_id: str | None = None,
     kind: str,
     order_status: str | None = None,
+    message_id: str | None = None,
 ) -> bool:
-    """Grava intenção de push na outbox da mesma transação do evento original."""
+    """Grava intenção de push na outbox da mesma transação do evento original.
+
+    Mensagens entram na outbox somente por ID. O texto é lido da tabela de chat
+    já existente apenas no momento da entrega, evitando duplicar conteúdo privado.
+    """
     if not web_push_ready():
         return False
     normalized_kind = (kind or "").strip().lower()
@@ -197,6 +234,9 @@ def enqueue_order_push_event(
         "kind": normalized_kind,
         "status": normalized_status,
     }
+    if normalized_kind == "message" and message_id:
+        payload["message_id"] = str(message_id)
+
     enqueue_outbox_event_in_session(
         db,
         payload,
@@ -207,7 +247,7 @@ def enqueue_order_push_event(
     return True
 
 
-def _notification_for(snapshot: dict, comanda: Comanda) -> dict:
+def _notification_for(snapshot: dict, comanda: Comanda, *, message_body: str | None = None) -> dict:
     payload = snapshot.get("payload") or {}
     kind = str(payload.get("kind") or "status")
     status_value = str(payload.get("status") or "")
@@ -215,8 +255,19 @@ def _notification_for(snapshot: dict, comanda: Comanda) -> dict:
     fulfillment = (getattr(comanda, "tipo", "") or "").strip().lower()
 
     if kind == "message":
-        body = "O restaurante enviou uma nova mensagem."
+        preview = sanitize_message_preview(message_body)
+        title = f"Nova mensagem • Pedido #{display_number}"
+        body = preview or "O restaurante enviou uma nova mensagem."
+        action_title = "Abrir conversa"
+        vibration = [120, 60, 120]
     else:
+        status_titles = {
+            "producao": "Em preparo 👨‍🍳",
+            "pronto": "Pronto ✅",
+            "transito": "Saiu para entrega 🛵",
+            "recusado": "Pedido não aceito",
+            "finalizado": "Concluído",
+        }
         bodies = {
             "producao": "O restaurante confirmou seu pedido e já está preparando.",
             "pronto": (
@@ -228,17 +279,26 @@ def _notification_for(snapshot: dict, comanda: Comanda) -> dict:
             "recusado": "O restaurante não conseguiu aceitar seu pedido.",
             "finalizado": "Pedido concluído. Bom apetite!",
         }
+        title = f"Pedido #{display_number} • {status_titles.get(status_value, 'Atualização')}"
         body = bodies.get(status_value, "O status do seu pedido foi atualizado.")
+        action_title = "Acompanhar pedido"
+        vibration = [180, 80, 180] if status_value in {"pronto", "transito"} else [90]
 
     order_hash = hashlib.sha256(str(comanda.id).encode("utf-8")).hexdigest()[:12]
     return {
-        "title": f"KÔMA • Pedido #{display_number}",
+        "title": title,
         "body": body,
+        # Status e chat nunca se sobrescrevem. O status usa uma tag estável para
+        # evoluir como uma única notificação ao longo do fluxo do pedido.
         "tag": f"koma-order-{order_hash}-{'message' if kind == 'message' else 'status'}",
+        "renotify": True,
+        "vibrate": vibration,
+        "actions": [{"action": "open", "title": action_title}],
         "data": {
             "restaurantId": int(comanda.restaurante_id),
             "pedidoId": str(comanda.id),
             "conversationId": str(payload.get("conversation_id") or ""),
+            "kind": kind,
         },
     }
 
@@ -270,7 +330,19 @@ def dispatch_order_push_event(db: Session, snapshot: dict) -> int:
     if not subscriptions:
         return 0
 
-    notification = _notification_for(snapshot, comanda)
+    message_body = None
+    if str(payload.get("kind") or "") == "message" and payload.get("message_id"):
+        message = db.query(OrderMessage).filter(
+            OrderMessage.id == str(payload["message_id"]),
+            OrderMessage.restaurante_id == restaurante_id,
+            OrderMessage.pedido_id == pedido_id,
+            OrderMessage.conversation_id == str(payload.get("conversation_id") or ""),
+            OrderMessage.sender_type == "staff",
+        ).first()
+        if message is not None:
+            message_body = message.body
+
+    notification = _notification_for(snapshot, comanda, message_body=message_body)
     data = json.dumps(notification, ensure_ascii=False, separators=(",", ":"))
 
     from pywebpush import WebPushException, webpush
