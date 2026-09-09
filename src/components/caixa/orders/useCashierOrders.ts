@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { deriveProductionState } from '../../../domain/operationalState';
 import { describeTableOrders } from '../../../domain/tableReadModel';
 import type { Order } from '../../../types';
@@ -195,6 +195,7 @@ export function useCashierOrders({
   };
 
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
+  const pendingDeliveryMutationRef = useRef<Record<string, DeliveryOrderView['status'] | 'remove'>>({});
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
 
@@ -317,7 +318,15 @@ export function useCashierOrders({
       });
       if (res.ok) {
         const data = await res.json();
-        const mapped = data.map(mapComandaToDeliveryView);
+        const mapped = data
+          .map(mapComandaToDeliveryView)
+          .filter((order: DeliveryOrderView) => pendingDeliveryMutationRef.current[order.id] !== 'remove')
+          .map((order: DeliveryOrderView) => {
+            const optimisticStatus = pendingDeliveryMutationRef.current[order.id];
+            return optimisticStatus && optimisticStatus !== 'remove'
+              ? { ...order, status: optimisticStatus }
+              : order;
+          });
         setDeliveryOrders(mapped);
       }
     } catch (err) {
@@ -340,16 +349,25 @@ export function useCashierOrders({
   };
 
   useEffect(() => {
-    fetchDeliveryOrders();
-    fetchMotoboys();
+    void fetchDeliveryOrders();
+    void fetchMotoboys();
 
     const handleDeliveryUpdate = () => {
-      fetchDeliveryOrders();
+      void fetchDeliveryOrders();
     };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void fetchDeliveryOrders();
+    };
+    const reconcileInterval = window.setInterval(() => {
+      if (!document.hidden) void fetchDeliveryOrders();
+    }, 5000);
 
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      window.clearInterval(reconcileInterval);
       window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [apiBaseUrl]);
 
@@ -401,21 +419,39 @@ export function useCashierOrders({
   };
 
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
+    const previousDeliveryOrders = deliveryOrders;
+    const optimisticStatus = statusNovo === 'recusado'
+      ? 'remove'
+      : statusNovo as DeliveryOrderView['status'];
+
+    pendingDeliveryMutationRef.current[orderId] = optimisticStatus;
+    setDeliveryOrders((current) => optimisticStatus === 'remove'
+      ? current.filter((order) => String(order.id) !== String(orderId))
+      : current.map((order) => String(order.id) === String(orderId)
+        ? { ...order, status: optimisticStatus }
+        : order));
+
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
         method: 'PUT',
         headers: authHeaders,
       });
       if (res.ok) {
-        fetchDeliveryOrders();
-        onRefreshOrders();
+        delete pendingDeliveryMutationRef.current[orderId];
+        await Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
         showToast('Status atualizado e cliente avisado automaticamente!');
         return true;
-      } else {
-        showToast('Erro ao atualizar status do pedido.', 'error');
-        return false;
       }
+
+      delete pendingDeliveryMutationRef.current[orderId];
+      setDeliveryOrders(previousDeliveryOrders);
+      void fetchDeliveryOrders();
+      showToast('Erro ao atualizar status do pedido.', 'error');
+      return false;
     } catch (err) {
+      delete pendingDeliveryMutationRef.current[orderId];
+      setDeliveryOrders(previousDeliveryOrders);
+      void fetchDeliveryOrders();
       console.error(err);
       showToast('Erro de conexão ao atualizar status.', 'error');
       return false;
@@ -436,8 +472,7 @@ export function useCashierOrders({
       if (res.ok) {
         showToast('Pedido despachado; motoboy e cliente avisados automaticamente!');
         setSelectedKanbanOrder(null);
-        fetchDeliveryOrders();
-        onRefreshOrders();
+        await Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
       } else {
         const err = await res.json();
         showToast(`Erro ao despachar: ${err.detail}`, 'error');
@@ -474,23 +509,28 @@ export function useCashierOrders({
     }
   };
 
-  const handleFecharDelivery = async (orderId: string) => {
+  const handleFecharDelivery = async (orderId: string): Promise<boolean> => {
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
         method: 'PUT',
         headers: authHeaders,
       });
       if (res.ok) {
+        pendingDeliveryMutationRef.current[orderId] = 'remove';
+        setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(orderId)));
         showToast('Comanda de delivery encerrada com sucesso!');
         setSelectedKanbanOrder(null);
-        fetchDeliveryOrders();
-        onRefreshOrders();
-      } else {
-        showToast('Erro ao fechar comanda.', 'error');
+        await Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
+        delete pendingDeliveryMutationRef.current[orderId];
+        return true;
       }
+      showToast('Erro ao fechar comanda.', 'error');
+      return false;
     } catch (err) {
+      delete pendingDeliveryMutationRef.current[orderId];
       console.error(err);
       showToast('Erro de conexão ao finalizar pedido.', 'error');
+      return false;
     }
   };
 
@@ -498,8 +538,8 @@ export function useCashierOrders({
     await handleUpdateDeliveryStatus(orderId, 'recusado');
   };
 
-  const handleFinalizarPedido = async (orderId: string) => {
-    await handleFecharDelivery(orderId);
+  const handleFinalizarPedido = async (orderId: string): Promise<boolean> => {
+    return handleFecharDelivery(orderId);
   };
 
   const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
@@ -588,7 +628,7 @@ export function useCashierOrders({
   const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
     if (isLoading) return;
     const isDeliveryOrder = order.modalidade === 'delivery';
-    handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
+    await handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
   };
 
   const handleAdvanceSelectedKanbanOrder = async () => {
