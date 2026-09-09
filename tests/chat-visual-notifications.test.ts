@@ -9,6 +9,7 @@ const cashierDrawer = source('../src/components/caixa/chat/CashierConversationsD
 const cashierHook = source('../src/components/caixa/chat/useCashierChat.ts');
 const cashierRealtime = source('../src/components/caixa/chat/cashierChatRealtime.ts');
 const trackingRoute = source('../backend/app/routes/order_tracking.py');
+const cardapioRoute = source('../backend/app/routes/cardapio.py');
 
 test('cardapio mantém um gatilho flutuante de chat dentro da própria página', () => {
   assert.match(drawer, /floating-order-chat-trigger/);
@@ -16,6 +17,20 @@ test('cardapio mantém um gatilho flutuante de chat dentro da própria página',
   assert.match(drawer, /Fale com o restaurante/);
   assert.match(drawer, /setFloatingOpen\(true\)/);
   assert.match(drawer, /onClose=\{closeDrawer\}/);
+});
+
+test('gatilho flutuante continua visível e clicável mesmo sem pedido ou login', () => {
+  assert.match(drawer, /Pedidos & chat/);
+  assert.match(drawer, /Acompanhe seus pedidos/);
+  assert.match(drawer, /Abrir pedidos e chat/);
+  assert.doesNotMatch(drawer, /if \(!activeOrderForFab\) return null/);
+  assert.match(drawer, /Nenhum pedido por aqui ainda/);
+  assert.match(drawer, /Este atalho continua disponível mesmo sem login/);
+});
+
+test('novos pedidos deixam de emitir tracking_url legado para o cliente', () => {
+  assert.match(cardapioRoute, /response\["tracking_url"\] = None/);
+  assert.match(cardapioRoute, /tracking_url é legado/);
 });
 
 test('cliente recebe badge visual de mensagens não lidas do restaurante', () => {
