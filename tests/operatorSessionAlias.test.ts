@@ -22,10 +22,19 @@ test('canonical auth never writes operational bearer to durable storage', () => 
 test('browser boundary is installed before app bootstrap and redirects legacy aliases to sessionStorage', () => {
   assert.match(main, /import ["']\.\/utils\/sessionScopedBrowserStorage["']/);
   assert.match(storageBoundary, /OPERATIONAL_SESSION_KEYS/);
+  assert.match(storageBoundary, /migrateAtBootstrap/);
+  assert.match(storageBoundary, /OPERATIONAL_SESSION_KEYS\.forEach\(migrateAtBootstrap\)/);
   assert.match(storageBoundary, /if \(isOperationalSessionKey\(key\)\)/);
   assert.doesNotMatch(storageBoundary, /this === durable/);
   assert.match(storageBoundary, /originalSetItem\.call\(scoped/);
   assert.match(storageBoundary, /originalRemoveItem\.call\(durable/);
+});
+
+test('legacy durable values are consumed only during bootstrap, never lazily on reads', () => {
+  const getItemBody = storageBoundary.match(/Storage\.prototype\.getItem = function getItem[\s\S]*?\n  };/)?.[0] || '';
+  assert.match(getItemBody, /originalGetItem\.call\(scoped, key\)/);
+  assert.doesNotMatch(getItemBody, /migrateAtBootstrap/);
+  assert.doesNotMatch(getItemBody, /originalGetItem\.call\(durable/);
 });
 
 test('auth session exposes portal-scoped accessors for caixa and garçom', () => {
