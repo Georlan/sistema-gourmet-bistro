@@ -137,7 +137,9 @@ export default function CardapioDigital({
   const [errorMessage, setErrorMessage] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [orderingBlock, setOrderingBlock] = useState<OrderingBlockInfo | null>(null);
-  const [checkingOrderingBlock, setCheckingOrderingBlock] = useState(() => typeof window !== "undefined");
+  const [checkingOrderingBlock, setCheckingOrderingBlock] = useState(
+    () => typeof document !== "undefined" && Boolean(document.documentElement),
+  );
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
