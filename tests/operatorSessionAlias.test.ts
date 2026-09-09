@@ -24,6 +24,7 @@ test('browser boundary is installed before app bootstrap and redirects legacy al
   assert.match(storageBoundary, /OPERATIONAL_SESSION_KEYS/);
   assert.match(storageBoundary, /migrateAtBootstrap/);
   assert.match(storageBoundary, /OPERATIONAL_SESSION_KEYS\.forEach\(migrateAtBootstrap\)/);
+  assert.match(storageBoundary, /BOUNDARY_FLAG/);
   assert.match(storageBoundary, /if \(isOperationalSessionKey\(key\)\)/);
   assert.doesNotMatch(storageBoundary, /this === durable/);
   assert.match(storageBoundary, /originalSetItem\.call\(scoped/);
@@ -35,6 +36,14 @@ test('legacy durable values are consumed only during bootstrap, never lazily on 
   assert.match(getItemBody, /originalGetItem\.call\(scoped, key\)/);
   assert.doesNotMatch(getItemBody, /migrateAtBootstrap/);
   assert.doesNotMatch(getItemBody, /originalGetItem\.call\(durable/);
+});
+
+test('canonical session cleanup does not erase the active scoped value after the browser boundary is installed', () => {
+  assert.match(authSession, /STORAGE_BOUNDARY_FLAG/);
+  assert.match(authSession, /function removeLegacyDurableCopy/);
+  assert.match(authSession, /if \(isStorageBoundaryInstalled\(\)\) return/);
+  assert.match(authSession, /function writeScoped[\s\S]*removeLegacyDurableCopy\(key\)/);
+  assert.match(authSession, /if \(current != null\)[\s\S]*removeLegacyDurableCopy\(key\)/);
 });
 
 test('auth session exposes portal-scoped accessors for caixa and garçom', () => {
