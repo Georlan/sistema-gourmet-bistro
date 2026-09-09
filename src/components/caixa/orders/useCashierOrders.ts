@@ -15,6 +15,11 @@ type Props = Pick<
   setIsLoading: (value: boolean) => void;
 };
 
+type PendingDeliveryMutation = {
+  status: DeliveryOrderView['status'] | 'remove';
+  requestId: number;
+};
+
 /** Owns orders state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierOrders({
   orders,
@@ -195,7 +200,8 @@ export function useCashierOrders({
   };
 
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
-  const pendingDeliveryMutationRef = useRef<Record<string, DeliveryOrderView['status'] | 'remove'>>({});
+  const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
+  const deliveryMutationSequenceRef = useRef(0);
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
 
@@ -320,9 +326,9 @@ export function useCashierOrders({
         const data = await res.json();
         const mapped = data
           .map(mapComandaToDeliveryView)
-          .filter((order: DeliveryOrderView) => pendingDeliveryMutationRef.current[order.id] !== 'remove')
+          .filter((order: DeliveryOrderView) => pendingDeliveryMutationRef.current[String(order.id)]?.status !== 'remove')
           .map((order: DeliveryOrderView) => {
-            const optimisticStatus = pendingDeliveryMutationRef.current[order.id];
+            const optimisticStatus = pendingDeliveryMutationRef.current[String(order.id)]?.status;
             return optimisticStatus && optimisticStatus !== 'remove'
               ? { ...order, status: optimisticStatus }
               : order;
@@ -419,17 +425,42 @@ export function useCashierOrders({
   };
 
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
-    const previousDeliveryOrders = deliveryOrders;
+    const previousIndex = deliveryOrders.findIndex((order) => String(order.id) === String(orderId));
+    const previousOrder = previousIndex >= 0 ? deliveryOrders[previousIndex] : undefined;
     const optimisticStatus = statusNovo === 'recusado'
       ? 'remove'
       : statusNovo as DeliveryOrderView['status'];
+    const requestId = ++deliveryMutationSequenceRef.current;
 
-    pendingDeliveryMutationRef.current[orderId] = optimisticStatus;
+    pendingDeliveryMutationRef.current[orderId] = { status: optimisticStatus, requestId };
     setDeliveryOrders((current) => optimisticStatus === 'remove'
       ? current.filter((order) => String(order.id) !== String(orderId))
       : current.map((order) => String(order.id) === String(orderId)
         ? { ...order, status: optimisticStatus }
         : order));
+
+    const clearCurrentMutation = () => {
+      if (pendingDeliveryMutationRef.current[orderId]?.requestId !== requestId) return false;
+      delete pendingDeliveryMutationRef.current[orderId];
+      return true;
+    };
+
+    const rollbackCurrentMutation = () => {
+      if (!clearCurrentMutation()) return false;
+      if (previousOrder) {
+        setDeliveryOrders((current) => {
+          const existingIndex = current.findIndex((order) => String(order.id) === String(orderId));
+          if (existingIndex >= 0) {
+            return current.map((order) => String(order.id) === String(orderId) ? previousOrder : order);
+          }
+          const restored = [...current];
+          restored.splice(Math.min(previousIndex, restored.length), 0, previousOrder);
+          return restored;
+        });
+      }
+      void fetchDeliveryOrders();
+      return true;
+    };
 
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
@@ -437,23 +468,21 @@ export function useCashierOrders({
         headers: authHeaders,
       });
       if (res.ok) {
-        delete pendingDeliveryMutationRef.current[orderId];
+        const wasCurrentMutation = clearCurrentMutation();
         await Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
-        showToast('Status atualizado e cliente avisado automaticamente!');
+        if (wasCurrentMutation) showToast('Status atualizado e cliente avisado automaticamente!');
         return true;
       }
 
-      delete pendingDeliveryMutationRef.current[orderId];
-      setDeliveryOrders(previousDeliveryOrders);
-      void fetchDeliveryOrders();
-      showToast('Erro ao atualizar status do pedido.', 'error');
+      if (rollbackCurrentMutation()) {
+        showToast('Erro ao atualizar status do pedido.', 'error');
+      }
       return false;
     } catch (err) {
-      delete pendingDeliveryMutationRef.current[orderId];
-      setDeliveryOrders(previousDeliveryOrders);
-      void fetchDeliveryOrders();
+      if (rollbackCurrentMutation()) {
+        showToast('Erro de conexão ao atualizar status.', 'error');
+      }
       console.error(err);
-      showToast('Erro de conexão ao atualizar status.', 'error');
       return false;
     }
   };
@@ -516,18 +545,20 @@ export function useCashierOrders({
         headers: authHeaders,
       });
       if (res.ok) {
-        pendingDeliveryMutationRef.current[orderId] = 'remove';
+        const removalRequestId = ++deliveryMutationSequenceRef.current;
+        pendingDeliveryMutationRef.current[orderId] = { status: 'remove', requestId: removalRequestId };
         setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(orderId)));
         showToast('Comanda de delivery encerrada com sucesso!');
         setSelectedKanbanOrder(null);
         await Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
-        delete pendingDeliveryMutationRef.current[orderId];
+        if (pendingDeliveryMutationRef.current[orderId]?.requestId === removalRequestId) {
+          delete pendingDeliveryMutationRef.current[orderId];
+        }
         return true;
       }
       showToast('Erro ao fechar comanda.', 'error');
       return false;
     } catch (err) {
-      delete pendingDeliveryMutationRef.current[orderId];
       console.error(err);
       showToast('Erro de conexão ao finalizar pedido.', 'error');
       return false;
