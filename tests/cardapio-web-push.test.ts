@@ -45,7 +45,8 @@ test("preview de mensagem é resolvido no dispatcher sem copiar body para outbox
   assert.match(caixaChat, /message_id=msg\.id/);
   assert.match(webPushBackend, /payload\["message_id"\]/);
   assert.match(webPushBackend, /message_body = message\.body/);
-  assert.doesNotMatch(caixaChat, /message_body=payload\.body|body=payload\.body/);
+  assert.doesNotMatch(webPushBackend, /payload\["(?:body|message_body)"\]\s*=/);
+  assert.doesNotMatch(webPushBackend, /"(?:body|message_body)"\s*:\s*(?:message_body|raw_body)/);
   assert.match(webPushBackend, /sanitize_message_preview/);
 });
 
