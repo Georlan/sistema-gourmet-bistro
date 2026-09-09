@@ -16,20 +16,6 @@ on:
       - 'tests/subscriptionPaymentOptions.test.ts'
       - 'e2e/plan-subscription-flow.spec.ts'
       - '.github/workflows/checkout-smoke.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/legal/PlanContractPage.tsx'
-      - 'src/legal/planSubscriptionFlow.css'
-      - 'src/legal/paymentOptionsCatalog.css'
-      - 'src/config/subscriptionPlans.ts'
-      - 'src/config/subscriptionPaymentOptions.ts'
-      - 'src/landing/sections/Plans.tsx'
-      - 'src/main.tsx'
-      - 'tests/planSubscriptionFlow.test.ts'
-      - 'tests/subscriptionPaymentOptions.test.ts'
-      - 'e2e/plan-subscription-flow.spec.ts'
-      - '.github/workflows/checkout-smoke.yml'
 
 permissions:
   contents: read
