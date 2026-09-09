@@ -64,6 +64,8 @@ test("clique da notificação retoma cold-start sem capability em payload ou que
   assert.match(trackingPage, /window\.history\.replaceState/);
   assert.match(trackingPage, /"\/acompanhar"/);
   assert.match(trackingPage, /api\/cardapio\/pedidos\/acompanhar\/\$\{encodeURIComponent\(token\)\}/);
+  assert.match(trackingPage, /setRetryNonce\(\(current\) => current \+ 1\)/);
+  assert.doesNotMatch(trackingPage, /window\.location\.reload\(\)/);
 
   assert.match(ordersDrawer, /requestedPushOrderFromHash/);
   assert.match(ordersDrawer, /KOMA_PUSH_OPEN_ORDER/);
