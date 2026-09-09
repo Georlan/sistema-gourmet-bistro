@@ -1,27 +1,40 @@
+import uuid
+import datetime
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Annotated
-
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
-from ..adapters.orders.web_adapter import CardapioWebAdapter
-from ..database import get_db
-from ..models import Comanda, ItemComanda, OnlinePaymentIntent
-from ..schemas import CardapioPedidoAgendavelCreate
-from ..services.online_payments import OnlinePaymentService
-from ..services.public_orders import enforce_public_order_rate_limits
+from ..database import get_db, current_restaurante_id, tenant_session_scope
+from ..models import Comanda, OnlinePaymentIntent
+from ..schemas import CardapioPedidoCreate
+from ..services.order_state_contract import build_order_state_contract
+from ..services.public_orders import (
+    MAX_PUBLIC_ORDERS_PER_IP,
+    MAX_PUBLIC_ORDERS_PER_PHONE,
+    PUBLIC_ORDER_RATE_WINDOW_SECONDS,
+    authenticated_customer,
+    client_ip as _client_ip,
+    consume_rate_limit as _consume_rate_limit,
+    enforce_public_order_rate_limits,
+    resolve_restaurant_id,
+)
 from ..services.scheduled_orders import scheduled_for_order
+from ..adapters.orders.web_adapter import CardapioWebAdapter
+# Stable Python compatibility export; order creation already uses the Core.
+from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
 
-logger = logging.getLogger("koma.routes.cardapio")
+logger = logging.getLogger("koma.cardapio")
+router = APIRouter(
+    prefix="/cardapio",
+    tags=["Cardápio Digital Client"]
+)
 
-router = APIRouter(prefix="/cardapio", tags=["cardapio"])
+MAX_PUBLIC_ORDER_UNITS = 200
+ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
 
 
-@router.get("/health")
-def cardapio_health():
-    return {"status": "ok"}
+class CardapioPedidoAgendavelCreate(CardapioPedidoCreate):
+    scheduled_for: datetime.datetime | None = None
 
 
 def _order_total(comanda: Comanda) -> float:
@@ -32,17 +45,30 @@ def _order_total(comanda: Comanda) -> float:
     return round(max(0.0, itens_total + taxa - desconto_cupom - desconto_cashback), 2)
 
 
+def _existing_order_response(comanda: Comanda) -> dict:
+    return {
+        "status": "success",
+        "comanda_id": comanda.id,
+        "numero_pedido": comanda.numero_pedido,
+        "delivery_status": comanda.delivery_status or "pendente",
+        "tipo": comanda.tipo,
+        "cliente_id": comanda.cliente_id,
+        "total": _order_total(comanda),
+        "mensagem": "Pedido já cadastrado com sucesso!",
+        "pagamento": {
+            "status": "pendente_no_atendimento",
+            "cobranca_online": False,
+        },
+    }
+
+
 def _load_existing_idempotent_order(db: Session, rest_id: int, key: str) -> Comanda | None:
     if not key:
         return None
-    return (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == rest_id,
-            Comanda.idempotency_key == key,
-        )
-        .first()
-    )
+    return db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.idempotency_key == key,
+    ).first()
 
 
 def _enforce_public_order_rate_limits(
@@ -110,100 +136,107 @@ def _resolve_public_order_tenant(db: Session, comanda_id: str, key: str) -> int 
             {"comanda_id": comanda_id, "key": key},
         ).scalar_one_or_none()
 
-    row = (
-        db.query(Comanda.restaurante_id)
-        .filter(Comanda.id == comanda_id, Comanda.idempotency_key == key)
-        .one_or_none()
-    )
-    return int(row[0]) if row else None
+    return db.execute(
+        text(
+            """
+            SELECT restaurante_id
+            FROM comandas
+            WHERE id = :comanda_id
+              AND idempotency_key = :key
+            LIMIT 1
+            """
+        ),
+        {"comanda_id": comanda_id, "key": key},
+    ).scalar_one_or_none()
 
 
-def _resolve_tracking_order_tenant(db: Session, comanda_id: str, token: str) -> int | None:
-    """Descobre tenant por token opaco de tracking sem confiar em tenant do cliente."""
-    if not comanda_id or not token:
-        return None
-
-    if db.get_bind().dialect.name == "postgresql":
-        return db.execute(
-            text(
-                "SELECT koma_internal.resolve_tracking_order_tenant("
-                ":comanda_id, :token)"
-            ),
-            {"comanda_id": comanda_id, "token": token},
-        ).scalar_one_or_none()
-
-    row = (
-        db.query(Comanda.restaurante_id)
-        .filter(Comanda.id == comanda_id, Comanda.tracking_token == token)
-        .one_or_none()
-    )
-    return int(row[0]) if row else None
-
-
-@router.get("/pedidos/{comanda_id}")
+@router.get("/pedidos/{comanda_id}/status")
 def consultar_status_pedido_publico(
     comanda_id: str,
-    key: Annotated[str | None, Query(min_length=16, max_length=512)] = None,
-    tracking_token: Annotated[str | None, Query(min_length=16, max_length=512)] = None,
+    key: str = "",
     db: Session = Depends(get_db),
 ):
-    tenant_id = None
-    if tracking_token:
-        tenant_id = _resolve_tracking_order_tenant(db, comanda_id, tracking_token)
-    elif key:
-        tenant_id = _resolve_public_order_tenant(db, comanda_id, key)
-    if tenant_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
-
-    comanda = (
-        db.query(Comanda)
-        .filter(Comanda.id == comanda_id, Comanda.restaurante_id == tenant_id)
-        .first()
-    )
-    if not comanda:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
-
-    schedule = scheduled_for_order(
-        db,
-        restaurante_id=tenant_id,
-        comanda_id=comanda.id,
-    )
-    payment_intent = (
-        db.query(OnlinePaymentIntent)
-        .filter(
-            OnlinePaymentIntent.restaurante_id == tenant_id,
-            OnlinePaymentIntent.comanda_id == comanda.id,
+    """
+    Retorna o status atual de um pedido público em andamento para o cliente.
+    Requer a idempotency_key como query param ?key=... para provar posse.
+    Retorna 404 (nunca 403) quando a chave está errada ou ausente, para não
+    revelar que o comanda_id existe.
+    """
+    key = (key or "").strip()
+    rest_id = _resolve_public_order_tenant(db, comanda_id.strip(), key)
+    if rest_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pedido não encontrado.",
         )
-        .first()
-    )
 
-    return {
-        "id": comanda.id,
-        "numero_pedido": comanda.numero_pedido,
-        "tipo": comanda.tipo,
-        "delivery_status": (
-            "agendado"
-            if schedule is not None and schedule.released_at is None
-            else (comanda.delivery_status or "pendente")
-        ),
-        "scheduled_for": schedule.scheduled_for.isoformat() if schedule is not None else None,
-        "cliente_nome": comanda.cliente_nome,
-        "cliente_telefone": comanda.cliente_telefone,
-        "total": _order_total(comanda),
-        "itens": [
+    with tenant_session_scope(db, int(rest_id)):
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == int(rest_id),
+            Comanda.id == comanda_id,
+            Comanda.idempotency_key == key,
+        ).first()
+        if not comanda:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pedido não encontrado.",
+            )
+
+        itens_payload = [
             {
                 "id": item.id,
-                "produto_id": item.produto_id,
-                "quantidade": item.quantidade,
-                "preco_unit": float(item.preco_unit or 0),
-                "status": item.status,
-                "observacao": item.observacao,
+                "nome": item.produto.nome if item.produto else "Item",
+                "quantidade": 1,
             }
             for item in comanda.itens
-        ],
-        "pagamento": (
-            OnlinePaymentService.public_payload(payment_intent)
-            if payment_intent is not None
-            else {"status": "pendente_no_atendimento", "cobranca_online": False}
-        ),
-    }
+        ]
+
+        schedule = scheduled_for_order(
+            db,
+            restaurante_id=int(rest_id),
+            comanda_id=comanda.id,
+        )
+        status_retorno = comanda.delivery_status or "pendente"
+        if schedule is not None and schedule.released_at is None:
+            status_retorno = "agendado"
+        elif comanda.fechada and status_retorno != "recusado":
+            status_retorno = "finalizado"
+
+        payment_intent = db.query(OnlinePaymentIntent).filter(
+            OnlinePaymentIntent.restaurante_id == int(rest_id),
+            OnlinePaymentIntent.comanda_id == comanda.id,
+        ).first()
+        if payment_intent is not None and payment_intent.status != "approved":
+            status_retorno = "aguardando_pagamento"
+
+        state_contract = build_order_state_contract(
+            status_retorno,
+            comanda.tipo,
+            conversation_closed=bool(comanda.fechada),
+            scheduled_pending=status_retorno == "agendado",
+            payment_pending=status_retorno == "aguardando_pagamento",
+        )
+
+        return {
+            "id": comanda.id,
+            "numero_pedido": comanda.numero_pedido,
+            "status": status_retorno,
+            "state": state_contract,
+            "tipo": comanda.tipo,
+            "total": _order_total(comanda),
+            "fechada": comanda.fechada,
+            "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
+            "scheduled_for": schedule.scheduled_for.isoformat() if schedule is not None else None,
+            "scheduled_released_at": schedule.released_at.isoformat() if schedule is not None and schedule.released_at else None,
+            "itens": itens_payload,
+            "pagamento": (
+                {
+                    "status": payment_intent.status,
+                    "cobranca_online": True,
+                    "metodo": payment_intent.method,
+                    "expira_em": payment_intent.expires_at.isoformat() if payment_intent.expires_at else None,
+                }
+                if payment_intent is not None
+                else {"status": "pendente_no_atendimento", "cobranca_online": False}
+            ),
+        }
