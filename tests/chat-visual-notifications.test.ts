@@ -109,3 +109,23 @@ test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigi
   assert.match(cashierDrawer, /case 'status_changed':/);
   assert.match(cashierDrawer, /case 'read_update':/);
 });
+
+test('central do Caixa arquiva pedidos terminais sem apagar histórico', () => {
+  assert.match(cashierDrawer, /type ConversationFilter = 'active' \| 'archived' \| 'all'/);
+  assert.match(cashierDrawer, /isArchivedConversation/);
+  assert.match(cashierDrawer, /TERMINAL_CHAT_STATUSES/);
+  assert.match(cashierDrawer, /'finalizado'/);
+  assert.match(cashierDrawer, /Ativas/);
+  assert.match(cashierDrawer, /Arquivadas/);
+  assert.match(cashierDrawer, /Todas/);
+  assert.match(cashierDrawer, /type="search"/);
+  assert.match(cashierDrawer, /Buscar pedido, cliente ou mensagem/);
+  assert.match(cashierDrawer, /Conversa arquivada/);
+});
+
+test('mensagem nova em pedido terminal volta para a fila como pós-venda', () => {
+  assert.match(cashierDrawer, /conversation\.unread_count <= 0/);
+  assert.match(cashierDrawer, /!isWaitingForStaff\(conversation\)/);
+  assert.match(cashierDrawer, /Pós-venda/);
+  assert.match(cashierDrawer, /volta automaticamente para Ativas como pós-venda/);
+});
