@@ -68,12 +68,34 @@ interface LoadMessagesOptions {
   markRead?: boolean;
 }
 
+type ConversationFilter = 'active' | 'archived' | 'all';
+
 const QUICK_REPLIES = [
   'Estamos preparando seu pedido.',
   'Está quase pronto.',
   'Seu pedido está pronto para retirada.',
   'Seu pedido saiu para entrega.',
 ] as const;
+
+const TERMINAL_CHAT_STATUSES = new Set([
+  'finalizado',
+  'finalizada',
+  'concluido',
+  'concluida',
+  'completed',
+  'recusado',
+  'recusada',
+  'rejected',
+  'cancelado',
+  'cancelada',
+  'cancelled',
+]);
+
+const normalizeStatus = (value: string) => value
+  .trim()
+  .toLocaleLowerCase('pt-BR')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
 
 const conversationTimestamp = (conversation: CaixaConversationItem) => {
   const source = conversation.last_message?.created_at || conversation.updated_at;
@@ -83,6 +105,30 @@ const conversationTimestamp = (conversation: CaixaConversationItem) => {
 
 const isWaitingForStaff = (conversation: CaixaConversationItem) =>
   conversation.last_message?.sender_type === 'customer';
+
+export const isTerminalConversation = (conversation: CaixaConversationItem) =>
+  Boolean(conversation.closed_at) || TERMINAL_CHAT_STATUSES.has(normalizeStatus(conversation.status_pedido || ''));
+
+/**
+ * Pedido terminal vira histórico por padrão. Se o cliente voltar a escrever,
+ * a thread retorna para a fila ativa como pós-venda sem reabrir o pedido.
+ */
+export const isArchivedConversation = (conversation: CaixaConversationItem) =>
+  isTerminalConversation(conversation)
+  && conversation.unread_count <= 0
+  && !isWaitingForStaff(conversation);
+
+const matchesConversationSearch = (conversation: CaixaConversationItem, rawQuery: string) => {
+  const query = rawQuery.trim().toLocaleLowerCase('pt-BR');
+  if (!query) return true;
+  return [
+    conversation.numero_pedido ? String(conversation.numero_pedido) : '',
+    conversation.cliente_nome,
+    conversation.tipo_pedido,
+    conversation.status_pedido,
+    conversation.last_message?.body || '',
+  ].some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(query));
+};
 
 export function CashierConversationsDrawer({
   isOpen,
@@ -94,11 +140,13 @@ export function CashierConversationsDrawer({
   const [conversations, setConversations] = useState<CaixaConversationItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messageState, setMessageState] = useState<MessageState>({ conversationId: null, items: [] });
-  const [loadingList, setLoadingList] = useState<boolean>(false);
-  const [loadingMessages, setLoadingMessages] = useState<boolean>(false);
-  const [replyText, setReplyText] = useState<string>('');
-  const [sending, setSending] = useState<boolean>(false);
+  const [loadingList, setLoadingList] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('active');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -111,32 +159,62 @@ export function CashierConversationsDrawer({
     selectedIdRef.current = selectedId;
   }, [selectedId]);
 
-  const sortedConversations = useMemo(() => [...conversations].sort((a, b) => {
-    const unreadPriority = Number(b.unread_count > 0) - Number(a.unread_count > 0);
-    if (unreadPriority !== 0) return unreadPriority;
+  const activeCount = useMemo(
+    () => conversations.filter((conversation) => !isArchivedConversation(conversation)).length,
+    [conversations],
+  );
+  const archivedCount = useMemo(
+    () => conversations.filter(isArchivedConversation).length,
+    [conversations],
+  );
 
-    const waitingPriority = Number(isWaitingForStaff(b)) - Number(isWaitingForStaff(a));
-    if (waitingPriority !== 0) return waitingPriority;
-
-    return conversationTimestamp(b) - conversationTimestamp(a);
-  }), [conversations]);
+  const sortedConversations = useMemo(() => conversations
+    .filter((conversation) => {
+      const archived = isArchivedConversation(conversation);
+      if (conversationFilter === 'active' && archived) return false;
+      if (conversationFilter === 'archived' && !archived) return false;
+      return matchesConversationSearch(conversation, searchQuery);
+    })
+    .sort((a, b) => {
+      const unreadPriority = Number(b.unread_count > 0) - Number(a.unread_count > 0);
+      if (unreadPriority !== 0) return unreadPriority;
+      const waitingPriority = Number(isWaitingForStaff(b)) - Number(isWaitingForStaff(a));
+      if (waitingPriority !== 0) return waitingPriority;
+      return conversationTimestamp(b) - conversationTimestamp(a);
+    }), [conversationFilter, conversations, searchQuery]);
 
   const selectedConv = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || null,
     [conversations, selectedId],
   );
+  const selectedArchived = selectedConv ? isArchivedConversation(selectedConv) : false;
+  const selectedPostSale = selectedConv
+    ? isTerminalConversation(selectedConv) && !selectedArchived
+    : false;
 
   const messages = messageState.conversationId === selectedId ? messageState.items : [];
 
   const totalUnread = useMemo(
-    () => conversations.reduce((acc, conversation) => acc + (conversation.unread_count || 0), 0),
+    () => conversations
+      .filter((conversation) => !isArchivedConversation(conversation))
+      .reduce((acc, conversation) => acc + (conversation.unread_count || 0), 0),
     [conversations],
   );
 
   const waitingForStaffCount = useMemo(
-    () => conversations.filter(isWaitingForStaff).length,
+    () => conversations.filter((conversation) => !isArchivedConversation(conversation) && isWaitingForStaff(conversation)).length,
     [conversations],
   );
+
+  const clearSelection = useCallback(() => {
+    selectedIdRef.current = null;
+    messageGenerationRef.current += 1;
+    messageAbortRef.current?.abort();
+    setSelectedId(null);
+    setMessageState({ conversationId: null, items: [] });
+    setReplyText('');
+    setErrorText(null);
+  }, []);
 
   useEffect(() => {
     if (isOpen && !loadingList) onUnreadCountChange?.(totalUnread);
@@ -151,13 +229,19 @@ export function CashierConversationsDrawer({
     return () => window.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
-  const scrollToBottom = useCallback((smooth = true) => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTo({
-        top: chatScrollRef.current.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-      });
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!sortedConversations.some((conversation) => conversation.id === selectedId)) {
+      clearSelection();
     }
+  }, [clearSelection, selectedId, sortedConversations]);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (!chatScrollRef.current) return;
+    chatScrollRef.current.scrollTo({
+      top: chatScrollRef.current.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
   }, []);
 
   const fetchConversations = useCallback(async ({ background = false }: FetchConversationsOptions = {}) => {
@@ -168,39 +252,33 @@ export function CashierConversationsDrawer({
         headers: { Authorization: authorization },
         cache: 'no-store',
       });
-      if (!response.ok) {
-        throw new Error(`Falha ao listar conversas (${response.status}).`);
-      }
+      if (!response.ok) throw new Error(`Falha ao listar conversas (${response.status}).`);
       const data: CaixaConversationItem[] = await response.json();
-      setConversations(data);
+      setConversations(Array.isArray(data) ? data : []);
       const currentSelection = selectedIdRef.current;
       if (currentSelection && !data.some((conversation) => conversation.id === currentSelection)) {
-        selectedIdRef.current = null;
-        setSelectedId(null);
-        setMessageState({ conversationId: null, items: [] });
+        clearSelection();
       }
     } catch (error) {
       console.warn('Erro ao listar conversas do Caixa:', error);
     } finally {
       if (!background) setLoadingList(false);
     }
-  }, [authorization]);
+  }, [authorization, clearSelection]);
 
   const markConversationRead = useCallback(async (conversationId: string) => {
     if (!authorization || markReadInFlightRef.current.has(conversationId)) return;
-
     markReadInFlightRef.current.add(conversationId);
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId ? { ...conversation, unread_count: 0 } : conversation
     )));
-
     try {
       await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
         method: 'POST',
         headers: { Authorization: authorization },
       });
     } catch {
-      // O próximo snapshot autoritativo da lista restaura o badge se a marcação falhar.
+      // O próximo snapshot autoritativo restaura a contagem se a marcação falhar.
     } finally {
       markReadInFlightRef.current.delete(conversationId);
     }
@@ -227,33 +305,22 @@ export function CashierConversationsDrawer({
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`,
-        {
-          headers: { Authorization: authorization },
-          cache: 'no-store',
-          signal: controller.signal,
-        },
-      );
-      if (!response.ok) {
-        throw new Error(`Falha ao carregar conversa (${response.status}).`);
-      }
+      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
+        headers: { Authorization: authorization },
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
       const items: CaixaChatMessage[] = await response.json();
-
       if (
         controller.signal.aborted
         || generation !== messageGenerationRef.current
         || selectedIdRef.current !== conversationId
-      ) {
-        return;
-      }
+      ) return;
 
       setMessageState({ conversationId, items: Array.isArray(items) ? items : [] });
       if (markRead) void markConversationRead(conversationId);
-
-      if (!background) {
-        window.setTimeout(() => scrollToBottom(false), 50);
-      }
+      if (!background) window.setTimeout(() => scrollToBottom(false), 50);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
         console.warn('Erro ao carregar mensagens da conversa:', error);
@@ -283,16 +350,13 @@ export function CashierConversationsDrawer({
   }, [isOpen, selectedId, loadMessages]);
 
   useEffect(() => {
-    if (isOpen && !selectedId && sortedConversations.length > 0) {
-      if (typeof window !== 'undefined' && window.innerWidth >= 640) {
-        openConversation(sortedConversations[0].id);
-      }
+    if (isOpen && !selectedId && sortedConversations.length > 0 && window.innerWidth >= 640) {
+      openConversation(sortedConversations[0].id);
     }
-  }, [isOpen, selectedId, sortedConversations, openConversation]);
+  }, [isOpen, openConversation, selectedId, sortedConversations]);
 
   useEffect(() => {
     if (!isOpen || !authorization) return;
-
     const controller = new AbortController();
     let fallbackInterval: number | null = null;
     let reconnectTimer: number | null = null;
@@ -304,14 +368,10 @@ export function CashierConversationsDrawer({
         fallbackInterval = null;
       }
     };
-
     const refreshSelectedInBackground = () => {
       const current = selectedIdRef.current;
-      if (current) {
-        void loadMessages(current, { background: true, markRead: false });
-      }
+      if (current) void loadMessages(current, { background: true, markRead: false });
     };
-
     const startFallback = () => {
       if (fallbackInterval !== null) return;
       fallbackInterval = window.setInterval(() => {
@@ -322,23 +382,18 @@ export function CashierConversationsDrawer({
     };
 
     const appendRealtimeMessage = (data: Record<string, unknown> | null) => {
-      const eventConversationId = typeof data?.conversation_id === 'string'
-        ? data.conversation_id
-        : null;
+      const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
       const messageId = typeof data?.id === 'string' ? data.id : null;
       const pedidoId = typeof data?.pedido_id === 'string' ? data.pedido_id : null;
       const senderType = data?.sender_type;
       const body = typeof data?.body === 'string' ? data.body : null;
-
       if (
         !eventConversationId
         || !messageId
         || !pedidoId
         || !body
         || (senderType !== 'system' && senderType !== 'customer' && senderType !== 'staff')
-      ) {
-        return;
-      }
+      ) return;
 
       const message: CaixaChatMessage = {
         id: messageId,
@@ -358,7 +413,6 @@ export function CashierConversationsDrawer({
           return { conversationId: eventConversationId, items: [...items, message] };
         });
         window.setTimeout(() => scrollToBottom(true), 50);
-
         if (senderType === 'customer' && document.visibilityState === 'visible') {
           void markConversationRead(eventConversationId);
         }
@@ -374,21 +428,15 @@ export function CashierConversationsDrawer({
         onOpen: stopFallback,
         onEvent: ({ event, data }) => {
           if (event === 'connected') return;
-
-          const eventConversationId = typeof data?.conversation_id === 'string'
-            ? data.conversation_id
-            : null;
-
+          const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
           switch (event) {
             case 'new_message':
               appendRealtimeMessage(data);
               void fetchConversations({ background: true });
               return;
-
             case 'status_changed':
               void fetchConversations({ background: true });
               return;
-
             case 'read_update':
               if (eventConversationId && data?.reader === 'staff') {
                 setConversations((current) => current.map((conversation) => (
@@ -398,7 +446,6 @@ export function CashierConversationsDrawer({
                 )));
               }
               return;
-
             default:
               void fetchConversations({ background: true });
           }
@@ -418,7 +465,7 @@ export function CashierConversationsDrawer({
       stopFallback();
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
     };
-  }, [isOpen, authorization, fetchConversations, loadMessages, markConversationRead, scrollToBottom]);
+  }, [authorization, fetchConversations, isOpen, loadMessages, markConversationRead, scrollToBottom]);
 
   useEffect(() => () => {
     messageGenerationRef.current += 1;
@@ -426,31 +473,21 @@ export function CashierConversationsDrawer({
   }, []);
 
   const sendReply = useCallback(async () => {
-    if (!selectedId || !replyText.trim() || sending) return;
-
+    if (!selectedId || !replyText.trim() || sending || selectedArchived) return;
     const targetConversationId = selectedId;
+    const bodyToSend = replyText.trim();
     setSending(true);
     setErrorText(null);
-    const bodyToSend = replyText.trim();
-
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/caixa/conversas/${targetConversationId}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: authorization,
-          },
-          body: JSON.stringify({ body: bodyToSend }),
-        },
-      );
-
+      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${targetConversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: authorization },
+        body: JSON.stringify({ body: bodyToSend }),
+      });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || 'Erro ao enviar resposta.');
       }
-
       const sentMessage: CaixaChatMessage = await response.json();
       if (selectedIdRef.current === targetConversationId) {
         setMessageState((current) => {
@@ -465,6 +502,7 @@ export function CashierConversationsDrawer({
         conversation.id === targetConversationId
           ? {
               ...conversation,
+              unread_count: 0,
               last_message: {
                 id: sentMessage.id,
                 sender_type: sentMessage.sender_type,
@@ -474,18 +512,18 @@ export function CashierConversationsDrawer({
             }
           : conversation
       )));
+      void fetchConversations({ background: true });
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Falha ao enviar resposta.');
     } finally {
       setSending(false);
     }
-  }, [authorization, replyText, selectedId, sending, scrollToBottom]);
+  }, [authorization, fetchConversations, replyText, selectedArchived, selectedId, sending, scrollToBottom]);
 
   const handleSendReply = (event: React.FormEvent) => {
     event.preventDefault();
     void sendReply();
   };
-
   const handleReplyKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -494,6 +532,22 @@ export function CashierConversationsDrawer({
   };
 
   if (!isOpen) return null;
+
+  const filterButton = (value: ConversationFilter, label: string, count: number) => (
+    <button
+      type="button"
+      onClick={() => setConversationFilter(value)}
+      className={clsx(
+        'rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition',
+        conversationFilter === value
+          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
+          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
+      )}
+      aria-pressed={conversationFilter === value}
+    >
+      {label} <span className="ml-1 opacity-70">{count}</span>
+    </button>
+  );
 
   return (
     <div
@@ -527,7 +581,7 @@ export function CashierConversationsDrawer({
                   </span>
                 )}
               </div>
-              <p className="truncate text-xs text-zinc-400">Mensagens priorizadas por atenção e atividade recente</p>
+              <p className="truncate text-xs text-zinc-400">Ativas por padrão · histórico finalizado fica em Arquivadas</p>
             </div>
           </div>
 
@@ -561,7 +615,20 @@ export function CashierConversationsDrawer({
               selectedId ? 'hidden sm:flex' : 'flex',
             )}
           >
-            <div className="sticky top-0 z-10 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur">
+            <div className="sticky top-0 z-10 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur space-y-2">
+              <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
+                {filterButton('active', 'Ativas', activeCount)}
+                {filterButton('archived', 'Arquivadas', archivedCount)}
+                {filterButton('all', 'Todas', conversations.length)}
+              </div>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Buscar pedido, cliente ou mensagem"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none transition focus:border-emerald-500"
+                aria-label="Buscar conversas"
+              />
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
                 Não lidas primeiro · depois aguardando resposta
               </p>
@@ -570,13 +637,15 @@ export function CashierConversationsDrawer({
             {sortedConversations.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs">
                 <MessageSquare size={32} className="opacity-20 mb-3" />
-                <p>Nenhuma conversa ativa no momento.</p>
+                <p>{conversationFilter === 'archived' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa ativa no momento.'}</p>
               </div>
             ) : (
               <div className="divide-y divide-zinc-800/70">
                 {sortedConversations.map((conversation) => {
                   const isSelected = conversation.id === selectedId;
                   const awaitingReply = isWaitingForStaff(conversation);
+                  const archived = isArchivedConversation(conversation);
+                  const postSale = isTerminalConversation(conversation) && !archived;
                   return (
                     <button
                       key={conversation.id}
@@ -597,6 +666,8 @@ export function CashierConversationsDrawer({
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium capitalize">
                             {conversation.tipo_pedido}
                           </span>
+                          {archived && <span className="text-[9px] font-bold text-zinc-500">Arquivada</span>}
+                          {postSale && <span className="text-[9px] font-bold text-amber-300">Pós-venda</span>}
                         </div>
                         {conversation.unread_count > 0 && (
                           <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black flex items-center justify-center">
@@ -604,18 +675,15 @@ export function CashierConversationsDrawer({
                           </span>
                         )}
                       </div>
-
                       <div className="flex items-center justify-between gap-2 text-xs">
                         <span className="text-zinc-200 font-semibold truncate">{conversation.cliente_nome}</span>
                         <span className="text-[10px] text-zinc-500 capitalize shrink-0">{conversation.status_pedido}</span>
                       </div>
-
                       {awaitingReply && (
                         <span className="w-fit rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300">
                           Cliente aguardando resposta
                         </span>
                       )}
-
                       {conversation.last_message && (
                         <p className={clsx(
                           'text-[11px] line-clamp-2 break-words leading-relaxed',
@@ -636,52 +704,29 @@ export function CashierConversationsDrawer({
             )}
           </div>
 
-          <div
-            className={clsx(
-              'flex-1 flex flex-col bg-zinc-950 min-w-0',
-              !selectedId ? 'hidden sm:flex items-center justify-center' : 'flex',
-            )}
-          >
+          <div className={clsx('flex-1 flex flex-col bg-zinc-950 min-w-0', !selectedId ? 'hidden sm:flex items-center justify-center' : 'flex')}>
             {selectedConv ? (
               <>
                 <div className="px-4 sm:px-5 py-3 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-900/45">
                   <div className="flex min-w-0 items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectedIdRef.current = null;
-                        messageGenerationRef.current += 1;
-                        messageAbortRef.current?.abort();
-                        setSelectedId(null);
-                      }}
-                      className="sm:hidden p-1 text-zinc-400 hover:text-white"
-                      aria-label="Voltar para conversas"
-                    >
-                      ←
-                    </button>
+                    <button type="button" onClick={clearSelection} className="sm:hidden p-1 text-zinc-400 hover:text-white" aria-label="Voltar para conversas">←</button>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-bold text-white">Pedido #{selectedConv.numero_pedido || '—'}</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 capitalize">
-                          {selectedConv.status_pedido}
-                        </span>
-                        {isWaitingForStaff(selectedConv) && (
-                          <span className="text-[10px] font-bold text-amber-300">aguardando sua resposta</span>
-                        )}
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 capitalize">{selectedConv.status_pedido}</span>
+                        {selectedArchived && <span className="text-[10px] font-bold text-zinc-500">arquivada</span>}
+                        {selectedPostSale && <span className="text-[10px] font-bold text-amber-300">pós-venda</span>}
+                        {isWaitingForStaff(selectedConv) && <span className="text-[10px] font-bold text-amber-300">aguardando sua resposta</span>}
                       </div>
                       <span className="block truncate text-xs text-zinc-400">
                         {selectedConv.cliente_nome} · {selectedConv.tipo_pedido} · R$ {selectedConv.total_pedido.toFixed(2)}
                       </span>
                     </div>
                   </div>
-
                   {onInspectOrder && (
                     <button
                       type="button"
-                      onClick={() => {
-                        onInspectOrder(selectedConv.pedido_id);
-                        onClose();
-                      }}
+                      onClick={() => { onInspectOrder(selectedConv.pedido_id); onClose(); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 transition shrink-0"
                     >
                       <span className="hidden sm:inline">Ver pedido</span>
@@ -692,120 +737,99 @@ export function CashierConversationsDrawer({
 
                 <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 scroll-smooth">
                   {loadingMessages ? (
-                    <div className="h-full flex items-center justify-center">
-                      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                    </div>
+                    <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
                   ) : messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-zinc-500 text-xs text-center p-4">
                       <MessageSquare size={24} className="opacity-30 mb-2" />
                       <p>Nenhuma mensagem registrada para este pedido.</p>
-                      <p className="mt-1 text-[10px] text-zinc-600">Use uma resposta rápida ou escreva abaixo.</p>
                     </div>
-                  ) : (
-                    messages.map((message) => {
-                      if (message.sender_type === 'system') {
-                        return (
-                          <div key={message.id} className="flex justify-center my-2">
-                            <span className="max-w-[90%] px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium whitespace-pre-wrap break-words text-center">
-                              {message.body}
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      const isStaff = message.sender_type === 'staff';
+                  ) : messages.map((message) => {
+                    if (message.sender_type === 'system') {
                       return (
-                        <div
-                          key={message.id}
-                          className={clsx(
-                            'flex flex-col max-w-[86%] sm:max-w-[76%]',
-                            isStaff ? 'ml-auto items-end' : 'mr-auto items-start',
-                          )}
-                        >
-                          <span className="text-[10px] text-zinc-500 mb-0.5 px-1">
-                            {isStaff ? 'Equipe Caixa' : selectedConv.cliente_nome}
-                          </span>
-                          <div
-                            className={clsx(
-                              'rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed break-words whitespace-pre-wrap shadow-sm',
-                              isStaff
-                                ? 'bg-emerald-600 text-white rounded-tr-sm'
-                                : 'bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-tl-sm',
-                            )}
-                          >
-                            {message.body}
-                          </div>
-                          {message.created_at && (
-                            <span className="text-[9px] text-zinc-600 mt-0.5 px-1 font-mono">
-                              {new Date(message.created_at).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          )}
+                        <div key={message.id} className="flex justify-center my-2">
+                          <span className="max-w-[90%] px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-400 font-medium whitespace-pre-wrap break-words text-center">{message.body}</span>
                         </div>
                       );
-                    })
-                  )}
+                    }
+                    const isStaff = message.sender_type === 'staff';
+                    return (
+                      <div key={message.id} className={clsx('flex flex-col max-w-[86%] sm:max-w-[76%]', isStaff ? 'ml-auto items-end' : 'mr-auto items-start')}>
+                        <span className="text-[10px] text-zinc-500 mb-0.5 px-1">{isStaff ? 'Equipe Caixa' : selectedConv.cliente_nome}</span>
+                        <div className={clsx(
+                          'rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed break-words whitespace-pre-wrap shadow-sm',
+                          isStaff ? 'bg-emerald-600 text-white rounded-tr-sm' : 'bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-tl-sm',
+                        )}>{message.body}</div>
+                        {message.created_at && (
+                          <span className="text-[9px] text-zinc-600 mt-0.5 px-1 font-mono">
+                            {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="border-t border-zinc-800 bg-zinc-900/75 p-3">
-                  <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Respostas rápidas">
-                    {QUICK_REPLIES.map((reply) => (
-                      <button
-                        key={reply}
-                        type="button"
-                        onClick={() => setReplyText(reply)}
-                        disabled={sending}
-                        className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
-                        title={`Usar resposta: ${reply}`}
-                      >
-                        {reply}
-                      </button>
-                    ))}
-                  </div>
-
-                  {errorText && (
-                    <div className="text-[11px] text-rose-400 mb-1.5 px-1 flex items-center gap-1">
-                      <AlertCircle size={12} />
-                      <span>{errorText}</span>
+                  {selectedArchived ? (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-3 text-xs text-zinc-400">
+                      Conversa arquivada. O histórico continua disponível; se o cliente enviar uma nova mensagem, ela volta automaticamente para Ativas como pós-venda.
                     </div>
-                  )}
-
-                  <form onSubmit={handleSendReply} className="flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
-                      <textarea
-                        value={replyText}
-                        onChange={(event) => setReplyText(event.target.value)}
-                        onKeyDown={handleReplyKeyDown}
-                        placeholder="Responder ao cliente..."
-                        maxLength={1000}
-                        rows={2}
-                        disabled={sending}
-                        className="min-h-[46px] max-h-32 w-full resize-y bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 transition"
-                      />
-                      <div className="mt-1 flex items-center justify-between px-1 text-[9px] text-zinc-600">
-                        <span>Enter envia · Shift+Enter quebra linha</span>
-                        <span>{replyText.length}/1000</span>
+                  ) : (
+                    <>
+                      <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Respostas rápidas">
+                        {QUICK_REPLIES.map((reply) => (
+                          <button
+                            key={reply}
+                            type="button"
+                            onClick={() => setReplyText(reply)}
+                            disabled={sending}
+                            className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
+                            title={`Usar resposta: ${reply}`}
+                          >
+                            {reply}
+                          </button>
+                        ))}
                       </div>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={sending || !replyText.trim()}
-                      className="mb-4 w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 flex items-center justify-center disabled:opacity-40 disabled:hover:bg-emerald-500 transition shrink-0"
-                      title="Enviar resposta"
-                      aria-label="Enviar resposta"
-                    >
-                      <Send size={16} />
-                    </button>
-                  </form>
+                      {errorText && (
+                        <div className="text-[11px] text-rose-400 mb-1.5 px-1 flex items-center gap-1">
+                          <AlertCircle size={12} /><span>{errorText}</span>
+                        </div>
+                      )}
+                      <form onSubmit={handleSendReply} className="flex items-end gap-2">
+                        <div className="min-w-0 flex-1">
+                          <textarea
+                            value={replyText}
+                            onChange={(event) => setReplyText(event.target.value)}
+                            onKeyDown={handleReplyKeyDown}
+                            placeholder="Responder ao cliente..."
+                            maxLength={1000}
+                            rows={2}
+                            disabled={sending}
+                            className="min-h-[46px] max-h-32 w-full resize-y bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 transition"
+                          />
+                          <div className="mt-1 flex items-center justify-between px-1 text-[9px] text-zinc-600">
+                            <span>Enter envia · Shift+Enter quebra linha</span><span>{replyText.length}/1000</span>
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={sending || !replyText.trim()}
+                          className="mb-4 w-10 h-10 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 flex items-center justify-center disabled:opacity-40 disabled:hover:bg-emerald-500 transition shrink-0"
+                          title="Enviar resposta"
+                          aria-label="Enviar resposta"
+                        >
+                          <Send size={16} />
+                        </button>
+                      </form>
+                    </>
+                  )}
                 </div>
               </>
             ) : (
               <div className="text-zinc-500 text-xs flex flex-col items-center text-center px-6">
                 <MessageSquare size={32} className="opacity-20 mb-2" />
                 <p className="font-semibold text-zinc-400">Selecione uma conversa</p>
-                <p className="mt-1 text-[10px]">As mensagens não lidas e clientes aguardando resposta aparecem primeiro.</p>
+                <p className="mt-1 text-[10px]">Ativas ficam limpas; o histórico permanece em Arquivadas.</p>
               </div>
             )}
           </div>
