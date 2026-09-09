@@ -1,4 +1,3 @@
-import { API_BASE_URL } from "../config/api";
 import { loadStoredOrders, type StoredOrder } from "./orderTracking";
 
 export interface OrderingBlockInfo {
@@ -47,7 +46,8 @@ function trackingTokenFor(order: StoredOrder): string | null {
   const legacyUrl = String(order.tracking_url || "").trim();
   if (!legacyUrl) return null;
   try {
-    const parsed = new URL(legacyUrl, window.location.origin);
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://koma.invalid";
+    const parsed = new URL(legacyUrl, baseUrl);
     const parts = parsed.pathname.split("/").filter(Boolean);
     const index = parts.indexOf("acompanhar");
     return index >= 0 && parts[index + 1] ? decodeURIComponent(parts[index + 1]) : null;
@@ -58,10 +58,10 @@ function trackingTokenFor(order: StoredOrder): string | null {
 
 export async function resolveOrderingBlockForCurrentSession(
   restaurantId: string | number,
-  apiBaseUrl = API_BASE_URL,
+  apiBaseUrl: string,
 ): Promise<OrderingBlockInfo | null> {
   const rid = Number(restaurantId);
-  if (!Number.isInteger(rid) || rid <= 0) return null;
+  if (!Number.isInteger(rid) || rid <= 0 || !apiBaseUrl) return null;
 
   const candidates = loadStoredOrders(rid)
     .filter((order) => Boolean(trackingTokenFor(order)))
