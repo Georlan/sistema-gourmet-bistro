@@ -13,6 +13,7 @@ test('Caixa moves digital orders optimistically and keeps a visible-state reconc
   assert.match(ordersOwner, /await handleUpdateDeliveryStatus\(order\.id, isDeliveryOrder \? 'transito' : 'pronto'\)/);
   assert.match(ordersOwner, /window\.setInterval\([\s\S]*?5000\)/);
   assert.match(ordersOwner, /visibilitychange/);
+  assert.match(ordersOwner, /\}, \[apiBaseUrl, authHeaders\]\);/);
   assert.match(ordersOwner, /await Promise\.all\(\[fetchDeliveryOrders\(\), onRefreshOrders\(\)\]\)/);
 });
 
