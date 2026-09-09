@@ -3,7 +3,7 @@ import datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from app.database import Base, SessionLocal, current_restaurante_id, engine
+from app.database import Base, SessionLocal, engine, tenant_session_scope
 from app.main import app
 from app.models import (
     Categoria,
@@ -24,12 +24,61 @@ from app.services.customer_auth import create_customer_access_token
 client = TestClient(app)
 
 
+def _cleanup_tenant(db, restaurant_id: int) -> None:
+    for model in (ItemModificador, Item, Lancamento, Comanda, Cliente, Produto, Categoria, Usuario):
+        db.query(model).filter(model.restaurante_id == restaurant_id).delete(
+            synchronize_session=False
+        )
+    db.query(OpcaoModificador).filter(
+        OpcaoModificador.restaurante_id == restaurant_id
+    ).delete(synchronize_session=False)
+    db.query(GrupoModificador).filter(
+        GrupoModificador.restaurante_id == restaurant_id
+    ).delete(synchronize_session=False)
+    db.commit()
+
+
+def _seed_identity(db, restaurant_id: int) -> None:
+    user = Usuario(
+        id=f"history-user-{restaurant_id}",
+        restaurante_id=restaurant_id,
+        nome="Operador Histórico",
+        email=f"history-{restaurant_id}@koma.test",
+        cargo="admin",
+        status="ativo",
+    )
+    category = Categoria(
+        id=f"history-cat-{restaurant_id}",
+        restaurante_id=restaurant_id,
+        nome="Histórico",
+    )
+    product = Produto(
+        id=f"history-product-{restaurant_id}",
+        restaurante_id=restaurant_id,
+        categoria_id=category.id,
+        nome=f"Produto {restaurant_id}",
+        preco=20.0,
+        ativo=True,
+    )
+    customer = Cliente(
+        id=f"history-customer-{restaurant_id}",
+        restaurante_id=restaurant_id,
+        nome=f"Cliente {restaurant_id}",
+        telefone=f"1199999{restaurant_id}",
+        saldo_pontos=0,
+        saldo_cashback=0,
+    )
+    db.add_all([user, category, product, customer])
+    db.commit()
+
+
 @pytest.fixture(autouse=True)
 def setup_history_data():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    token = current_restaurante_id.set(701)
     try:
+        # Restaurante is the tenant root and therefore can be resolved before binding
+        # the session. Every tenant-owned write below happens inside its own scope.
         for restaurant_id, slug in [(701, "history-a"), (702, "history-b")]:
             if not db.query(Restaurante).filter(Restaurante.id == restaurant_id).first():
                 db.add(
@@ -42,170 +91,129 @@ def setup_history_data():
                 )
         db.commit()
 
-        # Cleanup is intentionally scoped to the dedicated test tenants.
-        for model in (ItemModificador, Item, Lancamento, Comanda, Cliente, Produto, Categoria, Usuario):
-            if hasattr(model, "restaurante_id"):
-                db.query(model).filter(model.restaurante_id.in_([701, 702])).delete(
-                    synchronize_session=False
-                )
-        db.query(OpcaoModificador).filter(
-            OpcaoModificador.restaurante_id.in_([701, 702])
-        ).delete(synchronize_session=False)
-        db.query(GrupoModificador).filter(
-            GrupoModificador.restaurante_id.in_([701, 702])
-        ).delete(synchronize_session=False)
-        db.commit()
-
         for restaurant_id in (701, 702):
-            user = Usuario(
-                id=f"history-user-{restaurant_id}",
-                restaurante_id=restaurant_id,
-                nome="Operador Histórico",
-                email=f"history-{restaurant_id}@koma.test",
-                cargo="admin",
-                status="ativo",
-            )
-            category = Categoria(
-                id=f"history-cat-{restaurant_id}",
-                restaurante_id=restaurant_id,
-                nome="Histórico",
-            )
-            product = Produto(
-                id=f"history-product-{restaurant_id}",
-                restaurante_id=restaurant_id,
-                categoria_id=category.id,
-                nome=f"Produto {restaurant_id}",
-                preco=20.0,
-                ativo=True,
-            )
-            customer = Cliente(
-                id=f"history-customer-{restaurant_id}",
-                restaurante_id=restaurant_id,
-                nome=f"Cliente {restaurant_id}",
-                telefone=f"1199999{restaurant_id}",
-                saldo_pontos=0,
-                saldo_cashback=0,
-            )
-            db.add_all([user, category, product, customer])
-        db.commit()
-
-        group = GrupoModificador(
-            id="history-group-701",
-            restaurante_id=701,
-            nome="Molho",
-            min_selecoes=0,
-            max_selecoes=2,
-            tipo="opcional",
-        )
-        option = OpcaoModificador(
-            id="history-option-701",
-            restaurante_id=701,
-            grupo_id=group.id,
-            nome="Molho especial",
-            preco_adicional=3.0,
-            ativo=True,
-        )
-        db.add_all([group, option])
-        db.commit()
+            with tenant_session_scope(db, restaurant_id):
+                _cleanup_tenant(db, restaurant_id)
+                _seed_identity(db, restaurant_id)
 
         base_time = datetime.datetime(2026, 9, 9, 15, 0, 0)
-        for index in range(3):
-            order = Comanda(
-                id=f"history-order-{index}",
+        with tenant_session_scope(db, 701):
+            group = GrupoModificador(
+                id="history-group-701",
                 restaurante_id=701,
-                garcom_id="history-user-701",
-                cliente_id="history-customer-701",
-                tipo="Retirada",
-                identificador="Cliente 701",
-                numero_pedido=900 + index,
-                fechada=index == 0,
-                fechado_em=base_time + datetime.timedelta(minutes=31) if index == 0 else None,
-                criado_em=base_time + datetime.timedelta(minutes=index),
-                delivery_status="finalizado" if index == 0 else "producao",
-                delivery_taxa=0,
-                valor_desconto_cupom=0,
-                valor_desconto_cashback=0,
-                idempotency_key=f"history-key-{index}",
+                nome="Molho",
+                min_selecoes=0,
+                max_selecoes=2,
+                tipo="opcional",
             )
-            launch = Lancamento(
-                id=f"history-launch-{index}",
+            option = OpcaoModificador(
+                id="history-option-701",
                 restaurante_id=701,
-                comanda_id=order.id,
-                garcom_id="history-user-701",
-                origem="cardapio",
-                status="finalizado" if index == 0 else "producao",
-                idempotency_key=f"history-launch-key-{index}",
-                timestamp=order.criado_em,
+                grupo_id=group.id,
+                nome="Molho especial",
+                preco_adicional=3.0,
+                ativo=True,
             )
-            db.add_all([order, launch])
-            db.flush()
+            db.add_all([group, option])
+            db.commit()
 
-            # Two equal rows represent quantity=2 in the operational model.
-            for unit in range(2):
-                item = Item(
-                    id=f"history-item-{index}-{unit}",
+            for index in range(3):
+                order = Comanda(
+                    id=f"history-order-{index}",
+                    restaurante_id=701,
+                    garcom_id="history-user-701",
+                    cliente_id="history-customer-701",
+                    tipo="Retirada",
+                    identificador="Cliente 701",
+                    numero_pedido=900 + index,
+                    fechada=index == 0,
+                    fechado_em=base_time + datetime.timedelta(minutes=31) if index == 0 else None,
+                    criado_em=base_time + datetime.timedelta(minutes=index),
+                    delivery_status="finalizado" if index == 0 else "producao",
+                    delivery_taxa=0,
+                    valor_desconto_cupom=0,
+                    valor_desconto_cashback=0,
+                    idempotency_key=f"history-key-{index}",
+                )
+                launch = Lancamento(
+                    id=f"history-launch-{index}",
                     restaurante_id=701,
                     comanda_id=order.id,
-                    lancamento_id=launch.id,
-                    produto_id="history-product-701",
-                    preco_unit=23.0 if index == 2 else 20.0,
-                    observacao="Sem cebola" if index == 2 else "",
-                    status="entregue" if index == 0 else "preparando",
-                    pago=False,
+                    garcom_id="history-user-701",
+                    origem="cardapio",
+                    status="finalizado" if index == 0 else "producao",
+                    idempotency_key=f"history-launch-key-{index}",
+                    timestamp=order.criado_em,
                 )
-                db.add(item)
+                db.add_all([order, launch])
                 db.flush()
-                if index == 2:
-                    db.add(
-                        ItemModificador(
-                            restaurante_id=701,
-                            item_id=item.id,
-                            opcao_modificador_id="history-option-701",
-                            preco_aplicado=3.0,
-                        )
-                    )
-        db.commit()
 
-        foreign_order = Comanda(
-            id="history-order-foreign",
-            restaurante_id=702,
-            garcom_id="history-user-702",
-            cliente_id="history-customer-702",
-            tipo="Retirada",
-            identificador="Cliente 702",
-            numero_pedido=990,
-            fechada=True,
-            criado_em=base_time + datetime.timedelta(hours=1),
-            delivery_status="finalizado",
-            idempotency_key="history-key-foreign",
-        )
-        foreign_launch = Lancamento(
-            id="history-launch-foreign",
-            restaurante_id=702,
-            comanda_id=foreign_order.id,
-            garcom_id="history-user-702",
-            origem="cardapio",
-            status="finalizado",
-            idempotency_key="history-launch-key-foreign",
-            timestamp=foreign_order.criado_em,
-        )
-        db.add_all([foreign_order, foreign_launch])
-        db.flush()
-        db.add(
-            Item(
-                id="history-item-foreign",
+                # Two equal rows represent quantity=2 in the operational model.
+                for unit in range(2):
+                    item = Item(
+                        id=f"history-item-{index}-{unit}",
+                        restaurante_id=701,
+                        comanda_id=order.id,
+                        lancamento_id=launch.id,
+                        produto_id="history-product-701",
+                        preco_unit=23.0 if index == 2 else 20.0,
+                        observacao="Sem cebola" if index == 2 else "",
+                        status="entregue" if index == 0 else "preparando",
+                        pago=False,
+                    )
+                    db.add(item)
+                    db.flush()
+                    if index == 2:
+                        db.add(
+                            ItemModificador(
+                                restaurante_id=701,
+                                item_id=item.id,
+                                opcao_modificador_id="history-option-701",
+                                preco_aplicado=3.0,
+                            )
+                        )
+            db.commit()
+
+        with tenant_session_scope(db, 702):
+            foreign_order = Comanda(
+                id="history-order-foreign",
+                restaurante_id=702,
+                garcom_id="history-user-702",
+                cliente_id="history-customer-702",
+                tipo="Retirada",
+                identificador="Cliente 702",
+                numero_pedido=990,
+                fechada=True,
+                criado_em=base_time + datetime.timedelta(hours=1),
+                delivery_status="finalizado",
+                idempotency_key="history-key-foreign",
+            )
+            foreign_launch = Lancamento(
+                id="history-launch-foreign",
                 restaurante_id=702,
                 comanda_id=foreign_order.id,
-                lancamento_id=foreign_launch.id,
-                produto_id="history-product-702",
-                preco_unit=20.0,
-                status="entregue",
-                pago=False,
+                garcom_id="history-user-702",
+                origem="cardapio",
+                status="finalizado",
+                idempotency_key="history-launch-key-foreign",
+                timestamp=foreign_order.criado_em,
             )
-        )
-        db.commit()
+            db.add_all([foreign_order, foreign_launch])
+            db.flush()
+            db.add(
+                Item(
+                    id="history-item-foreign",
+                    restaurante_id=702,
+                    comanda_id=foreign_order.id,
+                    lancamento_id=foreign_launch.id,
+                    produto_id="history-product-702",
+                    preco_unit=20.0,
+                    status="entregue",
+                    pago=False,
+                )
+            )
+            db.commit()
     finally:
-        current_restaurante_id.reset(token)
         db.close()
 
 
