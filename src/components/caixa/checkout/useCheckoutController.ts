@@ -29,8 +29,8 @@ type Props = Pick<
   getSmartPosCardState: (order: Order) => SmartPosCardState | null;
   setSmartPosRecoveryError: (value: string) => void;
   fetchTurno: () => Promise<void>;
-  handleFecharDelivery: (id: string) => Promise<void>;
-  handleFinalizarPedido: (id: string) => Promise<void>;
+  handleFecharDelivery: (id: string) => Promise<boolean>;
+  handleFinalizarPedido: (id: string) => Promise<boolean>;
 };
 
 /** Owns checkout state, effects and actions; composition supplies only cross-feature dependencies. */
@@ -186,8 +186,8 @@ export function useCheckoutController({
   const [splitPeople, setSplitPeople] = useState('1');
 
   const [paymentMetodo, setPaymentMetodo] = useState<
-    'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'
-  >('pix');
+    '' | 'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'
+  >('');
 
   const [paymentValor, setPaymentValor] = useState<number | ''>('');
 
@@ -199,19 +199,18 @@ export function useCheckoutController({
   // vira erro controlado dentro do fluxo financeiro em vez de exceção de render/effect.
   useEffect(() => {
     setIdempotencyKey('');
+    setPaymentMetodo('');
   }, [selectedOrder]);
 
-  // Auto-initialize paymentValor when checkout modal opens. Mesas priorizam itens prontos;
-  // sem itens prontos, o operador precisa optar conscientemente por um adiantamento.
+  // Auto-initialize paymentValor when checkout modal opens. Em mesas, o operador
+  // precisa escolher explicitamente os itens prontos; pedidos digitais podem exibir
+  // o saldo total, mas a forma de pagamento nunca é presumida.
   useEffect(() => {
     if (showCheckoutModal && selectedOrder) {
       if (!paymentValor || Number(paymentValor || 0) <= 0) {
-        const readyItemIds = selectedOrder.itens
-          .filter((item) => !item.pago && isItemReadyForCheckout(item))
-          .map((item) => item.id);
         const balance = isTableCheckoutOrder(selectedOrder)
-          ? readyItemIds.length > 0
-            ? getSelectedItemsTotal(selectedOrder, readyItemIds)
+          ? selectedItemIds.length > 0
+            ? getSelectedItemsTotal(selectedOrder, selectedItemIds)
             : 0
           : getCheckoutBalance(selectedOrder);
         if (balance > 0) {
@@ -220,6 +219,7 @@ export function useCheckoutController({
       }
     } else if (!showCheckoutModal) {
       setPaymentValor('');
+      setPaymentMetodo('');
     }
   }, [showCheckoutModal, selectedOrder]);
 
@@ -227,13 +227,17 @@ export function useCheckoutController({
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder || isProcessingPaymentRef.current) return; // Sync ref guard
+    setErrorMsg('');
+    if (!paymentMetodo) {
+      setErrorMsg('Escolha a forma de pagamento antes de receber.');
+      return;
+    }
     const smartPosState = getSmartPosCardState(selectedOrder);
     if (smartPosState?.blocksPayment) {
       setSmartPosRecoveryError('Revise a operação da maquininha antes de lançar outra baixa para esta mesa.');
       return;
     }
     isProcessingPaymentRef.current = true;
-    setErrorMsg('');
     setIsProcessingPayment(true);
 
     try {
@@ -249,6 +253,8 @@ export function useCheckoutController({
 
       const comandaIds: string[] = (selectedOrder as any).comandaIds || [selectedOrder.id];
       const isMesaPayment = isTableCheckoutOrder(selectedOrder);
+      const balanceBeforePayment = getCheckoutBalance(selectedOrder);
+      const shouldRemoveDigitalOrder = !isMesaPayment && valorPagamento >= balanceBeforePayment - 0.01;
       const effectiveIdempotencyKey = idempotencyKey || createSecureIdempotencyKey('idem');
       if (!idempotencyKey) setIdempotencyKey(effectiveIdempotencyKey);
 
@@ -379,14 +385,21 @@ export function useCheckoutController({
         }
       }
 
+      if (shouldRemoveDigitalOrder) {
+        window.dispatchEvent(new CustomEvent('koma_orders_updated', {
+          detail: { removeDeliveryOrderId: selectedOrder.id },
+        }));
+      }
+
       setPaymentValor('');
       setPaymentCPF('');
       setSelectedItemIds([]);
+      setPaymentMetodo('');
       setIdempotencyKey('');
 
       setSelectedOrder(null);
       setShowCheckoutModal(false);
-      await Promise.all([onRefreshOrders(), fetchTurno()]);
+      await Promise.allSettled([onRefreshOrders(), fetchTurno()]);
     } catch (err: any) {
       setErrorMsg(err.message || 'Erro de conexão ao servidor.');
     } finally {
@@ -454,17 +467,14 @@ export function useCheckoutController({
     const checkoutOrder = buildTableCheckoutOrder(tableComandas);
     if (!checkoutOrder) return;
 
-    const readyItemIds = checkoutOrder.itens
-      .filter((item) => !item.pago && isItemReadyForCheckout(item))
-      .map((item) => item.id);
     setSelectedOrder(checkoutOrder);
     setShowCheckoutModal(true);
     setCheckoutServiceTax(true);
     setSplitPeople('1');
-    setSelectedItemIds(readyItemIds);
+    setSelectedItemIds([]);
+    setPaymentMetodo('');
     setSmartPosRecoveryError('');
-    const readyTotal = readyItemIds.length > 0 ? getSelectedItemsTotal(checkoutOrder, readyItemIds, true) : 0;
-    setPaymentValor(readyTotal > 0 ? readyTotal : '');
+    setPaymentValor('');
   };
 
   const handleFinalizeDigitalOrder = async (order: DeliveryOrderView) => {
@@ -492,20 +502,18 @@ export function useCheckoutController({
           pago: item.pago,
         })),
       };
-      const activeUnpaidItemIds = mappedOrder.itens
-        .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
-        .map((item: any) => item.id);
       setSelectedOrder(mappedOrder);
       setShowCheckoutModal(true);
       setCheckoutServiceTax(false);
       setSplitPeople('1');
-      setSelectedItemIds(activeUnpaidItemIds);
+      setSelectedItemIds([]);
+      setPaymentMetodo('');
       const sub = mappedOrder.itens
         .filter((item: any) => !item.pago && (item.status as string) !== 'cancelado')
         .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
       setPaymentValor(sub);
     } else {
-      handleFinalizarPedido(order.id);
+      await handleFinalizarPedido(order.id);
     }
   };
 
@@ -517,6 +525,7 @@ export function useCheckoutController({
     setCheckoutServiceTax(true);
     setSplitPeople('1');
     setSelectedItemIds([]);
+    setPaymentMetodo('');
     const subtotal = checkoutOrder.itens
       .filter((item) => (item.status as string) !== 'cancelado')
       .reduce((sum, item) => sum + item.preco, 0);
