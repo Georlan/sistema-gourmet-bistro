@@ -1,10 +1,11 @@
 import uuid
-from typing import List
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import Field
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..adapters.orders.waiter_modifiers_adapter import WaiterModifiersAdapter
 from ..catalog_addons import (
     CategoriaGrupoModificador,
     category_hierarchy_payload,
@@ -17,6 +18,7 @@ from ..models import GrupoModificador, OpcaoModificador, ProdutoGrupoModificador
 from ..schemas import (
     GrupoModificadorCreate,
     GrupoModificadorResponse,
+    LancamentoResponse,
     OpcaoModificadorResponse,
 )
 from ..security import get_current_user, require_permission
@@ -38,6 +40,20 @@ class GrupoModificadorResponseV2(GrupoModificadorResponse):
     incluir_subcategorias: bool = True
 
 
+class ItemComModificadoresCreate(BaseModel):
+    produto_id: str
+    observacao: str = ""
+    cliente_nome: str = "Consumo Geral"
+    modificador_ids: List[str] = Field(default_factory=list, max_length=100)
+
+
+class LancamentoComModificadoresCreate(BaseModel):
+    garcom_id: str
+    origem: Optional[Literal["smartpos"]] = None
+    idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    itens: List[ItemComModificadoresCreate] = Field(min_length=1, max_length=200)
+
+
 def _notify_catalog_update(
     background_tasks: BackgroundTasks,
     restaurante_id: int,
@@ -55,7 +71,6 @@ def _serialize_grupo(grupo: GrupoModificador, db: Session) -> GrupoModificadorRe
         OpcaoModificador.grupo_id == grupo.id,
         OpcaoModificador.restaurante_id == grupo.restaurante_id,
     ).all()
-
     produtos_vinculados = db.query(ProdutoGrupoModificador.produto_id).filter(
         ProdutoGrupoModificador.grupo_id == grupo.id,
         ProdutoGrupoModificador.restaurante_id == grupo.restaurante_id,
@@ -64,7 +79,6 @@ def _serialize_grupo(grupo: GrupoModificador, db: Session) -> GrupoModificadorRe
         CategoriaGrupoModificador.grupo_id == grupo.id,
         CategoriaGrupoModificador.restaurante_id == grupo.restaurante_id,
     ).all()
-
     return GrupoModificadorResponseV2(
         id=grupo.id,
         nome=grupo.nome,
@@ -85,8 +99,7 @@ def _serialize_grupo(grupo: GrupoModificador, db: Session) -> GrupoModificadorRe
         categoria_ids=[str(link.categoria_id) for link in categorias_vinculadas],
         incluir_subcategorias=(
             all(bool(link.incluir_subcategorias) for link in categorias_vinculadas)
-            if categorias_vinculadas
-            else True
+            if categorias_vinculadas else True
         ),
     )
 
@@ -107,10 +120,7 @@ def _validate_product_ids(db: Session, restaurante_id: int, product_ids: List[st
 
 
 @router.get("/grupos", response_model=List[GrupoModificadorResponseV2])
-def listar_grupos(
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
-):
+def listar_grupos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     del current_user
     rest_id = require_tenant_id()
     grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == rest_id).all()
@@ -118,19 +128,13 @@ def listar_grupos(
 
 
 @router.get("/categorias-hierarquia")
-def listar_categorias_hierarquia(
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
-):
+def listar_categorias_hierarquia(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     del current_user
     return category_hierarchy_payload(db, require_tenant_id())
 
 
 @router.get("/efetivos")
-def listar_modificadores_efetivos(
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
-):
+def listar_modificadores_efetivos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     del current_user
     rest_id = require_tenant_id()
     products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
@@ -138,10 +142,7 @@ def listar_modificadores_efetivos(
 
 
 @router.get("/publico/{restaurante_id}", response_model=List[GrupoModificadorResponseV2])
-def listar_grupos_publico(
-    restaurante_id: int,
-    db: Session = Depends(get_db),
-):
+def listar_grupos_publico(restaurante_id: int, db: Session = Depends(get_db)):
     grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == restaurante_id).all()
     return [_serialize_grupo(g, db) for g in grupos]
 
@@ -160,11 +161,7 @@ def aplicar_sugestoes_hamburgueria(
     except Exception:
         db.rollback()
         raise
-    _notify_catalog_update(
-        background_tasks,
-        rest_id,
-        "Categorias e complementos sugeridos foram sincronizados.",
-    )
+    _notify_catalog_update(background_tasks, rest_id, "Categorias e complementos sugeridos foram sincronizados.")
     return result
 
 
@@ -179,7 +176,6 @@ def criar_grupo(
     rest_id = require_tenant_id()
     _validate_product_ids(db, rest_id, payload.produto_ids or [])
     grupo_id = f"gmod-{uuid.uuid4().hex[:8]}"
-
     novo_grupo = GrupoModificador(
         id=grupo_id,
         restaurante_id=rest_id,
@@ -190,44 +186,25 @@ def criar_grupo(
     )
     db.add(novo_grupo)
     db.flush()
-
     if payload.opcoes:
         for op in payload.opcoes:
-            nova_op = OpcaoModificador(
-                id=f"opmod-{uuid.uuid4().hex[:8]}",
-                restaurante_id=rest_id,
-                grupo_id=grupo_id,
-                nome=op.nome.strip(),
-                preco_adicional=op.preco_adicional or 0.0,
-                ativo=op.ativo,
-            )
-            db.add(nova_op)
-
+            db.add(OpcaoModificador(
+                id=f"opmod-{uuid.uuid4().hex[:8]}", restaurante_id=rest_id,
+                grupo_id=grupo_id, nome=op.nome.strip(),
+                preco_adicional=op.preco_adicional or 0.0, ativo=op.ativo,
+            ))
     if payload.produto_ids:
         for pid in dict.fromkeys(payload.produto_ids):
-            db.add(
-                ProdutoGrupoModificador(
-                    restaurante_id=rest_id,
-                    produto_id=pid,
-                    grupo_id=grupo_id,
-                )
-            )
-
+            db.add(ProdutoGrupoModificador(restaurante_id=rest_id, produto_id=pid, grupo_id=grupo_id))
     try:
         replace_category_links_for_group(
-            db,
-            restaurante_id=rest_id,
-            grupo_id=grupo_id,
+            db, restaurante_id=rest_id, grupo_id=grupo_id,
             categoria_ids=payload.categoria_ids,
             incluir_subcategorias=payload.incluir_subcategorias,
         )
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
-
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     db.refresh(novo_grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos criado.")
@@ -249,60 +226,39 @@ def atualizar_grupo(
         GrupoModificador.id == grupo_id,
     ).first()
     if not grupo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo não encontrado.")
-
+        raise HTTPException(status_code=404, detail="Grupo não encontrado.")
     _validate_product_ids(db, rest_id, payload.produto_ids or [])
     grupo.nome = payload.nome.strip()
     grupo.min_selecoes = payload.min_selecoes
     grupo.max_selecoes = payload.max_selecoes
     grupo.tipo = payload.tipo
-
     if payload.opcoes is not None:
         db.query(OpcaoModificador).filter(
             OpcaoModificador.restaurante_id == rest_id,
             OpcaoModificador.grupo_id == grupo_id,
         ).delete()
         for op in payload.opcoes:
-            db.add(
-                OpcaoModificador(
-                    id=op.id or f"opmod-{uuid.uuid4().hex[:8]}",
-                    restaurante_id=rest_id,
-                    grupo_id=grupo_id,
-                    nome=op.nome.strip(),
-                    preco_adicional=op.preco_adicional or 0.0,
-                    ativo=op.ativo,
-                )
-            )
-
+            db.add(OpcaoModificador(
+                id=op.id or f"opmod-{uuid.uuid4().hex[:8]}", restaurante_id=rest_id,
+                grupo_id=grupo_id, nome=op.nome.strip(),
+                preco_adicional=op.preco_adicional or 0.0, ativo=op.ativo,
+            ))
     if payload.produto_ids is not None:
         db.query(ProdutoGrupoModificador).filter(
             ProdutoGrupoModificador.restaurante_id == rest_id,
             ProdutoGrupoModificador.grupo_id == grupo_id,
         ).delete()
         for pid in dict.fromkeys(payload.produto_ids):
-            db.add(
-                ProdutoGrupoModificador(
-                    restaurante_id=rest_id,
-                    produto_id=pid,
-                    grupo_id=grupo_id,
-                )
-            )
-
+            db.add(ProdutoGrupoModificador(restaurante_id=rest_id, produto_id=pid, grupo_id=grupo_id))
     try:
         replace_category_links_for_group(
-            db,
-            restaurante_id=rest_id,
-            grupo_id=grupo_id,
+            db, restaurante_id=rest_id, grupo_id=grupo_id,
             categoria_ids=payload.categoria_ids,
             incluir_subcategorias=payload.incluir_subcategorias,
         )
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
-
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     db.refresh(grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos atualizado.")
@@ -323,8 +279,7 @@ def deletar_grupo(
         GrupoModificador.id == grupo_id,
     ).first()
     if not grupo:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo não encontrado.")
-
+        raise HTTPException(status_code=404, detail="Grupo não encontrado.")
     db.query(ProdutoGrupoModificador).filter(
         ProdutoGrupoModificador.restaurante_id == rest_id,
         ProdutoGrupoModificador.grupo_id == grupo_id,
@@ -337,8 +292,25 @@ def deletar_grupo(
         OpcaoModificador.restaurante_id == rest_id,
         OpcaoModificador.grupo_id == grupo_id,
     ).delete()
-
     db.delete(grupo)
     db.commit()
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos removido.")
     return None
+
+
+@router.post("/lancamentos/{comanda_id}", response_model=LancamentoResponse)
+def lancar_itens_com_modificadores(
+    comanda_id: str,
+    payload: LancamentoComModificadoresCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Lança pedido de garçom/caixa preservando os IDs canônicos dos complementos."""
+    return WaiterModifiersAdapter.handle_launch_items(
+        comanda_id=comanda_id,
+        lancamento_in=payload,
+        background_tasks=background_tasks,
+        db=db,
+        current_user=current_user,
+    )
