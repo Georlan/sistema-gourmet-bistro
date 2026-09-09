@@ -7,15 +7,30 @@ import {
 } from "../../super-admin/SuperAdminSupportModal";
 import { API_BASE_URL } from "../../config/api";
 
-export function SupportSessionBanner() {
-  const [session, setSession] = useState<StoredSupportSession | null>(() => {
-    try {
-      const raw = localStorage.getItem(SUPPORT_SESSION_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
+function loadSupportSession(): StoredSupportSession | null {
+  try {
+    const scoped = sessionStorage.getItem(SUPPORT_SESSION_STORAGE_KEY);
+    if (scoped) {
+      localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
+      return JSON.parse(scoped);
     }
-  });
+
+    // Migração one-way de versões antigas que deixavam o contexto de suporte
+    // em armazenamento durável.
+    const legacy = localStorage.getItem(SUPPORT_SESSION_STORAGE_KEY);
+    if (!legacy) return null;
+    sessionStorage.setItem(SUPPORT_SESSION_STORAGE_KEY, legacy);
+    localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
+    return JSON.parse(legacy);
+  } catch {
+    localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+export function SupportSessionBanner() {
+  const [session, setSession] = useState<StoredSupportSession | null>(loadSupportSession);
 
   const [remainingText, setRemainingText] = useState<string>("");
   const [isEnding, setIsEnding] = useState<boolean>(false);
@@ -68,6 +83,7 @@ export function SupportSessionBanner() {
         }).catch(() => null);
       }
     } finally {
+      sessionStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
       localStorage.removeItem(SUPPORT_SESSION_STORAGE_KEY);
       clearOperatorSession();
       window.location.href = "/super-admin";
