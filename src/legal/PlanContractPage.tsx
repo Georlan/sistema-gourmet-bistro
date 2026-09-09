@@ -108,6 +108,7 @@ type ActivationResult = {
   slug?: string;
   trialDays?: number;
   trialEndsAt?: string;
+  activationToken?: string;
 };
 
 type PixData = {
@@ -405,6 +406,7 @@ export default function PlanContractPage() {
           slug: payload.slug || undefined,
           trialDays: payload.trialDays || 7,
           trialEndsAt: payload.trialEndsAt || undefined,
+          activationToken: payload.activationToken || undefined,
         });
         return;
       }
@@ -467,7 +469,19 @@ export default function PlanContractPage() {
               </div>
             )}
 
-            <a href="/ativar" className="koma-sub-primary-action">Concluir primeiro acesso <ArrowRight size={18} /></a>
+            {activationResult.activationToken ? (
+              <a
+                href={`/ativar#token=${encodeURIComponent(activationResult.activationToken)}`}
+                className="koma-sub-primary-action"
+              >
+                Concluir primeiro acesso <ArrowRight size={18} />
+              </a>
+            ) : (
+              <div className="koma-sub-success-detail koma-sub-activation-pending">
+                <span>Primeiro acesso</span>
+                <strong>Seu acesso está sendo preparado. Utilize o convite enviado ao responsável.</strong>
+              </div>
+            )}
             <button type="button" className="koma-sub-text-action" onClick={() => setShowReceipt((current) => !current)}>
               <FileText size={16} /> {showReceipt ? 'Ocultar comprovante' : 'Ver comprovante de contratação'}
             </button>
