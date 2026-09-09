@@ -6,17 +6,16 @@ const workflow = readFileSync('.github/workflows/production-smoke.yml', 'utf8');
 const smoke = readFileSync('scripts/production-smoke.mjs', 'utf8');
 const readiness = readFileSync('backend/app/routes/contract_readiness.py', 'utf8');
 
-test('production smoke runs after the main quality gate and waits for the exact backend revision', () => {
-  assert.match(workflow, /workflow_run:/);
-  assert.match(workflow, /workflows: \["Koma Quality Gate"\]/);
-  assert.match(workflow, /branches: \[main\]/);
-  assert.match(workflow, /workflow_run\.conclusion == 'success'/);
-  assert.match(workflow, /KOMA_EXPECTED_API_SHA:/);
-  assert.match(workflow, /workflow_run\.head_sha/);
-  assert.match(workflow, /max_attempts=24/);
+test('production smoke stays asynchronous and cannot become a merge/deploy gate', () => {
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /schedule:/);
+  assert.match(workflow, /cron:\s*['"]17 \* \* \* \*['"]/);
+  assert.doesNotMatch(workflow, /workflow_run:/);
   assert.match(workflow, /group: production-smoke-\$\{\{ github\.event_name \}\}/);
   assert.match(workflow, /cancel-in-progress: true/);
 
+  // The smoke script may still verify an exact deployment revision when a caller
+  // supplies one explicitly; scheduled/manual runs do not depend on a merge event.
   assert.match(readiness, /RAILWAY_GIT_COMMIT_SHA/);
   assert.match(readiness, /"deploymentGitSha": deployment_git_sha/);
   assert.match(smoke, /KOMA_EXPECTED_API_SHA/);
