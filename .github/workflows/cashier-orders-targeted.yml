@@ -1,15 +1,7 @@
 name: Cashier Orders Targeted
 
 on:
-  pull_request:
-    paths:
-      - "src/components/caixa/orders/**"
-      - "src/components/caixa/checkout/**"
-      - "src/components/CaixaPanel.tsx"
-      - "tests/automatic_order_acceptance.test.ts"
-      - "tests/cashierWorkspaceComponents.test.ts"
-      - "tests/cashierCheckoutAutoClose.test.ts"
-      - ".github/workflows/cashier-orders-targeted.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
