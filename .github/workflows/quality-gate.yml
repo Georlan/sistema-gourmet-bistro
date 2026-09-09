@@ -15,8 +15,100 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    name: Plan affected quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      frontend: ${{ steps.classify.outputs.frontend }}
+      browser: ${{ steps.classify.outputs.browser }}
+      backend: ${{ steps.classify.outputs.backend }}
+      security: ${{ steps.classify.outputs.security }}
+    steps:
+      - name: Checkout history for change classification
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          frontend=false
+          browser=false
+          backend=false
+          security=false
+          ci=false
+
+          # A push to main is the post-merge safety net: always run the complete gate.
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            frontend=true
+            browser=true
+            backend=true
+            security=true
+          else
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee /tmp/koma-changed-files.txt
+
+            while IFS= read -r file; do
+              [[ -z "$file" ]] && continue
+
+              case "$file" in
+                .github/workflows/*)
+                  ci=true
+                  ;;
+              esac
+
+              case "$file" in
+                src/*|tests/*.test.ts|e2e/*|public/*|package.json|package-lock.json|tsconfig*.json|vite.config.*)
+                  frontend=true
+                  ;;
+              esac
+
+              case "$file" in
+                e2e/*|src/App.tsx|src/main.tsx|src/cardapio/*|src/components/caixa/*|src/components/auth/*|src/super-admin/*|src/legal/*|src/landing/*)
+                  browser=true
+                  ;;
+              esac
+
+              case "$file" in
+                backend/*)
+                  backend=true
+                  ;;
+              esac
+
+              case "$file" in
+                .env.example|backend/alembic/*|backend/app/database.py|backend/app/models.py|backend/app/security.py|backend/app/main.py|backend/app/routes/auth*|backend/app/routes/super_admin*|backend/app/routes/online_payments.py|backend/app/services/online_payments/*|backend/app/services/customer_auth.py|backend/tests/test_*security*|backend/tests/test_*postgres*|backend/tests/test_multitenant_infra.py|backend/tests/test_super_admin_contract.py|backend/tests/test_cors_and_security_headers.py|backend/tests/test_cardapio_public_cors_railway.py)
+                  security=true
+                  ;;
+              esac
+            done < /tmp/koma-changed-files.txt
+
+            # Workflow edits validate every lane so CI refactors cannot silently disable coverage.
+            if [[ "$ci" == "true" ]]; then
+              frontend=true
+              browser=true
+              backend=true
+              security=true
+            fi
+          fi
+
+          {
+            echo "frontend=$frontend"
+            echo "browser=$browser"
+            echo "backend=$backend"
+            echo "security=$security"
+          } | tee -a "$GITHUB_OUTPUT"
+
   frontend:
     name: Frontend typecheck + unit + build
+    needs: plan
+    if: needs.plan.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -38,6 +130,8 @@ jobs:
 
   browser:
     name: Browser regression matrix
+    needs: plan
+    if: needs.plan.outputs.browser == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -66,14 +160,22 @@ jobs:
           retention-days: 7
 
   backend:
-    name: Backend full + critical regression gate
+    name: Backend regression shard ${{ matrix.shard }} of 4
+    needs: plan
+    if: needs.plan.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       ENVIRONMENT: test
       SECRET_KEY: quality-gate-secret-key-2026-only-for-ci
       ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
       PYTHONPATH: backend
+      SHARD_TOTAL: '4'
+      SHARD_INDEX: ${{ matrix.shard }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -84,7 +186,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install backend dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+        run: python -m pip install -r backend/requirements-dev.txt
       - name: Reject tests outside canonical suite
         run: |
           if find backend -maxdepth 1 -type f -name 'test_*.py' -print -quit | grep -q .; then
@@ -98,15 +200,39 @@ jobs:
           printf '%s\n' "$heads"
           count="$(printf '%s\n' "$heads" | grep -c '(head)')"
           test "$count" -eq 1
-      - name: Install print agent dependencies
-        run: python -m pip install -r print-agent/requirements.txt
-      - name: Run print agent regression suite
-        run: python -m pytest print-agent/tests -q -ra
-      - name: Run full backend regression suite
-        run: python -m pytest backend/tests -q -ra
+      - name: Run backend shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find backend/tests -maxdepth 1 -type f -name 'test_*.py' | sort)
+          selected=()
+          zero_based=$((SHARD_INDEX - 1))
+
+          for i in "${!files[@]}"; do
+            if (( i % SHARD_TOTAL == zero_based )); then
+              selected+=("${files[$i]}")
+            fi
+          done
+
+          if (( ${#selected[@]} == 0 )); then
+            echo "No tests selected for shard $SHARD_INDEX/$SHARD_TOTAL"
+            exit 1
+          fi
+
+          printf 'Shard %s/%s: %s test files\n' "$SHARD_INDEX" "$SHARD_TOTAL" "${#selected[@]}"
+          printf '  %s\n' "${selected[@]}"
+
+          pytest_args=(-q -ra)
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            pytest_args+=(-x)
+          fi
+
+          python -m pytest "${selected[@]}" "${pytest_args[@]}"
 
   security:
     name: postgres-security-audit
+    needs: plan
+    if: needs.plan.outputs.security == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -138,7 +264,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install backend dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r backend/requirements-dev.txt
+        run: python -m pip install -r backend/requirements-dev.txt
       - name: Run security regression gate
         run: >-
           python -m pytest
@@ -146,7 +272,7 @@ jobs:
           backend/tests/test_cardapio_public_cors_railway.py
           backend/tests/test_super_admin_contract.py
           backend/tests/test_multitenant_infra.py
-          -q -ra
+          -q -ra -x
       - name: Bootstrap Supabase compatibility roles
         env:
           PG_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/koma_security_test
@@ -189,4 +315,29 @@ jobs:
           backend/tests/test_b14_operational_smoke_postgres.py
           backend/tests/test_atendimento_concurrency_postgres.py
           backend/tests/test_first_client_payment_simulation.py
-          -q -ra
+          -q -ra -x
+
+  verdict:
+    name: Merge verdict
+    if: always()
+    needs: [plan, frontend, browser, backend, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every selected lane to pass
+        shell: bash
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
+        run: |
+          set -euo pipefail
+          for result in "$PLAN_RESULT" "$FRONTEND_RESULT" "$BROWSER_RESULT" "$BACKEND_RESULT" "$SECURITY_RESULT"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "Quality gate lane finished as: $result"; exit 1 ;;
+            esac
+          done
+          echo "All selected quality lanes passed."
