@@ -24,6 +24,11 @@ import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/what
 import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
+import {
+  formatOrderingBlockDate,
+  resolveOrderingBlockForCurrentSession,
+  type OrderingBlockInfo,
+} from "../orderingBlock";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
 import {
@@ -80,6 +85,7 @@ const PENDING_ORDER_TTL_MS = 15 * 60 * 1000;
 const ORDER_REQUEST_TIMEOUT_MS = 15_000;
 const SCHEDULE_MIN_LEAD_MS = 30 * 60 * 1000;
 const SCHEDULE_MAX_HORIZON_MS = 7 * 24 * 60 * 60 * 1000;
+const BLOCKED_ORDER_GENERIC_DETAIL = "Não foi possível receber um novo pedido com estes dados neste momento.";
 
 const createIdempotencyKey = () => createSecureIdempotencyKey("order");
 
@@ -130,6 +136,8 @@ export default function CardapioDigital({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
+  const [orderingBlock, setOrderingBlock] = useState<OrderingBlockInfo | null>(null);
+  const [checkingOrderingBlock, setCheckingOrderingBlock] = useState(true);
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -159,6 +167,21 @@ export default function CardapioDigital({
 
   const scheduleMin = toLocalDateTimeInput(new Date(Date.now() + SCHEDULE_MIN_LEAD_MS));
   const scheduleMax = toLocalDateTimeInput(new Date(Date.now() + SCHEDULE_MAX_HORIZON_MS));
+
+  useEffect(() => {
+    let cancelled = false;
+    setCheckingOrderingBlock(true);
+    void resolveOrderingBlockForCurrentSession(activeBrand.id)
+      .then((block) => {
+        if (!cancelled) setOrderingBlock(block);
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingOrderingBlock(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrand.id]);
 
   useEffect(() => {
     const restauranteId = Number(activeBrand.id);
@@ -265,7 +288,7 @@ export default function CardapioDigital({
   };
 
   const handlePlaceOrder = async () => {
-    if (isSubmittingRef.current) return;
+    if (isSubmittingRef.current || orderingBlock || checkingOrderingBlock) return;
     if (paymentError || schedulePaymentError) {
       setErrorMessage(paymentError || schedulePaymentError);
       return;
@@ -382,6 +405,14 @@ export default function CardapioDigital({
         onSessionExpired?.();
         throw new Error("Sua identificação expirou. Você pode tentar novamente sem perder a sacola.");
       }
+      if (response.status === 409 && String(data?.detail || "") === BLOCKED_ORDER_GENERIC_DETAIL) {
+        const block = await resolveOrderingBlockForCurrentSession(activeBrand.id);
+        if (block) {
+          setOrderingBlock(block);
+          return;
+        }
+        throw new Error("Este restaurante não pode receber novos pedidos deste contato neste momento. Consulte o pedido recusado em Meus Pedidos para mais informações.");
+      }
       if (!response.ok || !(data?.comanda_id || data?.id) || data?.numero_pedido == null) {
         throw new Error(data?.detail || "Não foi possível registrar o pedido. Tente novamente.");
       }
@@ -488,6 +519,59 @@ export default function CardapioDigital({
 
   const isCreatedOrderScheduled = Boolean(createdOrder?.scheduled_for);
   const createdScheduleLabel = formatScheduledDate(createdOrder?.scheduled_for);
+
+  if (checkingOrderingBlock || orderingBlock) {
+    const blockedAt = formatOrderingBlockDate(orderingBlock?.created_at);
+    const expiresAt = formatOrderingBlockDate(orderingBlock?.expires_at);
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-black/80 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in" id="cardapio-checkout-overlay">
+        <div className="relative flex min-h-[360px] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] border border-koma-border bg-koma-panel text-koma-foreground shadow-2xl sm:rounded-[28px] animate-scale-up" id="checkout-card">
+          <div className="flex items-start justify-between border-b border-koma-border px-5 py-4 sm:px-6">
+            <div>
+              <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.15em] ${orderingBlock ? "text-rose-400" : "text-emerald-500"}`}>
+                <AlertCircle className="h-3.5 w-3.5" /> {orderingBlock ? "Segurança do restaurante" : "Verificando pedido"}
+              </div>
+              <h2 className="mt-1.5 font-display text-lg font-black tracking-tight text-koma-foreground">
+                {orderingBlock ? "Novos pedidos bloqueados" : "Só um instante"}
+              </h2>
+            </div>
+            <button type="button" onClick={onClose} className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-koma-muted transition hover:bg-koma-raised hover:text-koma-foreground" aria-label="Voltar ao cardápio"><X className="h-5 w-5" /></button>
+          </div>
+
+          <div className="flex flex-1 flex-col items-center justify-center p-6 text-center sm:p-8">
+            {checkingOrderingBlock && !orderingBlock ? (
+              <>
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500/20 border-t-emerald-500" />
+                <p className="mt-4 text-xs leading-relaxed text-koma-muted">Confirmando se este contato pode iniciar um novo pedido.</p>
+              </>
+            ) : orderingBlock ? (
+              <>
+                <div className="grid h-16 w-16 place-items-center rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400"><X className="h-8 w-8" /></div>
+                <h3 className="mt-5 text-lg font-black text-koma-foreground">O restaurante bloqueou novos pedidos deste contato.</h3>
+                <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">Você não precisa preencher a revisão nem tentar enviar novamente enquanto o bloqueio estiver ativo.</p>
+
+                <div className="mt-5 w-full max-w-md space-y-3 text-left">
+                  <div className="rounded-2xl border border-rose-500/25 bg-rose-500/[0.08] p-4">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-rose-300">Motivo informado pelo restaurante</span>
+                    <p className="mt-1.5 text-sm font-bold leading-relaxed text-koma-foreground">{orderingBlock.reason}</p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {blockedAt && <div className="rounded-xl border border-koma-border bg-koma-card p-3"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Bloqueado em</span><p className="mt-1 text-xs font-bold text-koma-foreground">{blockedAt}</p></div>}
+                    <div className="rounded-xl border border-koma-border bg-koma-card p-3"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Duração</span><p className="mt-1 text-xs font-bold text-koma-foreground">{expiresAt ? `Até ${expiresAt}` : "Sem liberação automática"}</p></div>
+                  </div>
+                </div>
+
+                <p className="mt-4 max-w-md text-[10px] leading-relaxed text-koma-muted">
+                  {orderingBlock.orderNumber ? `O motivo completo também permanece no Pedido #${orderingBlock.orderNumber}, em Meus Pedidos.` : "O motivo completo permanece disponível no pedido recusado, em Meus Pedidos."}
+                </p>
+                <button type="button" onClick={onClose} className="mt-5 h-12 w-full max-w-sm rounded-xl bg-koma-raised px-4 text-xs font-black uppercase tracking-wider text-koma-foreground transition hover:bg-koma-card">Voltar ao cardápio</button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-black/80 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in" id="cardapio-checkout-overlay">
