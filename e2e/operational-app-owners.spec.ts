@@ -81,6 +81,7 @@ test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição
   await expect.poll(() => writes.length).toBe(1);
   await expect(page.locator('#modal-outer-overlay')).toBeVisible();
   await reviewDraft(page);
+  // The review cart owns the persisted observation; the product-config placeholder is not rendered here.
   await expect(page.getByPlaceholder('Observação de preparo...').first()).toHaveValue('Sem cebola');
   await page.reload();
   // The selected table is restored asynchronously; do not click its card behind the restored modal.
