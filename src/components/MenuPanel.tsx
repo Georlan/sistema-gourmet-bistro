@@ -3,11 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Search, Plus, Minus, Trash2, SlidersHorizontal, ArrowRight, FileText, Info, ShoppingCart, X, Edit3, Check } from 'lucide-react';
-import { Product, DraftItem, AppSettings, Order } from '../types';
+import React, { useMemo, useState } from 'react';
+import {
+  ArrowRight,
+  Check,
+  Edit3,
+  FileText,
+  Minus,
+  Plus,
+  Search,
+  Settings2,
+  ShoppingCart,
+  Trash2,
+  X,
+} from 'lucide-react';
+
+import type { CatalogCategory, CatalogModifierGroup } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
-import type { CatalogCategory } from '../catalog/catalog';
+import type { AppSettings, DraftItem, Order, Product } from '../types';
 
 interface MenuPanelProps {
   tableId: number;
@@ -31,6 +44,46 @@ interface MenuPanelProps {
   allowExternalOrders?: boolean;
 }
 
+type ModifierSelection = {
+  id: string;
+  nome: string;
+  preco: number;
+};
+
+type DraftWithModifiers = DraftItem & {
+  modificadorIds?: string[];
+  modificadoresSelecionados?: ModifierSelection[];
+  precoBase?: number;
+};
+
+type ProductWithModifiers = Product & {
+  ativo?: boolean;
+  categoria_id?: string;
+  grupos_modificadores?: CatalogModifierGroup[];
+  __selectedModifierIds?: string[];
+  __selectedModifiers?: ModifierSelection[];
+  __selectedModifierTotal?: number;
+};
+
+const productModifierGroups = (product: Product | null): CatalogModifierGroup[] => {
+  if (!product) return [];
+  return (product as ProductWithModifiers).grupos_modificadores || [];
+};
+
+const modifierSelectionsFor = (
+  groups: CatalogModifierGroup[],
+  selectedIds: string[],
+): ModifierSelection[] => {
+  const selected = new Set(selectedIds);
+  return groups.flatMap((group) => group.opcoes)
+    .filter((option) => option.ativo !== false && selected.has(option.id))
+    .map((option) => ({
+      id: option.id,
+      nome: option.nome,
+      preco: Number(option.preco_adicional || 0),
+    }));
+};
+
 export const MenuPanel: React.FC<MenuPanelProps> = ({
   tableId,
   draftItems,
@@ -49,39 +102,38 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   isSubmitting = false,
   allowExternalOrders = true,
 }) => {
-  // Uma mesa sem rascunho abre direto no cardápio. Quando já existem itens,
-  // preserva a revisão do carrinho como primeira tela.
   const [view, setView] = useState<'cart' | 'menu'>(() => draftItems.length > 0 ? 'cart' : 'menu');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [expandedDraftObs, setExpandedDraftObs] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [orderType, setOrderType] = useState<'Consumo no Local' | 'Retirada'>('Consumo no Local');
 
-  const scrollPanelToTop = () => {
-    requestAnimationFrame(() => {
-      document.getElementById('mesa-details-scroll-body')?.scrollTo({ top: 0, behavior: 'auto' });
-    });
-  };
+  const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
+  const [editingDraftItemId, setEditingDraftItemId] = useState<string | null>(null);
+  const [configQty, setConfigQty] = useState(1);
+  const [configObs, setConfigObs] = useState('');
+  const [configClient, setConfigClient] = useState('');
+  const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
 
-  const openCartReview = () => {
-    setView('cart');
-    scrollPanelToTop();
-  };
+  React.useEffect(() => {
+    if (!allowExternalOrders && orderType !== 'Consumo no Local') {
+      setOrderType('Consumo no Local');
+    }
+  }, [allowExternalOrders, orderType]);
 
-  const openMenu = () => {
-    setView('menu');
-    scrollPanelToTop();
-  };
+  const activeProducts = useMemo(
+    () => liveProdutos.filter((product) => (product as ProductWithModifiers).ativo !== false),
+    [liveProdutos],
+  );
 
-  const categoriesList = React.useMemo(() => {
+  const categoriesList = useMemo(() => {
     const activeCategoryIds = new Set(
-      liveProdutos
-        .filter((product) => product.ativo !== false)
-        .map((product) => product.categoria_id)
-        .filter(Boolean)
+      activeProducts
+        .map((product) => (product as ProductWithModifiers).categoria_id)
+        .filter((id): id is string => Boolean(id)),
     );
     return liveCategorias.filter((category) => activeCategoryIds.has(category.id));
-  }, [liveCategorias, liveProdutos]);
+  }, [activeProducts, liveCategorias]);
 
   React.useEffect(() => {
     if (categoriesList.length === 0) {
@@ -93,281 +145,262 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     }
   }, [categoriesList, selectedCategory]);
 
-  // Selected product to configure
-  const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
-  const [editingDraftItemIds, setEditingDraftItemIds] = useState<string[]>([]);
-  
-  // Product configuration modal inputs
-  const [configQty, setConfigQty] = useState<number>(1);
-  const [configObs, setConfigObs] = useState<string>('');
-  const [configClient, setConfigClient] = useState<string>('');
-  const [orderType, setOrderType] = useState<'Consumo no Local' | 'Retirada'>('Consumo no Local');
-
-  React.useEffect(() => {
-    if (!allowExternalOrders && orderType !== 'Consumo no Local') {
-      setOrderType('Consumo no Local');
-    }
-  }, [allowExternalOrders, orderType]);
-
-
-
-  // Extract already registered client names on this table to offer as quick auto-suggestions
-  const suggestedClientNames = React.useMemo(() => {
-    const namesSet = new Set<string>();
-    existingOrders.forEach(order => {
-      order.itens.forEach(item => {
-        if (item.clienteNome && item.clienteNome.trim() !== '') {
-          namesSet.add(item.clienteNome.trim());
-        }
-      });
-    });
-    return Array.from(namesSet);
-  }, [existingOrders]);
-
-  // Combined suggestions
-  const combinedSuggestions = React.useMemo(() => {
-    const availableNames = [
-      ...historicClients,
-      ...suggestedClientNames,
-      ...draftItems.map(item => item.clienteNome)
-    ];
-    const uniqueNames = new Map<string, string>();
-
-    availableNames.forEach(rawName => {
+  const combinedSuggestions = useMemo(() => {
+    const names = new Map<string, string>();
+    const pushName = (rawName?: string) => {
       const name = (rawName || '').trim();
       if (!name) return;
-      const normalizedName = name.toLocaleLowerCase('pt-BR');
-      if (!uniqueNames.has(normalizedName)) {
-        uniqueNames.set(normalizedName, name);
-      }
-    });
+      const key = name.toLocaleLowerCase('pt-BR');
+      if (!names.has(key)) names.set(key, name);
+    };
+    historicClients.forEach(pushName);
+    existingOrders.forEach((order) => order.itens.forEach((item) => pushName(item.clienteNome)));
+    draftItems.forEach((item) => pushName(item.clienteNome));
+    return Array.from(names.values());
+  }, [draftItems, existingOrders, historicClients]);
 
-    return Array.from(uniqueNames.values());
-  }, [historicClients, suggestedClientNames, draftItems]);
+  const totalDraftQty = draftItems.reduce((sum, item) => sum + (item.quantidade || 1), 0);
+  const draftTotal = draftItems.reduce(
+    (sum, item) => sum + Number(item.preco || 0) * (item.quantidade || 1),
+    0,
+  );
+
+  const currentGroups = productModifierGroups(selectedProductToConfigure);
+  const selectedModifierOptions = useMemo(
+    () => modifierSelectionsFor(currentGroups, selectedModifierIds),
+    [currentGroups, selectedModifierIds],
+  );
+  const modifierTotal = selectedModifierOptions.reduce((sum, option) => sum + option.preco, 0);
+  const configUnitTotal = Number(selectedProductToConfigure?.preco || 0) + modifierTotal;
+
+  const modifierSelectionValid = currentGroups.every((group) => {
+    const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
+    const count = selectedModifierIds.filter((id) => optionIds.has(id)).length;
+    return count >= Number(group.min_selecoes || 0) && count <= Number(group.max_selecoes || 1);
+  });
+
+  const scrollPanelToTop = () => {
+    requestAnimationFrame(() => {
+      document.getElementById('mesa-details-scroll-body')?.scrollTo({ top: 0, behavior: 'auto' });
+    });
+  };
+
+  const openMenu = () => {
+    setView('menu');
+    scrollPanelToTop();
+  };
+
+  const openCart = () => {
+    setView('cart');
+    scrollPanelToTop();
+  };
 
   const closeProductConfig = () => {
     setSelectedProductToConfigure(null);
-    setEditingDraftItemIds([]);
+    setEditingDraftItemId(null);
+    setSelectedModifierIds([]);
   };
 
-  // Quando o produto já está no carrinho, o modal edita todas as unidades
-  // selecionadas como um grupo. Salvar substitui o grupo em vez de anexar uma
-  // nova unidade ao rascunho.
-  const handleOpenConfig = (product: Product) => {
-    const matchingDraftItems = draftItems.filter((item) => item.produtoId === product.id);
-    const firstMatch = matchingDraftItems[0];
+  const handleOpenConfig = (product: Product, draftItem?: DraftItem) => {
+    const draft = draftItem as DraftWithModifiers | undefined;
     setSelectedProductToConfigure(product);
-    setEditingDraftItemIds(matchingDraftItems.map((item) => item.id));
-    setConfigQty(
-      matchingDraftItems.length > 0
-        ? matchingDraftItems.reduce((total, item) => total + (item.quantidade || 1), 0)
-        : 1,
-    );
-    setConfigObs(firstMatch?.observacao || '');
+    setEditingDraftItemId(draft?.id || null);
+    setConfigQty(draft?.quantidade || 1);
+    setConfigObs(draft?.observacao || '');
     setConfigClient(
-      firstMatch?.clienteNome
-        || (draftItems.length > 0 ? draftItems[0].clienteNome : ''),
+      draft?.clienteNome
+        || (draftItems.length > 0 ? draftItems[0].clienteNome || '' : ''),
     );
+    setSelectedModifierIds([...(draft?.modificadorIds || [])]);
   };
 
-  // Adiciona ao mesmo rascunho persistente. Permanecer no cardápio evita que
-  // o garçom precise reabrir a lista a cada novo item.
+  const toggleModifier = (group: CatalogModifierGroup, optionId: string) => {
+    setSelectedModifierIds((current) => {
+      const groupOptionIds = new Set(group.opcoes.map((option) => option.id));
+      const isSelected = current.includes(optionId);
+      if (isSelected) {
+        return current.filter((id) => id !== optionId);
+      }
+
+      const selectedInGroup = current.filter((id) => groupOptionIds.has(id));
+      const max = Math.max(1, Number(group.max_selecoes || 1));
+      if (max === 1) {
+        return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
+      }
+      if (selectedInGroup.length >= max) return current;
+      return [...current, optionId];
+    });
+  };
+
   const handleConfirmAdd = () => {
-    if (!selectedProductToConfigure) return;
-    if (editingDraftItemIds.length > 0) {
-      onEditDraftItems(editingDraftItemIds, {
-        quantidade: configQty,
-        observacao: configObs,
-        clienteNome: configClient,
-      });
+    if (!selectedProductToConfigure || !modifierSelectionValid) return;
+
+    const modifierMeta = {
+      modificadorIds: [...selectedModifierIds],
+      modificadoresSelecionados: selectedModifierOptions,
+      precoBase: Number(selectedProductToConfigure.preco),
+    };
+
+    if (editingDraftItemId) {
+      onEditDraftItems(
+        [editingDraftItemId],
+        {
+          quantidade: configQty,
+          observacao: configObs,
+          clienteNome: configClient,
+          ...modifierMeta,
+        } as any,
+      );
     } else {
-      onAddToDraft(selectedProductToConfigure, configQty, configObs, configClient);
+      const decoratedProduct = {
+        ...selectedProductToConfigure,
+        __selectedModifierIds: modifierMeta.modificadorIds,
+        __selectedModifiers: modifierMeta.modificadoresSelecionados,
+        __selectedModifierTotal: modifierTotal,
+      } as ProductWithModifiers;
+      onAddToDraft(decoratedProduct as Product, configQty, configObs, configClient);
     }
+
     closeProductConfig();
-    openCartReview();
+    openCart();
   };
 
-  // Adição rápida com 1 toque direto no card
-  const handleQuickAdd = (product: Product, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    const defaultClient = draftItems.length > 0 ? (draftItems[0].clienteNome || '') : '';
-    const compatibleDraftItem = draftItems.find((item) =>
-      item.produtoId === product.id
-      && !item.observacao
-      && (item.clienteNome || '') === defaultClient
-    );
-    if (compatibleDraftItem) {
-      onUpdateDraftItem(compatibleDraftItem.id, {
-        quantidade: (compatibleDraftItem.quantidade || 1) + 1,
+  const handleQuickAdd = (product: Product, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    if (productModifierGroups(product).length > 0) {
+      handleOpenConfig(product);
+      return;
+    }
+
+    const defaultClient = draftItems.length > 0 ? draftItems[0].clienteNome || '' : '';
+    const compatibleDraft = draftItems.find((item) => {
+      const decorated = item as DraftWithModifiers;
+      return item.produtoId === product.id
+        && !item.observacao
+        && (item.clienteNome || '') === defaultClient
+        && (decorated.modificadorIds || []).length === 0;
+    });
+    if (compatibleDraft) {
+      onUpdateDraftItem(compatibleDraft.id, {
+        quantidade: (compatibleDraft.quantidade || 1) + 1,
       });
       return;
     }
     onAddToDraft(product, 1, '', defaultClient);
   };
 
-  // Redução rápida de quantidade direto no card
-  const handleQuickSubtract = (product: Product, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    const matching = draftItems.filter(item => item.produtoId === product.id);
+  const handleQuickSubtract = (product: Product, event?: React.MouseEvent) => {
+    event?.stopPropagation();
+    const matching = draftItems.filter((item) => item.produtoId === product.id);
     if (matching.length === 0) return;
-    const lastItem = matching[matching.length - 1];
-    if ((lastItem.quantidade || 1) > 1) {
-      onUpdateDraftItem(lastItem.id, { quantidade: (lastItem.quantidade || 1) - 1 });
+    const item = matching[matching.length - 1];
+    if ((item.quantidade || 1) > 1) {
+      onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 });
     } else {
-      onRemoveFromDraft(lastItem.id);
+      onRemoveFromDraft(item.id);
     }
   };
 
-  // Total draft count and price
-  const totalDraftQty = draftItems.reduce((sum, item) => sum + (item.quantidade || 1), 0);
-  const draftTotal = draftItems.reduce((sum, item) => sum + (item.preco * (item.quantidade || 1)), 0);
-
   return (
     <div className="relative sm:h-full">
-      {/* 1. VIEW: CART (CARRINHO DE COMPRAS) */}
       {view === 'cart' && (
-        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-20 sm:pb-5 flex flex-col sm:h-full max-w-2xl mx-auto border-0 rounded-none">
-          <div className="flex flex-col sm:h-full justify-between min-h-0 space-y-3">
-            
-            {/* Cart Header */}
-            <div className="flex items-center justify-between gap-2 border-b border-koma-border pb-2.5 shrink-0">
-              <div className="flex items-center gap-2 text-koma-foreground min-w-0">
-                <ShoppingCart size={16} className="text-emerald-400 shrink-0" />
-                <h3 className="font-serif font-bold text-sm sm:text-base leading-tight truncate">Revisar Pedido</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold font-mono bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full shrink-0">
-                  {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={openMenu}
-                className="min-h-8 px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-1 shrink-0 shadow-sm"
-              >
-                <Plus size={13} />
-                <span>Adicionar</span>
+        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-24 sm:pb-5 flex flex-col sm:h-full max-w-2xl mx-auto">
+          <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShoppingCart size={16} className="text-emerald-400 shrink-0" />
+              <h3 className="font-serif font-bold text-sm sm:text-base text-koma-foreground">Revisar Pedido</h3>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400">
+                {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={openMenu}
+              className="min-h-9 px-3 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center gap-1"
+            >
+              <Plus size={13} /> Adicionar
+            </button>
+          </div>
+
+          {draftItems.length === 0 ? (
+            <div className="py-12 text-center flex-1 flex flex-col items-center justify-center gap-3">
+              <p className="text-sm font-semibold text-koma-foreground">Nenhum item no pedido</p>
+              <p className="text-xs text-koma-muted">Escolha os produtos da Mesa {tableId}.</p>
+              <button type="button" onClick={openMenu} className="koma-btn-primary px-5 py-2.5 rounded-xl text-xs font-bold">
+                Abrir cardápio
               </button>
             </div>
-
-            {/* Cart Body */}
-            {draftItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center space-y-3 flex-1">
-                <div className="text-sm text-koma-foreground font-semibold font-sans">Nenhum item no pedido</div>
-                <p className="text-xs text-koma-subtle max-w-[260px] leading-relaxed">Escolha os produtos da Mesa {tableId}.</p>
-                <button
-                  type="button"
-                  onClick={openMenu}
-                  className="min-h-11 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-zinc-950 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-sm"
-                >
-                  Abrir cardápio
-                </button>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
-                <div className="flex-1 overflow-visible sm:overflow-y-auto min-h-0 sm:pr-1 space-y-3">
-                {/* Global table client name config */}
-                <div className="bg-koma-raised border border-koma-border p-3 rounded-xl space-y-2 shadow-sm">
-                  <label htmlFor="overall-client-name" className="text-[10px] font-sans font-bold text-koma-muted uppercase tracking-wider block">
-                    Cliente do pedido <span className="normal-case text-koma-subtle">(opcional)</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="overall-client-name"
-                      type="text"
-                      value={draftItems[0]?.clienteNome || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        draftItems.forEach(item => {
-                          onUpdateDraftItem(item.id, { clienteNome: val });
-                        });
-                      }}
-                      placeholder="Ex: Pedro, Cláudia, Família..."
-                      className="w-full px-3 py-2 bg-koma-input text-koma-foreground border border-koma-border rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
-                    />
+          ) : (
+            <div className="flex-1 min-h-0 flex flex-col gap-4 pt-4">
+              <div className="bg-koma-raised border border-koma-border p-3 rounded-xl space-y-2">
+                <label htmlFor="overall-client-name" className="text-[10px] font-bold text-koma-muted uppercase tracking-wider">
+                  Cliente do pedido <span className="normal-case font-normal">(opcional)</span>
+                </label>
+                <input
+                  id="overall-client-name"
+                  value={draftItems[0]?.clienteNome || ''}
+                  onChange={(event) => draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: event.target.value }))}
+                  placeholder="Ex: Pedro, Cláudia, Família..."
+                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                />
+                {combinedSuggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {combinedSuggestions.map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: name }))}
+                        className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
+                      >
+                        {name}
+                      </button>
+                    ))}
                   </div>
+                )}
+              </div>
 
-                  {combinedSuggestions.length > 0 && (
-                    <div className="space-y-1.5 pt-1">
-                      <span className="text-[9px] text-koma-subtle font-sans block">Clientes atendidos nesta mesa (toque p/ preencher):</span>
-                      <div className="flex flex-wrap gap-1">
-                        {combinedSuggestions.map((name) => (
-                          <button
-                            key={name}
-                            id={`suggest-overall-${name.toLowerCase().replace(/\s+/g, '-')}`}
-                            onClick={() => {
-                              draftItems.forEach(item => {
-                                onUpdateDraftItem(item.id, { clienteNome: name });
-                              });
-                            }}
-                            className="px-2 py-0.5 text-[9px] bg-koma-card hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border border-koma-border rounded transition-colors font-medium cursor-pointer"
-                          >
-                            {name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Draft items list */}
-                <div className="space-y-2 sm:max-h-[40vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1 scrollbar-thin flex-1">
-                  {draftItems.map((item, index) => (
-                    <div
-                      key={item.id}
-                      id={`draft-item-${item.id}`}
-                      className="p-3 bg-koma-card border border-koma-border rounded-xl space-y-2.5 shadow-sm group"
-                    >
-                      {/* Item Header */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-1.5 min-w-0">
-                          <span className="text-[10px] font-bold font-mono bg-koma-card text-koma-subtle h-5 w-5 rounded-full flex items-center justify-center border border-koma-border">
-                            {index + 1}
-                          </span>
-                          <div className="min-w-0">
-                            <span className="text-xs font-bold text-koma-foreground block leading-snug">{item.nome}</span>
-                            {item.clienteNome && (
-                              <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 uppercase block">Para: {item.clienteNome}</span>
-                            )}
+              <div className="space-y-2 sm:max-h-[42vh] sm:overflow-y-auto sm:pr-1">
+                {draftItems.map((item, index) => {
+                  const decorated = item as DraftWithModifiers;
+                  const product = liveProdutos.find((candidate) => candidate.id === item.produtoId);
+                  return (
+                    <div key={item.id} id={`draft-item-${item.id}`} className="p-3 bg-koma-card border border-koma-border rounded-xl space-y-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full border border-koma-border text-[10px] font-mono flex items-center justify-center text-koma-subtle">{index + 1}</span>
+                            <span className="text-xs font-bold text-koma-foreground">{item.nome}</span>
                           </div>
+                          {decorated.modificadoresSelecionados && decorated.modificadoresSelecionados.length > 0 && (
+                            <div className="mt-1 ml-7 flex flex-wrap gap-1">
+                              {decorated.modificadoresSelecionados.map((option) => (
+                                <span key={option.id} className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-[9px] text-emerald-400 border border-emerald-500/20">
+                                  + {option.nome}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {item.clienteNome && (
+                            <span className="ml-7 text-[9px] uppercase font-bold text-emerald-400">Para: {item.clienteNome}</span>
+                          )}
                         </div>
-
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-400 mr-1">
-                            R$ {(item.preco * (item.quantidade || 1)).toFixed(2)}
+                          <span className="text-xs font-mono font-bold text-emerald-400">
+                            R$ {(Number(item.preco) * (item.quantidade || 1)).toFixed(2)}
                           </span>
-                          
-                          {/* Qty Selector */}
-                          <div className="flex items-center gap-1 bg-koma-card rounded-lg border border-koma-border p-0.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (item.quantidade > 1) {
-                                  onUpdateDraftItem(item.id, { quantidade: item.quantidade - 1 });
-                                } else {
-                                  onRemoveFromDraft(item.id);
-                                }
-                              }}
-                              className="p-1 hover:bg-koma-raised text-koma-subtle hover:text-rose-500 rounded transition-colors cursor-pointer"
-                              title="Reduzir quantidade"
-                            >
-                              <Minus size={11} />
-                            </button>
-                            <span className="font-mono text-xs font-bold text-koma-foreground px-1">{item.quantidade || 1}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 });
-                              }}
-                              className="p-1 hover:bg-koma-raised text-koma-subtle hover:text-emerald-500 rounded transition-colors cursor-pointer"
-                              title="Aumentar quantidade"
-                            >
-                              <Plus size={11} />
-                            </button>
-                          </div>
-
+                          <button
+                            type="button"
+                            onClick={() => product && handleOpenConfig(product, item)}
+                            className="p-1.5 rounded-lg text-koma-muted hover:text-emerald-400 hover:bg-koma-raised"
+                            title="Editar item e complementos"
+                          >
+                            <Edit3 size={13} />
+                          </button>
                           <button
                             id={`remove-draft-item-${item.id}`}
+                            type="button"
                             onClick={() => onRemoveFromDraft(item.id)}
-                            className="text-koma-subtle hover:text-rose-500 transition-colors p-1.5 rounded hover:bg-koma-card cursor-pointer"
+                            className="p-1.5 rounded-lg text-koma-muted hover:text-rose-400 hover:bg-rose-500/10"
                             title="Remover item"
                           >
                             <Trash2 size={13} />
@@ -375,639 +408,442 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                         </div>
                       </div>
 
-                      {/* Observations */}
-                      <div className="space-y-1.5 pt-1.5 border-t border-koma-border">
-                        <div className="flex items-center justify-between text-[10px] text-koma-muted font-sans font-medium">
-                          <div className="flex items-center gap-1">
-                            <FileText size={10} className="text-emerald-700 dark:text-emerald-400" />
-                            <span>Observação de Preparo:</span>
-                          </div>
-                          {item.observacao && (
-                            <button
-                              onClick={() => onUpdateDraftItem(item.id, { observacao: '' })}
-                              className="text-[9px] text-emerald-700 dark:text-emerald-400 hover:underline"
-                            >
-                              Limpar
-                            </button>
-                          )}
-                        </div>
-                        
-                        <input
-                          id={`draft-item-obs-${item.id}`}
-                          type="text"
-                          value={item.observacao}
-                          onChange={(e) => onUpdateDraftItem(item.id, { observacao: e.target.value })}
-                          placeholder="Ex: sem cebola, molho à parte..."
-                          className="w-full px-2.5 py-1.5 text-xs bg-koma-card border border-koma-border rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 text-koma-foreground"
-                        />
-
-                        {/* Presets */}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {(() => {
-                            const product = liveProdutos.find(p => p.id === item.produtoId);
-                            const presets = product ? getProductPresets(product) : ['VIAGEM', 'PRA MESA'];
-                            return presets.map((preset) => {
-                              const parts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
-                              const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
-                              return (
-                                <button
-                                  key={preset}
-                                  onClick={() => {
-                                    const currentParts = item.observacao ? item.observacao.split(',').map(p => p.trim()) : [];
-                                    const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
-                                    const updatedParts = exists 
-                                      ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
-                                      : [...currentParts.filter(p => p !== ''), preset];
-                                    onUpdateDraftItem(item.id, { observacao: updatedParts.join(', ') });
-                                  }}
-                                  className={`px-2 py-0.5 text-[9px] rounded border transition-colors font-medium cursor-pointer ${
-                                    isActive 
-                                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-400 font-bold'
-                                      : 'bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border-koma-border'
-                                  }`}
-                                >
-                                  {isActive ? preset : `+${preset}`}
-                                </button>
-                              );
-                            });
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Submit Actions (Fixado no rodapé) */}
-                <div className="mt-4 pt-4 border-t border-koma-border space-y-3.5 shrink-0">
-                  
-                  {/* Order Type Toggle Selector */}
-                  <div className="space-y-1.5 font-sans">
-                    <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Tipo do Pedido:</span>
-                    <div className={`${allowExternalOrders ? 'grid-cols-2' : 'grid-cols-1'} grid bg-koma-card border border-koma-border rounded-xl p-1`}>
-                      <button
-                        type="button"
-                        onClick={() => setOrderType('Consumo no Local')}
-                        className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                          orderType === 'Consumo no Local'
-                            ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 shadow-sm font-bold'
-                            : 'text-koma-subtle hover:text-koma-foreground'
-                        }`}
-                      >
-                        Consumo no Local
-                      </button>
-                      {allowExternalOrders && (
-                      <button
-                        type="button"
-                        onClick={() => setOrderType('Retirada')}
-                        className={`py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                          orderType === 'Retirada'
-                            ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 shadow-sm font-bold'
-                            : 'text-koma-subtle hover:text-koma-foreground'
-                        }`}
-                      >
-                        Retirada (Balcão)
-                      </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-baseline font-sans pt-1">
-                    <span className="text-xs text-koma-subtle font-bold uppercase tracking-wider">Subtotal Rascunho:</span>
-                    <span className="text-2xl font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                      R$ {draftTotal.toFixed(2)}
-                    </span>
-                  </div>
-
-                  <div className="bg-koma-card border border-koma-border rounded-xl px-3 py-2 flex items-start gap-2">
-                    <Info size={14} className="text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-koma-muted leading-normal font-sans">
-                      Ao lançar, os itens entram na conta da mesa e seguem para a cozinha.
-                    </p>
-                  </div>
-
-                  <button
-                    id="submit-draft-order-btn"
-                    disabled={isSubmitting}
-                    onClick={() => onSubmitDraft(orderType)}
-                    className="hidden sm:flex w-full min-h-12 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-sm items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/10 transition-colors cursor-pointer uppercase tracking-wider font-sans border border-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span>{isSubmitting ? 'Lançando...' : 'Lançar Pedido'}</span>
-                    <ArrowRight size={14} />
-                  </button>
-                </div>
-
-                {/* No celular, total e ação permanecem ao alcance do polegar. */}
-                <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                  <div className="mx-auto flex max-w-2xl items-center gap-3">
-                    <div className="min-w-[92px]">
-                      <span className="block text-[9px] font-bold uppercase tracking-wider text-koma-subtle">Total</span>
-                      <span className="block font-mono text-lg font-bold leading-tight text-emerald-400">
-                        R$ {draftTotal.toFixed(2)}
-                      </span>
-                    </div>
-                    <button
-                      id="submit-draft-order-btn-mobile"
-                      type="button"
-                      disabled={isSubmitting}
-                      onClick={() => onSubmitDraft(orderType)}
-                      className="flex min-h-12 flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-400/30 bg-emerald-500 px-4 py-3 text-sm font-bold uppercase tracking-wide text-black shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <span>{isSubmitting ? 'Lançando...' : 'Lançar pedido'}</span>
-                      <ArrowRight size={15} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 2. VIEW: MENU (CARDÁPIO DE PRODUTOS) */}
-      {view === 'menu' && (
-        <div className="flex flex-col justify-between max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl p-0 border-0 rounded-none">
-          <div>
-            
-            {/* Sticky Search & Direct 1-Touch Categories Bar (FLUSH TOP ZERO GAP) */}
-            <div className="sticky top-0 z-30 bg-koma-panel px-3 sm:px-5 pt-2.5 pb-2 border-b border-koma-border space-y-2 shadow-sm">
-              {/* Search Bar + Settings View Toggle */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-koma-subtle" />
-                  <input
-                    id="search-products-input"
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar no cardápio..."
-                    className="w-full pl-9 pr-7 py-2 text-xs sm:text-sm bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-koma-foreground placeholder:text-zinc-500"
-                  />
-                  {searchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-2.5 top-2.5 text-koma-subtle hover:text-koma-foreground cursor-pointer"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Settings Toggle */}
-                <div className="relative shrink-0">
-                  <button
-                    id="toggle-menu-settings"
-                    onClick={() => setShowSettings(!showSettings)}
-                    className="min-h-9 p-2 text-koma-subtle hover:text-koma-foreground bg-koma-card hover:bg-koma-raised rounded-xl transition-colors cursor-pointer border border-koma-border"
-                    title="Ajustar visualização"
-                    aria-label="Ajustar visualização"
-                  >
-                    <SlidersHorizontal size={15} />
-                  </button>
-
-                  {showSettings && (
-                    <div className="absolute right-0 top-full mt-2 w-52 bg-koma-dialog border border-koma-border shadow-2xl rounded-2xl p-3 z-50 space-y-2">
-                      <span className="block text-[10px] font-sans font-bold text-koma-subtle uppercase tracking-wider">Ajustes da Tela</span>
-                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded-lg hover:bg-koma-raised">
-                        <span>Exibir imagens</span>
-                        <input
-                          id="toggle-images-setting"
-                          type="checkbox"
-                          checked={settings.exibirImagens}
-                          onChange={(e) => onUpdateSettings({ ...settings, exibirImagens: e.target.checked })}
-                          className="rounded border-koma-border text-emerald-400 focus:ring-emerald-500 h-4 w-4 bg-koma-input"
-                        />
-                      </label>
-                      <label className="flex items-center justify-between text-xs text-koma-muted cursor-pointer p-1.5 rounded-lg hover:bg-koma-raised">
-                        <span>Exibir descrições</span>
-                        <input
-                          id="toggle-desc-setting"
-                          type="checkbox"
-                          checked={settings.exibirDescricoes}
-                          onChange={(e) => onUpdateSettings({ ...settings, exibirDescricoes: e.target.checked })}
-                          className="rounded border-koma-border text-emerald-400 focus:ring-emerald-500 h-4 w-4 bg-koma-input"
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Direct 1-Touch Horizontal Category Chips Carousel (JUMP ANCHORS) */}
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar -mx-0.5 px-0.5">
-                {categoriesList.map((catObj) => (
-                  <button
-                    key={catObj.id}
-                    id={`cat-btn-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
-                    onClick={() => {
-                      setSelectedCategory(catObj.nome);
-                      if (searchQuery) setSearchQuery('');
-                      setTimeout(() => {
-                        const element = document.getElementById(`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`);
-                        element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-                      }, 40);
-                    }}
-                    className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                      selectedCategory === catObj.nome
-                        ? 'bg-emerald-500 text-zinc-950 shadow-md font-extrabold'
-                        : 'bg-koma-card hover:bg-koma-raised text-koma-muted hover:text-koma-foreground border border-koma-border'
-                    }`}
-                  >
-                    {catObj.nome}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Continuous Scrollable Products Feed */}
-            <div className="p-3 sm:p-5 pb-28 sm:pb-8 flex flex-col gap-5 sm:gap-6 sm:max-h-[55vh] sm:overflow-y-auto max-h-none overflow-y-visible sm:pr-1">
-              {(() => {
-                let totalRendered = 0;
-                const productsList = liveProdutos.filter((product) => product.ativo !== false);
-
-                const renderedSections = categoriesList.map((catObj) => {
-                  const categoryProducts = productsList.filter((product) => {
-                    const prodCatName = obterNomeCategoria(product.categoria);
-                    const matchesCategory = product.categoria_id === catObj.id || prodCatName === catObj.nome;
-                    const fullProductText = `${product.nome} ${product.descricao || ''}`;
-                    const matchesSearch = !searchQuery || smartSearchMatch(fullProductText, searchQuery);
-                    return matchesCategory && matchesSearch;
-                  });
-
-                  if (categoryProducts.length === 0) return null;
-                  totalRendered += categoryProducts.length;
-
-                  return (
-                    <div 
-                      key={catObj.id} 
-                      id={`category-sec-${catObj.nome.toLowerCase().replace(/\s+/g, '-')}`}
-                      className="space-y-2.5 scroll-mt-24 sm:scroll-mt-28"
-                    >
-                      <div className="flex items-center gap-2 border-b border-koma-border/80 pb-1 pt-1">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-                        <h4 className="font-serif text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                          {catObj.nome}
-                        </h4>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
-                        {categoryProducts.map((product) => {
-                          const matchingDraftItems = draftItems.filter((it) => it.produtoId === product.id);
-                          const currentCountInDraft = matchingDraftItems.reduce((acc, it) => acc + (it.quantidade || 1), 0);
-
-                          return (
-                          <div
-                            key={product.id}
-                            id={`product-card-${product.id}`}
-                            className={`border rounded-xl sm:rounded-2xl p-3 sm:p-4 flex flex-col justify-between group cursor-pointer transition-all ${
-                              currentCountInDraft > 0
-                                ? 'bg-emerald-500/10 border-emerald-500/40 shadow-sm'
-                                : 'bg-koma-card border-koma-border hover:border-emerald-500/30'
-                            }`}
-                            onClick={() => handleOpenConfig(product)}
+                      <div className="flex items-center justify-between gap-2 border-t border-koma-border pt-2">
+                        <div className="flex items-center gap-1 bg-koma-raised border border-koma-border rounded-lg p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => (item.quantidade || 1) > 1
+                              ? onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 })
+                              : onRemoveFromDraft(item.id)}
+                            className="p-1.5 text-koma-muted hover:text-rose-400"
                           >
-                            <div className="space-y-2 sm:space-y-3">
-                              {/* Product Image */}
-                              {settings.exibirImagens && product.imagem && (
-                                <div 
-                                  className="w-full h-32 rounded-lg overflow-hidden relative bg-koma-card border border-koma-border"
-                                >
-                                  <img
-                                    src={product.imagem}
-                                    alt={product.nome}
-                                    referrerPolicy="no-referrer"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              )}
+                            <Minus size={12} />
+                          </button>
+                          <span className="px-2 text-xs font-mono font-bold text-koma-foreground">{item.quantidade || 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 })}
+                            className="p-1.5 text-koma-muted hover:text-emerald-400"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
 
-                              <div>
-                                <div className="flex justify-between items-start gap-2">
-                                  <h4 
-                                    className="font-serif font-bold leading-tight text-sm text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400 transition-colors"
-                                  >
-                                    {product.nome}
-                                  </h4>
-                                  <div className="flex flex-col items-end gap-1 shrink-0">
-                                    <span className="font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
-                                      R$ {product.preco.toFixed(2)}
-                                    </span>
-                                  </div>
-                                </div>
-                                
-                                {settings.exibirDescricoes && (
-                                  <p className="text-[11px] text-koma-subtle mt-1.5 leading-relaxed line-clamp-2 sm:line-clamp-none">
-                                    {product.descricao}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Controles de Adição Rápida e Personalização */}
-                            <div className="mt-2.5 sm:mt-4 pt-2 border-t border-koma-border/60">
-                              {currentCountInDraft > 0 ? (
-                                <div className="flex items-center justify-between gap-1.5">
-                                  <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5 shadow-sm">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleQuickSubtract(product, e)}
-                                      className="p-1.5 hover:bg-koma-raised text-koma-secondary hover:text-rose-400 rounded-lg transition-colors cursor-pointer"
-                                      title="Diminuir quantidade"
-                                    >
-                                      <Minus size={13} />
-                                    </button>
-                                    <span className="font-mono text-xs font-extrabold text-emerald-700 dark:text-emerald-400 px-2 min-w-[1.75rem] text-center">
-                                      {currentCountInDraft}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleQuickAdd(product, e)}
-                                      className="p-1.5 hover:bg-koma-raised text-koma-secondary hover:text-emerald-400 rounded-lg transition-colors cursor-pointer"
-                                      title="Adicionar mais um"
-                                    >
-                                      <Plus size={13} />
-                                    </button>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenConfig(product);
-                                    }}
-                                    className="min-h-9 px-2.5 py-1.5 flex items-center gap-1 bg-koma-raised hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/30 text-koma-muted hover:text-koma-foreground text-[11px] font-bold rounded-xl transition-all cursor-pointer"
-                                    title="Personalizar (Obs de cozinha / Cliente)"
-                                  >
-                                    <Edit3 size={12} className="text-amber-400" />
-                                    <span>Obs</span>
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    id={`add-product-btn-${product.id}`}
-                                    type="button"
-                                    onClick={(e) => handleQuickAdd(product, e)}
-                                    className="flex-1 min-h-10 flex items-center justify-center gap-1 py-2 text-xs font-bold rounded-xl transition-all border bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-sm border-emerald-400 cursor-pointer active:scale-95"
-                                  >
-                                    <Plus size={14} />
-                                    <span>Adicionar</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleOpenConfig(product);
-                                    }}
-                                    className="min-h-10 px-3 flex items-center justify-center bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-subtle hover:text-koma-foreground rounded-xl transition-all cursor-pointer"
-                                    title="Personalizar (Obs / Cliente)"
-                                  >
-                                    <Edit3 size={14} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );})}
+                        <div className="flex-1 relative">
+                          <FileText size={11} className="absolute left-2.5 top-2.5 text-koma-subtle" />
+                          <input
+                            value={item.observacao}
+                            onChange={(event) => onUpdateDraftItem(item.id, { observacao: event.target.value })}
+                            placeholder="Observação de preparo..."
+                            className="w-full pl-7 pr-2 py-2 bg-koma-input border border-koma-border rounded-lg text-[11px] text-koma-foreground focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
                       </div>
                     </div>
                   );
-                });
+                })}
+              </div>
 
-                if (totalRendered === 0) {
-                  return (
-                    <div className="py-12 text-center text-koma-subtle text-sm italic font-serif">
-                      {catalogReady
-                        ? 'Nenhum item disponível no cardápio.'
-                        : 'Carregando o cardápio…'}
-                    </div>
-                  );
-                }
-
-                return renderedSections;
-              })()}
-            </div>
-
-            {/* STICKY BOTTOM CART BAR (MOBILE & SALÃO) */}
-            {view === 'menu' && totalDraftQty > 0 && (
-              <div className="sticky bottom-0 left-0 right-0 z-40 -mx-3 -mb-3 sm:-mx-5 sm:-mb-5 p-2.5 sm:p-3 bg-koma-panel/95 backdrop-blur-md border-t border-koma-border shadow-[0_-8px_24px_rgba(0,0,0,0.35)] animate-slide-up">
-                <div className="flex items-center justify-between gap-2 sm:gap-3 max-w-2xl mx-auto">
-                  <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                    <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-extrabold shrink-0 font-mono text-xs sm:text-sm shadow-sm">
-                      {totalDraftQty}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[11px] sm:text-xs font-bold text-koma-foreground block truncate leading-tight">
-                        {totalDraftQty === 1 ? '1 item' : `${totalDraftQty} itens`}
-                      </span>
-                      <span className="text-xs sm:text-sm font-bold font-mono text-emerald-400 block leading-tight">
-                        R$ {draftTotal.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-
+              <div className="mt-auto border-t border-koma-border pt-4 space-y-3">
+                <div className={`${allowExternalOrders ? 'grid-cols-2' : 'grid-cols-1'} grid gap-1 bg-koma-card border border-koma-border rounded-xl p-1`}>
                   <button
                     type="button"
-                    onClick={openCartReview}
-                    className="min-h-10 sm:min-h-11 px-3.5 sm:px-5 py-2 sm:py-2.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shadow-lg shadow-emerald-900/30 border border-emerald-400 shrink-0"
+                    onClick={() => setOrderType('Consumo no Local')}
+                    className={`py-2 text-xs font-bold rounded-lg ${orderType === 'Consumo no Local' ? 'bg-emerald-500/20 text-emerald-400' : 'text-koma-muted'}`}
                   >
-                    <span>Revisar Pedido</span>
-                    <ArrowRight size={14} className="shrink-0" />
+                    Consumo no Local
+                  </button>
+                  {allowExternalOrders && (
+                    <button
+                      type="button"
+                      onClick={() => setOrderType('Retirada')}
+                      className={`py-2 text-xs font-bold rounded-lg ${orderType === 'Retirada' ? 'bg-emerald-500/20 text-emerald-400' : 'text-koma-muted'}`}
+                    >
+                      Retirada (Balcão)
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-koma-muted">Subtotal</span>
+                  <span className="text-xl font-mono font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
+                </div>
+
+                <button
+                  id="submit-draft-order-btn"
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => onSubmitDraft(orderType)}
+                  className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Lançando...' : 'Lançar Pedido'} <ArrowRight size={15} />
+                </button>
+              </div>
+
+              <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl">
+                <div className="mx-auto flex max-w-2xl items-center gap-3">
+                  <div className="min-w-[100px]">
+                    <span className="block text-[9px] uppercase font-bold text-koma-muted">Total</span>
+                    <span className="font-mono text-lg font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
+                  </div>
+                  <button
+                    id="submit-draft-order-btn-mobile"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => onSubmitDraft(orderType)}
+                    className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-black text-sm font-bold disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Lançando...' : 'Lançar pedido'} <ArrowRight size={15} />
                   </button>
                 </div>
               </div>
-            )}
-
-          </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 3. PRODUCT CONFIGURATION OVERLAY MODAL */}
-      {selectedProductToConfigure && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              closeProductConfig();
-            }
-          }}
-          className="fixed inset-0 bg-koma-overlay z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in cursor-pointer"
-        >
-          <div className="bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[92dvh] overflow-y-auto p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-4 shadow-2xl animate-scale-in">
-            
-            {/* Modal Header */}
-            <div className="flex justify-between items-start border-b border-koma-border pb-3">
-              <div>
-                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
-                <h4 className="font-serif font-bold text-base sm:text-lg text-koma-foreground mt-0.5">{selectedProductToConfigure.nome}</h4>
-                {editingDraftItemIds.length > 0 && (
-                  <span className="mt-1 block text-[9px] font-bold uppercase tracking-wider text-amber-400">
-                    Editando {configQty} {configQty === 1 ? 'unidade selecionada' : 'unidades selecionadas'}
-                  </span>
+      {view === 'menu' && (
+        <div className="max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl overflow-hidden">
+          <div className="sticky top-0 z-30 bg-koma-panel px-3 sm:px-5 py-2.5 border-b border-koma-border space-y-2 shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3 top-2.5 text-koma-subtle" />
+                <input
+                  id="search-products-input"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Buscar no cardápio..."
+                  className="w-full pl-9 pr-8 py-2 bg-koma-input border border-koma-border rounded-xl text-xs sm:text-sm text-koma-foreground focus:outline-none focus:border-emerald-500"
+                />
+                {searchQuery && (
+                  <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2.5 text-koma-muted">
+                    <X size={14} />
+                  </button>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={closeProductConfig}
-                className="p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"
-              >
+              <div className="relative">
+                <button
+                  id="toggle-menu-settings"
+                  type="button"
+                  onClick={() => setShowSettings((current) => !current)}
+                  className="p-2 rounded-xl bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground"
+                  title="Ajustar visualização"
+                >
+                  <Settings2 size={15} />
+                </button>
+                {showSettings && (
+                  <div className="absolute right-0 top-full mt-2 z-50 w-52 bg-koma-dialog border border-koma-border rounded-xl p-3 shadow-2xl space-y-2">
+                    <label className="flex items-center justify-between gap-3 text-xs text-koma-muted">
+                      <span>Exibir imagens</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.exibirImagens}
+                        onChange={(event) => onUpdateSettings({ ...settings, exibirImagens: event.target.checked })}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between gap-3 text-xs text-koma-muted">
+                      <span>Exibir descrições</span>
+                      <input
+                        type="checkbox"
+                        checked={settings.exibirDescricoes}
+                        onChange={(event) => onUpdateSettings({ ...settings, exibirDescricoes: event.target.checked })}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none no-scrollbar">
+              {categoriesList.map((category) => (
+                <button
+                  key={category.id}
+                  id={`cat-btn-${category.nome.toLowerCase().replace(/\s+/g, '-')}`}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(category.nome);
+                    setSearchQuery('');
+                    setTimeout(() => document.getElementById(`category-sec-${category.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 40);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap ${selectedCategory === category.nome ? 'bg-emerald-500 text-zinc-950' : 'bg-koma-card border border-koma-border text-koma-muted'}`}
+                >
+                  {category.nome}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-5 pb-28 sm:pb-8 space-y-6 sm:max-h-[58vh] sm:overflow-y-auto">
+            {categoriesList.map((category) => {
+              const products = activeProducts.filter((product) => {
+                const decorated = product as ProductWithModifiers;
+                const matchesCategory = decorated.categoria_id === category.id
+                  || obterNomeCategoria(product.categoria) === category.nome;
+                const matchesSearch = !searchQuery
+                  || smartSearchMatch(`${product.nome} ${product.descricao || ''}`, searchQuery);
+                return matchesCategory && matchesSearch;
+              });
+              if (products.length === 0) return null;
+
+              return (
+                <section key={category.id} id={`category-sec-${category.id}`} className="space-y-2.5 scroll-mt-24">
+                  <div className="flex items-center gap-2 border-b border-koma-border pb-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <h4 className="font-serif text-xs font-bold text-emerald-400 uppercase tracking-wider">{category.nome}</h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
+                    {products.map((product) => {
+                      const groups = productModifierGroups(product);
+                      const currentCount = draftItems
+                        .filter((item) => item.produtoId === product.id)
+                        .reduce((sum, item) => sum + (item.quantidade || 1), 0);
+                      return (
+                        <article
+                          key={product.id}
+                          id={`product-card-${product.id}`}
+                          onClick={() => handleOpenConfig(product)}
+                          className={`border rounded-2xl p-3 sm:p-4 flex flex-col justify-between cursor-pointer transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`}
+                        >
+                          <div className="space-y-2">
+                            {settings.exibirImagens && product.imagem && (
+                              <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised">
+                                <img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                            )}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>
+                                {groups.length > 0 && (
+                                  <span className="mt-1 inline-flex px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400">
+                                    Personalizável · {groups.length} {groups.length === 1 ? 'grupo' : 'grupos'}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {Number(product.preco).toFixed(2)}</span>
+                            </div>
+                            {settings.exibirDescricoes && product.descricao && (
+                              <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>
+                            )}
+                          </div>
+
+                          <div className="mt-3 pt-2 border-t border-koma-border/60 flex items-center gap-1.5">
+                            {currentCount > 0 && (
+                              <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5">
+                                <button type="button" onClick={(event) => handleQuickSubtract(product, event)} className="p-1.5 text-koma-muted hover:text-rose-400">
+                                  <Minus size={13} />
+                                </button>
+                                <span className="font-mono text-xs font-bold text-emerald-400 px-2">{currentCount}</span>
+                              </div>
+                            )}
+                            <button
+                              id={`add-product-btn-${product.id}`}
+                              type="button"
+                              onClick={(event) => handleQuickAdd(product, event)}
+                              className="flex-1 min-h-10 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center justify-center gap-1"
+                            >
+                              <Plus size={14} /> {groups.length > 0 ? 'Personalizar' : 'Adicionar'}
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+
+            {catalogReady && activeProducts.length === 0 && (
+              <div className="py-12 text-center text-sm text-koma-muted">Nenhum item disponível no cardápio.</div>
+            )}
+            {!catalogReady && (
+              <div className="py-12 text-center text-sm text-koma-muted">Carregando o cardápio…</div>
+            )}
+          </div>
+
+          {totalDraftQty > 0 && (
+            <div className="sticky bottom-0 z-40 p-3 bg-koma-panel/95 border-t border-koma-border backdrop-blur-md flex items-center justify-between gap-3">
+              <div>
+                <span className="block text-[10px] text-koma-muted">{totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}</span>
+                <span className="font-mono text-sm font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
+              </div>
+              <button type="button" onClick={openCart} className="min-h-10 px-4 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center gap-2">
+                Revisar Pedido <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedProductToConfigure && (
+        <div
+          className="fixed inset-0 z-50 bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={(event) => event.target === event.currentTarget && closeProductConfig()}
+        >
+          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 space-y-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3">
+              <div>
+                <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
+                <h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>
+                {editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}
+              </div>
+              <button type="button" onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground">
                 <X size={18} />
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="space-y-3 sm:space-y-4 font-sans text-xs">
-              
-              {/* Product description / image preview */}
-              {selectedProductToConfigure.descricao && (
-                <p className="text-koma-subtle leading-relaxed text-[11px] bg-koma-card px-3 py-2.5 rounded-xl border border-koma-border">
-                  {selectedProductToConfigure.descricao}
-                </p>
-              )}
+            {selectedProductToConfigure.descricao && (
+              <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">
+                {selectedProductToConfigure.descricao}
+              </p>
+            )}
 
-              {/* Quantity selector */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider block">Quantidade:</span>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center bg-koma-input rounded-xl border border-koma-border p-1">
-                    <button
-                      type="button"
-                      onClick={() => setConfigQty(prev => Math.max(1, prev - 1))}
-                      className="p-2 hover:bg-koma-raised text-koma-secondary hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <span className="font-mono text-sm font-bold text-koma-foreground px-4 min-w-[3rem] text-center">{configQty}</span>
-                    <button
-                      type="button"
-                      onClick={() => setConfigQty(prev => prev + 1)}
-                      className="p-2 hover:bg-koma-raised text-koma-secondary hover:text-emerald-500 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                  <span className="font-mono text-sm font-bold text-emerald-400 text-right">
-                    R$ {(selectedProductToConfigure.preco * configQty).toFixed(2)}
-                  </span>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-koma-muted mb-1">Quantidade</span>
+                <div className="flex items-center bg-koma-input border border-koma-border rounded-xl p-1">
+                  <button type="button" onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400">
+                    <Minus size={14} />
+                  </button>
+                  <span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span>
+                  <button type="button" onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400">
+                    <Plus size={14} />
+                  </button>
                 </div>
               </div>
-
-              {/* Observations */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[10px] font-bold text-koma-secondary uppercase tracking-wider block font-sans">
-                  <span>Observações de preparo (Cozinha):</span>
-                  {configObs && (
-                    <button
-                      type="button"
-                      onClick={() => setConfigObs('')}
-                      className="text-[9px] text-emerald-400 hover:underline cursor-pointer"
-                    >
-                      Limpar
-                    </button>
-                  )}
-                </div>
-                <input
-                  id="config-item-obs"
-                  type="text"
-                  value={configObs}
-                  onChange={(e) => setConfigObs(e.target.value)}
-                  placeholder="Ex: sem cheddar, mal passado, sem cebola..."
-                  className="w-full px-3 py-2 bg-koma-input text-koma-foreground border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
-                />
-
-                {/* Preset shortcuts */}
-                <div className="space-y-1 pt-0.5">
-                  <span className="text-[9px] text-koma-muted block">Atalhos rápidos de observação:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {(selectedProductToConfigure ? getProductPresets(selectedProductToConfigure) : ['VIAGEM', 'PRA MESA']).map((preset) => {
-                      const parts = configObs ? configObs.split(',').map(p => p.trim()) : [];
-                      const isActive = parts.some(p => p.toLowerCase() === preset.toLowerCase());
-                      return (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => {
-                            const currentParts = configObs ? configObs.split(',').map(p => p.trim()) : [];
-                            const exists = currentParts.some(p => p.toLowerCase() === preset.toLowerCase());
-                            const updatedParts = exists
-                              ? currentParts.filter(p => p.toLowerCase() !== preset.toLowerCase() && p !== '')
-                              : [...currentParts.filter(p => p !== ''), preset];
-                            setConfigObs(updatedParts.join(', '));
-                          }}
-                          className={`px-2.5 py-1 text-[9px] rounded-lg border transition-colors font-medium cursor-pointer ${
-                            isActive
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300'
-                              : 'bg-koma-raised hover:bg-emerald-500/25 text-koma-secondary hover:text-koma-foreground border-koma-border'
-                          }`}
-                        >
-                          {isActive ? preset : `+${preset}`}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Client Identifier */}
-              <div className="space-y-1.5">
-                <label htmlFor="config-client-name" className="text-[10px] font-bold text-koma-secondary uppercase tracking-wider block font-sans">
-                  Identificar Cliente (Opcional):
-                </label>
-                <input
-                  id="config-client-name"
-                  type="text"
-                  value={configClient}
-                  onChange={(e) => setConfigClient(e.target.value)}
-                  placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
-                  className="w-full px-3 py-2 bg-koma-input text-koma-foreground border border-koma-border rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 transition-all"
-                />
-
-                {combinedSuggestions.length > 0 && (
-                  <div className="space-y-1 pt-0.5">
-                    <span className="text-[9px] text-koma-subtle block">Escolher do atendimento atual:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {combinedSuggestions.map((name) => (
-                        <button
-                          key={name}
-                          type="button"
-                          onClick={() => setConfigClient(name)}
-                          className={`px-2 py-0.5 text-[9px] border rounded transition-colors font-medium cursor-pointer ${
-                            configClient === name
-                              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 font-bold'
-                              : 'bg-koma-raised hover:bg-emerald-500/15 text-koma-muted hover:text-koma-foreground border-koma-border'
-                          }`}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+              <div className="text-right">
+                <span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span>
+                <span className="font-mono text-lg font-bold text-emerald-400">R$ {(configUnitTotal * configQty).toFixed(2)}</span>
+                {modifierTotal > 0 && (
+                  <span className="block text-[9px] text-koma-subtle">+ R$ {modifierTotal.toFixed(2)} por unidade</span>
                 )}
               </div>
-
             </div>
 
-            {/* Modal Actions */}
-            <div className="flex items-center gap-3 pt-3 border-t border-koma-border">
-              <button
-                type="button"
-                onClick={closeProductConfig}
-                className="flex-1 py-2.5 border border-koma-border hover:bg-koma-raised text-koma-muted hover:text-koma-foreground text-xs font-bold rounded-xl transition-all cursor-pointer text-center"
-              >
+            {currentGroups.length > 0 && (
+              <div className="space-y-3 border-t border-koma-border pt-4">
+                <div>
+                  <h5 className="text-xs font-bold text-koma-foreground">Complementos</h5>
+                  <p className="text-[10px] text-koma-muted">As opções abaixo vêm do mesmo catálogo usado no caixa, garçom e cardápio online.</p>
+                </div>
+                {currentGroups.map((group) => {
+                  const activeOptions = group.opcoes.filter((option) => option.ativo !== false);
+                  const optionIds = new Set(activeOptions.map((option) => option.id));
+                  const selectedCount = selectedModifierIds.filter((id) => optionIds.has(id)).length;
+                  const min = Number(group.min_selecoes || 0);
+                  const max = Math.max(1, Number(group.max_selecoes || 1));
+                  const groupValid = selectedCount >= min && selectedCount <= max;
+                  return (
+                    <div key={group.id} className={`border rounded-xl p-3 space-y-2 ${groupValid ? 'border-koma-border bg-koma-raised/40' : 'border-amber-500/40 bg-amber-500/5'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <span className="text-xs font-bold text-koma-foreground">{group.nome}</span>
+                          <span className="block text-[9px] text-koma-muted">
+                            {min > 0 ? `Escolha de ${min} a ${max}` : `Escolha até ${max}`}
+                          </span>
+                        </div>
+                        <span className={`text-[9px] font-bold ${groupValid ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {selectedCount}/{max}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {activeOptions.map((option) => {
+                          const selected = selectedModifierIds.includes(option.id);
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => toggleModifier(group, option.id)}
+                              className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-left transition ${selected ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/25'}`}
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${selected ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-koma-border'}`}>
+                                  {selected && <Check size={11} strokeWidth={3} />}
+                                </span>
+                                <span className="text-xs font-medium text-koma-foreground truncate">{option.nome}</span>
+                              </span>
+                              <span className="text-[11px] font-mono font-bold text-emerald-400 whitespace-nowrap">
+                                {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)}` : 'Grátis'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="space-y-2 border-t border-koma-border pt-4">
+              <label htmlFor="config-item-obs" className="text-[10px] uppercase font-bold text-koma-muted">Observação de preparo</label>
+              <input
+                id="config-item-obs"
+                value={configObs}
+                onChange={(event) => setConfigObs(event.target.value)}
+                placeholder="Ex: sem cebola, mal passado, molho à parte..."
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+              />
+              <div className="flex flex-wrap gap-1">
+                {getProductPresets(selectedProductToConfigure).map((preset) => {
+                  const parts = configObs ? configObs.split(',').map((part) => part.trim()).filter(Boolean) : [];
+                  const active = parts.some((part) => part.toLocaleLowerCase('pt-BR') === preset.toLocaleLowerCase('pt-BR'));
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        const next = active
+                          ? parts.filter((part) => part.toLocaleLowerCase('pt-BR') !== preset.toLocaleLowerCase('pt-BR'))
+                          : [...parts, preset];
+                        setConfigObs(next.join(', '));
+                      }}
+                      className={`px-2 py-1 text-[9px] rounded-lg border ${active ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-koma-raised border-koma-border text-koma-muted'}`}
+                    >
+                      {active ? preset : `+${preset}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="config-client-name" className="text-[10px] uppercase font-bold text-koma-muted">Identificar Cliente (Opcional)</label>
+              <input
+                id="config-client-name"
+                value={configClient}
+                onChange={(event) => setConfigClient(event.target.value)}
+                placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
+                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+              />
+              {combinedSuggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {combinedSuggestions.map((name) => (
+                    <button key={name} type="button" onClick={() => setConfigClient(name)} className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-raised text-koma-muted">
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 border-t border-koma-border pt-4">
+              <button type="button" onClick={closeProductConfig} className="flex-1 py-2.5 rounded-xl border border-koma-border text-xs font-bold text-koma-muted hover:text-koma-foreground">
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleConfirmAdd}
-                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 border border-emerald-400 text-zinc-950 text-xs font-extrabold rounded-xl transition-all cursor-pointer text-center shadow-md shadow-emerald-900/30 active:scale-95"
+                disabled={!modifierSelectionValid}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {editingDraftItemIds.length > 0 ? 'Salvar alterações' : 'Adicionar ao Pedido'}
+                {!modifierSelectionValid
+                  ? 'Complete as escolhas'
+                  : editingDraftItemId ? 'Salvar alterações' : 'Adicionar ao Pedido'}
               </button>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 };
