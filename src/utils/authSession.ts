@@ -129,14 +129,23 @@ export function getOperatorAccessToken(): string {
   return getOperatorSession()?.token || localStorage.getItem('koma_waiter_token') || '';
 }
 
-// Limpa a sessão no logout ou expiração
+// Limpa toda a autenticação operacional no logout ou expiração, preservando
+// preferências e dados locais que não representam identidade/credenciais.
 export function clearOperatorSession(): void {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem('koma_caixa_token');
-  localStorage.removeItem('token');
-  localStorage.removeItem('koma_caixa_id');
-  localStorage.removeItem('koma_caixa_name');
-  localStorage.removeItem('koma_caixa_user_id');
-  localStorage.removeItem('koma_caixa_user_name');
-  localStorage.removeItem('koma_caixa_role');
+  for (const key of [
+    SESSION_KEY,
+    'koma_caixa_token',
+    'token',
+    'koma_caixa_id',
+    'koma_caixa_name',
+    'koma_caixa_user_id',
+    'koma_caixa_user_name',
+    'koma_caixa_role',
+    'koma_waiter_token',
+    'koma_waiter_id',
+    'koma_waiter_name',
+    'koma_user_role',
+  ]) {
+    localStorage.removeItem(key);
+  }
 }
