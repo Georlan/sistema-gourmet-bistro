@@ -375,7 +375,7 @@ export function useCashierOrders({
       window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, authHeaders]);
 
   const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
     const fullComanda = orders.find((o) => o.id === order.id);
