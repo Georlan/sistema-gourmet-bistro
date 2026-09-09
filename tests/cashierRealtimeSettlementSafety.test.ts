@@ -16,11 +16,28 @@ test('Caixa moves digital orders optimistically and keeps a visible-state reconc
   assert.match(ordersOwner, /await Promise\.all\(\[fetchDeliveryOrders\(\), onRefreshOrders\(\)\]\)/);
 });
 
+test('failed optimistic mutations rollback only the target order and ignore stale responses', () => {
+  assert.match(ordersOwner, /deliveryMutationSequenceRef/);
+  assert.match(
+    ordersOwner,
+    /pendingDeliveryMutationRef\.current\[orderId\] = \{ status: optimisticStatus, requestId \}/
+  );
+  assert.match(
+    ordersOwner,
+    /pendingDeliveryMutationRef\.current\[orderId\]\?\.requestId !== requestId/
+  );
+  assert.match(
+    ordersOwner,
+    /current\.map\(\(order\) => String\(order\.id\) === String\(orderId\) \? previousOrder : order\)/
+  );
+  assert.doesNotMatch(ordersOwner, /setDeliveryOrders\(previousDeliveryOrders\)/);
+});
+
 test('closing a digital order removes its card immediately after server confirmation', () => {
   assert.match(ordersOwner, /const handleFecharDelivery = async \(orderId: string\): Promise<boolean>/);
   assert.match(
     ordersOwner,
-    /if \(res\.ok\) \{[\s\S]*?pendingDeliveryMutationRef\.current\[orderId\] = 'remove';[\s\S]*?setDeliveryOrders\(\(current\) => current\.filter/
+    /if \(res\.ok\) \{[\s\S]*?pendingDeliveryMutationRef\.current\[orderId\] = \{ status: 'remove', requestId: removalRequestId \};[\s\S]*?setDeliveryOrders\(\(current\) => current\.filter/
   );
   assert.match(ordersOwner, /return true;/);
   assert.match(ordersOwner, /return false;/);
