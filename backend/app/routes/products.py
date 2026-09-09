@@ -2,6 +2,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union
+from ..catalog_addons import effective_modifier_payloads_by_product
 from ..database import get_db, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
 from ..security import get_current_user, require_permission
@@ -50,7 +51,9 @@ class ObservacaoResponse(BaseModel):
 
 class CatalogoResponse(BaseModel):
     categorias: List[CategoriaResponse]
-    produtos: List[ProdutoResponse]
+    # Mantém o contrato de produto existente e permite anexar grupos efetivos
+    # sem duplicar ProdutoResponse entre os canais operacionais.
+    produtos: List[dict]
 
 
 class DisponibilidadeLoteRequest(BaseModel):
@@ -92,6 +95,12 @@ def ordered_categories(categories: List[Categoria]) -> List[Categoria]:
             category.nome.casefold(),
         ),
     )
+
+
+def _serialize_product_with_modifiers(product: Produto, modifier_payloads: dict[str, list[dict]]) -> dict:
+    payload = ProdutoResponse.model_validate(product).model_dump()
+    payload["grupos_modificadores"] = modifier_payloads.get(str(product.id), [])
+    return payload
 
 
 # ─── CATEGORIES ENDPOINTS ─────────────────────────────────────────────────────
@@ -224,17 +233,20 @@ def delete_observacao(
 
 
 # ----------------- PRODUCTS ENDPOINTS -----------------
-@router.get("/", response_model=List[ProdutoResponse])
+@router.get("/", response_model=List[dict])
 def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    """Retorna todos os produtos cadastrados no cardápio do restaurante ativo, ordenados por ID dentro de cada categoria."""
+    """Retorna todos os produtos do tenant, incluindo complementos efetivos por categoria."""
+    del current_user
     rest_id = require_tenant_id()
-    return (
+    products = (
         db.query(Produto)
         .options(joinedload(Produto.categoria))
         .filter(Produto.restaurante_id == rest_id)
         .order_by(Produto.id)
         .all()
     )
+    modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
+    return [_serialize_product_with_modifiers(product, modifier_payloads) for product in products]
 
 @router.get("/catalogo", response_model=CatalogoResponse)
 def get_catalogo(
@@ -256,7 +268,14 @@ def get_catalogo(
         .order_by(Produto.id)
         .all()
     )
-    return {"categorias": categorias, "produtos": produtos}
+    modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
+    return {
+        "categorias": categorias,
+        "produtos": [
+            _serialize_product_with_modifiers(product, modifier_payloads)
+            for product in produtos
+        ],
+    }
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
