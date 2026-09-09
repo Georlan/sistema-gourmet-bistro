@@ -15,6 +15,7 @@ interface LegacyTrackingPayload {
   id?: string;
   numero_pedido?: string | number;
   status?: string;
+  state?: StoredOrder["state"];
   tipo?: string;
   total?: number;
   fechada?: boolean;
@@ -28,6 +29,14 @@ interface LegacyTrackingPayload {
 function resolveTrackingToken(propToken?: string | null): string {
   if (propToken?.trim()) return propToken.trim();
 
+  // Retomada de Web Push: fragmentos não são enviados ao servidor no request
+  // inicial nem viram Referer HTTP. A URL é limpa no início do efeito abaixo.
+  const fromFragment = new URLSearchParams(window.location.hash.replace(/^#/, ""))
+    .get("token")
+    ?.trim();
+  if (fromFragment) return fromFragment;
+
+  // Compatibilidade com links históricos. Nenhum link novo deve usar query string.
   const fromQuery = new URLSearchParams(window.location.search).get("token")?.trim();
   if (fromQuery) return fromQuery;
 
@@ -42,12 +51,20 @@ function resolveTrackingToken(propToken?: string | null): string {
   }
 }
 
+function scrubTrackingCapabilityFromAddressBar(): void {
+  if (typeof window === "undefined") return;
+  // Depois de capturar a capability em memória, removemos fragmento, query e
+  // eventual token legado no path antes de qualquer fetch subsequente.
+  window.history.replaceState(window.history.state, "", "/acompanhar");
+}
+
 /**
- * Compatibilidade para links antigos /acompanhar/:token.
+ * Compatibilidade para links antigos /acompanhar/:token e retomada segura de
+ * Web Push via /acompanhar#token=... .
  *
  * A experiência de acompanhamento/chat agora pertence ao Cardápio e ao drawer
  * lateral de "Pedido / Chat". Esta rota apenas recupera o pedido pelo token,
- * restaura o snapshot local necessário e redireciona para o Cardápio.
+ * restaura o snapshot da sessão atual e redireciona para o Cardápio.
  */
 export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) {
   const token = useMemo(() => resolveTrackingToken(propToken), [propToken]);
@@ -59,6 +76,7 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
       return;
     }
 
+    scrubTrackingCapabilityFromAddressBar();
     let cancelled = false;
 
     const redirectToInlineTracking = async () => {
@@ -96,6 +114,7 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
           total: Number(payload.total || 0),
           idempotency_key: `tracking:${pedidoId}`,
           status: String(payload.status || "pendente"),
+          state: payload.state,
           fechado: Boolean(payload.fechada),
           itens: Array.isArray(payload.itens) ? payload.itens : undefined,
           created_at: payload.criado_em || undefined,
