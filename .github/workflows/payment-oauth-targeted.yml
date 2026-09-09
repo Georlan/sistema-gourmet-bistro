@@ -1,17 +1,7 @@
 name: Payment OAuth Targeted
 
 on:
-  pull_request:
-    paths:
-      - ".env.example"
-      - "backend/alembic/versions/1c2d3e4f5a6b_resolve_mercado_pago_webhook_account.py"
-      - "backend/app/routes/online_payments.py"
-      - "backend/app/services/online_payments/**"
-      - "backend/tests/test_mercado_pago_*.py"
-      - "backend/tests/test_online_payment_gate.py"
-      - "src/components/caixa/online-menu/**"
-      - "tests/mercadoPagoConnection.test.ts"
-      - ".github/workflows/payment-oauth-targeted.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
