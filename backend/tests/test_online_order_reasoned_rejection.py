@@ -4,7 +4,9 @@ from app.database import Base, SessionLocal, current_restaurante_id, engine, ten
 from app.main import app
 from app.models import Comanda, Restaurante, Usuario
 from app.online_order_control_models import OnlineOrderCustomerBlock, OnlineOrderOperationalAudit
+from app.order_chat_models import OrderMessage
 from app.routes.auth import create_access_token
+from app.services.order_chat_service import create_conversation_for_order
 
 client = TestClient(app)
 RID = 8821
@@ -68,6 +70,8 @@ def _order(order_id: str, phone: str = "11998887777"):
                     fechada=False,
                 )
             )
+            db.flush()
+            create_conversation_for_order(db, RID, order_id)
             db.commit()
     finally:
         db.close()
@@ -76,16 +80,17 @@ def _order(order_id: str, phone: str = "11998887777"):
 def test_reasoned_rejection_uses_canonical_lifecycle():
     _reset()
     _order("reject-reason-1")
+    reason = "Cozinha sem capacidade para atender no prazo"
     response = client.post(
         "/api/online-orders/orders/reject-reason-1/reject",
         headers=_headers(),
         json={
-            "reason": "Cozinha sem capacidade para atender no prazo",
+            "reason": reason,
             "block_customer": False,
         },
     )
     assert response.status_code == 200, response.text
-    assert response.json()["reason"] == "Cozinha sem capacidade para atender no prazo"
+    assert response.json()["reason"] == reason
     assert response.json()["customer_block_id"] is None
 
     db = SessionLocal()
@@ -94,6 +99,17 @@ def test_reasoned_rejection_uses_canonical_lifecycle():
             order = db.query(Comanda).filter(Comanda.id == "reject-reason-1").one()
             assert order.delivery_status == "recusado"
             assert order.fechada is True
+            notice = (
+                db.query(OrderMessage)
+                .filter(
+                    OrderMessage.restaurante_id == RID,
+                    OrderMessage.pedido_id == order.id,
+                    OrderMessage.event_key == "rejection_reason",
+                )
+                .one()
+            )
+            assert notice.sender_type == "system"
+            assert notice.body == f"Motivo informado pelo restaurante: {reason}"
     finally:
         db.close()
 
