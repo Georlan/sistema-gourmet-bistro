@@ -1,17 +1,6 @@
 /**
- * Defense-in-depth para aliases operacionais legados.
- *
- * Parte do shell ainda chama `localStorage` diretamente. Para impedir que bearer
- * tokens e identidade operacional sobrevivam ao fechamento da aba enquanto a
- * migração estrutural termina, esses nomes são redirecionados para sessionStorage
- * no boundary do navegador. Valores duráveis de versões antigas são migrados uma
- * única vez e removidos do disco.
- *
- * Importante: não dependemos da identidade (`this === localStorage`) do wrapper
- * WebIDL de Storage. Chromium pode entregar receivers diferentes entre acessos;
- * para as chaves explicitamente listadas abaixo, tanto chamadas via localStorage
- * quanto via sessionStorage convergem para a mesma área de sessão. As operações
- * internas usam os métodos originais para não recursar.
+ * Session-scoped compatibility boundary for legacy operational storage keys.
+ * Durable values are migrated once during bootstrap and then removed.
  */
 
 const OPERATIONAL_SESSION_KEYS = new Set([
@@ -48,22 +37,18 @@ export function installSessionScopedBrowserStorage(): void {
   const originalSetItem = Storage.prototype.setItem;
   const originalRemoveItem = Storage.prototype.removeItem;
 
-  const migrate = (key: string) => {
-    const scopedValue = originalGetItem.call(scoped, key);
+  const migrateAtBootstrap = (key: string) => {
     const durableValue = originalGetItem.call(durable, key);
-    if (scopedValue == null && durableValue != null) {
-      originalSetItem.call(scoped, key, durableValue);
-    }
     if (durableValue != null) {
+      originalSetItem.call(scoped, key, durableValue);
       originalRemoveItem.call(durable, key);
     }
   };
 
-  OPERATIONAL_SESSION_KEYS.forEach(migrate);
+  OPERATIONAL_SESSION_KEYS.forEach(migrateAtBootstrap);
 
   Storage.prototype.getItem = function getItem(key: string): string | null {
     if (isOperationalSessionKey(key)) {
-      migrate(key);
       return originalGetItem.call(scoped, key);
     }
     return originalGetItem.call(this, key);
