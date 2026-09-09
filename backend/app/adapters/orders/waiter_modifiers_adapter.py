@@ -37,7 +37,7 @@ from ...domain.orders.errors import (
     ProductTenantMismatchError,
 )
 from ...domain.orders.types import FulfillmentType, OrderChannel
-from ...models import Comanda, Item, Lancamento, Usuario
+from ...models import Comanda, Item, ItemModificador, Lancamento, Usuario
 from ...services.atendimentos import ensure_atendimento_for_comanda, ensure_launch_identity
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from ...services.shifts import require_open_cash_shift
@@ -100,8 +100,11 @@ class WaiterModifiersAdapter:
 
         def _existing_signature(item):
             modifier_ids = tuple(sorted(
-                str(link.opcao_modificador_id)
-                for link in getattr(item, "modificadores", []) or []
+                str(row[0])
+                for row in db.query(ItemModificador.opcao_modificador_id).filter(
+                    ItemModificador.restaurante_id == rid,
+                    ItemModificador.item_id == item.id,
+                ).all()
             ))
             return (item.produto_id, (item.observacao or "").strip(), modifier_ids)
 
@@ -131,13 +134,7 @@ class WaiterModifiersAdapter:
                 Lancamento.idempotency_key == normalized_idempotency_key,
             ).first()
             if existing_launch is not None:
-                # Versões anteriores podem não expor a relationship de modificadores.
-                # O replay permanece seguro pelo fingerprint no cliente; quando os links
-                # não estiverem carregáveis, rejeitamos colisão em vez de duplicar.
-                try:
-                    return _ensure_replay_matches(existing_launch)
-                except AttributeError:
-                    raise HTTPException(status_code=409, detail="Não foi possível validar o replay do lançamento.")
+                return _ensure_replay_matches(existing_launch)
 
         has_existing_items = db.query(Item.id).filter(
             Item.restaurante_id == rid,
