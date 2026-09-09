@@ -11,6 +11,7 @@ import {
   formatBrazilianPhone,
   mapCustomerProfile,
 } from "../customerSession";
+import CardapioCustomerOrderHistory from "./CardapioCustomerOrderHistory";
 
 interface CardapioUserProfileModalProps {
   onClose: () => void;
@@ -276,6 +277,8 @@ export default function CardapioUserProfileModal({
                   </div>
                 </div>
               </div>
+
+              {customerToken && <CardapioCustomerOrderHistory customerToken={customerToken} />}
 
               {errorMessage && <p className="text-red-400 text-[11px]">{errorMessage}</p>}
               <button
