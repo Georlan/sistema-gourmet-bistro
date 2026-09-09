@@ -32,9 +32,12 @@ def purge_expired_closed_conversations_in_session(
     - somente o tenant informado pode ser afetado;
     - ``closed_at IS NULL`` nunca é elegível;
     - pedidos/comandas não são removidos;
+    - o lote elegível é bloqueado na transação para evitar corrida com outro worker;
     - mensagens e assinaturas push são removidas antes da conversa para tornar
       o comportamento determinístico também em SQLite/testes, sem depender de
       ``ON DELETE CASCADE`` estar habilitado no cliente;
+    - qualquer divergência entre seleção e delete levanta erro para o chamador
+      fazer rollback integral da transação;
     - não faz ``commit``: a transação pertence ao chamador.
     """
     if restaurante_id <= 0:
@@ -59,6 +62,7 @@ def purge_expired_closed_conversations_in_session(
         )
         .order_by(OrderConversation.closed_at.asc(), OrderConversation.id.asc())
         .limit(effective_batch_size)
+        .with_for_update(skip_locked=True)
         .all()
     )
     conversation_ids = [row[0] for row in rows]
@@ -95,6 +99,11 @@ def purge_expired_closed_conversations_in_session(
         )
         .delete(synchronize_session=False)
     )
+
+    if int(conversations_deleted or 0) != len(conversation_ids):
+        raise RuntimeError(
+            "Retenção de chat abortada: o lote elegível mudou durante a transação."
+        )
 
     return {
         "conversations_deleted": int(conversations_deleted or 0),
