@@ -41,3 +41,20 @@ def test_whole_table_cancellation_and_transfer_are_salon_context_actions():
     assert "Transferir para…" in details
     assert "<CaixaSalonTab" in source
     assert "./caixa/salao/CaixaSalonTab" in source
+
+
+def test_pending_rejection_requires_reason_and_can_block_customer():
+    owner = (ROOT / "src/components/caixa/orders/useCashierOrders.ts").read_text(encoding="utf-8")
+    dialog = (ROOT / "src/components/caixa/orders/CashierCancelConsumptionDialog.tsx").read_text(encoding="utf-8")
+
+    assert "openCancelOrderConfirmation(order, 'reject')" in owner
+    assert 'block_customer: Boolean(isPendingRejection && blockCustomer)' in owner
+    assert 'block_duration_hours:' in owner
+    assert "Pedido recusado e motivo enviado ao cliente" in owner
+    assert "Recusar este pedido?" in dialog
+    assert "Este texto ficará no histórico e será mostrado ao cliente como motivo da recusa." in dialog
+    assert "Bloquear novos pedidos deste cliente" in dialog
+    assert "24 horas" in dialog
+    assert "7 dias" in dialog
+    assert "30 dias" in dialog
+    assert "Permanente" in dialog

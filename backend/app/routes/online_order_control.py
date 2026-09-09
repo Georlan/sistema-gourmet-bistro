@@ -26,6 +26,7 @@ from ..services.online_order_control import (
     resume_online_orders,
     update_capacity,
 )
+from ..services.order_rejection_notice import append_rejection_reason_notice
 from ..websocket_manager import manager
 
 router = APIRouter(prefix="/api/online-orders", tags=["Online Order Operational Control"])
@@ -190,6 +191,12 @@ def reject_online_order(
                 reason=payload.reason.strip(),
                 duration_hours=payload.block_duration_hours,
             )
+        append_rejection_reason_notice(
+            db,
+            restaurante_id=rid,
+            pedido_id=transition.comanda.id,
+            reason=payload.reason.strip(),
+        )
         db.commit()
     except InvalidOrderTransitionError as exc:
         db.rollback()

@@ -30,6 +30,7 @@ export function useCashierOrders({
 
   const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
     scope: 'order' | 'table' | 'digital';
+    intent?: 'reject' | 'cancel';
     mesaId: number;
     orderId?: string;
     comandas: number;
@@ -53,6 +54,7 @@ export function useCashierOrders({
       .filter((item) => (item.status as string) !== 'cancelado');
     setCancelConsumptionTarget({
       scope: 'table',
+      intent: 'cancel',
       mesaId,
       comandas: tableOrders.length,
       itens: activeItems.length,
@@ -63,8 +65,13 @@ export function useCashierOrders({
     setSelectedKanbanOrder(null);
   };
 
-  const openCancelOrderConfirmation = (order: any) => {
-    const activeItems = (order?.itens || []).filter(
+  const openCancelOrderConfirmation = (order: any, intent: 'reject' | 'cancel' = 'cancel') => {
+    const rawItems = Array.isArray(order?.itens)
+      ? order.itens
+      : Array.isArray(order?.detailItems)
+        ? order.detailItems
+        : [];
+    const activeItems = rawItems.filter(
       (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id
     );
     const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
@@ -75,6 +82,7 @@ export function useCashierOrders({
     );
     setCancelConsumptionTarget({
       scope: isDigitalOrder ? 'digital' : 'order',
+      intent: isDigitalOrder ? intent : 'cancel',
       mesaId: Number(order.mesaId || 0),
       orderId: isDigitalOrder ? String(order.id || order.comandaId || '') : undefined,
       comandas: isDigitalOrder ? 1 : comandaIds.size,
@@ -86,16 +94,31 @@ export function useCashierOrders({
     setSelectedKanbanOrder(null);
   };
 
-  const handleCancelTableConsumption = async () => {
+  const handleCancelTableConsumption = async ({
+    blockCustomer = false,
+    blockDurationHours = null,
+  }: {
+    blockCustomer?: boolean;
+    blockDurationHours?: 24 | 168 | 720 | null;
+  } = {}) => {
     if (!cancelConsumptionTarget || cancelTableReason.trim().length < 3 || isCancellingTable) return;
     setIsCancellingTable(true);
     try {
       const isOrderScope = cancelConsumptionTarget.scope === 'order';
       const isDigitalScope = cancelConsumptionTarget.scope === 'digital';
+      const isPendingRejection = isDigitalScope && cancelConsumptionTarget.intent === 'reject';
       const response = isDigitalScope
         ? await fetch(
             `${apiBaseUrl}/api/online-orders/orders/${encodeURIComponent(cancelConsumptionTarget.orderId || '')}/reject`,
-            { method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: cancelTableReason.trim() }) }
+            {
+              method: 'POST',
+              headers: { ...authHeaders, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                reason: cancelTableReason.trim(),
+                block_customer: Boolean(isPendingRejection && blockCustomer),
+                block_duration_hours: isPendingRejection && blockCustomer ? blockDurationHours : null,
+              }),
+            }
           )
         : await fetch(
             `${apiBaseUrl}/mesas/${cancelConsumptionTarget.mesaId}/${isOrderScope ? 'cancelar-itens' : 'cancelar-consumo'}`,
@@ -112,12 +135,26 @@ export function useCashierOrders({
       if (!response.ok) throw new Error(data?.detail || 'Não foi possível cancelar o pedido.');
 
       const cancelledOrderId = cancelConsumptionTarget.orderId;
+      const digitalIntent = cancelConsumptionTarget.intent || 'cancel';
+      const customerWasBlocked = Boolean(data?.customer_block_id);
       setCancelConsumptionTarget(null);
       setCancelTableReason('');
       if (isDigitalScope) {
         setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(cancelledOrderId)));
         window.dispatchEvent(new Event('koma_orders_updated'));
-        showToast('Pedido cancelado e removido da operação ativa.', 'success');
+        if (digitalIntent === 'reject') {
+          if (deliveryOrders.filter((order) => order.status === 'pendente').length <= 1) {
+            setIsDrawerOpen(false);
+          }
+          showToast(
+            customerWasBlocked
+              ? 'Pedido recusado, motivo enviado ao cliente e novos pedidos deste cliente bloqueados.'
+              : 'Pedido recusado e motivo enviado ao cliente.',
+            'success'
+          );
+        } else {
+          showToast('Pedido cancelado e removido da operação ativa.', 'success');
+        }
       } else {
         await onRefreshOrders();
         showToast(
@@ -563,9 +600,8 @@ export function useCashierOrders({
     if (deliveryOrders.filter((o) => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
   };
 
-  const handleRejectPendingDeliveryOrder = async (order: DeliveryOrderView) => {
-    await handleRecusarPedido(order.id);
-    if (deliveryOrders.filter((o) => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
+  const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => {
+    openCancelOrderConfirmation(order, 'reject');
   };
 
   const handleMarkTableItemsReady = async (order: CashierTableCard['order']) => {
