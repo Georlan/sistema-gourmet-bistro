@@ -39,23 +39,25 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
       if (ctx.state !== 'running') return;
 
       const t = ctx.currentTime;
+      // Chat usa dois "toques" graves iguais, sem contorno melódico. A assinatura
+      // fica deliberadamente distante dos alertas agudos de pedido/delivery.
       const notes = [
-        { freq: 587.33, start: 0, dur: 0.08, vol: 0.18 },
-        { freq: 739.99, start: 0.095, dur: 0.13, vol: 0.24 },
+        { freq: 440.0, start: 0, dur: 0.06, vol: 0.24 },
+        { freq: 440.0, start: 0.18, dur: 0.07, vol: 0.2 },
       ];
 
       notes.forEach(({ freq, start, dur, vol }) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = 'sine';
+        osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, t + start);
         gain.gain.setValueAtTime(0.001, t + start);
-        gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(vol, t + start + 0.01);
         gain.gain.exponentialRampToValueAtTime(0.001, t + start + dur);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(t + start);
-        osc.stop(t + start + dur + 0.03);
+        osc.stop(t + start + dur + 0.025);
       });
     } catch {
       // Web Audio indisponível: o badge visual continua sendo a fonte de atenção.
