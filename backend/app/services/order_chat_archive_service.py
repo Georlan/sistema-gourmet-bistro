@@ -1,11 +1,13 @@
-"""Read model da Central de Conversas do Caixa.
+"""Read model e regras leves de arquivo da Central de Conversas do Caixa.
 
-Mantém o hot path de não lidas somente em conversas ativas, mas permite que a
-Central consulte também o histórico encerrado sem apagar mensagens antigas.
+Mantém o hot path de não lidas somente em conversas ativas, permite consultar o
+histórico encerrado e reabre atendimento de pós-venda quando o cliente volta a
+escrever em um pedido concluído — sem reabrir o pedido.
 """
 
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
 from sqlalchemy import func
@@ -13,7 +15,16 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..models import Comanda
 from ..order_chat_models import OrderConversation, OrderMessage
+from .order_chat_hub import order_chat_hub
 from .order_chat_service import compute_comanda_total, list_caixa_conversations, serialize_message
+
+
+_COMPLETED_STATUSES = {"finalizado", "finalizada", "concluido", "concluida", "completed"}
+_REJECTED_STATUSES = {"recusado", "recusada", "rejected", "cancelado", "cancelada", "cancelled"}
+
+
+def _normalize_status(value: str | None) -> str:
+    return (value or "").strip().lower()
 
 
 def _client_name(comanda: Comanda | None) -> str:
@@ -27,6 +38,60 @@ def _client_name(comanda: Comanda | None) -> str:
     except Exception:
         return "Cliente"
     return "Cliente"
+
+
+def reopen_completed_conversation_if_needed(
+    db: Session,
+    restaurante_id: int,
+    conversation_id: str,
+) -> bool:
+    """Reabre somente o atendimento de um pedido concluído.
+
+    Pedido recusado/cancelado continua encerrado. O pedido em si nunca muda de
+    status; somente ``closed_at`` da conversa volta a ``None`` para pós-venda.
+    """
+    conversation = (
+        db.query(OrderConversation)
+        .filter(
+            OrderConversation.restaurante_id == restaurante_id,
+            OrderConversation.id == conversation_id,
+        )
+        .first()
+    )
+    if not conversation or conversation.closed_at is None:
+        return False
+
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id == conversation.pedido_id,
+        )
+        .first()
+    )
+    if not comanda:
+        return False
+
+    raw_status = _normalize_status(comanda.delivery_status)
+    if raw_status in _REJECTED_STATUSES:
+        return False
+    if not bool(comanda.fechada) and raw_status not in _COMPLETED_STATUSES:
+        return False
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    conversation.closed_at = None
+    conversation.updated_at = now
+    db.flush()
+    order_chat_hub.publish_status(
+        restaurante_id,
+        conversation.id,
+        {
+            "status": "post_sale",
+            "closed_at": None,
+            "reopened": True,
+        },
+    )
+    return True
 
 
 def list_caixa_conversations_for_central(
