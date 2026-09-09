@@ -22,7 +22,8 @@ test('canonical auth never writes operational bearer to durable storage', () => 
 test('browser boundary is installed before app bootstrap and redirects legacy aliases to sessionStorage', () => {
   assert.match(main, /import ["']\.\/utils\/sessionScopedBrowserStorage["']/);
   assert.match(storageBoundary, /OPERATIONAL_SESSION_KEYS/);
-  assert.match(storageBoundary, /this === durable && isOperationalSessionKey\(key\)/);
+  assert.match(storageBoundary, /if \(isOperationalSessionKey\(key\)\)/);
+  assert.doesNotMatch(storageBoundary, /this === durable/);
   assert.match(storageBoundary, /originalSetItem\.call\(scoped/);
   assert.match(storageBoundary, /originalRemoveItem\.call\(durable/);
 });
