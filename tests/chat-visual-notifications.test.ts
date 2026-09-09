@@ -10,6 +10,8 @@ const cashierDrawer = source('../src/components/caixa/chat/CashierConversationsD
 const cashierHook = source('../src/components/caixa/chat/useCashierChat.ts');
 const cashierRealtime = source('../src/components/caixa/chat/cashierChatRealtime.ts');
 const trackingRoute = source('../backend/app/routes/order_tracking.py');
+const cashierChatRoute = source('../backend/app/routes/caixa_chat.py');
+const archiveService = source('../backend/app/services/order_chat_archive_service.py');
 const cardapioRoute = source('../backend/app/routes/cardapio.py');
 
 test('cardapio mantém um gatilho flutuante de chat dentro da própria página', () => {
@@ -108,4 +110,33 @@ test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigi
   assert.match(cashierDrawer, /case 'new_message':/);
   assert.match(cashierDrawer, /case 'status_changed':/);
   assert.match(cashierDrawer, /case 'read_update':/);
+});
+
+test('central do Caixa arquiva pedidos terminais sem apagar histórico', () => {
+  assert.match(cashierDrawer, /type ConversationFilter = 'active' \| 'archived' \| 'all'/);
+  assert.match(cashierDrawer, /isArchivedConversation/);
+  assert.match(cashierDrawer, /TERMINAL_CHAT_STATUSES/);
+  assert.match(cashierDrawer, /'finalizado'/);
+  assert.match(cashierDrawer, /Ativas/);
+  assert.match(cashierDrawer, /Arquivadas/);
+  assert.match(cashierDrawer, /Todas/);
+  assert.match(cashierDrawer, /type="search"/);
+  assert.match(cashierDrawer, /Buscar pedido, cliente ou mensagem/);
+  assert.match(cashierDrawer, /Conversa arquivada/);
+  assert.match(cashierChatRoute, /list_caixa_conversations_for_central/);
+  assert.match(archiveService, /OrderConversation\.closed_at\.isnot\(None\)/);
+  assert.match(archiveService, /"closed_at": conversation\.closed_at\.isoformat/);
+});
+
+test('mensagem nova em pedido terminal volta para a fila como pós-venda', () => {
+  assert.match(cashierDrawer, /conversation\.unread_count <= 0/);
+  assert.match(cashierDrawer, /!isWaitingForStaff\(conversation\)/);
+  assert.match(cashierDrawer, /Pós-venda/);
+  assert.match(cashierDrawer, /volta automaticamente para Ativas como pós-venda/);
+  assert.match(trackingRoute, /reopen_completed_conversation_if_needed/);
+  assert.match(trackingRoute, /state_contract\["can_chat"\] = True/);
+  assert.match(archiveService, /conversation\.closed_at = None/);
+  assert.match(archiveService, /"status": "post_sale"/);
+  assert.match(clientPanel, /atendimento de pós-venda sem reabrir o pedido/);
+  assert.doesNotMatch(clientPanel, /Boolean\(closedAt\)/);
 });

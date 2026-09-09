@@ -155,8 +155,6 @@ export default function CardapioOrderChatPanel({
           startFallback();
         }
       });
-      // O evento SSE sinaliza a mudança; o GET continua sendo a fonte do
-      // contrato `state`, evitando reimplementar a máquina de estados no cliente.
       source.addEventListener("status", () => {
         void refresh();
       });
@@ -196,8 +194,7 @@ export default function CardapioOrderChatPanel({
   const steps = isDelivery
     ? ["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"]
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
-  const closedAt = tracking?.closed_at || tracking?.conversa?.closed_at || null;
-  const isClosed = Boolean(closedAt) || !state.can_chat || tracking?.conversa?.can_chat === false;
+  const isClosed = !state.can_chat || tracking?.conversa?.can_chat === false;
 
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -219,6 +216,7 @@ export default function CardapioOrderChatPanel({
         ? current
         : [...current, sent]);
       setInput("");
+      void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
     } finally {
@@ -347,23 +345,28 @@ export default function CardapioOrderChatPanel({
             O atendimento deste pedido foi encerrado.
           </div>
         ) : (
-          <div className="flex items-end gap-2">
-            <textarea
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              rows={1}
-              maxLength={1000}
-              placeholder="Escreva para o restaurante…"
-              className="min-h-[44px] max-h-28 flex-1 resize-none rounded-xl border border-koma-border bg-koma-panel px-3 py-3 text-xs text-koma-foreground outline-none transition focus:border-emerald-500/60"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || sending}
-              className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-500 text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Enviar mensagem"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+          <div className="space-y-2">
+            {state.terminal && !rejected && (
+              <p className="text-[10px] text-koma-muted">Pedido concluído · sua mensagem abrirá um atendimento de pós-venda sem reabrir o pedido.</p>
+            )}
+            <div className="flex items-end gap-2">
+              <textarea
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                rows={1}
+                maxLength={1000}
+                placeholder="Escreva para o restaurante…"
+                className="min-h-[44px] max-h-28 flex-1 resize-none rounded-xl border border-koma-border bg-koma-panel px-3 py-3 text-xs text-koma-foreground outline-none transition focus:border-emerald-500/60"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || sending}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-emerald-500 text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Enviar mensagem"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </form>
