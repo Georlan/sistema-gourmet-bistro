@@ -8,6 +8,8 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from ..catalog_addons import effective_modifier_payloads_by_product
 from ..config import settings
 from ..database import (
     bind_session_to_tenant,
@@ -19,10 +21,7 @@ from ..database import (
 from ..models import (
     Categoria,
     ConfiguracaoRestaurante,
-    GrupoModificador,
-    OpcaoModificador,
     Produto,
-    ProdutoGrupoModificador,
     Restaurante,
     RestaurantPaymentAccount,
     Usuario,
@@ -201,7 +200,7 @@ def _public_category_payload(category: Categoria) -> dict:
     return {"id": category.id, "nome": category.nome}
 
 
-def _public_product_payload(product: Produto) -> dict:
+def _public_product_payload(product: Produto, modifier_groups: Optional[list[dict]] = None) -> dict:
     return {
         "id": product.id,
         "nome": product.nome,
@@ -210,7 +209,7 @@ def _public_product_payload(product: Produto) -> dict:
         "imagem_url": product.imagem or "",
         "imagens_galeria": product.imagens_galeria or [],
         "categoria_id": product.categoria_id,
-        "grupos_modificadores": [],
+        "grupos_modificadores": modifier_groups or [],
     }
 
 
@@ -222,21 +221,11 @@ def obter_config_cardapio_digital(
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
 ):
-    """
-    Retorna as configurações whitelabel de personalização do restaurante ativo.
-    Filtra dinamicamente por restaurante_id (int ou string) ou slug.
-    """
-    with public_tenant_scope(
-        restaurante_id, slug, db, current_user
-    ) as rest_id:
-        restaurante = db.query(Restaurante).filter(
-            Restaurante.id == rest_id
-        ).first()
+    """Retorna as configurações whitelabel do restaurante resolvido."""
+    with public_tenant_scope(restaurante_id, slug, db, current_user) as rest_id:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
         if not restaurante:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Restaurante não encontrado.",
-            )
+            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
         configuracao = db.query(ConfiguracaoRestaurante).filter(
             ConfiguracaoRestaurante.restaurante_id == rest_id
         ).first()
@@ -254,15 +243,10 @@ def obter_categorias_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna as categorias ativas do restaurante especificado para o cardápio digital (isolamento multi-tenant)."""
+    """Retorna as categorias do tenant para o cardápio digital."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
-        categorias = db.query(Categoria).filter(
-            Categoria.restaurante_id == rest_id
-        ).all()
-        return [
-            _public_category_payload(category)
-            for category in _ordered_categories(categorias)
-        ]
+        categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
+        return [_public_category_payload(category) for category in _ordered_categories(categorias)]
 
 
 @router.get("/produtos")
@@ -271,14 +255,21 @@ def obter_produtos_cardapio_digital(
     slug: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Retorna os produtos ativos do restaurante especificado para o cardápio digital (isolamento multi-tenant)."""
+    """Retorna produtos ativos com os mesmos complementos efetivos do catálogo operacional."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
         produtos = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
         ).all()
+        modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
         return [
-            {**_public_product_payload(product), "ativo": True}
+            {
+                **_public_product_payload(
+                    product,
+                    modifier_payloads.get(str(product.id), []),
+                ),
+                "ativo": True,
+            }
             for product in produtos
         ]
 
@@ -290,18 +281,11 @@ def obter_cardapio_publico(
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_current_garcom_optional),
 ):
-    """Retorna apenas os dados necessários ao cardápio público em um tenant."""
-    with public_tenant_scope(
-        restaurante_id, slug, db, current_user
-    ) as rest_id:
-        restaurante = db.query(Restaurante).filter(
-            Restaurante.id == rest_id
-        ).first()
+    """Snapshot público único: restaurante, categorias, produtos e complementos efetivos."""
+    with public_tenant_scope(restaurante_id, slug, db, current_user) as rest_id:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
         if not restaurante:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Restaurante não encontrado.",
-            )
+            raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
         configuracao = db.query(ConfiguracaoRestaurante).filter(
             ConfiguracaoRestaurante.restaurante_id == rest_id
@@ -311,55 +295,12 @@ def obter_cardapio_publico(
             RestaurantPaymentAccount.provider == "mercado_pago",
             RestaurantPaymentAccount.status == "active",
         ).first() is not None
-
-        categorias = db.query(Categoria).filter(
-            Categoria.restaurante_id == rest_id
-        ).all()
+        categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         produtos = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
         ).all()
-
-        # Carrega grupos de modificadores vinculados aos produtos
-        grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == rest_id).all()
-        opcoes = db.query(OpcaoModificador).filter(
-            OpcaoModificador.restaurante_id == rest_id,
-            OpcaoModificador.ativo == True,
-        ).all()
-        vinculos = db.query(ProdutoGrupoModificador).filter(ProdutoGrupoModificador.restaurante_id == rest_id).all()
-
-        opcoes_por_grupo = {}
-        for op in opcoes:
-            opcoes_por_grupo.setdefault(op.grupo_id, []).append({
-                "id": op.id,
-                "grupo_id": op.grupo_id,
-                "nome": op.nome,
-                "preco_adicional": float(op.preco_adicional or 0.0),
-                "ativo": op.ativo,
-            })
-
-        grupos_por_id = {
-            g.id: {
-                "id": g.id,
-                "nome": g.nome,
-                "min_selecoes": g.min_selecoes,
-                "max_selecoes": g.max_selecoes,
-                "tipo": g.tipo,
-                "opcoes": opcoes_por_grupo.get(g.id, []),
-            }
-            for g in grupos
-        }
-
-        grupos_por_produto = {}
-        for v in vinculos:
-            if v.grupo_id in grupos_por_id:
-                grupos_por_produto.setdefault(v.produto_id, []).append(grupos_por_id[v.grupo_id])
-
-        produtos_payload = []
-        for product in produtos:
-            prod_dict = _public_product_payload(product)
-            prod_dict["grupos_modificadores"] = grupos_por_produto.get(product.id, [])
-            produtos_payload.append(prod_dict)
+        modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
 
         return {
             "restaurante": _public_restaurant_payload(
@@ -371,7 +312,13 @@ def obter_cardapio_publico(
                 _public_category_payload(category)
                 for category in _ordered_categories(categorias)
             ],
-            "produtos": produtos_payload,
+            "produtos": [
+                _public_product_payload(
+                    product,
+                    modifier_payloads.get(str(product.id), []),
+                )
+                for product in produtos
+            ],
         }
 
 
@@ -384,17 +331,12 @@ async def upload_cardapio_asset(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(
-        require_permission("configuracoes:administrar")
-    ),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     """Envia logo/banner validado ao bucket e salva somente no tenant autenticado."""
     del current_user
     if asset_type not in {"logo", "banner"}:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tipo de imagem não encontrado.",
-        )
+        raise HTTPException(status_code=404, detail="Tipo de imagem não encontrado.")
 
     content_type = file.content_type or ""
     try:
@@ -409,14 +351,9 @@ async def upload_cardapio_asset(
     extension = _validate_asset_content(content_type, content)
 
     rest_id = require_tenant_id()
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == rest_id
-    ).first()
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado.",
-        )
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
     object_path = f"{rest_id}/{asset_type}/{uuid.uuid4().hex}.{extension}"
     storage_url = _supabase_storage_url()
@@ -433,7 +370,7 @@ async def upload_cardapio_asset(
             )
     except httpx.HTTPError as exc:
         logger.warning(
-            "Falha de rede ao enviar %s do restaurante %s: %s",
+            "Falha de rede ao enviar %s do restaurante %s: %s.",
             asset_type,
             rest_id,
             type(exc).__name__,
@@ -480,48 +417,28 @@ async def delete_cardapio_asset(
     asset_type: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(
-        require_permission("configuracoes:administrar")
-    ),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     """Remove logo/banner apenas do tenant autenticado."""
     del current_user
     if asset_type not in {"logo", "banner"}:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tipo de imagem não encontrado.",
-        )
+        raise HTTPException(status_code=404, detail="Tipo de imagem não encontrado.")
 
     rest_id = require_tenant_id()
-    restaurante = db.query(Restaurante).filter(
-        Restaurante.id == rest_id
-    ).first()
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado.",
-        )
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
 
     current_url = (
         (restaurante.logo_url or restaurante.cardapio_logo_path)
         if asset_type == "logo"
         else (restaurante.banner_url or restaurante.cardapio_banner_path)
     )
-    object_path = _storage_object_path(
-        current_url,
-        rest_id,
-        asset_type,
-    )
+    object_path = _storage_object_path(current_url, rest_id, asset_type)
     if object_path:
-        delete_url = (
-            f"{_supabase_storage_url()}"
-            "/storage/v1/object/cardapio-assets"
-        )
+        delete_url = f"{_supabase_storage_url()}/storage/v1/object/cardapio-assets"
         try:
-            async with httpx.AsyncClient(
-                timeout=20.0,
-                trust_env=False,
-            ) as client:
+            async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
                 response = await client.request(
                     "DELETE",
                     delete_url,
@@ -530,7 +447,7 @@ async def delete_cardapio_asset(
                 )
         except httpx.HTTPError as exc:
             logger.warning(
-                "Falha de rede ao remover %s do restaurante %s: %s",
+                "Falha de rede ao remover %s do restaurante %s: %s.",
                 asset_type,
                 rest_id,
                 type(exc).__name__,
@@ -576,28 +493,28 @@ def atualizar_config_cardapio_digital(
     config_in: RestauranteConfigUpdate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
-    """
-    Atualiza e persiste as configurações whitelabel de personalização do restaurante.
-    Filtra pelo restaurante_id / tenant autenticado do usuário logado e salva com db.commit().
-    """
-    rest_id = getattr(current_user, "restaurante_id", None) or getattr(current_user, "tenant_id", None) or current_restaurante_id.get()
+    """Atualiza e persiste as configurações whitelabel do tenant autenticado."""
+    rest_id = (
+        getattr(current_user, "restaurante_id", None)
+        or getattr(current_user, "tenant_id", None)
+        or current_restaurante_id.get()
+    )
     if not rest_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Restaurante não identificado na sessão do usuário."
+            detail="Restaurante não identificado na sessão do usuário.",
         )
 
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Restaurante não encontrado para atualização."
+            detail="Restaurante não encontrado para atualização.",
         )
 
     apply_restaurant_profile_update(restaurante, config_in)
-
     db.commit()
     db.refresh(restaurante)
     notify_cardapio_config_update(background_tasks, int(rest_id))

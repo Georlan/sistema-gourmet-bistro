@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Sequence
 from sqlalchemy.orm import Session
 
+from ...catalog_addons import effective_modifier_group_ids_by_product
 from ...domain.orders.pricing import to_money_decimal
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
 from ...domain.orders.validation import (
@@ -30,7 +31,6 @@ from ...models import (
     Cupom,
     OpcaoModificador,
     Produto,
-    ProdutoGrupoModificador,
 )
 
 
@@ -64,24 +64,19 @@ class ValidationDataLoader:
         if config and config.pedido_minimo:
             min_delivery_subtotal = to_money_decimal(config.pedido_minimo)
 
-        # 2. Carregar Produtos e seus Grupos Permitidos
+        # 2. Carregar Produtos e os grupos efetivos (produto + categoria + ancestrais)
         prod_ids = {str(it.get("produto_id")) for it in itens_solicitados if it.get("produto_id")}
         catalog_products: dict[str, ValidationProduct] = {}
 
         if prod_ids:
-            # Buscar produtos (sem filtrar por restaurante_id na query inicial para permitir que o
-            # OrderValidationService detecte ProductTenantMismatchError explicitamente)
+            # Buscar produtos sem filtro inicial de tenant preserva a detecção explícita
+            # de ProductTenantMismatchError no serviço de domínio.
             prods = db.query(Produto).filter(Produto.id.in_(prod_ids)).all()
-
-            # Buscar vínculos produto -> grupos de modificadores
-            prod_grupos = (
-                db.query(ProdutoGrupoModificador)
-                .filter(ProdutoGrupoModificador.produto_id.in_(prod_ids))
-                .all()
+            grupos_by_prod = effective_modifier_group_ids_by_product(
+                db,
+                restaurante_id,
+                prods,
             )
-            grupos_by_prod: dict[str, list[str]] = {}
-            for pg in prod_grupos:
-                grupos_by_prod.setdefault(str(pg.produto_id), []).append(str(pg.grupo_id))
 
             for p in prods:
                 catalog_products[str(p.id)] = ValidationProduct(
@@ -90,7 +85,7 @@ class ValidationDataLoader:
                     name=p.nome,
                     price=to_money_decimal(p.preco),
                     is_active=bool(p.ativo),
-                    allowed_modifier_group_ids=tuple(grupos_by_prod.get(str(p.id), [])),
+                    allowed_modifier_group_ids=tuple(grupos_by_prod.get(str(p.id), ())),
                 )
 
         # 3. Carregar Modificadores
