@@ -7,6 +7,10 @@ import React from "react";
 import { Bell, BellOff, Check, Smartphone } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { StoredOrder } from "../orderTracking";
+import {
+  persistPushResumeCapability,
+  removePushResumeCapability,
+} from "../pushResumeStore";
 
 const PUSH_OPT_IN_KEY = "koma_web_push_opt_in";
 
@@ -84,7 +88,7 @@ export default function CardapioPushNotifications({ order }: Props) {
   React.useEffect(() => {
     let cancelled = false;
     const inspect = async () => {
-      if (!apiRoot || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      if (!apiRoot || !token || !("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
         if (!cancelled) setState("unsupported");
         return;
       }
@@ -106,8 +110,10 @@ export default function CardapioPushNotifications({ order }: Props) {
         const subscription = await registration.pushManager.getSubscription();
         const optedIn = localStorage.getItem(PUSH_OPT_IN_KEY) === "true";
         if (subscription && Notification.permission === "granted" && optedIn) {
-          // Uma única PushSubscription do navegador pode acompanhar vários pedidos.
-          // Reassociamos silenciosamente este pedido depois do consentimento inicial.
+          // O token bruto continua limitado à sessão da aba. Para permitir cold-start
+          // de uma notificação, guardamos somente ciphertext derivado da própria
+          // PushSubscription antes de reassociar o pedido no backend.
+          await persistPushResumeCapability(order.id, token, subscription);
           await persistSubscription(apiRoot, subscription);
           if (!cancelled) setState("enabled");
           return;
@@ -122,10 +128,10 @@ export default function CardapioPushNotifications({ order }: Props) {
     };
     void inspect();
     return () => { cancelled = true; };
-  }, [apiRoot]);
+  }, [apiRoot, order.id, token]);
 
   const enable = async () => {
-    if (!apiRoot || state === "enabling") return;
+    if (!apiRoot || !token || state === "enabling") return;
     if (isIosDevice() && !isStandalone()) {
       setState("ios-install");
       return;
@@ -151,6 +157,9 @@ export default function CardapioPushNotifications({ order }: Props) {
           applicationServerKey: base64UrlToUint8Array(config.publicKey) as BufferSource,
         });
       }
+      // Fail closed: o backend só considera o push habilitado depois de o browser
+      // conseguir proteger a capability necessária para reabrir o pedido.
+      await persistPushResumeCapability(order.id, token, subscription);
       await persistSubscription(apiRoot, subscription);
       localStorage.setItem(PUSH_OPT_IN_KEY, "true");
       setState("enabled");
@@ -173,6 +182,7 @@ export default function CardapioPushNotifications({ order }: Props) {
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
       }
+      await removePushResumeCapability(order.id);
       // Não chamamos PushSubscription.unsubscribe(): a mesma assinatura pode estar
       // vinculada a outro pedido recente neste aparelho.
       localStorage.setItem(PUSH_OPT_IN_KEY, "false");
