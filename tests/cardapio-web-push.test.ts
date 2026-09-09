@@ -25,18 +25,17 @@ test("service worker não intercepta fetch/cache do cardápio", () => {
   assert.match(sw, /\/cardapio\?restaurante_id=/);
 });
 
-test("service worker usa actions, renotify e categorias separadas", () => {
+test("service worker usa actions e renotify nas notificações", () => {
   assert.match(sw, /actions,/);
   assert.match(sw, /renotify: payload\.renotify !== false/);
   assert.match(sw, /Abrir conversa/);
   assert.match(sw, /Acompanhar pedido/);
-  assert.match(webPushBackend, /-message'/);
-  assert.match(webPushBackend, /-status'/);
-  assert.match(webPushBackend, /tag.*koma-order-/s);
+  assert.match(webPushBackend, /'message' if kind == 'message' else 'status'/);
+  assert.match(webPushBackend, /f"koma-order-\{order_hash\}-/);
 });
 
 test("status do pedido usa tag estável e chat não sobrescreve status", () => {
-  assert.match(webPushBackend, /status e chat nunca se sobrescrevem/i);
+  assert.match(webPushBackend, /Status e chat nunca se sobrescrevem/i);
   assert.match(webPushBackend, /'message' if kind == 'message' else 'status'/);
   assert.match(webPushBackend, /"renotify": True/);
   assert.match(webPushBackend, /"vibrate": vibration/);
