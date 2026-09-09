@@ -17,14 +17,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from ..database import get_db, require_tenant_id, tenant_session_scope
+from ..database import get_db, tenant_session_scope
 from ..models import Usuario
 from ..order_chat_models import OrderConversation, OrderMessage
 from ..security import get_current_user
+from ..services.order_chat_archive_service import list_caixa_conversations_for_central
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     get_caixa_unread_summary,
-    list_caixa_conversations,
     mark_staff_read,
     send_staff_message,
     serialize_message,
@@ -57,10 +57,10 @@ def listar_conversas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Retorna todas as conversas recentes de pedidos com indicador de não lidas e preview."""
+    """Retorna fila ativa e histórico arquivado recente para a Central de Conversas."""
     restaurante_id = _get_tenant_id(current_user)
     with tenant_session_scope(db, restaurante_id):
-        return list_caixa_conversations(db, restaurante_id)
+        return list_caixa_conversations_for_central(db, restaurante_id)
 
 
 @router.get("/unread-count", summary="Total global de mensagens não lidas no Caixa")
@@ -127,9 +127,6 @@ def responder_cliente(
             user_id=current_user.id,
             raw_body=payload.body,
         )
-        # A outbox carrega somente o ID da mensagem já persistida. O conteúdo
-        # é recuperado dentro do tenant no dispatcher, evitando duplicar texto
-        # privado em Integration Outbox/logs.
         enqueue_order_push_event(
             db,
             restaurante_id=restaurante_id,
