@@ -110,8 +110,6 @@ async function recoverPushResumeToken(orderId) {
     );
     return new TextDecoder().decode(plaintext).trim();
   } catch {
-    // Capability ausente/corrompida nunca bloqueia o clique: usamos fallback
-    // sem segredo e deixamos o cardápio abrir normalmente.
     return "";
   }
 }
@@ -128,15 +126,22 @@ self.addEventListener("push", (event) => {
   const body = String(payload.body || "Seu pedido tem uma atualização.");
   const tag = String(payload.tag || "koma-order-update");
   const data = payload.data && typeof payload.data === "object" ? payload.data : {};
+  const actions = Array.isArray(payload.actions)
+    ? payload.actions.slice(0, 2).filter((item) => item && item.action && item.title)
+    : [{ action: "open", title: data.kind === "message" ? "Abrir conversa" : "Acompanhar pedido" }];
+  const vibrate = Array.isArray(payload.vibrate)
+    ? payload.vibrate.slice(0, 7).map((value) => Math.max(0, Math.min(Number(value) || 0, 1000)))
+    : undefined;
 
   event.waitUntil(self.registration.showNotification(title, {
     body,
     tag,
-    renotify: true,
+    renotify: payload.renotify !== false,
     icon: "/logo-koma.png",
     badge: "/logo-koma.png",
     data,
-    actions: [{ action: "open", title: "Ver pedido" }],
+    actions,
+    ...(vibrate ? { vibrate } : {}),
   }));
 });
 
@@ -149,9 +154,6 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil((async () => {
     const resumeToken = await recoverPushResumeToken(pedidoId);
-    // A capability nunca entra no payload do Push nem em query string. Quando
-    // existe retomada segura, ela vai somente no fragmento local do navegador;
-    // a rota /acompanhar limpa o fragmento antes de consultar a API.
     const target = resumeToken
       ? `/acompanhar#token=${encodeURIComponent(resumeToken)}`
       : `/cardapio?restaurante_id=${encodeURIComponent(String(restaurantId))}#koma-order=${encodeURIComponent(pedidoId)}`;
