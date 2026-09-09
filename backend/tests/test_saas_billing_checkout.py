@@ -167,6 +167,8 @@ def test_credit_card_checkout_activates_tenant_immediately_with_seven_days_trial
     assert data["status"] == "ready"
     assert data["trialDays"] == 7
     assert data["slug"].startswith("bistro-sandbox-")
+    assert "activationToken" in data
+    assert bool(data["activationToken"])
     tenant_id = int(data["restaurantId"])
     assert tenant_id > 0
 
@@ -189,6 +191,7 @@ def test_credit_card_checkout_activates_tenant_immediately_with_seven_days_trial
         assert admin_user.cargo == "admin"
         assert admin_user.status == "pendente_ativacao"
         assert admin_user.token_convite is not None
+        assert data["activationToken"] == admin_user.token_convite
 
         # SaaSBillingSetup está pronto
         setup = get_billing_setup(db, protocol)
@@ -258,6 +261,7 @@ def test_pix_billing_setup_requires_annual_cycle(client_and_session):
     assert data["paymentMethodType"] == "pix"
     assert data["paymentId"].startswith("mock-pix-")
     assert "br.gov.bcb.pix" in data["qrCode"]
+    assert "activationToken" not in data
 
     with Session() as db:
         setup = get_billing_setup(db, protocol_annual)

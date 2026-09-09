@@ -175,6 +175,7 @@ def setup_contract_billing(
             "slug": provision_res["slug"],
             "trialDays": 7,
             "trialEndsAt": provision_res["trial_ends_at"].isoformat(),
+            "activationToken": provision_res.get("invitation_token"),
             "message": "Assinatura autorizada com sucesso! Seu período de 7 dias grátis já começou.",
         }
 
