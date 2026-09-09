@@ -14,13 +14,37 @@ export interface OperatorIdentitySnapshot {
 export interface OperatorSession {
   token: string;
   user: OperatorIdentitySnapshot;
-  expiresAt: number; // Timestamp de expiração em milissegundos
+  expiresAt: number;
 }
 
 export type OperationalPortal = 'caixa' | 'garcom';
 
 const SESSION_KEY = 'koma_operator_session';
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+const CAIXA_KEYS = [
+  'koma_caixa_token',
+  'koma_caixa_id',
+  'koma_caixa_name',
+  'koma_caixa_user_id',
+  'koma_caixa_user_name',
+  'koma_caixa_role',
+] as const;
+
+const WAITER_KEYS = [
+  'koma_waiter_token',
+  'koma_waiter_id',
+  'koma_waiter_name',
+  'koma_user_role',
+] as const;
+
+function scopedStorage(): Storage | null {
+  return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
+}
+
+function durableStorage(): Storage | null {
+  return typeof localStorage !== 'undefined' ? localStorage : null;
+}
 
 function minimalOperatorIdentity(user: any): OperatorIdentitySnapshot {
   const snapshot: OperatorIdentitySnapshot = {};
@@ -34,18 +58,46 @@ function minimalOperatorIdentity(user: any): OperatorIdentitySnapshot {
   return snapshot;
 }
 
+function removeEverywhere(key: string): void {
+  try { scopedStorage()?.removeItem(key); } catch { /* best effort */ }
+  try { durableStorage()?.removeItem(key); } catch { /* best effort */ }
+}
+
+function writeScoped(key: string, value: string): void {
+  scopedStorage()?.setItem(key, value);
+  try { durableStorage()?.removeItem(key); } catch { /* best effort */ }
+}
+
+function readScopedWithLegacyMigration(key: string): string | null {
+  const scoped = scopedStorage();
+  const durable = durableStorage();
+  const current = scoped?.getItem(key) || null;
+  if (current != null) {
+    try { durable?.removeItem(key); } catch { /* best effort */ }
+    return current;
+  }
+
+  const legacy = durable?.getItem(key) || null;
+  if (legacy == null) return null;
+  try {
+    scoped?.setItem(key, legacy);
+    durable?.removeItem(key);
+  } catch {
+    // Se sessionStorage estiver indisponível, não prolonga a cópia durável.
+    try { durable?.removeItem(key); } catch { /* best effort */ }
+    return null;
+  }
+  return legacy;
+}
+
 function persistCanonicalSession(session: OperatorSession): void {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({
+  writeScoped(SESSION_KEY, JSON.stringify({
     ...session,
     user: minimalOperatorIdentity(session.user),
   }));
 }
 
-// Salva a sessão do operador com 24 horas de validade.
-// A chave genérica `token` foi aposentada: ela duplicava o bearer token sem
-// escopo e podia ser lida por fluxos que não sabiam a qual portal pertencia.
-// O snapshot persistido também é deliberadamente mínimo: e-mail, telefone,
-// endereço e outros dados de perfil não são necessários para restaurar o shell.
+/** Mantém bearer e identidade operacional somente durante a sessão da aba. */
 export function saveOperatorSession(token: string, user: any): void {
   const minimalUser = minimalOperatorIdentity(user);
   const session: OperatorSession = {
@@ -54,46 +106,45 @@ export function saveOperatorSession(token: string, user: any): void {
     expiresAt: Date.now() + TWENTY_FOUR_HOURS_MS,
   };
   persistCanonicalSession(session);
-  localStorage.setItem('koma_caixa_token', token);
-  localStorage.removeItem('token');
-  // O app operacional e o WebSocket ainda compartilham estas chaves legadas.
-  // Elas serão retiradas na fase seguinte, junto da migração para sessão HttpOnly.
-  if (minimalUser.id != null) {
-    localStorage.setItem('koma_caixa_id', String(minimalUser.id));
-  }
-  if (minimalUser.nome) {
-    localStorage.setItem('koma_caixa_name', minimalUser.nome);
-  }
-  if (minimalUser.role) {
-    localStorage.setItem('koma_caixa_role', minimalUser.role);
-  }
+  writeScoped('koma_caixa_token', token);
+  removeEverywhere('token');
+  if (minimalUser.id != null) writeScoped('koma_caixa_id', String(minimalUser.id));
+  if (minimalUser.nome) writeScoped('koma_caixa_name', minimalUser.nome);
+  if (minimalUser.role) writeScoped('koma_caixa_role', minimalUser.role);
 }
 
-// Recupera a sessão do operador e limpa automaticamente se tiver mais de 24h.
+/** Compatibilidade do portal Garçom enquanto o shell ainda usa aliases escopados. */
+export function saveWaiterSession(token: string, user: any): void {
+  const minimalUser = minimalOperatorIdentity(user);
+  writeScoped('koma_waiter_token', token);
+  if (minimalUser.id != null) writeScoped('koma_waiter_id', String(minimalUser.id));
+  if (minimalUser.nome) writeScoped('koma_waiter_name', minimalUser.nome);
+  writeScoped('koma_user_role', minimalUser.role || 'garcom');
+  removeEverywhere('token');
+}
+
 export function getOperatorSession(): OperatorSession | null {
-  // Limpa o alias genérico deixado por versões antigas assim que o app inicia.
-  localStorage.removeItem('token');
-  const rawSession = localStorage.getItem(SESSION_KEY);
+  removeEverywhere('token');
+  const rawSession = readScopedWithLegacyMigration(SESSION_KEY);
   if (!rawSession) {
-    // Fallback temporário somente para a chave escopada do Caixa.
-    const legacyToken = localStorage.getItem('koma_caixa_token');
-    if (legacyToken) {
-      const legacySession: OperatorSession = {
-        token: legacyToken,
-        user: { role: localStorage.getItem('koma_caixa_role') || 'operador' },
-        expiresAt: Date.now() + TWENTY_FOUR_HOURS_MS,
-      };
-      saveOperatorSession(legacyToken, legacySession.user);
-      return legacySession;
-    }
-    return null;
+    const legacyToken = readScopedWithLegacyMigration('koma_caixa_token');
+    if (!legacyToken) return null;
+    const legacySession: OperatorSession = {
+      token: legacyToken,
+      user: {
+        id: readScopedWithLegacyMigration('koma_caixa_id') || undefined,
+        nome: readScopedWithLegacyMigration('koma_caixa_name') || undefined,
+        role: readScopedWithLegacyMigration('koma_caixa_role') || 'operador',
+      },
+      expiresAt: Date.now() + TWENTY_FOUR_HOURS_MS,
+    };
+    persistCanonicalSession(legacySession);
+    return legacySession;
   }
 
   try {
     const parsed = JSON.parse(rawSession) as OperatorSession;
-
-    if (Date.now() > parsed.expiresAt) {
-      console.warn("⚠️ Sessão de operador expirada (mais de 24h). Efetuando logout...");
+    if (Date.now() > Number(parsed.expiresAt)) {
       clearOperatorSession();
       return null;
     }
@@ -108,11 +159,10 @@ export function getOperatorSession(): OperatorSession | null {
       return null;
     }
 
-    // Migração one-way: versões antigas persistiam o objeto completo de usuário.
-    // Reescrever no primeiro acesso remove PII que não é necessária ao shell.
+    // Migração one-way também remove PII eventualmente presente no snapshot legado.
     persistCanonicalSession(session);
     return session;
-  } catch (e) {
+  } catch {
     clearOperatorSession();
     return null;
   }
@@ -120,23 +170,22 @@ export function getOperatorSession(): OperatorSession | null {
 
 export function getOperationalAccessToken(portal: OperationalPortal): string {
   if (portal === 'garcom') {
-    return localStorage.getItem('koma_waiter_token') || '';
+    return readScopedWithLegacyMigration('koma_waiter_token') || '';
   }
-  return getOperatorSession()?.token || localStorage.getItem('koma_caixa_token') || '';
+  return getOperatorSession()?.token || readScopedWithLegacyMigration('koma_caixa_token') || '';
 }
 
 export function getOperatorAccessToken(): string {
-  return getOperatorSession()?.token || localStorage.getItem('koma_waiter_token') || '';
+  return getOperatorSession()?.token || readScopedWithLegacyMigration('koma_waiter_token') || '';
 }
 
-// Limpa a sessão no logout ou expiração
+export function clearWaiterSession(): void {
+  WAITER_KEYS.forEach(removeEverywhere);
+  removeEverywhere('token');
+}
+
 export function clearOperatorSession(): void {
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem('koma_caixa_token');
-  localStorage.removeItem('token');
-  localStorage.removeItem('koma_caixa_id');
-  localStorage.removeItem('koma_caixa_name');
-  localStorage.removeItem('koma_caixa_user_id');
-  localStorage.removeItem('koma_caixa_user_name');
-  localStorage.removeItem('koma_caixa_role');
+  removeEverywhere(SESSION_KEY);
+  CAIXA_KEYS.forEach(removeEverywhere);
+  removeEverywhere('token');
 }
