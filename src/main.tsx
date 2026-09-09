@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import "./utils/sessionScopedBrowserStorage";
 import "./components/auth/passwordRecoveryToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
