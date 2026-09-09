@@ -1,6 +1,7 @@
 name: Koma SmartPOS Android Bridge
 
 on:
+  # SmartPOS changes are validated before merge; main deploy must not wait for an Android rebuild.
   pull_request:
     branches: [main]
     paths:
