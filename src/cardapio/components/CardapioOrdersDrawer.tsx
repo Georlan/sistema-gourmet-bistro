@@ -274,13 +274,10 @@ export default function CardapioOrdersDrawer({
   };
 
   if (!drawerOpen) {
-    const activeOrderForFab = preferredChatOrder || activeOrders[0] || null;
-    if (!activeOrderForFab) return null;
-
-    const displayOrder = activeOrderForFab;
-    const displayState = resolveOrderState(displayOrder);
-    const isChatAvailable = Boolean(resolveTrackingToken(displayOrder)) && displayState.can_chat;
-    const statusText = displayState.label;
+    const displayOrder = preferredChatOrder || activeOrders[0] || null;
+    const displayState = displayOrder ? resolveOrderState(displayOrder) : null;
+    const isChatAvailable = Boolean(displayOrder && resolveTrackingToken(displayOrder) && displayState?.can_chat);
+    const statusText = displayState?.label || "Acompanhe seus pedidos";
 
     return (
       <div
@@ -295,7 +292,7 @@ export default function CardapioOrdersDrawer({
         <button
           type="button"
           onClick={() => {
-            if (totalUnread > 0 && preferredChatOrder) {
+            if (preferredChatOrder) {
               openFloatingChat();
             } else {
               setFloatingOpen(true);
@@ -308,7 +305,7 @@ export default function CardapioOrdersDrawer({
           id="floating-order-chat-trigger"
           aria-label={totalUnread > 0
             ? `Abrir chat do pedido, ${totalUnread} ${totalUnread === 1 ? "mensagem nova" : "mensagens novas"}`
-            : "Abrir chat do pedido"}
+            : displayOrder ? "Abrir chat do pedido" : "Abrir pedidos e chat"}
         >
           {totalUnread > 0 ? (
             <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-emerald-400 px-1 text-[10px] font-black text-black shadow-lg animate-pulse">
@@ -324,20 +321,31 @@ export default function CardapioOrdersDrawer({
             "grid h-8 w-8 place-items-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 shrink-0",
             totalUnread > 0 && "animate-pulse"
           )}>
-            {isChatAvailable ? <MessageCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
+            {isChatAvailable || !displayOrder ? <MessageCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
           </span>
           <div className="text-left pr-1">
-            <div className="flex items-center gap-1.5">
-              <span className="block text-[9px] font-black uppercase tracking-wider text-emerald-400">
-                Pedido #{displayOrder.numero_pedido}
-              </span>
-              <strong className="text-[10px] font-black text-emerald-300">
-                {totalUnread > 0 ? "Nova mensagem" : "Chat do pedido"}
-              </strong>
-            </div>
-            <span className="block text-[11px] font-bold text-white leading-tight">
-              {statusText} · <small className="text-[9px] text-emerald-200/70 font-normal">Fale com o restaurante</small>
-            </span>
+            {displayOrder ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-emerald-400">
+                    Pedido #{displayOrder.numero_pedido}
+                  </span>
+                  <strong className="text-[10px] font-black text-emerald-300">
+                    {totalUnread > 0 ? "Nova mensagem" : "Chat do pedido"}
+                  </strong>
+                </div>
+                <span className="block text-[11px] font-bold text-white leading-tight">
+                  {statusText} · <small className="text-[9px] text-emerald-200/70 font-normal">Fale com o restaurante</small>
+                </span>
+              </>
+            ) : (
+              <>
+                <strong className="block text-[10px] font-black text-emerald-300">Pedidos & chat</strong>
+                <span className="block text-[11px] font-bold text-white leading-tight">
+                  Acompanhe seus pedidos
+                </span>
+              </>
+            )}
           </div>
         </button>
       </div>
@@ -422,11 +430,11 @@ export default function CardapioOrdersDrawer({
           {orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="grid h-16 w-16 place-items-center rounded-2xl border border-koma-border bg-koma-panel text-koma-muted">
-                <Package className="h-8 w-8 opacity-40" />
+                <MessageCircle className="h-8 w-8 opacity-40" />
               </div>
-              <h3 className="mt-4 text-sm font-bold text-koma-foreground">Nenhum pedido recente</h3>
+              <h3 className="mt-4 text-sm font-bold text-koma-foreground">Nenhum pedido por aqui ainda</h3>
               <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-koma-muted">
-                Quando você enviar um pedido pelo cardápio, ele aparecerá aqui para você acompanhar cada etapa do preparo e entrega.
+                Quando você fizer um pedido, poderá acompanhar o status e conversar com o restaurante por aqui. Este atalho continua disponível mesmo sem login.
               </p>
             </div>
           ) : (
@@ -525,9 +533,7 @@ export default function CardapioOrdersDrawer({
                               return (
                                 <div key={label} className="text-center">
                                   <div className={clsx("h-1 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                                  <span className={clsx("mt-1 block text-[8px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>
-                                    {label}
-                                  </span>
+                                  <span className={clsx("mt-1 block text-[8px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>{label}</span>
                                 </div>
                               );
                             })}

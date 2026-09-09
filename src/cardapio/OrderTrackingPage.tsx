@@ -62,9 +62,9 @@ function scrubTrackingCapabilityFromAddressBar(): void {
  * Compatibilidade para links antigos /acompanhar/:token e retomada segura de
  * Web Push via /acompanhar#token=... .
  *
- * A experiência de acompanhamento/chat agora pertence ao Cardápio e ao drawer
- * lateral de "Pedido / Chat". Esta rota apenas recupera o pedido pelo token,
- * restaura o snapshot da sessão atual e redireciona para o Cardápio.
+ * A experiência de acompanhamento/chat pertence ao Cardápio e ao drawer
+ * lateral de "Pedidos & chat". Esta rota só recupera silenciosamente o pedido,
+ * restaura o snapshot da sessão atual e redireciona direto para o pedido/chat.
  */
 export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) {
   const token = useMemo(() => resolveTrackingToken(propToken), [propToken]);
@@ -120,10 +120,12 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
           itens: Array.isArray(payload.itens) ? payload.itens : undefined,
           created_at: payload.criado_em || undefined,
           tracking_token: token,
-          tracking_url: `/acompanhar/${encodeURIComponent(token)}`,
         });
 
-        window.location.replace(`/cardapio?restaurante_id=${encodeURIComponent(String(restauranteId))}`);
+        window.location.replace(
+          `/cardapio?restaurante_id=${encodeURIComponent(String(restauranteId))}`
+          + `#koma-order=${encodeURIComponent(pedidoId)}`,
+        );
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Não foi possível abrir o pedido.");
@@ -137,33 +139,31 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
     };
   }, [token, retryNonce]);
 
+  if (!error) {
+    // Compatibilidade legada não deve parecer uma segunda página do produto.
+    // Mantemos apenas um estado silencioso e acessível durante o lookup curto.
+    return (
+      <main className="min-h-screen bg-koma-page" aria-busy="true">
+        <span className="sr-only" role="status">Abrindo seu pedido.</span>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-koma-page p-6 text-koma-foreground">
       <section className="w-full max-w-sm rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
-        {error ? (
-          <>
-            <h1 className="text-base font-black">Não foi possível abrir este pedido</h1>
-            <p className="mt-2 text-xs leading-relaxed text-koma-muted">{error}</p>
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setRetryNonce((current) => current + 1);
-              }}
-              className="mt-5 h-10 rounded-xl border border-koma-border px-4 text-xs font-bold text-koma-secondary transition hover:text-white"
-            >
-              Tentar novamente
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-500/20 border-t-emerald-500" />
-            <h1 className="mt-4 text-sm font-black">Abrindo seu pedido no cardápio</h1>
-            <p className="mt-1.5 text-xs leading-relaxed text-koma-muted">
-              O acompanhamento e a conversa agora ficam juntos em Pedido / Chat.
-            </p>
-          </>
-        )}
+        <h1 className="text-base font-black">Não foi possível abrir este pedido</h1>
+        <p className="mt-2 text-xs leading-relaxed text-koma-muted">{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError("");
+            setRetryNonce((current) => current + 1);
+          }}
+          className="mt-5 h-10 rounded-xl border border-koma-border px-4 text-xs font-bold text-koma-secondary transition hover:text-white"
+        >
+          Tentar novamente
+        </button>
       </section>
     </main>
   );

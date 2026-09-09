@@ -359,15 +359,6 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
     expect(saved.find((order: { id: string }) => order.id === orderId)?.tracking_token).toBe(trackingToken);
     expect(await page.evaluate(() => localStorage.getItem('koma_active_orders'))).toBeNull();
 
-    const floatingChat = page.locator('#floating-order-chat-trigger');
-    await expect(floatingChat).toBeVisible();
-    await floatingChat.click();
-
-    const ordersDrawer = page.getByLabel('Meus Pedidos');
-    await expect(ordersDrawer.getByText('Pedido #4321')).toBeVisible();
-    await expect(ordersDrawer.getByText(/1x Pizza Margherita/)).toBeVisible();
-
-    await ordersDrawer.getByRole('button', { name: 'Chat & Status' }).click();
     const inlineChat = page.locator('#inline-order-chat-panel');
     await expect(inlineChat.getByText('Pedido #4321')).toBeVisible();
     await expect(inlineChat.getByText('Em preparo').first()).toBeVisible();

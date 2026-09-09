@@ -31,8 +31,13 @@ test('cabecalho deixa o retorno ao pedido e chat explicito', () => {
 
 test('link legado de acompanhamento restaura o pedido e volta ao cardapio', () => {
   assert.match(legacyTracking, /saveStoredOrder\(/);
-  assert.match(legacyTracking, /window\.location\.replace\(`\/cardapio\?restaurante_id=/);
-  assert.match(legacyTracking, /acompanhamento e a conversa agora ficam juntos em Pedido \/ Chat/);
+  assert.match(legacyTracking, /window\.location\.replace\(/);
+  assert.match(
+    legacyTracking,
+    /\/cardapio\?restaurante_id=\$\{encodeURIComponent\(String\(restauranteId\)\)\}/,
+  );
+  assert.match(legacyTracking, /#koma-order=\$\{encodeURIComponent\(pedidoId\)\}/);
+  assert.match(legacyTracking, /aria-busy="true"/);
   assert.doesNotMatch(legacyTracking, /LINHA DO TEMPO AO VIVO/);
 });
 
