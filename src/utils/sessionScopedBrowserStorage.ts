@@ -21,10 +21,16 @@ const OPERATIONAL_SESSION_KEYS = new Set([
   'token',
 ]);
 
+const BOUNDARY_FLAG = '__komaOperationalSessionStorageScoped';
 let installed = false;
 
 function isOperationalSessionKey(key: string): boolean {
   return OPERATIONAL_SESSION_KEYS.has(String(key));
+}
+
+export function isSessionScopedBrowserStorageInstalled(): boolean {
+  return typeof window !== 'undefined'
+    && (window as unknown as Record<string, unknown>)[BOUNDARY_FLAG] === true;
 }
 
 export function installSessionScopedBrowserStorage(): void {
@@ -46,6 +52,7 @@ export function installSessionScopedBrowserStorage(): void {
   };
 
   OPERATIONAL_SESSION_KEYS.forEach(migrateAtBootstrap);
+  (window as unknown as Record<string, unknown>)[BOUNDARY_FLAG] = true;
 
   Storage.prototype.getItem = function getItem(key: string): string | null {
     if (isOperationalSessionKey(key)) {
