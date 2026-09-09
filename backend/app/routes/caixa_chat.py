@@ -127,14 +127,16 @@ def responder_cliente(
             user_id=current_user.id,
             raw_body=payload.body,
         )
-        # A notificação é apenas uma projeção da mensagem já persistida. Ela entra
-        # na mesma outbox/transação e nunca participa do caminho crítico do chat.
+        # A outbox carrega somente o ID da mensagem já persistida. O conteúdo
+        # é recuperado dentro do tenant no dispatcher, evitando duplicar texto
+        # privado em Integration Outbox/logs.
         enqueue_order_push_event(
             db,
             restaurante_id=restaurante_id,
             pedido_id=msg.pedido_id,
             conversation_id=conversation_id,
             kind="message",
+            message_id=msg.id,
         )
         db.commit()
         db.refresh(msg)
