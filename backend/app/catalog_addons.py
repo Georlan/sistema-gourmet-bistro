@@ -12,7 +12,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
-from sqlalchemy import Boolean, Column, ForeignKey, ForeignKeyConstraint, Index, Integer, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Session
 
 from .database import Base, current_restaurante_id
@@ -448,13 +448,16 @@ def ensure_hamburger_addon_suggestions(db: Session, restaurante_id: int) -> dict
     created_options = 0
     updated_options = 0
     group_ids: list[str] = []
+    existing_groups = (
+        db.query(GrupoModificador)
+        .filter(GrupoModificador.restaurante_id == restaurante_id)
+        .all()
+    )
     for suggestion in HAMBURGER_ADDON_SUGGESTIONS:
         group = next(
             (
                 existing
-                for existing in db.query(GrupoModificador)
-                .filter(GrupoModificador.restaurante_id == restaurante_id)
-                .all()
+                for existing in existing_groups
                 if normalize_catalog_name(existing.nome) == normalize_catalog_name(suggestion.name)
             ),
             None,
@@ -470,6 +473,7 @@ def ensure_hamburger_addon_suggestions(db: Session, restaurante_id: int) -> dict
             )
             db.add(group)
             db.flush()
+            existing_groups.append(group)
             created_groups += 1
         else:
             group.min_selecoes = 0
