@@ -29,6 +29,7 @@ from ..services.order_chat_service import (
     send_staff_message,
     serialize_message,
 )
+from ..services.web_push import enqueue_order_push_event
 
 router = APIRouter(prefix="/api/caixa/conversas", tags=["Caixa - Chat"])
 
@@ -125,6 +126,15 @@ def responder_cliente(
             conversation_id=conversation_id,
             user_id=current_user.id,
             raw_body=payload.body,
+        )
+        # A notificação é apenas uma projeção da mensagem já persistida. Ela entra
+        # na mesma outbox/transação e nunca participa do caminho crítico do chat.
+        enqueue_order_push_event(
+            db,
+            restaurante_id=restaurante_id,
+            pedido_id=msg.pedido_id,
+            conversation_id=conversation_id,
+            kind="message",
         )
         db.commit()
         db.refresh(msg)

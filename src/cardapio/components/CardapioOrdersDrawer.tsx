@@ -34,6 +34,11 @@ interface CardapioOrdersDrawerProps {
   hasFloatingCart?: boolean;
 }
 
+interface RequestedPushOrder {
+  orderId: string;
+  restaurantId: number | null;
+}
+
 function resolveTrackingToken(order: StoredOrder): string | null {
   if (order.tracking_token?.trim()) return order.tracking_token.trim();
   if (!order.tracking_url?.trim()) return null;
@@ -43,6 +48,18 @@ function resolveTrackingToken(order: StoredOrder): string | null {
     const parts = parsed.pathname.split("/").filter(Boolean);
     const idx = parts.indexOf("acompanhar");
     return idx >= 0 && parts[idx + 1] ? decodeURIComponent(parts[idx + 1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function requestedPushOrderFromHash(): RequestedPushOrder | null {
+  if (typeof window === "undefined") return null;
+  const match = window.location.hash.match(/^#koma-order=(.+)$/);
+  if (!match?.[1]) return null;
+  try {
+    const orderId = decodeURIComponent(match[1]).trim();
+    return orderId ? { orderId, restaurantId: null } : null;
   } catch {
     return null;
   }
@@ -62,6 +79,9 @@ export default function CardapioOrdersDrawer({
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
   const [floatingOpen, setFloatingOpen] = React.useState(false);
   const [unreadByOrder, setUnreadByOrder] = React.useState<Record<string, number>>({});
+  const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
+    () => requestedPushOrderFromHash(),
+  );
   const drawerOpen = isOpen || floatingOpen;
 
   const ordersWithChat = React.useMemo(
@@ -143,8 +163,7 @@ export default function CardapioOrdersDrawer({
       const unreadDelta = unreadFor(right.id) - unreadFor(left.id);
       if (unreadDelta !== 0) return unreadDelta;
       return Number(right.timestamp || 0) - Number(left.timestamp || 0);
-    },
-    [unreadFor],
+    }, [unreadFor],
   );
 
   const activeOrders = React.useMemo(
@@ -174,6 +193,61 @@ export default function CardapioOrdersDrawer({
     setChatOrderId(orderId);
     markChatReadLocally(orderId);
   }, [markChatReadLocally]);
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const request = requestedPushOrderFromHash();
+      if (request) setRequestedPushOrder(request);
+    };
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      const data = event.data as {
+        type?: unknown;
+        pedidoId?: unknown;
+        restaurantId?: unknown;
+      } | null;
+      if (!data || data.type !== "KOMA_PUSH_OPEN_ORDER") return;
+      const orderId = String(data.pedidoId || "").trim();
+      if (!orderId) return;
+      const restaurantId = Number(data.restaurantId || 0);
+      setRequestedPushOrder({
+        orderId,
+        restaurantId: Number.isInteger(restaurantId) && restaurantId > 0 ? restaurantId : null,
+      });
+    };
+
+    window.addEventListener("hashchange", handleHashChange);
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+    handleHashChange();
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!requestedPushOrder) return;
+    const order = orders.find((candidate) => (
+      candidate.id === requestedPushOrder.orderId
+      && (
+        requestedPushOrder.restaurantId === null
+        || Number(candidate.restaurante_id) === requestedPushOrder.restaurantId
+      )
+    ));
+    if (!order || !resolveTrackingToken(order)) return;
+
+    openChat(order.id);
+    setFloatingOpen(true);
+    setRequestedPushOrder(null);
+
+    if (window.location.hash.startsWith("#koma-order=")) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${window.location.search}`,
+      );
+    }
+  }, [openChat, orders, requestedPushOrder]);
 
   const openFloatingChat = React.useCallback(() => {
     if (preferredChatOrder) openChat(preferredChatOrder.id);

@@ -22,6 +22,7 @@ import {
   fallbackOrderState,
   isOrderStateContract,
 } from "../orderTracking";
+import CardapioPushNotifications from "./CardapioPushNotifications";
 
 interface TrackingPayload {
   status: string;
@@ -296,6 +297,8 @@ export default function CardapioOrderChatPanel({
           </div>
         )}
       </div>
+
+      <CardapioPushNotifications order={order} />
 
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
         {loading && messages.length === 0 ? (

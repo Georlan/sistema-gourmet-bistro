@@ -12,6 +12,7 @@ não como writers independentes de ``Comanda.delivery_status``/``Lancamento.stat
 from __future__ import annotations
 
 import datetime
+import logging
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ from .commands import (
 )
 from .service import OrderApplicationService
 
+logger = logging.getLogger("koma.orders.lifecycle")
 
 LEGACY_ORDER_STATUS_INPUTS = frozenset(
     to_legacy_order_status(status) for status in OrderStatus
@@ -172,7 +174,21 @@ class OrderLifecycleCoordinator:
                 new_status=comanda.delivery_status,
             )
         except Exception:
-            logger.debug("Chat event not emitted for comanda %s", comanda.id)
+            logger.debug("Chat event not emitted for comanda %s", comanda.id, exc_info=True)
+
+        try:
+            from ...services.web_push import enqueue_order_push_event
+            enqueue_order_push_event(
+                db,
+                restaurante_id=restaurant_id,
+                pedido_id=comanda.id,
+                kind="status",
+                order_status=comanda.delivery_status,
+            )
+        except Exception:
+            # Push é uma projeção assíncrona e nunca pode invalidar a transição
+            # canônica do pedido. A outbox mantém retries quando a intenção entra.
+            logger.debug("Push event not enqueued for comanda %s", comanda.id, exc_info=True)
 
         if commit:
             db.commit()
