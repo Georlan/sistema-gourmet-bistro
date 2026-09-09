@@ -81,6 +81,10 @@ def operational_counts(db: Session, restaurante_id: int) -> dict[str, int]:
             Comanda.restaurante_id == restaurante_id,
             Comanda.fechada.is_(False),
             Comanda.delivery_status.in_(ACTIVE_OPERATIONAL_STATUSES),
+            or_(
+                Comanda.online_payment_status.is_(None),
+                Comanda.online_payment_status == "approved",
+            ),
             ~unreleased_schedule,
         )
         .group_by(Comanda.delivery_status)
