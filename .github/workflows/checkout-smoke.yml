@@ -2,6 +2,7 @@ name: Checkout Smoke
 
 on:
   workflow_dispatch:
+  # Checkout changes are validated before merge; main deploy must not wait for this browser suite again.
   pull_request:
     branches: [main]
     paths:
