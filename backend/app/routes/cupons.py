@@ -13,6 +13,7 @@ from ..domain.growth_economics import calculate_growth_recommendations
 from ..models import ActivityLog, Cupom, Cliente, Comanda, ConfigFidelizacao, Restaurante, Usuario
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
 from ..security import get_current_user, require_permission
+from ..services.coupon_eligibility import customer_matches_targeted_coupon
 from ..subscription import subscription_marketplace_rate
 
 router = APIRouter(
@@ -49,9 +50,31 @@ def _validate_coupon_configuration(payload: CupomCreate) -> None:
         )
 
 
+def _validate_targeted_customer(db: Session, *, restaurante_id: int, cliente_id: str | None) -> None:
+    if not cliente_id:
+        return
+    cliente = db.query(Cliente.id).filter(
+        Cliente.restaurante_id == restaurante_id,
+        Cliente.id == str(cliente_id),
+    ).first()
+    if cliente is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Cliente destinatário não pertence a este restaurante.",
+        )
+
+
 def _validar_regras_cupom(cupom: Cupom, subtotal: float, telefone: Optional[str], db: Session) -> tuple[bool, str, float]:
     if not cupom.ativo:
         return False, "Este cupom está desativado.", 0.0
+
+    if cupom.cliente_id and not customer_matches_targeted_coupon(
+        db,
+        restaurante_id=cupom.restaurante_id,
+        targeted_cliente_id=cupom.cliente_id,
+        cliente_telefone=telefone,
+    ):
+        return False, "Este cupom é exclusivo para outro cliente.", 0.0
 
     agora = datetime.datetime.now(datetime.timezone.utc)
     if cupom.valido_ate:
@@ -130,6 +153,7 @@ def criar_cupom(
 ):
     _validate_coupon_configuration(payload)
     rest_id = require_tenant_id()
+    _validate_targeted_customer(db, restaurante_id=rest_id, cliente_id=payload.cliente_id)
     codigo_clean = payload.codigo.strip().upper()
 
     existente = db.query(Cupom).filter(
@@ -172,6 +196,7 @@ def atualizar_cupom(
 ):
     _validate_coupon_configuration(payload)
     rest_id = require_tenant_id()
+    _validate_targeted_customer(db, restaurante_id=rest_id, cliente_id=payload.cliente_id)
     cupom = db.query(Cupom).filter(
         Cupom.restaurante_id == rest_id,
         Cupom.id == cupom_id,
