@@ -49,6 +49,13 @@ from .cardapio_customer_orders import router as _cardapio_customer_orders_router
 
 _cardapio_clientes.router.include_router(_cardapio_customer_orders_router)
 
+# Rankings públicos derivados ficam no mesmo owner HTTP do cardápio digital.
+# A implementação usa cache curto e nunca vira fonte de verdade de preço/estoque.
+from . import cardapio_digital as _cardapio_digital  # noqa: E402
+from .cardapio_popular import router as _cardapio_popular_router  # noqa: E402
+
+_cardapio_digital.router.include_router(_cardapio_popular_router)
+
 # O Print Agent continua com um único owner HTTP no main. O sub-router adiciona
 # apenas o plano de transporte SSE; claim, fila e regras físicas permanecem no
 # router canônico de print_agents e no Core Universal de Impressão.
