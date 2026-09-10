@@ -1,13 +1,18 @@
 import datetime
 import uuid
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+
 from ..database import get_db, require_tenant_id
-from ..models import Cupom, Cliente, Comanda, ConfigFidelizacao, Usuario
+from ..domain.growth_economics import calculate_growth_recommendations
+from ..models import Cupom, Cliente, Comanda, ConfigFidelizacao, Restaurante, Usuario
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
-from ..security import get_current_user
+from ..security import get_current_user, require_permission
+from ..subscription import subscription_marketplace_rate
 
 router = APIRouter(
     prefix="/caixa/cupons",
@@ -18,6 +23,14 @@ public_router = APIRouter(
     prefix="/cardapio/cupons",
     tags=["Cupons Cardápio Público"]
 )
+
+
+class GrowthRecommendationRequest(BaseModel):
+    """Entradas explícitas da calculadora; nenhum custo do restaurante é inventado."""
+
+    average_ticket: float = Field(gt=0, le=1_000_000)
+    variable_cost_percent: float = Field(ge=0, lt=100)
+    minimum_margin_percent: float = Field(gt=0, lt=100)
 
 
 def _validar_regras_cupom(cupom: Cupom, subtotal: float, telefone: Optional[str], db: Session) -> tuple[bool, str, float]:
@@ -65,6 +78,32 @@ def listar_cupons(
 ):
     rest_id = require_tenant_id()
     return db.query(Cupom).filter(Cupom.restaurante_id == rest_id).order_by(Cupom.criado_em.desc()).all()
+
+
+@router.post("/economia/recomendacao")
+def recomendar_incentivos(
+    payload: GrowthRecommendationRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
+):
+    """Calcula opções seguras sem alterar a configuração do restaurante.
+
+    O plano e o split vêm da fonte canônica do backend. CMV/custos e margem-alvo
+    são fornecidos explicitamente pelo restaurante. O endpoint apenas calcula;
+    salvar ou ajustar manualmente cupom/fidelidade continua sendo uma ação
+    administrativa separada.
+    """
+    rest_id = require_tenant_id()
+    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+    if not restaurante:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+    return calculate_growth_recommendations(
+        average_ticket=payload.average_ticket,
+        variable_cost_percent=payload.variable_cost_percent,
+        minimum_margin_percent=payload.minimum_margin_percent,
+        koma_fee_fraction=subscription_marketplace_rate(restaurante.plano),
+    )
 
 
 @router.post("", response_model=CupomResponse, status_code=status.HTTP_201_CREATED)
