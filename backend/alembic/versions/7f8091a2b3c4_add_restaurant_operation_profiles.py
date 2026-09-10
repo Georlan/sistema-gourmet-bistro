@@ -54,24 +54,31 @@ def upgrade() -> None:
         "FORCE ROW LEVEL SECURITY"
     )
     op.execute(
-        f"CREATE POLICY restaurante_operation_profiles_select "
-        f"ON public.restaurante_operation_profiles FOR SELECT TO koma_app "
-        f"USING ({tenant_expr})"
-    )
-    op.execute(
-        f"CREATE POLICY restaurante_operation_profiles_insert "
-        f"ON public.restaurante_operation_profiles FOR INSERT TO koma_app "
-        f"WITH CHECK ({tenant_expr})"
-    )
-    op.execute(
-        f"CREATE POLICY restaurante_operation_profiles_update "
-        f"ON public.restaurante_operation_profiles FOR UPDATE TO koma_app "
-        f"USING ({tenant_expr}) WITH CHECK ({tenant_expr})"
-    )
-    op.execute(
-        f"CREATE POLICY restaurante_operation_profiles_delete "
-        f"ON public.restaurante_operation_profiles FOR DELETE TO koma_app "
-        f"USING ({tenant_expr})"
+        f"""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'koma_app') THEN
+                REVOKE ALL ON TABLE public.restaurante_operation_profiles FROM PUBLIC;
+                REVOKE ALL ON TABLE public.restaurante_operation_profiles FROM koma_app;
+                GRANT SELECT, INSERT, UPDATE, DELETE
+                    ON TABLE public.restaurante_operation_profiles TO koma_app;
+
+                CREATE POLICY restaurante_operation_profiles_select
+                    ON public.restaurante_operation_profiles
+                    FOR SELECT TO koma_app USING ({tenant_expr});
+                CREATE POLICY restaurante_operation_profiles_insert
+                    ON public.restaurante_operation_profiles
+                    FOR INSERT TO koma_app WITH CHECK ({tenant_expr});
+                CREATE POLICY restaurante_operation_profiles_update
+                    ON public.restaurante_operation_profiles
+                    FOR UPDATE TO koma_app USING ({tenant_expr}) WITH CHECK ({tenant_expr});
+                CREATE POLICY restaurante_operation_profiles_delete
+                    ON public.restaurante_operation_profiles
+                    FOR DELETE TO koma_app USING ({tenant_expr});
+            END IF;
+        END
+        $$;
+        """
     )
 
 
