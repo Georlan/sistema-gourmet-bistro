@@ -1,10 +1,11 @@
 import datetime
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from ..database import get_db, require_tenant_id
-from ..models import Cupom, Cliente, Comanda, Usuario
+from ..models import Cupom, Cliente, Comanda, ConfigFidelizacao, Usuario
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
 from ..security import get_current_user
 
@@ -165,6 +166,57 @@ def deletar_cupom(
     db.delete(cupom)
     db.commit()
     return None
+
+
+@public_router.get("/beneficios")
+def listar_beneficios_publicos(
+    restaurante_id: int,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Entrega apenas regras promocionais seguras para exibição no cardápio público.
+
+    A resposta é pequena, limitada por tenant e cacheável no navegador/CDN. Cupons
+    direcionados a um cliente específico nunca são expostos neste catálogo público.
+    """
+    agora_utc_sem_tz = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+    cupons = (
+        db.query(Cupom)
+        .filter(
+            Cupom.restaurante_id == restaurante_id,
+            Cupom.ativo.is_(True),
+            Cupom.cliente_id.is_(None),
+            or_(Cupom.valido_ate.is_(None), Cupom.valido_ate >= agora_utc_sem_tz),
+            or_(Cupom.limite_usos.is_(None), Cupom.usos_atuais < Cupom.limite_usos),
+        )
+        .order_by(Cupom.criado_em.desc())
+        .limit(12)
+        .all()
+    )
+    programa = db.query(ConfigFidelizacao).filter(
+        ConfigFidelizacao.restaurante_id == restaurante_id,
+    ).first()
+
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+    return {
+        "cupons": [
+            {
+                "codigo": cupom.codigo,
+                "tipo_desconto": cupom.tipo_desconto,
+                "valor_desconto": float(cupom.valor_desconto or 0),
+                "valor_minimo_pedido": float(cupom.valor_minimo_pedido or 0),
+                "valido_ate": cupom.valido_ate.isoformat() if cupom.valido_ate else None,
+                "apenas_primeira_compra": bool(cupom.apenas_primeira_compra),
+            }
+            for cupom in cupons
+        ],
+        "programa": {
+            "ativo": bool(programa.ativo),
+            "tipo_recompensa": str(programa.tipo_recompensa or "").upper(),
+            "taxa_conversao": float(programa.taxa_conversao or 0),
+            "valor_ponto_em_dinheiro": float(programa.valor_ponto_em_dinheiro or 0),
+        } if programa else None,
+    }
 
 
 @public_router.post("/validar", response_model=CupomValidateResponse)

@@ -1,8 +1,10 @@
+import datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import SessionLocal, current_restaurante_id
-from app.models import Restaurante, Usuario, Cupom
+from app.models import ConfigFidelizacao, Restaurante, Usuario, Cupom
 from app.routes.auth import create_access_token
 
 client = TestClient(app)
@@ -104,3 +106,85 @@ def test_validar_cupom_publico():
     data_val = res_valido.json()
     assert data_val["valido"] is True
     assert data_val["desconto_calculado"] == 15.0
+
+
+def test_beneficios_publicos_expoem_apenas_ofertas_seguras_e_programa():
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        codes = ["PUBLICO7", "DIRECIONADO9", "DESLIGADO5", "EXPIRADO4"]
+        db.query(Cupom).filter(
+            Cupom.restaurante_id == 999,
+            Cupom.codigo.in_(codes),
+        ).delete(synchronize_session=False)
+
+        db.add_all([
+            Cupom(
+                id="cup-public-benefits",
+                restaurante_id=999,
+                codigo="PUBLICO7",
+                tipo_desconto="porcentagem",
+                valor_desconto=7.0,
+                valor_minimo_pedido=25.0,
+                ativo=True,
+                cliente_id=None,
+            ),
+            Cupom(
+                id="cup-target-benefits",
+                restaurante_id=999,
+                codigo="DIRECIONADO9",
+                tipo_desconto="porcentagem",
+                valor_desconto=9.0,
+                ativo=True,
+                cliente_id="cliente-privado",
+            ),
+            Cupom(
+                id="cup-disabled-benefits",
+                restaurante_id=999,
+                codigo="DESLIGADO5",
+                tipo_desconto="porcentagem",
+                valor_desconto=5.0,
+                ativo=False,
+            ),
+            Cupom(
+                id="cup-expired-benefits",
+                restaurante_id=999,
+                codigo="EXPIRADO4",
+                tipo_desconto="porcentagem",
+                valor_desconto=4.0,
+                ativo=True,
+                valido_ate=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - datetime.timedelta(days=1),
+            ),
+        ])
+
+        config = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == 999,
+        ).first()
+        if not config:
+            config = ConfigFidelizacao(restaurante_id=999)
+            db.add(config)
+        config.ativo = True
+        config.tipo_recompensa = "CASHBACK"
+        config.taxa_conversao = 3.0
+        config.valor_ponto_em_dinheiro = 0.05
+        db.commit()
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+    res = client.get("/cardapio/cupons/beneficios", params={"restaurante_id": 999})
+    assert res.status_code == 200, res.text
+    assert "max-age=60" in res.headers.get("cache-control", "")
+
+    payload = res.json()
+    public_codes = {coupon["codigo"] for coupon in payload["cupons"]}
+    assert "PUBLICO7" in public_codes
+    assert "DIRECIONADO9" not in public_codes
+    assert "DESLIGADO5" not in public_codes
+    assert "EXPIRADO4" not in public_codes
+    assert payload["programa"] == {
+        "ativo": True,
+        "tipo_recompensa": "CASHBACK",
+        "taxa_conversao": 3.0,
+        "valor_ponto_em_dinheiro": 0.05,
+    }
