@@ -47,6 +47,30 @@ function base64UrlToUint8Array(base64Url: string): Uint8Array {
   return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
 }
 
+function pushErrorMessage(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message.trim() : "";
+  const name = error instanceof DOMException ? error.name : "";
+  const normalized = raw.toLowerCase();
+
+  if (
+    name === "AbortError"
+    || normalized.includes("push service error")
+    || normalized.includes("registration failed")
+  ) {
+    return "O serviço de notificações do navegador não respondeu. Confira as permissões de notificações/push e tente novamente. Seu pedido continua disponível aqui mesmo sem os avisos.";
+  }
+
+  if (name === "NotAllowedError" || normalized.includes("permission denied")) {
+    return "As notificações foram bloqueadas pelo navegador. Libere a permissão do site e tente novamente.";
+  }
+
+  if (name === "InvalidStateError") {
+    return "O navegador ainda não conseguiu preparar as notificações. Recarregue a página e tente novamente.";
+  }
+
+  return raw || fallback;
+}
+
 async function getServerConfig(apiRoot: string): Promise<{ enabled: boolean; publicKey: string }> {
   const response = await fetch(`${apiRoot}/push-config`, { cache: "no-store" });
   if (!response.ok) throw new Error("Não foi possível consultar as notificações.");
@@ -121,7 +145,7 @@ export default function CardapioPushNotifications({ order }: Props) {
         if (!cancelled) setState("ready");
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Falha ao verificar notificações.");
+          setError(pushErrorMessage(err, "Falha ao verificar notificações."));
           setState("error");
         }
       }
@@ -164,7 +188,7 @@ export default function CardapioPushNotifications({ order }: Props) {
       localStorage.setItem(PUSH_OPT_IN_KEY, "true");
       setState("enabled");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível ativar as notificações.");
+      setError(pushErrorMessage(err, "Não foi possível ativar as notificações."));
       setState("error");
     }
   };
@@ -188,7 +212,7 @@ export default function CardapioPushNotifications({ order }: Props) {
       localStorage.setItem(PUSH_OPT_IN_KEY, "false");
       setState("ready");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível desativar os avisos.");
+      setError(pushErrorMessage(err, "Não foi possível desativar os avisos."));
       setState("error");
     }
   };
@@ -258,7 +282,7 @@ export default function CardapioPushNotifications({ order }: Props) {
           {state === "enabling" ? "Ativando…" : state === "checking" ? "Verificando…" : "Ativar"}
         </button>
       </div>
-      {error && <p className="mt-2 text-[9px] font-bold text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-[9px] font-bold leading-relaxed text-rose-300">{error}</p>}
     </div>
   );
 }
