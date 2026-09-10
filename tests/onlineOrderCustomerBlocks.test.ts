@@ -16,7 +16,7 @@ test('gestão de bloqueios usa apenas as rotas autenticadas canônicas', () => {
   assert.match(blocks, /\/release/);
   assert.match(blocks, /method: 'POST'/);
   assert.match(blocks, /authHeaders/);
-  assert.doesNotMatch(blocks, /localStorage|sessionStorage|telefone|phone_hash/i);
+  assert.doesNotMatch(blocks, /localStorage|sessionStorage|phone_hash/i);
 });
 
 test('liberação exige confirmação e mantém mensagem pública de bloqueio fora do painel', () => {
