@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..domain.growth_economics import calculate_growth_recommendations
-from ..models import Cupom, Cliente, Comanda, ConfigFidelizacao, Restaurante, Usuario
+from ..models import ActivityLog, Cupom, Cliente, Comanda, ConfigFidelizacao, Restaurante, Usuario
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
 from ..security import get_current_user, require_permission
 from ..subscription import subscription_marketplace_rate
@@ -192,8 +192,9 @@ def atualizar_cupom(
 def deletar_cupom(
     cupom_id: str,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
+    """Desativa o cupom preservando seu histórico e referências de pedidos."""
     rest_id = require_tenant_id()
     cupom = db.query(Cupom).filter(
         Cupom.restaurante_id == rest_id,
@@ -202,8 +203,18 @@ def deletar_cupom(
     if not cupom:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cupom não encontrado.")
 
-    db.delete(cupom)
-    db.commit()
+    if cupom.ativo:
+        cupom.ativo = False
+        db.add(ActivityLog(
+            restaurante_id=rest_id,
+            garcom_id=current_user.id,
+            action="DEACTIVATE_COUPON",
+            details=(
+                f"Cupom {cupom.id} ({cupom.codigo}) desativado; "
+                f"histórico preservado com {int(cupom.usos_atuais or 0)} uso(s)."
+            ),
+        ))
+        db.commit()
     return None
 
 
