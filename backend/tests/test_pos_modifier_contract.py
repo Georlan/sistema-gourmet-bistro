@@ -12,7 +12,7 @@ def test_pos_adapter_maps_modifier_ids_to_order_items():
         modificador_ids=["opmod-bacon", "opmod-pao"],
     )
     venda = SimpleNamespace(
-        tipo="Retirada",
+        tipo="balcao",
         origem="smartpos",
         mesa_id=None,
         identificador="Balcão",
