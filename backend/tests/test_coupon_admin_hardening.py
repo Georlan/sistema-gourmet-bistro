@@ -1,14 +1,13 @@
 import uuid
 
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.database import SessionLocal, current_restaurante_id
 from app.main import app
 from app.models import Restaurante, Usuario
 from app.routes.auth import create_access_token
-from app.routes.cupons import _validate_coupon_configuration
 from app.schemas import CupomCreate
 
 client = TestClient(app)
@@ -93,15 +92,13 @@ def test_fixed_coupon_keeps_manual_business_freedom():
     assert response.json()["valor_desconto"] == 150.0
 
 
-def test_non_finite_coupon_value_is_rejected_before_persistence():
-    payload = CupomCreate(
-        codigo="FINITE10",
-        tipo_desconto="fixo",
-        valor_desconto=float("nan"),
-    )
-    with pytest.raises(HTTPException) as exc_info:
-        _validate_coupon_configuration(payload)
-    assert exc_info.value.status_code == 422
+def test_non_finite_coupon_value_is_rejected_by_input_contract():
+    with pytest.raises(ValidationError):
+        CupomCreate(
+            codigo="FINITE10",
+            tipo_desconto="fixo",
+            valor_desconto=float("nan"),
+        )
 
 
 def test_waiter_cannot_read_or_mutate_coupon_administration():
