@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Flame, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
-import { getProductImageUrl } from '../CardapioTypes';
 import { API_BASE_URL } from '../../config/api';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -79,7 +78,7 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
             aria-label={`Ver ${product.name} no cardápio`}
           >
             <img
-              src={getProductImageUrl(product.image)}
+              src={product.image}
               alt=""
               loading="lazy"
               decoding="async"
