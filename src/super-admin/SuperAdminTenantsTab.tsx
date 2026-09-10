@@ -32,6 +32,13 @@ interface SuperAdminTenantsTabProps {
   globalSearch: string;
 }
 
+const OPERATION_PROFILES = [
+  { id: "generic", label: "Outro / configurar depois" },
+  { id: "pizzaria", label: "Pizzaria" },
+  { id: "acai", label: "Açaí" },
+  { id: "churrasco", label: "Churrasco" },
+] as const;
+
 function officialPlan(planId?: string) {
   if (!planId) return undefined;
   return SUBSCRIPTION_PLANS.find(plan => plan.id === planId.toLowerCase());
@@ -67,6 +74,8 @@ export function SuperAdminTenantsTab({
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
   const [editPlan, setEditPlan] = useState("pocket");
+  const [editOperationProfile, setEditOperationProfile] = useState<string | null>(null);
+  const [isLoadingOperationProfile, setIsLoadingOperationProfile] = useState(false);
   const [editReason, setEditReason] = useState("");
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -88,13 +97,32 @@ export function SuperAdminTenantsTab({
     return matchesSearch && matchesPlan;
   });
 
+  const loadOperationProfile = async (tenant: Tenant) => {
+    setIsLoadingOperationProfile(true);
+    try {
+      const response = await superAdminFetch(`/api/super-admin/restaurantes/${tenant.id}/operation-profile`);
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || typeof payload?.operationProfile !== "string") {
+        throw new Error(payload?.detail || "Não foi possível carregar o tipo de operação.");
+      }
+      setEditOperationProfile(payload.operationProfile);
+    } catch (error) {
+      setEditOperationProfile(null);
+      setEditError(superAdminErrorMessage(error));
+    } finally {
+      setIsLoadingOperationProfile(false);
+    }
+  };
+
   const openEditModal = (tenant: Tenant) => {
     setEditingTenant(tenant);
     setEditName(tenant.name || "");
     setEditSlug(tenant.subdomain || "");
     setEditPlan(tenant.plan?.toLowerCase() || "pocket");
+    setEditOperationProfile(null);
     setEditReason("");
     setEditError(null);
+    void loadOperationProfile(tenant);
   };
 
   const handleSaveEdit = async (event: React.FormEvent) => {
@@ -102,6 +130,10 @@ export function SuperAdminTenantsTab({
     if (!editingTenant) return;
     if (editReason.trim().length < 3) {
       setEditError("O motivo da alteração é obrigatório (mínimo de 3 caracteres).");
+      return;
+    }
+    if (!editOperationProfile) {
+      setEditError("Aguarde o carregamento do tipo de operação antes de salvar.");
       return;
     }
 
@@ -122,6 +154,26 @@ export function SuperAdminTenantsTab({
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.detail || "Falha ao salvar alterações.");
       }
+
+      const profileResponse = await superAdminFetch(
+        `/api/super-admin/restaurantes/${editingTenant.id}/operation-profile`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operation_profile: editOperationProfile,
+            reason: editReason.trim(),
+          }),
+        },
+      );
+      if (!profileResponse.ok) {
+        const payload = await profileResponse.json().catch(() => null);
+        throw new Error(
+          payload?.detail
+          || "Os dados principais foram salvos, mas não foi possível salvar o tipo de operação.",
+        );
+      }
+
       setEditingTenant(null);
       refreshTenants();
     } catch (error) {
@@ -227,7 +279,7 @@ export function SuperAdminTenantsTab({
                     <td className="px-4 py-3.5 text-right"><div className="inline-flex items-center gap-1.5">
                       <button type="button" onClick={() => setSupportTenant(tenant)} className="flex items-center gap-1 rounded border border-amber-800/60 bg-amber-950/40 px-2 py-1 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100" title="Acessar estabelecimento em Modo Suporte auditado"><Headphones className="h-3 w-3" /> Suporte</button>
                       <button type="button" onClick={() => setSelectedTenant(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Ver detalhes"><Eye className="h-3 w-3" /> Detalhes</button>
-                      <button type="button" onClick={() => openEditModal(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Editar restaurante e plano"><Edit3 className="h-3 w-3" /> Editar</button>
+                      <button type="button" onClick={() => openEditModal(tenant)} className="flex items-center gap-1 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-koma-secondary hover:bg-zinc-800 hover:text-koma-foreground" title="Editar restaurante, plano e tipo"><Edit3 className="h-3 w-3" /> Editar</button>
                       <button type="button" onClick={() => openStatusModal(tenant)} className={`rounded border p-1.5 ${isSuspended ? "border-emerald-800/50 bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60" : "border-rose-800/50 bg-rose-950/40 text-rose-400 hover:bg-rose-900/60"}`} title={isSuspended ? "Reativar restaurante" : "Suspender restaurante"}>{isSuspended ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}</button>
                     </div></td>
                   </tr>
@@ -266,9 +318,22 @@ export function SuperAdminTenantsTab({
               <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Nome do Estabelecimento</span><input type="text" value={editName} onChange={event => setEditName(event.target.value)} required className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" /></label>
               <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Subdomínio / Slug</span><input type="text" value={editSlug} onChange={event => setEditSlug(event.target.value)} placeholder="slug-do-restaurante" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" /></label>
               <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Plano Comercial</span><select value={editPlan} onChange={event => setEditPlan(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{SUBSCRIPTION_PLANS.map(plan => <option key={plan.id} value={plan.id}>{plan.name} — {formatCurrency(plan.price)}/mês ({formatPercentage(plan.splitFeeRate)} split)</option>)}</select></label>
-              <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Motivo da Alteração <span className="text-rose-400">*</span></span><textarea rows={2} value={editReason} onChange={event => setEditReason(event.target.value)} required placeholder="Ex: Cliente solicitou upgrade para o plano Premium." className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground placeholder:text-koma-subtle focus:border-[#00b894] focus:outline-none" /><span className="mt-0.5 block text-[10px] text-koma-subtle">Obrigatório para a trilha de auditoria administrativa persistente.</span></label>
+              <label className="block">
+                <span className="mb-1 block font-medium text-koma-secondary">Tipo de operação</span>
+                <select
+                  value={editOperationProfile || ""}
+                  onChange={event => setEditOperationProfile(event.target.value)}
+                  disabled={isLoadingOperationProfile || editOperationProfile === null}
+                  className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none disabled:opacity-60"
+                >
+                  {editOperationProfile === null && <option value="">Carregando configuração...</option>}
+                  {OPERATION_PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
+                </select>
+                <span className="mt-1 block text-[10px] leading-relaxed text-koma-subtle">Por enquanto este campo é somente uma configuração. Mudar o tipo não altera cardápio, preços, complementos, Caixa, Garçom ou regras de pedido automaticamente.</span>
+              </label>
+              <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Motivo da Alteração <span className="text-rose-400">*</span></span><textarea rows={2} value={editReason} onChange={event => setEditReason(event.target.value)} required placeholder="Ex: Ajuste cadastral solicitado pelo restaurante." className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground placeholder:text-koma-subtle focus:border-[#00b894] focus:outline-none" /><span className="mt-0.5 block text-[10px] text-koma-subtle">Obrigatório para a trilha de auditoria administrativa persistente.</span></label>
               {editError && <div className="rounded-lg border border-rose-800/50 bg-rose-950/40 p-2.5 text-xs text-rose-300">{editError}</div>}
-              <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3"><button type="button" onClick={() => setEditingTenant(null)} disabled={isSubmittingEdit} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-koma-secondary disabled:opacity-50">Cancelar</button><button type="submit" disabled={isSubmittingEdit} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-bold text-black disabled:opacity-50">{isSubmittingEdit ? "Salvando..." : "Salvar Alterações"}</button></div>
+              <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3"><button type="button" onClick={() => setEditingTenant(null)} disabled={isSubmittingEdit} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-koma-secondary disabled:opacity-50">Cancelar</button><button type="submit" disabled={isSubmittingEdit || isLoadingOperationProfile || !editOperationProfile} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-bold text-black disabled:opacity-50">{isSubmittingEdit ? "Salvando..." : "Salvar Alterações"}</button></div>
             </form>
           </div>
         </div>
