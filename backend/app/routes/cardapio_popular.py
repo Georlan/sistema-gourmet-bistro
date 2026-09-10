@@ -20,7 +20,7 @@ from ..database import get_db, tenant_session_scope
 from ..models import Comanda, Item, Lancamento, Produto
 from ..services.public_orders import resolve_restaurant_id
 
-router = APIRouter()
+router = APIRouter(prefix="/api/cardapio-digital")
 
 POPULAR_WINDOW_DAYS = 90
 POPULAR_LIMIT = 6
