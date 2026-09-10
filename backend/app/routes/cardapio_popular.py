@@ -12,15 +12,13 @@ import time
 from threading import Lock
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import Depends, Response
 from sqlalchemy import and_, desc, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db, tenant_session_scope
 from ..models import Comanda, Item, Lancamento, Produto
 from ..services.public_orders import resolve_restaurant_id
-
-router = APIRouter(prefix="/api/cardapio-digital")
 
 POPULAR_WINDOW_DAYS = 90
 POPULAR_LIMIT = 6
@@ -53,7 +51,6 @@ def _store_cache(restaurante_id: int, payload: list[dict[str, object]]) -> None:
         )
 
 
-@router.get("/populares")
 def listar_produtos_populares(
     response: Response,
     restaurante_id: Optional[str] = None,
