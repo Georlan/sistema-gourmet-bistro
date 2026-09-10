@@ -32,6 +32,7 @@ from ...models import (
     OpcaoModificador,
     Produto,
 )
+from ...services.coupon_eligibility import customer_matches_targeted_coupon
 
 
 class ValidationDataLoader:
@@ -161,12 +162,22 @@ class ValidationDataLoader:
                     )
                     has_prev_orders = prev_count > 0
 
+                customer_is_eligible = customer_matches_targeted_coupon(
+                    db,
+                    restaurante_id=restaurante_id,
+                    targeted_cliente_id=cupom.cliente_id,
+                    cliente_id=cliente_id,
+                    cliente_telefone=cliente_telefone or delivery_phone,
+                )
+
                 coupon_input = ValidationCoupon(
                     code=cupom.codigo,
                     discount_type=cupom.tipo_desconto,
                     discount_value=to_money_decimal(cupom.valor_desconto),
                     min_order_value=to_money_decimal(cupom.valor_minimo_pedido or 0.0),
-                    is_active=bool(cupom.ativo),
+                    # Um cupom direcionado incompatível é tratado como não elegível
+                    # no pipeline canônico, portanto nunca chega ao pricing.
+                    is_active=bool(cupom.ativo) and customer_is_eligible,
                     is_expired=is_expired,
                     is_usage_limit_reached=limit_reached,
                     is_first_purchase_only=bool(cupom.apenas_primeira_compra),
