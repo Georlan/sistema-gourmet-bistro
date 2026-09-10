@@ -38,6 +38,17 @@ test('CashierOnlineMenu routes channel concerns to their canonical owners', () =
   assert.match(onlineMenu, /setActiveSubTab\('integracoes'\)/);
 });
 
+test('Cardápio online aproxima venda recorrente sem criar outra fonte de cupom ou fidelidade', () => {
+  const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
+  assert.match(onlineMenu, /id="online-menu-growth-shortcuts"/);
+  assert.match(onlineMenu, /id="online-menu-open-coupons"/);
+  assert.match(onlineMenu, /id="online-menu-open-loyalty"/);
+  assert.match(onlineMenu, /setActiveTab\('clientes'\)/);
+  assert.match(onlineMenu, /openCustomerTool\('cupons'\)/);
+  assert.match(onlineMenu, /openCustomerTool\('fidelidade'\)/);
+  assert.doesNotMatch(onlineMenu, /fetch\([^\n]*(?:cupons|fidelidade)/i);
+});
+
 test('Pedidos & horários no longer owns payment or delivery configuration', () => {
   const orders = source('../src/components/caixa/online-menu/OnlineMenuOrdersSettings.tsx');
   assert.match(orders, /status_override/);
