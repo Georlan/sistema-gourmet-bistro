@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Edit3, Layers, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Check, Edit3, Layers, Plus, Search, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 export interface OpcaoModificador {
@@ -48,7 +48,6 @@ export default function ComplementosTab({
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGrupo, setEditingGrupo] = useState<GrupoModificador | null>(null);
-  const [syncingSuggestions, setSyncingSuggestions] = useState(false);
 
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'obrigatorio' | 'opcional' | 'meio_a_meio'>('opcional');
@@ -195,39 +194,6 @@ export default function ComplementosTab({
     ));
   };
 
-  const handleApplySuggestions = async () => {
-    if (syncingSuggestions) return;
-    try {
-      setSyncingSuggestions(true);
-      const response = await fetch(`${apiBaseUrl}/cardapio/modificadores/sugestoes/hamburgueria`, {
-        method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json',
-        },
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.detail || 'Falha ao aplicar sugestões.');
-      }
-      await fetchCatalogBindings();
-      const created = Number(data.opcoes_criadas || 0);
-      onShowNotification?.(
-        created > 0
-          ? `${created} adicionais criados e vinculados à família Hambúrgueres.`
-          : 'Sugestões já estavam sincronizadas. Nenhuma duplicação foi criada.',
-        'success',
-      );
-    } catch (err) {
-      onShowNotification?.(
-        err instanceof Error ? err.message : 'Falha ao aplicar sugestões.',
-        'error',
-      );
-    } finally {
-      setSyncingSuggestions(false);
-    }
-  };
-
   const handleSaveGrupo = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!nome.trim()) {
@@ -337,15 +303,6 @@ export default function ComplementosTab({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleApplySuggestions}
-            disabled={syncingSuggestions}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15 disabled:opacity-50"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>{syncingSuggestions ? 'Sincronizando...' : 'Aplicar sugestões'}</span>
-          </button>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
             <input
@@ -374,7 +331,7 @@ export default function ComplementosTab({
           <Layers className="w-10 h-10 mx-auto text-koma-muted opacity-40 mb-3" />
           <h3 className="text-sm font-bold text-koma-foreground">Nenhum grupo de adicionais criado</h3>
           <p className="text-xs text-koma-muted mt-1 max-w-md mx-auto">
-            Use “Aplicar sugestões” para criar os 21 adicionais de hamburgueria ou cadastre um grupo manualmente.
+            Cadastre os grupos e adicionais manualmente para manter o cardápio sob seu controle.
           </p>
         </div>
       ) : (
