@@ -125,14 +125,14 @@ test('Mais escolhidos e Destaques abrem exatamente o mesmo modal canônico do ca
 
   const popular = page.locator('#popular-products-home');
   await expect(popular).toBeVisible();
-  await popular.getByRole('button', { name: 'Abrir Pizza Margherita Especial' }).click();
+  await popular.getByRole('listitem', { name: 'Abrir Pizza Margherita Especial' }).click();
   const popularSnapshot = await modalSnapshot(page, 'Pizza Margherita Especial');
   expect(popularSnapshot).toBe(traditionalSnapshot);
   await closeProductModal(page);
 
   const highlights = page.locator('#cardapio-highlights-home');
   await expect(highlights).toBeVisible();
-  await highlights.getByRole('button', { name: 'Abrir Pizza Margherita Especial' }).click();
+  await highlights.getByRole('listitem', { name: 'Abrir Pizza Margherita Especial' }).click();
   const highlightSnapshot = await modalSnapshot(page, 'Pizza Margherita Especial');
   expect(highlightSnapshot).toBe(traditionalSnapshot);
 });
@@ -150,7 +150,7 @@ test('Complete seu pedido abre o mesmo modal canônico do produto recomendado', 
 
   const recommendations = page.locator('#cardapio-recommendations-home');
   await expect(recommendations).toBeVisible();
-  await recommendations.getByRole('button', {
+  await recommendations.getByRole('listitem', {
     name: 'Abrir bebida Vinho Tinto Sangiovese (Taça)',
   }).click();
   const recommendationSnapshot = await modalSnapshot(page, 'Vinho Tinto Sangiovese (Taça)');
