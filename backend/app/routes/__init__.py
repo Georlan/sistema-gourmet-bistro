@@ -32,7 +32,6 @@ from .saas_billing import router as _saas_billing_router, webhook_router as _saa
 from .order_tracking import router as _order_tracking_router  # noqa: E402
 from .caixa_chat import router as _caixa_chat_router  # noqa: E402
 from .online_order_control import router as _online_order_control_router  # noqa: E402
-from .cardapio_popular import router as _cardapio_popular_router  # noqa: E402
 
 _root_router.router.include_router(_contracts_router)
 _root_router.router.include_router(_contract_readiness_router)
@@ -42,7 +41,6 @@ _root_router.router.include_router(_saas_webhook_router)
 _root_router.router.include_router(_order_tracking_router)
 _root_router.router.include_router(_caixa_chat_router)
 _root_router.router.include_router(_online_order_control_router)
-_root_router.router.include_router(_cardapio_popular_router)
 
 # O histórico autenticado pertence à conta do cliente e é composto como
 # sub-router do cardápio/clientes, sem alterar o tracking anônimo existente.
