@@ -103,6 +103,60 @@ function CompactOnlineMenuNavigation({
   );
 }
 
+/**
+ * Atalhos comerciais, não novos owners de regra.
+ * Cupons e fidelidade continuam pertencendo ao módulo de Clientes; o cardápio
+ * apenas aproxima essas ações do lugar em que o restaurante pensa na vitrine.
+ */
+function OnlineMenuGrowthShortcuts({
+  setActiveTab,
+  setActiveSubTab,
+}: {
+  setActiveTab: (tab: CashierTab) => void;
+  setActiveSubTab: (tab: string) => void;
+}) {
+  const openCustomerTool = (subTab: 'cupons' | 'fidelidade') => {
+    setActiveTab('clientes');
+    setActiveSubTab(subTab);
+  };
+
+  return (
+    <section
+      id="online-menu-growth-shortcuts"
+      className="mb-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex sm:items-center sm:justify-between sm:gap-4"
+    >
+      <div className="max-w-xl">
+        <p className="text-[9px] font-black uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-300">Venda mais</p>
+        <h3 className="mt-1 text-sm font-black text-koma-foreground">Traga o cliente de volta sem complicar o cardápio</h3>
+        <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+          Use cupom para conversão imediata e fidelidade ou cashback para recorrência. As regras continuam centralizadas em Clientes.
+        </p>
+      </div>
+
+      <div className="mt-3 grid shrink-0 grid-cols-2 gap-2 sm:mt-0 sm:min-w-[300px]">
+        <button
+          id="online-menu-open-coupons"
+          type="button"
+          onClick={() => openCustomerTool('cupons')}
+          className="rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-left transition hover:border-emerald-500/35 hover:bg-emerald-500/[0.06]"
+        >
+          <strong className="block text-[10px] text-koma-foreground">Cupons</strong>
+          <span className="mt-0.5 block text-[8px] leading-relaxed text-koma-muted">Criar incentivo para fechar a compra.</span>
+        </button>
+        <button
+          id="online-menu-open-loyalty"
+          type="button"
+          onClick={() => openCustomerTool('fidelidade')}
+          className="rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-left transition hover:border-emerald-500/35 hover:bg-emerald-500/[0.06]"
+        >
+          <strong className="block text-[10px] text-koma-foreground">Fidelidade</strong>
+          <span className="mt-0.5 block text-[8px] leading-relaxed text-koma-muted">Configurar pontos ou cashback.</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 /** Plan gate and online-channel composition only. Technical integrations live under Sistema. */
 export default function CashierOnlineMenu({
   apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu,
@@ -187,6 +241,9 @@ export default function CashierOnlineMenu({
   return (
     <>
       <CompactOnlineMenuNavigation activeSection={activeSection} setActiveSubTab={setActiveSubTab} />
+      {activeSection === 'perfil' && (
+        <OnlineMenuGrowthShortcuts setActiveTab={setActiveTab} setActiveSubTab={setActiveSubTab} />
+      )}
       {content}
     </>
   );
