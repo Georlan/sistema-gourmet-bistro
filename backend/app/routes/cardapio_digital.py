@@ -36,7 +36,7 @@ from ..schemas import (
 from ..websocket_manager import manager
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.online_order_policy import evaluate_online_order_policy
-from .products import ordered_categories as _ordered_categories
+from .products import notify_catalog_update, ordered_categories as _ordered_categories
 
 logger = logging.getLogger("koma.cardapio_digital")
 router = APIRouter(prefix="/api/cardapio-digital", tags=["Cardapio Digital Assets"])
@@ -135,6 +135,41 @@ def _supabase_storage_url() -> str:
             detail="Armazenamento de imagens não configurado.",
         )
     return storage_url
+
+
+async def _delete_storage_object_best_effort(
+    object_path: str,
+    restaurante_id: int,
+    asset_label: str,
+) -> None:
+    """Remove objeto antigo sem transformar uma troca já concluída em erro para o operador."""
+    delete_url = f"{_supabase_storage_url()}/storage/v1/object/cardapio-assets"
+    try:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
+            response = await client.request(
+                "DELETE",
+                delete_url,
+                headers=_supabase_storage_headers(),
+                json={"prefixes": [object_path]},
+            )
+        if response.status_code not in {
+            status.HTTP_200_OK,
+            status.HTTP_204_NO_CONTENT,
+            status.HTTP_404_NOT_FOUND,
+        }:
+            logger.warning(
+                "Storage rejeitou limpeza de %s do restaurante %s com HTTP %s.",
+                asset_label,
+                restaurante_id,
+                response.status_code,
+            )
+    except (httpx.HTTPError, HTTPException) as exc:
+        logger.warning(
+            "Falha ao limpar %s antigo do restaurante %s: %s.",
+            asset_label,
+            restaurante_id,
+            type(exc).__name__,
+        )
 
 
 from ..services.public_orders import resolve_restaurant_id
@@ -320,6 +355,145 @@ def obter_cardapio_publico(
                 for product in produtos
             ],
         }
+
+
+@router.post("/assets/product/{produto_id}")
+async def upload_product_asset(
+    produto_id: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Publica uma única foto do produto no storage do tenant autenticado."""
+    del current_user
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_id,
+    ).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+    content_type = file.content_type or ""
+    try:
+        content = await file.read(MAX_ASSET_SIZE + 1)
+    finally:
+        await file.close()
+    if len(content) > MAX_ASSET_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo excede o limite máximo de 5 MB.",
+        )
+    extension = _validate_asset_content(content_type, content)
+
+    previous_url = produto.imagem or next(
+        (str(url) for url in (produto.imagens_galeria or []) if str(url).strip()),
+        "",
+    )
+    previous_path = _storage_object_path(previous_url, rest_id, "products")
+
+    object_path = f"{rest_id}/products/{uuid.uuid4().hex}.{extension}"
+    storage_url = _supabase_storage_url()
+    upload_url = (
+        f"{storage_url}/storage/v1/object/cardapio-assets/"
+        f"{quote(object_path, safe='/')}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
+            response = await client.post(
+                upload_url,
+                headers=_supabase_storage_headers(content_type),
+                content=content,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "Falha de rede ao enviar foto do produto %s do restaurante %s: %s.",
+            produto_id,
+            rest_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível armazenar a imagem.",
+        ) from exc
+
+    if response.status_code not in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+        logger.warning(
+            "Storage rejeitou foto do produto %s do restaurante %s com HTTP %s.",
+            produto_id,
+            rest_id,
+            response.status_code,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível armazenar a imagem.",
+        )
+
+    public_url = (
+        f"{storage_url}/storage/v1/object/public/cardapio-assets/"
+        f"{quote(object_path, safe='/')}"
+    )
+    produto.imagem = public_url
+    produto.imagens_galeria = []
+    db.commit()
+    db.refresh(produto)
+
+    if previous_path and previous_path != object_path:
+        background_tasks.add_task(
+            _delete_storage_object_best_effort,
+            previous_path,
+            rest_id,
+            "foto de produto",
+        )
+    notify_catalog_update(background_tasks, "Foto do produto atualizada", rest_id)
+    return {
+        "id": produto.id,
+        "imagem": produto.imagem,
+        "imagens_galeria": [],
+    }
+
+
+@router.delete("/assets/product/{produto_id}")
+async def delete_product_asset(
+    produto_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Remove a foto do produto sem afetar itens de outros tenants."""
+    del current_user
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_id,
+    ).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+    current_url = produto.imagem or next(
+        (str(url) for url in (produto.imagens_galeria or []) if str(url).strip()),
+        "",
+    )
+    object_path = _storage_object_path(current_url, rest_id, "products")
+    produto.imagem = ""
+    produto.imagens_galeria = []
+    db.commit()
+    db.refresh(produto)
+
+    if object_path:
+        background_tasks.add_task(
+            _delete_storage_object_best_effort,
+            object_path,
+            rest_id,
+            "foto de produto",
+        )
+    notify_catalog_update(background_tasks, "Foto do produto removida", rest_id)
+    return {
+        "id": produto.id,
+        "imagem": "",
+        "imagens_galeria": [],
+    }
 
 
 @router.post(
