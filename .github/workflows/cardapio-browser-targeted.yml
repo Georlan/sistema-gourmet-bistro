@@ -49,6 +49,7 @@ jobs:
         run: >-
           npm run test:e2e --
           e2e/cardapio-canonical-modal-entrypoints.spec.ts
+          e2e/cardapio-benefits.spec.ts
           e2e/public-menu-order.spec.ts
           e2e/order-tracking-chat.spec.ts
           --project=mobile-390
