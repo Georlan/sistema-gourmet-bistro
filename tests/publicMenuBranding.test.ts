@@ -16,7 +16,7 @@ test('public menu keeps the restaurant logo only in the header', () => {
   assert.doesNotMatch(pageSource, /src=\{activeBrand\.logo\}/);
 });
 
-test('brand hero remains banner-first without a duplicated logo overlay', () => {
+test('brand hero remains banner-first without duplicated branding overlays', () => {
   const heroStart = pageSource.indexOf('id="brand-banner-hero"');
   const heroEnd = pageSource.indexOf('<CardapioConditionsSummary', heroStart);
 
@@ -27,4 +27,7 @@ test('brand hero remains banner-first without a duplicated logo overlay', () => 
   assert.match(heroSource, /activeBrand\.bannerImage/);
   assert.doesNotMatch(heroSource, /activeBrand\.logo/);
   assert.doesNotMatch(heroSource, /LOCAL_LOGO_PLACEHOLDER/);
+  assert.doesNotMatch(heroSource, /activeBrand\.slogan/);
+  assert.doesNotMatch(heroSource, /activeBrand\.address/);
+  assert.doesNotMatch(heroSource, /<h1/);
 });
