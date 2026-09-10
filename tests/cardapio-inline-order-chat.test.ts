@@ -8,6 +8,7 @@ const panel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
 const header = source('../src/cardapio/components/CardapioHeader.tsx');
 const customIcons = source('../src/cardapio/components/KomaPublicIcons.tsx');
 const chatPolish = source('../src/cardapio/cardapioChatPolish.css');
+const viewportSpec = source('../e2e/cardapio-chat-viewports.spec.ts');
 const legacyTracking = source('../src/cardapio/OrderTrackingPage.tsx');
 const emergencyControl = source('../src/components/caixa/online-menu/OnlineOrderEmergencyControl.tsx');
 
@@ -54,6 +55,16 @@ test('painel e drawer compartilham a linguagem KOMA e preservam mobile sem overf
   assert.match(chatPolish, /@media \(max-width: 480px\)/);
   assert.match(chatPolish, /#orders-drawer-panel[\s\S]*width:\s*100vw/);
   assert.match(chatPolish, /prefers-reduced-motion/);
+});
+
+test('regressao de viewport cobre desktop e celulares estreitos sem rede real', () => {
+  assert.match(viewportSpec, /desktop.*1280.*800/s);
+  assert.match(viewportSpec, /mobile-390.*390.*844/s);
+  assert.match(viewportSpec, /mobile-320.*320.*720/s);
+  assert.match(viewportSpec, /expectInsideViewport/);
+  assert.match(viewportSpec, /scrollWidth - document\.documentElement\.clientWidth/);
+  assert.match(viewportSpec, /page\.route\(`\$\{API_ORIGIN\}\/\*\*`/);
+  assert.match(viewportSpec, /sessionStorage\.setItem\('koma_active_orders'/);
 });
 
 test('link legado de acompanhamento restaura o pedido e volta ao cardapio', () => {
