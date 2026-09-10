@@ -33,6 +33,7 @@ import CardapioCartDrawer, {
 } from "./components/CardapioCartDrawer";
 import CardapioAuthModal from "./components/CardapioAuthModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
+import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHistory";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
@@ -54,6 +55,7 @@ import {
   clearAllStoredOrders,
   resolveOrderState,
 } from "./orderTracking";
+import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
@@ -597,6 +599,37 @@ export default function CardapioPage() {
     if (activeBrand?.id) saveCustomerSession(activeBrand.id, { token, profile });
   };
 
+  const handleRepeatOrder = (order: CustomerHistoryOrder) => {
+    if (!activeBrand) return;
+    if (!orderingEnabled) {
+      showNotification(`${orderingMessage} O pedido anterior não foi colocado na sacola.`);
+      return;
+    }
+
+    const rebuilt = rebuildOrderFromCurrentCatalog(order, activeBrand.products);
+    if (rebuilt.items.length === 0) {
+      showNotification(rebuilt.issues[0] || "Os itens desse pedido não estão disponíveis no cardápio atual.");
+      return;
+    }
+
+    if (cart.length > 0 && !window.confirm("Sua sacola atual será substituída pelos itens deste pedido. Continuar?")) {
+      return;
+    }
+
+    setCart(rebuilt.items);
+    setIsProfileOpen(false);
+    setIsCartOpen(true);
+
+    if (rebuilt.issues.length > 0) {
+      const skipped = rebuilt.skippedItems > 0
+        ? ` ${rebuilt.skippedItems} item${rebuilt.skippedItems === 1 ? "" : "ns"} não foi${rebuilt.skippedItems === 1 ? "" : "ram"} incluído${rebuilt.skippedItems === 1 ? "" : "s"}.`
+        : "";
+      showNotification(`Pedido atualizado com ${rebuilt.issues.length} ajuste${rebuilt.issues.length === 1 ? "" : "s"}.${skipped} Confira a sacola.`);
+    } else {
+      showNotification("Pedido recomposto com preços e disponibilidade atuais. Confira a sacola.");
+    }
+  };
+
   const handleLogout = () => {
     if (activeBrand?.id) clearCustomerSession(activeBrand.id);
     setUser(null);
@@ -965,6 +998,7 @@ export default function CardapioPage() {
             if (customerToken) saveCustomerSession(activeBrand.id, { token: customerToken, profile });
           }}
           onLogout={handleLogout}
+          onRepeatOrder={handleRepeatOrder}
         />
       )}
 

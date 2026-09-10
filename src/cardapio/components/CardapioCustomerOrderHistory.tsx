@@ -3,7 +3,7 @@
  * order tracking, which remains session-scoped and token-based.
  */
 import React from "react";
-import { CheckCircle2, ChevronDown, Clock3, History, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, Clock3, History, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
 
@@ -51,6 +51,7 @@ interface HistoryResponse {
 
 interface CardapioCustomerOrderHistoryProps {
   customerToken: string;
+  onRepeatOrder?: (order: CustomerHistoryOrder) => void;
 }
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", {
@@ -70,7 +71,10 @@ const formatDate = (value?: string | null) => {
   }).format(date);
 };
 
-export default function CardapioCustomerOrderHistory({ customerToken }: CardapioCustomerOrderHistoryProps) {
+export default function CardapioCustomerOrderHistory({
+  customerToken,
+  onRepeatOrder,
+}: CardapioCustomerOrderHistoryProps) {
   const [orders, setOrders] = React.useState<CustomerHistoryOrder[]>([]);
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -216,6 +220,15 @@ export default function CardapioCustomerOrderHistory({ customerToken }: Cardapio
                         {order.desconto_cupom > 0 && <div className="flex justify-between text-emerald-400"><span>Cupom</span><span>− {formatCurrency(order.desconto_cupom)}</span></div>}
                         {order.desconto_cashback > 0 && <div className="flex justify-between text-emerald-400"><span>Cashback</span><span>− {formatCurrency(order.desconto_cashback)}</span></div>}
                       </div>
+                    )}
+                    {terminal && order.itens.length > 0 && onRepeatOrder && (
+                      <button
+                        type="button"
+                        onClick={() => onRepeatOrder(order)}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-[10px] font-black text-emerald-400 transition hover:bg-emerald-500/20"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" /> Pedir novamente
+                      </button>
                     )}
                   </div>
                 )}

@@ -11,7 +11,7 @@ import {
   formatBrazilianPhone,
   mapCustomerProfile,
 } from "../customerSession";
-import CardapioCustomerOrderHistory from "./CardapioCustomerOrderHistory";
+import CardapioCustomerOrderHistory, { CustomerHistoryOrder } from "./CardapioCustomerOrderHistory";
 
 interface CardapioUserProfileModalProps {
   onClose: () => void;
@@ -19,6 +19,7 @@ interface CardapioUserProfileModalProps {
   customerToken: string | null;
   onProfileUpdate: (profile: CustomerProfile) => void;
   onLogout: () => void;
+  onRepeatOrder?: (order: CustomerHistoryOrder) => void;
 }
 
 export default function CardapioUserProfileModal({
@@ -27,6 +28,7 @@ export default function CardapioUserProfileModal({
   customerToken,
   onProfileUpdate,
   onLogout,
+  onRepeatOrder,
 }: CardapioUserProfileModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || "");
@@ -278,7 +280,12 @@ export default function CardapioUserProfileModal({
                 </div>
               </div>
 
-              {customerToken && <CardapioCustomerOrderHistory customerToken={customerToken} />}
+              {customerToken && (
+                <CardapioCustomerOrderHistory
+                  customerToken={customerToken}
+                  onRepeatOrder={onRepeatOrder}
+                />
+              )}
 
               {errorMessage && <p className="text-red-400 text-[11px]">{errorMessage}</p>}
               <button
