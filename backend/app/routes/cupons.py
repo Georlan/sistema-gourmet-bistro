@@ -1,4 +1,5 @@
 import datetime
+import math
 import uuid
 from typing import List, Optional
 
@@ -31,6 +32,21 @@ class GrowthRecommendationRequest(BaseModel):
     average_ticket: float = Field(gt=0, le=1_000_000)
     variable_cost_percent: float = Field(ge=0, lt=100)
     minimum_margin_percent: float = Field(gt=0, lt=100)
+
+
+def _validate_coupon_configuration(payload: CupomCreate) -> None:
+    """Protege invariantes matemáticas sem limitar escolhas comerciais válidas."""
+    numeric_values = [payload.valor_desconto, payload.valor_minimo_pedido]
+    if any(value is not None and not math.isfinite(float(value)) for value in numeric_values):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Valores monetários do cupom devem ser números finitos.",
+        )
+    if payload.tipo_desconto == "porcentagem" and float(payload.valor_desconto) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Desconto percentual não pode ultrapassar 100%.",
+        )
 
 
 def _validar_regras_cupom(cupom: Cupom, subtotal: float, telefone: Optional[str], db: Session) -> tuple[bool, str, float]:
@@ -74,7 +90,7 @@ def _validar_regras_cupom(cupom: Cupom, subtotal: float, telefone: Optional[str]
 @router.get("", response_model=List[CupomResponse])
 def listar_cupons(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("fidelidade:operar")),
 ):
     rest_id = require_tenant_id()
     return db.query(Cupom).filter(Cupom.restaurante_id == rest_id).order_by(Cupom.criado_em.desc()).all()
@@ -110,8 +126,9 @@ def recomendar_incentivos(
 def criar_cupom(
     payload: CupomCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
+    _validate_coupon_configuration(payload)
     rest_id = require_tenant_id()
     codigo_clean = payload.codigo.strip().upper()
 
@@ -151,8 +168,9 @@ def atualizar_cupom(
     cupom_id: str,
     payload: CupomCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
+    _validate_coupon_configuration(payload)
     rest_id = require_tenant_id()
     cupom = db.query(Cupom).filter(
         Cupom.restaurante_id == rest_id,
