@@ -6,6 +6,7 @@
 import React from "react";
 import { Minus, Plus } from "lucide-react";
 import { Product, getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from "../CardapioTypes";
+import { getProductCatalogSignalLabel } from "../cardapioMerchandising";
 import "../cardapioTone.css";
 
 interface CardapioProductCardProps {
@@ -29,6 +30,7 @@ export default function CardapioProductCard({
     (product.modifiers && product.modifiers.length > 0) ||
     (product.modifierGroups && product.modifierGroups.length > 0)
   );
+  const catalogSignal = getProductCatalogSignalLabel(product.category);
 
   const formattedPrice = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -66,6 +68,14 @@ export default function CardapioProductCard({
             {!available && (
               <span className="rounded-md bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-rose-400">
                 Esgotado
+              </span>
+            )}
+            {available && catalogSignal && (
+              <span
+                className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-amber-300"
+                title="Sinal publicado na categoria do catálogo"
+              >
+                {catalogSignal}
               </span>
             )}
             {available && hasModifiers && (
