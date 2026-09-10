@@ -30,6 +30,11 @@ router = APIRouter(
     tags=["Modificadores e Complementos"]
 )
 
+# Tombstone interno para remover um grupo da configuração ativa sem quebrar
+# referências históricas de pedidos. O schema público de criação não aceita esse
+# valor; ele existe somente para reparos administrativos auditados.
+ARCHIVED_MODIFIER_TYPE = "__archived__"
+
 
 class GrupoModificadorCreateV2(GrupoModificadorCreate):
     categoria_ids: List[str] = Field(default_factory=list)
@@ -128,7 +133,10 @@ def _validate_product_ids(db: Session, restaurante_id: int, product_ids: List[st
 def listar_grupos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     del current_user
     rest_id = require_tenant_id()
-    grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == rest_id).all()
+    grupos = db.query(GrupoModificador).filter(
+        GrupoModificador.restaurante_id == rest_id,
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
+    ).all()
     return [_serialize_grupo(g, db) for g in grupos]
 
 
@@ -148,9 +156,11 @@ def listar_modificadores_efetivos(db: Session = Depends(get_db), current_user: U
 
 @router.get("/publico/{restaurante_id}", response_model=List[GrupoModificadorResponseV2])
 def listar_grupos_publico(restaurante_id: int, db: Session = Depends(get_db)):
-    grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == restaurante_id).all()
+    grupos = db.query(GrupoModificador).filter(
+        GrupoModificador.restaurante_id == restaurante_id,
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
+    ).all()
     return [_serialize_grupo(g, db) for g in grupos]
-
 
 
 @router.post("/grupos", response_model=GrupoModificadorResponseV2, status_code=status.HTTP_201_CREATED)
@@ -212,6 +222,7 @@ def atualizar_grupo(
     grupo = db.query(GrupoModificador).filter(
         GrupoModificador.restaurante_id == rest_id,
         GrupoModificador.id == grupo_id,
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
     ).first()
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
@@ -265,6 +276,7 @@ def deletar_grupo(
     grupo = db.query(GrupoModificador).filter(
         GrupoModificador.restaurante_id == rest_id,
         GrupoModificador.id == grupo_id,
+        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
     ).first()
     if not grupo:
         raise HTTPException(status_code=404, detail="Grupo não encontrado.")
