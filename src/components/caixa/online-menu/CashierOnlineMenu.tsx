@@ -6,6 +6,7 @@ import { OnlineMenuOrdersSettings } from './OnlineMenuOrdersSettings';
 import { OnlineMenuPaymentSettings } from './OnlineMenuPaymentSettings';
 import { OnlineMenuQrLinks } from './OnlineMenuQrLinks';
 import { OnlineOrderCapacitySettings } from './OnlineOrderCapacitySettings';
+import { OnlineOrderCustomerBlocks } from './OnlineOrderCustomerBlocks';
 
 interface Props {
   apiBaseUrl: string;
@@ -139,6 +140,7 @@ export default function CashierOnlineMenu({
     content = (
       <>
         <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+        <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
         <OnlineMenuOrdersSettings
           apiBaseUrl={apiBaseUrl}
           authHeaders={authHeaders}
