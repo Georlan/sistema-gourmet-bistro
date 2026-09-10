@@ -66,7 +66,7 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
   };
 
   return (
-    <section aria-labelledby="popular-products-title" className="rounded-2xl border border-koma-border bg-koma-card p-4" id="popular-products-home">
+    <section aria-labelledby="popular-products-title" className="w-full basis-full border-t border-koma-border pt-3" id="popular-products-home">
       <div className="mb-3 flex items-center gap-2">
         <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
           <Flame className="h-4 w-4" aria-hidden="true" />
@@ -108,19 +108,17 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
 export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfig; onOpen: () => void }) {
   const deliveryEnabled = brand.deliveryEnabled !== false;
   return (
-    <>
-      <section aria-label="Condições do pedido" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-koma-border bg-koma-card px-4 py-2">
-        {!deliveryEnabled ? (
-          <span className="text-xs font-semibold text-koma-secondary">Somente retirada</span>
-        ) : (brand.pedidoMinimo ?? 0) > 0 ? (
-          <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">Mínimo para entrega</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
-        ) : <span className="text-xs font-semibold text-koma-secondary">Entrega e retirada</span>}
-        <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
-          <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-        </button>
-      </section>
+    <section aria-label="Condições do pedido" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-koma-border bg-koma-card px-4 py-2">
+      {!deliveryEnabled ? (
+        <span className="text-xs font-semibold text-koma-secondary">Somente retirada</span>
+      ) : (brand.pedidoMinimo ?? 0) > 0 ? (
+        <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">Mínimo para entrega</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
+      ) : <span className="text-xs font-semibold text-koma-secondary">Entrega e retirada</span>}
+      <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
+        <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+      </button>
       <PopularProductsPreview brand={brand} />
-    </>
+    </section>
   );
 }
 
