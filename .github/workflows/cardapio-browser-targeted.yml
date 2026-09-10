@@ -1,0 +1,65 @@
+name: Cardapio Browser Targeted
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/cardapio/**'
+      - 'tests/cardapio*.test.ts'
+      - 'tests/publicMenu*.test.ts'
+      - 'e2e/cardapio-*.spec.ts'
+      - 'e2e/public-menu-order.spec.ts'
+      - 'e2e/order-tracking-chat.spec.ts'
+      - 'playwright.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+
+concurrency:
+  group: cardapio-browser-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cardapio-browser:
+    name: Cardapio browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run focused cardapio browser regressions
+        env:
+          KOMA_E2E_PORT: '4287'
+        run: >-
+          npm run test:e2e --
+          e2e/cardapio-canonical-modal-entrypoints.spec.ts
+          e2e/public-menu-order.spec.ts
+          e2e/order-tracking-chat.spec.ts
+          --project=mobile-390
+          --project=desktop-1366
+          --workers=2
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cardapio-playwright-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
