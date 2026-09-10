@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { getProductCatalogSignalLabel, isCampaignCategory } from '../src/cardapio/cardapioMerchandising';
+import { getProductCatalogSignalLabel } from '../src/cardapio/cardapioMerchandising';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
@@ -16,15 +16,13 @@ test('classificador promocional deriva apenas sinais explícitos da categoria do
   assert.equal(getProductCatalogSignalLabel(undefined), null);
 });
 
-test('home e cards compartilham o mesmo classificador de campanha', () => {
-  for (const category of ['Destaques', 'Ofertas', 'Promoção', 'Campanha', 'Especial']) {
-    assert.equal(isCampaignCategory(category), true);
+test('card usa o classificador do catálogo para sinais promocionais explícitos', () => {
+  for (const category of ['Destaques', 'Ofertas', 'Promoção', 'Campanha', 'Especial', 'Especiais']) {
+    assert.notEqual(getProductCatalogSignalLabel(category), null);
   }
-  assert.equal(isCampaignCategory('Bebidas'), false);
+  assert.equal(getProductCatalogSignalLabel('Bebidas'), null);
 
-  const highlights = source('../src/cardapio/components/CardapioHighlights.tsx');
   const card = source('../src/cardapio/components/CardapioProductCard.tsx');
-  assert.match(highlights, /isCampaignCategory\(product\.category\)/);
   assert.match(card, /getProductCatalogSignalLabel\(product\.category\)/);
 });
 
