@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
-  MessageCircle,
   RefreshCw,
   Send,
   X,
@@ -22,7 +21,9 @@ import {
   fallbackOrderState,
   isOrderStateContract,
 } from "../orderTracking";
+import "../cardapioChatPolish.css";
 import CardapioPushNotifications from "./CardapioPushNotifications";
+import { KomaOrderChatIcon } from "./KomaPublicIcons";
 
 interface TrackingPayload {
   status: string;
@@ -238,7 +239,7 @@ export default function CardapioOrderChatPanel({
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 shrink-0 text-emerald-400" />
+              <KomaOrderChatIcon size={16} className="shrink-0" aria-hidden="true" />
               <h2 className="truncate text-sm font-black">Pedido #{order.numero_pedido}</h2>
             </div>
             <p className="mt-0.5 text-[10px] text-koma-muted">Chat e acompanhamento sem sair do cardápio</p>
@@ -303,7 +304,7 @@ export default function CardapioOrderChatPanel({
           <div className="flex h-full items-center justify-center text-xs text-koma-muted">Carregando conversa…</div>
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-koma-muted">
-            <MessageCircle className="h-8 w-8 opacity-30" />
+            <KomaOrderChatIcon size={32} className="opacity-30" aria-hidden="true" />
             <p className="mt-2 text-xs">Nenhuma mensagem ainda.</p>
           </div>
         ) : messages.map((message) => (
