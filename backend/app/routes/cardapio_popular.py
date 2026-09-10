@@ -55,9 +55,9 @@ def _store_cache(restaurante_id: int, payload: list[dict[str, object]]) -> None:
 
 @router.get("/populares")
 def listar_produtos_populares(
+    response: Response,
     restaurante_id: Optional[str] = None,
     slug: Optional[str] = None,
-    response: Response = None,
     db: Session = Depends(get_db),
 ):
     """Retorna no máximo seis ids de produtos populares do tenant nos últimos 90 dias."""
