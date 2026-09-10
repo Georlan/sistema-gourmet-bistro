@@ -23,7 +23,6 @@ import {
   SocialNetwork,
   getProductImageUrl,
   getRestaurantAssetUrl,
-  LOCAL_LOGO_PLACEHOLDER,
 } from "./CardapioTypes";
 import CardapioHeader from "./components/CardapioHeader";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
@@ -811,30 +810,19 @@ export default function CardapioPage() {
           <img src={activeBrand.bannerImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-emerald-950/40" />
           <div className="relative flex h-full items-end justify-between gap-4 p-5 sm:p-7">
-            <div className="flex min-w-0 items-center gap-3.5 sm:gap-4">
-              <img
-                src={activeBrand.logo}
-                alt={activeBrand.name}
-                className="h-14 w-14 shrink-0 rounded-2xl border border-white/20 bg-white object-contain p-1 shadow-lg sm:h-16 sm:w-16"
-                onError={(event) => {
-                  event.currentTarget.onerror = null;
-                  event.currentTarget.src = LOCAL_LOGO_PLACEHOLDER;
-                }}
-              />
-              <div className="min-w-0">
-                <h1 className="truncate text-xl font-black text-white sm:text-2xl">{activeBrand.name}</h1>
-                {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/75 sm:text-sm">{activeBrand.slogan}</p>}
-                {activeBrand.address && (
-                  <button
-                    type="button"
-                    onClick={() => setIsStoreInfoOpen(true)}
-                    className="mt-1.5 flex items-center gap-1.5 text-left text-xs font-semibold text-emerald-300/90 transition hover:text-emerald-200"
-                  >
-                    <MapPin className="h-3 w-3 shrink-0" />
-                    <span className="truncate max-w-xs">{activeBrand.address}</span>
-                  </button>
-                )}
-              </div>
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-black text-white sm:text-2xl">{activeBrand.name}</h1>
+              {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/75 sm:text-sm">{activeBrand.slogan}</p>}
+              {activeBrand.address && (
+                <button
+                  type="button"
+                  onClick={() => setIsStoreInfoOpen(true)}
+                  className="mt-1.5 flex items-center gap-1.5 text-left text-xs font-semibold text-emerald-300/90 transition hover:text-emerald-200"
+                >
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate max-w-xs">{activeBrand.address}</span>
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -938,7 +926,7 @@ export default function CardapioPage() {
         </div>
 
         <footer className="mt-4 border-t border-koma-border py-7 text-center">
-          <div className="flex items-center justify-center gap-2"><img src={activeBrand.logo} alt="" className="h-7 w-7 rounded-lg bg-white object-contain p-0.5" /><strong className="text-xs text-koma-secondary">{activeBrand.name}</strong></div>
+          <strong className="text-xs text-koma-secondary">{activeBrand.name}</strong>
           <p className="mt-2 text-[9px] text-koma-subtle">Cardápio digital KÔMA · preços e disponibilidade atualizados pelo restaurante.</p>
         </footer>
       </main>
