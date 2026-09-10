@@ -11,59 +11,83 @@ TENANT_A = 992
 TENANT_B = 991
 
 
-def _ensure_restaurant(db, restaurante_id: int, slug: str):
-    if not db.query(Restaurante).filter(Restaurante.id == restaurante_id).first():
-        db.add(Restaurante(id=restaurante_id, nome=f"Restaurante {restaurante_id}", slug=slug))
+def _seed_tenant(
+    restaurante_id: int,
+    *,
+    slug: str,
+    coupon_code: str,
+    discount_type: str,
+    discount_value: float,
+    minimum_order: float,
+    reward_type: str,
+    reward_rate: float,
+    point_value: float,
+):
+    db = SessionLocal()
+    token = current_restaurante_id.set(restaurante_id)
+    try:
+        if not db.query(Restaurante).filter(Restaurante.id == restaurante_id).first():
+            db.add(Restaurante(
+                id=restaurante_id,
+                nome=f"Restaurante {restaurante_id}",
+                slug=slug,
+            ))
+            db.commit()
+
+        db.add(Cupom(
+            id=f"cup-public-{restaurante_id}-{uuid.uuid4().hex[:8]}",
+            restaurante_id=restaurante_id,
+            codigo=coupon_code,
+            tipo_desconto=discount_type,
+            valor_desconto=discount_value,
+            valor_minimo_pedido=minimum_order,
+            ativo=True,
+        ))
+
+        program = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == restaurante_id,
+        ).first()
+        if not program:
+            program = ConfigFidelizacao(restaurante_id=restaurante_id)
+            db.add(program)
+        program.ativo = True
+        program.tipo_recompensa = reward_type
+        program.taxa_conversao = reward_rate
+        program.valor_ponto_em_dinheiro = point_value
         db.commit()
-
-
-def _set_program(db, restaurante_id: int, *, reward_type: str, rate: float, point_value: float):
-    program = db.query(ConfigFidelizacao).filter(
-        ConfigFidelizacao.restaurante_id == restaurante_id,
-    ).first()
-    if not program:
-        program = ConfigFidelizacao(restaurante_id=restaurante_id)
-        db.add(program)
-    program.ativo = True
-    program.tipo_recompensa = reward_type
-    program.taxa_conversao = rate
-    program.valor_ponto_em_dinheiro = point_value
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
 
 
 def test_public_benefits_are_tenant_isolated_and_minimal():
     code_a = f"PUBLICA{uuid.uuid4().hex[:7].upper()}"
     code_b = f"OUTRA{uuid.uuid4().hex[:7].upper()}"
 
-    db = SessionLocal()
-    token = current_restaurante_id.set(TENANT_A)
-    try:
-        _ensure_restaurant(db, TENANT_A, "benefits-contract-a")
-        _ensure_restaurant(db, TENANT_B, "benefits-contract-b")
-
-        db.add(Cupom(
-            id=f"cup-public-a-{uuid.uuid4().hex[:8]}",
-            restaurante_id=TENANT_A,
-            codigo=code_a,
-            tipo_desconto="porcentagem",
-            valor_desconto=7.0,
-            valor_minimo_pedido=30.0,
-            ativo=True,
-        ))
-        db.add(Cupom(
-            id=f"cup-public-b-{uuid.uuid4().hex[:8]}",
-            restaurante_id=TENANT_B,
-            codigo=code_b,
-            tipo_desconto="fixo",
-            valor_desconto=9.0,
-            valor_minimo_pedido=45.0,
-            ativo=True,
-        ))
-        _set_program(db, TENANT_A, reward_type="CASHBACK", rate=3.25, point_value=0.05)
-        _set_program(db, TENANT_B, reward_type="PONTOS", rate=2.0, point_value=0.10)
-        db.commit()
-    finally:
-        current_restaurante_id.reset(token)
-        db.close()
+    # Cada seed usa seu próprio TenantSession/contexto. O teste deve provar o
+    # isolamento público sem contornar o guard de escrita cross-tenant.
+    _seed_tenant(
+        TENANT_A,
+        slug="benefits-contract-a",
+        coupon_code=code_a,
+        discount_type="porcentagem",
+        discount_value=7.0,
+        minimum_order=30.0,
+        reward_type="CASHBACK",
+        reward_rate=3.25,
+        point_value=0.05,
+    )
+    _seed_tenant(
+        TENANT_B,
+        slug="benefits-contract-b",
+        coupon_code=code_b,
+        discount_type="fixo",
+        discount_value=9.0,
+        minimum_order=45.0,
+        reward_type="PONTOS",
+        reward_rate=2.0,
+        point_value=0.10,
+    )
 
     response = client.get("/cardapio/cupons/beneficios", params={"restaurante_id": TENANT_A})
     assert response.status_code == 200
