@@ -7,7 +7,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   CheckCircle2,
   Clock3,
-  MapPin,
   RefreshCw,
   Search,
   ShoppingBag,
@@ -807,52 +806,36 @@ export default function CardapioPage() {
         )}
 
         <section className="relative h-48 overflow-hidden rounded-3xl border border-koma-border sm:h-60" id="brand-banner-hero">
-          <img src={activeBrand.bannerImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-emerald-950/40" />
-          <div className="relative flex h-full items-end justify-between gap-4 p-5 sm:p-7">
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-black text-white sm:text-2xl">{activeBrand.name}</h1>
-              {activeBrand.slogan && <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-relaxed text-white/75 sm:text-sm">{activeBrand.slogan}</p>}
-              {activeBrand.address && (
-                <button
-                  type="button"
-                  onClick={() => setIsStoreInfoOpen(true)}
-                  className="mt-1.5 flex items-center gap-1.5 text-left text-xs font-semibold text-emerald-300/90 transition hover:text-emerald-200"
-                >
-                  <MapPin className="h-3 w-3 shrink-0" />
-                  <span className="truncate max-w-xs">{activeBrand.address}</span>
-                </button>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsStoreInfoOpen(true)}
-              className={clsx(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-black backdrop-blur transition hover:scale-105",
-                activeBrand.storeStatus === "closed"
-                  ? "border-rose-400/30 bg-rose-500/20 text-rose-200"
-                  : activeBrand.storeStatus === "open"
-                    ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200"
-                    : "border-amber-400/30 bg-amber-500/20 text-amber-100"
-              )}
-            >
-              <span className={clsx(
-                "h-2 w-2 rounded-full shrink-0",
-                activeBrand.storeStatus === "open"
-                  ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
-                  : activeBrand.storeStatus === "closed"
-                    ? "bg-rose-400"
-                    : "bg-amber-400"
-              )} />
-              <span>
-                {activeBrand.storeStatus === "closed"
-                  ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados")
-                  : activeBrand.storeStatus === "open"
-                    ? "Aberto para pedidos"
-                    : "Ver horários"}
-              </span>
-            </button>
-          </div>
+          <img src={activeBrand.bannerImage} alt={`${activeBrand.name} — banner`} className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" aria-hidden="true" />
+          <button
+            type="button"
+            onClick={() => setIsStoreInfoOpen(true)}
+            className={clsx(
+              "absolute bottom-4 right-4 inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-black backdrop-blur transition hover:scale-105 sm:bottom-5 sm:right-5",
+              activeBrand.storeStatus === "closed"
+                ? "border-rose-400/30 bg-rose-500/20 text-rose-200"
+                : activeBrand.storeStatus === "open"
+                  ? "border-emerald-400/30 bg-emerald-500/20 text-emerald-200"
+                  : "border-amber-400/30 bg-amber-500/20 text-amber-100"
+            )}
+          >
+            <span className={clsx(
+              "h-2 w-2 rounded-full shrink-0",
+              activeBrand.storeStatus === "open"
+                ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
+                : activeBrand.storeStatus === "closed"
+                  ? "bg-rose-400"
+                  : "bg-amber-400"
+            )} />
+            <span>
+              {activeBrand.storeStatus === "closed"
+                ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados")
+                : activeBrand.storeStatus === "open"
+                  ? "Aberto para pedidos"
+                  : "Ver horários"}
+            </span>
+          </button>
         </section>
 
         <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} />
