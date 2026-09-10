@@ -69,7 +69,7 @@ def test_profile_storage_migration_enforces_rls_and_tenant_policy():
     assert "ENABLE ROW LEVEL SECURITY" in migration
     assert "FORCE ROW LEVEL SECURITY" in migration
     assert "restaurante_operation_profiles" in migration
-    assert "app.restaurante_id" in migration
+    assert "app.current_restaurante_id" in migration
     for operation in ("SELECT", "INSERT", "UPDATE", "DELETE"):
         assert operation in migration
 
