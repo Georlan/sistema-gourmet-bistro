@@ -9,14 +9,15 @@ const subscriptionPlans = readFileSync("src/config/subscriptionPlans.ts", "utf8"
 test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
   assert.match(
     onboardingModal,
-    /superAdminFetch\("\/api\/super-admin\/restaurantes"/,
-    "o modal deve provisionar pelo endpoint transacional canônico",
+    /superAdminFetch\("\/api\/super-admin\/restaurantes\/provisionar"/,
+    "o modal deve provisionar pelo endpoint transacional profile-aware",
   );
   assert.doesNotMatch(
     onboardingModal,
     /restaurantes\/onboarding/,
     "a UI não deve voltar ao endpoint legado 501",
   );
+  assert.match(onboardingModal, /operation_profile/);
   assert.match(onboardingModal, /admin_name/);
   assert.match(onboardingModal, /admin_email/);
   assert.match(onboardingModal, /temporary_password/);
