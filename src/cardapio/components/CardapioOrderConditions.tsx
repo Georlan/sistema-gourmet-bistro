@@ -1,9 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Flame, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
-import { API_BASE_URL } from '../../config/api';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const resolveApiBaseUrl = () => {
+  const envApiUrl = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+  if (envApiUrl) return envApiUrl;
+  if (typeof window !== 'undefined') {
+    const { hostname, protocol } = window.location;
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1' || /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+    if (isLocalHost) return `${protocol}//${hostname}:8000`;
+  }
+  return 'https://sistema-gourmet-bistro-production.up.railway.app';
+};
 
 type PopularProductRank = {
   produto_id: string;
@@ -21,7 +31,7 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
     if (!brand.id) return;
     const controller = new AbortController();
 
-    void fetch(`${API_BASE_URL}/api/cardapio-digital/populares?restaurante_id=${encodeURIComponent(brand.id)}`, {
+    void fetch(`${resolveApiBaseUrl()}/api/cardapio-digital/populares?restaurante_id=${encodeURIComponent(brand.id)}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
