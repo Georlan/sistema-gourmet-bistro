@@ -56,12 +56,14 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
 
   if (recommendations.length === 0) return null;
 
-  const focusProduct = (product: Product) => {
+  const openProduct = (product: Product) => {
     const target = document.getElementById(`product-card-${product.id}`);
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (typeof window !== 'undefined') {
-      window.setTimeout(() => target?.querySelector<HTMLElement>('.cardapio-product-card__details-hitbox')?.focus(), 450);
+    const detailsTrigger = target?.querySelector<HTMLButtonElement>('.cardapio-product-card__details-hitbox');
+    if (detailsTrigger) {
+      detailsTrigger.click();
+      return;
     }
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   return (
@@ -84,9 +86,9 @@ export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
               key={`${kind}-${product.id}`}
               type="button"
               role="listitem"
-              onClick={() => focusProduct(product)}
+              onClick={() => openProduct(product)}
               className="flex min-w-0 items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-              aria-label={`Ver sugestão de ${label.toLowerCase()}: ${product.name}`}
+              aria-label={`Abrir ${label.toLowerCase()} ${product.name}`}
             >
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-koma-card text-emerald-400">
                 <Icon className="h-4 w-4" aria-hidden="true" />

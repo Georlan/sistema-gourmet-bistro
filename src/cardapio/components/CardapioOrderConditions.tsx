@@ -61,10 +61,14 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
 
   if (products.length === 0) return null;
 
-  const focusProduct = (product: Product) => {
+  const openProduct = (product: Product) => {
     const target = document.getElementById(`product-card-${product.id}`);
+    const detailsTrigger = target?.querySelector<HTMLButtonElement>('.cardapio-product-card__details-hitbox');
+    if (detailsTrigger) {
+      detailsTrigger.click();
+      return;
+    }
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    window.setTimeout(() => target?.querySelector<HTMLElement>('.cardapio-product-card__details-hitbox')?.focus(), 450);
   };
 
   return (
@@ -85,9 +89,9 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
             key={product.id}
             type="button"
             role="listitem"
-            onClick={() => focusProduct(product)}
+            onClick={() => openProduct(product)}
             className="flex min-w-[210px] max-w-[250px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
-            aria-label={`Ver ${product.name} no cardápio`}
+            aria-label={`Abrir ${product.name}`}
           >
             <img
               src={product.image}
