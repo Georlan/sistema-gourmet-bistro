@@ -6,7 +6,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,
-  Check,
   Edit3,
   FileText,
   Minus,
@@ -21,6 +20,7 @@ import {
 import type { CatalogCategory, CatalogModifierGroup } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import type { AppSettings, DraftItem, Order, Product } from '../types';
+import ModifierPicker from './shared/ModifierPicker';
 
 interface MenuPanelProps {
   tableId: number;
@@ -267,11 +267,6 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
   const handleQuickAdd = (product: Product, event?: React.MouseEvent) => {
     event?.stopPropagation();
-    if (productModifierGroups(product).length > 0) {
-      handleOpenConfig(product);
-      return;
-    }
-
     const defaultClient = draftItems.length > 0 ? draftItems[0].clienteNome || '' : '';
     const compatibleDraft = draftItems.find((item) => {
       const decorated = item as DraftWithModifiers;
@@ -293,7 +288,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     event?.stopPropagation();
     const matching = draftItems.filter((item) => item.produtoId === product.id);
     if (matching.length === 0) return;
-    const item = matching[matching.length - 1];
+    const cleanItem = [...matching].reverse().find((item) => {
+      const decorated = item as DraftWithModifiers;
+      return !item.observacao && (decorated.modificadorIds || []).length === 0;
+    });
+    const item = cleanItem || matching[matching.length - 1];
     if ((item.quantidade || 1) > 1) {
       onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 });
     } else {
@@ -594,6 +593,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
                     {products.map((product) => {
                       const groups = productModifierGroups(product);
+                      const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
                       const currentCount = draftItems
                         .filter((item) => item.produtoId === product.id)
                         .reduce((sum, item) => sum + (item.quantidade || 1), 0);
@@ -603,6 +603,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           id={`product-card-${product.id}`}
                           onClick={() => handleOpenConfig(product)}
                           className={`border rounded-2xl p-3 sm:p-4 flex flex-col justify-between cursor-pointer transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`}
+                          title="Clique no card para personalizar. Use + Adicionar para lançar rapidamente."
                         >
                           <div className="space-y-2">
                             {settings.exibirImagens && product.imagem && (
@@ -615,7 +616,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                                 <h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>
                                 {groups.length > 0 && (
                                   <span className="mt-1 inline-flex px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400">
-                                    Personalizável · {groups.length} {groups.length === 1 ? 'grupo' : 'grupos'}
+                                    Personalizável{recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}
                                   </span>
                                 )}
                               </div>
@@ -629,7 +630,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           <div className="mt-3 pt-2 border-t border-koma-border/60 flex items-center gap-1.5">
                             {currentCount > 0 && (
                               <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5">
-                                <button type="button" onClick={(event) => handleQuickSubtract(product, event)} className="p-1.5 text-koma-muted hover:text-rose-400">
+                                <button type="button" onClick={(event) => handleQuickSubtract(product, event)} className="p-1.5 text-koma-muted hover:text-rose-400" aria-label={`Remover uma unidade de ${product.nome}`}>
                                   <Minus size={13} />
                                 </button>
                                 <span className="font-mono text-xs font-bold text-emerald-400 px-2">{currentCount}</span>
@@ -641,7 +642,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               onClick={(event) => handleQuickAdd(product, event)}
                               className="flex-1 min-h-10 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center justify-center gap-1"
                             >
-                              <Plus size={14} /> {groups.length > 0 ? 'Personalizar' : 'Adicionar'}
+                              <Plus size={14} /> Adicionar
                             </button>
                           </div>
                         </article>
@@ -723,54 +724,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <div className="space-y-3 border-t border-koma-border pt-4">
                 <div>
                   <h5 className="text-xs font-bold text-koma-foreground">Complementos</h5>
-                  <p className="text-[10px] text-koma-muted">As opções abaixo vêm do mesmo catálogo usado no caixa, garçom e cardápio online.</p>
+                  <p className="text-[10px] text-koma-muted">Recomendados aparecem primeiro. Se o cliente pedir algo fora do padrão, busque no catálogo geral.</p>
                 </div>
-                {currentGroups.map((group) => {
-                  const activeOptions = group.opcoes.filter((option) => option.ativo !== false);
-                  const optionIds = new Set(activeOptions.map((option) => option.id));
-                  const selectedCount = selectedModifierIds.filter((id) => optionIds.has(id)).length;
-                  const min = Number(group.min_selecoes || 0);
-                  const max = Math.max(1, Number(group.max_selecoes || 1));
-                  const groupValid = selectedCount >= min && selectedCount <= max;
-                  return (
-                    <div key={group.id} className={`border rounded-xl p-3 space-y-2 ${groupValid ? 'border-koma-border bg-koma-raised/40' : 'border-amber-500/40 bg-amber-500/5'}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <span className="text-xs font-bold text-koma-foreground">{group.nome}</span>
-                          <span className="block text-[9px] text-koma-muted">
-                            {min > 0 ? `Escolha de ${min} a ${max}` : `Escolha até ${max}`}
-                          </span>
-                        </div>
-                        <span className={`text-[9px] font-bold ${groupValid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          {selectedCount}/{max}
-                        </span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {activeOptions.map((option) => {
-                          const selected = selectedModifierIds.includes(option.id);
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => toggleModifier(group, option.id)}
-                              className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl border text-left transition ${selected ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/25'}`}
-                            >
-                              <span className="flex items-center gap-2 min-w-0">
-                                <span className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${selected ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-koma-border'}`}>
-                                  {selected && <Check size={11} strokeWidth={3} />}
-                                </span>
-                                <span className="text-xs font-medium text-koma-foreground truncate">{option.nome}</span>
-                              </span>
-                              <span className="text-[11px] font-mono font-bold text-emerald-400 whitespace-nowrap">
-                                {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)}` : 'Grátis'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
+                <ModifierPicker
+                  key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`}
+                  groups={currentGroups}
+                  selectedIds={selectedModifierIds}
+                  onToggle={toggleModifier}
+                />
               </div>
             )}
 
