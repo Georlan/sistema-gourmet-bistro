@@ -5,6 +5,7 @@ import {
   Search, Users, ArrowUpRight
 } from 'lucide-react';
 import clsx from 'clsx';
+import GrowthEconomicsCalculator, { GrowthEconomicsOption } from './GrowthEconomicsCalculator';
 
 export interface CupomData {
   id: string;
@@ -89,6 +90,19 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
       setAtivo(true);
     }
     setIsModalOpen(true);
+  };
+
+  const handleApplyGrowthOption = (option: GrowthEconomicsOption) => {
+    if (tipoDesconto === 'porcentagem') {
+      setValorDesconto(String(option.coupon.percentage_discount));
+    } else {
+      setValorDesconto(String(option.coupon.fixed_discount_on_average_ticket));
+      setValorMinimo(String(option.coupon.suggested_minimum_order_for_fixed_discount));
+    }
+    onShowNotification?.(
+      'Sugestão aplicada ao formulário. Revise e edite se quiser antes de salvar.',
+      'success'
+    );
   };
 
   const handleSaveCupom = async (e: React.FormEvent) => {
@@ -297,7 +311,7 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
       {/* Modal de Criação / Edição */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-fade-in">
-          <div className="bg-koma-panel border border-koma-border rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scale-up">
+          <div className="bg-koma-panel border border-koma-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5 animate-scale-up">
             <div className="flex items-center justify-between border-b border-koma-border pb-3">
               <h3 className="font-bold text-sm text-koma-foreground flex items-center gap-2">
                 <Ticket className="w-4 h-4 text-emerald-500" />
@@ -325,12 +339,20 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
                 />
               </div>
 
+              <GrowthEconomicsCalculator
+                apiBaseUrl={apiBaseUrl}
+                authHeaders={authHeaders}
+                onApplyOption={handleApplyGrowthOption}
+                applyLabel="Preencher cupom"
+                compact
+              />
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-koma-muted mb-1">Tipo de Desconto</label>
                   <select
                     value={tipoDesconto}
-                    onChange={e => setTipoDesconto(e.target.value as any)}
+                    onChange={e => setTipoDesconto(e.target.value as 'porcentagem' | 'fixo')}
                     className="w-full px-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
                   >
                     <option value="porcentagem">Porcentagem (%)</option>
