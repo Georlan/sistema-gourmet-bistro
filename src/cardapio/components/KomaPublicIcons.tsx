@@ -15,7 +15,7 @@ type IconFrameProps = KomaIconProps & {
 
 const iconClassName = (className?: string) => ["koma-public-icon", className].filter(Boolean).join(" ");
 
-function IconFrame({ size = 16, className, children, ...props }: IconFrameProps) {
+function IconFrame({ size = 16, className, children, style, ...props }: IconFrameProps) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -27,6 +27,10 @@ function IconFrame({ size = 16, className, children, ...props }: IconFrameProps)
       strokeLinecap="round"
       strokeLinejoin="round"
       className={iconClassName(className)}
+      style={{
+        filter: "drop-shadow(0 0 2.5px color-mix(in srgb, var(--color-brand-primary) 24%, transparent))",
+        ...style,
+      }}
       focusable="false"
       {...props}
     >
