@@ -1,22 +1,117 @@
-import React from 'react';
-import { ArrowRight, Truck } from 'lucide-react';
-import type { BrandConfig } from '../CardapioTypes';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Flame, Truck } from 'lucide-react';
+import type { BrandConfig, Product } from '../CardapioTypes';
+import { getProductImageUrl } from '../CardapioTypes';
+import { API_BASE_URL } from '../../config/api';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+type PopularProductRank = {
+  produto_id: string;
+  escolhas: number;
+};
+
+type PopularProductsPayload = {
+  produtos?: PopularProductRank[];
+};
+
+function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
+  const [rankedIds, setRankedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!brand.id) return;
+    const controller = new AbortController();
+
+    void fetch(`${API_BASE_URL}/api/cardapio-digital/populares?restaurante_id=${encodeURIComponent(brand.id)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json() as Promise<PopularProductsPayload>;
+      })
+      .then((payload) => {
+        if (!payload) return;
+        const ids = Array.isArray(payload.produtos)
+          ? payload.produtos.map((item) => String(item.produto_id || '')).filter(Boolean)
+          : [];
+        setRankedIds(ids);
+      })
+      .catch((error) => {
+        if ((error as Error)?.name !== 'AbortError') setRankedIds([]);
+      });
+
+    return () => controller.abort();
+  }, [brand.id]);
+
+  const products = useMemo(() => {
+    const byId = new Map(brand.products.map((product) => [String(product.id), product]));
+    return rankedIds.map((id) => byId.get(id)).filter((product): product is Product => Boolean(product));
+  }, [brand.products, rankedIds]);
+
+  if (products.length === 0) return null;
+
+  const focusProduct = (product: Product) => {
+    const target = document.getElementById(`product-card-${product.id}`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => target?.querySelector<HTMLElement>('.cardapio-product-card__details-hitbox')?.focus(), 450);
+  };
+
+  return (
+    <section aria-labelledby="popular-products-title" className="rounded-2xl border border-koma-border bg-koma-card p-4" id="popular-products-home">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
+          <Flame className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div>
+          <h2 id="popular-products-title" className="text-sm font-black text-koma-foreground">Mais escolhidos</h2>
+          <p className="text-[10px] text-koma-muted">Os favoritos recentes deste restaurante.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="list">
+        {products.map((product) => (
+          <button
+            key={product.id}
+            type="button"
+            role="listitem"
+            onClick={() => focusProduct(product)}
+            className="flex min-w-[210px] max-w-[250px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left transition hover:border-emerald-500/30 hover:bg-koma-raised focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+            aria-label={`Ver ${product.name} no cardápio`}
+          >
+            <img
+              src={getProductImageUrl(product.image)}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-12 w-12 shrink-0 rounded-lg object-cover"
+            />
+            <span className="min-w-0">
+              <strong className="block truncate text-xs text-koma-foreground">{product.name}</strong>
+              <span className="mt-1 block text-xs font-black text-emerald-400">{money(product.price)}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfig; onOpen: () => void }) {
   const deliveryEnabled = brand.deliveryEnabled !== false;
   return (
-    <section aria-label="Condições do pedido" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-koma-border bg-koma-card px-4 py-2">
-      {!deliveryEnabled ? (
-        <span className="text-xs font-semibold text-koma-secondary">Somente retirada</span>
-      ) : (brand.pedidoMinimo ?? 0) > 0 ? (
-        <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">Mínimo para entrega</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
-      ) : <span className="text-xs font-semibold text-koma-secondary">Entrega e retirada</span>}
-      <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
-        <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-      </button>
-    </section>
+    <>
+      <section aria-label="Condições do pedido" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-koma-border bg-koma-card px-4 py-2">
+        {!deliveryEnabled ? (
+          <span className="text-xs font-semibold text-koma-secondary">Somente retirada</span>
+        ) : (brand.pedidoMinimo ?? 0) > 0 ? (
+          <div className="min-w-0 py-1"><span className="block text-xs text-koma-muted">Mínimo para entrega</span><strong className="mt-0.5 block text-sm text-koma-foreground">{money(brand.pedidoMinimo!)}</strong></div>
+        ) : <span className="text-xs font-semibold text-koma-secondary">Entrega e retirada</span>}
+        <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
+          <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+        </button>
+      </section>
+      <PopularProductsPreview brand={brand} />
+    </>
   );
 }
 
