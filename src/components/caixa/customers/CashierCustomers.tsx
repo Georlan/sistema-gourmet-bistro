@@ -3,6 +3,7 @@ import { Plus, Search, Users, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import CuponsTab from '../../clientes/CuponsTab';
+import GrowthEconomicsCalculator, { type GrowthEconomicsOption } from '../../clientes/GrowthEconomicsCalculator';
 import MoneyInput from '../../MoneyInput';
 import { KomaEmptyState } from '../../shared/KomaEmptyState';
 import { OperationalBanner } from '../../shared/OperationalBanner';
@@ -87,6 +88,20 @@ export default function CashierCustomers({
     taxa_conversao: 1.0,
     valor_ponto_em_dinheiro: 0.05,
   });
+
+  const handleApplyGrowthOptionToLoyalty = (option: GrowthEconomicsOption) => {
+    setFidelidadeConfig((prev) => {
+      if (prev.tipo_recompensa === 'CASHBACK') {
+        return { ...prev, taxa_conversao: option.cashback.earn_percent };
+      }
+      return {
+        ...prev,
+        taxa_conversao: option.loyalty_points.points_per_real,
+        valor_ponto_em_dinheiro: option.loyalty_points.suggested_point_value_brl,
+      };
+    });
+    showToast('Sugestão aplicada ao programa. Revise e edite se quiser antes de salvar.');
+  };
 
   const [editingCrmUser, setEditingCrmUser] = useState<any>(null);
 
@@ -305,6 +320,16 @@ export default function CashierCustomers({
                   </select>
                 </div>
 
+                {fidelidadeConfig.ativo && (
+                  <GrowthEconomicsCalculator
+                    apiBaseUrl={apiBaseUrl}
+                    authHeaders={authHeaders}
+                    onApplyOption={handleApplyGrowthOptionToLoyalty}
+                    applyLabel={fidelidadeConfig.tipo_recompensa === 'CASHBACK' ? 'Usar no cashback' : 'Usar nos pontos'}
+                    compact
+                  />
+                )}
+
                 <div className="space-y-1">
                   <label
                     className={"text-[9px] font-bold text-koma-secondary uppercase tracking-wider block"}
@@ -315,6 +340,7 @@ export default function CashierCustomers({
                   </label>
                   <input
                     type="number"
+                    step="0.01"
                     value={fidelidadeConfig.taxa_conversao}
                     onChange={(e) =>
                       setFidelidadeConfig((prev) => ({ ...prev, taxa_conversao: Number(e.target.value) }))
@@ -333,7 +359,7 @@ export default function CashierCustomers({
                     </label>
                     <input
                       type="number"
-                      step="0.01"
+                      step="0.0001"
                       value={fidelidadeConfig.valor_ponto_em_dinheiro}
                       onChange={(e) =>
                         setFidelidadeConfig((prev) => ({ ...prev, valor_ponto_em_dinheiro: Number(e.target.value) }))
@@ -373,7 +399,7 @@ export default function CashierCustomers({
                 </strong>
                 <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
                   {fidelidadeConfig.tipo_recompensa === 'PONTOS'
-                    ? `Cada ponto vale R$ ${Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0).toFixed(2)} no resgate.`
+                    ? `Cada ponto vale R$ ${Number(fidelidadeConfig.valor_ponto_em_dinheiro || 0).toFixed(4)} no resgate.`
                     : `O cliente recebe ${Number(fidelidadeConfig.taxa_conversao || 0).toFixed(2)}% do valor da compra.`}
                 </p>
               </div>
