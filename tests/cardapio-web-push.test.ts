@@ -4,6 +4,7 @@ import test from "node:test";
 
 const sw = readFileSync("public/koma-sw.js", "utf8");
 const manifest = readFileSync("public/manifest.webmanifest", "utf8");
+const indexHtml = readFileSync("index.html", "utf8");
 const pushUi = readFileSync("src/cardapio/components/CardapioPushNotifications.tsx", "utf8");
 const pushResumeStore = readFileSync("src/cardapio/pushResumeStore.ts", "utf8");
 const trackingPage = readFileSync("src/cardapio/OrderTrackingPage.tsx", "utf8");
@@ -16,6 +17,18 @@ test("Web Push só pede permissão depois de ação explícita do cliente", () =
   assert.match(pushUi, /onClick=\{\(\) => void enable\(\)\}/);
   assert.match(pushUi, /Notification\.requestPermission\(\)/);
   assert.doesNotMatch(main, /Notification\.requestPermission\(\)/);
+});
+
+test("falha do serviço de push recebe feedback legível sem expor erro bruto", () => {
+  assert.match(pushUi, /push service error/);
+  assert.match(pushUi, /Registration failed/i);
+  assert.match(pushUi, /O serviço de notificações do navegador não respondeu/);
+  assert.match(pushUi, /Seu pedido continua disponível aqui mesmo sem os avisos/);
+});
+
+test("HTML declara capability PWA moderna e mantém compatibilidade Apple", () => {
+  assert.match(indexHtml, /name="mobile-web-app-capable" content="yes"/);
+  assert.match(indexHtml, /name="apple-mobile-web-app-capable" content="yes"/);
 });
 
 test("service worker não intercepta fetch/cache do cardápio", () => {
