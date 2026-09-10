@@ -7,6 +7,25 @@ import { makeOperationKey, operationalFetch } from '../../../utils/operationalRe
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { formatCompactCurrency } from '../cashierPresentation';
 
+export type PdvModifierSelection = {
+  id: string;
+  nome: string;
+  preco: number;
+};
+
+export type PdvCartItem = {
+  product: Product;
+  quantity: number;
+  obs: string;
+  client: string;
+  modifierIds?: string[];
+  modifiers?: PdvModifierSelection[];
+};
+
+export const pdvCartItemUnitPrice = (item: PdvCartItem) =>
+  Number(item.product.preco || 0)
+  + (item.modifiers || []).reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
+
 type Props = {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
@@ -52,7 +71,7 @@ export function useCashierPdv({
 
   const [pdvSelectedCategory, setPdvSelectedCategory] = useState<string>('todos');
 
-  const [pdvCart, setPdvCart] = useState<{ product: Product; quantity: number; obs: string; client: string }[]>([]);
+  const [pdvCart, setPdvCart] = useState<PdvCartItem[]>([]);
 
   const [pdvCustomerName, setPdvCustomerName] = useState('');
 
@@ -180,13 +199,18 @@ export function useCashierPdv({
 
   const handlePdvAddToCart = (product: Product) => {
     setPdvCart((prev) => {
-      const idx = prev.findIndex((item) => item.product.id === product.id && item.client === 'Balcão');
+      const idx = prev.findIndex((item) =>
+        item.product.id === product.id
+        && item.client === 'Balcão'
+        && !item.obs
+        && (item.modifierIds || []).length === 0,
+      );
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
         return copy;
       }
-      return [...prev, { product, quantity: 1, obs: '', client: 'Balcão' }];
+      return [...prev, { product, quantity: 1, obs: '', client: 'Balcão', modifierIds: [], modifiers: [] }];
     });
   };
 
@@ -249,7 +273,7 @@ export function useCashierPdv({
           id: `temp-item-${idx}-${qtyIdx}-${Date.now()}`,
           produtoId: item.product.id,
           nome: item.product.nome,
-          preco: item.product.preco,
+          preco: pdvCartItemUnitPrice(item),
           observacao: item.obs || '',
           clienteNome: customerName || 'Consumo Geral',
           status: 'preparando',
@@ -290,6 +314,7 @@ export function useCashierPdv({
           produto_id: item.product.id,
           observacao: item.obs || '',
           cliente_nome: customerName || 'Consumo Geral',
+          modificador_ids: item.modifierIds || [],
         })),
       );
       const salePayload = {
@@ -311,7 +336,7 @@ export function useCashierPdv({
         };
       }
 
-      const res = await operationalFetch(`${apiBaseUrl}/comandas/venda-direta`, {
+      const res = await operationalFetch(`${apiBaseUrl}/cardapio/modificadores/venda-direta`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -360,7 +385,7 @@ export function useCashierPdv({
 
   const pdvMenuInsights = useMemo(() => {
     const itemCount = pdvCart.reduce((total, item) => total + item.quantity, 0);
-    const cartTotal = pdvCart.reduce((total, item) => total + item.product.preco * item.quantity, 0);
+    const cartTotal = pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity, 0);
     const destination =
       pdvOrderType === 'mesa'
         ? pdvTargetMesaId > 0
