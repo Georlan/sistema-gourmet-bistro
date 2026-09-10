@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Flame, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
+import { CardapioHighlights } from './CardapioHighlights';
 import { CardapioRecommendations } from './CardapioRecommendations';
 
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -118,6 +119,7 @@ export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfi
       <button type="button" aria-label="Ver condições de entrega" onClick={onOpen} className="inline-flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left text-xs font-bold text-emerald-500 transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
         <span>{deliveryEnabled ? 'Taxas de entrega' : 'Ver detalhes'}</span><ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
       </button>
+      <CardapioHighlights brand={brand} />
       <PopularProductsPreview brand={brand} />
       <CardapioRecommendations brand={brand} />
     </section>
