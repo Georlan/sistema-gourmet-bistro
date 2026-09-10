@@ -7,6 +7,7 @@ const drawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 const panel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
 const header = source('../src/cardapio/components/CardapioHeader.tsx');
 const customIcons = source('../src/cardapio/components/KomaPublicIcons.tsx');
+const chatPolish = source('../src/cardapio/cardapioChatPolish.css');
 const legacyTracking = source('../src/cardapio/OrderTrackingPage.tsx');
 const emergencyControl = source('../src/components/caixa/online-menu/OnlineOrderEmergencyControl.tsx');
 
@@ -42,6 +43,17 @@ test('cabecalho publico usa a familia de icones originais do KOMA sem trocar a s
   assert.doesNotMatch(header, /\b(?:Info|Instagram|MapPin|MessageCircle|Search|Share2|ShoppingBag|UserRound)\b[\s\S]*from "lucide-react"/);
   assert.match(customIcons, /stroke="currentColor"/);
   assert.match(customIcons, /var\(--color-brand-primary\)/);
+});
+
+test('painel e drawer compartilham a linguagem KOMA e preservam mobile sem overflow', () => {
+  assert.match(panel, /KomaOrderChatIcon/);
+  assert.doesNotMatch(panel, /\bMessageCircle\b[\s\S]*from "lucide-react"/);
+  assert.match(panel, /cardapioChatPolish\.css/);
+  assert.match(chatPolish, /#floating-order-chat-trigger/);
+  assert.match(chatPolish, /max-width:\s*min\(22rem,\s*calc\(100vw - 2rem\)\)/);
+  assert.match(chatPolish, /@media \(max-width: 480px\)/);
+  assert.match(chatPolish, /#orders-drawer-panel[\s\S]*width:\s*100vw/);
+  assert.match(chatPolish, /prefers-reduced-motion/);
 });
 
 test('link legado de acompanhamento restaura o pedido e volta ao cardapio', () => {
