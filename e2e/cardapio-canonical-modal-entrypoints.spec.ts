@@ -19,7 +19,7 @@ const publicMenuPayload = {
     formas_pagamento_aceitas: ['Dinheiro', 'Cartão de crédito'],
   },
   categorias: [
-    { id: 10, nome: 'Pizzas Especiais' },
+    { id: 10, nome: 'Destaques' },
     { id: 20, nome: 'Bebidas' },
   ],
   produtos: [
