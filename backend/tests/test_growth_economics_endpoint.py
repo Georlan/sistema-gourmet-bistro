@@ -29,7 +29,11 @@ def setup_database():
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         db = TestingSessionLocal()
-        db.add(Restaurante(id=1, nome="Economia Pro", plano="pro"))
+        # Base.metadata.after_create semeia o restaurante 1 nos bancos SQLite de
+        # teste. Reaproveitamos esse registro para não criar uma segunda PK.
+        restaurante = db.query(Restaurante).filter(Restaurante.id == 1).one()
+        restaurante.nome = "Economia Pro"
+        restaurante.plano = "pro"
         db.add(
             Usuario(
                 id="growth-admin",
