@@ -1,13 +1,13 @@
 import React, { useMemo } from 'react';
 import { Megaphone } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
-import { isCampaignCategory } from '../cardapioMerchandising';
 
+const CAMPAIGN_CATEGORY = /(destaque|oferta|promo(?:c[aã]o|ç[aã]o)?|campanha|especial)/i;
 const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export function getCatalogHighlights(products: Product[]): Product[] {
   return products
-    .filter((product) => product.isAvailable !== false && isCampaignCategory(product.category))
+    .filter((product) => product.isAvailable !== false && CAMPAIGN_CATEGORY.test(String(product.category || '')))
     .slice(0, 4);
 }
 
