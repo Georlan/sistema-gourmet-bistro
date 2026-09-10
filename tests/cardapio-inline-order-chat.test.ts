@@ -6,6 +6,7 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const drawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 const panel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
 const header = source('../src/cardapio/components/CardapioHeader.tsx');
+const customIcons = source('../src/cardapio/components/KomaPublicIcons.tsx');
 const legacyTracking = source('../src/cardapio/OrderTrackingPage.tsx');
 const emergencyControl = source('../src/components/caixa/online-menu/OnlineOrderEmergencyControl.tsx');
 
@@ -27,6 +28,20 @@ test('painel lateral oferece timeline, historico e envio de mensagem', () => {
 test('cabecalho deixa o retorno ao pedido e chat explicito', () => {
   assert.match(header, /Pedido \/ Chat/);
   assert.match(header, /Abrir acompanhamento e chat dos pedidos/);
+});
+
+test('cabecalho publico usa a familia de icones originais do KOMA sem trocar a semantica da sacola', () => {
+  assert.match(header, /KomaSearchIcon/);
+  assert.match(header, /KomaLocationIcon/);
+  assert.match(header, /KomaInfoIcon/);
+  assert.match(header, /KomaShareIcon/);
+  assert.match(header, /KomaOrderChatIcon/);
+  assert.match(header, /KomaBagIcon/);
+  assert.match(header, /KomaUserIcon/);
+  assert.match(header, /KomaSocialCameraIcon/);
+  assert.doesNotMatch(header, /\b(?:Info|Instagram|MapPin|MessageCircle|Search|Share2|ShoppingBag|UserRound)\b[\s\S]*from "lucide-react"/);
+  assert.match(customIcons, /stroke="currentColor"/);
+  assert.match(customIcons, /var\(--color-brand-primary\)/);
 });
 
 test('link legado de acompanhamento restaura o pedido e volta ao cardapio', () => {
