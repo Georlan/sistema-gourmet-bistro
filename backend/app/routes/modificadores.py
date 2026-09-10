@@ -11,7 +11,6 @@ from ..catalog_addons import (
     CategoriaGrupoModificador,
     category_hierarchy_payload,
     effective_modifier_payloads_by_product,
-    ensure_hamburger_addon_suggestions,
     replace_category_links_for_group,
 )
 from ..database import get_db, require_tenant_id
@@ -152,23 +151,6 @@ def listar_grupos_publico(restaurante_id: int, db: Session = Depends(get_db)):
     grupos = db.query(GrupoModificador).filter(GrupoModificador.restaurante_id == restaurante_id).all()
     return [_serialize_grupo(g, db) for g in grupos]
 
-
-@router.post("/sugestoes/hamburgueria")
-def aplicar_sugestoes_hamburgueria(
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
-):
-    del current_user
-    rest_id = require_tenant_id()
-    try:
-        result = ensure_hamburger_addon_suggestions(db, rest_id)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    _notify_catalog_update(background_tasks, rest_id, "Categorias e complementos sugeridos foram sincronizados.")
-    return result
 
 
 @router.post("/grupos", response_model=GrupoModificadorResponseV2, status_code=status.HTTP_201_CREATED)
