@@ -1,15 +1,20 @@
 from fastapi import APIRouter, HTTPException, Request, status
 
 from ..database import current_restaurante_id
-from .cardapio_popular import router as cardapio_popular_router
+from .cardapio_popular import listar_produtos_populares
 
 
 router = APIRouter(tags=["Cardapio Digital Compatibility"])
 
 # Este módulo é importado diretamente pelo main antes de app.include_router().
-# Usá-lo como âncora de composição garante que o ranking público já esteja
-# materializado no router quando o FastAPI copia as rotas para a aplicação.
-router.include_router(cardapio_popular_router)
+# Registrar o handler nesta instância evita composição tardia entre APIRouters,
+# que o FastAPI não retropropaga depois que as rotas são copiadas para a app.
+router.add_api_route(
+    "/api/cardapio-digital/populares",
+    listar_produtos_populares,
+    methods=["GET"],
+    tags=["Cardapio Digital Assets"],
+)
 
 
 @router.get("/caixa/config-cardapio")
