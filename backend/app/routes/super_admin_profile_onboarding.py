@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 
 from ..database import SessionLocal, tenant_session_scope
@@ -28,6 +28,37 @@ logger = logging.getLogger("koma.super_admin.profile_onboarding")
 router = APIRouter()
 
 _PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+SUPPORTED_OPERATION_PROFILES = ("generic", "pizzaria", "acai", "churrasco")
+
+
+def _normalize_operation_profile(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if not _PROFILE_RE.fullmatch(normalized):
+        raise ValueError(
+            "Perfil inválido. Use letras minúsculas, números, hífen ou sublinhado."
+        )
+    if normalized not in SUPPORTED_OPERATION_PROFILES:
+        raise ValueError(
+            "Tipo de operação indisponível. Escolha entre: Outro, Pizzaria, Açaí ou Churrasco."
+        )
+    return normalized
+
+
+def _parse_tenant_id(raw: str) -> int:
+    try:
+        tenant_id = int(raw)
+        if tenant_id <= 0:
+            raise ValueError()
+        return tenant_id
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="ID do restaurante inválido.",
+        ) from exc
 
 
 class ProfiledTenantOnboardingRequest(TenantOnboardingRequest):
@@ -42,15 +73,21 @@ class ProfiledTenantOnboardingRequest(TenantOnboardingRequest):
     @field_validator("operation_profile")
     @classmethod
     def normalize_operation_profile(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip().lower()
-        if not normalized:
-            return None
-        if not _PROFILE_RE.fullmatch(normalized):
-            raise ValueError(
-                "Perfil inválido. Use letras minúsculas, números, hífen ou sublinhado."
-            )
+        return _normalize_operation_profile(value)
+
+
+class OperationProfileUpdateRequest(BaseModel):
+    operation_profile: str = Field(min_length=1, max_length=64)
+    reason: str = Field(min_length=3, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("operation_profile")
+    @classmethod
+    def validate_operation_profile(cls, value: str) -> str:
+        normalized = _normalize_operation_profile(value)
+        if normalized is None:
+            raise ValueError("Tipo de operação é obrigatório.")
         return normalized
 
 
@@ -205,6 +242,124 @@ def create_profiled_tenant(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Falha ao provisionar o restaurante. Nenhuma criação parcial foi mantida.",
+        )
+    finally:
+        db.close()
+
+
+@router.get("/restaurantes/{tenant_id}/operation-profile")
+def get_operation_profile(
+    tenant_id: str,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Consulta somente o metadado de tipo operacional de um tenant existente."""
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            restaurante = db.query(Restaurante).filter(Restaurante.id == tenant_id_int).one_or_none()
+            if restaurante is None:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+            profile = (
+                db.query(RestauranteOperationProfile)
+                .filter(RestauranteOperationProfile.restaurante_id == tenant_id_int)
+                .one_or_none()
+            )
+            return {
+                "restaurantId": str(tenant_id_int),
+                "operationProfile": str(profile.profile_key) if profile else "generic",
+                "behaviorApplied": False,
+            }
+    finally:
+        db.close()
+
+
+@router.patch("/restaurantes/{tenant_id}/operation-profile")
+def update_operation_profile(
+    tenant_id: str,
+    payload: OperationProfileUpdateRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Altera apenas o metadado operacional, sem efeitos automáticos no produto."""
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    clean_reason = payload.reason.strip()
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            restaurante = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == tenant_id_int)
+                .with_for_update()
+                .one_or_none()
+            )
+            if restaurante is None:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+            profile = (
+                db.query(RestauranteOperationProfile)
+                .filter(RestauranteOperationProfile.restaurante_id == tenant_id_int)
+                .with_for_update()
+                .one_or_none()
+            )
+            previous = str(profile.profile_key) if profile else "generic"
+            next_profile = payload.operation_profile
+
+            if previous == next_profile:
+                return {
+                    "restaurantId": str(tenant_id_int),
+                    "operationProfile": next_profile,
+                    "behaviorApplied": False,
+                    "message": "Tipo de operação já estava configurado com este valor.",
+                }
+
+            if profile is None:
+                profile = RestauranteOperationProfile(
+                    restaurante_id=tenant_id_int,
+                    profile_key=next_profile,
+                )
+                db.add(profile)
+            else:
+                profile.profile_key = next_profile
+
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id_int,
+                    actor=str(admin.get("user") or "superadmin"),
+                    action="SUPERADMIN_OPERATION_PROFILE_UPDATE",
+                    reason=clean_reason,
+                    before_data={"operation_profile": previous},
+                    after_data={
+                        "operation_profile": next_profile,
+                        "behavior_applied": False,
+                    },
+                )
+            )
+            db.commit()
+
+            logger.info(
+                "SUPERADMIN OPERATION PROFILE UPDATED tenant=%s actor=%s from=%s to=%s",
+                tenant_id_int,
+                admin.get("user"),
+                previous,
+                next_profile,
+            )
+            return {
+                "restaurantId": str(tenant_id_int),
+                "operationProfile": next_profile,
+                "behaviorApplied": False,
+                "message": "Tipo de operação salvo como configuração, sem alterar o funcionamento do restaurante.",
+            }
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
+    except Exception:
+        if db.in_transaction():
+            db.rollback()
+        logger.exception("SUPERADMIN OPERATION PROFILE UPDATE FAILED tenant=%s", tenant_id_int)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao atualizar o tipo de operação do restaurante.",
         )
     finally:
         db.close()
