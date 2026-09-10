@@ -7,11 +7,19 @@ import {
 } from "../config/subscriptionPlans";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
+const OPERATION_PROFILES = [
+  { id: "generic", label: "Outro / configurar depois" },
+  { id: "pizzaria", label: "Pizzaria" },
+  { id: "acai", label: "Açaí" },
+  { id: "churrasco", label: "Churrasco" },
+] as const;
+
 type OnboardingResponse = {
   id: string;
   name: string;
   subdomain: string;
   plan: string;
+  operationProfile: string;
   status: string;
   onlinePaymentStatus: string;
   trial: {
@@ -59,6 +67,10 @@ function formatTrialEnd(value: string) {
   }).format(date);
 }
 
+function operationProfileLabel(value: string) {
+  return OPERATION_PROFILES.find(item => item.id === value)?.label || value;
+}
+
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -89,6 +101,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [plan, setPlan] = useState("pocket");
+  const [operationProfile, setOperationProfile] = useState("generic");
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
@@ -123,13 +136,14 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
     setIsSubmitting(true);
     setError(null);
     try {
-      const response = await superAdminFetch("/api/super-admin/restaurantes", {
+      const response = await superAdminFetch("/api/super-admin/restaurantes/provisionar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           subdomain: slug.trim(),
           plan,
+          operation_profile: operationProfile,
           admin_name: adminName.trim(),
           admin_email: adminEmail.trim(),
           temporary_password: temporaryPassword,
@@ -177,6 +191,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
           <div className="mt-5 grid gap-3 sm:grid-cols-2 text-xs">
             <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Restaurante</span><p className="mt-1 font-bold text-koma-foreground">{created.name}</p><p className="font-mono text-[10px] text-koma-subtle">#{created.id} · {created.subdomain}</p></div>
             <div className="rounded-lg border border-zinc-800 bg-koma-page p-3"><span className="text-koma-muted">Plano de recursos</span><p className="mt-1 font-bold text-koma-foreground">{officialCreatedPlan?.name || created.plan}</p><p className="text-[10px] text-koma-subtle">Mercado Pago do cardápio: desconectado</p></div>
+            <div className="rounded-lg border border-zinc-800 bg-koma-page p-3 sm:col-span-2"><span className="text-koma-muted">Tipo de operação</span><p className="mt-1 font-bold text-koma-foreground">{operationProfileLabel(created.operationProfile)}</p><p className="text-[10px] text-koma-subtle">Metadado de experiência. Nenhum item ou complemento foi criado automaticamente.</p></div>
           </div>
 
           <div className="mt-4 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-4 text-xs">
@@ -215,7 +230,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-koma-foreground"><Plus className="h-5 w-5 text-[#00b894]" /> Novo restaurante</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">Cria o tenant, configuração padrão, administrador inicial e 7 dias grátis em uma única operação.</p>
+            <p className="mt-1 text-[10px] text-koma-muted">Cria o tenant, perfil operacional, configuração padrão, administrador inicial e 7 dias grátis em uma única operação.</p>
           </div>
           <button type="button" onClick={close} disabled={isSubmitting} className="text-koma-subtle hover:text-koma-foreground disabled:opacity-50"><X className="h-5 w-5" /></button>
         </div>
@@ -225,6 +240,8 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Restaurante</span><input value={name} onChange={event => updateName(event.target.value)} required minLength={2} maxLength={255} autoFocus className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Ex: Pizzaria Central" /></label>
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Slug público</span><input value={slug} onChange={event => updateSlug(event.target.value)} required minLength={2} maxLength={100} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="pizzaria-central" /><span className="mt-1 block text-[10px] text-koma-subtle">/c/{slug || "slug-do-restaurante"}</span></label>
           </div>
+
+          <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Tipo de operação</span><select value={operationProfile} onChange={event => setOperationProfile(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{OPERATION_PROFILES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="mt-1 block text-[10px] leading-relaxed text-koma-subtle">Isso só adapta sugestões e atalhos. Você continua com acesso a todos os recursos do KÔMA e o cardápio não é preenchido automaticamente.</span></label>
 
           <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Plano de recursos durante o trial</span><select value={plan} onChange={event => setPlan(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{SUBSCRIPTION_PLANS.map(item => <option key={item.id} value={item.id}>{item.name} — referência {formatCurrency(item.price)}/mês · {formatPercentage(item.splitFeeRate)} split</option>)}</select>{selectedPlan && <span className="mt-1 block text-[10px] text-koma-subtle">O restaurante testa os recursos do {selectedPlan.name} por 7 dias. A cobrança SaaS recorrente ainda não é criada automaticamente.</span>}</label>
 
