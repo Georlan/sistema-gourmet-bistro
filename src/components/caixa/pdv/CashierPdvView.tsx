@@ -1,17 +1,39 @@
 import clsx from 'clsx';
-import { Check, ChevronLeft, ChevronRight, Info, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { getProductPresets } from '../../../domain/catalogPresentation';
+import type { Product } from '../../../types';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
+import ModifierPicker from '../../shared/ModifierPicker';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
-import type { useCashierPdv } from './useCashierPdv';
+import { pdvCartItemUnitPrice, type PdvModifierSelection, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 
 const splitProductLabel = (label: string) => {
   const match = String(label || '').match(/^(\d{2,4})\s*[-–]\s*(.+)$/);
   return match ? { code: match[1], name: match[2] } : { code: '', name: label };
 };
+
+type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
+
+const modifierGroupsFor = (product: Product | null) =>
+  product ? ((product as ProductWithModifiers).grupos_modificadores || []) : [];
+
+const modifierSelectionsFor = (groups: CatalogModifierGroup[], selectedIds: string[]): PdvModifierSelection[] => {
+  const selected = new Set(selectedIds);
+  return groups
+    .flatMap((group) => group.opcoes)
+    .filter((option) => option.ativo !== false && selected.has(option.id))
+    .map((option) => ({
+      id: option.id,
+      nome: option.nome,
+      preco: Number(option.preco_adicional || 0),
+    }));
+};
+
 interface Props {
   activeSubTab: string;
   catalogReady: boolean;
@@ -68,6 +90,88 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     finishPdvCategoryDrag,
   } = usePdvCategoryNavigation({ activeSubTab, balcaoMobileView, pdvCategories });
 
+  const [configProduct, setConfigProduct] = useState<Product | null>(null);
+  const [configCartIndex, setConfigCartIndex] = useState<number | null>(null);
+  const [configQty, setConfigQty] = useState(1);
+  const [configObs, setConfigObs] = useState('');
+  const [configModifierIds, setConfigModifierIds] = useState<string[]>([]);
+
+  const configGroups = modifierGroupsFor(configProduct);
+  const configModifiers = useMemo(
+    () => modifierSelectionsFor(configGroups, configModifierIds),
+    [configGroups, configModifierIds],
+  );
+  const configModifierTotal = configModifiers.reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
+  const configUnitTotal = Number(configProduct?.preco || 0) + configModifierTotal;
+  const configValid = configGroups.every((group) => {
+    const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
+    const count = configModifierIds.filter((id) => optionIds.has(id)).length;
+    return count >= Number(group.min_selecoes || 0) && count <= Number(group.max_selecoes || 1);
+  });
+
+  const closeConfig = () => {
+    setConfigProduct(null);
+    setConfigCartIndex(null);
+    setConfigModifierIds([]);
+  };
+
+  const openConfig = (product: Product, cartIndex: number | null = null) => {
+    const item = cartIndex === null ? null : pdvCart[cartIndex];
+    setConfigProduct(product);
+    setConfigCartIndex(cartIndex);
+    setConfigQty(item?.quantity || 1);
+    setConfigObs(item?.obs || '');
+    setConfigModifierIds([...(item?.modifierIds || [])]);
+    setPdvProductDetailId(null);
+  };
+
+  const toggleConfigModifier = (group: CatalogModifierGroup, optionId: string) => {
+    setConfigModifierIds((current) => {
+      const groupOptionIds = new Set(group.opcoes.map((option) => option.id));
+      if (current.includes(optionId)) return current.filter((id) => id !== optionId);
+      const max = Math.max(1, Number(group.max_selecoes || 1));
+      const selectedInGroup = current.filter((id) => groupOptionIds.has(id));
+      if (max === 1) return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
+      if (selectedInGroup.length >= max) return current;
+      return [...current, optionId];
+    });
+  };
+
+  const saveConfiguredItem = () => {
+    if (!configProduct || !configValid) return;
+    const nextItem = {
+      product: configProduct,
+      quantity: configQty,
+      obs: configObs.trim(),
+      client: configCartIndex === null ? 'Balcão' : pdvCart[configCartIndex]?.client || 'Balcão',
+      modifierIds: [...configModifierIds],
+      modifiers: configModifiers,
+    };
+
+    setPdvCart((current) => {
+      if (configCartIndex !== null) {
+        return current.map((item, index) => index === configCartIndex ? nextItem : item);
+      }
+      if (!nextItem.obs && nextItem.modifierIds.length === 0) {
+        const cleanIndex = current.findIndex((item) =>
+          item.product.id === configProduct.id
+          && !item.obs
+          && (item.modifierIds || []).length === 0
+          && item.client === 'Balcão',
+        );
+        if (cleanIndex >= 0) {
+          return current.map((item, index) => index === cleanIndex
+            ? { ...item, quantity: item.quantity + configQty }
+            : item);
+        }
+      }
+      return [...current, nextItem];
+    });
+    closeConfig();
+  };
+
+  const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+
   return (
     <>
       {activeSubTab === 'balcao' && (
@@ -77,7 +181,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             eyebrow="VENDA"
             title="Novo pedido"
             accent="rápido e simples"
-            description="Clique para adicionar. Passe o mouse ou use o ícone de detalhes para conferir ingredientes."
+            description="+ Adicionar lança rápido. Clique no card para personalizar; no pedido, use o lápis para editar."
             metrics={
               pdvMenuInsights.pausedCount > 0
                 ? [
@@ -101,7 +205,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           <div
             className={"min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
-            {/* Mobile sub-tab toggle */}
             <div
               className={"flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-koma-border rounded-xl shrink-0"}
             >
@@ -131,7 +234,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </button>
             </div>
 
-            {/* Product grid column */}
             <div
               className={`min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
             >
@@ -247,24 +349,24 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       const productLabel = splitProductLabel(p.nome);
                       const productDetailKey = String(p.id);
                       const hasProductDetails = Boolean(p.descricao || productLabel.code);
+                      const groups = modifierGroupsFor(p);
+                      const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
                       return (
                         <div
                           key={p.id}
-                          className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm"}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setPdvProductDetailId(null);
-                              handlePdvAddToCart(p);
-                            }}
-                            className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left cursor-pointer rounded-xl sm:rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
-                            title={
-                              hasProductDetails
-                                ? `Adicionar ${productLabel.name}. Use detalhes para ver ingredientes.`
-                                : `Adicionar ${productLabel.name}`
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openConfig(p)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault();
+                              openConfig(p);
                             }
-                          >
+                          }}
+                          className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
+                          title="Clique no card para personalizar"
+                        >
+                          <div className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left rounded-xl sm:rounded-2xl"}>
                             {p.imagem && (
                               <img
                                 src={p.imagem}
@@ -279,22 +381,34 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               >
                                 {productLabel.name}
                               </h4>
+                              {groups.length > 0 && (
+                                <span className="mt-1 inline-flex rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
+                                  Personalizável{recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}
+                                </span>
+                              )}
                             </div>
                             <div
-                              className={"flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5"}
+                              className={"flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5 gap-2"}
                             >
                               <span
                                 className={"font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs"}
                               >
                                 R$ {p.preco.toFixed(2).replace('.', ',')}
                               </span>
-                              <span
-                                className={"inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 dark:text-[#4fe0bc]"}
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setPdvProductDetailId(null);
+                                  handlePdvAddToCart(p);
+                                }}
+                                className={"inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2 text-[9px] font-extrabold text-zinc-950 hover:bg-emerald-400"}
+                                aria-label={`Adicionar ${productLabel.name} rapidamente`}
                               >
                                 <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
-                              </span>
+                              </button>
                             </div>
-                          </button>
+                          </div>
 
                           {hasProductDetails && (
                             <>
@@ -379,7 +493,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </div>
             </div>
 
-            {/* Shopping cart sidebar */}
             <div
               className={`w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
@@ -408,7 +521,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   >
                     <ShoppingCart size={22} className={"mb-3 opacity-60"} />
                     <p className={"text-xs font-semibold text-koma-subtle"}>Comece escolhendo um item</p>
-                    <p className={"text-[9px] mt-1"}>Selecione um item para montar o pedido.</p>
+                    <p className={"text-[9px] mt-1"}>+ Adicionar é rápido. O card abre a personalização.</p>
                   </div>
                 ) : (
                   pdvCart.map((item, idx) => (
@@ -416,24 +529,47 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       key={`${item.product.id}-${idx}`}
                       className={"bg-white/[0.025] p-3 rounded-xl border border-koma-border-subtle space-y-2.5"}
                     >
-                      <div className={"flex justify-between items-start"}>
-                        <div className="space-y-0.5">
+                      <div className={"flex justify-between items-start gap-2"}>
+                        <div className="min-w-0 space-y-0.5">
                           <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
                             {item.product.nome}
                           </strong>
                           <span className={"text-[9px] text-[#4fe0bc] font-mono"}>
-                            R$ {item.product.preco.toFixed(2).replace('.', ',')} / un.
+                            {formatCurrency(pdvCartItemUnitPrice(item))} / un.
                           </span>
                         </div>
-                        <button
-                          onClick={() => handlePdvRemoveCartItem(idx)}
-                          className={"text-koma-muted hover:text-rose-500 p-0.5 cursor-pointer"}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openConfig(item.product, idx)}
+                            className={"text-koma-muted hover:text-emerald-400 p-1 cursor-pointer rounded-lg hover:bg-koma-raised"}
+                            aria-label={`Editar ${item.product.nome}`}
+                            title="Editar item e adicionais"
+                          >
+                            <Edit3 size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePdvRemoveCartItem(idx)}
+                            className={"text-koma-muted hover:text-rose-500 p-1 cursor-pointer rounded-lg"}
+                            aria-label={`Remover ${item.product.nome}`}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </div>
 
-                      <div className={"flex justify-between items-center"}>
+                      {(item.modifiers || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {(item.modifiers || []).map((modifier) => (
+                            <span key={modifier.id} className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-400">
+                              + {modifier.nome}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className={"flex justify-between items-center gap-2"}>
                         <div
                           className={"flex items-center bg-koma-input border border-koma-border rounded-lg overflow-hidden"}
                         >
@@ -463,17 +599,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           value={item.obs}
                           onChange={(e) => {
                             const val = e.target.value;
-                            setPdvCart((prev) => {
-                              const c = [...prev];
-                              c[idx].obs = val;
-                              return c;
-                            });
+                            setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: val } : entry));
                           }}
-                          className={"w-24 px-1.5 py-1 text-[9px] bg-koma-input border border-koma-border rounded focus:outline-none focus:border-[#10b981] text-koma-foreground"}
+                          className={"min-w-0 flex-1 px-1.5 py-1 text-[9px] bg-koma-input border border-koma-border rounded focus:outline-none focus:border-[#10b981] text-koma-foreground"}
                         />
                       </div>
 
-                      {/* Presets de Observação Dinâmicos do Terminal Balcão */}
                       {(() => {
                         const presets = getProductPresets(item.product);
                         if (presets.length === 0) return null;
@@ -494,11 +625,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                                       : [...currentParts.filter((p) => p !== ''), preset];
 
                                     const updatedObs = updatedParts.join(', ');
-                                    setPdvCart((prev) => {
-                                      const c = [...prev];
-                                      c[idx].obs = updatedObs;
-                                      return c;
-                                    });
+                                    setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: updatedObs } : entry));
                                   }}
                                   className={`px-1.5 py-0.5 text-[8px] rounded border transition-colors cursor-pointer font-medium ${
                                     isActive
@@ -518,7 +645,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 )}
               </div>
 
-              {/* Subtotal e formulário de dados do cliente / modalidade */}
               <form
                 onSubmit={handlePdvSubmitOrder}
                 className={"p-3 border-t border-koma-border space-y-3 bg-koma-panel/40 shrink-0"}
@@ -736,7 +862,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 >
                   <span>Total Pedido:</span>
                   <span className={"text-emerald-700 dark:text-emerald-400 text-sm"}>
-                    {formatCurrency(pdvCart.reduce((sum, item) => sum + item.product.preco * item.quantity, 0))}
+                    {formatCurrency(cartTotal)}
                   </span>
                 </div>
 
@@ -759,7 +885,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </form>
             </div>
 
-            {/* Floating Bottom Bar on Mobile when on Products tab */}
             {pdvCart.length > 0 && balcaoMobileView === 'produtos' && (
               <button
                 type="button"
@@ -773,10 +898,97 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 <span
                   className={"text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl"}
                 >
-                  {formatCurrency(pdvCart.reduce((sum, item) => sum + item.product.preco * item.quantity, 0))} →
+                  {formatCurrency(cartTotal)} →
                 </span>
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {configProduct && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-koma-overlay p-0 sm:items-center sm:p-4"
+          onClick={(event) => event.target === event.currentTarget && closeConfig()}
+        >
+          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-koma-border bg-koma-card p-4 shadow-2xl sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3">
+              <div className="min-w-0">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">
+                  {configCartIndex === null ? 'Personalizar item' : 'Editar item do pedido'}
+                </span>
+                <h3 className="truncate text-lg font-bold text-koma-foreground">{configProduct.nome}</h3>
+              </div>
+              <button type="button" onClick={closeConfig} className="rounded-full p-1.5 text-koma-muted hover:text-koma-foreground" aria-label="Fechar personalização">
+                <X size={18} />
+              </button>
+            </div>
+
+            {configProduct.descricao && (
+              <p className="mt-3 rounded-xl border border-koma-border bg-koma-raised p-3 text-[11px] leading-relaxed text-koma-subtle">
+                {configProduct.descricao}
+              </p>
+            )}
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div>
+                <span className="mb-1 block text-[9px] font-bold uppercase text-koma-muted">Quantidade</span>
+                <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
+                  <button type="button" onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400">
+                    <Minus size={14} />
+                  </button>
+                  <span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span>
+                  <button type="button" onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400">
+                    <Plus size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="block text-[9px] font-bold uppercase text-koma-muted">Total configurado</span>
+                <span className="font-mono text-lg font-bold text-emerald-400">{formatCurrency(configUnitTotal * configQty)}</span>
+              </div>
+            </div>
+
+            {configGroups.length > 0 && (
+              <div className="mt-4 space-y-3 border-t border-koma-border pt-4">
+                <div>
+                  <h4 className="text-xs font-bold text-koma-foreground">Complementos</h4>
+                  <p className="text-[10px] text-koma-muted">Recomendados primeiro. Use a busca para qualquer adicional do restaurante.</p>
+                </div>
+                <ModifierPicker
+                  key={`${configProduct.id}-${configCartIndex ?? 'new'}`}
+                  groups={configGroups}
+                  selectedIds={configModifierIds}
+                  onToggle={toggleConfigModifier}
+                  compact
+                />
+              </div>
+            )}
+
+            <div className="mt-4 space-y-2 border-t border-koma-border pt-4">
+              <label htmlFor="pdv-config-obs" className="text-[9px] font-bold uppercase text-koma-muted">Observação de preparo</label>
+              <input
+                id="pdv-config-obs"
+                value={configObs}
+                onChange={(event) => setConfigObs(event.target.value)}
+                placeholder="Ex: sem cebola, bem passado, molho à parte..."
+                className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-2 text-xs text-koma-foreground outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="mt-4 flex items-center gap-3 border-t border-koma-border pt-4">
+              <button type="button" onClick={closeConfig} className="flex-1 rounded-xl border border-koma-border py-2.5 text-xs font-bold text-koma-muted hover:text-koma-foreground">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveConfiguredItem}
+                disabled={!configValid}
+                className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-xs font-extrabold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {!configValid ? 'Complete as escolhas' : configCartIndex === null ? 'Adicionar ao pedido' : 'Salvar alterações'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -13,6 +13,7 @@ from app.models import (
     GrupoModificador,
     OpcaoModificador,
     Produto,
+    ProdutoGrupoModificador,
     Restaurante,
 )
 
@@ -93,6 +94,7 @@ def test_hamburger_suggestions_are_idempotent_and_inherited_by_children():
             "Vegetais e Extras",
             "Pães",
         }
+        assert all(group["recomendado"] is True for group in groups)
         meat_group = next(group for group in groups if group["nome"] == "Carnes e Proteínas")
         assert {option["nome"] for option in meat_group["opcoes"]} >= {
             "Bacon Fatiado",
@@ -109,6 +111,113 @@ def test_hamburger_suggestions_are_idempotent_and_inherited_by_children():
             restaurante_id=771,
             categoria_id=parent.id,
         ).count() == 5
+    finally:
+        db.close()
+
+
+def test_optional_addons_are_global_but_required_groups_stay_scoped():
+    db = _session()
+    try:
+        _seed_restaurant(db, 776, "addons-776")
+        burgers = Categoria(
+            id="cat-burgers",
+            restaurante_id=776,
+            nome="Hambúrgueres Bovinos",
+            destino_impressao="COZINHA",
+        )
+        baguettes = Categoria(
+            id="cat-baguettes",
+            restaurante_id=776,
+            nome="Baguetes",
+            destino_impressao="COZINHA",
+        )
+        pasteis = Categoria(
+            id="cat-pasteis",
+            restaurante_id=776,
+            nome="Pastéis",
+            destino_impressao="COZINHA",
+        )
+        db.add_all([burgers, baguettes, pasteis])
+        db.flush()
+        burger = Produto(
+            id="burger-1",
+            restaurante_id=776,
+            categoria_id=burgers.id,
+            nome="Burger",
+            preco=25.0,
+        )
+        baguette = Produto(
+            id="baguette-1",
+            restaurante_id=776,
+            categoria_id=baguettes.id,
+            nome="Baguete de Cupim",
+            preco=36.0,
+        )
+        pastel = Produto(
+            id="pastel-1",
+            restaurante_id=776,
+            categoria_id=pasteis.id,
+            nome="Pastel de Frango",
+            preco=22.0,
+        )
+        db.add_all([burger, baguette, pastel])
+        db.flush()
+
+        ensure_hamburger_addon_suggestions(db, 776)
+        required = GrupoModificador(
+            id="gmod-required-point",
+            restaurante_id=776,
+            nome="Ponto da Carne",
+            min_selecoes=1,
+            max_selecoes=1,
+            tipo="obrigatorio",
+        )
+        db.add(required)
+        db.flush()
+        db.add(
+            OpcaoModificador(
+                id="opmod-required-well",
+                restaurante_id=776,
+                grupo_id=required.id,
+                nome="Bem passado",
+                preco_adicional=0,
+                ativo=True,
+            )
+        )
+        db.add(
+            ProdutoGrupoModificador(
+                restaurante_id=776,
+                produto_id=burger.id,
+                grupo_id=required.id,
+            )
+        )
+        db.commit()
+
+        payload = effective_modifier_payloads_by_product(db, 776, [burger, baguette, pastel])
+        burger_groups = payload[burger.id]
+        baguette_groups = payload[baguette.id]
+        pastel_groups = payload[pastel.id]
+
+        assert {group["nome"] for group in burger_groups} >= {
+            "Queijos e Cremosos",
+            "Carnes e Proteínas",
+            "Molhos e Sabores",
+            "Vegetais e Extras",
+            "Pães",
+            "Ponto da Carne",
+        }
+        assert next(group for group in burger_groups if group["nome"] == "Ponto da Carne")["recomendado"] is True
+
+        for general_groups in (baguette_groups, pastel_groups):
+            assert {group["nome"] for group in general_groups} == {
+                "Queijos e Cremosos",
+                "Carnes e Proteínas",
+                "Molhos e Sabores",
+                "Vegetais e Extras",
+                "Pães",
+            }
+            assert all(group["recomendado"] is False for group in general_groups)
+            assert "Ponto da Carne" not in {group["nome"] for group in general_groups}
     finally:
         db.close()
 

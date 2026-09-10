@@ -254,7 +254,7 @@ class PosAdapter:
             OrderItemInput(
                 product_id=item.produto_id,
                 quantity=Decimal("1"),
-                modifier_ids=(),
+                modifier_ids=tuple(getattr(item, "modificador_ids", ()) or ()),
                 notes=item.observacao or "",
             )
             for item in venda_in.itens

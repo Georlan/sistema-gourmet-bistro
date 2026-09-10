@@ -20,6 +20,7 @@ export interface CatalogModifierGroup {
   min_selecoes: number;
   max_selecoes: number;
   tipo: 'obrigatorio' | 'opcional' | 'meio_a_meio' | string;
+  recomendado?: boolean;
   opcoes: CatalogModifierOption[];
 }
 
@@ -53,6 +54,7 @@ function normalizeModifierGroups(value: unknown): CatalogModifierGroup[] {
       min_selecoes: Math.max(0, Number(group.min_selecoes ?? 0)),
       max_selecoes: Math.max(1, Number(group.max_selecoes ?? 1)),
       tipo: String(group.tipo ?? 'opcional'),
+      recomendado: group.recomendado !== false,
       opcoes: (Array.isArray(group.opcoes) ? group.opcoes : [])
         .filter((option): option is Record<string, unknown> => Boolean(option) && typeof option === 'object')
         .map((option) => ({

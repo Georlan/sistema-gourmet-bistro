@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from ..adapters.orders.pos_adapter import PosAdapter
 from ..adapters.orders.waiter_modifiers_adapter import WaiterModifiersAdapter
 from ..catalog_addons import (
     CategoriaGrupoModificador,
@@ -20,6 +21,7 @@ from ..schemas import (
     GrupoModificadorResponse,
     LancamentoResponse,
     OpcaoModificadorResponse,
+    VendaDiretaCreate,
 )
 from ..security import get_current_user, require_permission
 from ..websocket_manager import manager
@@ -51,6 +53,10 @@ class LancamentoComModificadoresCreate(BaseModel):
     garcom_id: str
     origem: Optional[Literal["smartpos"]] = None
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    itens: List[ItemComModificadoresCreate] = Field(min_length=1, max_length=200)
+
+
+class VendaDiretaComModificadoresCreate(VendaDiretaCreate):
     itens: List[ItemComModificadoresCreate] = Field(min_length=1, max_length=200)
 
 
@@ -296,6 +302,22 @@ def deletar_grupo(
     db.commit()
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos removido.")
     return None
+
+
+@router.post("/venda-direta")
+def criar_venda_direta_com_modificadores(
+    payload: VendaDiretaComModificadoresCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Venda do Caixa com o mesmo Core de Pedidos e IDs de complementos."""
+    return PosAdapter.handle_create_pos_order(
+        venda_in=payload,
+        background_tasks=background_tasks,
+        db=db,
+        current_user=current_user,
+    )
 
 
 @router.post("/lancamentos/{comanda_id}", response_model=LancamentoResponse)
