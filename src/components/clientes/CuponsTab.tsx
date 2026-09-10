@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Ticket, Plus, Trash2, Edit3, CheckCircle2, XCircle, 
+  Ticket, Plus, Edit3, CheckCircle2, XCircle, 
   Percent, DollarSign, Calendar, AlertCircle, Sparkles,
   Search, Users, ArrowUpRight
 } from 'lucide-react';
@@ -158,19 +158,21 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
     }
   };
 
-  const handleDeleteCupom = async (id: string) => {
-    if (!confirm('Deseja realmente excluir este cupom?')) return;
+  const handleDeactivateCupom = async (id: string) => {
+    if (!confirm('Desativar este cupom? O histórico e os usos serão preservados e ele poderá ser reativado pela edição.')) return;
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/cupons/${id}`, {
         method: 'DELETE',
         headers: authHeaders,
       });
       if (res.ok) {
-        onShowNotification?.('Cupom excluído.', 'success');
-        setCupons(prev => prev.filter(c => c.id !== id));
+        onShowNotification?.('Cupom desativado. Histórico preservado.', 'success');
+        setCupons(prev => prev.map(c => c.id === id ? { ...c, ativo: false } : c));
+      } else {
+        onShowNotification?.('Não foi possível desativar o cupom.', 'error');
       }
     } catch (err) {
-      onShowNotification?.('Erro ao excluir cupom.', 'error');
+      onShowNotification?.('Erro ao desativar cupom.', 'error');
     }
   };
 
@@ -267,14 +269,17 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCupom(cupom.id)}
-                    className="p-1.5 text-koma-muted hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
-                    title="Excluir"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {cupom.ativo && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeactivateCupom(cupom.id)}
+                      className="p-1.5 text-koma-muted hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
+                      title="Desativar"
+                      aria-label={`Desativar cupom ${cupom.codigo}`}
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -291,6 +296,11 @@ export default function CuponsTab({ apiBaseUrl, authHeaders, onShowNotification 
                     {cupom.usos_atuais} {cupom.limite_usos ? `/ ${cupom.limite_usos}` : 'usos'}
                   </span>
                 </div>
+                {!cupom.ativo && (
+                  <div className="inline-block px-2 py-0.5 rounded bg-zinc-500/15 text-koma-muted text-[10px] font-bold">
+                    Desativado — histórico preservado
+                  </div>
+                )}
                 {cupom.apenas_primeira_compra && (
                   <div className="inline-block px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-bold">
                     Apenas 1ª compra
