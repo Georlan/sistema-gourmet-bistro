@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Facebook, Gift, Globe, Phone } from "lucide-react";
+import { Facebook, Gift, Globe, Phone, RotateCcw } from "lucide-react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
 import "../cardapioPublic.css";
 import CardapioBenefitsDrawer from "./CardapioBenefitsDrawer";
@@ -195,6 +195,19 @@ export default function CardapioHeader({
                 >
                   <KomaOrderChatIcon size={15} aria-hidden="true" />
                   <span>{activeOrdersCount > 0 ? `Pedido / Chat${activeOrdersCount > 1 ? ` (${activeOrdersCount})` : ""}` : "Meus pedidos"}</span>
+                </button>
+              )}
+              {user && (
+                <button
+                  type="button"
+                  onClick={onAuthClick}
+                  className="cardapio-public-account-button"
+                  id="btn-order-again-home"
+                  title="Abrir seus pedidos para pedir novamente"
+                  aria-label="Abrir seus pedidos para pedir novamente"
+                >
+                  <RotateCcw size={15} aria-hidden="true" />
+                  <span>Peça novamente</span>
                 </button>
               )}
               <button
