@@ -1,6 +1,6 @@
 
-import { Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { Product } from '../../../types';
 import { CardapioCategoriasTab } from '../../cardapio/CardapioCategoriasTab';
@@ -28,6 +28,9 @@ interface Props {
   fetchProdutos: () => Promise<void>;
   fetchCategorias: () => Promise<void>;
 }
+
+const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const PRODUCT_IMAGE_MAX_SIZE = 5 * 1024 * 1024;
 
 export default function CashierCatalog({
   apiBaseUrl,
@@ -65,13 +68,62 @@ export default function CashierCatalog({
   const [prodFormDescricao, setProdFormDescricao] = useState('');
 
   const [prodFormImagem, setProdFormImagem] = useState('');
-
-  const [prodFormImagem2, setProdFormImagem2] = useState('');
-
-  const [prodFormImagem3, setProdFormImagem3] = useState('');
+  const [prodFormOriginalImagem, setProdFormOriginalImagem] = useState('');
+  const [prodFormImageFile, setProdFormImageFile] = useState<File | null>(null);
+  const [prodFormImagePreview, setProdFormImagePreview] = useState('');
+  const [prodFormImageRemoveRequested, setProdFormImageRemoveRequested] = useState(false);
+  const [prodFormImageError, setProdFormImageError] = useState('');
+  const productImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+
+  const resetProductImageState = (url = '') => {
+    setProdFormImagem(url);
+    setProdFormOriginalImagem(url);
+    setProdFormImageFile(null);
+    setProdFormImagePreview('');
+    setProdFormImageRemoveRequested(false);
+    setProdFormImageError('');
+    if (productImageInputRef.current) productImageInputRef.current.value = '';
+  };
+
+  const selectProductImage = (file: File) => {
+    const normalizedType = file.type.toLowerCase();
+    if (!PRODUCT_IMAGE_TYPES.includes(normalizedType)) {
+      setProdFormImageError('Use uma imagem PNG, JPG ou WEBP.');
+      return;
+    }
+    if (file.size > PRODUCT_IMAGE_MAX_SIZE) {
+      setProdFormImageError('A foto deve ter no máximo 5 MB.');
+      return;
+    }
+
+    setProdFormImageError('');
+    setProdFormImageFile(file);
+    setProdFormImageRemoveRequested(false);
+    const reader = new FileReader();
+    reader.onload = () => setProdFormImagePreview(String(reader.result || ''));
+    reader.onerror = () => {
+      setProdFormImageFile(null);
+      setProdFormImagePreview('');
+      setProdFormImageError('Não foi possível ler essa imagem.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeProductImageLocally = () => {
+    setProdFormImageFile(null);
+    setProdFormImagePreview('');
+    setProdFormImagem('');
+    setProdFormImageRemoveRequested(Boolean(prodFormOriginalImagem));
+    setProdFormImageError('');
+    if (productImageInputRef.current) productImageInputRef.current.value = '';
+  };
+
+  const productImagePreview = prodFormImagePreview
+    || (!prodFormImageRemoveRequested ? prodFormImagem : '');
+
   return (
     <>
       {activeTab === 'cardapio' && activeSubTab === 'produtos' && (
@@ -111,9 +163,7 @@ export default function CashierCatalog({
               setProdFormPreco('');
               setProdFormCategoriaId(apiCategorias[0]?.id || '');
               setProdFormDescricao('');
-              setProdFormImagem('');
-              setProdFormImagem2('');
-              setProdFormImagem3('');
+              resetProductImageState('');
               setProdFormAtivo(true);
               setShowProductModal(true);
             }}
@@ -125,9 +175,7 @@ export default function CashierCatalog({
               setProdFormCategoriaId(product.categoria_id || '');
               setProdFormDescricao(product.descricao || '');
               const gallery = product.imagens_galeria || [];
-              setProdFormImagem(product.imagem || gallery[0] || '');
-              setProdFormImagem2(gallery[1] || '');
-              setProdFormImagem3(gallery[2] || '');
+              resetProductImageState(product.imagem || gallery[0] || '');
               setProdFormAtivo(product.ativo !== false);
               setShowProductModal(true);
             }}
@@ -138,10 +186,7 @@ export default function CashierCatalog({
               setProdFormPreco(Number(product.preco) || 0);
               setProdFormCategoriaId(product.categoria_id || '');
               setProdFormDescricao(product.descricao || '');
-              const gallery = product.imagens_galeria || [];
-              setProdFormImagem(product.imagem || gallery[0] || '');
-              setProdFormImagem2(gallery[1] || '');
-              setProdFormImagem3(gallery[2] || '');
+              resetProductImageState('');
               setProdFormAtivo(true);
               setShowProductModal(true);
             }}
@@ -301,16 +346,13 @@ export default function CashierCatalog({
                 if (isLoading) return;
                 setIsLoading(true);
                 try {
-                  const galeriaUrls = [prodFormImagem, prodFormImagem2, prodFormImagem3]
-                    .map((u) => u.trim())
-                    .filter(Boolean);
                   const payload = {
                     nome: prodFormNome.trim(),
                     categoria_id: prodFormCategoriaId,
                     preco: Number(prodFormPreco || 0),
                     descricao: prodFormDescricao.trim(),
-                    imagem: galeriaUrls[0] || prodFormImagem || '',
-                    imagens_galeria: galeriaUrls,
+                    imagem: prodFormImageRemoveRequested ? prodFormOriginalImagem : prodFormImagem.trim(),
+                    imagens_galeria: [],
                     ativo: prodFormAtivo,
                   };
 
@@ -332,14 +374,70 @@ export default function CashierCatalog({
                     });
                   }
 
-                  if (res.ok) {
-                    await fetchProdutos();
-                    setShowProductModal(false);
-                    showToast(editingProduct ? 'Produto atualizado.' : 'Produto criado.');
-                  } else {
-                    const errData = await res.json().catch(() => ({}));
-                    showToast(errData.detail || 'Não foi possível salvar o produto.', 'error');
+                  const savedProduct = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    showToast(savedProduct.detail || 'Não foi possível salvar o produto.', 'error');
+                    return;
                   }
+
+                  const savedProductId = String(
+                    savedProduct.id || editingProduct?.id || prodFormId.trim() || suggestedProductCode,
+                  );
+
+                  if (prodFormImageFile) {
+                    const formData = new FormData();
+                    formData.append('file', prodFormImageFile);
+                    const uploadHeaders = { ...authHeaders };
+                    delete uploadHeaders['Content-Type'];
+                    const imageResponse = await fetch(
+                      `${apiBaseUrl}/api/cardapio-digital/assets/product/${encodeURIComponent(savedProductId)}`,
+                      {
+                        method: 'POST',
+                        headers: uploadHeaders,
+                        body: formData,
+                      },
+                    );
+                    const imagePayload = await imageResponse.json().catch(() => ({}));
+                    if (!imageResponse.ok) {
+                      await fetchProdutos();
+                      setEditingProduct(savedProduct);
+                      setProdFormId(savedProductId);
+                      showToast(
+                        imagePayload.detail || 'Produto salvo, mas não foi possível enviar a foto. Tente novamente.',
+                        'error',
+                      );
+                      return;
+                    }
+                    setProdFormImagem(String(imagePayload.imagem || ''));
+                    setProdFormOriginalImagem(String(imagePayload.imagem || ''));
+                    setProdFormImageFile(null);
+                    setProdFormImagePreview('');
+                    setProdFormImageRemoveRequested(false);
+                  } else if (prodFormImageRemoveRequested && prodFormOriginalImagem) {
+                    const imageResponse = await fetch(
+                      `${apiBaseUrl}/api/cardapio-digital/assets/product/${encodeURIComponent(savedProductId)}`,
+                      {
+                        method: 'DELETE',
+                        headers: authHeaders,
+                      },
+                    );
+                    const imagePayload = await imageResponse.json().catch(() => ({}));
+                    if (!imageResponse.ok) {
+                      await fetchProdutos();
+                      setEditingProduct(savedProduct);
+                      setProdFormId(savedProductId);
+                      showToast(
+                        imagePayload.detail || 'Produto salvo, mas não foi possível remover a foto. Tente novamente.',
+                        'error',
+                      );
+                      return;
+                    }
+                    resetProductImageState('');
+                  }
+
+                  await fetchProdutos();
+                  setShowProductModal(false);
+                  showToast(editingProduct ? 'Produto atualizado.' : 'Produto criado.');
                 } catch (err) {
                   console.error(err);
                   showToast('Erro de conexão ao salvar produto.', 'error');
@@ -484,50 +582,77 @@ export default function CashierCatalog({
                 </details>
               )}
 
-              <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
-                  <span>
-                    Fotos do produto
-                    <span className="ml-1 font-normal text-koma-muted">
-                      {[prodFormImagem, prodFormImagem2, prodFormImagem3].filter((url) => url.trim()).length > 0
-                        ? `(${[prodFormImagem, prodFormImagem2, prodFormImagem3].filter((url) => url.trim()).length} adicionada${[prodFormImagem, prodFormImagem2, prodFormImagem3].filter((url) => url.trim()).length === 1 ? '' : 's'})`
-                        : '(opcional)'}
-                    </span>
-                  </span>
-                  <span className="text-[9px] font-medium text-koma-muted group-open:hidden">
-                    {[prodFormImagem, prodFormImagem2, prodFormImagem3].some((url) => url.trim())
-                      ? 'Ver fotos'
-                      : 'Adicionar fotos'}
-                  </span>
-                  <span className="hidden text-[9px] font-medium text-koma-muted group-open:inline">Ocultar</span>
-                </summary>
-                <div className="space-y-2 border-t border-koma-border p-3">
-                  <p className="text-[9px] leading-relaxed text-koma-muted">
-                    Cole o endereço de até três fotos. A primeira será a imagem principal.
+              <section className="rounded-xl border border-koma-border bg-koma-panel p-3">
+                <div className="mb-3">
+                  <strong className="block text-[10px] text-koma-foreground">Foto do produto <span className="font-normal text-koma-muted">(opcional)</span></strong>
+                  <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
+                    Use uma única foto. Clique em adicionar ou trocar para escolher um arquivo do seu dispositivo.
                   </p>
-                  <input
-                    type="text"
-                    placeholder="Foto principal: https://…"
-                    value={prodFormImagem}
-                    onChange={(e) => setProdFormImagem(e.target.value)}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Segunda foto: https://…"
-                    value={prodFormImagem2}
-                    onChange={(e) => setProdFormImagem2(e.target.value)}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Terceira foto: https://…"
-                    value={prodFormImagem3}
-                    onChange={(e) => setProdFormImagem3(e.target.value)}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-[#10b981]"}
-                  />
                 </div>
-              </details>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => productImageInputRef.current?.click()}
+                    disabled={isLoading}
+                    className="grid h-32 w-full shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-koma-border bg-koma-raised transition hover:border-emerald-500/50 sm:w-44"
+                    aria-label={productImagePreview ? 'Trocar foto do produto' : 'Adicionar foto do produto'}
+                  >
+                    {productImagePreview ? (
+                      <img src={productImagePreview} alt="Prévia do produto" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="flex flex-col items-center gap-2 text-koma-muted">
+                        <ImageIcon size={24} />
+                        <span className="text-[9px] font-bold">Adicionar foto</span>
+                      </span>
+                    )}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] text-koma-muted">PNG, JPG ou WEBP · até 5 MB</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => productImageInputRef.current?.click()}
+                        disabled={isLoading}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[9px] font-bold text-koma-secondary transition hover:bg-koma-raised disabled:opacity-50"
+                      >
+                        {productImagePreview ? <RefreshCw size={12} /> : <Upload size={12} />}
+                        {productImagePreview ? 'Trocar foto' : 'Adicionar foto'}
+                      </button>
+                      {productImagePreview && (
+                        <button
+                          type="button"
+                          onClick={removeProductImageLocally}
+                          disabled={isLoading}
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-xl px-3 py-2 text-[9px] font-bold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-300 disabled:opacity-50"
+                        >
+                          <Trash2 size={12} /> Remover foto
+                        </button>
+                      )}
+                    </div>
+                    {prodFormImageFile && (
+                      <p className="mt-2 truncate text-[9px] font-semibold text-emerald-600 dark:text-emerald-300">
+                        {prodFormImageFile.name}
+                      </p>
+                    )}
+                    {prodFormImageError && (
+                      <p className="mt-2 text-[9px] font-semibold text-rose-600 dark:text-rose-300">
+                        {prodFormImageError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <input
+                  ref={productImageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) selectProductImage(file);
+                    event.currentTarget.value = '';
+                  }}
+                />
+              </section>
 
               <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
