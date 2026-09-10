@@ -12,26 +12,26 @@ const catalogSource = readFileSync(
 );
 
 test('media health stays inside Produtos instead of creating a duplicate image owner', () => {
-  assert.match(productsSource, /type MediaFilter = 'TODAS' \| 'SEM_FOTO' \| 'UMA_FOTO' \| 'GALERIA'/);
   assert.match(productsSource, /aria-label="Filtrar por fotos do produto"/);
   assert.match(productsSource, /'Sem foto'/);
-  assert.match(productsSource, /'1 foto'/);
-  assert.match(productsSource, /'2–3 fotos'/);
   assert.match(productsSource, /mediaCoverage/);
-  assert.match(productsSource, /Editar fotos deste produto/);
+  assert.match(productsSource, /onEditProduct\(product\)/);
 
   assert.doesNotMatch(catalogSource, /activeSubTab === 'midias'/);
   assert.doesNotMatch(catalogSource, /MediaManager|ImageManager|Gerenciador de imagens/);
 });
 
-test('media health reuses the canonical product gallery and existing edit flow', () => {
+test('product media editing now uses one stored photo through the existing product flow', () => {
   assert.match(productsSource, /product\.imagem/);
-  assert.match(productsSource, /product\.imagens_galeria/);
-  assert.match(productsSource, /new Set\(urls\)\.size/);
   assert.match(productsSource, /onClick=\{\(\) => onEditProduct\(product\)\}/);
 
-  assert.match(catalogSource, /imagens_galeria: galeriaUrls/);
-  assert.match(catalogSource, /A primeira será a imagem principal/);
+  assert.match(catalogSource, /type="file"/);
+  assert.match(catalogSource, /Use uma única foto/);
+  assert.match(catalogSource, /imagens_galeria: \[\]/);
+  assert.match(catalogSource, /\/api\/cardapio-digital\/assets\/product\//);
+  assert.doesNotMatch(catalogSource, /Foto principal: https:\/\//);
+  assert.doesNotMatch(catalogSource, /Segunda foto: https:\/\//);
+  assert.doesNotMatch(catalogSource, /Terceira foto: https:\/\//);
 });
 
 test('existing catalog controls remain available alongside the condensed media filter', () => {
