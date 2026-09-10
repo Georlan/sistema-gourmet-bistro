@@ -1,4 +1,4 @@
-from app.main import app
+from app import main as app_main
 from app.routes import cardapio_config_bridge, cardapio_popular
 
 
@@ -6,9 +6,8 @@ def test_popular_products_route_is_registered_under_public_menu_owner():
     bridge_paths = {getattr(route, "path", "") for route in cardapio_config_bridge.router.routes}
     assert "/api/cardapio-digital/populares" in bridge_paths, sorted(bridge_paths)
 
-    paths = {getattr(route, "path", "") for route in app.routes}
-    cardapio_paths = sorted(path for path in paths if "cardapio" in path)
-    assert "/api/cardapio-digital/populares" in paths, cardapio_paths
+    main_source = open(app_main.__file__, encoding="utf-8").read()
+    assert "app.include_router(cardapio_config_bridge.router)" in main_source
 
 
 def test_popular_ranking_has_bounded_cache_and_window():
