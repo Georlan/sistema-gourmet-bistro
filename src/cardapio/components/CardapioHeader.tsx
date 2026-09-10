@@ -4,21 +4,19 @@
  */
 
 import React, { useEffect, useState } from "react";
-import {
-  Facebook,
-  Globe,
-  Info,
-  Instagram,
-  MapPin,
-  MessageCircle,
-  Phone,
-  Search,
-  Share2,
-  ShoppingBag,
-  UserRound,
-} from "lucide-react";
+import { Facebook, Globe, Phone } from "lucide-react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
 import "../cardapioPublic.css";
+import {
+  KomaBagIcon,
+  KomaInfoIcon,
+  KomaLocationIcon,
+  KomaOrderChatIcon,
+  KomaSearchIcon,
+  KomaShareIcon,
+  KomaSocialCameraIcon,
+  KomaUserIcon,
+} from "./KomaPublicIcons";
 
 interface CardapioHeaderProps {
   activeBrand: BrandConfig;
@@ -37,11 +35,11 @@ interface CardapioHeaderProps {
 const getSocialIcon = (platform: string) => {
   switch (platform.toLocaleLowerCase("pt-BR")) {
     case "instagram":
-      return <Instagram size={15} />;
+      return <KomaSocialCameraIcon size={15} aria-hidden="true" />;
     case "facebook":
-      return <Facebook size={15} />;
+      return <Facebook size={15} aria-hidden="true" />;
     default:
-      return <Globe size={15} />;
+      return <Globe size={15} aria-hidden="true" />;
   }
 };
 
@@ -143,7 +141,7 @@ export default function CardapioHeader({
             <div className="cardapio-public-header__context" aria-label="Informações rápidas">
               {activeBrand.address && (
                 <button type="button" onClick={onLogoClick} className="cardapio-public-context-chip">
-                  <MapPin size={13} />
+                  <KomaLocationIcon size={13} aria-hidden="true" />
                   <span>{activeBrand.address}</span>
                 </button>
               )}
@@ -161,7 +159,7 @@ export default function CardapioHeader({
                 title="Informações do restaurante"
                 aria-label="Informações do restaurante"
               >
-                <Info size={16} />
+                <KomaInfoIcon size={16} aria-hidden="true" />
               </button>
               <button
                 type="button"
@@ -171,7 +169,7 @@ export default function CardapioHeader({
                 aria-label="Compartilhar cardápio"
                 id="btn-share-header"
               >
-                <Share2 size={16} />
+                <KomaShareIcon size={16} aria-hidden="true" />
               </button>
               {ordersCount > 0 && onOrdersClick && (
                 <button
@@ -182,7 +180,7 @@ export default function CardapioHeader({
                   aria-label={`Abrir acompanhamento e chat dos pedidos${activeOrdersCount > 0 ? `, ${activeOrdersCount} em andamento` : ""}`}
                   id="btn-my-orders-header"
                 >
-                  <MessageCircle size={15} />
+                  <KomaOrderChatIcon size={15} aria-hidden="true" />
                   <span>{activeOrdersCount > 0 ? `Pedido / Chat${activeOrdersCount > 1 ? ` (${activeOrdersCount})` : ""}` : "Meus pedidos"}</span>
                 </button>
               )}
@@ -194,7 +192,7 @@ export default function CardapioHeader({
                 aria-label={`Sua sacola, ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
                 id="btn-cart-header"
               >
-                <ShoppingBag size={17} />
+                <KomaBagIcon size={17} aria-hidden="true" />
                 {cartCount > 0 && <span>{cartCount > 99 ? "99+" : cartCount}</span>}
               </button>
               <button
@@ -205,7 +203,7 @@ export default function CardapioHeader({
                 title={user ? user.name || "Perfil" : "Entrar na conta"}
                 aria-label={user ? user.name || "Perfil" : "Entrar na conta"}
               >
-                <UserRound size={15} />
+                <KomaUserIcon size={15} aria-hidden="true" />
                 <span>{user ? user.name?.split(" ")[0] || "Perfil" : "Entrar"}</span>
               </button>
             </div>
@@ -213,7 +211,7 @@ export default function CardapioHeader({
 
           <div className="cardapio-public-header__searchrow" id="search-address-row">
             <label className="cardapio-public-search" id="search-bar-wrapper">
-              <Search size={17} aria-hidden="true" />
+              <KomaSearchIcon size={17} aria-hidden="true" />
               <input
                 type="search"
                 placeholder="O que você quer pedir?"
@@ -237,7 +235,7 @@ export default function CardapioHeader({
                   rel="noreferrer"
                   className="cardapio-public-contact-link"
                 >
-                  <Phone size={14} /> WhatsApp
+                  <Phone size={14} aria-hidden="true" /> WhatsApp
                 </a>
               )}
               {activeBrand.socials?.filter((social) => social.active).slice(0, 2).map((social) => (
