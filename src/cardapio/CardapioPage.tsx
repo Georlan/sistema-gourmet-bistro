@@ -35,6 +35,7 @@ import CardapioCartDrawer, {
 } from "./components/CardapioCartDrawer";
 import CardapioAuthModal from "./components/CardapioAuthModal";
 import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
+import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHistory";
 import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
@@ -56,6 +57,7 @@ import {
   clearAllStoredOrders,
   resolveOrderState,
 } from "./orderTracking";
+import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
@@ -599,6 +601,37 @@ export default function CardapioPage() {
     if (activeBrand?.id) saveCustomerSession(activeBrand.id, { token, profile });
   };
 
+  const handleRepeatOrder = (order: CustomerHistoryOrder) => {
+    if (!activeBrand) return;
+    if (!orderingEnabled) {
+      showNotification(`${orderingMessage} O pedido anterior não foi colocado na sacola.`);
+      return;
+    }
+
+    const rebuilt = rebuildOrderFromCurrentCatalog(order, activeBrand.products);
+    if (rebuilt.items.length === 0) {
+      showNotification(rebuilt.issues[0] || "Os itens desse pedido não estão disponíveis no cardápio atual.");
+      return;
+    }
+
+    if (cart.length > 0 && !window.confirm("Sua sacola atual será substituída pelos itens deste pedido. Continuar?")) {
+      return;
+    }
+
+    setCart(rebuilt.items);
+    setIsProfileOpen(false);
+    setIsCartOpen(true);
+
+    if (rebuilt.issues.length > 0) {
+      const skipped = rebuilt.skippedItems > 0
+        ? ` ${rebuilt.skippedItems} item${rebuilt.skippedItems === 1 ? "" : "ns"} não foi${rebuilt.skippedItems === 1 ? "" : "ram"} incluído${rebuilt.skippedItems === 1 ? "" : "s"}.`
+        : "";
+      showNotification(`Pedido atualizado com ${rebuilt.issues.length} ajuste${rebuilt.issues.length === 1 ? "" : "s"}.${skipped} Confira a sacola.`);
+    } else {
+      showNotification("Pedido recomposto com preços e disponibilidade atuais. Confira a sacola.");
+    }
+  };
+
   const handleLogout = () => {
     if (activeBrand?.id) clearCustomerSession(activeBrand.id);
     setUser(null);
@@ -679,7 +712,7 @@ export default function CardapioPage() {
       />
 
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
-        {notice && !isCartOpen && !isCheckoutOpen && (
+        {notice && !isCheckoutOpen && (
           <div
             className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
             role="status"
@@ -994,6 +1027,7 @@ export default function CardapioPage() {
             if (customerToken) saveCustomerSession(activeBrand.id, { token: customerToken, profile });
           }}
           onLogout={handleLogout}
+          onRepeatOrder={handleRepeatOrder}
         />
       )}
 
