@@ -51,11 +51,45 @@ def test_cors_malicious_pages_dev_blocked():
     assert "access-control-allow-origin" not in response.headers
 
 
+def test_cors_official_first_level_subdomains_allowed():
+    """Subdomínios de primeiro nível de komafood.com.br (pordosol, pordosol-caixa, etc.) são autorizados."""
+    for subdomain in ["pordosol", "pordosol-caixa", "pordosol-garcom", "bar-do-sol", "central"]:
+        origin = f"https://{subdomain}.komafood.com.br"
+        response = client.get("/health", headers={"Origin": origin})
+        assert response.status_code == 200
+        assert response.headers.get("access-control-allow-origin") == origin
+
+    # Preflight OPTIONS também funciona com o cabeçalho X-Idempotency-Key
+    response = client.options(
+        "/api/auth/login",
+        headers={
+            "Origin": "https://pordosol-caixa.komafood.com.br",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Authorization, Content-Type, X-Idempotency-Key",
+        },
+    )
+    assert response.status_code in (200, 204)
+    assert response.headers.get("access-control-allow-origin") == "https://pordosol-caixa.komafood.com.br"
+    assert "x-idempotency-key" in response.headers.get("access-control-allow-headers", "").lower()
+
+
+def test_cors_nested_subdomain_attack_blocked():
+    """Subdomínios aninhados de segundo nível (ex: a.b.komafood.com.br) são bloqueados pela regex estrita."""
+    response = client.get("/health", headers={"Origin": "https://caixa.pordosol.komafood.com.br"})
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+
 def test_cors_similar_domain_suffix_attack_blocked():
     """Tentativa de sufixo no domínio é bloqueada."""
     response = client.get("/health", headers={"Origin": SUBDOMAIN_ATTACK})
     assert response.status_code == 200
     assert "access-control-allow-origin" not in response.headers
+    
+    # Tentativa de sufixo após komafood.com.br
+    response2 = client.get("/health", headers={"Origin": "https://komafood.com.br.evil.com"})
+    assert response2.status_code == 200
+    assert "access-control-allow-origin" not in response2.headers
 
 
 def test_cors_unauthorized_subdomain_blocked():

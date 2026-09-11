@@ -23,6 +23,7 @@ import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { RESTAURANT_CONFIG } from './data';
 import { countWaiterSalonTables, projectWaiterSalonTables } from './domain/waiterSalonProjection';
+import { resolveKomaHost } from './domain/komaHost';
 import { AppRole, AppSettings, CaixaTurnoResumo } from './types';
 import { authFetch, authRequestErrorMessage } from './utils/authRequest';
 import { getOperatorSession, saveOperatorSession } from './utils/authSession';
@@ -73,60 +74,45 @@ const readJwtSubject = (token: string): string => {
 };
 
 export default function App() {
-  const isSuperAdmin = window.location.pathname.startsWith('/super-admin');
+  const hostConfig = useMemo(() => resolveKomaHost(), []);
 
-  if (isSuperAdmin) {
+  if (hostConfig.surface === 'central') {
     return <AppRouteBoundary label="administração"><SuperAdminGate /></AppRouteBoundary>;
   }
 
   // Detect activation page (?view=ativar or /ativar)
-  const isAtivar = window.location.pathname.startsWith('/ativar') ||
-                   window.location.search.includes('view=ativar');
-  if (isAtivar) {
+  if (hostConfig.surface === 'ativar') {
     const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
     return <AppRouteBoundary label="ativação"><CaixaAtivarPage token={tokenFromUrl} /></AppRouteBoundary>;
   }
 
-  // Detect motoboy PWA page (/entregador or ?view=entregador)
-  const isEntregador = window.location.pathname.startsWith('/entregador') ||
-                       window.location.search.includes('view=entregador');
-  if (isEntregador) {
+  // Detect motoboy PWA page (/entregador or ?view=entregador or subdomain -entregador/-motoboy)
+  if (hostConfig.surface === 'entregador') {
     return <AppRouteBoundary label="entregador"><MotoboyPwaPage /></AppRouteBoundary>;
   }
 
-  // Detect KÔMA Landing Page (/landing or ?view=landing)
-  const isLanding = window.location.pathname.startsWith('/landing') ||
-                    window.location.search.includes('view=landing');
-  if (isLanding) {
+  // Detect KÔMA Landing Page (/landing or ?view=landing or apex komafood.com.br)
+  if (hostConfig.surface === 'landing') {
     return <AppRouteBoundary label="apresentação"><LandingPage /></AppRouteBoundary>;
   }
 
   // Detect Order Tracking Page (/acompanhar or ?view=acompanhar)
-  const isAcompanhar = window.location.pathname.startsWith('/acompanhar') ||
-                       window.location.search.includes('view=acompanhar');
-  if (isAcompanhar) {
+  if (hostConfig.surface === 'acompanhar') {
     const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
     return <AppRouteBoundary label="acompanhamento"><OrderTrackingPage token={tokenFromUrl} /></AppRouteBoundary>;
   }
 
   // Detect if access is client cardapio (online menu)
-  const isCardapio = window.location.pathname.startsWith('/cardapio') ||
-                     window.location.search.includes('view=cardapio') ||
-                     (window.location.hostname !== 'localhost' &&
-                      window.location.hostname !== '127.0.0.1' &&
-                      !window.location.hostname.includes('sistema-gourmet-bistro') &&
-                      !window.location.hostname.includes('pages.dev') &&
-                      !window.location.hostname.includes('komafood.com.br') &&
-                      window.location.hostname.split('.').length > 2 &&
-                      window.location.hostname.split('.')[0] !== 'www');
-
-  if (isCardapio) {
+  if (hostConfig.surface === 'public') {
     return <AppRouteBoundary label="cardápio"><CardapioPage /></AppRouteBoundary>;
   }
 
-  // 1. Roles & Active user state (Strictly 'garcom')
-  // 1. Detect portal (garcom or caixa/management) from URL query parameters or hashes
+  // 1. Roles & Active user state (Strictly 'garcom' or 'caixa')
+  // 1. Detect portal from resolved host surface, URL query parameters or hashes
   const [portal, setPortal] = useState<'garcom' | 'caixa'>(() => {
+    if (hostConfig.surface === 'caixa') {
+      return 'caixa';
+    }
     const searchParams = new URLSearchParams(window.location.search);
     const viewParam = searchParams.get('view');
     const hash = window.location.hash;
