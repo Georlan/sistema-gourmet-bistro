@@ -7,7 +7,7 @@ import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoun
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 
-import { resolveKomaHost } from "./domain/komaHost";
+import { isOperationalAppHost, resolveKomaHost } from "./domain/komaHost";
 
 function isPublicMenuRoute(): boolean {
   const pathname = window.location.pathname;
@@ -86,9 +86,12 @@ if (sentryDsn) {
 }
 
 const pathname = window.location.pathname;
+const resolvedHost = resolveKomaHost();
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
+const isUnifiedOperationalRoute = isOperationalAppHost()
+  && (resolvedHost.surface === "garcom" || resolvedHost.surface === "caixa");
 
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
@@ -99,7 +102,9 @@ const RootApp = React.lazy(
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPage")
-        : () => import("./App"),
+        : isUnifiedOperationalRoute
+          ? () => import("./components/auth/UnifiedOperationalEntry")
+          : () => import("./App"),
 );
 
 const RouteLoading = () => (
