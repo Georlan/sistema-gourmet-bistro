@@ -3,8 +3,10 @@
   var params = new URLSearchParams(window.location.search);
   var hostname = window.location.hostname.toLowerCase();
   var parts = hostname.split('.');
-  var ignoredSubdomains = ['www', 'localhost', 'sistema-gourmet-bistro'];
+  var ignoredSubdomains = ['www', 'localhost', 'sistema-gourmet-bistro', 'komafood'];
   var isPlatformHost = hostname.endsWith('.pages.dev')
+    || hostname === 'komafood.com.br'
+    || hostname === 'www.komafood.com.br'
     || hostname.endsWith('.railway.app')
     || hostname.endsWith('.up.railway.app')
     || hostname.endsWith('.vercel.app')
