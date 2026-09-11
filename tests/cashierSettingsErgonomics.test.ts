@@ -27,11 +27,12 @@ test('appearance settings persist theme and local text size using the cashier pr
   assert.match(appearance, /aria-pressed=\{selected\}/);
 });
 
-test('mobile cashier topbar reserves independent touch targets for menu, chat and fullscreen', () => {
+test('mobile cashier topbar reserves independent 44px touch targets for menu, chat and fullscreen', () => {
   assert.match(responsiveCss, /@media \(max-width: 639px\)/);
   assert.match(responsiveCss, /#btn-mobile-caixa-sidebar-open,[\s\S]*#btn-caixa-conversas-drawer,[\s\S]*#btn-modo-pdv-fullscreen/);
   assert.match(responsiveCss, /width: 2\.75rem/);
   assert.match(responsiveCss, /min-height: 2\.75rem/);
+  assert.doesNotMatch(responsiveCss, /(?:width|height|min-width|min-height): 2\.55rem/);
   assert.match(responsiveCss, /#btn-caixa-conversas-drawer > span:not\(\[role="status"\]\)[\s\S]*display: none/);
   assert.match(responsiveCss, /\.cashier-subnav__button[\s\S]*min-height: 2\.75rem/);
 });
