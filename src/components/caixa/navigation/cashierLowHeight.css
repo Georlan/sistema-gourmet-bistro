@@ -181,13 +181,18 @@
  * The topbar is a control surface, not a second navigation menu: keep the
  * page title readable and force chat/fullscreen into predictable 44px touch
  * targets so they cannot squeeze or overlap the title on narrow phones.
+ * Topbar + subnav stay pinned while the operational content scrolls.
  */
 @media (max-width: 639px) {
   .cashier-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 70;
     height: 3.5rem !important;
     min-height: 3.5rem !important;
     padding-inline: 0.7rem !important;
     gap: 0.45rem;
+    background: var(--koma-surface-panel) !important;
   }
 
   .cashier-topbar > div:first-child {
@@ -250,10 +255,15 @@
   }
 
   .cashier-subnav {
+    position: sticky;
+    top: 3.5rem;
+    z-index: 69;
     gap: 0.18rem !important;
     padding: 0.34rem 0.55rem !important;
     scroll-padding-inline: 0.55rem;
     overscroll-behavior-x: contain;
+    background: var(--koma-surface-panel) !important;
+    box-shadow: 0 1px 0 var(--koma-border-subtle);
   }
 
   .cashier-subnav__button {
@@ -288,4 +298,3 @@
 .cashier-settings-primary-button {
   min-height: 2.75rem;
 }
-

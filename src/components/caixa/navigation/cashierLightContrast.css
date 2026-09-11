@@ -1,0 +1,39 @@
+/* Light-mode legibility contract for persistent cashier sidebar controls. */
+[data-koma-theme="light"] #online-orders-emergency-trigger[aria-label="Pausar cardápio online"] {
+  color: var(--koma-danger-text);
+  border-color: var(--koma-danger-border);
+  background: var(--koma-danger-bg);
+}
+
+[data-koma-theme="light"] #online-orders-emergency-trigger[aria-label="Pausar cardápio online"]:hover {
+  border-color: #ef4444;
+  background: #fecaca;
+}
+
+[data-koma-theme="light"] #online-orders-emergency-trigger[aria-label="Reabrir cardápio online"] {
+  color: var(--koma-success-text);
+  border-color: var(--koma-success-border);
+  background: var(--koma-success-bg);
+}
+
+[data-koma-theme="light"] #online-orders-emergency-trigger[aria-label="Reabrir cardápio online"]:hover {
+  border-color: #34d399;
+  background: #d1fae5;
+}
+
+/* High-demand state keeps warning semantics instead of inheriting the pause/danger palette. */
+[data-koma-theme="light"] #online-orders-emergency-trigger[class*="border-amber-500"] {
+  color: var(--koma-warning-text);
+  border-color: var(--koma-warning-border);
+  background: var(--koma-warning-bg);
+}
+
+[data-koma-theme="light"] #online-orders-emergency-trigger[class*="border-amber-500"]:hover {
+  border-color: #f59e0b;
+  background: #fde68a;
+}
+
+[data-koma-theme="light"] #online-orders-emergency-trigger small {
+  opacity: 0.9;
+  font-weight: 700;
+}
