@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy.orm import Session
 
 from ...config import settings
+from ...database import SessionLocal
 from ...domain.orders.events import OrderCreated
 from ...domain.orders.types import FulfillmentType, OrderChannel
 from ...models import (
@@ -21,10 +23,13 @@ from ...models import (
 from ...subscription import subscription_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
-from .mercado_pago import MercadoPagoProvider
+from .mercado_pago import MercadoPagoError, MercadoPagoProvider
+from .oauth import MercadoPagoOAuthError, refresh_access_token
 
 
 MONEY = Decimal("0.01")
+TOKEN_REFRESH_SKEW = datetime.timedelta(minutes=5)
+logger = logging.getLogger("koma.online_payments")
 
 
 class OnlinePaymentConfigurationError(RuntimeError):
@@ -51,9 +56,112 @@ def _mapped_status(provider_status: str) -> str:
     }.get((provider_status or "").lower(), "pending")
 
 
+def _token_needs_refresh(expires_at: datetime.datetime | None) -> bool:
+    if expires_at is None:
+        return False
+    normalized = expires_at
+    if normalized.tzinfo is None:
+        normalized = normalized.replace(tzinfo=datetime.timezone.utc)
+    return normalized <= datetime.datetime.now(datetime.timezone.utc) + TOKEN_REFRESH_SKEW
+
+
+def _token_expiry(expires_in: int | None) -> datetime.datetime | None:
+    if expires_in is None or expires_in <= 0:
+        return None
+    return datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=expires_in)
+
+
 class OnlinePaymentService:
-    @staticmethod
-    def active_account(db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
+    @classmethod
+    def _refresh_account_credentials(
+        cls,
+        db: Session,
+        account: RestaurantPaymentAccount,
+        *,
+        force: bool = False,
+        known_access_token: str | None = None,
+    ) -> RestaurantPaymentAccount:
+        """Renova credenciais OAuth numa transação independente da transação do pedido.
+
+        O refresh token do Mercado Pago pode rotacionar. Por isso a renovação precisa
+        ser commitada antes de continuar o pedido; um rollback posterior do pedido não
+        pode restaurar um refresh token que o provedor já invalidou.
+        """
+        refresh_db = SessionLocal(restaurante_id=account.restaurante_id)
+        try:
+            locked = (
+                refresh_db.query(RestaurantPaymentAccount)
+                .filter(
+                    RestaurantPaymentAccount.restaurante_id == account.restaurante_id,
+                    RestaurantPaymentAccount.id == account.id,
+                    RestaurantPaymentAccount.provider == "mercado_pago",
+                    RestaurantPaymentAccount.status == "active",
+                )
+                .with_for_update()
+                .first()
+            )
+            if locked is None:
+                raise OnlinePaymentConfigurationError(
+                    "A conta Mercado Pago precisa ser reconectada."
+                )
+
+            locked_access_token = locked.access_token
+            if force and known_access_token and locked_access_token != known_access_token:
+                # Outra requisição já renovou as credenciais enquanto esperávamos o lock.
+                refresh_db.rollback()
+            elif not force and not _token_needs_refresh(locked.token_expires_at):
+                refresh_db.rollback()
+            else:
+                current_refresh_token = locked.refresh_token
+                if not current_refresh_token:
+                    raise OnlinePaymentConfigurationError(
+                        "A conta Mercado Pago precisa ser reconectada."
+                    )
+                try:
+                    tokens = refresh_access_token(current_refresh_token)
+                except MercadoPagoOAuthError as exc:
+                    logger.warning(
+                        "Falha ao renovar OAuth Mercado Pago do restaurante %s.",
+                        account.restaurante_id,
+                    )
+                    raise OnlinePaymentConfigurationError(
+                        "Não foi possível renovar a conexão com o Mercado Pago. Reconecte a conta e tente novamente."
+                    ) from exc
+
+                if (
+                    locked.provider_user_id
+                    and tokens.provider_user_id != locked.provider_user_id
+                ):
+                    raise OnlinePaymentConfigurationError(
+                        "A renovação do Mercado Pago retornou uma conta diferente. Reconecte a conta."
+                    )
+
+                locked.access_token = tokens.access_token
+                if tokens.refresh_token:
+                    locked.refresh_token = tokens.refresh_token
+                if tokens.public_key:
+                    locked.public_key = tokens.public_key
+                locked.provider_user_id = tokens.provider_user_id
+                locked.token_expires_at = _token_expiry(tokens.expires_in)
+                locked.updated_at = datetime.datetime.now(datetime.timezone.utc)
+                refresh_db.commit()
+                logger.info(
+                    "Credenciais OAuth Mercado Pago renovadas para o restaurante %s.",
+                    account.restaurante_id,
+                )
+        except OnlinePaymentConfigurationError:
+            refresh_db.rollback()
+            raise
+        finally:
+            refresh_db.close()
+
+        # A sessão do pedido pode ter carregado a linha antes da renovação. Recarrega
+        # os campos criptografados sem interferir nos demais writes/locks da transação.
+        db.refresh(account)
+        return account
+
+    @classmethod
+    def active_account(cls, db: Session, restaurant_id: int) -> RestaurantPaymentAccount:
         account = db.query(RestaurantPaymentAccount).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
@@ -67,6 +175,8 @@ class OnlinePaymentService:
             raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
         if not settings.KOMA_PUBLIC_API_URL:
             raise OnlinePaymentConfigurationError("A URL pública de pagamentos ainda não foi configurada.")
+        if _token_needs_refresh(account.token_expires_at):
+            account = cls._refresh_account_credentials(db, account)
         return account
 
     @staticmethod
@@ -277,9 +387,9 @@ class OnlinePaymentService:
         expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
             minutes=settings.ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES
         )
-        provider = MercadoPagoProvider(account.access_token)
-        try:
-            payment = provider.create_pix(
+
+        def create_with_current_token() -> ProviderPayment:
+            return MercadoPagoProvider(account.access_token).create_pix(
                 amount=_money(intent.amount),
                 marketplace_fee=_money(intent.marketplace_fee),
                 payer_email=payer_email,
@@ -290,6 +400,26 @@ class OnlinePaymentService:
                 ),
                 expires_at=expires_at,
             )
+
+        try:
+            try:
+                payment = create_with_current_token()
+            except MercadoPagoError as exc:
+                if exc.status_code != 401:
+                    raise
+                stale_access_token = account.access_token
+                logger.info(
+                    "Mercado Pago rejeitou access token do restaurante %s; tentando refresh OAuth uma vez.",
+                    account.restaurante_id,
+                )
+                account = cls._refresh_account_credentials(
+                    db,
+                    account,
+                    force=True,
+                    known_access_token=stale_access_token,
+                )
+                payment = create_with_current_token()
+
             settled_intent, _ = cls.apply_provider_snapshot_in_session(
                 db,
                 account=account,
@@ -337,7 +467,20 @@ class OnlinePaymentService:
         account: RestaurantPaymentAccount,
         external_payment_id: str,
     ) -> tuple[OnlinePaymentIntent | None, bool]:
-        payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+        try:
+            payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+        except MercadoPagoError as exc:
+            if exc.status_code != 401:
+                raise
+            stale_access_token = account.access_token
+            account = cls._refresh_account_credentials(
+                db,
+                account,
+                force=True,
+                known_access_token=stale_access_token,
+            )
+            payment = MercadoPagoProvider(account.access_token).get_payment(external_payment_id)
+
         intent = db.query(OnlinePaymentIntent).filter(
             OnlinePaymentIntent.restaurante_id == account.restaurante_id,
             OnlinePaymentIntent.provider == "mercado_pago",
