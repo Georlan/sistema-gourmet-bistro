@@ -275,15 +275,6 @@
     padding-inline: 0.5rem !important;
   }
 
-  #btn-mobile-caixa-sidebar-open,
-  #btn-caixa-conversas-drawer,
-  #btn-modo-pdv-fullscreen {
-    width: 2.55rem;
-    height: 2.55rem;
-    min-width: 2.55rem;
-    min-height: 2.55rem;
-  }
-
   .cashier-subnav__button {
     padding-inline: 0.46rem;
     font-size: 0.65rem;
