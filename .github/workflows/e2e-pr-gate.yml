@@ -1,0 +1,46 @@
+name: E2E PR Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'e2e/**'
+      - 'playwright.config.*'
+      - '.github/workflows/e2e-pr-gate.yml'
+
+concurrency:
+  group: e2e-pr-gate-${{ github.event.pull_request.head.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Browser regression for E2E changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser matrix
+        env:
+          KOMA_E2E_PORT: '4283'
+        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts e2e/app-recovery.spec.ts e2e/public-menu-order.spec.ts e2e/order-tracking-chat.spec.ts e2e/password-recovery.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-pr-playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
