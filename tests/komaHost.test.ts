@@ -85,6 +85,13 @@ describe('resolveKomaHost', () => {
     assert.equal(resolved.tenantSlug, null);
   });
 
+  it('keeps explicit public menu paths sovereign on app.komafood.com.br', () => {
+    const resolved = resolveKomaHost('app.komafood.com.br', '/c/pordosol', '');
+    assert.equal(resolved.kind, 'tenant');
+    assert.equal(resolved.surface, 'public');
+    assert.equal(resolved.tenantSlug, 'pordosol');
+  });
+
   it('resolves tenant public menu subdomain (e.g. pordosol.komafood.com.br)', () => {
     const resolved = resolveKomaHost('pordosol.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'tenant');
