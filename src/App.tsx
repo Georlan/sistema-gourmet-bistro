@@ -116,6 +116,7 @@ export default function App() {
                       window.location.hostname !== '127.0.0.1' &&
                       !window.location.hostname.includes('sistema-gourmet-bistro') &&
                       !window.location.hostname.includes('pages.dev') &&
+                      !window.location.hostname.includes('komafood.com.br') &&
                       window.location.hostname.split('.').length > 2 &&
                       window.location.hostname.split('.')[0] !== 'www');
 

@@ -3,6 +3,11 @@ import secrets
 from urllib.parse import urlsplit
 
 OFFICIAL_PUBLIC_FRONTEND_ORIGIN = "https://sistema-gourmet-bistro.pages.dev"
+OFFICIAL_CUSTOM_DOMAIN_ORIGIN = "https://komafood.com.br"
+OFFICIAL_PUBLIC_FRONTEND_ORIGINS = (
+    OFFICIAL_PUBLIC_FRONTEND_ORIGIN,
+    OFFICIAL_CUSTOM_DOMAIN_ORIGIN,
+)
 
 
 def normalize_cors_origin(raw: str) -> str:
@@ -174,9 +179,10 @@ class Settings:
             or os.getenv("RAILWAY_SERVICE_ID")
         )
         if running_on_railway:
-            official_origin = normalize_cors_origin(OFFICIAL_PUBLIC_FRONTEND_ORIGIN)
-            if official_origin not in normalized:
-                normalized.insert(0, official_origin)
+            for official_origin_raw in OFFICIAL_PUBLIC_FRONTEND_ORIGINS:
+                official_origin = normalize_cors_origin(official_origin_raw)
+                if official_origin not in normalized:
+                    normalized.append(official_origin)
                 
         env = os.getenv("ENVIRONMENT", "production").lower()
         if not normalized and env in ("development", "test"):

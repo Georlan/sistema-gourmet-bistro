@@ -18,8 +18,10 @@ function isPublicMenuRoute(): boolean {
 
   const hostname = window.location.hostname.toLowerCase();
   const parts = hostname.split(".");
-  const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro"];
+  const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro", "komafood"];
   const isPlatformHost = hostname.endsWith(".pages.dev")
+    || hostname === "komafood.com.br"
+    || hostname === "www.komafood.com.br"
     || hostname.endsWith(".railway.app")
     || hostname.endsWith(".up.railway.app")
     || hostname.endsWith(".vercel.app")

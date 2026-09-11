@@ -2,7 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
-from app.config import OFFICIAL_PUBLIC_FRONTEND_ORIGIN, settings
+from app.config import (
+    OFFICIAL_CUSTOM_DOMAIN_ORIGIN,
+    OFFICIAL_PUBLIC_FRONTEND_ORIGIN,
+    OFFICIAL_PUBLIC_FRONTEND_ORIGINS,
+    settings,
+)
 from app.main import app as koma_app
 
 
@@ -18,7 +23,8 @@ def _railway_origins(monkeypatch) -> list[str]:
 def test_railway_keeps_exact_official_public_origin_without_env_override(monkeypatch):
     origins = _railway_origins(monkeypatch)
 
-    assert origins == [OFFICIAL_PUBLIC_FRONTEND_ORIGIN]
+    assert origins == list(OFFICIAL_PUBLIC_FRONTEND_ORIGINS)
+    assert OFFICIAL_CUSTOM_DOMAIN_ORIGIN in origins
     assert "https://evil-hacker.pages.dev" not in origins
 
 
