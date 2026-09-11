@@ -21,9 +21,9 @@ test('loyalty compact mode offers automatic or manual rates without asking the o
     calculator.indexOf('const calculate = async'),
   );
 
+  assert.match(calculator, /body:\s*JSON\.stringify\(\{\s*mode:\s*'automatico'\s*\}\)/);
   assert.match(compactMode, /Automático/);
   assert.match(compactMode, /Manual/);
-  assert.match(compactMode, /mode:\s*'automatico'/);
   assert.match(compactMode, /Usar sugestão KÔMA/);
   assert.match(compactMode, /Nada é salvo até você tocar em “Salvar programa”/);
   assert.doesNotMatch(compactMode, /Ticket médio/);
