@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
-  BadgeCheck,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   CreditCard,
   ExternalLink,
@@ -14,12 +14,10 @@ import {
   Plus,
   RefreshCw,
   Save,
-  Sparkles,
   Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { CardapioAssetUploader } from '../CardapioAssetUploader';
-import { OperationalBanner } from '../shared/OperationalBanner';
 
 export type CardapioDigitalSettingsSection = 'perfil' | 'pedidos' | 'marca';
 
@@ -514,18 +512,28 @@ export function CardapioDigitalSettingsPanel({
 
   return (
     <div className="space-y-4 text-left animate-fade-in">
-      <OperationalBanner
-        id="online-menu-settings-heading"
-        eyebrow="CARDÁPIO ONLINE"
-        title="Sua vitrine"
-        accent={readiness.ready ? 'pronta para vender' : 'precisa de ajustes'}
-        description="Configure só o que muda a experiência do cliente. O visual, a navegação e o fluxo de pedido seguem o padrão Kôma."
-        metrics={[
-          { label: 'status', value: statusLabel },
-          { label: 'prontidão', value: `${readiness.completed}/${readiness.total}` },
-          { label: 'pagamentos', value: config.formas_pagamento_aceitas.length },
-        ]}
-      />
+      <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <h2 className="text-base font-black text-koma-foreground">
+            {activeTab === 'marca' ? 'Marca' : 'Perfil do cardápio'}
+          </h2>
+          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+            {activeTab === 'marca'
+              ? 'Logo e capa usadas no cardápio público.'
+              : 'Informações que o cliente vê para reconhecer e encontrar o restaurante.'}
+          </p>
+        </div>
+        {publicMenuUrl && (
+          <a
+            href={publicMenuUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+          >
+            <ExternalLink size={13} /> Ver cardápio
+          </a>
+        )}
+      </header>
 
       {loadError && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/[0.08] px-4 py-3 text-xs text-rose-700 dark:text-rose-300" role="alert">
@@ -539,57 +547,88 @@ export function CardapioDigitalSettingsPanel({
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
         <div className="min-w-0 space-y-4">
-          <div
-            className={clsx(
-              'flex items-start gap-3 rounded-2xl border px-4 py-3.5',
-              readiness.ready
-                ? 'border-emerald-500/25 bg-emerald-500/[0.08]'
-                : 'border-amber-500/25 bg-amber-500/[0.07]',
-            )}
-          >
-            <div className={clsx('mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl', readiness.ready ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500')}>
-              {readiness.ready ? <BadgeCheck size={17} /> : <Sparkles size={17} />}
+          {activeTab === 'perfil' && !readiness.ready && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3 text-[10px] text-amber-700 dark:text-amber-300">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <strong>Recomendado preencher:</strong> complete {readiness.missing.join(', ')} para que seus clientes identifiquem a loja.
+              </div>
             </div>
-            <div className="min-w-0">
-              <strong className="block text-[11px] text-koma-foreground">
-                {readiness.ready ? 'Cardápio pronto para receber pedidos' : `${readiness.missing.length} ajuste${readiness.missing.length === 1 ? '' : 's'} recomendado${readiness.missing.length === 1 ? '' : 's'}`}
-              </strong>
-              <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
-                {readiness.ready
-                  ? 'As informações essenciais estão preenchidas. Você pode continuar refinando fotos e descrição quando quiser.'
-                  : `Complete ${readiness.missing.join(', ')} para reduzir dúvidas do cliente durante o pedido.`}
-              </p>
-            </div>
-          </div>
+          )}
 
-          <main className="rounded-2xl border border-koma-border bg-koma-panel px-4 sm:px-5">
-            {activeTab === 'perfil' && (
-              <>
-                <SettingsSection
-                  title="Identidade do restaurante"
-                  description="Essas informações aparecem no topo do cardápio e ajudam o cliente a reconhecer a loja certa."
-                >
+          {activeTab === 'perfil' && (
+            <>
+              <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+                <div className="mb-4">
+                  <h3 className="text-sm font-black text-koma-foreground">Informações principais</h3>
+                  <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+                    Dados essenciais para os clientes reconhecerem e encontrarem seu restaurante.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="sm:col-span-2">
+                    <FieldLabel>Nome público do restaurante</FieldLabel>
+                    <input
+                      value={config.nome}
+                      onChange={(event) => updateConfig('nome', event.target.value)}
+                      maxLength={120}
+                      className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-semibold text-koma-foreground outline-none focus:border-emerald-500/60"
+                      placeholder="Ex.: Pizzeria Bella Italia"
+                    />
+                  </label>
+                  <label className="sm:col-span-2">
+                    <FieldLabel>Slogan / frase curta</FieldLabel>
+                    <input
+                      value={config.subtitulo}
+                      onChange={(event) => updateConfig('subtitulo', event.target.value)}
+                      maxLength={180}
+                      className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
+                      placeholder="Ex.: Pizza artesanal no forno a lenha"
+                    />
+                  </label>
+                  <label>
+                    <FieldLabel>WhatsApp</FieldLabel>
+                    <div className="relative">
+                      <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
+                      <input
+                        value={String(config.socials.whatsapp || '')}
+                        onChange={(event) => updateSocial('whatsapp', event.target.value)}
+                        className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-3 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
+                        placeholder="(85) 99999-9999"
+                      />
+                    </div>
+                  </label>
+                  <label className="sm:col-span-2">
+                    <FieldLabel>Endereço físico</FieldLabel>
+                    <div className="relative">
+                      <MapPin size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
+                      <input
+                        value={config.endereco}
+                        onChange={(event) => updateConfig('endereco', event.target.value)}
+                        maxLength={240}
+                        className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-3 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
+                        placeholder="Av. Principal, 100 - Centro"
+                      />
+                    </div>
+                  </label>
+                </div>
+              </section>
+
+              <details className="group rounded-2xl border border-koma-border bg-koma-panel">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
+                  <div>
+                    <strong className="block text-sm font-black text-koma-foreground">Informações adicionais</strong>
+                    <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">
+                      Sobre o restaurante, Instagram e link do Google Maps.
+                    </span>
+                  </div>
+                  <ChevronDown
+                    size={16}
+                    className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
+                  />
+                </summary>
+                <div className="border-t border-koma-border px-4 py-4 sm:px-5">
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Nome público do restaurante</FieldLabel>
-                      <input
-                        value={config.nome}
-                        onChange={(event) => updateConfig('nome', event.target.value)}
-                        maxLength={120}
-                        className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-semibold text-koma-foreground outline-none focus:border-emerald-500/60"
-                        placeholder="Ex.: Pizzeria Bella Italia"
-                      />
-                    </label>
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Slogan / frase curta</FieldLabel>
-                      <input
-                        value={config.subtitulo}
-                        onChange={(event) => updateConfig('subtitulo', event.target.value)}
-                        maxLength={180}
-                        className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
-                        placeholder="Ex.: Pizza artesanal no forno a lenha"
-                      />
-                    </label>
                     <label className="sm:col-span-2">
                       <FieldLabel>Sobre o restaurante</FieldLabel>
                       <textarea
@@ -601,27 +640,6 @@ export function CardapioDigitalSettingsPanel({
                         placeholder="Conte em poucas linhas o que torna o restaurante especial."
                       />
                       <span className="mt-1 block text-right text-[9px] text-koma-subtle">{config.sobre_nos.length}/900</span>
-                    </label>
-                  </div>
-                </SettingsSection>
-
-                <SettingsSection
-                  separated
-                  title="Contato e localização"
-                  description="Deixe fácil falar com o restaurante ou encontrar o endereço sem sair procurando informação."
-                >
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label>
-                      <FieldLabel>WhatsApp</FieldLabel>
-                      <div className="relative">
-                        <MessageCircle size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
-                        <input
-                          value={String(config.socials.whatsapp || '')}
-                          onChange={(event) => updateSocial('whatsapp', event.target.value)}
-                          className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-3 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
-                          placeholder="(85) 99999-9999"
-                        />
-                      </div>
                     </label>
                     <label>
                       <FieldLabel>Instagram</FieldLabel>
@@ -635,20 +653,7 @@ export function CardapioDigitalSettingsPanel({
                         />
                       </div>
                     </label>
-                    <label className="sm:col-span-2">
-                      <FieldLabel>Endereço físico</FieldLabel>
-                      <div className="relative">
-                        <MapPin size={15} className="pointer-events-none absolute left-3 top-3.5 text-koma-muted" />
-                        <input
-                          value={config.endereco}
-                          onChange={(event) => updateConfig('endereco', event.target.value)}
-                          maxLength={240}
-                          className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-9 pr-3 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
-                          placeholder="Av. Principal, 100 - Centro"
-                        />
-                      </div>
-                    </label>
-                    <label className="sm:col-span-2">
+                    <label>
                       <FieldLabel>Link do Google Maps</FieldLabel>
                       <input
                         value={config.google_maps_url}
@@ -658,11 +663,13 @@ export function CardapioDigitalSettingsPanel({
                       />
                     </label>
                   </div>
-                </SettingsSection>
-              </>
-            )}
+                </div>
+              </details>
+            </>
+          )}
 
-            {activeTab === 'pedidos' && (
+          {activeTab === 'pedidos' && (
+            <main className="rounded-2xl border border-koma-border bg-koma-panel px-4 sm:px-5">
               <>
                 <SettingsSection
                   title="Recebimento de pedidos"
@@ -885,67 +892,62 @@ export function CardapioDigitalSettingsPanel({
                   </div>
                 </SettingsSection>
               </>
-            )}
+            </main>
+          )}
 
-            {activeTab === 'marca' && (
-              <SettingsSection
-                title="Logo e capa"
-                description="A interface e as cores seguem a identidade Kôma. Você personaliza somente as imagens que identificam o restaurante."
-              >
-                <div className="space-y-3">
-                  <CardapioAssetUploader
-                    type="logo"
-                    label="Logotipo do restaurante"
-                    currentUrl={config.logo_url}
-                    apiBaseUrl={apiBaseUrl}
-                    authHeaders={authHeaders}
-                    onChange={(url) => updateConfig('logo_url', url)}
-                  />
-                  <CardapioAssetUploader
-                    type="banner"
-                    label="Banner / capa"
-                    currentUrl={config.banner_url}
-                    apiBaseUrl={apiBaseUrl}
-                    authHeaders={authHeaders}
-                    onChange={(url) => updateConfig('banner_url', url)}
-                  />
-                </div>
-              </SettingsSection>
-            )}
-          </main>
-
-          <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-end">
-            {feedback && (
-              <div className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
-                {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                {feedback.text}
+          {activeTab === 'marca' && (
+            <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-black text-koma-foreground">Imagens do restaurante</h3>
+                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+                  Logo e capa usadas no cardápio público.
+                </p>
               </div>
-            )}
-            {!feedback && (
-              <span className="mr-auto text-[10px] font-semibold text-koma-muted">
-                {hasUnsavedChanges ? 'Há alterações que ainda não foram publicadas.' : 'Tudo salvo.'}
-              </span>
-            )}
-            {publicMenuUrl && (
-              <a
-                href={publicMenuUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-4 text-[10px] font-black uppercase tracking-wider text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
-              >
-                <ExternalLink size={13} /> Ver cardápio
-              </a>
-            )}
-            <button
-              type="button"
-              disabled={isSaving || !hasUnsavedChanges || !hasLoadedConfig || Boolean(loadError)}
-              onClick={() => void saveConfig()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-default disabled:border-koma-border disabled:bg-koma-raised disabled:text-koma-muted disabled:opacity-70"
-            >
-              {isSaving ? <Loader2 size={13} className="animate-spin" /> : hasUnsavedChanges ? <Save size={13} /> : <CheckCircle2 size={13} />}
-              {isSaving ? 'Publicando…' : hasUnsavedChanges ? 'Salvar e publicar' : 'Tudo salvo'}
-            </button>
-          </div>
+              <div className="space-y-4">
+                <CardapioAssetUploader
+                  type="logo"
+                  label="Logotipo do restaurante"
+                  currentUrl={config.logo_url}
+                  apiBaseUrl={apiBaseUrl}
+                  authHeaders={authHeaders}
+                  onChange={(url) => updateConfig('logo_url', url)}
+                />
+                <CardapioAssetUploader
+                  type="banner"
+                  label="Banner / capa"
+                  currentUrl={config.banner_url}
+                  apiBaseUrl={apiBaseUrl}
+                  authHeaders={authHeaders}
+                  onChange={(url) => updateConfig('banner_url', url)}
+                />
+              </div>
+            </section>
+          )}
+
+          {(feedback || hasUnsavedChanges) && (
+            <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
+              {feedback ? (
+                <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
+                  {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
+                </span>
+              ) : (
+                <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                  Alterações ainda não publicadas.
+                </span>
+              )}
+              {hasUnsavedChanges && (
+                <button
+                  type="button"
+                  disabled={isSaving || !hasLoadedConfig || Boolean(loadError)}
+                  onClick={() => void saveConfig()}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
+                >
+                  {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  {isSaving ? 'Publicando…' : 'Salvar e publicar'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <PhonePreview config={config} />

@@ -38,14 +38,12 @@ test('CashierOnlineMenu routes channel concerns to their canonical owners', () =
   assert.match(onlineMenu, /setActiveSubTab\('integracoes'\)/);
 });
 
-test('Cardápio online aproxima venda recorrente sem criar outra fonte de cupom ou fidelidade', () => {
+test('Cardápio online mantém apenas fluxos canônicos sem atalhos paralelos de cupom ou fidelidade', () => {
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
-  assert.match(onlineMenu, /id="online-menu-growth-shortcuts"/);
-  assert.match(onlineMenu, /id="online-menu-open-coupons"/);
-  assert.match(onlineMenu, /id="online-menu-open-loyalty"/);
-  assert.match(onlineMenu, /setActiveTab\('clientes'\)/);
-  assert.match(onlineMenu, /openCustomerTool\('cupons'\)/);
-  assert.match(onlineMenu, /openCustomerTool\('fidelidade'\)/);
+  assert.doesNotMatch(onlineMenu, /id="online-menu-growth-shortcuts"/);
+  assert.doesNotMatch(onlineMenu, /id="online-menu-open-coupons"/);
+  assert.doesNotMatch(onlineMenu, /id="online-menu-open-loyalty"/);
+  assert.doesNotMatch(onlineMenu, /openCustomerTool/);
   assert.doesNotMatch(onlineMenu, /fetch\([^\n]*(?:cupons|fidelidade)/i);
 });
 

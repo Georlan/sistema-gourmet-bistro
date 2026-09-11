@@ -1,11 +1,11 @@
 import clsx from 'clsx';
 import { AlertCircle, CheckCircle2, CreditCard, ExternalLink, Loader2, Save, ShieldCheck } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { OperationalBanner } from '../../shared/OperationalBanner';
 
 interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  publicMenuUrl?: string | null;
   onManageIntegrations: () => void;
 }
 
@@ -32,7 +32,7 @@ function normalizePayments(value: unknown): string[] {
     : [];
 }
 
-export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, onManageIntegrations }: Props) {
+export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuUrl, onManageIntegrations }: Props) {
   const [methods, setMethods] = useState<string[]>([]);
   const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState('');
@@ -102,17 +102,24 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, onManageInt
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <OperationalBanner
-        id="online-menu-payments-heading"
-        eyebrow="CARDÁPIO ONLINE"
-        title="Pagamentos"
-        accent="sem misturar integração"
-        description="Escolha o que o cliente pode selecionar no canal. Credenciais e conexão do provedor continuam em Sistema → Integrações."
-        metrics={[
-          { label: 'formas aceitas', value: methods.length },
-          { label: 'pagamento online', value: onlinePaymentEnabled ? 'Conectado' : 'Desconectado' },
-        ]}
-      />
+      <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <h2 className="text-base font-black text-koma-foreground">Pagamentos</h2>
+          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+            Escolha como o cliente pode pagar.
+          </p>
+        </div>
+        {publicMenuUrl && (
+          <a
+            href={publicMenuUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+          >
+            <ExternalLink size={13} /> Ver cardápio
+          </a>
+        )}
+      </header>
 
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="mb-4 flex items-start gap-3">
@@ -175,7 +182,7 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, onManageInt
               <h3 className="text-sm font-black text-koma-foreground">Pagamento online</h3>
               <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
                 {onlinePaymentEnabled
-                  ? 'Mercado Pago está conectado. Este painel só mostra o estado operacional; OAuth, webhook e credenciais permanecem no owner técnico.'
+                  ? 'Mercado Pago está conectado. Este painel só mostra o estado operacional; credenciais permanecem em Integrações.'
                   : 'Nenhum provedor de pagamento online está ativo para este restaurante.'}
               </p>
             </div>
@@ -183,31 +190,37 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, onManageInt
           <button
             type="button"
             onClick={onManageIntegrations}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-4 text-[10px] font-black uppercase tracking-wider text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
           >
             <ExternalLink size={13} /> Gerenciar integração
           </button>
         </div>
       </section>
 
-      <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-end">
-        {feedback ? (
-          <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
-            {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
-          </span>
-        ) : (
-          <span className="mr-auto text-[10px] font-semibold text-koma-muted">{hasUnsavedChanges ? 'Há alterações que ainda não foram publicadas.' : 'Tudo salvo.'}</span>
-        )}
-        <button
-          type="button"
-          disabled={isSaving || !hasUnsavedChanges}
-          onClick={() => void save()}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-default disabled:border-koma-border disabled:bg-koma-raised disabled:text-koma-muted disabled:opacity-70"
-        >
-          {isSaving ? <Loader2 size={13} className="animate-spin" /> : hasUnsavedChanges ? <Save size={13} /> : <CheckCircle2 size={13} />}
-          {isSaving ? 'Publicando…' : hasUnsavedChanges ? 'Salvar pagamentos' : 'Tudo salvo'}
-        </button>
-      </div>
+      {(feedback || hasUnsavedChanges) && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
+          {feedback ? (
+            <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
+              {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
+            </span>
+          ) : (
+            <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+              Alterações ainda não publicadas.
+            </span>
+          )}
+          {hasUnsavedChanges && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => void save()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {isSaving ? 'Publicando…' : 'Salvar e publicar'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
