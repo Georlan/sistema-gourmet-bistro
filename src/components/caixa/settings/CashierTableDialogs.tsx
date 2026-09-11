@@ -66,10 +66,10 @@ export function CashierTableDialogs({
         >
           <form
             onSubmit={handleAddMesaSubmit}
-            className={"w-full max-w-md overflow-hidden rounded-[24px] border border-[#2b312e] bg-koma-card shadow-2xl animate-scale-in"}
+            className={"w-full max-w-md overflow-hidden rounded-[24px] border border-koma-border bg-koma-card shadow-2xl animate-scale-in"}
           >
             <div
-              className={"flex items-start justify-between border-b border-[#2b312e] px-5 py-4 sm:px-6"}
+              className={"flex items-start justify-between border-b border-koma-border px-5 py-4 sm:px-6"}
             >
               <div className={"flex items-center gap-3"}>
                 <span
@@ -120,7 +120,7 @@ export function CashierTableDialogs({
                       setNewMesaId(e.target.value);
                       setTableFormError('');
                     }}
-                    className={"w-full rounded-xl border border-[#303633] bg-koma-panel px-3 py-3 font-mono text-sm text-koma-foreground outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"}
+                    className={"w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 font-mono text-sm text-koma-foreground outline-none transition-colors placeholder:text-koma-subtle focus:border-emerald-500"}
                   />
                 </label>
                 <label className="space-y-1.5">
@@ -139,7 +139,7 @@ export function CashierTableDialogs({
                       setNewMesaCap(e.target.value);
                       setTableFormError('');
                     }}
-                    className={"w-full rounded-xl border border-[#303633] bg-koma-panel px-3 py-3 font-mono text-sm text-koma-foreground outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"}
+                    className={"w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 font-mono text-sm text-koma-foreground outline-none transition-colors placeholder:text-koma-subtle focus:border-emerald-500"}
                   />
                 </label>
               </div>
@@ -160,14 +160,14 @@ export function CashierTableDialogs({
                     setNewMesaNome(e.target.value);
                     setTableFormError('');
                   }}
-                  className={"w-full rounded-xl border border-[#303633] bg-koma-panel px-3 py-3 text-sm text-koma-foreground outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"}
+                  className={"w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-sm text-koma-foreground outline-none transition-colors placeholder:text-koma-subtle focus:border-emerald-500"}
                 />
               </label>
 
               {tableFormError && (
                 <div
                   role="alert"
-                  className={"flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-[11px] leading-relaxed text-rose-600 dark:text-rose-300"}
+                  className={"flex gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-[11px] leading-relaxed text-rose-700 dark:text-rose-300"}
                 >
                   <AlertTriangle className={"mt-0.5 shrink-0"} size={14} />
                   {tableFormError}
@@ -179,14 +179,14 @@ export function CashierTableDialogs({
                   type="button"
                   disabled={tableMutation !== null}
                   onClick={() => setShowAddMesaModal(false)}
-                  className={"min-h-11 flex-1 rounded-xl border border-[#303633] bg-koma-panel px-4 text-xs font-bold text-koma-subtle transition-colors hover:text-koma-foreground disabled:opacity-40"}
+                  className={"min-h-[44px] flex-1 rounded-xl border border-koma-border bg-koma-panel px-4 text-xs font-bold text-koma-subtle transition-colors hover:text-koma-foreground disabled:opacity-40"}
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={tableMutation !== null}
-                  className={"flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-xs font-extrabold text-[#07110e] transition-colors hover:bg-[#35c99a] disabled:cursor-wait disabled:opacity-60"}
+                  className={"flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"}
                 >
                   {tableMutation === 'create' ? (
                     <RefreshCw className="animate-spin" size={14} />
@@ -213,10 +213,10 @@ export function CashierTableDialogs({
         >
           <form
             onSubmit={handleUpdateMesaSubmit}
-            className={"w-full max-w-md overflow-hidden rounded-[24px] border border-[#2b312e] bg-koma-card shadow-2xl animate-scale-in"}
+            className={"w-full max-w-md overflow-hidden rounded-[24px] border border-koma-border bg-koma-card shadow-2xl animate-scale-in"}
           >
             <div
-              className={"flex items-start justify-between border-b border-[#2b312e] px-5 py-4 sm:px-6"}
+              className={"flex items-start justify-between border-b border-koma-border px-5 py-4 sm:px-6"}
             >
               <div className={"flex items-center gap-3"}>
                 <span
@@ -255,10 +255,10 @@ export function CashierTableDialogs({
             <div className={"space-y-4 px-5 py-5 sm:px-6"}>
               {isConfirmingDelete ? (
                 <div
-                  className={"space-y-4 rounded-2xl border border-rose-900/40 bg-rose-950/20 p-4 text-center"}
+                  className={"space-y-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-center"}
                 >
                   <span
-                    className={"mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-400"}
+                    className={"mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400"}
                   >
                     <Trash2 size={17} />
                   </span>
@@ -275,7 +275,7 @@ export function CashierTableDialogs({
                       type="button"
                       onClick={() => setIsConfirmingDelete(false)}
                       disabled={tableMutation !== null}
-                      className={"min-h-10 flex-1 rounded-xl border border-[#303633] bg-koma-panel text-xs font-bold text-koma-subtle transition-colors hover:text-koma-foreground disabled:opacity-40"}
+                      className={"min-h-10 flex-1 rounded-xl border border-koma-border bg-koma-panel text-xs font-bold text-koma-subtle transition-colors hover:text-koma-foreground disabled:opacity-40"}
                     >
                       Manter mesa
                     </button>
@@ -283,7 +283,7 @@ export function CashierTableDialogs({
                       type="button"
                       onClick={handleDeleteMesa}
                       disabled={tableMutation !== null}
-                      className={"flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 text-xs font-bold text-koma-foreground transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"}
+                      className={"flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60"}
                     >
                       {tableMutation === 'delete' && <RefreshCw className="animate-spin" size={13} />}
                       {tableMutation === 'delete' ? 'Removendo…' : 'Remover'}
@@ -308,7 +308,7 @@ export function CashierTableDialogs({
                           setEditTableNome(e.target.value);
                           setTableFormError('');
                         }}
-                        className={"w-full rounded-xl border border-[#303633] bg-koma-panel px-3 py-3 text-sm text-koma-foreground outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"}
+                        className={"w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-sm text-koma-foreground outline-none transition-colors placeholder:text-koma-subtle focus:border-emerald-500"}
                       />
                       <span className={"block text-[9px] text-koma-muted"}>
                         Use um nome simples, como “Varanda” ou “Deck”.
@@ -336,7 +336,7 @@ export function CashierTableDialogs({
                             setEditTableCap(e.target.value);
                             setTableFormError('');
                           }}
-                          className={"w-full rounded-xl border border-[#303633] bg-koma-panel py-3 pl-9 pr-3 font-mono text-sm text-koma-foreground outline-none transition-colors placeholder:text-zinc-700 focus:border-[#10b981]/60"}
+                          className={"w-full rounded-xl border border-koma-border bg-koma-input py-3 pl-9 pr-3 font-mono text-sm text-koma-foreground outline-none transition-colors placeholder:text-koma-subtle focus:border-emerald-500"}
                         />
                       </div>
                     </label>
@@ -345,7 +345,7 @@ export function CashierTableDialogs({
                   {tableFormError && (
                     <div
                       role="alert"
-                      className={"flex gap-2 rounded-xl border border-rose-900/40 bg-rose-950/20 p-3 text-[11px] leading-relaxed text-rose-600 dark:text-rose-300"}
+                      className={"flex gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-[11px] leading-relaxed text-rose-700 dark:text-rose-300"}
                     >
                       <AlertTriangle className={"mt-0.5 shrink-0"} size={14} />
                       {tableFormError}
@@ -358,14 +358,14 @@ export function CashierTableDialogs({
                         type="button"
                         onClick={() => setEditingTable(null)}
                         disabled={tableMutation !== null}
-                        className={"min-h-11 flex-1 rounded-xl border border-[#303633] bg-koma-panel px-4 text-xs font-bold text-koma-subtle transition-colors hover:text-koma-foreground disabled:opacity-40"}
+                        className={"min-h-[44px] flex-1 rounded-xl border border-koma-border bg-koma-panel px-4 text-xs font-bold text-koma-subtle transition-colors hover:text-koma-foreground disabled:opacity-40"}
                       >
                         Cancelar
                       </button>
                       <button
                         type="submit"
                         disabled={tableMutation !== null}
-                        className={"flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#10b981] px-4 text-xs font-extrabold text-[#07110e] transition-colors hover:bg-[#35c99a] disabled:cursor-wait disabled:opacity-60"}
+                        className={"flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"}
                       >
                         {tableMutation === 'update' ? (
                           <RefreshCw className="animate-spin" size={14} />
@@ -380,7 +380,7 @@ export function CashierTableDialogs({
                       type="button"
                       onClick={() => setIsConfirmingDelete(true)}
                       disabled={Boolean(editingTableRuntime?.isOccupied) || tableMutation !== null}
-                      className={"flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-rose-900/30 bg-rose-950/10 px-3 text-[10px] font-bold text-rose-400 transition-colors hover:bg-rose-950/25 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-transparent disabled:text-zinc-600"}
+                      className={"flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:border-koma-border disabled:bg-transparent disabled:text-koma-muted"}
                     >
                       <Trash2 size={12} />
                       {editingTableRuntime?.isOccupied

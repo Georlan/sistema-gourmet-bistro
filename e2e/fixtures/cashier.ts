@@ -44,6 +44,8 @@ const commands = tables.slice(0, -1).map((table, index) => ({
 }));
 
 const cashierConfig = {
+  plano: 'pro',
+  plano_efetivo: 'pro',
   taxa_servico_ativa: true,
   taxa_servico_padrao: 10,
   unificar_vias_delivery: false,
@@ -212,6 +214,101 @@ async function mockCashierBackend(page: Page) {
           { slug: 'caixa', label: 'Operador de caixa', total_funcionarios: 1, permissoes: { pedidos: true, caixa: true, relatorios: true, equipe: true, admin: false } },
           { slug: 'garcom', label: 'Garçom', total_funcionarios: 1, permissoes: { pedidos: true, caixa: false, relatorios: false, equipe: false, admin: false } },
         ],
+      };
+    } else if (pathname === '/chat/caixa/conversas') {
+      body = [
+        {
+          id: 'conv-e2e-1',
+          pedido_id: 'ped-e2e-1',
+          numero_pedido: 101,
+          cliente_nome: 'Ana Maria',
+          tipo_pedido: 'delivery',
+          status_pedido: 'em_preparo',
+          total_pedido: 75.5,
+          unread_count: 3,
+          closed_at: null,
+          updated_at: new Date().toISOString(),
+          last_message: {
+            id: 'msg-1',
+            sender_type: 'customer',
+            body: 'Quanto tempo até sair para entrega?',
+            created_at: new Date().toISOString(),
+          },
+        },
+      ];
+    } else if (pathname.startsWith('/chat/caixa/conversas/')) {
+      body = [];
+    } else if (pathname === '/payments/mercado-pago/status') {
+      body = {
+        provider: 'mercado_pago',
+        connected: true,
+        status: 'active',
+        provider_user_id: 'mp-test-operator',
+        token_expires_at: null,
+      };
+    } else if (pathname === '/api/print-agents/monitor' || pathname === '/printing/monitors/overview') {
+      body = {
+        generated_at: new Date().toISOString(),
+        history_date: '2026-09-11',
+        history_limit: 20,
+        queue_limit: 20,
+        history_timezone: 'America/Sao_Paulo',
+        online_threshold_seconds: 90,
+        command_timeout_seconds: 45,
+        delay_threshold_seconds: 120,
+        physical_completion_tracking: false,
+        summary: {
+          online_agents: 1,
+          active_agents: 1,
+          pending: 0,
+          claimed: 0,
+          printing: 0,
+          failed: 0,
+          delayed: 0,
+          ready_printers: 1,
+          printer_ready: true,
+          oldest_unresolved_seconds: null,
+        },
+        agents: [
+          {
+            agent_id: 'agent-e2e',
+            online: true,
+            last_seen_at: new Date().toISOString(),
+            seconds_since_heartbeat: 5,
+            diagnostics_fresh: true,
+            diagnostics_age_seconds: 5,
+            physical_printer_present: true,
+            printer_ready: true,
+            ready_printer_count: 1,
+            supports_usb_commands: true,
+            printer_diagnostics: {
+              adapter: 'system',
+              platform: 'linux',
+              printers: [
+                {
+                  name: 'Termica E2E',
+                  connection: 'usb',
+                  uri: 'usb://test/printer',
+                  is_default: true,
+                  available: true,
+                  present: true,
+                  configured: true,
+                },
+              ],
+              default_printer: 'Termica E2E',
+              error: null,
+            },
+            diagnostics_updated_at: new Date().toISOString(),
+            pending_command: null,
+            command_requested_at: null,
+            last_command_result: null,
+            command_completed_at: null,
+          },
+        ],
+        jobs: [],
+        history_jobs: [],
+        queue_jobs: [],
+        latest_spooler_success: null,
       };
     } else if (
       pathname === '/caixa/pagamentos/pendentes'

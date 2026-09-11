@@ -280,3 +280,12 @@
     font-size: 0.65rem;
   }
 }
+
+.cashier-settings-tab {
+  min-height: 2.75rem;
+}
+
+.cashier-settings-primary-button {
+  min-height: 2.75rem;
+}
+

@@ -272,7 +272,7 @@ export function PrintMonitorPanel({
     };
   }, [loadMonitor]);
 
-  const activePendingCommand = monitorData?.agents
+  const activePendingCommand = (monitorData?.agents || [])
     .map(agent => ({
       command: agent.pending_command,
       requestedAt: agent.command_requested_at
@@ -310,7 +310,7 @@ export function PrintMonitorPanel({
 
   useEffect(() => {
     if (!monitorData) return;
-    const completedResults = monitorData.agents
+    const completedResults = (monitorData.agents || [])
       .map(agent => agent.last_command_result)
       .filter((result): result is AgentCommandResult => Boolean(result))
       .sort((left, right) => (
@@ -346,11 +346,11 @@ export function PrintMonitorPanel({
   }, [commandRunning, hasPendingCommand]);
 
   const queueTotal = useMemo(() => {
-    if (!monitorData) return 0;
+    if (!monitorData?.summary) return 0;
     return (
-      monitorData.summary.pending
-      + monitorData.summary.claimed
-      + monitorData.summary.printing
+      (monitorData.summary.pending || 0)
+      + (monitorData.summary.claimed || 0)
+      + (monitorData.summary.printing || 0)
     );
   }, [monitorData]);
 
@@ -373,7 +373,7 @@ export function PrintMonitorPanel({
   }, [monitorData]);
 
   const usbPrinters = useMemo(() => (
-    monitorData?.agents
+    (monitorData?.agents || [])
       .filter(agent => agentHasFreshDiagnostics(agent))
       .flatMap((agent, agentIndex) => (
         (agent.printer_diagnostics?.printers || [])
@@ -383,7 +383,7 @@ export function PrintMonitorPanel({
             agentIndex,
             agentId: agent.agent_id
           }))
-      )) || []
+      ))
   ), [agentHasFreshDiagnostics, monitorData]);
 
   const readyUsbPrinters = usbPrinters.filter(
@@ -396,7 +396,7 @@ export function PrintMonitorPanel({
   const presentUsbPrinters = usbPrinters.filter(
     printer => printer.present === true
   );
-  const onlineAgents = monitorData?.agents.filter(agent => agent.online) || [];
+  const onlineAgents = (monitorData?.agents || []).filter(agent => agent.online);
   const controlAgent = (
     onlineAgents.find(
       agent => agent.printer_ready && agent.supports_usb_commands
@@ -411,9 +411,9 @@ export function PrintMonitorPanel({
   );
   const hasReadyPrinter = readyUsbPrinters.length > 0;
   const hasFreshPrinterDiagnostics = Boolean(
-    monitorData?.agents.some(agent => agentHasFreshDiagnostics(agent))
+    (monitorData?.agents || []).some(agent => agentHasFreshDiagnostics(agent))
   );
-  const latestJob = monitorData?.queue_jobs?.[0] || monitorData?.jobs[0] || null;
+  const latestJob = monitorData?.queue_jobs?.[0] || monitorData?.jobs?.[0] || null;
 
   const requestUsbConnection = async (
     agentId?: string,
@@ -977,7 +977,7 @@ export function PrintMonitorPanel({
                   disabled={
                     busy
                     || !hasOnlineAgent
-                    || !monitorData?.agents.find(
+                    || !(monitorData?.agents || []).find(
                       agent => agent.agent_id === printer.agentId
                     )?.supports_usb_commands
                   }

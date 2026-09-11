@@ -132,7 +132,7 @@ export default function CashierSettings({
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" role="tablist" aria-label="Configurações do caixa">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" aria-label="Configurações do caixa">
               {settingsTabs.map((tab) => {
                 const Icon = tab.icon;
                 const selected = settingsTab === tab.id;
@@ -140,14 +140,13 @@ export default function CashierSettings({
                   <button
                     key={tab.id}
                     type="button"
-                    role="tab"
-                    aria-selected={selected}
+                    aria-pressed={selected}
                     onClick={() => setSettingsTab(tab.id)}
-                    className={`min-h-11 rounded-xl border px-3 py-2 text-[10px] font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                    className={`cashier-settings-tab min-h-11 rounded-xl border px-3 py-2 text-[10px] font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
                       selected
                         ? 'border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/50 dark:text-emerald-200'
                         : 'border-koma-border bg-koma-page text-koma-secondary hover:bg-koma-raised hover:text-koma-foreground'
-                    }`}
+                    } ${tab.id === 'taxa' ? 'col-span-2 sm:col-span-1' : ''}`}
                   >
                     <Icon size={13} />
                     <span>{tab.label}</span>

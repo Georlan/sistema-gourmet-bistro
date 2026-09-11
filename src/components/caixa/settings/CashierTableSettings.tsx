@@ -64,11 +64,12 @@ export function CashierTableSettings({
             </div>
             <button
               type="button"
+              style={{ minHeight: '44px' }}
               onClick={() => {
                 setTableFormError('');
                 setShowAddMesaModal(true);
               }}
-              className={"inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-[#10b981] px-4 text-[9px] font-extrabold uppercase tracking-wider text-[#07110e] transition-colors hover:bg-[#35c99a]"}
+              className={"cashier-settings-primary-button inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-[9px] font-extrabold uppercase tracking-wider text-white transition-colors hover:bg-emerald-500 cursor-pointer"}
             >
               <Plus size={13} /> Adicionar mesa
             </button>
@@ -95,7 +96,7 @@ export function CashierTableSettings({
                 .map((table) => (
                   <article
                     key={table.id}
-                    className={"flex items-center justify-between gap-3 rounded-2xl border border-[#292e2c] bg-koma-card p-3.5"}
+                    className={"flex items-center justify-between gap-3 rounded-2xl border border-koma-border bg-koma-card p-3.5"}
                   >
                     <div className="min-w-0">
                       <span
@@ -124,9 +125,9 @@ export function CashierTableSettings({
                         setTableFormError('');
                       }}
                       aria-label={`Editar Mesa ${table.id}`}
-                      className={"rounded-lg border border-koma-border-subtle bg-white/[0.025] p-2 text-koma-muted transition-colors hover:border-emerald-500/30 hover:text-emerald-800 dark:text-emerald-300"}
+                      className={"flex h-10 w-10 items-center justify-center rounded-xl border border-koma-border bg-koma-raised text-koma-secondary transition-colors hover:border-emerald-500/30 hover:text-emerald-800 dark:text-emerald-300"}
                     >
-                      <Edit3 size={13} />
+                      <Edit3 size={15} />
                     </button>
                   </article>
                 ))}
