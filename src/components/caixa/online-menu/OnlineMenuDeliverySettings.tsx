@@ -1,7 +1,6 @@
 import clsx from 'clsx';
-import { AlertCircle, CheckCircle2, Loader2, MapPin, Plus, Save, Trash2, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, ExternalLink, Loader2, MapPin, Plus, Save, Trash2, Truck } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { OperationalBanner } from '../../shared/OperationalBanner';
 
 type BairroTaxaRow = {
   id: string;
@@ -23,6 +22,7 @@ type DeliveryConfig = {
 interface Props {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  publicMenuUrl?: string | null;
 }
 
 function normalizeNeighborhoods(value: unknown): BairroTaxaRow[] {
@@ -73,7 +73,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
+export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenuUrl }: Props) {
   const [config, setConfig] = useState<DeliveryConfig>({
     delivery_ativo: true,
     pedido_minimo: 0,
@@ -167,18 +167,34 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <OperationalBanner
-        id="online-menu-delivery-heading"
-        eyebrow="CARDÁPIO ONLINE"
-        title="Entrega"
-        accent="fácil de configurar"
-        description="Defina quando aceitar delivery, o valor mínimo, frete grátis e como cobrar a entrega."
-        metrics={[
-          { label: 'delivery', value: config.delivery_ativo ? 'Ativo' : 'Pausado' },
-          { label: config.tipo_taxa_entrega === 'bairro' ? 'bairros' : 'taxa única', value: config.tipo_taxa_entrega === 'bairro' ? areasCount : `R$ ${(Number(config.taxa_entrega_fixa) || 0).toFixed(2)}` },
-          { label: 'pedido mínimo', value: payload.pedido_minimo > 0 ? `R$ ${payload.pedido_minimo.toFixed(2)}` : 'Livre' },
-        ]}
-      />
+      <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-black text-koma-foreground">Entrega</h2>
+            <span className={clsx(
+              'rounded-full border px-2 py-0.5 text-[9px] font-black',
+              config.delivery_ativo
+                ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                : 'border-koma-border bg-koma-card text-koma-muted'
+            )}>
+              {config.delivery_ativo ? 'Ativa' : 'Pausada'}
+            </span>
+          </div>
+          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+            Defina onde entregar e quanto cobrar.
+          </p>
+        </div>
+        {publicMenuUrl && (
+          <a
+            href={publicMenuUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+          >
+            <ExternalLink size={13} /> Ver cardápio
+          </a>
+        )}
+      </header>
 
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -188,7 +204,9 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
             </div>
             <div>
               <h3 className="text-sm font-black text-koma-foreground">Aceitar pedidos para entrega</h3>
-              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">Desligue quando o restaurante não quiser receber novos pedidos de delivery. Retirada continua funcionando.</p>
+              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+                Ative ou pause o recebimento de delivery no cardápio online.
+              </p>
             </div>
           </div>
           <button
@@ -204,43 +222,8 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
             )}
           >
             <span className={clsx('h-2 w-2 rounded-full', config.delivery_ativo ? 'bg-emerald-500' : 'bg-koma-border')} />
-            {config.delivery_ativo ? 'Ativo' : 'Pausado'}
+            {config.delivery_ativo ? 'Ativa' : 'Pausada'}
           </button>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
-        <div className="mb-4">
-          <h3 className="text-sm font-black text-koma-foreground">Valores do delivery</h3>
-          <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Deixe em zero quando não quiser usar a condição.</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label>
-            <FieldLabel>Pedido mínimo (R$)</FieldLabel>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={config.pedido_minimo || ''}
-              onChange={(event) => setConfig((current) => ({ ...current, pedido_minimo: Number(event.target.value) || 0 }))}
-              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
-              placeholder="0,00"
-            />
-            <span className="mt-1 block text-[9px] text-koma-muted">Ex.: R$ 30. Abaixo disso o cliente precisa adicionar mais itens.</span>
-          </label>
-          <label>
-            <FieldLabel>Frete grátis a partir de (R$)</FieldLabel>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={config.frete_gratis_valor || ''}
-              onChange={(event) => setConfig((current) => ({ ...current, frete_gratis_valor: Number(event.target.value) || 0 }))}
-              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
-              placeholder="0,00"
-            />
-            <span className="mt-1 block text-[9px] text-koma-muted">Ex.: R$ 100. Ao atingir o valor, a entrega fica grátis.</span>
-          </label>
         </div>
       </section>
 
@@ -251,7 +234,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
           </div>
           <div>
             <h3 className="text-sm font-black text-koma-foreground">Como cobrar a entrega</h3>
-            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">Escolha uma regra simples. Não é preciso configurar mapa ou distância.</p>
+            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">Escolha entre taxa única para todas as entregas ou valores específicos por bairro.</p>
           </div>
         </div>
 
@@ -268,7 +251,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
             )}
           >
             <strong className="block text-xs text-koma-foreground">Taxa única</strong>
-            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Boa para quem cobra o mesmo valor em toda a área atendida.</span>
+            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Mesmo valor cobrado em todas as entregas.</span>
           </button>
           <button
             type="button"
@@ -282,7 +265,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
             )}
           >
             <strong className="block text-xs text-koma-foreground">Taxa por bairro</strong>
-            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Defina quanto cobrar em cada bairro que o restaurante atende.</span>
+            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Defina o valor cobrado para cada bairro atendido.</span>
           </button>
         </div>
 
@@ -305,7 +288,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
                 placeholder="0,00"
               />
               <span className="mt-1 block text-[9px] text-koma-muted">
-                Este valor será cobrado em todas as entregas dentro da área de atendimento.
+                Cobrado em todas as entregas realizadas pelo cardápio.
               </span>
             </label>
           </div>
@@ -373,24 +356,65 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders }: Props) {
         )}
       </section>
 
-      <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-end">
-        {feedback ? (
-          <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
-            {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
-          </span>
-        ) : (
-          <span className="mr-auto text-[10px] font-semibold text-koma-muted">{hasUnsavedChanges ? 'Há alterações que ainda não foram salvas.' : 'Tudo salvo.'}</span>
-        )}
-        <button
-          type="button"
-          disabled={isSaving || !hasUnsavedChanges}
-          onClick={() => void save()}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-default disabled:border-koma-border disabled:bg-koma-raised disabled:text-koma-muted disabled:opacity-70"
-        >
-          {isSaving ? <Loader2 size={13} className="animate-spin" /> : hasUnsavedChanges ? <Save size={13} /> : <CheckCircle2 size={13} />}
-          {isSaving ? 'Salvando…' : hasUnsavedChanges ? 'Salvar entrega' : 'Tudo salvo'}
-        </button>
-      </div>
+      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+        <div className="mb-4">
+          <h3 className="text-sm font-black text-koma-foreground">Pedido mínimo e frete grátis</h3>
+          <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Deixe em zero para não aplicar valor mínimo ou faixa de frete grátis.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label>
+            <FieldLabel>Pedido mínimo (R$)</FieldLabel>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={config.pedido_minimo || ''}
+              onChange={(event) => setConfig((current) => ({ ...current, pedido_minimo: Number(event.target.value) || 0 }))}
+              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+              placeholder="0,00"
+            />
+            <span className="mt-1 block text-[9px] text-koma-muted">Valor mínimo do pedido para delivery.</span>
+          </label>
+          <label>
+            <FieldLabel>Frete grátis a partir de (R$)</FieldLabel>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={config.frete_gratis_valor || ''}
+              onChange={(event) => setConfig((current) => ({ ...current, frete_gratis_valor: Number(event.target.value) || 0 }))}
+              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
+              placeholder="0,00"
+            />
+            <span className="mt-1 block text-[9px] text-koma-muted">Pedidos que atingirem este valor terão entrega grátis.</span>
+          </label>
+        </div>
+      </section>
+
+      {(feedback || hasUnsavedChanges) && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
+          {feedback ? (
+            <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
+              {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
+            </span>
+          ) : (
+            <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+              Alterações ainda não publicadas.
+            </span>
+          )}
+          {hasUnsavedChanges && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => void save()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {isSaving ? 'Publicando…' : 'Salvar e publicar'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

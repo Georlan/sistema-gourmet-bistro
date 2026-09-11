@@ -165,12 +165,13 @@ export default function CashierOnlineMenu({
       </div>
     );
   } else if (activeSection === 'entrega') {
-    content = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
+    content = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} publicMenuUrl={publicMenuUrl} />;
   } else if (activeSection === 'pagamentos') {
     content = (
       <OnlineMenuPaymentSettings
         apiBaseUrl={apiBaseUrl}
         authHeaders={authHeaders}
+        publicMenuUrl={publicMenuUrl}
         onManageIntegrations={() => {
           setActiveTab('impressao_salao');
           setActiveSubTab('integracoes');
