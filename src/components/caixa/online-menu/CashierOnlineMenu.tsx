@@ -1,6 +1,7 @@
 import { ChevronDown, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
+import { getTenantPublicMenuUrl, resolveKomaHost } from '../../../domain/komaHost';
 import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
 import { OnlineMenuOrdersSettings } from './OnlineMenuOrdersSettings';
 import { OnlineMenuPaymentSettings } from './OnlineMenuPaymentSettings';
@@ -131,7 +132,12 @@ export default function CashierOnlineMenu({
   );
 
   const restaurantId = readRestaurantIdFromAuthorization(authHeaders.Authorization || authHeaders.authorization);
-  const publicMenuUrl = restaurantId ? `/cardapio?restaurante_id=${restaurantId}` : null;
+  const resolvedHost = resolveKomaHost();
+  const publicMenuUrl = resolvedHost.kind === 'tenant' && resolvedHost.tenantSlug
+    ? getTenantPublicMenuUrl(resolvedHost.tenantSlug)
+    : restaurantId
+      ? `/cardapio?restaurante_id=${restaurantId}`
+      : null;
   const activeSection = sectionBySubTab[activeSubTab as keyof typeof sectionBySubTab] ?? 'perfil';
 
   let content;
