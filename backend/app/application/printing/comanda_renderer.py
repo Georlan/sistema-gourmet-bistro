@@ -25,8 +25,9 @@ class ComandaVariant:
 
     origin_label: Optional[str] = None
     location_label: Optional[str] = "BALCÃO"
-    operator_label: str = "OPERADOR"
+    operator_label: Optional[str] = "OPERADOR"
     customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
     is_reprint: bool = False
     event_at: Optional[datetime.datetime] = None
     via_label: Optional[str] = None
@@ -38,10 +39,40 @@ class ComandaVariant:
     payment_method: Optional[str] = None
     change_for: Optional[float] = None
     delivery_fee: float = 0.0
+    coupon_discount: float = 0.0
+    cashback_discount: float = 0.0
+    online_payment_status: Optional[str] = None
+    amount_paid: float = 0.0
+    show_financial_breakdown: bool = False
 
 
 def _format_brl(value: float) -> str:
     return f"R$ {float(value or 0.0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _format_discount_brl(value: float) -> str:
+    return f"-{_format_brl(abs(float(value or 0.0)))}"
+
+
+def _payment_method_label(method: Optional[str], *, online_status: Optional[str]) -> Optional[str]:
+    raw = str(method or "").strip()
+    if not raw:
+        return None
+    normalized = " ".join(raw.lower().replace("_", " ").replace("-", " ").split())
+    labels = {
+        "pix": "PIX",
+        "dinheiro": "DINHEIRO",
+        "cartao credito": "CARTÃO DE CRÉDITO",
+        "credito": "CARTÃO DE CRÉDITO",
+        "cartao de credito": "CARTÃO DE CRÉDITO",
+        "cartao debito": "CARTÃO DE DÉBITO",
+        "debito": "CARTÃO DE DÉBITO",
+        "cartao de debito": "CARTÃO DE DÉBITO",
+    }
+    label = labels.get(normalized, raw.upper())
+    if str(online_status or "").strip().casefold() == "approved":
+        return f"{label} ONLINE"
+    return label
 
 
 def _order_type_label(tipo: object) -> str:
@@ -178,7 +209,7 @@ def _replace_metadata_line(
     *,
     order_number: Optional[object],
     event_at: Optional[datetime.datetime],
-    operator_label: str,
+    operator_label: Optional[str],
     operator_name: Optional[str],
     location_label: Optional[str],
     identity_label: str,
@@ -251,6 +282,13 @@ def _replace_metadata_line(
     for index, line in enumerate(lines):
         if "GARÇOM:" not in line:
             continue
+        if operator_label is None:
+            if location_label:
+                lines[index] = f"CANAL: {str(location_label).strip().upper()}"
+            else:
+                lines.pop(index)
+            break
+
         operator_text = (
             f"{str(operator_label or 'OPERADOR').strip().upper()}: "
             f"{str(operator_name or 'OPERADOR').strip()}"
@@ -305,33 +343,30 @@ def _insert_context_block(
         return
 
     block: list[str] = []
-    if variant.customer_name:
-        customer_lines = textwrap.wrap(
-            f"CLIENTE: {variant.customer_name.upper()}",
-            width=width,
-            break_long_words=True,
-            break_on_hyphens=False,
-        ) or ["CLIENTE: NÃO INFORMADO"]
-        block.extend(
-            ESC_BOLD_ON + customer_line + ESC_BOLD_OFF
-            for customer_line in customer_lines
-        )
+    customer_phone = variant.customer_phone or variant.delivery_phone
+    if variant.customer_name or customer_phone:
+        block.append(ESC_BOLD_ON + "CLIENTE" + ESC_BOLD_OFF)
+        if variant.customer_name:
+            customer_lines = textwrap.wrap(
+                f"NOME: {variant.customer_name}",
+                width=width,
+                break_long_words=True,
+                break_on_hyphens=False,
+            ) or ["NOME: NÃO INFORMADO"]
+            block.extend(customer_lines)
+        if customer_phone:
+            block.append(f"TELEFONE: {mask_phone(customer_phone)}")
 
     has_delivery_data = any(
         (
-            variant.delivery_phone,
             variant.delivery_address,
             variant.delivery_neighborhood,
-            variant.payment_method,
-            variant.change_for,
         )
     )
     if has_delivery_data:
         if block:
             block.append("-" * width)
-        block.append(ESC_BOLD_ON + "DADOS DA ENTREGA" + ESC_BOLD_OFF)
-        if variant.delivery_phone:
-            block.append(f"TELEFONE: {mask_phone(variant.delivery_phone)}")
+        block.append(ESC_BOLD_ON + "ENTREGA" + ESC_BOLD_OFF)
         if variant.delivery_address:
             wrapped = textwrap.wrap(
                 f"ENDEREÇO: {variant.delivery_address}",
@@ -342,14 +377,60 @@ def _insert_context_block(
             block.extend(wrapped)
         if variant.delivery_neighborhood:
             block.append(f"BAIRRO: {variant.delivery_neighborhood}")
-        if variant.payment_method:
-            block.append(f"PAGAMENTO: {variant.payment_method.upper()}")
-        if variant.change_for is not None and float(variant.change_for or 0.0) > 0:
-            block.append(f"TROCO PARA: {_format_brl(float(variant.change_for))}")
 
     if block:
         block.extend(["-" * width, ""])
         lines[items_index:items_index] = block
+
+
+def _insert_payment_block(
+    lines: list[str],
+    *,
+    variant: ComandaVariant,
+    width: int,
+) -> None:
+    total_index = next(
+        (index for index, line in enumerate(lines) if "TOTAL GERAL DA MESA:" in line),
+        None,
+    )
+    if total_index is None:
+        return
+
+    payment_label = _payment_method_label(
+        variant.payment_method,
+        online_status=variant.online_payment_status,
+    )
+    paid_online = str(variant.online_payment_status or "").strip().casefold() == "approved"
+    has_change = variant.change_for is not None and float(variant.change_for or 0.0) > 0
+    if not payment_label and not paid_online and not has_change:
+        return
+
+    block: list[str] = ["-" * width, ESC_BOLD_ON + "PAGAMENTO" + ESC_BOLD_OFF]
+    if payment_label:
+        block.append(f"FORMA: {payment_label}")
+    if has_change:
+        block.append(f"TROCO PARA: {_format_brl(float(variant.change_for or 0.0))}")
+
+    if paid_online:
+        if float(variant.amount_paid or 0.0) > 0:
+            block.append(f"VALOR PAGO: {_format_brl(float(variant.amount_paid or 0.0))}")
+        block.extend(
+            [
+                "=" * width,
+                (
+                    ESC_DOUBLE_HEIGHT_ON
+                    + ESC_BOLD_ON
+                    + align_center("PAGO ONLINE", width)
+                    + ESC_BOLD_OFF
+                    + ESC_NORMAL_SIZE
+                ),
+                ESC_BOLD_ON + align_center("NÃO COBRAR DO CLIENTE", width) + ESC_BOLD_OFF,
+                "=" * width,
+            ]
+        )
+
+    block.append("")
+    lines[total_index:total_index] = block
 
 
 def _style_items_header(lines: list[str], *, width: int) -> None:
@@ -368,7 +449,7 @@ def apply_operational_visual_hierarchy(
     *,
     order_number: Optional[object] = None,
     event_at: Optional[datetime.datetime] = None,
-    operator_label: str = "GARÇOM",
+    operator_label: Optional[str] = "GARÇOM",
     operator_name: Optional[str] = None,
     location_label: Optional[str] = None,
     identity_label: str = "PEDIDO",
@@ -408,6 +489,7 @@ def _replace_total(
     *,
     items: list[PrintItem],
     variant: ComandaVariant,
+    order_type: str,
     width: int,
 ) -> None:
     total_index = next(
@@ -419,7 +501,41 @@ def _replace_total(
 
     items_total = sum(float(item.total) for item in items)
     delivery_fee = max(float(variant.delivery_fee or 0.0), 0.0)
-    if delivery_fee > 0:
+    coupon_discount = max(float(variant.coupon_discount or 0.0), 0.0)
+    cashback_discount = max(float(variant.cashback_discount or 0.0), 0.0)
+    order_total = max(
+        0.0,
+        items_total + delivery_fee - coupon_discount - cashback_discount,
+    )
+
+    if variant.show_financial_breakdown:
+        charge_lines = [
+            split_justified("SUBTOTAL ITENS:", _format_brl(items_total), width),
+        ]
+        if _order_type_label(order_type) == "DELIVERY":
+            charge_lines.append(
+                split_justified("TAXA DE ENTREGA:", _format_brl(delivery_fee), width)
+            )
+        if coupon_discount > 0:
+            charge_lines.append(
+                split_justified(
+                    "DESCONTO CUPOM:",
+                    _format_discount_brl(coupon_discount),
+                    width,
+                )
+            )
+        if cashback_discount > 0:
+            charge_lines.append(
+                split_justified(
+                    "CASHBACK:",
+                    _format_discount_brl(cashback_discount),
+                    width,
+                )
+            )
+        charge_lines.append("-" * width)
+        lines[total_index:total_index] = charge_lines
+        total_index += len(charge_lines)
+    elif delivery_fee > 0:
         charge_lines = [
             split_justified("SUBTOTAL ITENS:", _format_brl(items_total), width),
             split_justified("TAXA DE ENTREGA:", _format_brl(delivery_fee), width),
@@ -430,7 +546,7 @@ def _replace_total(
 
     replacement = split_justified(
         "TOTAL DO PEDIDO:",
-        _format_brl(items_total + delivery_fee),
+        _format_brl(order_total),
         width,
     )
     lines[total_index] = ESC_BOLD_ON + replacement + ESC_BOLD_OFF
@@ -489,5 +605,12 @@ def render_canonical_comanda(
     lines = receipt.split("\n")
     _insert_variant_header(lines, tipo=order_type, variant=variant, width=width)
     _insert_context_block(lines, variant=variant, width=width)
-    _replace_total(lines, items=items, variant=variant, width=width)
+    _insert_payment_block(lines, variant=variant, width=width)
+    _replace_total(
+        lines,
+        items=items,
+        variant=variant,
+        order_type=order_type,
+        width=width,
+    )
     return "\n".join(lines)
