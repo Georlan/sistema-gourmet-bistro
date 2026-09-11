@@ -1,4 +1,4 @@
-import { Lock, MonitorCog, Percent, Printer, Smartphone, Users } from 'lucide-react';
+import { Lock, Monitor, Percent, Printer, Smartphone, Users } from 'lucide-react';
 import React, { useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
@@ -109,7 +109,7 @@ export default function CashierSettings({
   });
 
   const settingsTabs = [
-    { id: 'aparencia', label: 'Aparência', icon: MonitorCog },
+    { id: 'aparencia', label: 'Aparência', icon: Monitor },
     { id: 'impressao', label: 'Impressão', icon: Printer },
     { id: 'mesas', label: 'Mesas', icon: Users },
     { id: 'garcom', label: 'App do Garçom', icon: Smartphone },
