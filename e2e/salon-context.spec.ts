@@ -48,8 +48,9 @@ test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao volta
   const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
   await details.getByRole('button', { name: 'Adicionar consumo', exact: true }).click();
   await expect(details).toBeHidden();
-  await expect(page.getByTitle('Adicionar Prato em preparo', { exact: true })).toBeVisible();
-  await page.getByTitle('Adicionar Prato em preparo', { exact: true }).click();
+  const preparedDishButton = page.getByRole('button', { name: 'Adicionar Prato em preparo rapidamente', exact: true });
+  await expect(preparedDishButton).toBeVisible();
+  await preparedDishButton.click();
   const cart = page.getByRole('button', { name: /^Carrinho \(/ });
   if (await cart.isVisible()) await cart.click();
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
