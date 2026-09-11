@@ -2309,7 +2309,7 @@ body {
   }
 
   .cashier-subnav button {
-    min-height: 2.5rem;
+    min-height: 2.75rem;
     flex: 0 0 auto;
     padding-inline: 0.75rem;
   }

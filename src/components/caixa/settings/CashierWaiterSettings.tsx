@@ -45,7 +45,7 @@ export function CashierWaiterSettings({
 
       {/* Sub tabs inside configurations */}
       <div
-        className={"flex gap-1.5 bg-koma-page p-1 rounded-xl border border-koma-border w-fit shrink-0"}
+        className={"flex flex-wrap gap-1.5 bg-koma-page p-1 rounded-xl border border-koma-border max-w-full"}
       >
         {[
           { id: 'pedido', label: '1. Pedido' },
@@ -55,10 +55,10 @@ export function CashierWaiterSettings({
           <button
             key={tab.id}
             onClick={() => setConfigSalSubTab(tab.id as any)}
-            className={`px-3 py-1.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all ${
+            className={`min-h-9 sm:min-h-8 px-3 py-1.5 text-[9px] font-bold rounded-lg cursor-pointer transition-all flex items-center justify-center ${
               configSalSubTab === tab.id
                 ? 'bg-emerald-600 text-white shadow'
-                : 'text-koma-subtle hover:text-koma-foreground'
+                : 'text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised'
             }`}
           >
             {tab.label}
@@ -83,7 +83,7 @@ export function CashierWaiterSettings({
                     </strong>
                     {!item.available && (
                       <span
-                        className={"rounded-full border border-amber-700/40 bg-amber-900/20 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-400"}
+                        className={"rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300"}
                       >
                         Integração pendente
                       </span>
