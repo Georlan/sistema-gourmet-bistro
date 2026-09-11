@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calculator, Check, Loader2, ShieldCheck, TrendingUp } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Calculator, Check, Loader2, Pencil, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react';
 
 export interface GrowthEconomicsOption {
   key: 'conservative' | 'balanced' | 'limit' | string;
@@ -45,6 +45,25 @@ interface GrowthEconomicsResponse {
   assumptions: string[];
 }
 
+interface AutomaticLoyaltyResponse {
+  mode: 'automatico';
+  source: 'configured_costs' | 'conservative_default';
+  suggestion: {
+    effective_reward_percent: number;
+    cashback_percent: number;
+    points_per_real: number;
+    point_value_brl: number;
+  };
+  evidence: {
+    lookback_days: number;
+    orders_analyzed: number;
+    cost_coverage_percent: number;
+    known_contribution_percent: number | null;
+  };
+  warnings: string[];
+  message: string;
+}
+
 interface GrowthEconomicsCalculatorProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
@@ -77,6 +96,209 @@ export default function GrowthEconomicsCalculator({
   const [error, setError] = useState('');
   const [appliedKey, setAppliedKey] = useState('');
 
+  const [loyaltyMode, setLoyaltyMode] = useState<'automatico' | 'manual'>('automatico');
+  const [automaticResult, setAutomaticResult] = useState<AutomaticLoyaltyResponse | null>(null);
+  const [automaticLoading, setAutomaticLoading] = useState(false);
+  const [automaticError, setAutomaticError] = useState('');
+  const [automaticApplied, setAutomaticApplied] = useState(false);
+
+  const loadAutomaticSuggestion = async () => {
+    setAutomaticLoading(true);
+    setAutomaticError('');
+    setAutomaticApplied(false);
+    try {
+      const response = await fetch(`${apiBaseUrl}/caixa/cupons/economia/recomendacao`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ mode: 'automatico' }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = payload && typeof payload.detail === 'string'
+          ? payload.detail
+          : 'Não foi possível calcular a sugestão agora.';
+        throw new Error(detail);
+      }
+      setAutomaticResult(payload as AutomaticLoyaltyResponse);
+    } catch (loadError) {
+      setAutomaticResult(null);
+      setAutomaticError(loadError instanceof Error ? loadError.message : 'Não foi possível calcular a sugestão agora.');
+    } finally {
+      setAutomaticLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (compact && loyaltyMode === 'automatico' && !automaticResult && !automaticLoading) {
+      void loadAutomaticSuggestion();
+    }
+  }, [compact, loyaltyMode, apiBaseUrl, authHeaders.Authorization]);
+
+  const applyAutomaticSuggestion = () => {
+    if (!automaticResult || !onApplyOption) return;
+    const reward = automaticResult.suggestion;
+    const option: GrowthEconomicsOption = {
+      key: 'automatic',
+      label: 'Sugestão KÔMA',
+      incentive_percent: reward.effective_reward_percent,
+      estimated_margin_after_incentive_percent: 0,
+      estimated_contribution_per_average_order: 0,
+      break_even_order_volume_lift_percent: 0,
+      coupon: {
+        percentage_discount: reward.effective_reward_percent,
+        fixed_discount_on_average_ticket: 0,
+        suggested_minimum_order_for_fixed_discount: 0,
+      },
+      cashback: {
+        earn_percent: reward.cashback_percent,
+        suggested_max_redemption_percent_per_order: reward.cashback_percent,
+        worst_case_redemption_assumption_percent: 100,
+      },
+      loyalty_points: {
+        points_per_real: reward.points_per_real,
+        suggested_point_value_brl: reward.point_value_brl,
+        effective_reward_percent: reward.effective_reward_percent,
+      },
+      preserves_minimum_margin: true,
+    };
+    onApplyOption(option);
+    setAutomaticApplied(true);
+  };
+
+  if (compact) {
+    const isCashback = applyLabel.toLocaleLowerCase('pt-BR').includes('cashback');
+    const reward = automaticResult?.suggestion;
+
+    return (
+      <section
+        className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4"
+        id="loyalty-rate-mode"
+      >
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400">
+            <Sparkles className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-xs font-black text-koma-foreground">Como definir a taxa</h4>
+            <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+              O KÔMA pode sugerir uma taxa usando os dados que já conhece. Se preferir, escolha Manual e digite sua própria taxa nos campos abaixo.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-koma-border bg-koma-card p-1" role="group" aria-label="Modo da taxa de fidelidade">
+          <button
+            type="button"
+            onClick={() => setLoyaltyMode('automatico')}
+            aria-pressed={loyaltyMode === 'automatico'}
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-[10px] font-black transition ${
+              loyaltyMode === 'automatico'
+                ? 'bg-emerald-500 text-white'
+                : 'text-koma-muted hover:bg-koma-raised'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Automático
+          </button>
+          <button
+            type="button"
+            onClick={() => setLoyaltyMode('manual')}
+            aria-pressed={loyaltyMode === 'manual'}
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-[10px] font-black transition ${
+              loyaltyMode === 'manual'
+                ? 'bg-koma-raised text-koma-foreground'
+                : 'text-koma-muted hover:bg-koma-raised'
+            }`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Manual
+          </button>
+        </div>
+
+        {loyaltyMode === 'automatico' ? (
+          <div className="mt-3">
+            {automaticLoading && (
+              <div className="flex min-h-24 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card text-[10px] text-koma-muted">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Calculando sugestão…
+              </div>
+            )}
+
+            {automaticError && !automaticLoading && (
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] text-rose-300" role="alert">
+                <p>{automaticError}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadAutomaticSuggestion()}
+                  className="mt-2 font-black underline underline-offset-2"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
+            {automaticResult && !automaticLoading && (
+              <div className="rounded-xl border border-emerald-500/20 bg-koma-card p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Sugestão KÔMA</p>
+                    <p className="mt-1 text-xl font-black text-koma-foreground">
+                      {isCashback
+                        ? `${number(reward?.cashback_percent || 0)}% de volta`
+                        : `${number(reward?.points_per_real || 0)} ponto por R$ 1`}
+                    </p>
+                    {!isCashback && (
+                      <p className="mt-1 text-[10px] text-koma-muted">
+                        Cada ponto vale {currency(reward?.point_value_brl || 0)} no resgate — equivalente a {number(reward?.effective_reward_percent || 0)}%.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadAutomaticSuggestion()}
+                    className="shrink-0 text-[9px] font-bold text-emerald-400 underline underline-offset-2"
+                  >
+                    Recalcular
+                  </button>
+                </div>
+
+                <p className="mt-2 text-[9px] leading-relaxed text-koma-muted">{automaticResult.message}</p>
+                {automaticResult.warnings.length > 0 && (
+                  <p className="mt-2 text-[9px] leading-relaxed text-amber-300">
+                    {automaticResult.warnings[0]}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={applyAutomaticSuggestion}
+                  disabled={!onApplyOption || (reward?.effective_reward_percent || 0) <= 0}
+                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-[10px] font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {automaticApplied ? <Check className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                  {automaticApplied ? 'Sugestão aplicada aos campos abaixo' : 'Usar sugestão KÔMA'}
+                </button>
+                <p className="mt-2 text-[9px] leading-relaxed text-koma-subtle">
+                  A sugestão só preenche o programa. Nada é salvo até você tocar em “Salvar programa”.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border border-koma-border bg-koma-card p-3">
+            <p className="text-[10px] font-black text-koma-foreground">Você decide a taxa.</p>
+            <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
+              Digite abaixo o percentual de cashback que quiser ou, em Pontos, quantos pontos o cliente ganha e quanto vale cada ponto.
+            </p>
+          </div>
+        )}
+      </section>
+    );
+  }
+
   const calculate = async () => {
     const ticket = Number(averageTicket);
     const costs = Number(variableCostPercent);
@@ -98,6 +320,7 @@ export default function GrowthEconomicsCalculator({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          mode: 'manual',
           average_ticket: ticket,
           variable_cost_percent: costs,
           minimum_margin_percent: margin,
@@ -119,7 +342,7 @@ export default function GrowthEconomicsCalculator({
 
   return (
     <section
-      className={`rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] ${compact ? 'p-3' : 'p-4'}`}
+      className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4"
       id="growth-economics-calculator"
     >
       <div className="flex items-start gap-3">

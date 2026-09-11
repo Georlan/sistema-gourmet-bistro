@@ -6,11 +6,25 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db, require_tenant_id
-from ..domain.growth_economics import calculate_growth_recommendations
-from ..models import ActivityLog, Cupom, Cliente, Comanda, ConfigFidelizacao, Restaurante, Usuario
+from ..domain.growth_economics import (
+    calculate_growth_recommendations,
+    suggest_loyalty_reward_percent,
+)
+from ..models import (
+    ActivityLog,
+    Cupom,
+    Cliente,
+    Comanda,
+    ConfigFidelizacao,
+    Item as ComandaItem,
+    Produto,
+    ProdutoInsumo,
+    Restaurante,
+    Usuario,
+)
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
 from ..security import get_current_user, require_permission
 from ..services.coupon_eligibility import customer_matches_targeted_coupon
@@ -28,11 +42,12 @@ public_router = APIRouter(
 
 
 class GrowthRecommendationRequest(BaseModel):
-    """Entradas explícitas da calculadora; nenhum custo do restaurante é inventado."""
+    """Entradas da calculadora avançada ou pedido de sugestão automática."""
 
-    average_ticket: float = Field(gt=0, le=1_000_000)
-    variable_cost_percent: float = Field(ge=0, lt=100)
-    minimum_margin_percent: float = Field(gt=0, lt=100)
+    mode: str = Field(default="manual", pattern="^(manual|automatico)$")
+    average_ticket: Optional[float] = Field(default=None, gt=0, le=1_000_000)
+    variable_cost_percent: Optional[float] = Field(default=None, ge=0, lt=100)
+    minimum_margin_percent: Optional[float] = Field(default=None, gt=0, lt=100)
 
 
 def _validate_coupon_configuration(payload: CupomCreate) -> None:
@@ -62,6 +77,153 @@ def _validate_targeted_customer(db: Session, *, restaurante_id: int, cliente_id:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Cliente destinatário não pertence a este restaurante.",
         )
+
+
+def _automatic_loyalty_recommendation(
+    db: Session,
+    *,
+    restaurante_id: int,
+    restaurante: Restaurante,
+) -> dict:
+    """Sugere uma taxa simples usando apenas dados que o KÔMA já possui.
+
+    Quando há ficha técnica suficiente, usa vendas fechadas recentes e custos dos
+    insumos para estimar a contribuição conhecida. Como taxas de pagamento,
+    embalagem e impostos podem estar fora da ficha técnica, somente 10% dessa
+    contribuição conhecida vira orçamento de fidelidade, com teto de 5%.
+
+    Sem cobertura de custos suficiente, usa 2% como ponto de partida conservador.
+    A sugestão nunca é salva automaticamente e não é apresentada como garantia
+    de lucro; o modo manual permanece disponível.
+    """
+
+    lookback_days = 60
+    cutoff = (
+        datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=lookback_days)
+    ).replace(tzinfo=None)
+
+    order_rows = (
+        db.query(Comanda.id)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.fechada.is_(True),
+            Comanda.fechado_em.isnot(None),
+            Comanda.fechado_em >= cutoff,
+        )
+        .order_by(Comanda.fechado_em.desc())
+        .limit(500)
+        .all()
+    )
+    order_ids = [row[0] for row in order_rows]
+
+    items = []
+    if order_ids:
+        items = (
+            db.query(ComandaItem)
+            .filter(
+                ComandaItem.restaurante_id == restaurante_id,
+                ComandaItem.comanda_id.in_(order_ids),
+                or_(ComandaItem.status.is_(None), ComandaItem.status != "cancelado"),
+            )
+            .all()
+        )
+
+    product_ids = {str(item.produto_id) for item in items if item.produto_id}
+    products = (
+        db.query(Produto)
+        .filter(
+            Produto.restaurante_id == restaurante_id,
+            Produto.id.in_(product_ids),
+        )
+        .options(joinedload(Produto.ficha_tecnica).joinedload(ProdutoInsumo.insumo))
+        .all()
+        if product_ids
+        else []
+    )
+    product_map = {str(product.id): product for product in products}
+
+    total_revenue = 0.0
+    covered_revenue = 0.0
+    covered_cost = 0.0
+
+    for item in items:
+        quantity = int(getattr(item, "quantidade", 1) or 1)
+        revenue = max(0.0, float(item.preco_unit or 0)) * quantity
+        total_revenue += revenue
+
+        product = product_map.get(str(item.produto_id))
+        if product is None:
+            continue
+        recipe_items = list(product.ficha_tecnica or [])
+        recipe_has_cost = bool(recipe_items) and all(
+            recipe.insumo is not None
+            and float(recipe.insumo.preco_medio_custo or 0) > 0
+            and float(recipe.quantidade or 0) > 0
+            for recipe in recipe_items
+        )
+        if not recipe_has_cost:
+            continue
+
+        unit_cost = sum(
+            float(recipe.quantidade or 0) * float(recipe.insumo.preco_medio_custo or 0)
+            for recipe in recipe_items
+        )
+        covered_revenue += revenue
+        covered_cost += unit_cost * quantity
+
+    cost_coverage_percent = (
+        (covered_revenue / total_revenue) * 100.0 if total_revenue > 0 else 0.0
+    )
+    koma_fee_percent = float(subscription_marketplace_rate(restaurante.plano)) * 100.0
+
+    known_contribution_percent: float | None = None
+    source = "conservative_default"
+    if covered_revenue > 0 and cost_coverage_percent >= 50.0:
+        gross_margin_percent = max(
+            0.0,
+            ((covered_revenue - covered_cost) / covered_revenue) * 100.0,
+        )
+        known_contribution_percent = max(0.0, gross_margin_percent - koma_fee_percent)
+        source = "configured_costs"
+
+    reward_percent = suggest_loyalty_reward_percent(known_contribution_percent)
+    warnings: list[str] = []
+    if source == "conservative_default":
+        warnings.append(
+            "Ainda não há ficha técnica suficiente para estimar custos; o KÔMA usa 2% como ponto de partida conservador."
+        )
+    if reward_percent <= 0:
+        warnings.append(
+            "Os custos conhecidos não deixam folga para uma taxa automática. O modo manual continua disponível."
+        )
+
+    point_value = round(reward_percent / 100.0, 4)
+    return {
+        "mode": "automatico",
+        "source": source,
+        "suggestion": {
+            "effective_reward_percent": reward_percent,
+            "cashback_percent": reward_percent,
+            "points_per_real": 1.0,
+            "point_value_brl": point_value,
+        },
+        "evidence": {
+            "lookback_days": lookback_days,
+            "orders_analyzed": len(order_ids),
+            "cost_coverage_percent": round(cost_coverage_percent, 1),
+            "known_contribution_percent": (
+                round(known_contribution_percent, 2)
+                if known_contribution_percent is not None
+                else None
+            ),
+        },
+        "warnings": warnings,
+        "message": (
+            "Sugestão calculada com vendas e custos que o KÔMA já conhece."
+            if source == "configured_costs"
+            else "Sugestão conservadora enquanto o KÔMA aprende mais sobre seus custos."
+        ),
+    }
 
 
 def _validar_regras_cupom(cupom: Cupom, subtotal: float, telefone: Optional[str], db: Session) -> tuple[bool, str, float]:
@@ -125,17 +287,33 @@ def recomendar_incentivos(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
-    """Calcula opções seguras sem alterar a configuração do restaurante.
+    """Calcula incentivo sem salvar configuração automaticamente.
 
-    O plano e o split vêm da fonte canônica do backend. CMV/custos e margem-alvo
-    são fornecidos explicitamente pelo restaurante. O endpoint apenas calcula;
-    salvar ou ajustar manualmente cupom/fidelidade continua sendo uma ação
-    administrativa separada.
+    O modo manual preserva a calculadora avançada usada em cupons. No modo
+    automático, fidelidade/cashback usam somente dados já conhecidos pelo KÔMA,
+    sem pedir CMV, ticket ou margem ao dono do restaurante.
     """
     rest_id = require_tenant_id()
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+    if payload.mode == "automatico":
+        return _automatic_loyalty_recommendation(
+            db,
+            restaurante_id=rest_id,
+            restaurante=restaurante,
+        )
+
+    if (
+        payload.average_ticket is None
+        or payload.variable_cost_percent is None
+        or payload.minimum_margin_percent is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe ticket médio, custos variáveis e margem mínima para a calculadora avançada.",
+        )
 
     return calculate_growth_recommendations(
         average_ticket=payload.average_ticket,

@@ -12,7 +12,7 @@ of issued credit were eventually redeemed.
 
 from __future__ import annotations
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_FLOOR, ROUND_HALF_UP
 from typing import Any
 
 CENT = Decimal("0.01")
@@ -33,6 +33,34 @@ def _percent(value: Decimal) -> Decimal:
 
 def _as_float(value: Decimal) -> float:
     return float(value)
+
+
+def suggest_loyalty_reward_percent(
+    known_contribution_percent: Decimal | int | float | str | None,
+) -> float:
+    """Return a conservative automatic loyalty rate without asking the owner for CMV.
+
+    When KOMA can estimate the restaurant's contribution from configured recipe
+    costs, the automatic reward consumes at most 10% of that *known*
+    contribution, rounded down in 0.5 percentage-point steps and capped at 5%.
+    This deliberately leaves the large majority of the observed contribution
+    untouched because payment fees, packaging, taxes and other costs may not be
+    represented in recipe cost.
+
+    When cost coverage is insufficient, callers pass ``None`` and we return a
+    conservative 2% starting suggestion. This is a product recommendation, not
+    a profit guarantee; the restaurant can always choose a manual rate.
+    """
+
+    if known_contribution_percent is None:
+        return 2.0
+
+    contribution = max(Decimal("0"), _decimal(known_contribution_percent))
+    raw_rate = contribution * Decimal("0.10")
+    stepped = (raw_rate * Decimal("2")).to_integral_value(
+        rounding=ROUND_FLOOR,
+    ) / Decimal("2")
+    return _as_float(min(Decimal("5"), max(Decimal("0"), stepped)))
 
 
 def _build_option(

@@ -14,6 +14,24 @@ test('growth calculator delegates all economics to the authenticated backend', (
   assert.doesNotMatch(calculator, /Math\.random|openai|gemini|anthropic/i);
 });
 
+test('loyalty compact mode offers automatic or manual rates without asking the owner for CMV', () => {
+  const calculator = source('src/components/clientes/GrowthEconomicsCalculator.tsx');
+  const compactMode = calculator.slice(
+    calculator.indexOf('if (compact)'),
+    calculator.indexOf('const calculate = async'),
+  );
+
+  assert.match(calculator, /body:\s*JSON\.stringify\(\{\s*mode:\s*'automatico'\s*\}\)/);
+  assert.match(compactMode, /Automático/);
+  assert.match(compactMode, /Manual/);
+  assert.match(compactMode, /Usar sugestão KÔMA/);
+  assert.match(compactMode, /Nada é salvo até você tocar em “Salvar programa”/);
+  assert.doesNotMatch(compactMode, /Ticket médio/);
+  assert.doesNotMatch(compactMode, /Custos variáveis/);
+  assert.doesNotMatch(compactMode, /Margem mínima/);
+  assert.doesNotMatch(compactMode, /CMV/);
+});
+
 test('coupon recommendation only fills the existing canonical form and never auto-saves', () => {
   const cupons = source('src/components/clientes/CuponsTab.tsx');
   assert.match(cupons, /<GrowthEconomicsCalculator/);

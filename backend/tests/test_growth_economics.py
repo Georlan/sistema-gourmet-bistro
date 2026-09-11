@@ -2,7 +2,10 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.growth_economics import calculate_growth_recommendations
+from app.domain.growth_economics import (
+    calculate_growth_recommendations,
+    suggest_loyalty_reward_percent,
+)
 from app.subscription import subscription_marketplace_rate
 
 
@@ -48,6 +51,22 @@ def test_growth_recommendation_does_not_invent_budget_when_target_margin_is_unav
     assert result["economics"]["safe_incentive_ceiling_percent"] == 0.0
     assert result["options"] == []
     assert result["warnings"]
+
+
+def test_loyalty_auto_rate_uses_conservative_fallback_without_cost_coverage():
+    assert suggest_loyalty_reward_percent(None) == 2.0
+
+
+def test_loyalty_auto_rate_consumes_at_most_ten_percent_of_known_contribution():
+    assert suggest_loyalty_reward_percent(38.51) == 3.5
+    assert suggest_loyalty_reward_percent(20) == 2.0
+    assert suggest_loyalty_reward_percent(10) == 1.0
+    assert suggest_loyalty_reward_percent(5) == 0.5
+    assert suggest_loyalty_reward_percent(4.9) == 0.0
+
+
+def test_loyalty_auto_rate_is_capped_at_five_percent():
+    assert suggest_loyalty_reward_percent(80) == 5.0
 
 
 @pytest.mark.parametrize(
