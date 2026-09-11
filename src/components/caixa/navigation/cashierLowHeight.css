@@ -175,3 +175,117 @@
     display: none;
   }
 }
+
+/*
+ * Mobile POS ergonomics.
+ * The topbar is a control surface, not a second navigation menu: keep the
+ * page title readable and force chat/fullscreen into predictable 44px touch
+ * targets so they cannot squeeze or overlap the title on narrow phones.
+ */
+@media (max-width: 639px) {
+  .cashier-topbar {
+    height: 3.5rem !important;
+    min-height: 3.5rem !important;
+    padding-inline: 0.7rem !important;
+    gap: 0.45rem;
+  }
+
+  .cashier-topbar > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 0.45rem !important;
+  }
+
+  .cashier-topbar > div:last-child {
+    flex: 0 0 auto;
+    gap: 0.35rem !important;
+  }
+
+  .cashier-topbar h2 {
+    min-width: 0;
+    font-size: 0.82rem !important;
+    line-height: 1.1;
+  }
+
+  #btn-mobile-caixa-sidebar-open,
+  #btn-caixa-conversas-drawer,
+  #btn-modo-pdv-fullscreen {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0 !important;
+    justify-content: center;
+    border-radius: 0.82rem !important;
+  }
+
+  #btn-caixa-conversas-drawer {
+    position: relative;
+  }
+
+  #btn-caixa-conversas-drawer > span:not([role="status"]) {
+    display: none;
+  }
+
+  #btn-caixa-conversas-drawer > span[role="status"] {
+    position: absolute;
+    top: -0.2rem;
+    right: -0.2rem;
+    display: grid;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.22rem !important;
+    place-items: center;
+    border: 2px solid var(--koma-topbar-bg);
+    border-radius: 999px;
+    font-size: 0.58rem !important;
+    line-height: 1;
+  }
+
+  #btn-mobile-caixa-sidebar-open:focus-visible,
+  #btn-caixa-conversas-drawer:focus-visible,
+  #btn-modo-pdv-fullscreen:focus-visible {
+    outline: 2px solid var(--koma-accent);
+    outline-offset: 2px;
+  }
+
+  .cashier-subnav {
+    gap: 0.18rem !important;
+    padding: 0.34rem 0.55rem !important;
+    scroll-padding-inline: 0.55rem;
+    overscroll-behavior-x: contain;
+  }
+
+  .cashier-subnav__button {
+    min-height: 2.75rem;
+    padding: 0.48rem 0.56rem;
+    border-radius: 0.72rem;
+    font-size: 0.69rem;
+    line-height: 1;
+    scroll-snap-align: start;
+  }
+
+  .cashier-subnav {
+    scroll-snap-type: x proximity;
+  }
+}
+
+@media (max-width: 380px) {
+  .cashier-topbar {
+    padding-inline: 0.5rem !important;
+  }
+
+  #btn-mobile-caixa-sidebar-open,
+  #btn-caixa-conversas-drawer,
+  #btn-modo-pdv-fullscreen {
+    width: 2.55rem;
+    height: 2.55rem;
+    min-width: 2.55rem;
+    min-height: 2.55rem;
+  }
+
+  .cashier-subnav__button {
+    padding-inline: 0.46rem;
+    font-size: 0.65rem;
+  }
+}
