@@ -105,6 +105,9 @@ export function resolveKomaHost(
   const cleanHost = hostname.trim().toLowerCase();
   const params = new URLSearchParams(search);
   const viewParam = params.get('view')?.toLowerCase() || '';
+  const isExplicitPublicRoute = pathname.startsWith('/cardapio')
+    || pathname.startsWith('/c/')
+    || viewParam === 'cardapio';
 
   // 1. Central / SuperAdmin exclusivo.
   if (
@@ -161,8 +164,8 @@ export function resolveKomaHost(
     };
   }
 
-  // 4. Entrada operacional única. O tenant só existe depois da autenticação.
-  if (isOperationalAppHost(cleanHost)) {
+  // 4. Entrada operacional única. Rotas públicas explícitas continuam soberanas.
+  if (isOperationalAppHost(cleanHost) && !isExplicitPublicRoute) {
     return {
       kind: 'generic',
       surface: viewParam === 'caixa' || viewParam === 'gerencia' ? 'caixa' : 'garcom',
@@ -229,7 +232,7 @@ export function resolveKomaHost(
     resolvedSlugFromPath = params.get('slug');
   }
 
-  if (pathname.startsWith('/cardapio') || pathname.startsWith('/c/') || viewParam === 'cardapio') {
+  if (isExplicitPublicRoute) {
     return {
       kind: resolvedSlugFromPath ? 'tenant' : 'generic',
       surface: 'public',
