@@ -38,6 +38,16 @@ test('CashierOnlineMenu routes channel concerns to their canonical owners', () =
   assert.match(onlineMenu, /setActiveSubTab\('integracoes'\)/);
 });
 
+test('Cardápio online prefere o domínio público canônico do tenant', () => {
+  const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
+  assert.match(onlineMenu, /resolveKomaHost\(\)/);
+  assert.match(onlineMenu, /resolvedHost\.kind === 'tenant'/);
+  assert.match(onlineMenu, /getTenantPublicMenuUrl\(resolvedHost\.tenantSlug\)/);
+
+  const hostDomain = source('../src/domain/komaHost.ts');
+  assert.match(hostDomain, /return `https:\/\/\$\{clean\}\.komafood\.com\.br\/`/);
+});
+
 test('Cardápio online mantém apenas fluxos canônicos sem atalhos paralelos de cupom ou fidelidade', () => {
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.doesNotMatch(onlineMenu, /id="online-menu-growth-shortcuts"/);
