@@ -3,6 +3,7 @@ import { Moon, Sun } from 'lucide-react';
 import { nextKomaTheme, persistKomaTheme } from '../../../config/theme';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import './cashierLowHeight.css';
+import './cashierLightContrast.css';
 
 type Props = Pick<
   CashierSidebarProps,
