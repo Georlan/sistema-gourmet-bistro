@@ -29,6 +29,12 @@ class MercadoPagoError(RuntimeError):
 
 _PAYMENT_ID_PATTERN = re.compile(r"[0-9]{1,30}\Z")
 _REFUND_ID_PATTERN = re.compile(r"[0-9]{1,30}\Z")
+_EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+_TOKEN_VALUE_PATTERN = re.compile(
+    r"(?i)\b(access_token|refresh_token|client_secret)\s*[:=]\s*[^\s,;]+"
+)
+_MP_TOKEN_PATTERN = re.compile(r"(?i)\b(?:APP_USR|TEST|PROD)-[A-Za-z0-9_-]{8,}\b")
+_SAFE_CAUSE_CODE_PATTERN = re.compile(r"[A-Za-z0-9_.-]{1,32}\Z")
 
 
 def _parse_datetime(value: object) -> datetime.datetime | None:
@@ -49,19 +55,50 @@ def _validated_payment_id(external_payment_id: str) -> int:
     return payment_id
 
 
+def _sanitize_provider_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = " ".join(str(value).split()).strip()
+    if not text:
+        return None
+    text = _EMAIL_PATTERN.sub("[redacted-email]", text)
+    text = _MP_TOKEN_PATTERN.sub("[redacted-token]", text)
+    text = _TOKEN_VALUE_PATTERN.sub(r"\1=[redacted]", text)
+    return text[:180]
+
+
 def _provider_error_message(response: httpx.Response, action: str) -> str:
-    code = None
+    provider_message = None
+    cause_codes: list[str] = []
     try:
         payload = response.json()
     except Exception:
         payload = None
+
     if isinstance(payload, dict):
-        raw_code = payload.get("error") or payload.get("code") or payload.get("message")
-        if raw_code:
-            code = str(raw_code).strip()
+        # Mercado Pago costuma responder com `error=bad_request` e uma
+        # `message` muito mais útil. Preferimos a mensagem sem jamais registrar
+        # request body, payer, tokens ou o campo `cause.data`.
+        provider_message = _sanitize_provider_text(
+            payload.get("message") or payload.get("error") or payload.get("code")
+        )
+        causes = payload.get("cause")
+        if isinstance(causes, list):
+            for cause in causes[:3]:
+                if not isinstance(cause, dict):
+                    continue
+                raw_code = cause.get("code")
+                if raw_code is None:
+                    continue
+                code = str(raw_code).strip()
+                if _SAFE_CAUSE_CODE_PATTERN.fullmatch(code) and code not in cause_codes:
+                    cause_codes.append(code)
+
     suffix = f" ({response.status_code})"
-    if code:
-        suffix += f": {code[:120]}"
+    if provider_message:
+        suffix += f": {provider_message}"
+    if cause_codes:
+        suffix += f" [cause={','.join(cause_codes)}]"
     return f"Mercado Pago recusou {action}{suffix}."
 
 
