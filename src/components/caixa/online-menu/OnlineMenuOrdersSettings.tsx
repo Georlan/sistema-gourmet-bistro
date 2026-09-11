@@ -1,7 +1,6 @@
 import clsx from 'clsx';
 import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ExternalLink, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { OperationalBanner } from '../../shared/OperationalBanner';
 
 type HourRow = {
   id: string;
@@ -145,7 +144,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
   const hasUnsavedChanges = JSON.stringify(payload) !== savedSnapshot;
   const automaticWithoutHours = config.status_override === 'Automático' && config.horarios_funcionamento.length === 0;
   const statusLabel = config.status_override === 'Forçado Aberto'
-    ? 'Aberto'
+    ? 'Aberto agora'
     : config.status_override === 'Forçado Fechado'
       ? 'Pausado'
       : 'Automático';
@@ -215,18 +214,29 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <OperationalBanner
-        id="online-menu-orders-heading"
-        eyebrow="CARDÁPIO ONLINE"
-        title="Pedidos"
-        accent="no horário certo"
-        description="Controle quando o canal recebe novos pedidos. Pagamentos e entrega ficam em seções próprias."
-        metrics={[
-          { label: 'status', value: statusLabel },
-          { label: 'períodos', value: config.horarios_funcionamento.length },
-          { label: 'agendamento', value: scheduledOrdersEnabled ? 'Ativo' : 'Desligado' },
-        ]}
-      />
+      <header className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-black text-koma-foreground">Pedidos e horários</h2>
+            <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[9px] font-black text-emerald-700 dark:text-emerald-300">
+              {statusLabel}
+            </span>
+          </div>
+          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+            Defina quando o cardápio recebe pedidos. Limites e bloqueios ficam em Proteções operacionais.
+          </p>
+        </div>
+        {publicMenuUrl && (
+          <a
+            href={publicMenuUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+          >
+            <ExternalLink size={13} /> Ver cardápio
+          </a>
+        )}
+      </header>
 
       {automaticWithoutHours && (
         <div className="flex items-start gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.08] p-3.5 text-[10px] text-amber-700 dark:text-amber-300">
@@ -238,7 +248,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="mb-4">
           <h3 className="text-sm font-black text-koma-foreground">Recebimento de pedidos</h3>
-          <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Use o modo automático no dia a dia e os overrides apenas para exceções operacionais.</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Use o automático no dia a dia. “Aberto agora” e “Pausar pedidos” são exceções temporárias.</p>
         </div>
         <div className="grid gap-2.5 md:grid-cols-3">
           {statusOptions.map((option) => {
@@ -265,52 +275,13 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       </section>
 
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-600 dark:text-emerald-300">
-              <CalendarClock size={17} />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-koma-foreground">Pedidos agendados</h3>
-              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-                Permita que o cliente escolha uma data e horário futuros. Desligado, o checkout fica somente em O quanto antes e a área de Agendados não aparece no Caixa.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={scheduledOrdersEnabled}
-            aria-label="Permitir pedidos agendados"
-            disabled={isSavingScheduledOrders}
-            onClick={() => void updateScheduledOrders(!scheduledOrdersEnabled)}
-            className={clsx(
-              'relative h-7 w-12 shrink-0 rounded-full border transition disabled:cursor-wait disabled:opacity-60',
-              scheduledOrdersEnabled
-                ? 'border-emerald-500/60 bg-emerald-500/25'
-                : 'border-koma-border bg-koma-raised',
-            )}
-          >
-            <span
-              className={clsx(
-                'absolute top-1 h-[18px] w-[18px] rounded-full shadow-sm transition-all',
-                scheduledOrdersEnabled
-                  ? 'left-[25px] bg-emerald-500'
-                  : 'left-1 bg-koma-muted',
-              )}
-            />
-          </button>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="mb-4 flex items-start gap-3">
           <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-600 dark:text-emerald-300">
             <Clock3 size={17} />
           </div>
           <div>
             <h3 className="text-sm font-black text-koma-foreground">Horários de funcionamento</h3>
-            <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Use blocos simples, por exemplo “Segunda a Sexta · 18:00 - 23:00”.</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Cadastre os períodos que realmente controlam o modo automático.</p>
           </div>
         </div>
 
@@ -369,29 +340,67 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
         </div>
       </section>
 
-      <div className="sticky bottom-3 z-20 flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-end">
-        {feedback ? (
-          <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
-            {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
-          </span>
-        ) : (
-          <span className="mr-auto text-[10px] font-semibold text-koma-muted">{hasUnsavedChanges ? 'Há alterações que ainda não foram publicadas.' : 'Tudo salvo.'}</span>
-        )}
-        {publicMenuUrl && (
-          <a href={publicMenuUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-4 text-[10px] font-black uppercase tracking-wider text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600">
-            <ExternalLink size={13} /> Ver cardápio
-          </a>
-        )}
-        <button
-          type="button"
-          disabled={isSaving || !hasUnsavedChanges}
-          onClick={() => void save()}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-default disabled:border-koma-border disabled:bg-koma-raised disabled:text-koma-muted disabled:opacity-70"
-        >
-          {isSaving ? <Loader2 size={13} className="animate-spin" /> : hasUnsavedChanges ? <Save size={13} /> : <CheckCircle2 size={13} />}
-          {isSaving ? 'Publicando…' : hasUnsavedChanges ? 'Salvar e publicar' : 'Tudo salvo'}
-        </button>
-      </div>
+      <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-600 dark:text-emerald-300">
+              <CalendarClock size={17} />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-koma-foreground">Pedidos agendados</h3>
+              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+                Ative apenas se o restaurante realmente aceitar pedidos para uma data ou horário futuro.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={scheduledOrdersEnabled}
+            aria-label="Permitir pedidos agendados"
+            disabled={isSavingScheduledOrders}
+            onClick={() => void updateScheduledOrders(!scheduledOrdersEnabled)}
+            className={clsx(
+              'relative h-7 w-12 shrink-0 rounded-full border transition disabled:cursor-wait disabled:opacity-60',
+              scheduledOrdersEnabled
+                ? 'border-emerald-500/60 bg-emerald-500/25'
+                : 'border-koma-border bg-koma-raised',
+            )}
+          >
+            <span
+              className={clsx(
+                'absolute top-1 h-[18px] w-[18px] rounded-full shadow-sm transition-all',
+                scheduledOrdersEnabled
+                  ? 'left-[25px] bg-emerald-500'
+                  : 'left-1 bg-koma-muted',
+              )}
+            />
+          </button>
+        </div>
+      </section>
+
+      {(feedback || hasUnsavedChanges) && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
+          {feedback ? (
+            <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
+              {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
+            </span>
+          ) : (
+            <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">Alterações ainda não publicadas.</span>
+          )}
+          {hasUnsavedChanges && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => void save()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {isSaving ? 'Publicando…' : 'Salvar e publicar'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
