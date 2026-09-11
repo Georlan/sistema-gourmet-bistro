@@ -16,14 +16,23 @@ export function CashierSidebarFooter({
   return <>
     <div className="cashier-display-controls">
       <div className="cashier-font-control flex-1">
-        <span className="cashier-font-control__label">Texto</span>
-        <div className="cashier-font-control__options">
+        <span
+          className="cashier-font-control__label"
+          style={{ color: 'var(--koma-text-secondary)' }}
+        >
+          Texto
+        </span>
+        <div
+          className="cashier-font-control__options"
+          style={{ borderColor: 'var(--koma-border-strong)', background: 'var(--koma-surface-raised)' }}
+        >
           {(['padrao', 'grande', 'gigante'] as const).map((sz) => (
             <button
               key={sz}
               type="button"
               onClick={() => changeFontSize(sz)}
               className={clsx('cashier-font-control__button', fontSize === sz && 'is-active')}
+              style={fontSize === sz ? undefined : { color: 'var(--koma-text-secondary)' }}
               aria-label={
                 sz === 'padrao'
                   ? 'Texto padrão'
@@ -46,14 +55,23 @@ export function CashierSidebarFooter({
       </div>
 
       <div className="cashier-font-control">
-        <span className="cashier-font-control__label">Tema</span>
-        <div className="cashier-font-control__options">
+        <span
+          className="cashier-font-control__label"
+          style={{ color: 'var(--koma-text-secondary)' }}
+        >
+          Tema
+        </span>
+        <div
+          className="cashier-font-control__options"
+          style={{ borderColor: 'var(--koma-border-strong)', background: 'var(--koma-surface-raised)' }}
+        >
           <button
             type="button"
             onClick={() => {
               setTheme(persistKomaTheme(nextKomaTheme(theme)));
             }}
             className="cashier-font-control__button flex items-center justify-center py-1"
+            style={{ color: 'var(--koma-text-secondary)' }}
             aria-label="Alternar tema"
             title="Alternar tema"
           >
@@ -80,7 +98,7 @@ export function CashierSidebarFooter({
         {activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}
       </span>
       <span className="cashier-operator__copy">
-        <small>Operador</small>
+        <small style={{ color: 'var(--koma-text-secondary)' }}>Operador</small>
         <strong>{activeWaiterNome}</strong>
       </span>
     </div>
