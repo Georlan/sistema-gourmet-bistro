@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 import re
 from decimal import Decimal
 
@@ -8,6 +9,9 @@ import httpx
 
 from ...config import settings
 from .base import ProviderPayment, ProviderRefund
+
+
+logger = logging.getLogger("koma.online_payments.mercado_pago")
 
 
 class MercadoPagoError(RuntimeError):
@@ -132,8 +136,10 @@ class MercadoPagoProvider:
             json=body,
         )
         if response.status_code >= 400:
+            message = _provider_error_message(response, "a criação do Pix")
+            logger.warning("%s", message)
             raise MercadoPagoError(
-                f"Mercado Pago recusou a criação ({response.status_code}).",
+                message,
                 status_code=response.status_code,
                 retryable=response.status_code >= 500 or response.status_code in {408, 409, 429},
             )
