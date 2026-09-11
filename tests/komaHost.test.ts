@@ -6,6 +6,8 @@ import {
   getTenantPublicMenuUrl,
   getTenantCaixaUrl,
   getTenantGarcomUrl,
+  getOperationalAppUrl,
+  isOperationalAppHost,
 } from '../src/domain/komaHost.js';
 
 describe('parseTenantSubdomain', () => {
@@ -19,12 +21,12 @@ describe('parseTenantSubdomain', () => {
     assert.deepEqual(result, { slug: 'bar-do-sol', surface: 'public' });
   });
 
-  it('identifies caixa operational surface right-to-left', () => {
+  it('identifies caixa operational surface right-to-left for legacy links', () => {
     assert.deepEqual(parseTenantSubdomain('pordosol-caixa'), { slug: 'pordosol', surface: 'caixa' });
     assert.deepEqual(parseTenantSubdomain('bar-do-sol-caixa'), { slug: 'bar-do-sol', surface: 'caixa' });
   });
 
-  it('identifies garcom operational surface right-to-left', () => {
+  it('identifies garcom operational surface right-to-left for legacy links', () => {
     assert.deepEqual(parseTenantSubdomain('pordosol-garcom'), { slug: 'pordosol', surface: 'garcom' });
     assert.deepEqual(parseTenantSubdomain('restaurante-top-garcom'), { slug: 'restaurante-top', surface: 'garcom' });
   });
@@ -39,6 +41,7 @@ describe('parseTenantSubdomain', () => {
     assert.equal(parseTenantSubdomain('central'), null);
     assert.equal(parseTenantSubdomain('admin'), null);
     assert.equal(parseTenantSubdomain('api'), null);
+    assert.equal(parseTenantSubdomain('app'), null);
   });
 });
 
@@ -67,6 +70,28 @@ describe('resolveKomaHost', () => {
     assert.equal(resolved.surface, 'central');
   });
 
+  it('resolves app.komafood.com.br as generic operational entry without tenant', () => {
+    const resolved = resolveKomaHost('app.komafood.com.br', '/', '');
+    assert.equal(isOperationalAppHost('app.komafood.com.br'), true);
+    assert.equal(resolved.kind, 'generic');
+    assert.equal(resolved.surface, 'garcom');
+    assert.equal(resolved.tenantSlug, null);
+  });
+
+  it('keeps the temporary management bridge tenantless on app.komafood.com.br', () => {
+    const resolved = resolveKomaHost('app.komafood.com.br', '/', '?view=caixa');
+    assert.equal(resolved.kind, 'generic');
+    assert.equal(resolved.surface, 'caixa');
+    assert.equal(resolved.tenantSlug, null);
+  });
+
+  it('keeps explicit public menu paths sovereign on app.komafood.com.br', () => {
+    const resolved = resolveKomaHost('app.komafood.com.br', '/c/pordosol', '');
+    assert.equal(resolved.kind, 'tenant');
+    assert.equal(resolved.surface, 'public');
+    assert.equal(resolved.tenantSlug, 'pordosol');
+  });
+
   it('resolves tenant public menu subdomain (e.g. pordosol.komafood.com.br)', () => {
     const resolved = resolveKomaHost('pordosol.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'tenant');
@@ -74,14 +99,14 @@ describe('resolveKomaHost', () => {
     assert.equal(resolved.tenantSlug, 'pordosol');
   });
 
-  it('resolves tenant caixa surface subdomain (e.g. pordosol-caixa.komafood.com.br)', () => {
+  it('continues resolving legacy tenant caixa links', () => {
     const resolved = resolveKomaHost('pordosol-caixa.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'tenant');
     assert.equal(resolved.surface, 'caixa');
     assert.equal(resolved.tenantSlug, 'pordosol');
   });
 
-  it('resolves tenant garcom surface subdomain (e.g. pordosol-garcom.komafood.com.br)', () => {
+  it('continues resolving legacy tenant garcom links', () => {
     const resolved = resolveKomaHost('pordosol-garcom.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'tenant');
     assert.equal(resolved.surface, 'garcom');
@@ -97,9 +122,13 @@ describe('resolveKomaHost', () => {
 });
 
 describe('URL generators', () => {
-  it('generates correct tenant URLs', () => {
+  it('keeps tenant identity only on the public menu URL', () => {
     assert.equal(getTenantPublicMenuUrl('pordosol'), 'https://pordosol.komafood.com.br/');
-    assert.equal(getTenantCaixaUrl('pordosol'), 'https://pordosol-caixa.komafood.com.br/');
-    assert.equal(getTenantGarcomUrl('pordosol'), 'https://pordosol-garcom.komafood.com.br/');
+  });
+
+  it('generates one canonical operational URL for staff', () => {
+    assert.equal(getOperationalAppUrl(), 'https://app.komafood.com.br/');
+    assert.equal(getTenantCaixaUrl('pordosol'), 'https://app.komafood.com.br/');
+    assert.equal(getTenantGarcomUrl('outro-restaurante'), 'https://app.komafood.com.br/');
   });
 });
