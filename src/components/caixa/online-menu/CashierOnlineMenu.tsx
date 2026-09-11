@@ -1,4 +1,4 @@
-import { Lock } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
 import type { CashierTab } from '../cashierContracts';
 import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
@@ -153,9 +153,10 @@ export default function CashierOnlineMenu({
                 Limite de pedidos ativos e clientes bloqueados. Abra somente quando precisar ajustar exceções.
               </span>
             </div>
-            <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-600 transition group-open:rotate-180 dark:text-emerald-300">
-              ↓
-            </span>
+            <ChevronDown
+              size={16}
+              className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
+            />
           </summary>
           <div className="space-y-4 border-t border-koma-border px-4 py-4 sm:px-5">
             <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   CreditCard,
   ExternalLink,
@@ -597,10 +598,10 @@ export function CardapioDigitalSettingsPanel({
                       />
                     </div>
                   </label>
-                  <label>
+                  <label className="sm:col-span-2">
                     <FieldLabel>Endereço físico</FieldLabel>
                     <div className="relative">
-                      <MapPin size={15} className="pointer-events-none absolute left-3 top-3.5 text-koma-muted" />
+                      <MapPin size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
                       <input
                         value={config.endereco}
                         onChange={(event) => updateConfig('endereco', event.target.value)}
@@ -621,9 +622,10 @@ export function CardapioDigitalSettingsPanel({
                       Sobre o restaurante, Instagram e link do Google Maps.
                     </span>
                   </div>
-                  <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-600 transition group-open:rotate-180 dark:text-emerald-300">
-                    ↓
-                  </span>
+                  <ChevronDown
+                    size={16}
+                    className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
+                  />
                 </summary>
                 <div className="border-t border-koma-border px-4 py-4 sm:px-5">
                   <div className="grid gap-4 sm:grid-cols-2">
