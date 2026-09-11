@@ -341,6 +341,7 @@ class PrintingApplicationService:
         routed_items[primary_destination] = list(print_items)
 
         origin_label = cls._origin_label(lancamento)
+        is_online_order = origin_label == "CARDÁPIO ONLINE"
         customer_name = str(comanda.identificador or "").strip() or None
         is_delivery = cls._is_delivery_type(comanda.tipo)
         operator_name = cls._operator_name(lancamento, comanda)
@@ -354,21 +355,23 @@ class PrintingApplicationService:
             is_primary = destination_key == str(primary_destination).strip().upper()
             variant = ComandaVariant(
                 origin_label=origin_label,
-                location_label="ENTREGA" if is_delivery else "BALCÃO",
-                operator_label="OPERADOR",
+                location_label=(
+                    None
+                    if is_online_order
+                    else ("ENTREGA" if is_delivery else "BALCÃO")
+                ),
+                operator_label=(None if is_online_order else "OPERADOR"),
                 customer_name=customer_name if is_primary else None,
+                customer_phone=(comanda.delivery_telefone if is_primary else None),
                 is_reprint=(intent.action == PrintAction.REPRINT),
                 event_at=source_time,
                 via_label=None if is_primary else destination_key,
-                delivery_phone=(comanda.delivery_telefone if is_delivery and is_primary else None),
                 delivery_address=(comanda.delivery_endereco if is_delivery and is_primary else None),
                 delivery_neighborhood=(comanda.delivery_bairro if is_delivery and is_primary else None),
-                payment_method=(comanda.delivery_forma_pagamento if is_delivery and is_primary else None),
+                payment_method=(comanda.delivery_forma_pagamento if is_primary else None),
                 change_for=(
                     float(comanda.delivery_troco_para)
-                    if is_delivery
-                    and is_primary
-                    and comanda.delivery_troco_para is not None
+                    if is_primary and comanda.delivery_troco_para is not None
                     else None
                 ),
                 delivery_fee=(
@@ -376,6 +379,25 @@ class PrintingApplicationService:
                     if is_delivery and is_primary
                     else 0.0
                 ),
+                coupon_discount=(
+                    float(comanda.valor_desconto_cupom or 0.0)
+                    if is_primary
+                    else 0.0
+                ),
+                cashback_discount=(
+                    float(comanda.valor_desconto_cashback or 0.0)
+                    if is_primary
+                    else 0.0
+                ),
+                online_payment_status=(
+                    comanda.online_payment_status if is_primary else None
+                ),
+                amount_paid=(
+                    float(comanda.valor_pago or 0.0)
+                    if is_primary
+                    else 0.0
+                ),
+                show_financial_breakdown=is_primary,
             )
             payload = render_canonical_comanda(
                 restaurant_name=preferences.restaurant_name,
