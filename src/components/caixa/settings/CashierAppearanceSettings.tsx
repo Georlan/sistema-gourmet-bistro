@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { MonitorCog, Moon, Sun, Type } from 'lucide-react';
+import { Monitor, Moon, Sun, Type } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import {
   KOMA_THEME_CHANGED_EVENT,
@@ -53,7 +53,7 @@ export function CashierAppearanceSettings() {
       <div className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-700 dark:text-emerald-300">
-            <MonitorCog size={18} />
+            <Monitor size={18} />
           </span>
           <div className="min-w-0">
             <h3 id="cashier-appearance-title" className="text-sm font-bold text-koma-foreground">
