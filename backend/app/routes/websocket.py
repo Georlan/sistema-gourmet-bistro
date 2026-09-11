@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import contextlib
+import re
 import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
@@ -19,6 +20,7 @@ router = APIRouter(
 
 KOMA_AUTH_SUBPROTOCOL = "koma-auth"
 SESSION_REVALIDATION_SECONDS = 30.0
+KOMA_TENANT_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+\.komafood\.com\.br$")
 
 
 async def _watch_internal_session(websocket, token, user_id, restaurante_id):
@@ -93,10 +95,15 @@ def _validated_internal_websocket_identity(token: str, requested_user_id: str):
         current_restaurante_id.reset(tenant_token)
 
 
+def _websocket_origin_allowed(clean_origin: str, allowed_origins: list[str]) -> bool:
+    return clean_origin in allowed_origins or bool(KOMA_TENANT_ORIGIN_RE.fullmatch(clean_origin))
+
+
 async def validate_websocket_origin(websocket: WebSocket) -> bool:
     """
     Valida a origem da conexão WebSocket contra a allowlist configurada.
     - Origem presente e autorizada: aceita.
+    - Subdomínio HTTPS canônico de primeiro nível em komafood.com.br: aceita.
     - Origem presente e não autorizada: encerra com WS_1008_POLICY_VIOLATION.
     - Origem ausente: em produção, encerra com WS_1008_POLICY_VIOLATION por padrão.
       Em ambiente de desenvolvimento/teste ou com WEBSOCKET_ALLOW_MISSING_ORIGIN=true, autoriza.
@@ -115,7 +122,7 @@ async def validate_websocket_origin(websocket: WebSocket) -> bool:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return False
 
-        if clean_origin not in allowed_origins:
+        if not _websocket_origin_allowed(clean_origin, allowed_origins):
             logging.getLogger("koma.websocket").warning(
                 f"[WEBSOCKET BLOQUEADO] Origem não autorizada: {clean_origin}"
             )
