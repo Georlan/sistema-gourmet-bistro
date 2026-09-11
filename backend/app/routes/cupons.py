@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from ..database import get_db, require_tenant_id
+from ..database import get_db, require_tenant_id, tenant_session_scope
 from ..domain.growth_economics import (
     calculate_growth_recommendations,
     suggest_loyalty_reward_percent,
@@ -451,43 +451,46 @@ def listar_beneficios_publicos(
     direcionados a um cliente específico nunca são expostos neste catálogo público.
     """
     agora_utc_sem_tz = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-    cupons = (
-        db.query(Cupom)
-        .filter(
-            Cupom.restaurante_id == restaurante_id,
-            Cupom.ativo.is_(True),
-            Cupom.cliente_id.is_(None),
-            or_(Cupom.valido_ate.is_(None), Cupom.valido_ate >= agora_utc_sem_tz),
-            or_(Cupom.limite_usos.is_(None), Cupom.usos_atuais < Cupom.limite_usos),
+    with tenant_session_scope(db, restaurante_id):
+        cupons = (
+            db.query(Cupom)
+            .filter(
+                Cupom.restaurante_id == restaurante_id,
+                Cupom.ativo.is_(True),
+                Cupom.cliente_id.is_(None),
+                or_(Cupom.valido_ate.is_(None), Cupom.valido_ate >= agora_utc_sem_tz),
+                or_(Cupom.limite_usos.is_(None), Cupom.usos_atuais < Cupom.limite_usos),
+            )
+            .order_by(Cupom.criado_em.desc())
+            .limit(12)
+            .all()
         )
-        .order_by(Cupom.criado_em.desc())
-        .limit(12)
-        .all()
-    )
-    programa = db.query(ConfigFidelizacao).filter(
-        ConfigFidelizacao.restaurante_id == restaurante_id,
-    ).first()
+        programa = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == restaurante_id,
+        ).first()
+
+        payload = {
+            "cupons": [
+                {
+                    "codigo": cupom.codigo,
+                    "tipo_desconto": cupom.tipo_desconto,
+                    "valor_desconto": float(cupom.valor_desconto or 0),
+                    "valor_minimo_pedido": float(cupom.valor_minimo_pedido or 0),
+                    "valido_ate": cupom.valido_ate.isoformat() if cupom.valido_ate else None,
+                    "apenas_primeira_compra": bool(cupom.apenas_primeira_compra),
+                }
+                for cupom in cupons
+            ],
+            "programa": {
+                "ativo": bool(programa.ativo),
+                "tipo_recompensa": str(programa.tipo_recompensa or "").upper(),
+                "taxa_conversao": float(programa.taxa_conversao or 0),
+                "valor_ponto_em_dinheiro": float(programa.valor_ponto_em_dinheiro or 0),
+            } if programa else None,
+        }
 
     response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
-    return {
-        "cupons": [
-            {
-                "codigo": cupom.codigo,
-                "tipo_desconto": cupom.tipo_desconto,
-                "valor_desconto": float(cupom.valor_desconto or 0),
-                "valor_minimo_pedido": float(cupom.valor_minimo_pedido or 0),
-                "valido_ate": cupom.valido_ate.isoformat() if cupom.valido_ate else None,
-                "apenas_primeira_compra": bool(cupom.apenas_primeira_compra),
-            }
-            for cupom in cupons
-        ],
-        "programa": {
-            "ativo": bool(programa.ativo),
-            "tipo_recompensa": str(programa.tipo_recompensa or "").upper(),
-            "taxa_conversao": float(programa.taxa_conversao or 0),
-            "valor_ponto_em_dinheiro": float(programa.valor_ponto_em_dinheiro or 0),
-        } if programa else None,
-    }
+    return payload
 
 
 @public_router.post("/validar", response_model=CupomValidateResponse)
@@ -496,29 +499,30 @@ def validar_cupom_publico(
     db: Session = Depends(get_db),
 ):
     codigo_clean = payload.codigo.strip().upper()
-    cupom = db.query(Cupom).filter(
-        Cupom.restaurante_id == payload.restaurante_id,
-        Cupom.codigo == codigo_clean,
-    ).first()
+    with tenant_session_scope(db, payload.restaurante_id):
+        cupom = db.query(Cupom).filter(
+            Cupom.restaurante_id == payload.restaurante_id,
+            Cupom.codigo == codigo_clean,
+        ).first()
 
-    if not cupom:
-        return CupomValidateResponse(
-            valido=False,
-            mensagem="Cupom inválido ou não encontrado.",
+        if not cupom:
+            return CupomValidateResponse(
+                valido=False,
+                mensagem="Cupom inválido ou não encontrado.",
+            )
+
+        valido, msg, desconto = _validar_regras_cupom(
+            cupom,
+            subtotal=payload.subtotal,
+            telefone=payload.telefone,
+            db=db,
         )
 
-    valido, msg, desconto = _validar_regras_cupom(
-        cupom,
-        subtotal=payload.subtotal,
-        telefone=payload.telefone,
-        db=db,
-    )
-
-    return CupomValidateResponse(
-        valido=valido,
-        mensagem=msg,
-        codigo=cupom.codigo,
-        tipo_desconto=cupom.tipo_desconto,
-        valor_desconto=float(cupom.valor_desconto),
-        desconto_calculado=desconto,
-    )
+        return CupomValidateResponse(
+            valido=valido,
+            mensagem=msg,
+            codigo=cupom.codigo,
+            tipo_desconto=cupom.tipo_desconto,
+            valor_desconto=float(cupom.valor_desconto),
+            desconto_calculado=desconto,
+        )
