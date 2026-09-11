@@ -25,6 +25,10 @@ def _seed_public_benefits() -> str:
                     nome="Restaurante RLS Público",
                     slug=f"public-rls-{TENANT_ID}",
                 ))
+                # Garante a FK do tenant antes de inserir configuração/cupom no
+                # SQLite do gate. Em produção, o mesmo escopo continua valendo
+                # para a nova transação via TenantSession.
+                db.commit()
 
             programa = db.query(ConfigFidelizacao).filter(
                 ConfigFidelizacao.restaurante_id == TENANT_ID,
