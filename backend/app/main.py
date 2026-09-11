@@ -332,6 +332,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_allowed_origins(),
+    allow_origin_regex=r"^https://[a-z0-9-]+(?:\.komafood\.com\.br)$",
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[

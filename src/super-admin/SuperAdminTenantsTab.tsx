@@ -269,7 +269,26 @@ export function SuperAdminTenantsTab({
                 const isSuspended = tenant.status?.toUpperCase() === "SUSPENDED";
                 return (
                   <tr key={tenant.id} className="transition-colors hover:bg-koma-page/40">
-                    <td className="px-4 py-3.5"><div className="flex items-center gap-1.5 font-semibold text-koma-foreground">{tenant.name}{tenant.subdomain && <a href={`/c/${tenant.subdomain}`} target="_blank" rel="noopener noreferrer" className="text-koma-subtle hover:text-[#00b894]" title="Abrir cardápio digital"><ExternalLink className="h-3 w-3" /></a>}</div><div className="font-mono text-[11px] text-koma-muted">#{tenant.id}{tenant.subdomain ? ` • /c/${tenant.subdomain}` : ""}</div></td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-1.5 font-semibold text-koma-foreground">
+                        {tenant.name}
+                        {tenant.subdomain && (
+                          <a
+                            href={`https://${tenant.subdomain}.komafood.com.br/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-koma-subtle hover:text-[#00b894]"
+                            title={`Abrir cardápio digital (https://${tenant.subdomain}.komafood.com.br/)`}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                      <div className="font-mono text-[11px] text-koma-muted">
+                        #{tenant.id}
+                        {tenant.subdomain ? ` • ${tenant.subdomain}.komafood.com.br` : ""}
+                      </div>
+                    </td>
                     <td className="px-4 py-3.5"><span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-bold ${isSuspended ? "border-rose-800/40 bg-rose-950/60 text-rose-400" : "border-emerald-800/30 bg-emerald-950/60 text-emerald-400"}`}><span className={`h-1.5 w-1.5 rounded-full ${isSuspended ? "bg-rose-400" : "bg-emerald-400"}`} />{isSuspended ? "Suspenso" : "Ativo"}</span></td>
                     <td className="px-4 py-3.5"><span className="inline-flex rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] font-semibold text-koma-secondary">{plan?.name || tenant.plan || "Não disponível"}</span></td>
                     <td className="px-4 py-3.5"><span className={tenant.onlinePaymentStatus === "connected" ? "text-emerald-400" : tenant.onlinePaymentStatus === "disconnected" ? "text-amber-400" : "text-koma-muted"}>{paymentStatusLabel(tenant.onlinePaymentStatus)}</span></td>
@@ -303,7 +322,16 @@ export function SuperAdminTenantsTab({
             <div className="space-y-2 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs"><h4 className="flex items-center gap-1.5 font-bold text-koma-foreground"><CreditCard className="h-4 w-4 text-[#00b894]" /> Comercial Oficial</h4><p className="text-koma-muted">Mensalidade: <strong className="text-koma-secondary">{officialPlan(selectedTenant.plan) ? formatCurrency(officialPlan(selectedTenant.plan)!.price) : "Não disponível"}</strong></p><p className="text-koma-muted">Taxa Split Pix: <strong className="text-koma-secondary">{officialPlan(selectedTenant.plan) ? formatPercentage(officialPlan(selectedTenant.plan)!.splitFeeRate) : "Não disponível"}</strong></p></div>
             <div className="flex justify-end gap-2 border-t border-zinc-800 pt-3">
               <button type="button" onClick={() => { const t = selectedTenant; setSelectedTenant(null); setSupportTenant(t); }} className="flex items-center gap-1.5 rounded-lg border border-amber-600/60 bg-amber-950/60 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-900/80"><Headphones className="h-3.5 w-3.5" /> Entrar em Modo Suporte</button>
-              {selectedTenant.subdomain && <a href={`/c/${selectedTenant.subdomain}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-koma-secondary"><ExternalLink className="h-3.5 w-3.5" /> Abrir cardápio</a>}
+              {selectedTenant.subdomain && (
+                <a
+                  href={`https://${selectedTenant.subdomain}.komafood.com.br/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-koma-secondary hover:text-[#00b894]"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> Abrir cardápio
+                </a>
+              )}
               <button type="button" onClick={() => setSelectedTenant(null)} className="rounded-lg bg-[#00b894] px-4 py-1.5 text-xs font-bold text-black">Fechar</button>
             </div>
           </div>

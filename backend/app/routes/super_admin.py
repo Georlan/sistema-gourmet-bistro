@@ -476,6 +476,12 @@ def update_tenant(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="O slug/subdomínio deve conter entre 2 e 100 caracteres.",
             )
+        from .super_admin_onboarding import RESERVED_SLUGS
+        if slug_candidate in RESERVED_SLUGS:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"O slug '{slug_candidate}' é reservado pela plataforma e não pode ser utilizado.",
+            )
         slug_norm = slug_candidate
 
     db = SessionLocal()

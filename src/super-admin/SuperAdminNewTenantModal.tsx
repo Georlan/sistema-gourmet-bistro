@@ -168,8 +168,8 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
   };
 
   if (created) {
-    const cashierUrl = new URL(created.paths.cashier, window.location.origin).toString();
-    const menuUrl = new URL(created.paths.publicMenu, window.location.origin).toString();
+    const cashierUrl = `https://${created.subdomain}-caixa.komafood.com.br/`;
+    const menuUrl = `https://${created.subdomain}.komafood.com.br/`;
     const officialCreatedPlan = SUBSCRIPTION_PLANS.find(item => item.id === created.plan);
 
     return (
@@ -238,7 +238,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         <form onSubmit={submit} className="mt-5 space-y-4 text-xs">
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Restaurante</span><input value={name} onChange={event => updateName(event.target.value)} required minLength={2} maxLength={255} autoFocus className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Ex: Pizzaria Central" /></label>
-            <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Slug público</span><input value={slug} onChange={event => updateSlug(event.target.value)} required minLength={2} maxLength={100} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="pizzaria-central" /><span className="mt-1 block text-[10px] text-koma-subtle">/c/{slug || "slug-do-restaurante"}</span></label>
+            <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Slug público</span><input value={slug} onChange={event => updateSlug(event.target.value)} required minLength={2} maxLength={100} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="pizzaria-central" /><span className="mt-1 block text-[10px] text-koma-subtle">{slug ? `${slug}.komafood.com.br` : "slug-do-restaurante.komafood.com.br"}</span></label>
           </div>
 
           <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Tipo de operação</span><select value={operationProfile} onChange={event => setOperationProfile(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{OPERATION_PROFILES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="mt-1 block text-[10px] leading-relaxed text-koma-subtle">Isso só adapta sugestões e atalhos. Você continua com acesso a todos os recursos do KÔMA e o cardápio não é preenchido automaticamente.</span></label>

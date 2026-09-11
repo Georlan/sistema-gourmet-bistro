@@ -29,6 +29,25 @@ logger = logging.getLogger("koma.super_admin.onboarding")
 router = APIRouter(prefix="/super-admin", tags=["SuperAdmin"])
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+RESERVED_SLUGS = {
+    "www",
+    "central",
+    "admin",
+    "superadmin",
+    "super-admin",
+    "api",
+    "app",
+    "static",
+    "assets",
+    "mail",
+    "smtp",
+    "cardapio",
+    "caixa",
+    "garcom",
+    "entregador",
+    "motoboy",
+    "sistema-gourmet-bistro",
+}
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 DEFAULT_TRIAL_DAYS = 7
 MAX_TRIAL_ACTION_DAYS = 90
@@ -118,6 +137,11 @@ def _normalize_payload(payload: TenantOnboardingRequest) -> dict[str, str]:
                 "Slug inválido. Use apenas letras minúsculas, números e hífens, "
                 "sem espaços ou hífen no início/fim."
             ),
+        )
+    if slug in RESERVED_SLUGS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"O slug '{slug}' é reservado pela plataforma e não pode ser utilizado.",
         )
     if plan not in VALID_SUBSCRIPTION_PLANS:
         raise HTTPException(

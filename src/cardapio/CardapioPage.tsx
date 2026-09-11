@@ -39,6 +39,7 @@ import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
+import { resolveKomaHost } from "../domain/komaHost";
 import { smartSearchMatch } from "../domain";
 import {
   CustomerProfile,
@@ -91,31 +92,14 @@ function categorySectionId(name: string) {
 function getRestaurantIdentifier(): string | null {
   const params = new URLSearchParams(window.location.search);
   const restaurantId = params.get("restaurant_id") || params.get("restaurante_id");
-  const slug = params.get("slug");
   if (restaurantId) return restaurantId;
+
+  const resolved = resolveKomaHost();
+  if (resolved.tenantSlug) return resolved.tenantSlug;
+
+  const slug = params.get("slug");
   if (slug) return slug;
 
-  const hostname = window.location.hostname.toLowerCase();
-  const parts = hostname.split(".");
-  const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro", "komafood"];
-  const isPlatformHost = hostname.endsWith(".pages.dev")
-    || hostname === "komafood.com.br"
-    || hostname === "www.komafood.com.br"
-    || hostname.endsWith(".railway.app")
-    || hostname.endsWith(".up.railway.app")
-    || hostname.endsWith(".vercel.app")
-    || hostname.endsWith(".netlify.app")
-    || hostname.endsWith(".github.io");
-
-  if (
-    parts.length > 2
-    && !ignoredSubdomains.includes(parts[0])
-    && !parts[0].startsWith("ais-dev")
-    && !parts[0].startsWith("ais-pre")
-    && !isPlatformHost
-  ) {
-    return parts[0];
-  }
   return null;
 }
 

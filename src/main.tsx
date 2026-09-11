@@ -7,6 +7,8 @@ import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoun
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 
+import { resolveKomaHost } from "./domain/komaHost";
+
 function isPublicMenuRoute(): boolean {
   const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
@@ -14,45 +16,38 @@ function isPublicMenuRoute(): boolean {
     pathname.startsWith("/cardapio")
     || pathname.startsWith("/c/")
     || params.get("view") === "cardapio"
-  ) return true;
-
-  const hostname = window.location.hostname.toLowerCase();
-  const parts = hostname.split(".");
-  const ignoredSubdomains = ["www", "localhost", "sistema-gourmet-bistro", "komafood"];
-  const isPlatformHost = hostname.endsWith(".pages.dev")
-    || hostname === "komafood.com.br"
-    || hostname === "www.komafood.com.br"
-    || hostname.endsWith(".railway.app")
-    || hostname.endsWith(".up.railway.app")
-    || hostname.endsWith(".vercel.app")
-    || hostname.endsWith(".netlify.app")
-    || hostname.endsWith(".github.io");
-
-  return parts.length > 2
-    && !ignoredSubdomains.includes(parts[0])
-    && !parts[0].startsWith("ais-dev")
-    && !parts[0].startsWith("ais-pre")
-    && !isPlatformHost;
+  ) {
+    return true;
+  }
+  const resolved = resolveKomaHost();
+  return resolved.surface === "public";
 }
 
 function isPublicCommercialRoute(): boolean {
   const pathname = window.location.pathname;
-  return pathname.startsWith("/landing")
+  const resolved = resolveKomaHost();
+  return resolved.surface === "landing"
+    || pathname.startsWith("/landing")
     || pathname.startsWith("/legal")
     || pathname.startsWith("/contratar");
 }
 
 function bypassTenantSuspensionBoundary(): boolean {
   const pathname = window.location.pathname;
-  const params = new URLSearchParams(window.location.search);
+  const resolved = resolveKomaHost();
 
   return pathname === "/recuperar-senha"
-    || isPublicMenuRoute()
-    || isPublicCommercialRoute()
     || pathname.startsWith("/super-admin")
+    || pathname.startsWith("/c/")
+    || pathname.startsWith("/cardapio")
     || pathname.startsWith("/ativar")
-    || params.get("view") === "landing"
-    || params.get("view") === "ativar";
+    || pathname.startsWith("/acompanhar")
+    || resolved.surface === "public"
+    || resolved.surface === "landing"
+    || resolved.surface === "central"
+    || resolved.surface === "ativar"
+    || resolved.surface === "acompanhar"
+    || isPublicCommercialRoute();
 }
 
 // O cardápio público preserva seu contrato explícito de isolamento do tema
