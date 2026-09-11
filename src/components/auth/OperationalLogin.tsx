@@ -10,7 +10,7 @@ export interface LoginRestaurantOption {
 }
 
 export interface OperationalLoginProps {
-  portal: 'garcom' | 'caixa';
+  portal: 'garcom' | 'caixa' | 'unified';
   theme: KomaTheme;
   username: string;
   password: string;
@@ -25,12 +25,18 @@ export interface OperationalLoginProps {
   onSubmit: React.FormEventHandler<HTMLFormElement>;
 }
 
-/** Controlled presentation; authentication, session and form state stay in App. */
+/** Controlled presentation; authentication, session and form state stay in the owner. */
 export function OperationalLogin({
   portal, theme, username, password, error, isLoggingIn,
   restaurantOptions = [], restaurantId = '', onRestaurantChange,
   onToggleTheme, onUsernameChange, onPasswordChange, onSubmit,
 }: OperationalLoginProps) {
+  const portalLabel = portal === 'unified'
+    ? 'Acesso da equipe'
+    : portal === 'caixa'
+      ? 'Painel de Gerenciamento & Caixa'
+      : 'Portal do Garçom';
+
   return (
       <div className="min-h-screen bg-koma-page relative flex items-center justify-center p-4">
         {/* Quick theme switcher button on login screen */}
@@ -59,8 +65,13 @@ export function OperationalLogin({
               </span>
             </div>
             <p className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-widest font-sans font-bold bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/15">
-              {portal === 'caixa' ? "Painel de Gerenciamento & Caixa" : "Portal do Garçom"}
+              {portalLabel}
             </p>
+            {portal === 'unified' && (
+              <p className="text-[11px] text-koma-subtle leading-relaxed px-2">
+                Entre com sua conta. O KÔMA identifica automaticamente o estabelecimento e o perfil de acesso.
+              </p>
+            )}
           </div>
 
           {/* Form */}
