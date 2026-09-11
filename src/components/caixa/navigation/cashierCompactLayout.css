@@ -1,0 +1,138 @@
+/*
+ * Compact POS policy for short desktop monitors such as 1280x720/1366x768.
+ * Appearance preferences stay in the settings drawer; the persistent shell
+ * keeps only operational actions and gives the order/cart the scarce space.
+ */
+.cashier-display-controls,
+.cashier-sidebar__compact-theme {
+  display: none !important;
+}
+
+@media (min-width: 1024px) and (max-width: 1440px) and (max-height: 820px) {
+  /* Reclaim horizontal space without collapsing navigation labels. */
+  div[class~="group/sidebar-wrapper"]:has(.cashier-sidebar) {
+    --sidebar-width: 14rem !important;
+  }
+
+  /* Emergency control owns the footer on short screens. Operator identity is
+   * available from account/preferences and must never squeeze this action. */
+  .cashier-sidebar__footer {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-end !important;
+    gap: 0.35rem !important;
+  }
+
+  .cashier-sidebar__footer .cashier-operator {
+    display: none !important;
+  }
+
+  .cashier-sidebar__footer #online-orders-emergency-trigger {
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .cashier-sidebar__footer #online-orders-emergency-trigger > div {
+    min-width: 0;
+  }
+
+  .cashier-sidebar__footer #online-orders-emergency-trigger svg {
+    flex-shrink: 0;
+  }
+
+  /* The cart has priority over showing one extra product column. At the xl
+   * breakpoint Tailwind switches to the side-by-side desktop flow; reserve a
+   * readable order width instead of letting the panel become the sacrifice. */
+  .orders-workspace div:has(> form > #pdv-submit-btn) {
+    width: clamp(22.5rem, 28vw, 24rem) !important;
+    min-width: 22.5rem;
+    max-width: 24rem;
+  }
+
+  /* Compact the cart chrome and donate the recovered height to the item list. */
+  .orders-workspace div:has(> form > #pdv-submit-btn) > div:first-child {
+    padding: 0.45rem 0.65rem !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > div:first-child span > span:first-child {
+    width: 1.8rem !important;
+    height: 1.8rem !important;
+    border-radius: 0.6rem !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) {
+    padding: 0.45rem !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) > div {
+    padding: 0.55rem !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) > div > * {
+    margin-block: 0 !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > div:nth-child(2) > div > * + * {
+    margin-top: 0.35rem !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.45rem 0.65rem 0.6rem !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form > * {
+    margin-block: 0 !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:first-child > * {
+    margin-block: 0 !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form details {
+    display: none !important;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:has(#pdv-target-table) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .orders-workspace div:has(> form > #pdv-submit-btn) > form > div:has(#pdv-target-table) > * {
+    margin-block: 0 !important;
+  }
+
+  #pdv-target-table {
+    min-height: 2.15rem !important;
+  }
+
+  /* Normal/free is not an exception: the explanatory card was duplicating
+   * the selected option and taking roughly one whole cart item of height. */
+  #pdv-target-table[data-table-status="free"] ~ #pdv-table-selection-help {
+    display: none !important;
+  }
+
+  #pdv-table-selection-help {
+    min-height: 2.15rem !important;
+    padding: 0.35rem 0.55rem !important;
+  }
+
+  #pdv-submit-btn {
+    min-height: 2.4rem !important;
+    padding-block: 0.35rem !important;
+  }
+
+  #pdv-submit-btn > span:last-child {
+    display: none !important;
+  }
+}
