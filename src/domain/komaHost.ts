@@ -20,6 +20,9 @@ export interface ResolvedKomaHost {
   rawHostname: string;
 }
 
+export const KOMA_OPERATIONAL_APP_HOST = 'app.komafood.com.br';
+export const KOMA_OPERATIONAL_APP_URL = `https://${KOMA_OPERATIONAL_APP_HOST}/`;
+
 export const RESERVED_SUBDOMAINS = new Set([
   'www',
   'central',
@@ -46,9 +49,17 @@ const KNOWN_PLATFORM_ROOTS = [
   'github.io',
 ];
 
+export function isOperationalAppHost(
+  hostname: string = typeof window !== 'undefined' ? window.location.hostname : '',
+): boolean {
+  return hostname.trim().toLowerCase() === KOMA_OPERATIONAL_APP_HOST;
+}
+
 /**
  * Decompõe um subdomínio de primeiro nível nos componentes tenantSlug e superfície operacional.
  * Faz matching right-to-left para suportar slugs compostos com hífen (ex: "bar-do-sol-caixa").
+ * Os sufixos operacionais continuam aceitos como compatibilidade de links antigos,
+ * mas novos links de equipe são sempre gerados para app.komafood.com.br.
  */
 export function parseTenantSubdomain(subdomain: string): { slug: string; surface: KomaSurface } | null {
   const clean = subdomain.trim().toLowerCase();
@@ -56,7 +67,6 @@ export function parseTenantSubdomain(subdomain: string): { slug: string; surface
     return null;
   }
 
-  // Superfícies operacionais reconhecidas como sufixo right-to-left
   const suffixes: Array<{ suffix: string; surface: KomaSurface }> = [
     { suffix: '-caixa', surface: 'caixa' },
     { suffix: '-gerencia', surface: 'caixa' },
@@ -75,14 +85,17 @@ export function parseTenantSubdomain(subdomain: string): { slug: string; surface
     }
   }
 
-  // Sem sufixo operacional: é o cardápio público do restaurante
+  // Sem sufixo operacional: é o cardápio público do restaurante.
   return { slug: clean, surface: 'public' };
 }
 
 /**
  * Resolve o papel da aplicação baseado no hostname, pathname e parâmetros da URL.
- * Segue a invariante de que komafood.com.br puro é Landing Page, central.komafood.com.br é SuperAdmin,
- * e subdomínios de primeiro nível roteiam diretamente para os tenants.
+ * Invariantes principais:
+ * - komafood.com.br puro é a Landing Page;
+ * - central.komafood.com.br é o Super Admin;
+ * - app.komafood.com.br é a entrada operacional sem tenant na URL;
+ * - subdomínios de tenant sem sufixo continuam sendo o cardápio público.
  */
 export function resolveKomaHost(
   hostname: string = typeof window !== 'undefined' ? window.location.hostname : '',
@@ -93,7 +106,7 @@ export function resolveKomaHost(
   const params = new URLSearchParams(search);
   const viewParam = params.get('view')?.toLowerCase() || '';
 
-  // 1. Central / SuperAdmin exclusivo
+  // 1. Central / SuperAdmin exclusivo.
   if (
     cleanHost === 'central.komafood.com.br' ||
     cleanHost.startsWith('central.') ||
@@ -107,7 +120,7 @@ export function resolveKomaHost(
     };
   }
 
-  // 2. Rotas explícitas de utilitários operacionais (ativar, acompanhar, entregador)
+  // 2. Rotas explícitas de utilitários operacionais.
   if (pathname.startsWith('/ativar') || viewParam === 'ativar') {
     return {
       kind: 'generic',
@@ -135,7 +148,7 @@ export function resolveKomaHost(
     };
   }
 
-  // 3. Landing page oficial
+  // 3. Landing page oficial.
   const isApexLandingDomain = cleanHost === 'komafood.com.br' || cleanHost === 'www.komafood.com.br';
   const isExplicitLandingRoute = pathname.startsWith('/landing') || viewParam === 'landing';
 
@@ -148,7 +161,17 @@ export function resolveKomaHost(
     };
   }
 
-  // 4. Subdomínios do komafood.com.br (ex: pordosol.komafood.com.br, pordosol-caixa.komafood.com.br)
+  // 4. Entrada operacional única. O tenant só existe depois da autenticação.
+  if (isOperationalAppHost(cleanHost)) {
+    return {
+      kind: 'generic',
+      surface: viewParam === 'caixa' || viewParam === 'gerencia' ? 'caixa' : 'garcom',
+      tenantSlug: null,
+      rawHostname: cleanHost,
+    };
+  }
+
+  // 5. Subdomínios do komafood.com.br. Sufixos operacionais são compatibilidade legada.
   if (cleanHost.endsWith('.komafood.com.br')) {
     const sub = cleanHost.replace(/\.komafood\.com\.br$/, '');
     const parsed = parseTenantSubdomain(sub);
@@ -162,7 +185,7 @@ export function resolveKomaHost(
     }
   }
 
-  // 5. Suporte a subdomínios locais para testes (ex: pordosol.localhost, pordosol-caixa.localhost)
+  // 6. Suporte a subdomínios locais para testes.
   if (cleanHost.endsWith('.localhost')) {
     const sub = cleanHost.replace(/\.localhost$/, '');
     const parsed = parseTenantSubdomain(sub);
@@ -176,11 +199,10 @@ export function resolveKomaHost(
     }
   }
 
-  // 6. Ambientes de hospedagem compartilhada (pages.dev, railway, localhost padrão)
+  // 7. Ambientes de hospedagem compartilhada.
   const isPlatformHost = KNOWN_PLATFORM_ROOTS.some((root) => cleanHost.endsWith(root));
   const parts = cleanHost.split('.');
 
-  // Subdomínio genérico que não seja plataforma
   if (
     parts.length > 2 &&
     !isPlatformHost &&
@@ -198,7 +220,7 @@ export function resolveKomaHost(
     }
   }
 
-  // 7. Fallback por path/search (ex: /cardapio, /c/:slug, ?slug=...)
+  // 8. Fallback por path/search (ex: /cardapio, /c/:slug, ?slug=...).
   const pathParts = pathname.split('/').filter(Boolean);
   let resolvedSlugFromPath: string | null = null;
   if (pathParts[0] === 'c' && pathParts[1]) {
@@ -225,7 +247,7 @@ export function resolveKomaHost(
     };
   }
 
-  // Fallback padrão: ambiente operacional garçom
+  // Fallback padrão: ambiente operacional garçom.
   return {
     kind: resolvedSlugFromPath ? 'tenant' : 'generic',
     surface: 'garcom',
@@ -234,22 +256,24 @@ export function resolveKomaHost(
   };
 }
 
-/**
- * Helpers canônicos de construção de URLs para o tenant
- */
+/** Helpers canônicos de construção de URLs. */
 export function getTenantPublicMenuUrl(slug: string): string {
   const clean = slug.trim().toLowerCase();
   return `https://${clean}.komafood.com.br/`;
 }
 
-export function getTenantCaixaUrl(slug: string): string {
-  const clean = slug.trim().toLowerCase();
-  return `https://${clean}-caixa.komafood.com.br/`;
+export function getOperationalAppUrl(): string {
+  return KOMA_OPERATIONAL_APP_URL;
 }
 
-export function getTenantGarcomUrl(slug: string): string {
-  const clean = slug.trim().toLowerCase();
-  return `https://${clean}-garcom.komafood.com.br/`;
+/** @deprecated Use getOperationalAppUrl. Mantido para consumidores antigos. */
+export function getTenantCaixaUrl(_slug: string): string {
+  return getOperationalAppUrl();
+}
+
+/** @deprecated Use getOperationalAppUrl. Mantido para consumidores antigos. */
+export function getTenantGarcomUrl(_slug: string): string {
+  return getOperationalAppUrl();
 }
 
 export function getTenantEntregadorUrl(slug: string): string {
