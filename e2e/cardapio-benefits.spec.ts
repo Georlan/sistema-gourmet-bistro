@@ -107,6 +107,12 @@ test('Cardápio expõe oferta e regra de cashback sem vazar a matemática intern
 
   await drawer.getByRole('button', { name: 'Créditos' }).click();
   await expect(page.locator('#cardapio-benefits-credit')).toContainText('4,25%');
+
+  await drawer.getByRole('button', { name: 'Pontos' }).click();
+  const inactivePoints = page.locator('#cardapio-benefits-points');
+  await expect(inactivePoints).toContainText('O restaurante está usando outra modalidade de vantagem no momento.');
+  await expect(inactivePoints).not.toContainText('Cada R$ 1 elegível gera');
+
   await expect(drawer).not.toContainText('Split KÔMA');
   await expect(drawer).not.toContainText('Teto calculado');
   await expect(drawer).not.toContainText('Margem estimada');
@@ -130,4 +136,9 @@ test('Cardápio explica a regra de pontos configurada pelo restaurante', async (
   const points = page.locator('#cardapio-benefits-points');
   await expect(points).toContainText(/Cada R\$ 1 elegível gera 1 ponto\(s\)/);
   await expect(points).toContainText(/R\$\s*0,05/);
+
+  await drawer.getByRole('button', { name: 'Créditos' }).click();
+  const inactiveCredit = page.locator('#cardapio-benefits-credit');
+  await expect(inactiveCredit).toContainText('O restaurante não está acumulando novos créditos por compra neste momento.');
+  await expect(inactiveCredit).not.toContainText('1%');
 });
