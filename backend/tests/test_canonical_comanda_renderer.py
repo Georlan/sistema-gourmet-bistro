@@ -37,7 +37,7 @@ def _render(items, variant, *, order_type="Retirada"):
         printer_service.width = old_width
 
 
-def test_online_pickup_uses_table_base_with_online_origin():
+def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warning():
     ticket = _render(
         [
             PrintItem(
@@ -49,10 +49,15 @@ def test_online_pickup_uses_table_base_with_online_origin():
         ],
         ComandaVariant(
             origin_label="CARDÁPIO ONLINE",
-            location_label="BALCÃO",
-            operator_label="OPERADOR",
+            location_label=None,
+            operator_label=None,
             customer_name="GEORLAN",
+            customer_phone="88999991234",
             event_at=datetime.datetime(2026, 8, 31, 22, 15, tzinfo=LOCAL_TIMEZONE),
+            payment_method="pix",
+            online_payment_status="approved",
+            amount_paid=12.0,
+            show_financial_breakdown=True,
         ),
     )
 
@@ -66,38 +71,52 @@ def test_online_pickup_uses_table_base_with_online_origin():
     assert ESC_BOLD_OFF + ESC_NORMAL_SIZE in ticket
     assert "DATA: 31/08/2026" in ticket
     assert "HORA: 22:15" in ticket
-    assert "OPERADOR: Admin" in ticket
-    assert "CANAL: BALCÃO" in ticket
-    assert "CLIENTE: GEORLAN" in ticket
+    assert "OPERADOR:" not in ticket
+    assert "CANAL:" not in ticket
+    assert "CLIENTE" in ticket
+    assert "NOME: GEORLAN" in ticket
+    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
     assert "ITENS" in ticket
     assert "VALOR" in ticket
     assert "1x REFRIGERANTE 1L" in ticket
     assert "R$ 12,00" in ticket
+    assert "PAGAMENTO" in ticket
+    assert "FORMA: PIX ONLINE" in ticket
+    assert "VALOR PAGO: R$ 12,00" in ticket
+    assert "PAGO ONLINE" in ticket
+    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "SUBTOTAL ITENS:" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert "TOTAL GERAL DA MESA:" not in ticket
     assert "Gerenciado por Kôma" in ticket
     assert "Documento não fiscal" in ticket
 
 
-def test_online_reprint_is_same_base_plus_reprint_marker():
+def test_online_reprint_is_same_base_plus_reprint_marker_without_operator_metadata():
     ticket = _render(
         [PrintItem(codigo="202", nome="COMBO AMIZADE", preco_unit=59.90)],
         ComandaVariant(
             origin_label="CARDÁPIO ONLINE",
-            location_label="BALCÃO",
+            location_label=None,
+            operator_label=None,
             customer_name="GEORLAN",
+            customer_phone="88999991234",
+            payment_method="dinheiro",
             is_reprint=True,
+            show_financial_breakdown=True,
         ),
     )
 
     assert ticket.count("REIMPRESSÃO") == 1
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
     assert "PEDIDO #93" in ticket
-    assert "CANAL: BALCÃO" in ticket
+    assert "OPERADOR:" not in ticket
+    assert "CANAL:" not in ticket
+    assert "FORMA: DINHEIRO" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
 
 
-def test_delivery_keeps_same_base_and_adds_delivery_context():
+def test_delivery_keeps_customer_delivery_payment_and_full_financial_breakdown():
     ticket = _render(
         [
             PrintItem(codigo="001", nome="HAMBÚRGUER", preco_unit=27.0),
@@ -105,16 +124,19 @@ def test_delivery_keeps_same_base_and_adds_delivery_context():
         ],
         ComandaVariant(
             origin_label="CARDÁPIO ONLINE",
-            location_label="ENTREGA",
-            operator_label="OPERADOR",
+            location_label=None,
+            operator_label=None,
             customer_name="MARIA",
+            customer_phone="88999991234",
             event_at=datetime.datetime(2026, 8, 31, 22, 20, tzinfo=LOCAL_TIMEZONE),
-            delivery_phone="88999991234",
             delivery_address="Rua José de Alencar, 124, Apto 302",
             delivery_neighborhood="Centro",
             payment_method="dinheiro",
             change_for=50.0,
             delivery_fee=5.0,
+            coupon_discount=3.0,
+            cashback_discount=2.0,
+            show_financial_breakdown=True,
         ),
         order_type="Delivery",
     )
@@ -123,20 +145,27 @@ def test_delivery_keeps_same_base_and_adds_delivery_context():
     assert "DELIVERY" in ticket
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
     assert "PEDIDO #93" in ticket
-    assert "CANAL: ENTREGA" in ticket
-    assert "CLIENTE: MARIA" in ticket
-    assert "DADOS DA ENTREGA" in ticket
+    assert "OPERADOR:" not in ticket
+    assert "CANAL:" not in ticket
+    assert "CLIENTE" in ticket
+    assert "NOME: MARIA" in ticket
     assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "ENTREGA" in ticket
     assert "ENDEREÇO: Rua José de Alencar, 124," in ticket
     assert "BAIRRO: Centro" in ticket
-    assert "PAGAMENTO: DINHEIRO" in ticket
+    assert "PAGAMENTO" in ticket
+    assert "FORMA: DINHEIRO" in ticket
     assert "TROCO PARA: R$ 50,00" in ticket
     assert "SUBTOTAL ITENS:" in ticket
     assert "R$ 35,00" in ticket
     assert "TAXA DE ENTREGA:" in ticket
     assert "R$ 5,00" in ticket
+    assert "DESCONTO CUPOM:" in ticket
+    assert "-R$ 3,00" in ticket
+    assert "CASHBACK:" in ticket
+    assert "-R$ 2,00" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
-    assert "R$ 40,00" in ticket
+    assert ticket.count("R$ 35,00") >= 2
 
 
 def test_secondary_sector_still_uses_same_visual_base():
@@ -144,7 +173,8 @@ def test_secondary_sector_still_uses_same_visual_base():
         [PrintItem(codigo="B01", nome="DRINK DA CASA", preco_unit=18.0)],
         ComandaVariant(
             origin_label="CARDÁPIO ONLINE",
-            location_label="BALCÃO",
+            location_label=None,
+            operator_label=None,
             via_label="BAR",
         ),
     )
