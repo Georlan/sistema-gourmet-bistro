@@ -33,7 +33,7 @@ export function CashierMobileSidebar({
   return (
     <>
       {isMobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden animate-fade-in">
+        <div className="fixed inset-0 z-[80] flex lg:hidden animate-fade-in">
           <div
             onClick={() => setIsMobileSidebarOpen(false)}
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
