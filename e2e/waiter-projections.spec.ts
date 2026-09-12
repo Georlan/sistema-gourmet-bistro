@@ -433,7 +433,7 @@ test('fechamento imprime direto, mantém estado entre abas e só confirma após 
   const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferPrinting: true });
   await page.locator('#mesa-card-7').click();
   const printButton = page.locator('#quick-print-values-btn');
-  await expect(printButton).toContainText('Fechamento');
+  await expect(printButton).toContainText('Conta da Mesa');
   await expect(printButton).not.toHaveClass(/bg-emerald-500/);
   await printButton.click();
   await expect.poll(() => state.writes).toEqual([
@@ -533,11 +533,11 @@ test('confirmação de fechamento permanece no owner ao alternar painéis sem fe
   await page.locator('#mesa-card-7').click();
   const closeButton = page.locator('#close-table-btn-consumo');
   await closeButton.click();
-  await expect(closeButton).toContainText('Confirmar Fechamento?');
+  await expect(closeButton).toContainText('Confirmar encerramento?');
   expect(state.writes).toEqual([]);
   await page.locator('#tab-transferir-btn').click();
   await page.locator('#tab-consumo-btn').click();
-  await expect(closeButton).toContainText('Confirmar Fechamento?');
+  await expect(closeButton).toContainText('Confirmar encerramento?');
   expect(state.check.fechada).toBe(false);
   expect(state.writes).toEqual([]);
   expect(state.unexpectedApiRequests).toEqual([]);
