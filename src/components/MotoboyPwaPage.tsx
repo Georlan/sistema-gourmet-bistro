@@ -27,6 +27,7 @@ interface MotoboyProfile {
 
 const DELIVERY_TOKEN_SESSION_KEY = 'koma_entregador_session_token';
 const DELIVERY_TOKEN_HEADER = 'X-Koma-Delivery-Token';
+const PANEL_REQUEST_TIMEOUT_MS = 12_000;
 
 function bootstrapDeliveryToken(): string {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -72,11 +73,15 @@ export function MotoboyPwaPage() {
   };
 
   const carregarDadosPainel = async (authToken: string) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), PANEL_REQUEST_TIMEOUT_MS);
+
     setLoading(true);
     setErrorMsg(null);
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/painel-entregador`, {
         headers: { [DELIVERY_TOKEN_HEADER]: authToken },
+        signal: controller.signal,
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -86,8 +91,13 @@ export function MotoboyPwaPage() {
       setMotoboy(data.motoboy);
       setEntregas(data.entregas || []);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Erro ao carregar entregas');
+      if (err?.name === 'AbortError') {
+        setErrorMsg('O painel demorou demais para responder. Verifique sua conexão e tente novamente.');
+      } else {
+        setErrorMsg(err.message || 'Erro ao carregar entregas');
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   };
