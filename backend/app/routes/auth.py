@@ -447,6 +447,13 @@ def delete_usuario(
         )
 
     target_role = (usuario.role or usuario.cargo or "").lower().strip()
+    actor_role = (current_user.role or current_user.cargo or "").lower().strip()
+    if target_role in {"admin", "superadmin"} and actor_role not in {"admin", "superadmin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Somente administradores podem excluir ou desativar contas administrativas.",
+        )
+
     if target_role in {"admin", "superadmin"}:
         admin_rows = db.query(Usuario.id, Usuario.status).filter(
             Usuario.restaurante_id == current_user.restaurante_id,
