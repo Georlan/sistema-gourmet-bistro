@@ -1,9 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
+
 from app.main import app
 from app.database import SessionLocal, current_restaurante_id
 from app.models import Restaurante, Usuario, Categoria, Produto, GrupoModificador, OpcaoModificador, ProdutoGrupoModificador
 from app.routes.auth import create_access_token
+from app.routes.modificadores import listar_grupos_publico
 
 client = TestClient(app)
 
@@ -88,3 +91,63 @@ def test_criar_e_listar_grupos_modificadores():
     grupo_publico = next(g for g in grupos_pub if g["nome"] == "Ponto da Carne")
     assert {op["nome"] for op in grupo_publico["opcoes"]} == {"Ao Ponto", "Bem Passado"}
     assert all(op["ativo"] is True for op in grupo_publico["opcoes"])
+
+
+def test_listar_grupos_publico_has_constant_query_count():
+    """A listagem deve custar quatro SELECTs, independentemente do número de grupos."""
+    db = SessionLocal()
+    token = current_restaurante_id.set(999)
+    try:
+        for index in range(8):
+            group_id = f"gmod-perf-{index}"
+            if db.query(GrupoModificador).filter(
+                GrupoModificador.restaurante_id == 999,
+                GrupoModificador.id == group_id,
+            ).first() is None:
+                db.add(
+                    GrupoModificador(
+                        id=group_id,
+                        restaurante_id=999,
+                        nome=f"Grupo Perf {index}",
+                        min_selecoes=0,
+                        max_selecoes=1,
+                        tipo="opcional",
+                    )
+                )
+                db.add(
+                    OpcaoModificador(
+                        id=f"opmod-perf-{index}",
+                        restaurante_id=999,
+                        grupo_id=group_id,
+                        nome=f"Opção Perf {index}",
+                        preco_adicional=0.0,
+                        ativo=True,
+                    )
+                )
+                db.add(
+                    ProdutoGrupoModificador(
+                        restaurante_id=999,
+                        produto_id="prod-burger-1",
+                        grupo_id=group_id,
+                    )
+                )
+        db.commit()
+
+        select_statements: list[str] = []
+        engine = db.get_bind()
+
+        def capture_selects(_conn, _cursor, statement, _parameters, _context, _executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                select_statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", capture_selects)
+        try:
+            payload = listar_grupos_publico(999, db)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_selects)
+
+        assert len([grupo for grupo in payload if grupo.id.startswith("gmod-perf-")]) == 8
+        assert len(select_statements) == 4
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
