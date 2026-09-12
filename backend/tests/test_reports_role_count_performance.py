@@ -45,7 +45,7 @@ def test_role_counts_are_aggregated_without_materializing_users():
     # A full-entity query (`db.query(Usuario)`) would scale ORM materialization
     # linearly with headcount. The optimized query selects aggregate expressions.
     assert db.query_args is not None
-    assert Usuario not in db.query_args
+    assert all(arg is not Usuario for arg in db.query_args)
 
     by_slug = {row["slug"]: row["total_funcionarios"] for row in payload["cargos"]}
     assert by_slug["admin"] == 2
