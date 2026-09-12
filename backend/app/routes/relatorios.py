@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
@@ -57,15 +57,12 @@ def get_cargos_permissoes(
     # Aggregate inside the database instead of materializing every employee as
     # a full ORM entity. The number of rows returned now scales with distinct
     # roles, not with the tenant's headcount.
-    raw_role_expr = func.lower(
-        func.trim(
-            case(
-                (Usuario.role.is_not(None), Usuario.role),
-                (Usuario.cargo.is_not(None), Usuario.cargo),
-                else_="garcom",
-            )
-        )
+    preferred_role_expr = case(
+        (and_(Usuario.role.is_not(None), Usuario.role != ""), Usuario.role),
+        (and_(Usuario.cargo.is_not(None), Usuario.cargo != ""), Usuario.cargo),
+        else_="garcom",
     )
+    raw_role_expr = func.lower(func.trim(preferred_role_expr))
     role_rows = (
         db.query(raw_role_expr.label("raw_role"), func.count(Usuario.id).label("total"))
         .filter(Usuario.restaurante_id == rest_id)
