@@ -38,33 +38,43 @@ export const MesaCard = React.memo<MesaCardProps>(({
     && operational.occupancy === 'IN_SERVICE'
     && !operational.mergedIntoMesaId,
   );
+  const tableLabel = table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`;
+
+  const quickOrderAction = canQuickOrder ? (
+    <button
+      id={`quick-order-table-${table.id}`}
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onQuickOrder?.(table.id);
+      }}
+      aria-label={`Novo pedido na Mesa ${table.id}`}
+      title="Adicionar pedido sem abrir o consumo"
+      className="relative z-20 inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-emerald-400/25 bg-emerald-500/[0.06] px-2 text-[10px] font-semibold text-emerald-700 transition-colors hover:border-emerald-400/45 hover:bg-emerald-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 dark:text-emerald-300"
+    >
+      <Plus size={12} strokeWidth={2.25} aria-hidden="true" />
+      <span className="hidden min-[560px]:inline">Pedido</span>
+    </button>
+  ) : undefined;
 
   return (
     <div className="relative min-w-0">
       <SharedTableCard
         {...view}
-        id={`mesa-card-${table.id}`}
         table={table}
         orders={orders}
         operational={operational}
         total={getTableTotal(orders)}
-        onClick={() => onClick(table.id)}
+        footerAction={quickOrderAction}
       />
-      {canQuickOrder && (
-        <button
-          id={`quick-order-table-${table.id}`}
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onQuickOrder?.(table.id);
-          }}
-          aria-label={`Novo pedido na Mesa ${table.id}`}
-          title="Adicionar pedido sem abrir o consumo"
-          className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500 text-zinc-950 shadow-lg transition-transform hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
-        >
-          <Plus size={17} strokeWidth={2.5} />
-        </button>
-      )}
+      <button
+        id={`mesa-card-${table.id}`}
+        type="button"
+        onClick={() => onClick(table.id)}
+        aria-label={`Abrir ${tableLabel}`}
+        title={`Abrir ${tableLabel}`}
+        className="absolute inset-0 z-10 rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+      />
     </div>
   );
 });

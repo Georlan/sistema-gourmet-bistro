@@ -35,6 +35,8 @@ interface Props {
   otherWaitersServing?: readonly string[];
   showOperationalStatus?: boolean;
   onClick?: () => void;
+  /** Optional role-specific action placed beside the total in regular occupied cards. */
+  footerAction?: React.ReactNode;
   /** Compatibility with cashier filters, not a second presentation authority. */
   filterStatus?: string;
   note?: string;
@@ -46,7 +48,7 @@ interface Props {
 /** Common shell; caller owns navigation, payment and any role-specific actions. */
 export function SharedTableCard({
   id, table, orders, operational, total, draftCount = 0, mergedSources = [],
-  otherWaitersServing = [], showOperationalStatus = true, onClick, filterStatus, note, density = 'regular', children,
+  otherWaitersServing = [], showOperationalStatus = true, onClick, footerAction, filterStatus, note, density = 'regular', children,
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
@@ -86,13 +88,30 @@ export function SharedTableCard({
           <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={11} aria-hidden="true" />{operational.elapsed}</span>
           {operational.production.activeItemCount > 0 && <span>{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
         </div>}
-        {occupied && !compact && <div className="flex flex-wrap items-end justify-between gap-2 border-t border-koma-border-subtle pt-2">
-          <div className="space-y-1 text-[10px] text-koma-secondary">
-            <span className="flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
-            <span className="flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
+        {occupied && !compact && (
+          <div className="border-t border-koma-border-subtle pt-2">
+            {footerAction ? (
+              <>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-koma-secondary">
+                  <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
+                  <span className="inline-flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
+                </div>
+                <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+                  <strong className="min-w-0 font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
+                  <div className="shrink-0">{footerAction}</div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div className="space-y-1 text-[10px] text-koma-secondary">
+                  <span className="flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
+                  <span className="flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
+                </div>
+                <strong className="font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
+              </div>
+            )}
           </div>
-          <strong className="font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
-        </div>}
+        )}
         {occupied && showOperationalStatus && operational.financial === 'AWAITING_PAYMENT' && operational.production.hasPreparingItems && <p className="text-[9px] text-koma-secondary">{operational.production.preparingItemCount} em preparo</p>}
         {operational.mergedIntoMesaId && <span className="flex items-center gap-1 text-[9px]"><GitMerge size={11} />Atendimento junto · M{operational.mergedIntoMesaId}</span>}
         {note && <p className="text-[9px] text-koma-muted">{note}</p>}
