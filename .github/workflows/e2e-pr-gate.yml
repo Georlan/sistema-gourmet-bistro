@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
@@ -35,7 +37,32 @@ jobs:
       - name: Run browser matrix
         env:
           KOMA_E2E_PORT: '4283'
-        run: npm run test:e2e -- e2e/operational-app-owners.spec.ts e2e/salon-context.spec.ts e2e/app-recovery.spec.ts e2e/public-menu-order.spec.ts e2e/order-tracking-chat.spec.ts e2e/password-recovery.spec.ts --project=mobile-360 --project=desktop-1366 --workers=2
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          canonical_specs=(
+            e2e/operational-app-owners.spec.ts
+            e2e/salon-context.spec.ts
+            e2e/app-recovery.spec.ts
+            e2e/public-menu-order.spec.ts
+            e2e/order-tracking-chat.spec.ts
+            e2e/password-recovery.spec.ts
+          )
+
+          mapfile -t changed_specs < <(
+            git diff --diff-filter=ACMR --name-only "origin/${{ github.base_ref }}...HEAD" -- 'e2e/*.spec.ts'
+          )
+
+          specs=("${canonical_specs[@]}")
+          for changed_spec in "${changed_specs[@]}"; do
+            if [[ ! " ${specs[*]} " =~ " ${changed_spec} " ]]; then
+              specs+=("${changed_spec}")
+            fi
+          done
+
+          printf 'Playwright specs: %s\n' "${specs[*]}"
+          npx playwright test "${specs[@]}" --project=mobile-360 --project=desktop-1366 --workers=2
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v6
