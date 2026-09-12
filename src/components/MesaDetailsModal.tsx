@@ -47,6 +47,16 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
   }), [table, orders, props.currentTime]);
 
   React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      props.onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [props.onClose]);
+
+  React.useEffect(() => {
     let cancelled = false;
     const token = currentAuthToken();
     if (!token || !table?.id || orders.length === 0) {
