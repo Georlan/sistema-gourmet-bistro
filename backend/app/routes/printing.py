@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -13,9 +14,12 @@ from ..application.printing import (
     PrintingApplicationService,
     UniversalPrintingError,
 )
+from ..application.printing.comanda_renderer import ComandaVariant, render_canonical_comanda
 from ..database import get_db, require_tenant_id
-from ..models import Usuario
+from ..domain.printing import PrintItem
+from ..models import PrintJob, Usuario
 from ..security import ensure_permission, get_current_user, require_permission
+from ..services.printing import get_print_preferences
 from ..waiter_permissions import require_waiter_permission
 
 
@@ -123,6 +127,125 @@ def imprimir_universal(
             }
             for job in jobs
         ],
+    }
+
+
+@router.post(
+    "/teste-extremo-cardapio",
+    status_code=status.HTTP_200_OK,
+)
+def imprimir_teste_extremo_cardapio(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("impressao:administrar")),
+):
+    """Enfileira uma comanda extrema sintética sem criar pedido ou movimentação real."""
+    restaurante_id = require_tenant_id()
+    preferences = get_print_preferences(db, restaurante_id)
+    items = [
+        PrintItem(
+            codigo="T01",
+            nome="DUPLO BURGER ARTESANAL ESPECIAL COM QUEIJO E BACON",
+            quantidade=2,
+            preco_unit=33.90,
+            observacao=(
+                "SEM CEBOLA, PONTO DA CARNE BEM PASSADO, ADICIONAR CATUPIRY ORIGINAL "
+                "E MOLHO ESPECIAL SEPARADO"
+            ),
+        ),
+        PrintItem(
+            codigo="T02",
+            nome="COMBO FRANGO CROCANTE GRANDE COM BATATA E REFRIGERANTE",
+            quantidade=1,
+            preco_unit=42.50,
+            observacao=(
+                "BATATA SEM SAL, REFRIGERANTE SEM GELO, MOLHO DE ALHO E KETCHUP SEPARADOS"
+            ),
+        ),
+        PrintItem(
+            codigo="T03",
+            nome="PIZZA INDIVIDUAL QUATRO QUEIJOS COM BORDA RECHEADA",
+            quantidade=1,
+            preco_unit=29.75,
+            observacao="BORDA DE CHEDDAR, SEM ORÉGANO, ADICIONAR BACON CROCANTE",
+        ),
+        PrintItem(
+            codigo="T04",
+            nome="PORÇÃO DE MINI PASTÉIS SORTIDOS DA CASA",
+            quantidade=2,
+            preco_unit=18.00,
+            observacao=(
+                "SABORES CARNE, QUEIJO E FRANGO; IDENTIFICAR OS SABORES NA EMBALAGEM"
+            ),
+        ),
+        PrintItem(
+            codigo="T05",
+            nome="SOBREMESA ESPECIAL CHOCOLATE COM MORANGO",
+            quantidade=1,
+            preco_unit=16.90,
+            observacao="CALDA DE CHOCOLATE SEPARADA E SEM AÇÚCAR DE CONFEITEIRO",
+        ),
+    ]
+    delivery_fee = 7.50
+    coupon_discount = 12.00
+    cashback_discount = 8.50
+    items_total = sum(float(item.total) for item in items)
+    final_total = round(
+        max(0.0, items_total + delivery_fee - coupon_discount - cashback_discount),
+        2,
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+    source_id = f"teste-extremo-{now.strftime('%Y%m%d%H%M%S%f')}"
+    payload = render_canonical_comanda(
+        restaurant_name=preferences.restaurant_name,
+        restaurant_name_position=preferences.restaurant_name_position,
+        print_footer="TESTE DE IMPRESSÃO — NÃO É PEDIDO REAL",
+        order_number="TESTE-9999",
+        order_type="Delivery",
+        operator_name="",
+        items=items,
+        variant=ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="CLIENTE TESTE EXTREMO COM NOME MUITO COMPRIDO",
+            customer_phone="88999990000",
+            event_at=now,
+            via_label="TESTE EXTREMO - NÃO É PEDIDO REAL",
+            delivery_phone="88999990000",
+            delivery_address=(
+                "Rua Doutor José de Albuquerque, número 153, apartamento 103, bloco B, "
+                "próximo ao portão lateral do condomínio, referência em frente à praça principal"
+            ),
+            delivery_neighborhood="Limoeirinho - Área de teste com nome extenso",
+            payment_method="pix",
+            delivery_fee=delivery_fee,
+            coupon_discount=coupon_discount,
+            cashback_discount=cashback_discount,
+            online_payment_status="approved",
+            amount_paid=final_total,
+            show_financial_breakdown=True,
+        ),
+    )
+    job = PrintJob(
+        restaurante_id=restaurante_id,
+        document_type="producao",
+        destination="COZINHA",
+        source_type="teste_extremo_cardapio",
+        source_id=source_id,
+        payload_text=payload,
+        status="pending",
+        idempotency_key=f"teste-extremo-cardapio:{source_id}",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return {
+        "status": "enqueued",
+        "detail": "Teste extremo do Cardápio Online enviado para a fila.",
+        "job_id": job.id,
+        "source_id": source_id,
+        "destination": job.destination,
+        "expected_total": final_total,
     }
 
 
