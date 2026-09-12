@@ -6,7 +6,8 @@ import React from 'react';
 import type { Table, Order } from '../types';
 import { getTableTotal } from '../domain';
 import { deriveTableOperationalState, type TableOperationalProjection } from '../domain/operationalState';
-import { SharedTableCard } from './shared/SharedTableCard';
+import { getTableCheckNumbers } from '../domain/tableReadModel';
+import { SharedTableCard, tableCardPresentation } from './shared/SharedTableCard';
 
 interface MesaCardProps {
   table: Table;
@@ -32,6 +33,10 @@ export const MesaCard = React.memo<MesaCardProps>(({
     table, orders, hasPendingPayment, mergedIntoMesaId, now: currentTime,
   });
   const tableLabel = table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`;
+  const presentation = tableCardPresentation(operational, true);
+  const checkNumbers = getTableCheckNumbers(orders);
+  const numbersText = checkNumbers.map(number => `#${number}`).join(' + ');
+  const accessibleLabel = `${tableLabel}: ${presentation.label}${numbersText ? `, pedido ${numbersText}` : ''}`;
   const actionLabel = operational.mergedIntoMesaId
     ? 'Ver atendimento'
     : operational.occupancy === 'FREE'
@@ -43,6 +48,8 @@ export const MesaCard = React.memo<MesaCardProps>(({
   return (
     <div
       id={`mesa-card-${table.id}`}
+      role="region"
+      aria-label={accessibleLabel}
       data-waiter-action={actionLabel}
       onClick={() => onClick(table.id)}
       className="relative h-full w-full min-w-0"
