@@ -150,9 +150,19 @@ export function getOperatorSession(): OperatorSession | null {
     }
 
     // Migração one-way: versões antigas persistiam o objeto completo de usuário.
-    // Reescrevemos apenas a sessão canônica para remover PII. Os aliases de portal
-    // só nascem no login; recriá-los aqui ressuscitaria uma sessão depois do logout.
+    // Reescrevemos a sessão canônica para remover PII. Só reparamos aliases quando
+    // o mesmo token está comprovadamente no portal errado; ausência de alias é
+    // sinal de logout e nunca pode recriar credenciais.
     persistCanonicalSession(session);
+    const portal = identityPortal(session.user);
+    const misplacedAliasToken = portal === 'garcom'
+      ? localStorage.getItem('koma_caixa_token') || ''
+      : portal === 'caixa'
+        ? localStorage.getItem('koma_waiter_token') || ''
+        : '';
+    if (misplacedAliasToken === session.token) {
+      persistScopedAliases(session.token, session.user);
+    }
     return session;
   } catch (e) {
     clearOperatorSession();
