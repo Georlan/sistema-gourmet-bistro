@@ -35,18 +35,6 @@ export function waiterTableMatchesQuery(table: Table, query: string): boolean {
     || customName.includes(numberQuery);
 }
 
-export function openWaiterQuickOrder(tableId: number, onTableClick?: (tableId: number) => void) {
-  if (!onTableClick) return;
-  onTableClick(tableId);
-  if (typeof window === 'undefined' || typeof document === 'undefined') return;
-  const openOrderTab = () => document.getElementById('tab-lancamento-btn')?.click();
-  if (typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(() => window.requestAnimationFrame(openOrderTab));
-  } else {
-    window.setTimeout(openOrderTab, 0);
-  }
-}
-
 export function MesasView({
   salonTables,
   orders = [],
@@ -258,9 +246,6 @@ export function MesasView({
               onClick={(id) => {
                 if (!readOnly && onTableClick) onTableClick(id);
               }}
-              onQuickOrder={!readOnly && onTableClick
-                ? (id) => openWaiterQuickOrder(id, onTableClick)
-                : undefined}
               hasPendingPayment={hasPendingPayment}
               mergedSources={mergedSources}
               mergedIntoMesaId={mergedIntoMesaId}
