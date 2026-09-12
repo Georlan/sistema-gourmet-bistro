@@ -61,7 +61,8 @@ test('operational staff links and mockups eliminate legacy URLs in favor of app.
   assert.doesNotMatch(desktopFrame, /sistema-gourmet-bistro\.pages\.dev/);
 
   const landing = source('../src/landing/LandingPage.tsx');
-  assert.match(landing, /https:\/\/komafood\.com\.br\/landing/);
+  assert.match(landing, /https:\/\/komafood\.com\.br\//);
+  assert.doesNotMatch(landing, /https:\/\/komafood\.com\.br\/landing/);
   assert.doesNotMatch(landing, /sistema-gourmet-bistro\.pages\.dev/);
 
   const pairing = source('../print-agent/pairing.py');
