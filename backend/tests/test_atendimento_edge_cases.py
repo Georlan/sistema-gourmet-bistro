@@ -369,7 +369,7 @@ def test_inconsistent_atendimento_repair_is_count_guarded_and_audited():
         db.close()
 
 
-def test_partial_full_and_closing_prints_use_the_new_identity_semantics():
+def test_partial_full_and_table_account_prints_use_the_new_identity_semantics():
     db = SessionLocal()
     try:
         command = _command(db, "c-print-46", 1, 46)
@@ -388,31 +388,34 @@ def test_partial_full_and_closing_prints_use_the_new_identity_semantics():
 
         complete = render_table_receipt(db, TENANT, 1, apenas_valores=False)
         assert "REIMPRESSÃO" in complete
-        assert "PEDIDO #46" in complete
-        assert "CONTA: #46" not in complete
+        assert "VIA COMPLETA DA MESA" in complete
+        assert "CONTA: #46" in complete
+        assert "PEDIDO #46" not in complete
         assert "TOTAL GERAL DA MESA:" in complete
 
-        closing = render_table_receipt(
+        table_account = render_table_receipt(
             db,
             TENANT,
             1,
             apenas_valores=True,
             printed_by="Operador Edge",
         )
-        assert "FECHAMENTO" in closing
-        assert "CONTA: #46" in closing
-        assert "MESA: 1" in closing
-        assert "ABERTURA:" in closing
-        assert "DATA:" in closing
-        assert "HORA:" in closing
-        assert "IMPRESSO POR: OPERADOR EDGE" in closing
-        assert "PEDIDO: #" not in closing
+        assert "CONTA DA MESA" in table_account
+        assert "FECHAMENTO" not in table_account
+        assert "RESTAURANTE EDGE" in table_account
+        assert "CONTA: #46" in table_account
+        assert "MESA: 1" in table_account
+        assert "ABERTURA:" in table_account
+        assert "DATA:" in table_account
+        assert "HORA:" in table_account
+        assert "IMPRESSO POR: OPERADOR EDGE" in table_account
+        assert "PEDIDO: #" not in table_account
         db.commit()
     finally:
         db.close()
 
 
-def test_merged_closing_lists_both_account_families_without_listing_launches():
+def test_merged_table_account_lists_both_account_families_without_listing_launches():
     db = SessionLocal()
     try:
         source = _command(db, "c-print-merge-46", 3, 46)
@@ -423,17 +426,18 @@ def test_merged_closing_lists_both_account_families_without_listing_launches():
         ensure_atendimento_for_comanda(db, target, actor_id=USER)
         merge_tables(db, TENANT, 3, 2, actor_id=USER)
 
-        closing = render_table_receipt(
+        table_account = render_table_receipt(
             db,
             TENANT,
             2,
             apenas_valores=True,
             printed_by="Operador Edge",
         )
-        assert "CONTAS: #46 + #47" in closing or "CONTAS: #47 + #46" in closing
-        assert "PEDIDO: #46-A" not in closing
-        assert "PEDIDO: #47-A" not in closing
-        assert "IMPRESSO POR: OPERADOR EDGE" in closing
+        assert "CONTA DA MESA" in table_account
+        assert "CONTAS: #46 + #47" in table_account or "CONTAS: #47 + #46" in table_account
+        assert "PEDIDO: #46-A" not in table_account
+        assert "PEDIDO: #47-A" not in table_account
+        assert "IMPRESSO POR: OPERADOR EDGE" in table_account
         db.commit()
     finally:
         db.close()
