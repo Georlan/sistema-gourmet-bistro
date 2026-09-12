@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { openWaiterQuickOrder, waiterTableMatchesQuery } from '../src/components/mesas/MesasView';
+import { waiterTableMatchesQuery } from '../src/components/mesas/MesasView';
 import type { Table } from '../src/types';
 
 test('busca compacta encontra mesa por número, prefixo e nome', () => {
@@ -13,34 +13,15 @@ test('busca compacta encontra mesa por número, prefixo e nome', () => {
   assert.equal(waiterTableMatchesQuery(table, '12'), false);
 });
 
-test('atalho de novo pedido abre a mesa e segue direto para a aba Pedido', () => {
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
-  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  const calls: string[] = [];
+test('toque na mesa usa a navegação canônica: livre abre Pedido e ocupada abre Consumo', () => {
+  const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
+  const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
+  const modal = readFileSync(new URL('../src/components/MesaDetailsModalBase.tsx', import.meta.url), 'utf8');
 
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: {
-      requestAnimationFrame: (callback: () => void) => { callback(); return 1; },
-      setTimeout: (callback: () => void) => { callback(); return 1; },
-    },
-  });
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: {
-      getElementById: (id: string) => ({ click: () => calls.push(id) }),
-    },
-  });
-
-  try {
-    openWaiterQuickOrder(12, (tableId) => calls.push(`mesa-${tableId}`));
-    assert.deepEqual(calls, ['mesa-12', 'tab-lancamento-btn']);
-  } finally {
-    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
-    else Reflect.deleteProperty(globalThis, 'window');
-    if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
-    else Reflect.deleteProperty(globalThis, 'document');
-  }
+  assert.match(card, /onClick=\{\(\) => onClick\(table\.id\)\}/);
+  assert.doesNotMatch(card, /onQuickOrder|quickOrderAction|quick-order-table-|Novo pedido na Mesa/);
+  assert.doesNotMatch(view, /openWaiterQuickOrder|onQuickOrder/);
+  assert.match(modal, /orders\.length === 0 \? 'lancamento' : 'consumo'/);
 });
 
 test('produto esgotado continua bloqueado e só ganha visibilidade durante busca', () => {
@@ -55,21 +36,15 @@ test('produto esgotado continua bloqueado e só ganha visibilidade durante busca
   assert.match(menu, /aria-disabled="true"/);
 });
 
-test('atalho de pedido permanece integrado ao card sem virar FAB dominante', () => {
+test('card do garçom usa Pedido como referência visual sem alterar a identidade interna', () => {
   const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
 
-  assert.match(card, /operational\.occupancy === 'IN_SERVICE'/);
-  assert.match(card, /footerAction=\{quickOrderAction\}/);
-  assert.match(card, /quick-order-table-/);
-  assert.match(card, /Novo pedido na Mesa/);
-  assert.match(card, /bg-emerald-500\/\[0\.06\]/);
-  assert.match(card, /h-7 w-7 shrink-0/);
-  assert.doesNotMatch(card, /absolute right-2 top-1\/2/);
-  assert.doesNotMatch(card, /rounded-full border border-emerald-400\/40 bg-emerald-500/);
-
-  assert.match(shared, /footerAction\?: React\.ReactNode/);
-  assert.match(shared, /items-center justify-between gap-2/);
+  assert.match(card, /identityLabel="Pedido"/);
+  assert.match(shared, /identityLabel\?: string/);
+  assert.match(shared, /identityLabel = 'Comanda'/);
+  assert.match(shared, /\{identityLabel\} \{checkNumbers\[0\]\}/);
+  assert.doesNotMatch(card, /footerAction/);
 });
 
 test('grade do salão padroniza largura e altura de todos os cards', () => {
@@ -88,13 +63,15 @@ test('grade do salão padroniza largura e altura de todos os cards', () => {
   assert.doesNotMatch(card, /sm:h-\[184px\]/);
 });
 
-test('card do garçom não mostra contagem de itens e mantém o total dentro do rodapé', () => {
+test('card do garçom não mostra contagem de itens e mantém tempo e total em linhas seguras', () => {
   const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
 
   assert.match(card, /showItemCount=\{false\}/);
   assert.match(shared, /showItemCount\?: boolean/);
   assert.match(shared, /showItemCount = true/);
-  assert.match(shared, /mt-1\.5 block whitespace-nowrap font-mono text-xs leading-none text-koma-foreground/);
-  assert.match(shared, /showItemCount && <span className="inline-flex items-center gap-1"><UsersRound/);
+  assert.match(shared, /showItemCount \? \(/);
+  assert.match(shared, /space-y-1\.5/);
+  assert.match(shared, /block whitespace-nowrap font-mono text-sm leading-none text-koma-foreground/);
+  assert.match(shared, /UsersRound size=\{10\}/);
 });
