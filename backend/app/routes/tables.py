@@ -2,7 +2,7 @@ import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List
 from ..database import get_db, require_tenant_id
 from ..models import (
@@ -191,6 +191,7 @@ def cancelar_consumo_mesa(
 
     comandas = (
         db.query(Comanda)
+        .options(selectinload(Comanda.itens))
         .filter(
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == mesa_id,
