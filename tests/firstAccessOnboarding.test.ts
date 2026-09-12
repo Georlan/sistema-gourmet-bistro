@@ -21,6 +21,12 @@ test('onboarding is advisory and can always be skipped to cashier', () => {
   assert.match(onboarding, /window\.location\.href = '\/\?view=caixa'/);
 });
 
+test('onboarding keeps cashier navigation available when session storage is blocked', () => {
+  assert.match(onboarding, /const openCashierAt = \(tab: string, subTab: string\) => \{\s*try \{/s);
+  assert.match(onboarding, /sessionStorage\.setItem\('koma_active_subtab', subTab\);\s*\} catch \{/s);
+  assert.match(onboarding, /catch \{[\s\S]*?window\.location\.href = '\/\?view=caixa';/);
+});
+
 test('onboarding uses canonical server progress and exposes the five launch steps', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
   for (const label of [
