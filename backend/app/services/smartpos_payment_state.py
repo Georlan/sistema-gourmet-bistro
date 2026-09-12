@@ -54,24 +54,39 @@ def transition_intent(
     if len(normalized_key) < 8:
         raise InvalidSmartPosTransition("A chave idempotente da transição deve possuir ao menos 8 caracteres úteis.")
 
+    # A máquina de estados não pode confiar no snapshot carregado pelo caller:
+    # outra sessão pode ter avançado a intenção entre a leitura e esta chamada.
+    # Recarregar sob lock serializa transições concorrentes no PostgreSQL e
+    # também invalida snapshots obsoletos nos testes/SQLite.
+    locked_intent = (
+        db.query(SmartPosPaymentIntent)
+        .filter(
+            SmartPosPaymentIntent.restaurante_id == intent.restaurante_id,
+            SmartPosPaymentIntent.id == intent.id,
+        )
+        .populate_existing()
+        .with_for_update()
+        .one()
+    )
+
     existing_event = db.query(SmartPosPaymentIntentEvent).filter(
-        SmartPosPaymentIntentEvent.restaurante_id == intent.restaurante_id,
-        SmartPosPaymentIntentEvent.intent_id == intent.id,
+        SmartPosPaymentIntentEvent.restaurante_id == locked_intent.restaurante_id,
+        SmartPosPaymentIntentEvent.intent_id == locked_intent.id,
         SmartPosPaymentIntentEvent.transition_key == normalized_key,
     ).first()
     if existing_event is not None:
         if existing_event.to_status != target_status:
             raise InvalidSmartPosTransition("A chave idempotente já foi usada para outra transição.")
-        return StateTransitionResult(intent=intent, event=existing_event, replayed=True)
+        return StateTransitionResult(intent=locked_intent, event=existing_event, replayed=True)
 
-    current = intent.status
+    current = locked_intent.status
     if not can_transition(current, target_status):
         raise InvalidSmartPosTransition(f"Transição inválida: {current} -> {target_status}.")
 
     now = datetime.datetime.now(datetime.timezone.utc)
     event = SmartPosPaymentIntentEvent(
-        restaurante_id=intent.restaurante_id,
-        intent_id=intent.id,
+        restaurante_id=locked_intent.restaurante_id,
+        intent_id=locked_intent.id,
         from_status=current,
         to_status=target_status,
         actor_id=actor_id,
@@ -79,8 +94,8 @@ def transition_intent(
         motivo=(motivo or "").strip() or None,
         criado_em=now,
     )
-    intent.status = target_status
-    intent.status_em = now
+    locked_intent.status = target_status
+    locked_intent.status_em = now
     db.add(event)
     db.flush()
-    return StateTransitionResult(intent=intent, event=event, replayed=False)
+    return StateTransitionResult(intent=locked_intent, event=event, replayed=False)
