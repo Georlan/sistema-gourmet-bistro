@@ -71,13 +71,18 @@ test('atalho de pedido permanece integrado ao card sem virar FAB dominante', () 
   assert.match(shared, /items-center justify-between gap-2/);
 });
 
-test('cards do salão do garçom mantêm altura uniforme em todos os estados', () => {
+test('grade do salão padroniza largura e altura de todos os cards', () => {
   const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
+  const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
 
-  assert.match(card, /h-\[176px\]/);
-  assert.match(card, /sm:h-\[184px\]/);
+  assert.match(view, /auto-rows-\[184px\]/);
+  assert.match(view, /items-stretch/);
+  assert.match(card, /relative h-full w-full min-w-0/);
+  assert.match(card, /absolute inset-0 z-10 h-full w-full/);
   assert.match(card, /fillHeight/);
   assert.match(shared, /fillHeight\?: boolean/);
   assert.match(shared, /fillHeight \? 'h-full' : ''/);
+  assert.doesNotMatch(card, /h-\[176px\]/);
+  assert.doesNotMatch(card, /sm:h-\[184px\]/);
 });
