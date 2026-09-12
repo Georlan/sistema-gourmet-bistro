@@ -6,8 +6,22 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 
 test('main routes the canonical app host through the unified operational entry', () => {
   const main = source('../src/main.tsx');
-  assert.match(main, /isOperationalAppHost\(\)/);
+  assert.match(main, /function isCanonicalOperationalEntryRoute\(\)/);
+  assert.match(main, /if \(!isOperationalAppHost\(\)\) return false/);
+  assert.match(main, /const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute\(\)/);
   assert.match(main, /UnifiedOperationalEntry/);
+  assert.doesNotMatch(main, /resolvedHost\.surface === ["']garcom["']/);
+  assert.doesNotMatch(main, /resolvedHost\.surface === ["']caixa["']/);
+});
+
+test('canonical app shell bypasses stale browser/service-worker caches', () => {
+  const main = source('../src/main.tsx');
+  assert.match(main, /updateViaCache:\s*["']none["']/);
+
+  const headers = source('../public/_headers');
+  assert.match(headers, /\/index\.html[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
+  assert.match(headers, /\/koma-sw\.js[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
+  assert.match(headers, /\/assets\/\*[\s\S]*Cache-Control: public, max-age=31536000, immutable/);
 });
 
 test('unified login lets backend identity choose restaurant and role choose portal', () => {
@@ -54,4 +68,3 @@ test('operational staff links and mockups eliminate legacy URLs in favor of app.
   assert.match(pairing, /https:\/\/app\.komafood\.com\.br\//);
   assert.match(pairing, /"https:\/\/app\.komafood\.com\.br"/);
 });
-
