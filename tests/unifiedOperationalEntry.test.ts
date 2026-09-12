@@ -4,14 +4,25 @@ import test from 'node:test';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('main routes the canonical app host through the unified operational entry', () => {
+test('main routes every canonical staff URL through the unified operational entry', () => {
   const main = source('../src/main.tsx');
   assert.match(main, /function isCanonicalOperationalEntryRoute\(\)/);
   assert.match(main, /if \(!isOperationalAppHost\(\)\) return false/);
+  assert.match(main, /isPublicMenuRoute\(\) \|\| isPublicCommercialRoute\(\)/);
+  assert.match(main, /pathname\.startsWith\("\/smartpos"\)/);
   assert.match(main, /const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute\(\)/);
   assert.match(main, /UnifiedOperationalEntry/);
+  assert.doesNotMatch(main, /return pathname === ["']\/["']/);
   assert.doesNotMatch(main, /resolvedHost\.surface === ["']garcom["']/);
   assert.doesNotMatch(main, /resolvedHost\.surface === ["']caixa["']/);
+});
+
+test('canonical app entry strips hidden legacy path and query before mounting', () => {
+  const main = source('../src/main.tsx');
+  assert.match(main, /isUnifiedOperationalRoute[\s\S]*window\.location\.pathname !== "\/"/);
+  assert.match(main, /window\.location\.search/);
+  assert.match(main, /window\.location\.hash/);
+  assert.match(main, /window\.history\.replaceState\(window\.history\.state, "", "\/"\)/);
 });
 
 test('canonical app shell bypasses stale browser/service-worker caches', () => {
@@ -34,8 +45,9 @@ test('unified login lets backend identity choose restaurant and role choose port
   assert.match(entry, /role === 'garcom'/);
   assert.match(entry, /MANAGEMENT_ROLES\.has\(role\)/);
   assert.match(entry, /clearOperatorSession\(\)/);
-  assert.match(entry, /saveOperatorSession\(data\.access_token/);
-  assert.match(entry, /koma_waiter_token/);
+  assert.match(entry, /saveOperatorSession\(data\.access_token, \{ \.\.\.data\.usuario, role \}\)/);
+  assert.match(entry, /getPersistedOperationalPortal\(\)/);
+  assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
 });
 
 test('unified operational URL stays tenantless after the management bridge initializes App', () => {

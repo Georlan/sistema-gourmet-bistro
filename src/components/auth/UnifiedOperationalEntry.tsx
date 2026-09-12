@@ -11,7 +11,7 @@ import type { AppRole } from '../../types';
 import { authFetch, authRequestErrorMessage } from '../../utils/authRequest';
 import {
   clearOperatorSession,
-  getOperatorSession,
+  getPersistedOperationalPortal,
   saveOperatorSession,
   type OperationalPortal,
 } from '../../utils/authSession';
@@ -28,10 +28,7 @@ function resolvePortalForRole(role: AppRole): OperationalPortal | null {
 }
 
 function detectPersistedPortal(): OperationalPortal | null {
-  const operatorSession = getOperatorSession();
-  if (operatorSession?.token) return 'caixa';
-  if (localStorage.getItem('koma_waiter_token')) return 'garcom';
-  return null;
+  return getPersistedOperationalPortal();
 }
 
 function relativeUrlWithParams(params: URLSearchParams): string {
@@ -215,14 +212,7 @@ export default function UnifiedOperationalEntry() {
       }
 
       clearOperatorSession();
-      if (portal === 'caixa') {
-        saveOperatorSession(data.access_token, { ...data.usuario, role });
-      } else {
-        localStorage.setItem('koma_waiter_token', data.access_token);
-        localStorage.setItem('koma_waiter_id', String(data.usuario.id));
-        localStorage.setItem('koma_waiter_name', String(data.usuario.nome));
-        localStorage.setItem('koma_user_role', role);
-      }
+      saveOperatorSession(data.access_token, { ...data.usuario, role });
 
       setUsername('');
       setPassword('');

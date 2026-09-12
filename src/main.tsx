@@ -39,10 +39,22 @@ function isCanonicalOperationalEntryRoute(): boolean {
   const params = new URLSearchParams(window.location.search);
   const viewParam = params.get("view")?.toLowerCase() || "";
 
-  // app.komafood.com.br é autoridade canônica da equipe. Somente superfícies
-  // explicitamente públicas/utilitárias podem escapar do login unificado.
-  return pathname === "/"
-    && viewParam !== "cardapio"
+  // app.komafood.com.br é autoridade canônica da equipe. Links operacionais
+  // antigos (/garcom, /caixa, ?view=garcom, ?view=caixa etc.) também entram
+  // pelo login unificado; somente superfícies públicas/utilitárias escapam.
+  if (isPublicMenuRoute() || isPublicCommercialRoute()) return false;
+  if (
+    pathname === "/recuperar-senha"
+    || pathname.startsWith("/smartpos")
+    || pathname.startsWith("/ativar")
+    || pathname.startsWith("/acompanhar")
+    || pathname.startsWith("/entregador")
+  ) {
+    return false;
+  }
+
+  return viewParam !== "cardapio"
+    && viewParam !== "landing"
     && viewParam !== "ativar"
     && viewParam !== "acompanhar"
     && viewParam !== "entregador";
@@ -108,6 +120,16 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute();
+
+// O Chrome mobile pode esconder path/query na barra e fazer links legados
+// parecerem o domínio puro. Antes de montar o shell, convertemos toda entrada
+// operacional canônica para exatamente https://app.komafood.com.br/.
+if (
+  isUnifiedOperationalRoute
+  && (window.location.pathname !== "/" || window.location.search || window.location.hash)
+) {
+  window.history.replaceState(window.history.state, "", "/");
+}
 
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
