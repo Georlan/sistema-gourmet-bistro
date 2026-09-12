@@ -63,8 +63,6 @@ def _lookup_users_before_tenant(
                 "restaurante_id": restaurante_id,
             },
         ).mappings().all()
-    # O fallback SQLite precisa ignorar o filtro ORM de tenant exatamente como
-    # a função interna do PostgreSQL. Retorna somente os três campos mínimos.
     return db.execute(
         text(
             """
@@ -177,10 +175,6 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """
-    Realiza a autenticação do usuário por e-mail ou telefone.
-    Retorna o token JWT e as informações do usuário.
-    """
     username_val = (login_data.username or "").strip().lower()
     client_ip = _client_ip(request)
     candidates = _lookup_users_before_tenant(
@@ -257,9 +251,6 @@ def login(
                 detail="Conta de usuário pendente, inativa ou bloqueada.",
             )
 
-        # Materializa o payload antes de limpar o bucket. O cleanup pode encerrar a
-        # transação de leitura atual, então não mantemos dependência de atributos ORM
-        # depois desse ponto.
         token_version = get_user_token_version(
             db,
             user_id=usuario.id,
@@ -295,11 +286,6 @@ def ativar_conta(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """
-    Ativa a conta do usuário através do token_convite.
-    Recebe email e senha, valida unicidade do e-mail, salva a senha e mude o status para 'ativo'.
-    Retorna o token JWT e dados do usuário para login automático.
-    """
     from datetime import datetime, timezone
 
     token_str = payload.token_convite.strip()
@@ -347,8 +333,6 @@ def ativar_conta(
                     detail="Link de ativação inválido ou expirado"
                 )
 
-        # A sessão já está vinculada ao restaurante do convite; portanto esta
-        # consulta valida duplicidade somente dentro do tenant correto.
         existente_email = db.query(Usuario).filter(Usuario.email == email_clean).first()
         if existente_email and existente_email.id != usuario.id:
             raise HTTPException(
@@ -417,7 +401,6 @@ def get_usuarios(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Retorna todos os usuários cadastrados (garçons, caixas, admins)."""
     return db.query(Usuario).filter(
         Usuario.restaurante_id == current_user.restaurante_id
     ).all()
@@ -429,7 +412,6 @@ def delete_usuario(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Deleta um usuário do sistema."""
     if user_id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -447,6 +429,13 @@ def delete_usuario(
         )
 
     target_role = (usuario.role or usuario.cargo or "").lower().strip()
+    actor_role = (current_user.role or current_user.cargo or "").lower().strip()
+    if target_role in {"admin", "superadmin"} and actor_role not in {"admin", "superadmin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Somente administradores podem excluir ou desativar contas administrativas.",
+        )
+
     if target_role in {"admin", "superadmin"}:
         admin_rows = db.query(Usuario.id, Usuario.status).filter(
             Usuario.restaurante_id == current_user.restaurante_id,
@@ -495,7 +484,6 @@ def delete_usuario(
     return
 
 
-# ----------------- PRIVACY REQUEST OPERATIONS -----------------
 from pydantic import BaseModel, Field
 from typing import Optional
 from ..models import Comanda, RascunhoPedido, MensagemWhatsApp, ActivityLog
@@ -511,30 +499,20 @@ def gdpr_opt_out(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("privacidade:administrar"))
 ):
-    """Executa o escopo automatizado de uma solicitação de privacidade.
-
-    Este fluxo não representa, sozinho, atendimento integral à LGPD. Dados
-    financeiros, fiscais, backups e fornecedores devem seguir a política de
-    retenção e a revisão manual do responsável pelo tratamento.
-    """
     target_phone = req.telefone.strip()
 
-    # 1. Locate all matching messages (check decrypted values)
     messages = db.query(MensagemWhatsApp).all()
     matched_msgs = [msg for msg in messages if msg.cliente_telefone == target_phone]
 
-    # 2. Locate matching drafts
     drafts = db.query(RascunhoPedido).all()
     matched_drafts = [d for d in drafts if d.cliente_telefone == target_phone]
 
-    # 3. Locate matching comandas by name
     matched_comandas = []
     if req.nome:
         comandas = db.query(Comanda).all()
         matched_comandas = [c for c in comandas if c.identificador and c.identificador.strip().lower() == req.nome.strip().lower()]
 
     try:
-        # Apply action
         if req.anonimizar:
             for msg in matched_msgs:
                 msg.cliente_telefone = "ANONIMIZADO"
@@ -549,7 +527,6 @@ def gdpr_opt_out(
 
             detail_msg = "Anonimização concluída no escopo automatizado."
         else:
-            # Hard delete
             for msg in matched_msgs:
                 db.delete(msg)
             for d in matched_drafts:
@@ -559,7 +536,6 @@ def gdpr_opt_out(
 
             detail_msg = "Remoção concluída no escopo automatizado."
 
-        # Registra a operação sem reintroduzir o telefone do titular no log.
         log = ActivityLog(
             restaurante_id=current_restaurante_id.get(),
             garcom_id="admin",
@@ -597,7 +573,6 @@ def reenviar_convite_usuario(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("equipe:administrar"))
 ):
-    """Renova e envia automaticamente o convite pelo WhatsApp."""
     import datetime
     from datetime import timezone
 
@@ -617,7 +592,6 @@ def reenviar_convite_usuario(
             detail="Este usuário já ativou sua conta."
         )
 
-    # Um novo token permite reenviar intencionalmente sem reutilizar o segredo.
     usuario.token_convite = str(uuid.uuid4())
     usuario.token_expira_em = datetime.datetime.now(timezone.utc) + datetime.timedelta(hours=24)
     db.commit()
@@ -641,7 +615,6 @@ def reenviar_convite_usuario(
     }
 
 
-# SmartPOS is part of this authenticated namespace, not a package import side effect.
 from . import smartpos, smartpos_provider, smartpos_cash_projection
 
 router.include_router(smartpos.router)
