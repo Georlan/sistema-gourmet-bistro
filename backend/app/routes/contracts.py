@@ -29,7 +29,7 @@ from ..legal_config import (
     get_legal_provider_identity,
 )
 from ..models import Usuario
-from ..security import get_current_user
+from ..security import IPRateLimiter, get_current_user
 from ..services.contract_notifications import schedule_contract_accepted_notifications
 from ..subscription import (
     VALID_SUBSCRIPTION_PLANS,
@@ -48,6 +48,7 @@ _EXPECTED_DOCUMENTS = {
     "dpa": "dpa",
     "privacy": "privacidade",
 }
+_accept_contract_rate_limiter = IPRateLimiter(requests_per_minute=6)
 
 
 class ContractAcceptanceRequest(BaseModel):
@@ -205,6 +206,8 @@ def accept_contract(
     request: Request,
     background_tasks: BackgroundTasks,
 ):
+    _accept_contract_rate_limiter.check(request)
+
     if not payload.powers_declared:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
