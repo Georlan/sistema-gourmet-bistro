@@ -50,7 +50,7 @@ export function DesktopFrame({ view = 'mesas', className = '', style }: DesktopF
         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }} />
         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }} />
         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981' }} />
-        <span style={{ fontSize: '0.65rem', color: '#666', fontFamily: 'Space Grotesk', marginLeft: 'auto', marginRight: 'auto' }}>sistema-gourmet-bistro.pages.dev/?view=caixa</span>
+        <span style={{ fontSize: '0.65rem', color: '#666', fontFamily: 'Space Grotesk', marginLeft: 'auto', marginRight: 'auto' }}>app.komafood.com.br</span>
       </div>
 
       {/* Screen */}

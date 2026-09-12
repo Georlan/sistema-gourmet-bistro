@@ -4,9 +4,11 @@ from urllib.parse import urlsplit
 
 OFFICIAL_PUBLIC_FRONTEND_ORIGIN = "https://sistema-gourmet-bistro.pages.dev"
 OFFICIAL_CUSTOM_DOMAIN_ORIGIN = "https://komafood.com.br"
+OFFICIAL_OPERATIONAL_APP_ORIGIN = "https://app.komafood.com.br"
 OFFICIAL_PUBLIC_FRONTEND_ORIGINS = (
     OFFICIAL_PUBLIC_FRONTEND_ORIGIN,
     OFFICIAL_CUSTOM_DOMAIN_ORIGIN,
+    OFFICIAL_OPERATIONAL_APP_ORIGIN,
 )
 
 
@@ -266,7 +268,7 @@ class Settings:
         "evolution",
     ).strip().lower()
     KOMA_PUBLIC_APP_URL: str = normalize_cors_origin(
-        os.getenv("KOMA_PUBLIC_APP_URL", OFFICIAL_PUBLIC_FRONTEND_ORIGIN)
+        os.getenv("KOMA_PUBLIC_APP_URL", OFFICIAL_OPERATIONAL_APP_ORIGIN)
     )
 
     # Evolution API (WhatsApp)

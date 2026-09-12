@@ -13,9 +13,13 @@ from urllib.parse import urlencode
 
 KOMA_WEB_URL = os.getenv(
     "KOMA_WEB_URL",
-    "https://sistema-gourmet-bistro.pages.dev/",
+    "https://app.komafood.com.br/",
 )
-ALLOWED_ORIGIN = "https://sistema-gourmet-bistro.pages.dev"
+ALLOWED_ORIGIN = "https://app.komafood.com.br"
+ALLOWED_ORIGINS = {
+    "https://app.komafood.com.br",
+    "https://sistema-gourmet-bistro.pages.dev",
+}
 
 
 def credentials_path() -> Path:
@@ -66,7 +70,7 @@ def pair_agent(timeout_seconds: int = 180) -> Optional[str]:
     class PairingHandler(BaseHTTPRequestHandler):
         def _cors(self) -> None:
             origin = self.headers.get("Origin", "")
-            if origin == ALLOWED_ORIGIN:
+            if origin in ALLOWED_ORIGINS:
                 self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
