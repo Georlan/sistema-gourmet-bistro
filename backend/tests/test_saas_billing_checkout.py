@@ -17,6 +17,7 @@ from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.database import Base, get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from app.session_models import UserSessionVersion
 from app.routes import contracts, saas_billing, super_admin_contracts
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
@@ -111,6 +112,7 @@ def client_and_session(monkeypatch):
     RestaurantContractAcceptance.__table__.create(engine)
     SaaSBillingSetup.__table__.create(engine)
     SaaSSubscription.__table__.create(engine)
+    UserSessionVersion.__table__.create(engine)
 
     Session = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

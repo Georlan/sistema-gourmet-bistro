@@ -618,6 +618,20 @@ def activate_contract(
                 )
                 db.add(canonical_sub)
 
+                if billing_setup.payment_method_type == "credit_card" and billing_setup.provider_subscription_id:
+                    from ..services.saas_mercadopago import default_saas_mp_service, SaasMercadoPagoError
+                    try:
+                        default_saas_mp_service.update_preapproval_next_payment_date(
+                            billing_setup.provider_subscription_id,
+                            trial_ends_at,
+                        )
+                    except SaasMercadoPagoError as exc:
+                        logger.warning(
+                            "Falha ao sincronizar término de trial no Mercado Pago para %s: %s",
+                            normalized,
+                            exc,
+                        )
+
             db.add(
                 SuperAdminAuditLog(
                     restaurante_id=tenant_id,
@@ -645,6 +659,16 @@ def activate_contract(
                         "mercado_pago": "disconnected",
                     },
                 )
+            )
+            from ..services.signup_notifications import enqueue_activation
+            enqueue_activation(
+                db,
+                protocol=normalized,
+                restaurant_name=restaurant_name,
+                representative_name=admin_name,
+                email=admin_email,
+                phone=admin_phone,
+                token=invitation_token,
             )
             db.commit()
 
