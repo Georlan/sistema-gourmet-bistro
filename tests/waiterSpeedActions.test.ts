@@ -70,3 +70,14 @@ test('atalho de pedido permanece integrado ao card sem virar FAB dominante', () 
   assert.match(shared, /footerAction\?: React\.ReactNode/);
   assert.match(shared, /items-center justify-between gap-2/);
 });
+
+test('cards do salão do garçom mantêm altura uniforme em todos os estados', () => {
+  const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
+  const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
+
+  assert.match(card, /h-\[176px\]/);
+  assert.match(card, /sm:h-\[184px\]/);
+  assert.match(card, /fillHeight/);
+  assert.match(shared, /fillHeight\?: boolean/);
+  assert.match(shared, /fillHeight \? 'h-full' : ''/);
+});

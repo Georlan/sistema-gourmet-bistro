@@ -58,7 +58,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
   ) : undefined;
 
   return (
-    <div className="relative min-w-0">
+    <div className="relative h-[176px] min-w-0 sm:h-[184px]">
       <SharedTableCard
         {...view}
         table={table}
@@ -66,6 +66,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
         operational={operational}
         total={getTableTotal(orders)}
         footerAction={quickOrderAction}
+        fillHeight
       />
       <button
         id={`mesa-card-${table.id}`}
