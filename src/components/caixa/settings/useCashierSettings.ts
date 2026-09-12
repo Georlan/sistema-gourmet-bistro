@@ -104,34 +104,16 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
     if (isTestingPrinter) return;
     setIsTestingPrinter(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/print-agents/jobs/inject`, {
+      const res = await fetch(`${apiBaseUrl}/impressao/teste-extremo-cardapio`, {
         method: 'POST',
-        headers: {
-          ...authHeaders,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          document_type: 'fechamento',
-          destination: 'FECHAMENTO',
-          source_type: 'teste_painel',
-          source_id: `teste-${Date.now()}`,
-          payload_text: [
-            '================================',
-            ...(printNamePosition === 'cabecalho' && printHeader ? [printHeader] : []),
-            '================================',
-            'TESTE REAL DO KÔMA PRINT',
-            new Date().toLocaleString('pt-BR'),
-            '================================',
-            printFooter || '',
-            ...(printNamePosition === 'rodape' && printHeader ? [printHeader] : []),
-          ].join('\n'),
-        }),
+        headers: authHeaders,
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data?.detail || 'Erro ao colocar o teste na fila.');
+        throw new Error(data?.detail || 'Erro ao colocar o teste extremo na fila.');
       }
       window.dispatchEvent(new Event('koma_print_monitor_refresh'));
+      showToast('Teste extremo do Cardápio Online enviado para a impressora.', 'success');
     } catch (error) {
       console.error(error);
       showToast(
