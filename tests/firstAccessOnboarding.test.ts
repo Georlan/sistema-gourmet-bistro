@@ -27,6 +27,16 @@ test('onboarding keeps cashier navigation available when session storage is bloc
   assert.match(onboarding, /catch \{[\s\S]*?window\.location\.href = '\/\?view=caixa';/);
 });
 
+test('onboarding status request cannot trap first access in infinite loading', () => {
+  assert.match(onboarding, /const ONBOARDING_LOAD_TIMEOUT_MS = 10_000/);
+  assert.match(onboarding, /const controller = new AbortController\(\)/);
+  assert.match(onboarding, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_LOAD_TIMEOUT_MS\)/);
+  assert.match(onboarding, /signal: controller\.signal/);
+  assert.match(onboarding, /error\.name === 'AbortError'/);
+  assert.match(onboarding, /Você pode tentar novamente ou seguir para o Caixa/);
+  assert.match(onboarding, /clearTimeout\(timeoutId\)/);
+});
+
 test('onboarding uses canonical server progress and exposes the five launch steps', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
   for (const label of [
