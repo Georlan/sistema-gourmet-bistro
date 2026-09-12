@@ -64,6 +64,7 @@ test('atalho de pedido permanece integrado ao card sem virar FAB dominante', () 
   assert.match(card, /quick-order-table-/);
   assert.match(card, /Novo pedido na Mesa/);
   assert.match(card, /bg-emerald-500\/\[0\.06\]/);
+  assert.match(card, /h-7 w-7 shrink-0/);
   assert.doesNotMatch(card, /absolute right-2 top-1\/2/);
   assert.doesNotMatch(card, /rounded-full border border-emerald-400\/40 bg-emerald-500/);
 
@@ -85,4 +86,15 @@ test('grade do salão padroniza largura e altura de todos os cards', () => {
   assert.match(shared, /fillHeight \? 'h-full' : ''/);
   assert.doesNotMatch(card, /h-\[176px\]/);
   assert.doesNotMatch(card, /sm:h-\[184px\]/);
+});
+
+test('card do garçom não mostra contagem de itens e mantém o total dentro do rodapé', () => {
+  const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
+  const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
+
+  assert.match(card, /showItemCount=\{false\}/);
+  assert.match(shared, /showItemCount\?: boolean/);
+  assert.match(shared, /showItemCount = true/);
+  assert.match(shared, /mt-1\.5 block whitespace-nowrap font-mono text-xs leading-none text-koma-foreground/);
+  assert.match(shared, /showItemCount && <span className="inline-flex items-center gap-1"><UsersRound/);
 });
