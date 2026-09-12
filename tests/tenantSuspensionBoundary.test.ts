@@ -17,6 +17,16 @@ test('suspensão substitui o app operacional por uma tela exclusiva', () => {
   assert.ok(suspendedReturn >= 0 && normalReturn > suspendedReturn, 'o app normal só volta depois do gate de suspensão');
 });
 
+test('checagem de suspensão preserva o shell montado para não reiniciar o login unificado', () => {
+  assert.match(boundary, /if \(accessState === 'checking'\) \{/);
+  assert.match(
+    boundary,
+    /if \(accessState === 'checking'\) \{[\s\S]*?return \([\s\S]*?\{children\}[\s\S]*?<AccessCheckingScreen \/>[\s\S]*?\);[\s\S]*?\}/,
+  );
+  assert.doesNotMatch(boundary, /if \(accessState === 'checking'\) return <AccessCheckingScreen \/>/);
+  assert.match(boundary, /desmontá-lo aqui[\s\S]*apaga `activePortal`/);
+});
+
 test('boundary detecta suspensão no backend e revalida a sessão periodicamente', () => {
   assert.match(boundary, /response\.status !== 403/);
   assert.match(boundary, /normalized\.includes\('restaurante'\)/);
