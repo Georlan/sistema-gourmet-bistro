@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+
+test('landing hero does not advertise plan-specific features as universal', () => {
+  const hero = source('src/landing/sections/Hero.tsx');
+
+  assert.doesNotMatch(hero, /COMANDA SAI AUTOMATICAMENTE/);
+  assert.doesNotMatch(hero, /CONTROLE TUDO\./);
+  assert.match(hero, /KDS e impressão automática no Pro e Premium/);
+  assert.match(hero, /CARDÁPIO DIGITAL DESDE O POCKET/);
+});
+
+test('landing management qualifies advanced features by plan', () => {
+  const management = source('src/landing/sections/Management.tsx');
+
+  assert.match(management, /KDS e impressão automática no Pro e Premium/);
+  assert.match(management, /Estoque, relatórios e financeiro no Pro e Premium/);
+  assert.match(management, /Fidelidade e cupons no Premium/);
+});
+
+test('landing comparison is framed as an example instead of a universal claim', () => {
+  const comparison = source('src/landing/sections/ValueStrip.tsx');
+
+  assert.match(comparison, /OPERAÇÃO FRAGMENTADA/);
+  assert.match(comparison, /EXEMPLO: 4 REPASSES/);
+  assert.doesNotMatch(comparison, /<strong>SEM KÔMA<\/strong>/);
+});
+
+test('landing SEO uses the public root and qualifies advanced features', () => {
+  const landing = source('src/landing/LandingPage.tsx');
+
+  assert.match(landing, /canonical\.href = 'https:\/\/komafood\.com\.br\/'/);
+  assert.doesNotMatch(landing, /https:\/\/komafood\.com\.br\/landing/);
+  assert.match(landing, /recursos avançados disponíveis conforme o plano/i);
+  assert.match(landing, /KDS e impressão automática nos planos compatíveis/);
+});
+
+test('final conversion copy supports manual or automatic release', () => {
+  const finalCta = source('src/landing/sections/FinalCTA.tsx');
+
+  assert.match(finalCta, /Após a confirmação, liberamos o acesso e enviamos o convite/);
+  assert.doesNotMatch(finalCta, /Conclua a ativação do restaurante/);
+});
