@@ -146,7 +146,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 "status": "awaiting_release",
                 "message": "Pagamento confirmado. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
             }
-        provision_res = provision_restaurant_for_contract(db, acceptance=acceptance, billing_setup=existing, actor="saas_checkout", background_tasks=background_tasks)
+        provision_res = provision_restaurant_for_contract(db, acceptance=acceptance, billing_setup=existing, actor="saas_checkout")
         return {"success": True, "status": "ready", "restaurantId": str(provision_res["restaurant_id"]), "slug": provision_res["slug"], "trialDays": 7, "trialEndsAt": provision_res["trial_ends_at"].isoformat(), "activationToken": provision_res.get("invitation_token")}
     if existing and existing.status == "pending" and existing.payment_method_type == "credit_card":
         try:
@@ -254,7 +254,6 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             billing_setup=billing_setup,
             actor="saas_checkout",
             reason="Ativação imediata pós-autorização de cartão no checkout com 7 dias grátis",
-            background_tasks=background_tasks,
         )
 
         return {
@@ -541,7 +540,6 @@ async def mercado_pago_saas_webhook(
                         billing_setup=billing_setup_data,
                         actor="saas_webhook",
                         reason="Ativação automática pós-confirmação verificada de pagamento Pix anual via Mercado Pago",
-                        background_tasks=background_tasks,
                     )
                     logger.info("Tenant activated via verified Pix approval for protocol %s", billing.protocol)
 

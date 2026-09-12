@@ -22,6 +22,51 @@ def is_homologation_environment(raw_env: str | None = None) -> bool:
     return env in {"staging", "homologation", "homolog", "development", "test"}
 
 
+def resolve_saas_mercado_pago_credentials(environment: str) -> tuple[str, str, str]:
+    """Resolve credenciais por ambiente sem permitir fallback entre teste e produção."""
+    if is_homologation_environment(environment):
+        access_token = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN", "").strip()
+        public_key = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY", "").strip()
+        webhook_secret = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET", "").strip()
+
+        if access_token and not access_token.startswith("TEST-"):
+            raise RuntimeError(
+                "A homologação exige KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN com prefixo TEST-."
+            )
+        if public_key and not public_key.startswith("TEST-"):
+            raise RuntimeError(
+                "A homologação exige KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY com prefixo TEST-."
+            )
+        return access_token, public_key, webhook_secret
+
+    access_token = (
+        os.getenv("KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN")
+        or os.getenv("KOMA_SAAS_MP_ACCESS_TOKEN")
+        or ""
+    ).strip()
+    public_key = (
+        os.getenv("KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY")
+        or os.getenv("KOMA_SAAS_MP_PUBLIC_KEY")
+        or ""
+    ).strip()
+    webhook_secret = (
+        os.getenv("KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET")
+        or os.getenv("KOMA_SAAS_MP_WEBHOOK_SECRET")
+        or ""
+    ).strip()
+
+    if is_production_environment(environment):
+        if access_token.startswith("TEST-"):
+            raise RuntimeError(
+                "Credenciais de teste do Mercado Pago (TEST-) são estritamente proibidas em ambiente de produção."
+            )
+        if public_key.startswith("TEST-"):
+            raise RuntimeError(
+                "Chave pública de teste do Mercado Pago (TEST-) é estritamente proibida em ambiente de produção."
+            )
+    return access_token, public_key, webhook_secret
+
+
 def normalize_cors_origin(raw: str) -> str:
     """
     Normaliza e valida uma origem CORS individual usando urlsplit.
@@ -266,41 +311,9 @@ class Settings:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production").strip().lower()
 
     # Mercado Pago SaaS Billing (Plataforma KÔMA - Assinaturas Recorrentes)
-    _mp_access_token: str = (
-        os.getenv("KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN")
-        or os.getenv("KOMA_SAAS_MP_ACCESS_TOKEN")
-        or ""
-    ).strip()
-    _mp_public_key: str = (
-        os.getenv("KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY")
-        or os.getenv("KOMA_SAAS_MP_PUBLIC_KEY")
-        or ""
-    ).strip()
-    _mp_webhook_secret: str = (
-        os.getenv("KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET")
-        or os.getenv("KOMA_SAAS_MP_WEBHOOK_SECRET")
-        or ""
-    ).strip()
-
-    if is_homologation_environment(ENVIRONMENT):
-        _test_token = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN", "").strip()
-        _test_pub = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY", "").strip()
-        _test_sec = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET", "").strip()
-        if _test_token:
-            _mp_access_token = _test_token
-        if _test_pub:
-            _mp_public_key = _test_pub
-        if _test_sec:
-            _mp_webhook_secret = _test_sec
-    elif is_production_environment(ENVIRONMENT):
-        if _mp_access_token.startswith("TEST-"):
-            raise RuntimeError(
-                "Credenciais de teste do Mercado Pago (TEST-) são estritamente proibidas em ambiente de produção."
-            )
-        if _mp_public_key.startswith("TEST-"):
-            raise RuntimeError(
-                "Chave pública de teste do Mercado Pago (TEST-) é estritamente proibida em ambiente de produção."
-            )
+    _mp_access_token, _mp_public_key, _mp_webhook_secret = resolve_saas_mercado_pago_credentials(
+        ENVIRONMENT
+    )
 
     KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN: str = _mp_access_token
     KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY: str = _mp_public_key

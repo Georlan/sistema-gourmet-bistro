@@ -3,43 +3,27 @@ from __future__ import annotations
 import datetime
 import logging
 import re
-import unicodedata
 import uuid
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
-from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from ..models import Restaurante, SuperAdminAuditLog
 from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
-from ..services.billing_service import (
-    annual_access_end,
-    get_billing_setup,
-    is_billing_enforcement_enabled,
-    is_billing_ready,
-    link_billing_setup_to_tenant,
-)
-from ..services.contract_notifications import schedule_customer_activation_notification
-from ..subscription import VALID_SUBSCRIPTION_PLANS
+from ..services.billing_service import get_billing_setup, is_billing_enforcement_enabled, is_billing_ready
 from .super_admin import get_current_admin
-from .super_admin_onboarding import (
-    DEFAULT_TRIAL_DAYS,
-    _lock_onboarding_transaction,
-    _reserve_restaurant_id,
-    _slug_owner_id,
-    restaurant_trials,
-)
+from .super_admin_onboarding import DEFAULT_TRIAL_DAYS
 
 
 logger = logging.getLogger("koma.super_admin.contracts")
 router = APIRouter(prefix="/contracts", tags=["SuperAdmin Contracts"])
 _PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
-INVITATION_TTL_HOURS = 72
 
 
 class ContractLinkRequest(BaseModel):
@@ -90,15 +74,6 @@ def _normalize_protocol_path(protocol: str) -> str:
             detail="Protocolo contratual inválido.",
         )
     return normalized
-
-
-def _activation_slug(restaurant_name: str, protocol: str) -> str:
-    ascii_name = unicodedata.normalize("NFKD", restaurant_name).encode("ascii", "ignore").decode("ascii")
-    base = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-") or "restaurante"
-    suffix = protocol.rsplit("-", 1)[-1].lower()
-    max_base_length = max(1, 100 - len(suffix) - 1)
-    trimmed = base[:max_base_length].rstrip("-") or "restaurante"
-    return f"{trimmed}-{suffix}"
 
 
 def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
@@ -458,16 +433,18 @@ def preview_contract(
 def activate_contract(
     protocol: str,
     payload: ContractActivationRequest,
-    background_tasks: BackgroundTasks,
     admin: dict[str, Any] = Depends(get_current_admin),
 ):
     normalized = _normalize_protocol_path(protocol)
     clean_reason = payload.reason.strip()
     db = SessionLocal()
-    tenant_id: int | None = None
-
     try:
-        acceptance = _resolve_activation_acceptance(db, normalized)
+        from ..services.restaurant_provisioning import (
+            provision_restaurant_for_contract,
+            resolve_activation_acceptance,
+        )
+
+        acceptance = resolve_activation_acceptance(db, normalized)
         if acceptance is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -487,250 +464,30 @@ def activate_contract(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A ativação do restaurante exige forma de pagamento configurada e confirmada (billing ready).",
             )
-
-        plan = str(acceptance.get("plan") or "").strip().lower()
-        if plan not in VALID_SUBSCRIPTION_PLANS:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O plano congelado no aceite não é provisionável.",
-            )
-
-        restaurant_name = str(acceptance.get("restaurant_name") or "").strip()
-        admin_name = str(acceptance.get("representative_name") or acceptance.get("contracting_party_name") or "").strip()
-        admin_email = str(acceptance.get("email") or "").strip().lower()
-        admin_phone = str(acceptance.get("phone") or "").strip() or None
-        if len(restaurant_name) < 2 or len(admin_name) < 2:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O aceite não contém dados suficientes para provisionamento automático.",
-            )
-        if not admin_email or "@" not in admin_email or len(admin_email) > 100:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O e-mail do representante não é compatível com o cadastro de administrador.",
-            )
-
-        tenant_id = _reserve_restaurant_id(db)
-        slug = _activation_slug(restaurant_name, normalized)
-
-        with tenant_session_scope(db, tenant_id):
-            _lock_onboarding_transaction(db)
-
-            latest = _resolve_activation_acceptance(db, normalized)
-            if latest is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Aceite contratual não encontrado.",
-                )
-            if latest.get("linked_restaurante_id") is not None:
-                return _activation_response(
-                    latest,
-                    int(latest["linked_restaurante_id"]),
-                    idempotent=True,
-                )
-
-            if is_billing_enforcement_enabled() and not is_billing_ready(db, normalized):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="A ativação do restaurante exige forma de pagamento configurada e confirmada (billing ready).",
-                )
-
-            if _slug_owner_id(db, slug) is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="O subdomínio determinístico desta contratação já está em uso.",
-                )
-
-            now = datetime.datetime.now(datetime.timezone.utc)
-            trial_ends_at = now + datetime.timedelta(days=DEFAULT_TRIAL_DAYS)
-            invitation_token = str(uuid.uuid4())
-
-            restaurant = Restaurante(
-                id=tenant_id,
-                nome=restaurant_name,
-                slug=slug,
-                plano=plan,
-                saas_status="active",
-                billing_mode="subscription",
-            )
-            db.add(restaurant)
-            db.flush()
-
-            db.execute(
-                restaurant_trials.insert().values(
-                    restaurante_id=tenant_id,
-                    trial_started_at=now,
-                    trial_ends_at=trial_ends_at,
-                    trial_status="active",
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-
-            db.add(
-                ConfiguracaoRestaurante(
-                    restaurante_id=tenant_id,
-                    impressao_nome_restaurante=restaurant_name,
-                )
-            )
-
-            initial_admin = Usuario(
-                restaurante_id=tenant_id,
-                nome=admin_name,
-                telefone=admin_phone,
-                email=admin_email,
-                cargo="admin",
-                status="pendente_ativacao",
-                senha_hash=None,
-                token_convite=invitation_token,
-                token_expira_em=now + datetime.timedelta(hours=INVITATION_TTL_HOURS),
-            )
-            db.add(initial_admin)
-            db.flush()
-
-            link = RestaurantContractAcceptance(
-                id=str(uuid.uuid4()),
-                restaurante_id=tenant_id,
-                acceptance_id=str(acceptance["acceptance_id"]),
-                linked_at=now,
-            )
-            db.add(link)
-
-            billing_setup = get_billing_setup(db, normalized)
-            if billing_setup is not None:
-                link_billing_setup_to_tenant(db, normalized, tenant_id)
-
-            if billing_setup is not None and billing_setup.status == "ready":
-                canonical_sub = SaaSSubscription(
-                    restaurante_id=tenant_id,
-                    provider=billing_setup.provider,
-                    provider_customer_id=billing_setup.provider_customer_id,
-                    provider_subscription_id=billing_setup.provider_subscription_id,
-                    payment_method_type=billing_setup.payment_method_type,
-                    status="active" if billing_setup.payment_method_type == "pix" else "trialing",
-                    billing_cycle=acceptance["billing_cycle"],
-                    trial_started_at=now,
-                    trial_ends_at=trial_ends_at,
-                    current_period_start=now,
-                    current_period_end=annual_access_end(now) if billing_setup.payment_method_type == "pix" else trial_ends_at,
-                    created_at=now,
-                    updated_at=now,
-                )
-                db.add(canonical_sub)
-
-                if billing_setup.payment_method_type == "credit_card" and billing_setup.provider_subscription_id:
-                    from ..services.saas_mercadopago import default_saas_mp_service, SaasMercadoPagoError
-                    try:
-                        default_saas_mp_service.update_preapproval_next_payment_date(
-                            billing_setup.provider_subscription_id,
-                            trial_ends_at,
-                        )
-                    except SaasMercadoPagoError as exc:
-                        logger.warning(
-                            "Falha ao sincronizar término de trial no Mercado Pago para %s: %s",
-                            normalized,
-                            exc,
-                        )
-
-            db.add(
-                SuperAdminAuditLog(
-                    restaurante_id=tenant_id,
-                    actor=str(admin.get("user") or "superadmin"),
-                    action="SUPERADMIN_CONTRACT_ACTIVATE",
-                    reason=clean_reason,
-                    before_data=None,
-                    after_data={
-                        "protocol": normalized,
-                        "acceptance_id": str(acceptance["acceptance_id"]),
-                        "restaurante_id": tenant_id,
-                        "slug": slug,
-                        "plan": plan,
-                        "billing_cycle": acceptance["billing_cycle"],
-                        "billing_status": latest.get("billing_status") or (billing_setup.status if billing_setup else "pending"),
-                        "billing_provider": latest.get("billing_provider") or (billing_setup.provider if billing_setup else None),
-                        "payment_method_type": latest.get("payment_method_type") or (billing_setup.payment_method_type if billing_setup else None),
-                        "trial_status": "active",
-                        "trial_days": DEFAULT_TRIAL_DAYS,
-                        "trial_ends_at": trial_ends_at.isoformat(),
-                        "admin_user_id": initial_admin.id,
-                        "admin_email": admin_email,
-                        "admin_status": "pendente_ativacao",
-                        "credential_delivery": "whatsapp_scheduled",
-                        "mercado_pago": "disconnected",
-                    },
-                )
-            )
-            from ..services.signup_notifications import enqueue_activation
-            enqueue_activation(
-                db,
-                protocol=normalized,
-                restaurant_name=restaurant_name,
-                representative_name=admin_name,
-                email=admin_email,
-                phone=admin_phone,
-                token=invitation_token,
-            )
-            db.commit()
-
-            # The tenant and contract link are already durable at this point. Any
-            # WhatsApp failure stays outside the critical provisioning transaction.
-            if admin_phone:
-                schedule_customer_activation_notification(
-                    background_tasks,
-                    phone=admin_phone,
-                    representative_name=admin_name,
-                    restaurant_name=restaurant_name,
-                    protocol=normalized,
-                    invitation_token=invitation_token,
-                    invitation_ttl_hours=INVITATION_TTL_HOURS,
-                )
-
-            logger.info(
-                "SUPERADMIN CONTRACT ACTIVATED tenant=%s protocol=%s actor=%s plan=%s",
-                tenant_id,
-                normalized,
-                admin.get("user"),
-                plan,
-            )
-            return _activation_response(
-                latest,
-                tenant_id,
-                slug=slug,
-                admin_id=str(initial_admin.id),
-                trial_ends_at=trial_ends_at,
-                idempotent=False,
-                credential_delivery="whatsapp_scheduled",
-            )
+        billing_setup = get_billing_setup(db, normalized)
+        result = provision_restaurant_for_contract(
+            db,
+            acceptance=acceptance,
+            billing_setup=billing_setup,
+            actor=str(admin.get("user") or "superadmin"),
+            reason=clean_reason,
+        )
+        latest = resolve_activation_acceptance(db, normalized) or acceptance
+        invitation_token = result.get("invitation_token")
+        admin_user_id = result.get("admin_user_id")
+        return _activation_response(
+            latest,
+            int(result["restaurant_id"]),
+            slug=str(result["slug"]),
+            admin_id=str(admin_user_id) if admin_user_id is not None else None,
+            trial_ends_at=result["trial_ends_at"],
+            idempotent=invitation_token is None,
+            credential_delivery="outbox_scheduled",
+        )
     except HTTPException:
         if db.in_transaction():
             db.rollback()
         raise
-    except IntegrityError as exc:
-        if db.in_transaction():
-            db.rollback()
-        logger.warning(
-            "SUPERADMIN CONTRACT ACTIVATE CONFLICT tenant=%s protocol=%s actor=%s",
-            tenant_id,
-            normalized,
-            admin.get("user"),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A contratação já foi ativada ou algum identificador de provisionamento já está em uso.",
-        ) from exc
-    except Exception as exc:
-        if db.in_transaction():
-            db.rollback()
-        logger.exception(
-            "SUPERADMIN CONTRACT ACTIVATE FAILED tenant=%s protocol=%s actor=%s",
-            tenant_id,
-            normalized,
-            admin.get("user"),
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Falha ao ativar a contratação. Nenhuma criação parcial foi mantida.",
-        ) from exc
     finally:
         db.close()
 

@@ -16,6 +16,8 @@ from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_V
 from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
 from app.routes import contracts, super_admin_contracts
 from app.routes.super_admin_onboarding import restaurant_trials
+from app.services import restaurant_provisioning
+from app.signup_models import SignupNotification
 
 
 VALID_CPF = "52998224725"
@@ -123,12 +125,6 @@ def _accept_contract(client: TestClient) -> str:
 
 def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session, monkeypatch):
     client, Session = client_and_session
-    deliveries: list[dict] = []
-    monkeypatch.setattr(
-        super_admin_contracts,
-        "schedule_customer_activation_notification",
-        lambda background_tasks, **kwargs: deliveries.append(kwargs),
-    )
     protocol = _accept_contract(client)
 
     activated = client.post(
@@ -141,7 +137,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     assert body["plan"] == "pocket"
     assert body["billingCycle"] == "mensal"
     assert body["idempotent"] is False
-    assert body["credentialDelivery"] == "whatsapp_scheduled"
+    assert body["credentialDelivery"] == "outbox_scheduled"
     assert body["admin"]["status"] == "pendente_ativacao"
     assert body["trial"]["daysGranted"] == 7
     assert body["subdomain"].endswith(protocol[-12:].lower())
@@ -152,12 +148,6 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     assert "access_token" not in serialized
     assert "invitation_token" not in serialized
     assert "token_convite" not in serialized
-
-    assert len(deliveries) == 1
-    assert deliveries[0]["phone"] == "85999999999"
-    assert deliveries[0]["protocol"] == protocol
-    assert deliveries[0]["invitation_ttl_hours"] == 72
-    assert deliveries[0]["invitation_token"] not in serialized
 
     tenant_id = int(body["restaurantId"])
     db = Session()
@@ -173,7 +163,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
         assert admin_user.cargo == "admin"
         assert admin_user.status == "pendente_ativacao"
         assert admin_user.senha_hash is None
-        assert admin_user.token_convite == deliveries[0]["invitation_token"]
+        assert admin_user.token_convite
 
         trial = db.execute(select(restaurant_trials)).mappings().one()
         assert trial["restaurante_id"] == tenant_id
@@ -185,8 +175,13 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
         audit = db.execute(select(SuperAdminAuditLog)).scalar_one()
         assert audit.action == "SUPERADMIN_CONTRACT_ACTIVATE"
         assert audit.restaurante_id == tenant_id
-        assert audit.after_data["credential_delivery"] == "whatsapp_scheduled"
-        assert deliveries[0]["invitation_token"] not in json.dumps(audit.after_data)
+        assert audit.after_data["credential_delivery"] == "outbox_scheduled"
+        assert admin_user.token_convite not in json.dumps(audit.after_data)
+
+        deliveries = db.query(SignupNotification).filter(
+            SignupNotification.id.like(f"{protocol}:activation:%")
+        ).all()
+        assert {item.id.rsplit(":", 1)[-1] for item in deliveries} == {"email", "whatsapp"}
     finally:
         db.close()
 
@@ -198,8 +193,6 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     repeated_body = repeated.json()
     assert repeated_body["idempotent"] is True
     assert repeated_body["restaurantId"] == str(tenant_id)
-    assert len(deliveries) == 1
-
     db = Session()
     try:
         assert len(db.execute(select(Restaurante)).scalars().all()) == 1
@@ -213,7 +206,7 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
 def test_activation_conflict_keeps_tenant_state_empty(client_and_session, monkeypatch):
     client, Session = client_and_session
     protocol = _accept_contract(client)
-    monkeypatch.setattr(super_admin_contracts, "_slug_owner_id", lambda db, slug: 999)
+    monkeypatch.setattr(restaurant_provisioning, "_slug_owner_id", lambda db, slug: 999)
 
     response = client.post(
         f"/api/super-admin/contracts/{protocol}/activate",
