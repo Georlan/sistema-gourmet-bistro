@@ -11,7 +11,6 @@ import type { AppRole } from '../../types';
 import { authFetch, authRequestErrorMessage } from '../../utils/authRequest';
 import {
   clearOperatorSession,
-  getPersistedOperationalPortal,
   saveOperatorSession,
   type OperationalPortal,
 } from '../../utils/authSession';
@@ -25,10 +24,6 @@ function resolvePortalForRole(role: AppRole): OperationalPortal | null {
   if (role === 'garcom') return 'garcom';
   if (MANAGEMENT_ROLES.has(role)) return 'caixa';
   return null;
-}
-
-function detectPersistedPortal(): OperationalPortal | null {
-  return getPersistedOperationalPortal();
 }
 
 function relativeUrlWithParams(params: URLSearchParams): string {
@@ -100,7 +95,10 @@ function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
 }
 
 export default function UnifiedOperationalEntry() {
-  const [activePortal, setActivePortal] = useState<OperationalPortal | null>(() => detectPersistedPortal());
+  // A URL canônica da equipe nunca escolhe um portal a partir de uma sessão
+  // persistida. Toda nova abertura/reload começa no login unificado; somente a
+  // resposta autenticada do backend decide se a pessoa entra em Caixa ou Garçom.
+  const [activePortal, setActivePortal] = useState<OperationalPortal | null>(null);
   const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
