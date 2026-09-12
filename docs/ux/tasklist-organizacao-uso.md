@@ -8,6 +8,7 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [x] Caixa: abrir recebimento de mesa sem pré-selecionar itens prontos; o saldo pode vir preenchido, mas permanece visível e editável.
 - [x] Caixa: revisar hierarquia visual do checkout em mobile e desktop com fluxo real de recebimento; ação principal agora explicita contexto + valor e modais ficam acima do chrome móvel.
 - [x] Caixa: reconciliar pedidos digitais e turno imediatamente ao retomar aba/janela, sem adicionar polling concorrente ao WebSocket.
+- [x] Caixa: impedir respostas de leitura fora de ordem de regredirem pedidos/turno após retomada do background.
 - [ ] Caixa: tornar avanço do Kanban otimista com rollback seguro e proteção contra respostas fora de ordem; concluir a fatia restante do PR #319 sobre a main atual.
 - [ ] App do Garçom: testar fluxo mesa livre → pedido → consumo → fechamento em mobile real/simulado e remover passos redundantes.
 - [ ] Impressão: consolidar diagnóstico, configuração e teste em uma sequência operacional curta.
@@ -24,7 +25,7 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 
 - [ ] Outbox: tornar idempotente também a colisão do mesmo `event_id` entre transações concorrentes.
 - [ ] Estoque: auditar e serializar writers restantes de entrada manual/XML/movimentações administrativas.
-- [ ] Entregador: adicionar timeout/recuperação ao POST de confirmar entrega sem criar retry duplicado.
+- [x] Entregador: timeout no POST de confirmar entrega, sem retry automático; após timeout o PWA reconcilia por GET antes de permitir nova tentativa.
 
 ## P2 — Limpeza e simplificação
 
