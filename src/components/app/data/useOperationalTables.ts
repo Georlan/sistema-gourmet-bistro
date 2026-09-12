@@ -12,6 +12,8 @@ type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
   scopeKey: string;
 };
 
+const TABLES_REQUEST_TIMEOUT_MS = 6_000;
+
 /** Owns the shared table snapshot, loading state and catalog mutations. Operational meanings are unchanged. */
 export function useOperationalTables({
   setFetchError,
@@ -41,6 +43,11 @@ export function useOperationalTables({
     }
     const controller = new AbortController();
     const requestScopeKey = scopeKey;
+    let timedOut = false;
+    const timeoutId = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, TABLES_REQUEST_TIMEOUT_MS);
     fetchTablesAbortControllerRef.current = controller;
 
     try {
@@ -62,11 +69,16 @@ export function useOperationalTables({
         setFetchError(`Erro HTTP mesas ${res.status}: ${res.statusText}`);
       }
     } catch (err: any) {
-      if (err.name !== 'AbortError') {
+      if (err.name === 'AbortError') {
+        if (timedOut && requestScopeKey === scopeKeyRef.current) {
+          setFetchError('A leitura das mesas demorou demais. O KÔMA tentará novamente automaticamente.');
+        }
+      } else {
         console.error('Error fetching tables', err);
         setFetchError(err.message || String(err));
       }
     } finally {
+      globalThis.clearTimeout(timeoutId);
       if (fetchTablesAbortControllerRef.current === controller) {
         fetchTablesAbortControllerRef.current = null;
       }
