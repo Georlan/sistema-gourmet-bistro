@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Activity, CheckCircle2, Grid2X2, Search, Utensils, X } from 'lucide-react';
+import { Activity, Search, X } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
 import { countWaiterSalonTables, projectWaiterSalonTables, type WaiterSalonRow } from '../../domain/waiterSalonProjection';
@@ -101,51 +101,24 @@ export function MesasView({
   ];
 
   return (
-    <div className="w-full text-koma-foreground font-sans select-none space-y-4 sm:space-y-5">
-      <section className="waiter-salon-stage relative overflow-hidden rounded-[24px] sm:rounded-[30px] border border-koma-border bg-koma-panel px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
-        <div className="waiter-salon-stage__plane" aria-hidden="true" />
-        <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
-
-        <div className="relative z-10 flex flex-col xl:flex-row xl:items-end xl:justify-between gap-5 xl:gap-8">
-          <div className="max-w-2xl">
-            <div className="flex items-end gap-3 sm:gap-4">
-              <h2 className="font-serif text-[2rem] sm:text-4xl lg:text-5xl font-black tracking-[-0.055em] leading-none text-koma-foreground">
-                Salão
-              </h2>
-              <span className="hidden sm:inline-block mb-1.5 h-1 w-14 bg-koma-accent -rotate-2" aria-hidden="true" />
-            </div>
-            <p className="mt-2.5 max-w-xl text-xs sm:text-sm text-koma-subtle leading-relaxed">
-              As mesas mudam de aparência conforme o atendimento. Toque para abrir ou agir.
+    <div className="w-full text-koma-foreground font-sans select-none space-y-3 sm:space-y-4">
+      <section className="waiter-salon-stage rounded-[20px] sm:rounded-[24px] border border-koma-border bg-koma-panel px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+          <div>
+            <h2 className="font-serif text-2xl sm:text-3xl font-black tracking-[-0.045em] leading-none text-koma-foreground">
+              Salão
+            </h2>
+            <p className="mt-1.5 max-w-2xl text-[11px] sm:text-xs text-koma-subtle leading-relaxed">
+              Mesa livre abre um novo pedido. Mesa ocupada abre o consumo; itens prontos aparecem no filtro abaixo.
             </p>
           </div>
-
-          <div className="grid grid-cols-3 gap-px overflow-hidden rounded-2xl border border-koma-border bg-koma-border-subtle w-full xl:w-auto xl:min-w-[470px]">
-            <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
-              <div className="flex items-center gap-1.5 text-koma-muted">
-                <Grid2X2 size={12} />
-                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Livres</span>
-              </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.livres}</p>
-            </div>
-            <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
-              <div className="flex items-center gap-1.5 text-koma-danger-text">
-                <Utensils size={12} />
-                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Ocupadas</span>
-              </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.ocupadas}</p>
-            </div>
-            <div className="bg-koma-panel px-3 py-3 sm:px-4 sm:py-3.5">
-              <div className="flex items-center gap-1.5 text-koma-warning-text">
-                <CheckCircle2 size={12} />
-                <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider">Prontas</span>
-              </div>
-              <p className="mt-1 font-mono text-lg sm:text-xl font-bold text-koma-foreground">{counts.prontas}</p>
-            </div>
-          </div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-koma-muted sm:pb-0.5">
+            {counts.todos} {counts.todos === 1 ? 'mesa' : 'mesas'}
+          </span>
         </div>
       </section>
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-koma-subtle">
           <Activity size={14} className="text-koma-accent" />
           <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Filtrar mesas</span>
