@@ -86,7 +86,10 @@ class PrintJournal:
                     status = 'printed',
                     printer_name = EXCLUDED.printer_name,
                     printed_at = EXCLUDED.printed_at,
-                    confirmed_backend = EXCLUDED.confirmed_backend
+                    confirmed_backend = CASE
+                        WHEN journal_jobs.confirmed_backend = 1 THEN 1
+                        ELSE EXCLUDED.confirmed_backend
+                    END
             """, (job_id, idempotency_key, printer_name, now, 1 if confirmed else 0))
             conn.commit()
 
