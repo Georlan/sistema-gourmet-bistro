@@ -438,10 +438,10 @@ def confirmar_entrega_motoboy(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="O pedido informado não é uma entrega por motoboy.",
             )
-        if comanda.motoboy_id not in {None, motoboy_id}:
+        if comanda.motoboy_id != motoboy_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Este pedido pertence a outro motoboy.",
+                detail="Este pedido não está atribuído a este motoboy.",
             )
 
         current_status = normalize_to_order_status(comanda.delivery_status)
@@ -449,11 +449,6 @@ def confirmar_entrega_motoboy(
             return {"status": "sucesso", "mensagem": "Entrega já estava confirmada."}
 
         status_anterior = to_legacy_order_status(current_status)
-        if comanda.motoboy_id is None:
-            # Compatibilidade para despachos legados que chegaram a trânsito sem
-            # persistir o vínculo. O status continua sendo alterado somente pelo Core.
-            comanda.motoboy_id = motoboy_id
-
         _transition_via_application_or_http(
             db,
             restaurant_id=rest_id,
