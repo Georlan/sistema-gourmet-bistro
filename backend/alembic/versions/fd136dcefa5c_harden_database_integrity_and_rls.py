@@ -380,30 +380,54 @@ def _add_check_constraint(
     """)
 
 
-def _secure_default_privileges() -> None:
+def _existing_roles(bind, candidates: tuple[str, ...]) -> list[str]:
+    """Return only roles available on the current PostgreSQL provider."""
+    return list(
+        bind.execute(
+            sa.text(
+                "SELECT rolname FROM pg_roles "
+                "WHERE rolname = ANY(CAST(:roles AS text[])) "
+                "ORDER BY rolname"
+            ),
+            {"roles": list(candidates)},
+        ).scalars()
+    )
+
+
+def _secure_default_privileges(bind) -> None:
     # New application objects must be private unless a migration explicitly
-    # exposes them. Existing intentional public-menu grants are not changed.
-    op.execute("""
-        ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-        REVOKE SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER,
-        MAINTAIN
-        ON TABLES FROM anon, authenticated
+    # exposes them. Supabase provides postgres/anon/authenticated roles, while
+    # Railway and ordinary PostgreSQL installations generally do not. Apply
+    # the same hardening to the role that is actually running the migration.
+    owner = _quote(bind, bind.execute(sa.text("SELECT current_user")).scalar_one())
+    external_roles = _existing_roles(bind, ("anon", "authenticated"))
+
+    for role in external_roles:
+        quoted_role = _quote(bind, role)
+        op.execute(f"""
+            ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public
+            REVOKE SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES,
+            TRIGGER, MAINTAIN ON TABLES FROM {quoted_role}
+        """)
+        op.execute(f"""
+            ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public
+            REVOKE USAGE, SELECT, UPDATE ON SEQUENCES FROM {quoted_role}
+        """)
+        op.execute(f"""
+            ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public
+            REVOKE EXECUTE ON FUNCTIONS FROM {quoted_role}
+        """)
+
+    op.execute(f"""
+        ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public
+        REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC
     """)
-    op.execute("""
-        ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-        REVOKE USAGE, SELECT, UPDATE
-        ON SEQUENCES FROM anon, authenticated
-    """)
-    op.execute("""
-        ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-        REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated
-    """)
-    op.execute("""
-        ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+    op.execute(f"""
+        ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public
         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO koma_app
     """)
-    op.execute("""
-        ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+    op.execute(f"""
+        ALTER DEFAULT PRIVILEGES FOR ROLE {owner} IN SCHEMA public
         GRANT USAGE, SELECT ON SEQUENCES TO koma_app
     """)
 
@@ -419,19 +443,28 @@ def _secure_alembic_version(bind) -> None:
         "DROP POLICY IF EXISTS alembic_migration_admin "
         "ON public.alembic_version"
     )
-    op.execute("""
+    migration_owner = _quote(
+        bind,
+        bind.execute(sa.text("SELECT current_user")).scalar_one(),
+    )
+    op.execute(f"""
         CREATE POLICY alembic_migration_admin
         ON public.alembic_version
         AS PERMISSIVE
         FOR ALL
-        TO postgres
+        TO {migration_owner}
         USING (true)
         WITH CHECK (true)
     """)
-    op.execute(
-        "REVOKE ALL ON TABLE public.alembic_version "
-        "FROM PUBLIC, anon, authenticated, service_role, koma_app"
-    )
+    op.execute("REVOKE ALL ON TABLE public.alembic_version FROM PUBLIC")
+    for role in _existing_roles(
+        bind,
+        ("anon", "authenticated", "service_role", "koma_app"),
+    ):
+        op.execute(
+            "REVOKE ALL ON TABLE public.alembic_version "
+            f"FROM {_quote(bind, role)}"
+        )
 
 
 def upgrade() -> None:
@@ -458,7 +491,7 @@ def upgrade() -> None:
             "ALTER COLUMN restaurante_id DROP DEFAULT"
         )
 
-    _secure_default_privileges()
+    _secure_default_privileges(bind)
     _secure_alembic_version(bind)
 
     for index_name, table, columns in FK_INDEXES:
