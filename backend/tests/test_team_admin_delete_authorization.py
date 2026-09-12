@@ -35,7 +35,7 @@ def setup_database():
     Base.metadata.create_all(bind=engine)
 
     with TestingSessionLocal() as db:
-        db.add(Restaurante(id=1, nome="Security Bistro", slug="security-bistro", plano="pro"))
+        db.merge(Restaurante(id=1, nome="Security Bistro", slug="security-bistro", plano="pro"))
         db.add_all(
             [
                 Usuario(
