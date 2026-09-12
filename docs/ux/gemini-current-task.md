@@ -1,1 +1,0 @@
-Depois do merge desta fatia, o Gemini deve testar o checkout da mesa em mobile e desktop, sem efetuar pagamento real: nenhum método selecionado, nenhum item marcado, nenhum valor pré-preenchido; submissão sem método deve mostrar orientação; selecionar item deve preencher somente o valor daquela seleção.

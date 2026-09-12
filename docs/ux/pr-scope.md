@@ -1,1 +1,0 @@
-Escopo congelado: checkout explícito do Caixa + testes + tracker UX. Não adicionar novas funcionalidades nesta branch antes do CI.
