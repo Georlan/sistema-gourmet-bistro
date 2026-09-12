@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { register } from 'node:module';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 
-import { OperationalDrawer, type OperationalDrawerProps } from '../src/components/app/OperationalDrawer';
+import type { OperationalDrawerProps } from '../src/components/app/OperationalDrawer';
+
+register('./helpers/staticAssetsLoader.mjs', import.meta.url);
+const { OperationalDrawer } = await import('../src/components/app/OperationalDrawer');
 
 function elements(node: ReactNode): ReactElement<Record<string, any>>[] {
   if (Array.isArray(node)) return node.flatMap(elements);
