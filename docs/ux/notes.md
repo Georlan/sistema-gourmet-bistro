@@ -1,0 +1,1 @@
+Primeira fatia executada: checkout explícito do Caixa. Não inclui ainda a reconciliação realtime/Kanban do PR #319; essa será reconstruída separadamente sobre a main atual para evitar carregar conflitos e decisões antigas.
