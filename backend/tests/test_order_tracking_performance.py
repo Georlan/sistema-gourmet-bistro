@@ -34,6 +34,8 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
 
     with SessionLocal() as db:
         db.add(Restaurante(id=restaurante_id, nome="Tracking Perf", slug=f"tracking-perf-{suffix}"))
+        db.flush()
+
         db.add(
             Usuario(
                 id=user_id,
@@ -58,6 +60,7 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
             )
             products.append(product)
             db.add(product)
+        db.flush()
 
         db.add(
             Comanda(
@@ -71,6 +74,8 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
                 fechada=False,
             )
         )
+        db.flush()
+
         db.add(
             Lancamento(
                 id=lancamento_id,
