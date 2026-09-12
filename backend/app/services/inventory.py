@@ -84,6 +84,22 @@ def consumir_estoque_dos_itens(
         produto_nome = produto.nome if produto else item.produto_id
 
         for receita in receitas:
+            insumo = (
+                db.query(Insumo)
+                .filter(
+                    Insumo.restaurante_id == restaurante_id,
+                    Insumo.id == receita.insumo_id,
+                )
+                .with_for_update()
+                .first()
+            )
+            if not insumo:
+                continue
+
+            # A checagem de idempotência precisa acontecer depois do lock do
+            # insumo. Sob READ COMMITTED, uma segunda transação que aguardou o
+            # mesmo row lock passa a enxergar a movimentação commitada pela
+            # primeira e não aplica a baixa novamente.
             existente = (
                 db.query(MovimentacaoEstoque.id)
                 .filter(
@@ -95,18 +111,6 @@ def consumir_estoque_dos_itens(
                 .first()
             )
             if existente:
-                continue
-
-            insumo = (
-                db.query(Insumo)
-                .filter(
-                    Insumo.restaurante_id == restaurante_id,
-                    Insumo.id == receita.insumo_id,
-                )
-                .with_for_update()
-                .first()
-            )
-            if not insumo:
                 continue
 
             quantidade = float(receita.quantidade or 0)
@@ -153,6 +157,20 @@ def estornar_estoque_dos_itens(
             .all()
         )
         for baixa in baixas:
+            insumo = (
+                db.query(Insumo)
+                .filter(
+                    Insumo.restaurante_id == restaurante_id,
+                    Insumo.id == baixa.insumo_id,
+                )
+                .with_for_update()
+                .first()
+            )
+            if not insumo:
+                continue
+
+            # Mesma garantia da baixa: o row lock serializa cancelamentos
+            # concorrentes antes de decidir se o estorno já existe.
             estorno_existente = (
                 db.query(MovimentacaoEstoque.id)
                 .filter(
@@ -164,18 +182,6 @@ def estornar_estoque_dos_itens(
                 .first()
             )
             if estorno_existente:
-                continue
-
-            insumo = (
-                db.query(Insumo)
-                .filter(
-                    Insumo.restaurante_id == restaurante_id,
-                    Insumo.id == baixa.insumo_id,
-                )
-                .with_for_update()
-                .first()
-            )
-            if not insumo:
                 continue
 
             quantidade = float(baixa.quantidade or 0)
