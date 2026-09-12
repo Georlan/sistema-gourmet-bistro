@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import test, { beforeEach } from 'node:test';
 
 import {
@@ -23,6 +24,12 @@ function createMockStorage() {
       Object.keys(values).forEach((key) => delete values[key]);
     },
   };
+}
+
+function fakeJwt(expSeconds: number): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ sub: 'qa-user', exp: expSeconds })).toString('base64url');
+  return `${header}.${payload}.signature`;
 }
 
 (globalThis as any).localStorage = createMockStorage();
@@ -74,6 +81,33 @@ test('sessão canônica de garçom usa apenas aliases de garçom', () => {
   assert.equal(localStorage.getItem('koma_user_role'), 'garcom');
   assert.equal(localStorage.getItem('koma_caixa_token'), null);
   assert.equal(getPersistedOperationalPortal(), 'garcom');
+});
+
+test('reload restaura garçom enquanto o JWT ainda estiver válido, mesmo após a antiga janela local', () => {
+  const expSeconds = Math.floor(Date.now() / 1000) + (10 * 24 * 60 * 60);
+  const token = fakeJwt(expSeconds);
+
+  localStorage.setItem('koma_operator_session', JSON.stringify({
+    token,
+    expiresAt: Date.now() - 1,
+    user: {
+      id: 'waiter-jwt',
+      nome: 'Garçom JWT',
+      role: 'garcom',
+      restaurante_id: 3,
+    },
+  }));
+  localStorage.setItem('koma_waiter_token', token);
+  localStorage.setItem('koma_waiter_id', 'waiter-jwt');
+  localStorage.setItem('koma_waiter_name', 'Garçom JWT');
+  localStorage.setItem('koma_user_role', 'garcom');
+
+  const session = getOperatorSession();
+
+  assert.ok(session);
+  assert.equal(session?.expiresAt, expSeconds * 1000);
+  assert.equal(getPersistedOperationalPortal(), 'garcom');
+  assert.equal(JSON.parse(localStorage.getItem('koma_operator_session') || '{}').expiresAt, expSeconds * 1000);
 });
 
 test('logout de garçom não ressuscita alias a partir da sessão canônica', () => {
