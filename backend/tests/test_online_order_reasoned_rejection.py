@@ -1,3 +1,5 @@
+import datetime
+
 from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine, tenant_session_scope
@@ -53,7 +55,7 @@ def _reset():
         db.close()
 
 
-def _order(order_id: str, phone: str = "11998887777"):
+def _order(order_id: str, phone: str = "11998887777") -> str:
     db = SessionLocal()
     try:
         with tenant_session_scope(db, RID):
@@ -71,8 +73,10 @@ def _order(order_id: str, phone: str = "11998887777"):
                 )
             )
             db.flush()
-            create_conversation_for_order(db, RID, order_id)
+            _conversation, tracking_token = create_conversation_for_order(db, RID, order_id)
+            assert tracking_token
             db.commit()
+            return tracking_token
     finally:
         db.close()
 
@@ -114,14 +118,15 @@ def test_reasoned_rejection_uses_canonical_lifecycle():
         db.close()
 
 
-def test_rejection_can_block_future_orders_in_same_transaction():
+def test_rejection_can_block_future_orders_and_secure_tracking_explains_why():
     _reset()
-    _order("reject-block-1", "11997776666")
+    tracking_token = _order("reject-block-1", "11997776666")
+    reason = "Spam confirmado pela operação"
     response = client.post(
         "/api/online-orders/orders/reject-block-1/reject",
         headers=_headers(),
         json={
-            "reason": "Spam confirmado pela operação",
+            "reason": reason,
             "block_customer": True,
             "block_duration_hours": 24,
         },
@@ -137,8 +142,35 @@ def test_rejection_can_block_future_orders_in_same_transaction():
                 OnlineOrderCustomerBlock.id == block_id
             ).one()
             assert block.active is True
-            assert block.reason == "Spam confirmado pela operação"
+            assert block.reason == reason
             assert block.phone_hash
             assert "11997776666" not in block.phone_hash
     finally:
         db.close()
+
+    tracked = client.get(
+        f"/api/cardapio/pedidos/acompanhar/{tracking_token}"
+    )
+    assert tracked.status_code == 200, tracked.text
+    ordering_block = tracked.json()["ordering_block"]
+    assert ordering_block["active"] is True
+    assert ordering_block["reason"] == reason
+    assert ordering_block["created_at"]
+    assert ordering_block["expires_at"]
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, RID):
+            block = db.query(OnlineOrderCustomerBlock).filter(
+                OnlineOrderCustomerBlock.id == block_id
+            ).one()
+            block.expires_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=1)
+            db.commit()
+    finally:
+        db.close()
+
+    expired = client.get(
+        f"/api/cardapio/pedidos/acompanhar/{tracking_token}"
+    )
+    assert expired.status_code == 200, expired.text
+    assert expired.json()["ordering_block"] is None

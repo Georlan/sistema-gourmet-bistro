@@ -594,6 +594,7 @@ export default function CardapioOrdersDrawer({
                     const rejected = state.rejected;
                     const isDelivery = state.fulfillment === "delivery";
                     const unread = unreadFor(order.id);
+                    const hasTracking = Boolean(order.tracking_url || order.tracking_token);
 
                     return (
                       <div
@@ -602,7 +603,9 @@ export default function CardapioOrdersDrawer({
                           "rounded-2xl border p-3.5 transition",
                           unread > 0
                             ? "border-emerald-400/70 bg-emerald-950/25"
-                            : "border-koma-border/80 bg-koma-panel/60",
+                            : rejected
+                              ? "border-rose-500/25 bg-rose-500/[0.05]"
+                              : "border-koma-border/80 bg-koma-panel/60",
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -648,24 +651,34 @@ export default function CardapioOrdersDrawer({
                         </div>
 
                         <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-koma-border/40 pt-2 text-[10px]">
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onSelectOrder(order.id);
-                                closeDrawer();
-                              }}
-                              className="text-koma-muted hover:text-white"
-                            >
-                              Ver detalhes
-                            </button>
-                            {(order.tracking_url || order.tracking_token) && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {rejected && hasTracking ? (
+                              <button
+                                type="button"
+                                onClick={() => openChat(order.id)}
+                                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/35 bg-rose-500/10 px-3 py-1.5 font-black text-rose-300 transition hover:bg-rose-500/20 hover:text-rose-200"
+                              >
+                                <XCircle className="h-3.5 w-3.5" /> Ver motivo da recusa
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onSelectOrder(order.id);
+                                  closeDrawer();
+                                }}
+                                className="rounded-xl border border-koma-border bg-koma-card px-3 py-1.5 font-bold text-koma-muted transition hover:text-white"
+                              >
+                                Ver detalhes
+                              </button>
+                            )}
+                            {!rejected && hasTracking && (
                               <button
                                 type="button"
                                 onClick={() => openChat(order.id)}
                                 className={clsx(
-                                  "inline-flex items-center gap-1 font-bold",
-                                  unread > 0 ? "text-emerald-300" : "text-emerald-400 hover:text-emerald-300",
+                                  "inline-flex items-center gap-1 rounded-xl px-2 py-1.5 font-bold",
+                                  unread > 0 ? "bg-emerald-500/15 text-emerald-300" : "text-emerald-400 hover:text-emerald-300",
                                 )}
                               >
                                 <MessageCircle className="h-3 w-3" /> {unread > 0 ? "Ler mensagem" : "Chat"}
