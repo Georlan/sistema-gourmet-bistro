@@ -31,6 +31,11 @@ class SaasMercadoPagoService:
         self.is_mock = not self.access_token or self.access_token.startswith("mock") or self.access_token == "test"
         self.mock_allowed = self.environment in {"test", "development"}
 
+    def checkout_capabilities(self):
+        enabled = self.mock_allowed or os.getenv("KOMA_SAAS_CHECKOUT_ENABLED", "false").lower() == "true"
+        ready = enabled and (self.mock_allowed or (not self.is_mock and bool(settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET)))
+        return {"pix": bool(ready), "credit_card": bool(ready and (self.mock_allowed or settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY)), "publicKey": settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY if ready else ""}
+
     def _ensure_provider_ready(self) -> None:
         if self.is_mock and not self.mock_allowed:
             raise SaasMercadoPagoError(
@@ -130,7 +135,7 @@ class SaasMercadoPagoService:
 
         try:
             with self._client() as client:
-                resp = client.post("/preapproval", json=payload)
+                resp = client.post("/preapproval", json=payload, headers={"X-Idempotency-Key": str(uuid.uuid5(uuid.NAMESPACE_URL, f"koma:subscription:{protocol}"))})
                 if resp.status_code >= 400:
                     data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     detail = data.get("message") or data.get("error") or resp.text
@@ -143,6 +148,31 @@ class SaasMercadoPagoService:
         except httpx.RequestError as exc:
             logger.error("Network error connecting to Mercado Pago preapproval API: %s", exc)
             raise SaasMercadoPagoError("Erro de comunicação com o gateway de pagamento.") from exc
+
+    def find_preapproval(self, protocol: str, payer_email: str) -> dict[str, Any] | None:
+        self._ensure_provider_ready()
+        try:
+            with self._client() as client:
+                response = client.get("/preapproval/search", params={"payer_email": payer_email})
+                if response.status_code >= 400:
+                    raise SaasMercadoPagoError("Não foi possível recuperar a autorização.")
+                matches = [row for row in response.json().get("results", []) if str(row.get("external_reference")) == protocol]
+                if len(matches) > 1:
+                    raise SaasMercadoPagoError("Mais de uma autorização encontrada; revisão necessária.")
+                return matches[0] if matches else None
+        except httpx.RequestError as exc:
+            raise SaasMercadoPagoError("Não foi possível recuperar a autorização.") from exc
+
+    def get_authorized_payment(self, invoice_id: str) -> dict[str, Any]:
+        self._ensure_provider_ready()
+        try:
+            with self._client() as client:
+                response = client.get(f"/authorized_payments/{invoice_id}")
+                if response.status_code >= 400:
+                    raise SaasMercadoPagoError("Não foi possível consultar a cobrança.")
+                return response.json()
+        except httpx.RequestError as exc:
+            raise SaasMercadoPagoError("Falha ao consultar a cobrança.") from exc
 
     def get_preapproval(self, preapproval_id: str) -> dict[str, Any]:
         """Consulta dados e status de um preapproval no Mercado Pago."""
@@ -193,6 +223,7 @@ class SaasMercadoPagoService:
         payer_email: str,
         payer_name: str,
         payer_tax_id: str,
+        attempt_reference: str | None = None,
     ) -> dict[str, Any]:
         """
         Cria um pagamento Pix antecipado para contratação do plano anual.
@@ -230,7 +261,7 @@ class SaasMercadoPagoService:
                 },
             },
         }
-        idempotency_key = self._annual_pix_idempotency_key(protocol)
+        idempotency_key = self._annual_pix_idempotency_key(f"{protocol}:{attempt_reference}" if attempt_reference else protocol)
 
         try:
             with self._client() as client:

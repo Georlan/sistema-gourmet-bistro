@@ -1,3 +1,4 @@
+import { SubscriptionControl } from './SubscriptionControl';
 import React, { useState, useEffect, useRef } from 'react';
 import clsx from 'clsx';
 import { motion } from 'motion/react';
@@ -270,7 +271,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
         </div>
       )}
 
-      {activeSubTab === 'contrato_documentos' && <ContractDocumentsPanel />}
+      {activeSubTab === 'contrato_documentos' && <><SubscriptionControl /><ContractDocumentsPanel /></>}
 
       {/* 3. SUB-ABA 2: PLANOS & UPGRADE */}
       {activeSubTab === 'planos_upgrade' && (

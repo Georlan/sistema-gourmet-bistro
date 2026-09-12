@@ -11,10 +11,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..database import SessionLocal, get_db
+from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Restaurante
 from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import (
+    contract_billing_terms,
     get_billing_setup,
     get_billing_setup_by_provider_sub,
     upsert_billing_setup,
@@ -71,6 +72,11 @@ def _normalized_money(value: object) -> Decimal | None:
         return None
 
 
+@router.get("/payment-methods")
+def available_payment_methods():
+    return default_saas_mp_service.checkout_capabilities()
+
+
 @router.post("/{protocol}/billing/setup")
 def setup_contract_billing(
     protocol: str,
@@ -78,12 +84,20 @@ def setup_contract_billing(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    from ..services.saas_checkout_lock import checkout_lock
+    with checkout_lock(db, _normalize_protocol(protocol)):
+        return _setup_contract_billing(protocol, payload, background_tasks, db)
+
+
+def _setup_contract_billing(protocol, payload, background_tasks, db):
     """
     Configura o método de pagamento para o contrato assinado.
     Para cartão de crédito (Arquitetura B): cria o preapproval com 7 dias de trial no Mercado Pago
     e ativa atomicamente o tenant e sua assinatura no KÔMA.
     Para Pix: gera o pagamento Pix para plano anual.
     """
+    if not default_saas_mp_service.checkout_capabilities().get(payload.payment_method_type):
+        raise HTTPException(503, "Inscrição salva. Os pagamentos estão temporariamente indisponíveis; tente novamente mais tarde.")
     normalized_protocol = _normalize_protocol(protocol)
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
     if acceptance is None:
@@ -106,12 +120,48 @@ def setup_contract_billing(
     is_annual = raw_cycle in ("annual", "anual")
     canonical_cycle = "annual" if is_annual else "monthly"
 
+    terms = contract_billing_terms(db, normalized_protocol)
     payer_email = (payload.payer_email or str(acceptance.get("email") or "")).strip().lower()
     if not payer_email or "@" not in payer_email:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="E-mail do pagador inválido.",
         )
+
+    renewal_reference = None
+    existing = get_billing_setup(db, normalized_protocol)
+    if existing and existing.status == "ready":
+        provision_res = provision_restaurant_for_contract(db, acceptance=acceptance, billing_setup=existing, actor="saas_checkout", background_tasks=background_tasks)
+        return {"success": True, "status": "ready", "restaurantId": str(provision_res["restaurant_id"]), "slug": provision_res["slug"], "trialDays": 7, "trialEndsAt": provision_res["trial_ends_at"].isoformat(), "activationToken": provision_res.get("invitation_token")}
+    if existing and existing.status == "pending" and existing.payment_method_type == "credit_card":
+        try:
+            recovered = (default_saas_mp_service.get_preapproval(existing.provider_subscription_id)
+                if existing.provider_subscription_id else default_saas_mp_service.find_preapproval(normalized_protocol, payer_email))
+        except SaasMercadoPagoError as exc:
+            raise HTTPException(502, "Ainda não foi possível confirmar a autorização anterior. Nenhuma nova cobrança foi criada.") from exc
+        if not recovered or recovered.get("status") != "authorized":
+            raise HTTPException(409, "A autorização anterior está em confirmação. Aguarde antes de tentar novamente.")
+        recurring = recovered.get("auto_recurring") or {}
+        if str(recovered.get("external_reference")) != normalized_protocol or _normalized_money(recurring.get("transaction_amount")) != _normalized_money(terms["commercial"]["billingAmount"]) or recurring.get("currency_id") != "BRL":
+            raise HTTPException(409, "A autorização anterior precisa de revisão; os dados não correspondem ao contrato.")
+        upsert_billing_setup(db, protocol=normalized_protocol, status="ready", payment_method_type="credit_card", provider_subscription_id=str(recovered["id"]), billing_cycle=canonical_cycle)
+        db.commit()
+        return _setup_contract_billing(protocol, payload, background_tasks, db)
+
+    if existing and existing.status == "pending" and existing.provider_subscription_id:
+        if existing.payment_method_type != payload.payment_method_type:
+            raise HTTPException(409, "Já existe um pagamento pendente. Conclua essa tentativa antes de trocar o método.")
+        if existing.payment_method_type == "pix":
+            try:
+                payment = default_saas_mp_service.get_payment(existing.provider_subscription_id)
+            except SaasMercadoPagoError as exc:
+                raise HTTPException(502, "Não foi possível recuperar o Pix. Tente novamente.") from exc
+            if payment.get("status") in {"cancelled", "rejected"}:
+                # A new key is safe only after the previous charge is terminal at the provider.
+                renewal_reference = existing.provider_subscription_id
+            else:
+                transaction = (payment.get("point_of_interaction") or {}).get("transaction_data") or {}
+                return {"success": True, "status": "pending", "paymentId": existing.provider_subscription_id, "qrCode": transaction.get("qr_code"), "qrCodeBase64": transaction.get("qr_code_base64"), "ticketUrl": transaction.get("ticket_url"), "expiresAt": payment.get("date_of_expiration")}
 
     # 1. Cartão de Crédito (Arquitetura B)
     if payload.payment_method_type == "credit_card":
@@ -122,8 +172,10 @@ def setup_contract_billing(
                 detail="card_token_id é obrigatório para pagamento com cartão de crédito.",
             )
 
-        amount = subscription_annual_total(plan) if is_annual else subscription_monthly_price(plan)
+        amount = Decimal(terms["commercial"]["billingAmount"])
 
+        upsert_billing_setup(db, protocol=normalized_protocol, contract_acceptance_id=str(acceptance["acceptance_id"]), payment_method_type="credit_card", status="pending", billing_cycle=canonical_cycle)
+        db.commit()
         try:
             mp_res = default_saas_mp_service.create_preapproval(
                 protocol=normalized_protocol,
@@ -135,12 +187,19 @@ def setup_contract_billing(
                 trial_days=7,
             )
         except SaasMercadoPagoError as exc:
-            logger.warning("Preapproval creation failed for %s: %s", normalized_protocol, exc)
+            outcome = "failed" if exc.status_code is not None and 400 <= exc.status_code < 500 else "pending"
+            upsert_billing_setup(db, protocol=normalized_protocol, payment_method_type="credit_card", status=outcome, billing_cycle=canonical_cycle)
+            db.commit()
+            logger.warning("Preapproval creation failed for %s", normalized_protocol)
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=str(exc),
             ) from exc
 
+        if str(mp_res.get("status") or "").lower() != "authorized" or not mp_res.get("id"):
+            upsert_billing_setup(db, protocol=normalized_protocol, payment_method_type="credit_card", status="pending", provider_subscription_id=str(mp_res["id"]) if mp_res.get("id") else None, billing_cycle=canonical_cycle)
+            db.commit()
+            raise HTTPException(402, "O provedor ainda não autorizou a assinatura. Aguarde a confirmação para tentar novamente.")
         sub_id = str(mp_res.get("id") or "")
         payer_id = str(mp_res.get("payer_id") or "")
 
@@ -187,9 +246,9 @@ def setup_contract_billing(
                 detail="O pagamento via Pix está disponível exclusivamente para o plano anual com pagamento antecipado.",
             )
 
-        amount = subscription_annual_total(plan)
+        amount = Decimal(terms["commercial"]["billingAmount"])
         payer_name = str(acceptance.get("representative_name") or acceptance.get("contracting_party_name") or "Cliente")
-        payer_tax_id = str(acceptance.get("representative_tax_id") or acceptance.get("contracting_party_tax_id") or "")
+        payer_tax_id = str(terms["representative"]["taxId"])
 
         try:
             pix_res = default_saas_mp_service.create_annual_pix(
@@ -199,6 +258,7 @@ def setup_contract_billing(
                 payer_email=payer_email,
                 payer_name=payer_name,
                 payer_tax_id=payer_tax_id,
+                attempt_reference=renewal_reference,
             )
         except SaasMercadoPagoError as exc:
             logger.warning("Pix creation failed for %s: %s", normalized_protocol, exc)
@@ -252,8 +312,9 @@ def get_contract_billing_status(
     linked_tenant_id = acceptance.get("linked_restaurante_id")
     restaurant_slug = None
     if linked_tenant_id is not None:
-        restaurant = db.query(Restaurante).filter(Restaurante.id == linked_tenant_id).one_or_none()
-        restaurant_slug = str(restaurant.slug) if restaurant and restaurant.slug else None
+        with tenant_session_scope(db, linked_tenant_id):
+            restaurant = db.query(Restaurante).filter(Restaurante.id == linked_tenant_id).one_or_none()
+            restaurant_slug = str(restaurant.slug) if restaurant and restaurant.slug else None
 
     return {
         "protocol": normalized_protocol,
@@ -285,6 +346,8 @@ async def mercado_pago_saas_webhook(
     except Exception:
         payload = {}
 
+    if not isinstance(payload, dict) or not isinstance(payload.get("data", {}), dict):
+        raise HTTPException(400, "Notificação inválida.")
     data = payload.get("data") or {}
     data_id = str(data.get("id") or payload.get("id") or "").strip()
     event_type = str(payload.get("type") or payload.get("action") or "").strip().lower()
@@ -301,53 +364,56 @@ async def mercado_pago_saas_webhook(
 
     logger.info("SaaS Mercado Pago webhook received event=%s data_id=%s", event_type, data_id)
 
+    if event_type == "subscription_authorized_payment":
+        from ..services.saas_invoice_reconciliation import reconcile_invoice
+        return reconcile_invoice(db, data_id)
+
     # 1. Evento de Assinatura Recorrente (Preapproval)
     if "preapproval" in event_type or payload.get("entity") == "preapproval":
         sub_id = data_id
         if sub_id:
             billing = get_billing_setup_by_provider_sub(db, "mercado_pago", sub_id)
-            if billing and billing.restaurante_id:
-                now = datetime.datetime.now(datetime.timezone.utc)
-                saas_sub = db.query(SaaSSubscription).filter(
-                    SaaSSubscription.restaurante_id == billing.restaurante_id
-                ).one_or_none()
-
-                if saas_sub:
-                    try:
-                        mp_data = default_saas_mp_service.get_preapproval(sub_id)
-                        mp_status = str(mp_data.get("status") or "").lower()
-
-                        if mp_status == "authorized":
-                            # Verifica se ainda está no período de trial
-                            if saas_sub.trial_ends_at and now <= saas_sub.trial_ends_at:
-                                saas_sub.status = "trialing"
-                            else:
-                                saas_sub.status = "active"
-                                saas_sub.grace_until = None
-                        elif mp_status == "paused":
-                            saas_sub.status = "suspended"
-                        elif mp_status == "cancelled":
-                            saas_sub.status = "canceled"
-                        elif mp_status == "pending":
-                            saas_sub.status = "past_due"
-                            if not saas_sub.grace_until:
-                                saas_sub.grace_until = now + datetime.timedelta(days=3)
-
-                        saas_sub.updated_at = now
+            if billing is None:
+                try:
+                    mandate = default_saas_mp_service.get_preapproval(sub_id)
+                except SaasMercadoPagoError as exc:
+                    raise HTTPException(502, "Não foi possível recuperar a autorização.") from exc
+                reference = str(mandate.get("external_reference") or "")
+                if _PROTOCOL_RE.fullmatch(reference):
+                    pending = get_billing_setup(db, reference)
+                    if pending and pending.status == "pending" and pending.payment_method_type == "credit_card" and not pending.provider_subscription_id:
+                        upsert_billing_setup(db, protocol=reference, status="pending", provider_subscription_id=sub_id, billing_cycle=pending.billing_cycle)
                         db.commit()
-                        logger.info(
-                            "Updated SaaS subscription status to %s for tenant %s via webhook",
-                            saas_sub.status, billing.restaurante_id
-                        )
-                    except Exception as exc:
-                        logger.error("Error processing preapproval webhook %s: %s", sub_id, exc)
+                        billing = get_billing_setup(db, reference)
+                    elif pending is None:
+                        raise HTTPException(503, "Autorização ainda não associada. Reenvie a notificação.")
+            if billing and not billing.restaurante_id:
+                from ..services.saas_checkout_lock import checkout_lock
+                with checkout_lock(db, billing.protocol):
+                    _setup_contract_billing(billing.protocol, SaasBillingSetupRequest(payment_method_type="credit_card"), background_tasks, db)
+            if billing and billing.restaurante_id:
+                with tenant_session_scope(db, billing.restaurante_id):
+                    saas_sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == billing.restaurante_id).one_or_none()
+                    if saas_sub:
+                        try:
+                            mp_data = default_saas_mp_service.get_preapproval(sub_id)
+                        except SaasMercadoPagoError as exc:
+                            raise HTTPException(502, "Não foi possível consultar a assinatura.") from exc
+                        mp_status = str(mp_data.get("status") or "").lower()
+                        if mp_status == "paused": saas_sub.status = "suspended"
+                        elif mp_status == "cancelled": saas_sub.status = "canceled"
+                        # authorized confirms a mandate, never a paid invoice.
+                        saas_sub.updated_at = datetime.datetime.now(datetime.timezone.utc)
+                        db.commit()
 
     # 2. Evento de Pagamento (ex.: Pix Anual aprovado)
     elif "payment" in event_type:
         payment_id = data_id
         if payment_id:
             billing = get_billing_setup_by_provider_sub(db, "mercado_pago", payment_id)
-            if billing and billing.status == "pending":
+            if billing is None:
+                raise HTTPException(503, "Pagamento ainda não associado. Reenvie a notificação.")
+            if billing and billing.status in {"pending", "ready"}:
                 if billing.payment_method_type != "pix" or billing.billing_cycle not in ("annual", "anual"):
                     logger.warning(
                         "Ignoring payment webhook for incompatible billing setup protocol=%s method=%s cycle=%s",
@@ -400,7 +466,7 @@ async def mercado_pago_saas_webhook(
                     return {"status": "received", "activated": False, "reason": "acceptance_not_found"}
 
                 plan = str(acceptance.get("plan") or "pro").lower()
-                expected_amount = _normalized_money(subscription_annual_total(plan))
+                expected_amount = _normalized_money(contract_billing_terms(db, billing.protocol)["commercial"]["billingAmount"])
                 provider_amount = _normalized_money(provider_payment.get("transaction_amount"))
                 if provider_amount is None or expected_amount is None or provider_amount != expected_amount:
                     logger.warning(

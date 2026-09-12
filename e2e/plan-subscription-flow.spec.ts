@@ -6,70 +6,52 @@ async function expectNoHorizontalOverflow(page: import('@playwright/test').Page)
 }
 
 test.describe('checkout público de adesão KÔMA', () => {
-  test('seleciona plano e ciclo, sincroniza a URL e separa método ativo de previews', async ({ page }) => {
-    await page.goto('/contratar');
-
-    await expect(page.getByRole('heading', { name: 'Escolha o KÔMA certo para sua operação.' })).toBeVisible();
-
-    const planGroup = page.getByRole('radiogroup', { name: 'Escolha um plano KÔMA' });
-    const proPlan = planGroup.getByRole('radio', { name: /^Pro\b/ });
-    const premiumPlan = planGroup.getByRole('radio', { name: /^Premium\b/ });
-
-    await expect(proPlan).toHaveAttribute('aria-checked', 'true');
-    await premiumPlan.click();
-    await expect(premiumPlan).toHaveAttribute('aria-checked', 'true');
-    await expect(page).toHaveURL(/\/contratar\/premium\?cobranca=mensal$/);
-
-    const billingGroup = page.getByRole('radiogroup', { name: 'Ciclo de cobrança' });
-    const annualBilling = billingGroup.getByRole('radio', { name: /^Anual\b/ });
-    await annualBilling.click();
-    await expect(annualBilling).toHaveAttribute('aria-checked', 'true');
-    await expect(page).toHaveURL(/\/contratar\/premium\?cobranca=anual$/);
-    await expect(page.getByText('Economize 10%', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Valor mensal equivalente não representa 12 parcelas/)).toBeVisible();
-
-    await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page.getByRole('heading', { name: 'Ative seu restaurante.' })).toBeVisible();
-
-    const paymentGroup = page.getByRole('radiogroup', { name: 'Forma de pagamento disponível' });
-    await expect(paymentGroup.getByRole('radio', { name: /^Cartão de crédito\b/ })).toBeVisible();
-    await expect(paymentGroup.getByRole('radio')).toHaveCount(1);
-
-    const pixPreview = page.getByRole('button', { name: /^Pix\b/ });
-    await expect(pixPreview).toBeVisible();
-    await expect(page.getByRole('button', { name: /^NuPay\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Mercado Pago\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Anual parcelado no cartão\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Boleto bancário\b/ })).toHaveCount(0);
-
-    await pixPreview.click();
-    await expect(page.getByText('Pix · em validação', { exact: true })).toBeVisible();
-    await expect(page.getByText(/só será ativado depois da confirmação real do pagamento/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
-
+  test('salva o contato antes de pedir documento ou cartão e retoma após recarregar', async ({ page }) => {
+    const data = { restaurant_name: 'Bistrô Novo', responsible_name: 'Ana Silva', email: 'ana@example.com', phone: '85999999999', plan: 'premium', billing_cycle: 'anual' };
+    let saved = false;
+    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: true, pix: true, publicKey: 'TEST-public' } }));
+    await page.route('**/api/signups', async route => {
+      expect(route.request().postDataJSON()).toEqual(data); saved = true;
+      await route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } });
+    });
+    await page.route('**/api/signups/current', route => route.fulfill({ json: { id: '12345678-1234-1234-1234-123456789012', data, receipt: null } }));
+    await page.goto('/contratar/premium?cobranca=anual');
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Vamos começar.' })).toBeVisible();
+    await expect(page.getByText('Número do cartão', { exact: true })).toHaveCount(0);
+    await page.getByLabel('Nome do restaurante', { exact: true }).fill(data.restaurant_name);
+    await page.getByLabel('Seu nome', { exact: true }).fill(data.responsible_name);
+    await page.getByLabel('E-mail', { exact: true }).fill(data.email);
+    await page.getByLabel('WhatsApp', { exact: true }).fill(data.phone);
+    await page.getByRole('button', { name: 'Salvar e continuar' }).click();
+    await expect(page.getByText('Inscrição recebida.', { exact: true })).toBeVisible();
+    expect(saved).toBe(true);
+    const storage = await page.evaluate(() => JSON.stringify(localStorage));
+    expect(storage).not.toContain(data.email);
+    expect(storage).not.toContain(data.phone);
+    await page.reload();
+    await expect(page.getByText('Sua inscrição foi recuperada. Continue de onde parou.')).toBeVisible();
+    await expect(page.getByLabel('E-mail', { exact: true })).toHaveValue(data.email);
+    await page.getByRole('radio', { name: /Pix · pagamento único/ }).click();
+    await expect(page.getByText('Número do cartão', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Pagamento único com 12 meses de acesso e 7 dias adicionais de bônus.')).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
-  test('mensal preserva o trial e apresenta Pix Automático e NuPay como próximos meios', async ({ page }) => {
+  test('mensal permite salvar a inscrição mesmo com pagamentos indisponíveis', async ({ page }) => {
+    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: false, pix: false, publicKey: '' } }));
+    await page.route('**/api/signups', route => route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } }));
     await page.goto('/contratar/pocket?cobranca=mensal');
-
-    const planGroup = page.getByRole('radiogroup', { name: 'Escolha um plano KÔMA' });
-    await expect(planGroup.getByRole('radio', { name: /^Pocket\b/ })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByText('7 dias sem mensalidade fixa no cartão.', { exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Continuar' }).click();
-    const paymentGroup = page.getByRole('radiogroup', { name: 'Forma de pagamento disponível' });
-    await expect(paymentGroup.getByRole('radio', { name: /^Cartão de crédito\b/ })).toBeVisible();
-    await expect(paymentGroup.getByRole('radio')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: /^Pix Automático\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^NuPay\b/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Pix\b/ })).toHaveCount(1);
-    await expect(page.getByText('7 dias sem mensalidade fixa. A taxa por pedidos online pagos continua aplicável.', { exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: /^Pix Automático\b/ }).click();
-    await expect(page.getByText('Pix Automático · em breve', { exact: true })).toBeVisible();
-    await expect(page.getByText(/Não usaremos comprovante de Pix agendado/)).toBeVisible();
-
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByLabel('Nome do restaurante', { exact: true }).fill('Bistrô Novo');
+    await page.getByLabel('Seu nome', { exact: true }).fill('Ana Silva');
+    await page.getByLabel('E-mail', { exact: true }).fill('ana@example.com');
+    await page.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
+    await page.getByRole('button', { name: 'Salvar e continuar' }).click();
+    await expect(page.getByText(/Os pagamentos estão temporariamente indisponíveis/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: /Pix/ })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
   });
 

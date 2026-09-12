@@ -244,6 +244,11 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
     if sub is not None:
         sub_status = str(sub.status or "").strip().lower()
         if sub_status == "active":
+            ends_at = sub.current_period_end
+            if ends_at is not None and ends_at.tzinfo is None:
+                ends_at = ends_at.replace(tzinfo=datetime.timezone.utc)
+            if ends_at is not None and now > ends_at:
+                return TenantEntitlement(allowed=False, reason="paid_period_expired", billing_status="past_due")
             return TenantEntitlement(allowed=True, reason="subscription_active", billing_status="active")
 
         if sub_status == "trialing":
@@ -307,3 +312,24 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
         reason="enforcement_disabled_transitional",
         billing_status="pending",
     )
+
+
+def annual_access_end(start):
+    import calendar
+    year = start.year + 1
+    return start.replace(year=year, day=min(start.day, calendar.monthrange(year, start.month)[1])) + datetime.timedelta(days=7)
+
+
+def contract_billing_terms(db, protocol):
+    import json
+    from ..crypt import decrypt_field
+    from ..contract_models import ContractAcceptance
+    if db.get_bind().dialect.name == "postgresql":
+        raw = db.execute(text("SELECT koma_internal.contract_terms_for_billing(:protocol)"), {"protocol": protocol}).scalar()
+    else:
+        row = db.query(ContractAcceptance).filter(ContractAcceptance.protocol == protocol).one_or_none()
+        raw = row.receipt_snapshot_encrypted if row else None
+    if not raw:
+        from fastapi import HTTPException
+        raise HTTPException(409, "Comprovante contratual indisponível para cobrança.")
+    return json.loads(decrypt_field(raw))

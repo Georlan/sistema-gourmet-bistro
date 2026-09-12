@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Literal
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..database import get_db, require_tenant_id
 from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
@@ -498,10 +498,10 @@ def delete_produto(
     return
 
 class ProdutoImportItem(BaseModel):
-    id: str
-    nome: str
-    preco: float
-    categoria_id: str
+    id: str = Field(min_length=1, max_length=100)
+    nome: str = Field(min_length=1, max_length=255)
+    preco: float = Field(ge=0, allow_inf_nan=False)
+    categoria_id: str = Field(min_length=1, max_length=100)
     descricao: Optional[str] = None
     imagem: Optional[str] = None
     imagens_galeria: Optional[List[str]] = None
@@ -513,6 +513,7 @@ class CategoriaImportItem(BaseModel):
     destino_impressao: str = "COZINHA"
 
 class CardapioImportPayload(BaseModel):
+    mode: Literal["merge", "replace"] = "replace"
     categories: Optional[List[Union[str, CategoriaImportItem]]] = Field(
         default=None,
         validation_alias=AliasChoices("categories", "categorias"),
@@ -542,6 +543,11 @@ def importar_cardapio(
     O commit é único e depois um evento atualiza caixa, garçom e cardápio digital.
     """
     rest_id = require_tenant_id()
+    incoming = (payload.products or []) if isinstance(payload, CardapioImportPayload) else payload
+    if not incoming or len(incoming) > 2000:
+        raise HTTPException(422, "Importe entre 1 e 2000 produtos. Nenhum item foi alterado.")
+    if len({item.id for item in incoming}) != len(incoming):
+        raise HTTPException(422, "O arquivo contém IDs de produtos duplicados.")
 
     if isinstance(payload, CardapioImportPayload):
         produtos_data = payload.products or []
@@ -581,7 +587,8 @@ def importar_cardapio(
     else:
         produtos_data = payload
 
-    db.query(Produto).filter(Produto.restaurante_id == rest_id).update({Produto.ativo: False})
+    if not isinstance(payload, CardapioImportPayload) or payload.mode == "replace":
+        db.query(Produto).filter(Produto.restaurante_id == rest_id).update({Produto.ativo: False})
 
     imported_products = []
 

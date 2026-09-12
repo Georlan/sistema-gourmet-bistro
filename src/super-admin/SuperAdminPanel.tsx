@@ -39,7 +39,10 @@ import { SuperAdminOperationsTab } from "./SuperAdminOperationsTab";
 import { SuperAdminAuditTab, type AuditLogItem } from "./SuperAdminAuditTab";
 import { SuperAdminSettingsTab } from "./SuperAdminSettingsTab";
 
+import { SuperAdminSignupsTab } from "./SuperAdminSignupsTab";
+
 type TabId =
+  | "signups"
   | "overview"
   | "incidents"
   | "tenants"
@@ -220,6 +223,7 @@ export default function SuperAdminPanel() {
   };
 
   const navItems = [
+    { id: "signups" as TabId, label: "Inscrições", icon: ClipboardList, badge: 0 },
     { id: "overview" as TabId, label: "Visão geral", icon: LayoutDashboard, badge: 0 },
     { id: "incidents" as TabId, label: "Central de incidentes", icon: AlertOctagon, badge: 0 },
     { id: "tenants" as TabId, label: "Restaurantes", icon: Store, badge: 0 },
@@ -344,6 +348,7 @@ export default function SuperAdminPanel() {
               globalSearch={globalSearch}
             />
           )}
+          {activeTab === "signups" && <SuperAdminSignupsTab globalSearch={globalSearch} />}
           {activeTab === "contracts" && (
             <SuperAdminContractsTab
               items={contracts}
