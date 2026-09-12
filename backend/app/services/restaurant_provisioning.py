@@ -246,6 +246,20 @@ def provision_restaurant_for_contract(
             )
             db.add(canonical_sub)
 
+            if billing_setup.payment_method_type == "credit_card" and billing_setup.provider_subscription_id:
+                from .saas_mercadopago import default_saas_mp_service, SaasMercadoPagoError
+                try:
+                    default_saas_mp_service.update_preapproval_next_payment_date(
+                        billing_setup.provider_subscription_id,
+                        trial_ends_at,
+                    )
+                except SaasMercadoPagoError as exc:
+                    logger.warning(
+                        "Falha ao sincronizar término de trial no Mercado Pago para %s: %s",
+                        protocol,
+                        exc,
+                    )
+
         db.add(
             SuperAdminAuditLog(
                 restaurante_id=tenant_id,

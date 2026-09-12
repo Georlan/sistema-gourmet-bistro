@@ -157,3 +157,53 @@ def test_webhook_signature_verification(monkeypatch):
         request_id=request_id,
         data_id=data_id,
     ) is False
+
+
+def test_test_token_is_forbidden_in_production(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    with pytest.raises(SaasMercadoPagoError, match="proibidas em ambiente de produção"):
+        SaasMercadoPagoService("TEST-token-12345")
+
+
+def test_test_token_is_allowed_in_homologation(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "homologation")
+    service = SaasMercadoPagoService("TEST-token-12345")
+    assert service.is_test_credentials is True
+    assert service.environment == "homologation"
+    caps = service.checkout_capabilities()
+    assert caps["environment"] == "homologation"
+    assert caps["isTestMode"] is True
+
+
+def test_test_buyer_rejected_with_production_credentials(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    service = SaasMercadoPagoService("APP_USR-prod-token")
+    assert service.is_production_credentials is True
+
+    with pytest.raises(SaasMercadoPagoError, match="compradores de teste do Mercado Pago com credenciais de produção"):
+        service.create_preapproval(
+            protocol="KOMA-CTR-20260912-TESTBUYER01",
+            plan="pro",
+            billing_cycle="mensal",
+            amount=Decimal("189.00"),
+            card_token_id="tok_123",
+            payer_email="test_user_12345@testuser.com",
+        )
+
+    with pytest.raises(SaasMercadoPagoError, match="compradores de teste do Mercado Pago com credenciais de produção"):
+        service.create_annual_pix(
+            protocol="KOMA-CTR-20260912-TESTBUYER02",
+            plan="pro",
+            amount=Decimal("2257.20"),
+            payer_email="test_user_99999@testuser.com",
+            payer_name="Test User",
+            payer_tax_id="12345678909",
+        )
+
+
+def test_update_preapproval_next_payment_date_in_mock():
+    service = SaasMercadoPagoService("mock-token")
+    future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
+    res = service.update_preapproval_next_payment_date("mock-sub-999", future)
+    assert res["id"] == "mock-sub-999"
+    assert "next_payment_date" in res

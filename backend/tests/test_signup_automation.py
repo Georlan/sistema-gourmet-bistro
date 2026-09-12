@@ -2,10 +2,10 @@ import datetime as dt
 import json
 import pytest
 from sqlalchemy import text
-from app.routes import signups, saas_billing
+from app.routes import signups, saas_billing, auth
 from app.routes.super_admin import get_current_admin
 from app.config import settings
-from app.models import Restaurante
+from app.models import Restaurante, Usuario
 from app.signup_models import RestaurantSignup, SignupNotification
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services import signup_notifications
@@ -19,6 +19,7 @@ def signup_client(client_and_session):
     client, Session = client_and_session
     client.app.include_router(signups.router)
     client.app.include_router(signups.admin_router, prefix="/api/super-admin")
+    client.app.include_router(auth.router)
     return client, Session
 
 
@@ -254,3 +255,105 @@ def test_expired_failed_delivery_erases_private_payload(signup_client, monkeypat
     signup_notifications.dispatch_batch()
     with Session() as db:
         assert all(row.payload_encrypted == '' and row.last_error == 'expired' for row in db.query(SignupNotification))
+
+
+def test_superadmin_releases_awaiting_contract_provisions_and_schedules_trial(signup_client, monkeypatch):
+    from app.models import Usuario
+    from app.routes.super_admin import get_current_admin
+    client, Session = signup_client
+    monkeypatch.setattr(settings, 'KOMA_SAAS_MANUAL_RELEASE_REQUIRED', True)
+    monkeypatch.setattr(settings, 'KOMA_OWNER_EMAIL', 'owner@example.com')
+
+    protocol = client.post('/api/contracts/accept', json=_contract_payload()).json()['protocol']
+
+    # Setup de cartão aguardando liberação manual
+    setup_res = client.post(
+        f'/api/contracts/{protocol}/billing/setup',
+        json={'payment_method_type': 'credit_card', 'card_token_id': 'test-token'},
+    )
+    assert setup_res.status_code == 200
+    assert setup_res.json()['status'] == 'awaiting_release'
+    with Session() as db:
+        assert db.query(Restaurante).count() == 0
+
+    # Liberação pelo SuperAdmin
+    client.app.dependency_overrides[get_current_admin] = lambda: {'user': 'super_operator'}
+    sync_calls = []
+    monkeypatch.setattr(
+        default_saas_mp_service,
+        'update_preapproval_next_payment_date',
+        lambda sub_id, date: sync_calls.append((sub_id, date)) or {'id': sub_id, 'next_payment_date': date.isoformat()},
+    )
+
+    release_res = client.post(
+        f'/api/super-admin/signups/{protocol}/release',
+        json={'reason': 'Liberação manual de homologação'},
+    )
+    assert release_res.status_code == 200, release_res.text
+    release_data = release_res.json()
+    assert release_data['success'] is True
+    assert release_data['status'] == 'activated'
+    assert release_data['restaurant_id']
+    assert release_data['invitation_token']
+    assert len(sync_calls) == 1
+
+    # Confirma criação do restaurante, do admin pendente e dos 7 dias grátis
+    with Session() as db:
+        rest = db.query(Restaurante).filter(Restaurante.id == int(release_data['restaurant_id'])).one()
+        assert rest.saas_status == 'active'
+        sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == rest.id).one()
+        assert sub.status == 'trialing'
+        diff_days = (sub.trial_ends_at - sub.trial_started_at).days
+        assert diff_days == 7
+
+        admin_user = db.query(Usuario).filter(Usuario.restaurante_id == rest.id).one()
+        assert admin_user.status == 'pendente_ativacao'
+        assert admin_user.cargo == 'admin'
+        assert admin_user.token_convite == release_data['invitation_token']
+
+        # Confirma mensagens na outbox de e-mail e WhatsApp
+        outbox = db.query(SignupNotification).filter(SignupNotification.id.like(f'{protocol}:activation:%')).all()
+        assert {item.id.rsplit(':', 1)[-1] for item in outbox} == {'email', 'whatsapp'}
+
+    # Conclui primeiro acesso criando senha via /auth/ativar
+    ativar_res = client.post(
+        '/auth/ativar',
+        json={
+            'token_convite': release_data['invitation_token'],
+            'email': release_data['admin_email'],
+            'senha': 'NovaSenhaSegura123#',
+        },
+    )
+    assert ativar_res.status_code == 200, ativar_res.text
+    assert ativar_res.json()['access_token']
+    assert ativar_res.json()['usuario']['status'] == 'ativo'
+
+
+def test_superadmin_release_rejects_pending_or_unpaid_signup(signup_client):
+    from app.routes.super_admin import get_current_admin
+    client, Session = signup_client
+    protocol = client.post('/api/contracts/accept', json=_contract_payload()).json()['protocol']
+
+    client.app.dependency_overrides[get_current_admin] = lambda: {'user': 'operator'}
+    res = client.post(f'/api/super-admin/signups/{protocol}/release')
+    assert res.status_code == 409
+    assert 'ready' in res.json()['detail']
+
+
+def test_superadmin_release_is_idempotent(signup_client, monkeypatch):
+    from app.routes.super_admin import get_current_admin
+    client, Session = signup_client
+    monkeypatch.setattr(settings, 'KOMA_SAAS_MANUAL_RELEASE_REQUIRED', True)
+    protocol = client.post('/api/contracts/accept', json=_contract_payload()).json()['protocol']
+    client.post(f'/api/contracts/{protocol}/billing/setup', json={'payment_method_type': 'credit_card', 'card_token_id': 'tok'})
+
+    client.app.dependency_overrides[get_current_admin] = lambda: {'user': 'operator'}
+    first = client.post(f'/api/super-admin/signups/{protocol}/release').json()
+    assert first['idempotent'] is False
+
+    second = client.post(f'/api/super-admin/signups/{protocol}/release').json()
+    assert second['idempotent'] is True
+    assert second['restaurant_id'] == first['restaurant_id']
+    with Session() as db:
+        assert db.query(Restaurante).count() == 1
+

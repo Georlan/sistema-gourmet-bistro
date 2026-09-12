@@ -28,19 +28,53 @@ class SaasMercadoPagoService:
         configured_token = settings.KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN if access_token is None else access_token
         self.access_token = configured_token.strip()
         self.environment = os.getenv("ENVIRONMENT", "production").strip().lower()
+        self.is_test_credentials = self.access_token.startswith("TEST-")
+        self.is_production_credentials = self.access_token.startswith("APP_USR-")
         self.is_mock = not self.access_token or self.access_token.startswith("mock") or self.access_token == "test"
         self.mock_allowed = self.environment in {"test", "development"}
+
+        if self.environment == "production" and self.is_test_credentials:
+            raise SaasMercadoPagoError(
+                "Credenciais de teste do Mercado Pago (TEST-) são estritamente proibidas em ambiente de produção.",
+                status_code=500,
+            )
 
     def checkout_capabilities(self):
         enabled = self.mock_allowed or os.getenv("KOMA_SAAS_CHECKOUT_ENABLED", "false").lower() == "true"
         ready = enabled and (self.mock_allowed or (not self.is_mock and bool(settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET)))
-        return {"pix": bool(ready), "credit_card": bool(ready and (self.mock_allowed or settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY)), "publicKey": settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY if ready else ""}
+        is_homolog = self.environment in {"staging", "homologation", "homolog", "development", "test"}
+        return {
+            "pix": bool(ready),
+            "credit_card": bool(ready and (self.mock_allowed or settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY)),
+            "publicKey": settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY if ready else "",
+            "environment": "homologation" if is_homolog else "production",
+            "isTestMode": bool(self.is_test_credentials or self.is_mock),
+        }
 
     def _ensure_provider_ready(self) -> None:
+        if self.environment == "production" and self.is_test_credentials:
+            raise SaasMercadoPagoError(
+                "Credenciais de teste do Mercado Pago (TEST-) são estritamente proibidas em ambiente de produção.",
+                status_code=500,
+            )
         if self.is_mock and not self.mock_allowed:
             raise SaasMercadoPagoError(
                 "Integração de cobrança SaaS do Mercado Pago não configurada para este ambiente.",
                 status_code=503,
+            )
+
+    def _ensure_no_environment_mismatch(self, payer_email: str) -> None:
+        """
+        Garante que nunca haja mistura entre comprador de teste e recebedor real.
+        Compradores de teste do Mercado Pago usam domínio @testuser.com ou prefixo test_user_.
+        """
+        email_clean = (payer_email or "").strip().lower()
+        is_test_payer = email_clean.startswith("test_user_") or email_clean.endswith("@testuser.com")
+
+        if self.is_production_credentials and is_test_payer:
+            raise SaasMercadoPagoError(
+                "Não é permitido utilizar compradores de teste do Mercado Pago com credenciais de produção.",
+                status_code=422,
             )
 
     def _client(self) -> httpx.Client:
@@ -81,6 +115,7 @@ class SaasMercadoPagoService:
         O trial inicia imediatamente na autorização do gateway (Arquitetura B).
         """
         self._ensure_provider_ready()
+        self._ensure_no_environment_mismatch(payer_email)
         cycle_normalized = billing_cycle.strip().lower()
         is_annual = cycle_normalized in ("anual", "annual")
         frequency = 12 if is_annual else 1
@@ -214,6 +249,51 @@ class SaasMercadoPagoService:
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao cancelar assinatura.") from exc
 
+    def update_preapproval_next_payment_date(
+        self,
+        preapproval_id: str,
+        next_payment_date: datetime.datetime,
+    ) -> dict[str, Any]:
+        """
+        Reprograma a data da primeira cobrança recorrente (término dos 7 dias grátis)
+        no Mercado Pago quando a contratação é liberada manualmente pelo SuperAdmin.
+        """
+        self._ensure_provider_ready()
+        clean_id = preapproval_id.strip()
+        if not clean_id:
+            raise SaasMercadoPagoError("ID de preapproval inválido para sincronização.", status_code=400)
+
+        iso_date = next_payment_date.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        if self.is_mock:
+            logger.info(
+                "[MOCK] Preapproval %s next_payment_date sincronizado para %s",
+                clean_id,
+                iso_date,
+            )
+            return {"id": clean_id, "next_payment_date": iso_date, "status": "authorized"}
+
+        payload = {"next_payment_date": iso_date}
+        try:
+            with self._client() as client:
+                resp = client.put(f"/preapproval/{clean_id}", json=payload)
+                if resp.status_code >= 400:
+                    data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                    detail = data.get("message") or data.get("error") or resp.text
+                    logger.error(
+                        "Falha ao sincronizar next_payment_date para preapproval %s (%s): %s",
+                        clean_id,
+                        resp.status_code,
+                        detail,
+                    )
+                    raise SaasMercadoPagoError(
+                        f"Falha ao sincronizar início de cobrança com o gateway: {detail}",
+                        status_code=resp.status_code,
+                    )
+                return resp.json()
+        except httpx.RequestError as exc:
+            logger.error("Erro de rede ao sincronizar next_payment_date do preapproval %s: %s", clean_id, exc)
+            raise SaasMercadoPagoError("Erro de comunicação ao sincronizar início de cobrança com o gateway.") from exc
+
     def create_annual_pix(
         self,
         *,
@@ -230,6 +310,7 @@ class SaasMercadoPagoService:
         Retorna id do pagamento, QR code e payload copia-e-cola.
         """
         self._ensure_provider_ready()
+        self._ensure_no_environment_mismatch(payer_email)
         if self.is_mock:
             mock_payment_id = f"mock-pix-{uuid.uuid4().hex[:10]}"
             qr_emv = f"00020126580014br.gov.bcb.pix0136{uuid.uuid4()}5204000053039865802BR5913KOMA PLATAFORMA6009FORTALEZA62070503***6304ABCD"

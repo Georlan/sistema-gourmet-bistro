@@ -4,7 +4,7 @@ import hashlib
 import json
 import secrets
 import uuid
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from ..database import get_db, tenant_session_scope
@@ -186,3 +186,70 @@ def retry_delivery(delivery_id: str, admin=Depends(get_current_admin), db=Depend
     db.commit()
     if not updated: raise HTTPException(409, "Envio concluído, em andamento ou expirado. Para convite expirado, gere um novo convite na aba Acessos.")
     return {"message":"Nova tentativa agendada."}
+
+
+class ReleaseSignupRequest(BaseModel):
+    reason: str = Field(default="Liberação manual de inscrição confirmada pelo SuperAdmin", min_length=3, max_length=255)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+@admin_router.post("/{protocol}/release")
+def release_signup(
+    protocol: str,
+    payload: ReleaseSignupRequest | None = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    admin=Depends(get_current_admin),
+    db=Depends(get_db),
+):
+    from ..services.restaurant_provisioning import (
+        resolve_activation_acceptance,
+        provision_restaurant_for_contract,
+    )
+    from ..services.billing_service import get_billing_setup
+
+    normalized = protocol.strip().upper()
+    acceptance = resolve_activation_acceptance(db, normalized)
+    if not acceptance:
+        raise HTTPException(status_code=404, detail="Contrato não encontrado.")
+
+    if acceptance.get("linked_restaurante_id"):
+        return {
+            "success": True,
+            "status": "activated",
+            "restaurant_id": str(acceptance["linked_restaurante_id"]),
+            "protocol": normalized,
+            "idempotent": True,
+            "message": "Contratação já estava liberada para este restaurante.",
+        }
+
+    billing_setup = get_billing_setup(db, normalized)
+    if not billing_setup or billing_setup.status != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail="A contratação só pode ser liberada após o pagamento ou autorização do cartão estar confirmado (status ready).",
+        )
+
+    reason = payload.reason if payload and payload.reason else "Liberação manual de inscrição confirmada pelo SuperAdmin"
+    actor_name = getattr(admin, "username", None) or (admin.get("user") if isinstance(admin, dict) else "superadmin")
+
+    provision_res = provision_restaurant_for_contract(
+        db,
+        acceptance=acceptance,
+        billing_setup=billing_setup,
+        actor=f"superadmin:{actor_name}",
+        reason=reason,
+        background_tasks=background_tasks,
+    )
+
+    return {
+        "success": True,
+        "status": "activated",
+        "restaurant_id": str(provision_res["restaurant_id"]),
+        "slug": provision_res["slug"],
+        "admin_email": provision_res["admin_email"],
+        "trial_ends_at": provision_res["trial_ends_at"].isoformat(),
+        "invitation_token": provision_res.get("invitation_token"),
+        "protocol": normalized,
+        "idempotent": False,
+        "message": "Inscrição liberada com sucesso! Restaurante provisionado e convite enviado.",
+    }
