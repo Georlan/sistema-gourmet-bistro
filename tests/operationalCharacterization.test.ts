@@ -72,27 +72,27 @@ test('2. comanda aberta, mesmo sem itens, mantém a mesa em atendimento', () => 
   assert.equal(getTableTotal([check([])]), 0);
 });
 
-test('3. pedido em preparo conserva consumo, contagem e tempo', () => {
+test('3. pedido em preparo conserva consumo e tempo sem exibir contagem no card', () => {
   const html = renderCard([check([item('preparing', 'preparando', 112)])]);
   assert.match(html, /Em preparo/);
-  assert.match(html, /1 item/);
+  assert.doesNotMatch(html, /1 item/);
   assert.match(html, /25m/);
   assert.match(html, /R\$ 112/);
 });
 
-test('4. algum item pronto é visível sem apagar o consumo ainda em preparo', () => {
+test('4. algum item pronto é visível sem poluir o card com contagem', () => {
   const orders = [check([item('preparing', 'preparando', 112), item('ready', 'pronto', 48)])];
   const html = renderCard(orders);
   assert.match(html, /Tem item pronto/);
-  assert.match(html, /2 itens/);
+  assert.doesNotMatch(html, /2 itens/);
   assert.match(html, /R\$ 160/);
   assert.equal(getTableTotal(orders), 160);
 });
 
-test('5. todos os itens prontos não inferem solicitação de conta', () => {
+test('5. todos os itens prontos não inferem solicitação de conta nem exibem contagem', () => {
   const html = renderCard([check([item('ready-a', 'pronto'), item('ready-b', 'pronto')])]);
   assert.match(html, /pronto/i);
-  assert.match(html, /2 itens/);
+  assert.doesNotMatch(html, /2 itens/);
   assert.match(html, /R\$ 96/);
   assert.doesNotMatch(html, /Confirmar pagamento|Aguardando pagamento|Pronta para pagar|Para receber/);
 });

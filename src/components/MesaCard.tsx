@@ -50,7 +50,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
       }}
       aria-label={`Novo pedido na Mesa ${table.id}`}
       title="Adicionar pedido sem abrir o consumo"
-      className="relative z-20 inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-emerald-400/25 bg-emerald-500/[0.06] px-2 text-[10px] font-semibold text-emerald-700 transition-colors hover:border-emerald-400/45 hover:bg-emerald-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 dark:text-emerald-300"
+      className="relative z-20 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-400/25 bg-emerald-500/[0.06] p-0 text-[10px] font-semibold text-emerald-700 transition-colors hover:border-emerald-400/45 hover:bg-emerald-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400 min-[560px]:w-auto min-[560px]:gap-1 min-[560px]:px-2 dark:text-emerald-300"
     >
       <Plus size={12} strokeWidth={2.25} aria-hidden="true" />
       <span className="hidden min-[560px]:inline">Pedido</span>
@@ -67,6 +67,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
         total={getTableTotal(orders)}
         footerAction={quickOrderAction}
         fillHeight
+        showItemCount={false}
       />
       <button
         id={`mesa-card-${table.id}`}

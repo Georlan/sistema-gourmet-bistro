@@ -35,10 +35,12 @@ interface Props {
   otherWaitersServing?: readonly string[];
   showOperationalStatus?: boolean;
   onClick?: () => void;
-  /** Optional role-specific action placed beside the total in regular occupied cards. */
+  /** Optional role-specific action placed in the occupied-card footer. */
   footerAction?: React.ReactNode;
   /** Lets a role-specific grid define a uniform row height without changing other consumers. */
   fillHeight?: boolean;
+  /** Some operational views do not need item quantity inside each table card. */
+  showItemCount?: boolean;
   /** Compatibility with cashier filters, not a second presentation authority. */
   filterStatus?: string;
   note?: string;
@@ -51,7 +53,7 @@ interface Props {
 export function SharedTableCard({
   id, table, orders, operational, total, draftCount = 0, mergedSources = [],
   otherWaitersServing = [], showOperationalStatus = true, onClick, footerAction, fillHeight = false,
-  filterStatus, note, density = 'regular', children,
+  showItemCount = true, filterStatus, note, density = 'regular', children,
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
@@ -79,7 +81,7 @@ export function SharedTableCard({
           <strong className={`block text-koma-foreground ${customName ? 'break-words text-sm' : 'font-serif text-3xl leading-none'}`}>{customName ? table.nome : table.id}</strong>
           {mergedSources.length > 0 && <span className="block text-[9px] text-koma-muted">+ mesas {mergedSources.join(', ')}</span>}
         </div>
-        {compact && occupied && <strong className="shrink-0 font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
+        {compact && occupied && <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
         {!compact && checkNumbers.length > 0 && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`Comanda ${numbersText}`}>Comanda {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
       </div>
       <div className="space-y-2">
@@ -89,28 +91,28 @@ export function SharedTableCard({
         </div>
         {occupied && compact && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-koma-secondary">
           <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={11} aria-hidden="true" />{operational.elapsed}</span>
-          {operational.production.activeItemCount > 0 && <span>{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
+          {showItemCount && operational.production.activeItemCount > 0 && <span>{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
         </div>}
         {occupied && !compact && (
           <div className="border-t border-koma-border-subtle pt-2">
             {footerAction ? (
               <>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-koma-secondary">
-                  <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
-                  <span className="inline-flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
-                </div>
-                <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
-                  <strong className="min-w-0 font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
+                <div className="flex min-w-0 items-center justify-between gap-2 text-[10px] text-koma-secondary">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap font-mono"><Clock3 size={10} />{operational.elapsed}</span>
+                    {showItemCount && <span className="inline-flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
+                  </div>
                   <div className="shrink-0">{footerAction}</div>
                 </div>
+                <strong className="mt-1.5 block whitespace-nowrap font-mono text-xs leading-none text-koma-foreground">{formattedTotal}</strong>
               </>
             ) : (
-              <div className="flex flex-wrap items-end justify-between gap-2">
+              <div className="flex items-end justify-between gap-2">
                 <div className="space-y-1 text-[10px] text-koma-secondary">
-                  <span className="flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
-                  <span className="flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
+                  <span className="flex items-center gap-1 whitespace-nowrap font-mono"><Clock3 size={10} />{operational.elapsed}</span>
+                  {showItemCount && <span className="flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
                 </div>
-                <strong className="font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
+                <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
               </div>
             )}
           </div>
