@@ -331,7 +331,20 @@ def dispatch_single_outbox_event(
     client: Optional[httpx.Client] = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> bool:
-    """Compatibilidade direta para envio de um registro existente."""
+    """Compatibilidade direta para envio de um registro existente sem reabrir estados terminais."""
+    if event_record.status == "delivered":
+        logger.info(
+            "[OUTBOX DIRECT DISPATCH] Evento %s já foi entregue; replay ignorado.",
+            event_record.id,
+        )
+        return True
+    if event_record.status == "dead_letter":
+        logger.warning(
+            "[OUTBOX DIRECT DISPATCH] Evento %s está em dead_letter; reenvio automático recusado.",
+            event_record.id,
+        )
+        return False
+
     now = datetime.datetime.now(datetime.timezone.utc)
     wid = event_record.locked_by or "direct-dispatcher"
     event_record.status = "processing"
