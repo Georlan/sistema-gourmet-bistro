@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../../config/api';
 import {
   KOMA_THEME_CHANGED_EVENT,
@@ -26,59 +26,7 @@ function resolvePortalForRole(role: AppRole): OperationalPortal | null {
   return null;
 }
 
-function relativeUrlWithParams(params: URLSearchParams): string {
-  const query = params.toString();
-  return `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
-}
-
 function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
-  const [ready, setReady] = useState(false);
-  const injectedView = useRef(false);
-
-  useLayoutEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const currentView = params.get('view')?.toLowerCase() || '';
-
-    if (portal === 'caixa') {
-      if (currentView !== 'caixa' && currentView !== 'gerencia') {
-        params.set('view', 'caixa');
-        injectedView.current = true;
-        window.history.replaceState(null, '', relativeUrlWithParams(params));
-      }
-    } else if (currentView === 'caixa' || currentView === 'gerencia') {
-      params.delete('view');
-      window.history.replaceState(null, '', relativeUrlWithParams(params));
-    }
-
-    setReady(true);
-  }, [portal]);
-
-  useEffect(() => {
-    if (!ready || portal !== 'caixa' || !injectedView.current) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      const params = new URLSearchParams(window.location.search);
-      const currentView = params.get('view')?.toLowerCase() || '';
-      if (currentView === 'caixa' || currentView === 'gerencia') {
-        params.delete('view');
-        window.history.replaceState(null, '', relativeUrlWithParams(params));
-      }
-      injectedView.current = false;
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [portal, ready]);
-
-  if (!ready) {
-    return (
-      <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
-          Preparando operação…
-        </p>
-      </main>
-    );
-  }
-
   return (
     <React.Suspense
       fallback={(
@@ -89,7 +37,7 @@ function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
         </main>
       )}
     >
-      <OperationalApp />
+      <OperationalApp initialPortal={portal} />
     </React.Suspense>
   );
 }

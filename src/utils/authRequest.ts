@@ -43,6 +43,12 @@ export function authRequestErrorMessage(error: unknown, fallback: string): strin
   if (error instanceof AuthRequestTimeoutError) {
     return 'O servidor demorou para responder. Confira a conexão e tente novamente.';
   }
+  if (
+    error instanceof TypeError
+    && /failed to fetch|networkerror|network request failed/i.test(error.message)
+  ) {
+    return 'O servidor do KÔMA está indisponível no momento. Aguarde alguns instantes e tente novamente.';
+  }
   if (error instanceof Error && error.message.trim()) return error.message;
   return fallback;
 }

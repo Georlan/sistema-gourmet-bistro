@@ -57,11 +57,14 @@ test('unified login lets backend identity choose restaurant and role choose port
   assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
 });
 
-test('unified operational URL stays tenantless after the management bridge initializes App', () => {
+test('unified operational entry passes the authenticated portal directly to App without a URL race', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
-  assert.match(entry, /params\.set\('view', 'caixa'\)/);
-  assert.match(entry, /requestAnimationFrame/);
-  assert.match(entry, /params\.delete\('view'\)/);
+  const app = source('../src/App.tsx');
+  assert.match(entry, /<OperationalApp initialPortal=\{portal\} \/>/);
+  assert.doesNotMatch(entry, /params\.set\('view', 'caixa'\)/);
+  assert.doesNotMatch(entry, /requestAnimationFrame/);
+  assert.match(app, /initialPortal\?: OperationalPortal/);
+  assert.match(app, /if \(initialPortal\) \{[\s\S]*return initialPortal;/);
 
   const login = source('../src/components/auth/OperationalLogin.tsx');
   assert.match(login, /Acesso da equipe/);
