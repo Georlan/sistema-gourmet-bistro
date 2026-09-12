@@ -262,7 +262,6 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     }
 
     closeProductConfig();
-    openCart();
   };
 
   const handleQuickAdd = (product: Product, event?: React.MouseEvent) => {
@@ -662,13 +661,19 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
           </div>
 
           {totalDraftQty > 0 && (
-            <div className="sticky bottom-0 z-40 p-3 bg-koma-panel/95 border-t border-koma-border backdrop-blur-md flex items-center justify-between gap-3">
+            <div className="fixed inset-x-0 bottom-0 z-[70] border-t border-emerald-500/20 bg-koma-panel/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:sticky sm:z-40 sm:p-3 sm:pb-3 flex items-center justify-between gap-3">
               <div>
-                <span className="block text-[10px] text-koma-muted">{totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}</span>
+                <span className="block text-[10px] text-koma-muted">{totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'} no pedido</span>
                 <span className="font-mono text-sm font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
               </div>
-              <button type="button" onClick={openCart} className="min-h-10 px-4 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center gap-2">
-                Revisar Pedido <ArrowRight size={14} />
+              <button
+                id="open-draft-cart-btn"
+                type="button"
+                onClick={openCart}
+                className="min-h-10 px-4 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center gap-2"
+                aria-label={`Ver pedido com ${totalDraftQty} ${totalDraftQty === 1 ? 'item' : 'itens'}`}
+              >
+                <ShoppingCart size={14} /> Ver pedido <ArrowRight size={14} />
               </button>
             </div>
           )}
@@ -787,7 +792,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-3 border-t border-koma-border pt-4">
+            <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[calc(0.35rem+env(safe-area-inset-bottom))] sm:pb-1 bg-koma-card/95 backdrop-blur-xl border-t border-koma-border flex items-center gap-3">
               <button type="button" onClick={closeProductConfig} className="flex-1 py-2.5 rounded-xl border border-koma-border text-xs font-bold text-koma-muted hover:text-koma-foreground">
                 Cancelar
               </button>

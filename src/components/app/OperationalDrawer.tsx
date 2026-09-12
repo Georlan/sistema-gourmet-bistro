@@ -49,7 +49,9 @@ export function OperationalDrawer({
                   <KomaLogo size="md" />
                   <div>
                     <span className={"font-serif font-bold text-base text-koma-foreground leading-none block"}>{restaurantName}</span>
-                    <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">Se você está com fome, Kôma</span>
+                    <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">
+                      {portal === 'garcom' ? 'Operação do salão' : 'Operação do caixa'}
+                    </span>
                   </div>
                 </div>
                 <button
@@ -167,7 +169,7 @@ export function OperationalDrawer({
                             </div>
                             <span className="font-semibold text-xs">Sincronizar Salão</span>
                           </div>
-                          <span className="text-[9px] text-blue-700 dark:text-blue-300 font-mono font-bold">Ao Vivo</span>
+                          <span className="text-[9px] text-blue-700 dark:text-blue-300 font-mono font-bold">Manual</span>
                         </button>
                       </div>
                     </div>

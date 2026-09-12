@@ -315,6 +315,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             id="tab-lancamento-btn"
             type="button"
             role="tab"
+            aria-label="Pedido (Cardápio)"
             aria-selected={activeTab === 'lancamento'}
             onClick={() => setActiveTab('lancamento')}
             className={`flex-1 sm:flex-initial min-h-9 px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap border ${
@@ -324,7 +325,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             }`}
           >
             <PlusCircle size={13} className="text-emerald-400" />
-            <span>Cardápio</span>
+            <span>Pedido</span>
             {draftItems.length > 0 && (
               <span className="min-w-4 h-4 px-1 rounded-full bg-emerald-500 text-zinc-950 text-[9px] font-mono font-extrabold flex items-center justify-center">
                 {draftItems.reduce((total, item) => total + (item.quantidade || 1), 0)}
