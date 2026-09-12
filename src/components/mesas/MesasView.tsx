@@ -126,6 +126,7 @@ export function MesasView({
             return (
               <button
                 key={filter.id}
+                id={`waiter-filter-${filter.id}`}
                 type="button"
                 onClick={() => !readOnly && handleFilterSelect(filter.id)}
                 aria-pressed={isActive}
