@@ -28,6 +28,7 @@ interface MotoboyProfile {
 const DELIVERY_TOKEN_SESSION_KEY = 'koma_entregador_session_token';
 const DELIVERY_TOKEN_HEADER = 'X-Koma-Delivery-Token';
 const PANEL_REQUEST_TIMEOUT_MS = 12_000;
+const CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS = 12_000;
 
 function bootstrapDeliveryToken(): string {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -103,23 +104,33 @@ export function MotoboyPwaPage() {
   };
 
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token) return;
+    if (!token || confirmingId) return;
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS);
+
     setConfirmingId(comandaId);
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/pedidos/${comandaId}/confirmar-entrega`, {
         method: 'POST',
         headers: { [DELIVERY_TOKEN_HEADER]: token },
+        signal: controller.signal,
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.detail || 'Falha ao confirmar entrega');
       }
       showToast('Entrega confirmada com sucesso.', 'success');
-      // Remove da lista otimistamente
       setEntregas(prev => prev.filter(e => e.id !== comandaId));
     } catch (err: any) {
-      showToast(err.message || 'Erro ao confirmar entrega', 'error');
+      if (err?.name === 'AbortError') {
+        showToast('A confirmação demorou demais. Atualizando o painel antes de permitir nova tentativa.', 'error');
+        await carregarDadosPainel(token);
+      } else {
+        showToast(err.message || 'Erro ao confirmar entrega', 'error');
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setConfirmingId(null);
     }
   };
