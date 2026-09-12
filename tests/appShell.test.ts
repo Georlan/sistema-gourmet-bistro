@@ -108,16 +108,26 @@ test('login encaminha submit e edição exatamente aos callbacks do App', () => 
   assert.deepEqual(calls, [['username', 'new@koma.test'], ['password', 'new-password'], ['submit', formEvent]]);
 });
 
-test('drawer Garçom preserva métricas canônicas, identificação e controles existentes', () => {
+test('drawer Garçom vira central operacional com métricas, atalhos e preferências úteis', () => {
   const html = renderToStaticMarkup(createElement(OperationalDrawer, drawerProps()));
   assert.match(html, /id="sidebar-backdrop"/);
   assert.match(html, /id="close-sidebar-btn"/);
   assert.match(html, /Garçom Shell/);
   assert.match(html, /Restaurante Shell/);
-  assert.match(html, /3<\/strong> ocupadas \/ 2 livres/);
-  assert.match(html, /1 p\/ servir/);
-  assert.match(html, /Disponível no Salão/);
+  assert.match(html, /Central do garçom/);
+  assert.match(html, /Salão agora/);
+  assert.match(html, />3<\/strong>/);
+  assert.match(html, /ocupadas • 2 livres/);
+  assert.match(html, />1<\/strong>/);
+  assert.match(html, /p\/ servir/);
+  assert.match(html, /Comandas/);
+  assert.match(html, /Ações rápidas/);
+  assert.match(html, /Todas as mesas/);
+  assert.match(html, /Itens prontos/);
+  assert.match(html, /Mesas ocupadas/);
   assert.match(html, /Sincronizar Salão/);
+  assert.match(html, /Tamanho do texto/);
+  assert.match(html, /Disponível no Salão/);
   assert.match(html, /id="sidebar-toggle-images"[^>]*checked=""/);
   assert.doesNotMatch(html, /id="sidebar-toggle-descriptions"[^>]*checked=""/);
 });
@@ -137,6 +147,80 @@ test('drawer não reseta disponibilidade controlada e fecha antes de sincronizar
   sync.props.onClick();
   assert.deepEqual(calls, [['available', true], 'close', 'sync']);
   assert.match(renderToStaticMarkup(tree), /Ocupado \/ Em Atendimento/);
+});
+
+test('atalhos do garçom fecham o drawer e acionam filtros reais do salão', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const calls: string[] = [];
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: { getItem: () => null, setItem: () => {} },
+      requestAnimationFrame: (callback: () => void) => { callback(); return 1; },
+      dispatchEvent: () => true,
+    },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      getElementById: (id: string) => ({ click: () => calls.push(id) }),
+    },
+  });
+  try {
+    const nodes = elements(OperationalDrawer(drawerProps({ onClose: () => calls.push('close') })));
+    for (const id of ['drawer-show-all-tables', 'drawer-show-ready-tables', 'drawer-show-occupied-tables']) {
+      nodes.find(node => node.props.id === id)!.props.onClick();
+    }
+    assert.deepEqual(calls, [
+      'close', 'waiter-filter-todos',
+      'close', 'waiter-filter-prontas',
+      'close', 'waiter-filter-ocupadas',
+    ]);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
+    if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+    else Reflect.deleteProperty(globalThis, 'document');
+  }
+});
+
+test('drawer mostra rascunho local e permite retomar a mesa em um toque', () => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const calls: string[] = [];
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key: string) => key === 'koma_drafts_vFinal_v3'
+          ? JSON.stringify({ 5: [{ quantidade: 2 }, { quantidade: 1 }] })
+          : null,
+        setItem: () => {},
+      },
+      requestAnimationFrame: (callback: () => void) => { callback(); return 1; },
+      dispatchEvent: () => true,
+    },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { getElementById: (id: string) => ({ click: () => calls.push(id) }) },
+  });
+  try {
+    const tree = OperationalDrawer(drawerProps({ onClose: () => calls.push('close') }));
+    const html = renderToStaticMarkup(tree);
+    assert.match(html, /Continuar pedidos/);
+    assert.match(html, /Mesa 5/);
+    assert.match(html, /3 itens aguardando lançamento/);
+    const nodes = elements(tree);
+    nodes.find(node => node.props.id === 'drawer-resume-draft-5')!.props.onClick();
+    assert.deepEqual(calls, ['close', 'mesa-card-5']);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
+    if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+    else Reflect.deleteProperty(globalThis, 'document');
+  }
 });
 
 test('preferências do drawer encaminham nova configuração sem alterar a configuração recebida', () => {
