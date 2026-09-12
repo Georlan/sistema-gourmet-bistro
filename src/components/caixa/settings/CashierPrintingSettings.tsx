@@ -1,5 +1,5 @@
-
-import { Lock } from 'lucide-react';
+import { useState } from 'react';
+import { Lock, Printer, RefreshCw } from 'lucide-react';
 import { PrintMonitorPanel } from '../../printing/PrintMonitorPanel';
 import type { CashierTab } from '../cashierContracts';
 import type { useCashierSettings } from './useCashierSettings';
@@ -47,6 +47,33 @@ export function CashierPrintingSettings({
   unificarViasDelivery,
   setUnificarViasDelivery,
 }: BoundaryProps) {
+  const [isTestingWaiterPrinter, setIsTestingWaiterPrinter] = useState(false);
+  const [waiterTestFeedback, setWaiterTestFeedback] = useState('');
+
+  const handleTestWaiterPrinter = async () => {
+    if (isTestingWaiterPrinter) return;
+    setIsTestingWaiterPrinter(true);
+    setWaiterTestFeedback('');
+    try {
+      const response = await fetch(`${apiBaseUrl}/impressao/teste-extremo-garcom`, {
+        method: 'POST',
+        headers: authHeaders,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.detail || 'Não foi possível enviar o teste extremo do garçom.');
+      }
+      window.dispatchEvent(new Event('koma_print_monitor_refresh'));
+      setWaiterTestFeedback('Teste extremo do App do Garçom enviado para a impressora.');
+    } catch (error) {
+      setWaiterTestFeedback(
+        error instanceof Error ? error.message : 'Não foi possível comunicar com a fila de impressão.',
+      );
+    } finally {
+      setIsTestingWaiterPrinter(false);
+    }
+  };
+
   return (
     <>
       {printingSettingsTab === 'impressao' && !hasPrinting && (
@@ -78,6 +105,32 @@ export function CashierPrintingSettings({
           onTestPrint={handleTestPrinter}
           testInProgress={isTestingPrinter}
         />
+      )}
+      {printingSettingsTab === 'impressao' && hasPrinting && (
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <strong className="block text-sm text-koma-foreground">Homologação do App do Garçom</strong>
+            <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+              Gera uma comanda sintética extrema de mesa, sem criar pedido real, estoque ou movimento de caixa.
+            </p>
+            {waiterTestFeedback && (
+              <p className="mt-2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">
+                {waiterTestFeedback}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={isTestingWaiterPrinter}
+            onClick={() => void handleTestWaiterPrinter()}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground transition hover:border-emerald-500/40 hover:text-emerald-600 disabled:cursor-wait disabled:opacity-60 dark:hover:text-emerald-300"
+          >
+            {isTestingWaiterPrinter
+              ? <RefreshCw size={16} className="animate-spin" />
+              : <Printer size={16} />}
+            {isTestingWaiterPrinter ? 'Enviando…' : 'Teste extremo — Garçom'}
+          </button>
+        </div>
       )}
       {printingSettingsTab === 'impressao' && hasPrinting && (
         <div

@@ -252,6 +252,105 @@ def imprimir_teste_extremo_cardapio(
 
 
 @router.post(
+    "/teste-extremo-garcom",
+    status_code=status.HTTP_200_OK,
+)
+def imprimir_teste_extremo_garcom(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("impressao:administrar")),
+):
+    """Enfileira uma comanda extrema sintética do App do Garçom sem criar pedido real."""
+    restaurante_id = require_tenant_id()
+    preferences = get_print_preferences(db, restaurante_id)
+    items = [
+        PrintItem(
+            codigo="G01",
+            nome="HAMBÚRGUER BOVINO ARTESANAL DUPLO COM QUEIJO E BACON",
+            quantidade=2,
+            preco_unit=19.00,
+            cliente_nome="GEORLAN",
+            observacao=(
+                "UM AO PONTO E UM BEM PASSADO, SEM CEBOLA, MOLHO DA CASA SEPARADO, "
+                "ADICIONAR CATUPIRY ORIGINAL"
+            ),
+        ),
+        PrintItem(
+            codigo="G02",
+            nome="CHEESE BURGER ESPECIAL COM BORDA DE CHEDDAR",
+            quantidade=2,
+            preco_unit=22.00,
+            cliente_nome="ANA CLIENTE COM NOME COMPRIDO",
+            observacao="SEM PICLES, BACON BEM CROCANTE, MAIONESE SEPARADA",
+        ),
+        PrintItem(
+            codigo="G03",
+            nome="SUCO DE GOIABA NATURAL 500ML SEM AÇÚCAR",
+            quantidade=3,
+            preco_unit=8.00,
+            cliente_nome="CONSUMO GERAL",
+            observacao="DOIS SEM GELO E UM COM POUCO GELO",
+            destino_impressao="BAR",
+        ),
+        PrintItem(
+            codigo="G04",
+            nome="PORÇÃO GRANDE DE BATATA FRITA COM CHEDDAR E BACON",
+            quantidade=1,
+            preco_unit=31.90,
+            cliente_nome="GEORLAN",
+            observacao="CHEDDAR E BACON SEPARADOS; BATATA SEM SAL",
+        ),
+        PrintItem(
+            codigo="G05",
+            nome="SOBREMESA BROWNIE COM SORVETE E CALDA DE CHOCOLATE",
+            quantidade=1,
+            preco_unit=24.90,
+            cliente_nome="ANA CLIENTE COM NOME COMPRIDO",
+            observacao="SORVETE DE CREME, CALDA SEPARADA, SEM CASTANHAS",
+        ),
+    ]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    source_id = f"teste-extremo-garcom-{now.strftime('%Y%m%d%H%M%S%f')}"
+    payload = render_canonical_comanda(
+        restaurant_name=preferences.restaurant_name,
+        restaurant_name_position=preferences.restaurant_name_position,
+        print_footer="TESTE DE IMPRESSÃO GARÇOM — NÃO É PEDIDO REAL",
+        order_number="TESTE-88-Z",
+        order_type="Consumo no Local",
+        operator_name="GARÇOM TESTE COM NOME MUITO COMPRIDO",
+        items=items,
+        variant=ComandaVariant(
+            location_label=None,
+            operator_label="GARÇOM",
+            event_at=now,
+            via_label="TESTE EXTREMO GARÇOM - NÃO É PEDIDO REAL",
+            table_id=99,
+            preserve_item_customers=True,
+        ),
+    )
+    safe_payload = payload.replace("\x00", "\\x00")
+    job = PrintJob(
+        restaurante_id=restaurante_id,
+        document_type="producao",
+        destination="COZINHA",
+        source_type="teste_extremo_garcom",
+        source_id=source_id,
+        payload_text=safe_payload,
+        status="pending",
+        idempotency_key=f"teste-extremo-garcom:{source_id}",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return {
+        "status": "enqueued",
+        "detail": "Teste extremo do App do Garçom enviado para a fila.",
+        "job_id": job.id,
+        "source_id": source_id,
+        "destination": job.destination,
+    }
+
+
+@router.post(
     "/caixa/turnos/{turno_id}/comprovante",
     status_code=status.HTTP_200_OK,
 )
