@@ -200,8 +200,18 @@ export default function SmartPosOrderingFlow({
 
   useEffect(() => {
     if (isRealtimeConnected) return;
-    const interval = setInterval(() => void loadCatalog(true), 40000);
-    return () => clearInterval(interval);
+    const fallbackTick = () => {
+      if (document.visibilityState === 'visible') void loadCatalog(true);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void loadCatalog(true);
+    };
+    const interval = window.setInterval(fallbackTick, 40000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [isRealtimeConnected, loadCatalog]);
 
   const sellableProducts = useMemo(
