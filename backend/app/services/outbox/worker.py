@@ -8,11 +8,13 @@ import os
 import signal
 import uuid
 from typing import Optional
+
 import httpx
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ...database import TenantSession, engine, tenant_session_scope
+from ..order_chat_retention import purge_expired_closed_conversations_in_session
 from ..scheduled_orders import release_due_scheduled_orders_in_session
 from .dispatcher import DEFAULT_STALE_TIMEOUT_SECONDS, dispatch_pending_outbox_events
 
@@ -55,16 +57,53 @@ class OutboxWorker:
         batch_size: int = 20,
         worker_id: Optional[str] = None,
         stale_timeout_seconds: int = DEFAULT_STALE_TIMEOUT_SECONDS,
+        chat_retention_enabled: Optional[bool] = None,
+        chat_retention_days: Optional[int] = None,
+        chat_retention_batch_size: Optional[int] = None,
+        chat_retention_sweep_seconds: Optional[float] = None,
     ):
         self.poll_interval_seconds = poll_interval_seconds
         self.batch_size = batch_size
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
         self.stale_timeout_seconds = stale_timeout_seconds
+        self.chat_retention_enabled = (
+            os.getenv("ORDER_CHAT_RETENTION_ENABLED", "false").lower() == "true"
+            if chat_retention_enabled is None
+            else bool(chat_retention_enabled)
+        )
+        self.chat_retention_days = max(
+            1,
+            int(
+                os.getenv("ORDER_CHAT_RETENTION_DAYS", "90")
+                if chat_retention_days is None
+                else chat_retention_days
+            ),
+        )
+        self.chat_retention_batch_size = max(
+            1,
+            min(
+                500,
+                int(
+                    os.getenv("ORDER_CHAT_RETENTION_BATCH_SIZE", "100")
+                    if chat_retention_batch_size is None
+                    else chat_retention_batch_size
+                ),
+            ),
+        )
+        self.chat_retention_sweep_seconds = max(
+            300.0,
+            float(
+                os.getenv("ORDER_CHAT_RETENTION_SWEEP_SECONDS", "21600")
+                if chat_retention_sweep_seconds is None
+                else chat_retention_sweep_seconds
+            ),
+        )
         self.is_running = False
         self._stop_event: Optional[asyncio.Event] = None
         self._task: Optional[asyncio.Task] = None
         self._wake_event: Optional[asyncio.Event] = None
         self._loop = None
+        self._next_chat_retention_sweep_at = 0.0
 
     def wake(self):
         """Commit notification is a hint; periodic reconciliation stays durable."""
@@ -140,9 +179,61 @@ class OutboxWorker:
         finally:
             db.close()
 
+    def run_chat_retention_sweep(
+        self,
+        *,
+        restaurant_id: Optional[int] = None,
+    ) -> dict[str, int]:
+        """Executa um sweep limitado da retenção de chat sob o contexto RLS de cada tenant."""
+        aggregated_stats = {
+            "conversations_deleted": 0,
+            "messages_deleted": 0,
+            "push_subscriptions_deleted": 0,
+        }
+        if not self.chat_retention_enabled:
+            return aggregated_stats
+
+        db: TenantSession = SessionLocal()
+        try:
+            if restaurant_id is not None:
+                target_tenant_ids = [restaurant_id]
+            else:
+                target_tenant_ids = discover_active_restaurant_ids(db)
+
+            for rid in target_tenant_ids:
+                try:
+                    with tenant_session_scope(db, rid):
+                        stats = purge_expired_closed_conversations_in_session(
+                            db,
+                            restaurante_id=rid,
+                            retention_days=self.chat_retention_days,
+                            batch_size=self.chat_retention_batch_size,
+                        )
+                        if stats["conversations_deleted"]:
+                            db.commit()
+                        for key in aggregated_stats:
+                            aggregated_stats[key] += stats.get(key, 0)
+                except Exception as tenant_exc:
+                    db.rollback()
+                    logger.error(
+                        "[CHAT RETENTION] Erro ao processar retenção do tenant %s: %s",
+                        rid,
+                        tenant_exc,
+                        exc_info=True,
+                    )
+
+            return aggregated_stats
+        finally:
+            db.close()
+
     async def run_loop(self) -> None:
         """Loop contínuo de varredura assíncrona com tratamento de paradas graciosas."""
-        logger.info("[OUTBOX WORKER] Iniciando worker %s (intervalo=%0.1fs, lote=%d)", self.worker_id, self.poll_interval_seconds, self.batch_size)
+        logger.info(
+            "[OUTBOX WORKER] Iniciando worker %s (intervalo=%0.1fs, lote=%d)",
+            self.worker_id,
+            self.poll_interval_seconds,
+            self.batch_size,
+        )
         self.is_running = True
         if self._stop_event is None:
             self._stop_event = asyncio.Event()
@@ -156,7 +247,31 @@ class OutboxWorker:
                 self._wake_event.clear()
                 stats = await loop.run_in_executor(None, self.run_once)
 
-                if stats["total"] > 0 or stats["recovered_stale"] > 0 or stats["scheduled_released"] > 0:
+                retention_deleted = 0
+                if (
+                    self.chat_retention_enabled
+                    and loop.time() >= self._next_chat_retention_sweep_at
+                ):
+                    retention_stats = await loop.run_in_executor(
+                        None,
+                        self.run_chat_retention_sweep,
+                    )
+                    self._next_chat_retention_sweep_at = (
+                        loop.time() + self.chat_retention_sweep_seconds
+                    )
+                    retention_deleted = retention_stats["conversations_deleted"]
+                    if retention_deleted:
+                        logger.info(
+                            "[CHAT RETENTION] Sweep concluído: %s",
+                            retention_stats,
+                        )
+
+                if (
+                    stats["total"] > 0
+                    or stats["recovered_stale"] > 0
+                    or stats["scheduled_released"] > 0
+                    or retention_deleted > 0
+                ):
                     logger.debug("[OUTBOX WORKER] Ciclo concluído: %s", stats)
                     await asyncio.sleep(0.1)
                     idle_delay = self.poll_interval_seconds
@@ -171,7 +286,12 @@ class OutboxWorker:
                 logger.info("[OUTBOX WORKER] Recebido cancelamento no worker %s.", self.worker_id)
                 break
             except Exception as exc:
-                logger.error("[OUTBOX WORKER] Erro não tratado no ciclo do worker %s: %s", self.worker_id, exc, exc_info=True)
+                logger.error(
+                    "[OUTBOX WORKER] Erro não tratado no ciclo do worker %s: %s",
+                    self.worker_id,
+                    exc,
+                    exc_info=True,
+                )
                 await asyncio.sleep(2.0)
 
         self.is_running = False
