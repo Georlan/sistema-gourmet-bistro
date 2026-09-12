@@ -153,9 +153,10 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
             )}
 
             <div className="space-y-1 text-left">
-              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">E-mail de Login</label>
+              <label htmlFor="activation-email" className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">E-mail de Login</label>
               <div className="relative">
                 <input
+                  id="activation-email"
                   type="email"
                   name="email"
                   autoComplete="username"
@@ -171,9 +172,10 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
             </div>
 
             <div className="space-y-1 text-left">
-              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Nova Senha</label>
+              <label htmlFor="activation-password" className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Nova Senha</label>
               <div className="relative">
                 <input
+                  id="activation-password"
                   type="password"
                   name="new-password"
                   autoComplete="new-password"
@@ -190,9 +192,10 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
             </div>
 
             <div className="space-y-1 text-left">
-              <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Confirme a Senha</label>
+              <label htmlFor="activation-password-confirmation" className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Confirme a Senha</label>
               <div className="relative">
                 <input
+                  id="activation-password-confirmation"
                   type="password"
                   name="confirm-password"
                   autoComplete="new-password"
