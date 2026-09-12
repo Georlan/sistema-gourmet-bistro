@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ShoppingBag, Truck, ExternalLink } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
@@ -40,7 +40,10 @@ function bootstrapDeliveryToken(): string {
   const token = tokenFromFragment || legacyQueryToken || sessionStorage.getItem(DELIVERY_TOKEN_SESSION_KEY)?.trim() || '';
 
   if (tokenFromFragment || legacyQueryToken) {
-    window.history.replaceState(null, '', window.location.pathname);
+    const canonicalPath = window.location.pathname.startsWith('/entregador')
+      ? window.location.pathname
+      : '/entregador';
+    window.history.replaceState(null, '', canonicalPath);
   }
   if (token) {
     sessionStorage.setItem(DELIVERY_TOKEN_SESSION_KEY, token);
@@ -51,6 +54,9 @@ function bootstrapDeliveryToken(): string {
 export function MotoboyPwaPage() {
   const [token, setToken] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const isFetchingRef = useRef<boolean>(false);
+  const isConfirmingRef = useRef<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [motoboy, setMotoboy] = useState<MotoboyProfile | null>(null);
   const [entregas, setEntregas] = useState<EntregaItem[]>([]);
@@ -74,11 +80,20 @@ export function MotoboyPwaPage() {
   };
 
   const carregarDadosPainel = async (authToken: string) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
+    const isBackground = Boolean(motoboy);
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), PANEL_REQUEST_TIMEOUT_MS);
 
-    setLoading(true);
-    setErrorMsg(null);
+    if (!isBackground) {
+      setLoading(true);
+      setErrorMsg(null);
+    } else {
+      setIsRefreshing(true);
+    }
+
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/painel-entregador`, {
         headers: { [DELIVERY_TOKEN_HEADER]: authToken },
@@ -92,19 +107,30 @@ export function MotoboyPwaPage() {
       setMotoboy(data.motoboy);
       setEntregas(data.entregas || []);
     } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        setErrorMsg('O painel demorou demais para responder. Verifique sua conexão e tente novamente.');
+      if (isBackground) {
+        if (err?.name === 'AbortError') {
+          showToast('A atualização do painel demorou demais. Verifique sua conexão.', 'error');
+        } else {
+          showToast(err.message || 'Erro ao atualizar entregas', 'error');
+        }
       } else {
-        setErrorMsg(err.message || 'Erro ao carregar entregas');
+        if (err?.name === 'AbortError') {
+          setErrorMsg('O painel demorou demais para responder. Verifique sua conexão e tente novamente.');
+        } else {
+          setErrorMsg(err.message || 'Erro ao carregar entregas');
+        }
       }
     } finally {
       window.clearTimeout(timeoutId);
+      isFetchingRef.current = false;
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token || confirmingId) return;
+    if (!token || isConfirmingRef.current || confirmingId) return;
+    isConfirmingRef.current = true;
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS);
@@ -131,6 +157,7 @@ export function MotoboyPwaPage() {
       }
     } finally {
       window.clearTimeout(timeoutId);
+      isConfirmingRef.current = false;
       setConfirmingId(null);
     }
   };
@@ -193,11 +220,14 @@ export function MotoboyPwaPage() {
         </div>
 
         <button
+          type="button"
+          disabled={Boolean(confirmingId) || isRefreshing}
           onClick={() => token && carregarDadosPainel(token)}
-          className="p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-koma-secondary transition-colors active:scale-95"
+          className="p-2.5 bg-koma-card hover:bg-koma-raised disabled:opacity-50 border border-koma-border rounded-xl text-koma-secondary transition-colors active:scale-95 cursor-pointer disabled:cursor-not-allowed"
           title="Atualizar Pedidos"
+          aria-label="Atualizar Pedidos"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={clsx("w-4 h-4", isRefreshing && "animate-spin")} />
         </button>
       </header>
 
@@ -313,10 +343,11 @@ export function MotoboyPwaPage() {
                 {/* Confirm Delivery Button */}
                 <button
                   type="button"
-                  disabled={confirmingId === entrega.id}
+                  disabled={Boolean(confirmingId) || isRefreshing}
                   onClick={() => handleConfirmarEntrega(entrega.id)}
                   className={clsx(
                     'w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 cursor-pointer active:scale-[0.98]',
+                    (Boolean(confirmingId) || isRefreshing) && 'cursor-not-allowed',
                     confirmingId === entrega.id && 'animate-pulse'
                   )}
                 >

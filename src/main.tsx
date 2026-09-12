@@ -58,11 +58,13 @@ function bypassTenantSuspensionBoundary(): boolean {
     || pathname.startsWith("/cardapio")
     || pathname.startsWith("/ativar")
     || pathname.startsWith("/acompanhar")
+    || pathname.startsWith("/entregador")
     || resolved.surface === "public"
     || resolved.surface === "landing"
     || resolved.surface === "central"
     || resolved.surface === "ativar"
     || resolved.surface === "acompanhar"
+    || resolved.surface === "entregador"
     || isPublicCommercialRoute();
 }
 
