@@ -389,8 +389,8 @@ def test_partial_full_and_table_account_prints_use_the_new_identity_semantics():
         complete = render_table_receipt(db, TENANT, 1, apenas_valores=False)
         assert "REIMPRESSÃO" in complete
         assert "VIA COMPLETA DA MESA" in complete
-        assert "CONTA: #46" in complete
-        assert "PEDIDO #46" not in complete
+        assert "PEDIDO #46" in complete
+        assert "CONTA: #46" not in complete
         assert "TOTAL GERAL DA MESA:" in complete
 
         table_account = render_table_receipt(

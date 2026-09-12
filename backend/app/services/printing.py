@@ -405,21 +405,41 @@ def _format_table_account_document(
     return "\n".join(lines)
 
 
-def _format_full_table_reprint(receipt: str, snapshot: TableReceiptSnapshot) -> str:
-    """Distingue a via completa da mesa de um pedido/lote individual."""
+def _format_full_table_reprint(receipt: str) -> str:
+    """Marca a segunda via completa sem transformar PEDIDO em CONTA."""
     lines = receipt.split("\n")
     width = int(getattr(printer_service, "width", 40) or 40)
-    account_label = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
-    generated_label = "PEDIDOS" if len(snapshot.account_numbers) > 1 else "PEDIDO"
-    for index, line in enumerate(lines):
-        if f"{generated_label} #" in line:
-            lines[index] = line.replace(f"{generated_label} #", f"{account_label}: #", 1)
-            break
+
+    reprint_marker = "REIMPRESSÃO"
+    if not any(reprint_marker in line for line in lines):
+        operational_types = ("CONSUMO NO LOCAL", "RETIRADA", "DELIVERY")
+        type_index = next(
+            (
+                index
+                for index, line in enumerate(lines)
+                if any(label in line for label in operational_types)
+            ),
+            None,
+        )
+        if type_index is None:
+            type_index = next(
+                (
+                    index
+                    for index, line in enumerate(lines)
+                    if "PEDIDO #" in line or "PEDIDOS #" in line
+                ),
+                None,
+            )
+        if type_index is not None:
+            lines.insert(
+                type_index + 1,
+                ESC_BOLD_ON + align_center(reprint_marker, width) + ESC_BOLD_OFF,
+            )
 
     marker = "VIA COMPLETA DA MESA"
     if not any(marker in line for line in lines):
         reprint_index = next(
-            (index for index, line in enumerate(lines) if "REIMPRESSÃO" in line),
+            (index for index, line in enumerate(lines) if reprint_marker in line),
             None,
         )
         if reprint_index is not None:
@@ -473,7 +493,7 @@ def render_table_receipt(
             document_title="CONTA DA MESA",
         )
 
-    identity_label = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
+    identity_label = "PEDIDOS" if len(snapshot.account_numbers) > 1 else "PEDIDO"
     rendered = apply_operational_visual_hierarchy(
         receipt,
         order_number=snapshot.numero_pedido,
@@ -482,7 +502,7 @@ def render_table_receipt(
         location_label=None,
         identity_label=identity_label,
     )
-    return _format_full_table_reprint(rendered, snapshot)
+    return _format_full_table_reprint(rendered)
 
 
 def render_table_source_receipt(
