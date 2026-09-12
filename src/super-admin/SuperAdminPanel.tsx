@@ -167,10 +167,15 @@ export default function SuperAdminPanel() {
     void fetchContracts();
     addAuditLog("Sessão autenticada de SuperAdmin iniciada.", "INFO", "AUTH");
 
-    const contractInboxPoll = window.setInterval(() => {
-      void fetchContracts();
-    }, 30_000);
-    return () => window.clearInterval(contractInboxPoll);
+    const refreshContractInboxWhenVisible = () => {
+      if (document.visibilityState === "visible") void fetchContracts();
+    };
+    const contractInboxPoll = window.setInterval(refreshContractInboxWhenVisible, 30_000);
+    document.addEventListener("visibilitychange", refreshContractInboxWhenVisible);
+    return () => {
+      window.clearInterval(contractInboxPoll);
+      document.removeEventListener("visibilitychange", refreshContractInboxWhenVisible);
+    };
   }, []);
 
   const handleToggleTenantStatus = async (
