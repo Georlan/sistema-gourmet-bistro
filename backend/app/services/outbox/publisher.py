@@ -78,18 +78,42 @@ def enqueue_outbox_event_in_session(
     """
     payload = domain_event_to_payload(event)
     ev_name = event_name or resolve_event_name(event)
-    ev_id = getattr(event, "event_id", str(uuid.uuid4()))
+    ev_id = str(getattr(event, "event_id", str(uuid.uuid4())))
     rest_id = getattr(event, "restaurant_id", payload.get("restaurant_id"))
 
     if not rest_id:
         raise ValueError("Evento de outbox precisa conter restaurant_id explícito.")
 
+    rest_id_int = int(rest_id)
     agg_id = str(aggregate_id or getattr(event, "order_id", payload.get("order_id", "")))
+
+    # ``event_id`` é a identidade estável da operação. Se o mesmo evento for
+    # publicado duas vezes na mesma transação/retry local, não materialize dois
+    # registros que seriam entregues duas vezes pelo dispatcher.
+    existing = (
+        db.query(IntegrationOutbox)
+        .filter(
+            IntegrationOutbox.restaurante_id == rest_id_int,
+            IntegrationOutbox.event_id == ev_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        if (
+            existing.event_name != ev_name
+            or existing.aggregate_type != aggregate_type
+            or str(existing.aggregate_id) != agg_id
+            or existing.payload != payload
+        ):
+            raise ValueError(
+                "event_id de outbox já utilizado com conteúdo diferente."
+            )
+        return existing
 
     outbox_record = IntegrationOutbox(
         id=str(uuid.uuid4()),
-        restaurante_id=int(rest_id),
-        event_id=str(ev_id),
+        restaurante_id=rest_id_int,
+        event_id=ev_id,
         event_name=ev_name,
         aggregate_type=aggregate_type,
         aggregate_id=agg_id,
