@@ -7,11 +7,12 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relativePath: string) => readFileSync(path.join(root, relativePath), 'utf8');
 
-test('waiter table actions distinguish reprint from closing', () => {
+test('waiter table actions distinguish reprint from Conta da Mesa', () => {
   const source = read('src/components/mesas/MesaConsumptionPanel.tsx');
 
   assert.match(source, /<span>Reimpressão<\/span>/);
-  assert.match(source, /<span>Fechamento<\/span>/);
+  assert.match(source, /<span>Conta da Mesa<\/span>/);
+  assert.doesNotMatch(source, /<span>Fechamento<\/span>/);
   assert.doesNotMatch(source, /Extrato Completo/);
 });
 
@@ -20,6 +21,7 @@ test('cashier table detail names the three physical print scopes explicitly', ()
 
   assert.match(source, /<span>Reimprimir produção<\/span>/);
   assert.match(source, /<span>Reimpressão total<\/span>/);
-  assert.match(source, /<span>Fechamento<\/span>/);
+  assert.match(source, /<span>Conta da Mesa<\/span>/);
+  assert.doesNotMatch(source, /<span>Fechamento<\/span>/);
   assert.doesNotMatch(source, /Comanda Inteira|Só Valores/);
 });
