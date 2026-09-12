@@ -45,6 +45,15 @@ test('final conversion copy supports manual or automatic release', () => {
   assert.doesNotMatch(finalCta, /Conclua a ativação do restaurante/);
 });
 
+test('post-contract flow uses the public tenant domain and does not promise automatic Pix release', () => {
+  const contract = source('src/legal/PlanContractPage.tsx');
+
+  assert.doesNotMatch(contract, /activationResult\.slug\}\.koma\.com\.br/);
+  assert.match(contract, /activationResult\.slug\}\.komafood\.com\.br/);
+  assert.doesNotMatch(contract, /ativação acontece automaticamente/i);
+  assert.match(contract, /contratação segue para liberação/i);
+});
+
 test('inactive landing sections are safe if reintroduced later', () => {
   const ecosystem = source('src/landing/sections/Ecosystem.tsx');
   const capabilities = source('src/landing/sections/Capabilities.tsx');
