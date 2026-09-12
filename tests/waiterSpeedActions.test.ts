@@ -55,10 +55,18 @@ test('produto esgotado continua bloqueado e só ganha visibilidade durante busca
   assert.match(menu, /aria-disabled="true"/);
 });
 
-test('botão rápido só é oferecido para mesa em atendimento e não substitui o toque normal', () => {
+test('atalho de pedido permanece integrado ao card sem virar FAB dominante', () => {
   const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
+  const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
+
   assert.match(card, /operational\.occupancy === 'IN_SERVICE'/);
-  assert.match(card, /onClick=\{\(\) => onClick\(table\.id\)\}/);
+  assert.match(card, /footerAction=\{quickOrderAction\}/);
   assert.match(card, /quick-order-table-/);
   assert.match(card, /Novo pedido na Mesa/);
+  assert.match(card, /bg-emerald-500\/\[0\.06\]/);
+  assert.doesNotMatch(card, /absolute right-2 top-1\/2/);
+  assert.doesNotMatch(card, /rounded-full border border-emerald-400\/40 bg-emerald-500/);
+
+  assert.match(shared, /footerAction\?: React\.ReactNode/);
+  assert.match(shared, /items-center justify-between gap-2/);
 });
