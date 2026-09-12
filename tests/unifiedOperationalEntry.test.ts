@@ -25,6 +25,15 @@ test('canonical app entry strips hidden legacy path and query before mounting', 
   assert.match(main, /window\.history\.replaceState\(window\.history\.state, "", "\/"\)/);
 });
 
+test('legacy cashier and waiter tenant hosts converge to the canonical team entry', () => {
+  const main = source('../src/main.tsx');
+  assert.match(main, /function redirectLegacyOperationalStaffHost\(\)/);
+  assert.match(main, /parseTenantSubdomain\(subdomain\)/);
+  assert.match(main, /parsed\?\.surface === "caixa" \|\| parsed\?\.surface === "garcom"/);
+  assert.match(main, /window\.location\.replace\(KOMA_OPERATIONAL_APP_URL\)/);
+  assert.match(main, /isCanonicalOperationalEntryRoute\(\) \|\| isLegacyOperationalRedirect/);
+});
+
 test('canonical app shell bypasses stale browser/service-worker caches', () => {
   const main = source('../src/main.tsx');
   assert.match(main, /updateViaCache:\s*["']none["']/);
@@ -41,6 +50,16 @@ test('canonical app always starts on team login instead of restoring waiter or c
   assert.doesNotMatch(entry, /getPersistedOperationalPortal/);
   assert.doesNotMatch(entry, /detectPersistedPortal/);
   assert.match(entry, /Toda nova abertura\/reload começa no login unificado/);
+});
+
+test('logout from resolved portal clears canonical auth and returns to team login', () => {
+  const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+  const login = source('../src/components/auth/OperationalLogin.tsx');
+
+  assert.match(entry, /if \(!localStorage\.getItem\(tokenKey\)\) \{[\s\S]*clearOperatorSession\(\);[\s\S]*setActivePortal\(null\)/);
+  assert.match(entry, /250\)/);
+  assert.match(login, /portal !== 'unified' && isOperationalAppHost\(\)/);
+  assert.match(login, /Retornando ao acesso da equipe/);
 });
 
 test('unified login lets backend identity choose restaurant and role choose portal', () => {
