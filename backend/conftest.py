@@ -76,3 +76,12 @@ def cleanup_isolated_test_database():
     engine.dispose()
     for suffix in ("", "-wal", "-shm", "-journal"):
         Path(f"{TEST_DB_PATH}{suffix}").unlink(missing_ok=True)
+
+
+@pytest.fixture(autouse=True)
+def isolate_signup_limiters():
+    from app.routes.contracts import _accept_contract_rate_limiter
+    from app.routes.signups import _signup_rate_limiter
+    _accept_contract_rate_limiter.history.clear()
+    _signup_rate_limiter.history.clear()
+    yield

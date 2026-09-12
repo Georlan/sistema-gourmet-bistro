@@ -1,3 +1,5 @@
+import { SubscriptionControl } from '../assinatura/SubscriptionControl';
+import { CatalogImport } from './CatalogImport';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -272,6 +274,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               </button>
             </div>
 
+            <SubscriptionControl accessToken={accessToken} />
+            <CatalogImport accessToken={accessToken} onImported={() => void loadSnapshot()} />
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised">
               <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>

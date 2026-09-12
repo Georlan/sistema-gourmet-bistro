@@ -12,7 +12,7 @@ const main = readFileSync('src/main.tsx', 'utf8');
 test('fluxo unificado de contratação está disponível em /contratar', () => {
   assert.match(main, /pathname\.startsWith\("\/contratar"\)/);
   assert.match(planContract, /01 · PLANO E COBRANÇA/);
-  assert.match(planContract, /02 · DADOS E PAGAMENTO/);
+  assert.match(planContract, /03 · CONTRATAÇÃO E PAGAMENTO/);
   assert.match(planContract, /SUBSCRIPTION_PLANS\.map/);
 });
 

@@ -84,6 +84,8 @@ def contract_client(monkeypatch):
         poolclass=StaticPool,
     )
     ContractAcceptance.__table__.create(engine)
+    from app.signup_models import SignupBase
+    SignupBase.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     monkeypatch.setattr(contracts, "SessionLocal", TestingSessionLocal)
 
@@ -99,35 +101,22 @@ def contract_client(monkeypatch):
     engine.dispose()
 
 
-def test_acceptance_schedules_notifications_only_after_persistence(contract_client, monkeypatch):
+def test_acceptance_queues_notifications_atomically(contract_client, monkeypatch):
+    from app.signup_models import SignupNotification
     client, Session = contract_client
-    calls: list[dict] = []
-
-    def capture(background_tasks, **kwargs):
-        db = Session()
-        try:
-            assert db.execute(select(ContractAcceptance)).scalar_one_or_none() is not None
-        finally:
-            db.close()
-        calls.append(kwargs)
-
-    monkeypatch.setattr(contracts, "schedule_contract_accepted_notifications", capture)
     payload = _payload()
-
     response = client.post("/api/contracts/accept", json=payload)
     assert response.status_code == 201, response.text
-    protocol = response.json()["protocol"]
-    assert len(calls) == 1
-    assert calls[0]["protocol"] == protocol
-    assert calls[0]["restaurant_name"] == "Restaurante Notificação"
-    assert calls[0]["representative_name"] == "Responsável Notificação"
-    assert calls[0]["phone"] == "85999999999"
-    assert calls[0]["plan"] == "pocket"
-    assert calls[0]["billing_cycle"] == "mensal"
-
+    with Session() as db:
+        rows = db.query(SignupNotification).all()
+        assert len(rows) >= 2
+        assert all(row.status == "pending" for row in rows)
+        assert all(payload["phone"] not in row.payload_encrypted for row in rows)
+        count = len(rows)
     duplicate = client.post("/api/contracts/accept", json=payload)
     assert duplicate.status_code == 409
-    assert len(calls) == 1
+    with Session() as db:
+        assert db.query(SignupNotification).count() == count
 
 
 def test_provider_failure_never_escapes_notification_boundary(monkeypatch):

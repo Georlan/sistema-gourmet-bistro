@@ -52,6 +52,7 @@ _accept_contract_rate_limiter = IPRateLimiter(requests_per_minute=6)
 
 
 class ContractAcceptanceRequest(BaseModel):
+    signup_token: str | None = Field(default=None, max_length=128)
     request_id: str = Field(min_length=36, max_length=36)
     contracting_party_name: str = Field(min_length=2, max_length=255)
     contracting_party_tax_id: str = Field(min_length=11, max_length=32)
@@ -59,7 +60,7 @@ class ContractAcceptanceRequest(BaseModel):
     representative_name: str = Field(min_length=2, max_length=255)
     representative_tax_id: str = Field(min_length=11, max_length=32)
     representative_role: str = Field(min_length=2, max_length=100)
-    email: str = Field(min_length=3, max_length=255)
+    email: str = Field(min_length=3, max_length=100)
     phone: str = Field(min_length=8, max_length=50)
     plan: str = Field(min_length=2, max_length=20)
     billing_cycle: str = Field(min_length=5, max_length=16)
@@ -361,9 +362,20 @@ def accept_contract(
 
     db = SessionLocal()
     try:
+        if payload.signup_token:
+            from .signups import require_signup, signup_receipt
+            signup = require_signup(db, payload.signup_token)
+            if signup["id"] != payload.request_id:
+                raise HTTPException(409, "Inscrição incompatível com esta contratação.")
+            prior = signup_receipt(db, signup["id"])
+            if prior:
+                prior_receipt = json.loads(decrypt_field(prior))
+                return {"protocol": prior_receipt["protocol"], "receipt": prior_receipt, "message": "Aceite já registrado."}
         # Core INSERT sem RETURNING: o runtime de produção recebe apenas INSERT
         # na tabela global de evidências e não ganha SELECT cross-tenant.
         db.execute(insert(ContractAcceptance.__table__).values(**values))
+        from ..services.signup_notifications import enqueue_acceptance
+        enqueue_acceptance(db, protocol=protocol, restaurant_name=restaurant_name, representative_name=representative_name, email=payload.email, phone=phone)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -373,18 +385,6 @@ def accept_contract(
         ) from exc
     finally:
         db.close()
-
-    # WhatsApp is deliberately scheduled only after the immutable evidence commit.
-    # Provider/scheduling failures cannot alter the legal acceptance.
-    schedule_contract_accepted_notifications(
-        background_tasks,
-        restaurant_name=restaurant_name,
-        representative_name=representative_name,
-        phone=phone,
-        plan=payload.plan,
-        billing_cycle=payload.billing_cycle,
-        protocol=protocol,
-    )
 
     return {
         "protocol": protocol,

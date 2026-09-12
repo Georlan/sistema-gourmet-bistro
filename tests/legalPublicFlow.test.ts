@@ -19,7 +19,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal publica o pacote v1.1 de lançamento', () => {
+test('central legal publica o pacote v1.2 de lançamento', () => {
   for (const slug of [
     'termos',
     'planos',
@@ -32,7 +32,7 @@ test('central legal publica o pacote v1.1 de lançamento', () => {
   ]) {
     assert.match(legalContent, new RegExp(`slug: '${slug}'`));
   }
-  assert.match(legalContent, /LEGAL_VERSION = '1\.1'/);
+  assert.match(legalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalContent, /Georlan Gomes e Silva Júnior/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
   assert.match(legalPage, /Fornecedores/);
@@ -66,7 +66,7 @@ test('contratação registra clickwrap com identidade, evidência e comprovante'
   assert.doesNotMatch(planContract, /defaultChecked/i, 'aceite não pode nascer pré-marcado');
 });
 
-test('proveniência jurídica fixa commit e blob da Legal v1.1 sem dados pessoais do prestador', () => {
+test('proveniência jurídica fixa commit e blob da Legal v1.2 sem dados pessoais do prestador', () => {
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -101,7 +101,7 @@ test('conteúdo comercial preserva preços oficiais, anual, trial e taxa do prov
   assert.match(legalContent, /IPCA/);
 });
 
-test('pacote v1.1 cobre LGPD, transferências, incidentes e restrição etária', () => {
+test('pacote v1.2 cobre LGPD, transferências, incidentes e restrição etária', () => {
   assert.match(legalContent, /Railway.*San Francisco/s);
   assert.match(legalContent, /Supabase.*Oregon/s);
   assert.match(legalContent, /24 horas após a confirmação/);

@@ -61,3 +61,9 @@ from . import print_agents as _print_agents  # noqa: E402
 from .print_agent_events import router as _print_agent_events_router  # noqa: E402
 
 _print_agents.router.include_router(_print_agent_events_router)
+from .signups import router as _signups_router, admin_router as _signup_admin_router
+_root_router.router.include_router(_signups_router)
+_super_admin.router.include_router(_signup_admin_router)
+
+from .subscription_account import router as _subscription_account_router
+_root_router.router.include_router(_subscription_account_router)

@@ -21,7 +21,7 @@ from ..routes.super_admin_onboarding import (
     restaurant_trials,
 )
 from ..saas_billing_models import SaaSSubscription
-from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant
+from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant, annual_access_end
 from ..services.contract_notifications import schedule_customer_activation_notification
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 
@@ -147,6 +147,16 @@ def provision_restaurant_for_contract(
     with tenant_session_scope(db, tenant_id):
         _lock_onboarding_transaction(db)
 
+        latest = resolve_activation_acceptance(db, protocol)
+        if latest and latest.get("linked_restaurante_id"):
+            existing_id = int(latest["linked_restaurante_id"])
+            db.rollback()
+            with tenant_session_scope(db, existing_id):
+                restaurant = db.query(Restaurante).filter(Restaurante.id == existing_id).one()
+                subscription = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == existing_id).one_or_none()
+                return {"restaurant_id": existing_id, "slug": restaurant.slug, "invitation_token": None,
+                        "trial_ends_at": subscription.trial_ends_at if subscription else datetime.datetime.now(datetime.timezone.utc)}
+
         if _slug_owner_id(db, slug) is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -217,7 +227,7 @@ def provision_restaurant_for_contract(
                 and str(acceptance.get("billing_cycle")).lower() in ("annual", "anual")
             )
             sub_status = "active" if is_pix_annual else "trialing"
-            period_end = (now + datetime.timedelta(days=365)) if is_pix_annual else trial_ends_at
+            period_end = annual_access_end(now) if is_pix_annual else trial_ends_at
 
             canonical_sub = SaaSSubscription(
                 restaurante_id=tenant_id,
@@ -264,18 +274,9 @@ def provision_restaurant_for_contract(
                 },
             )
         )
+        from .signup_notifications import enqueue_activation
+        enqueue_activation(db, protocol=protocol, restaurant_name=restaurant_name, representative_name=admin_name, email=admin_email, phone=admin_phone, token=invitation_token)
         db.commit()
-
-        if background_tasks is not None and admin_phone:
-            schedule_customer_activation_notification(
-                background_tasks,
-                phone=admin_phone,
-                representative_name=admin_name,
-                restaurant_name=restaurant_name,
-                protocol=protocol,
-                invitation_token=invitation_token,
-                invitation_ttl_hours=INVITATION_TTL_HOURS,
-            )
 
         return {
             "restaurant_id": tenant_id,

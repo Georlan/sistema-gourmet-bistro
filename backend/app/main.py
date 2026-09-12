@@ -83,14 +83,23 @@ async def lifespan(app: FastAPI):
     # Inicializa o worker da Outbox se não estiver em ambiente de teste ou se habilitado explicitamente
     worker_enabled = os.getenv("ENABLE_OUTBOX_WORKER", "true").lower() == "true" and os.getenv("ENVIRONMENT") != "test"
     outbox_task = None
+    signup_task = None
     if worker_enabled:
         from .services.outbox import default_outbox_worker
         outbox_task = default_outbox_worker.start()
+        import asyncio
+        from .services.signup_notifications import run_worker
+        signup_task = asyncio.create_task(run_worker())
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
     try:
         yield
     finally:
+        if signup_task:
+            import contextlib
+            signup_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await signup_task
         if outbox_task and worker_enabled:
             from .services.outbox import default_outbox_worker
             await default_outbox_worker.stop()
@@ -347,6 +356,7 @@ app.add_middleware(
         "X-Tenant-ID",
         "X-Restaurante-ID",
         "X-Request-ID",
+        "X-Signup-Token",
     ],
     expose_headers=["X-Request-ID"],
 )

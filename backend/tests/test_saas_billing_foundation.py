@@ -97,6 +97,8 @@ def client_and_session(monkeypatch):
     SuperAdminAuditLog.__table__.create(engine)
     restaurant_trials.create(engine)
     ContractAcceptance.__table__.create(engine)
+    from app.signup_models import SignupBase
+    SignupBase.metadata.create_all(engine)
     RestaurantContractAcceptance.__table__.create(engine)
     SaaSBillingSetup.__table__.create(engine)
     SaaSSubscription.__table__.create(engine)

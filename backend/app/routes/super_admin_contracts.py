@@ -18,6 +18,7 @@ from ..database import SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
 from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from ..services.billing_service import (
+    annual_access_end,
     get_billing_setup,
     is_billing_enforcement_enabled,
     is_billing_ready,
@@ -606,12 +607,12 @@ def activate_contract(
                     provider_customer_id=billing_setup.provider_customer_id,
                     provider_subscription_id=billing_setup.provider_subscription_id,
                     payment_method_type=billing_setup.payment_method_type,
-                    status="trialing",
+                    status="active" if billing_setup.payment_method_type == "pix" else "trialing",
                     billing_cycle=acceptance["billing_cycle"],
                     trial_started_at=now,
                     trial_ends_at=trial_ends_at,
                     current_period_start=now,
-                    current_period_end=trial_ends_at,
+                    current_period_end=annual_access_end(now) if billing_setup.payment_method_type == "pix" else trial_ends_at,
                     created_at=now,
                     updated_at=now,
                 )

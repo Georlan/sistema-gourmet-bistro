@@ -90,6 +90,8 @@ def client_and_session(monkeypatch):
         poolclass=StaticPool,
     )
     ContractAcceptance.__table__.create(engine)
+    from app.signup_models import SignupBase
+    SignupBase.metadata.create_all(engine)
     RestaurantContractAcceptance.__table__.create(engine)
     TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     monkeypatch.setattr(contracts, "SessionLocal", TestingSessionLocal)
