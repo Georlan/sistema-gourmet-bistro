@@ -7,7 +7,7 @@ import unicodedata
 import uuid
 from typing import Any
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..contract_models import RestaurantContractAcceptance
@@ -22,7 +22,6 @@ from ..routes.super_admin_onboarding import (
 )
 from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant, annual_access_end
-from ..services.contract_notifications import schedule_customer_activation_notification
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 
 logger = logging.getLogger("koma.services.restaurant_provisioning")
@@ -58,6 +57,8 @@ def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] 
                 res["payment_method_type"] = None
         return res
 
+    SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+    SaaSSubscription.__table__.create(db.get_bind(), checkfirst=True)
     row = (
         db.query(ContractAcceptance, RestaurantContractAcceptance, SaaSBillingSetup)
         .outerjoin(
@@ -109,7 +110,6 @@ def provision_restaurant_for_contract(
     billing_setup: BillingSetupData | None = None,
     actor: str = "saas_checkout",
     reason: str = "Ativação automática via checkout SaaS com trial de 7 dias",
-    background_tasks: BackgroundTasks | None = None,
 ) -> dict[str, Any]:
     """
     Provisiona atomicamente o restaurante, configurações, admin inicial e assinatura SaaS.
@@ -166,6 +166,31 @@ def provision_restaurant_for_contract(
         now = datetime.datetime.now(datetime.timezone.utc)
         trial_ends_at = now + datetime.timedelta(days=DEFAULT_TRIAL_DAYS)
         invitation_token = str(uuid.uuid4())
+
+        # O gateway precisa aceitar a nova data antes de ativarmos o acesso local.
+        # Assim, uma falha externa nunca deixa o restaurante ativo enquanto a
+        # cobrança permanece agendada para uma data anterior.
+        if (
+            billing_setup is not None
+            and billing_setup.status == "ready"
+            and billing_setup.payment_method_type == "credit_card"
+            and billing_setup.provider_subscription_id
+        ):
+            from .saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
+
+            try:
+                default_saas_mp_service.update_preapproval_next_payment_date(
+                    billing_setup.provider_subscription_id,
+                    trial_ends_at,
+                )
+            except SaasMercadoPagoError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=(
+                        "Não foi possível alinhar os 7 dias grátis com o gateway. "
+                        "O restaurante não foi liberado; tente novamente."
+                    ),
+                ) from exc
 
         restaurant = Restaurante(
             id=tenant_id,
@@ -246,20 +271,6 @@ def provision_restaurant_for_contract(
             )
             db.add(canonical_sub)
 
-            if billing_setup.payment_method_type == "credit_card" and billing_setup.provider_subscription_id:
-                from .saas_mercadopago import default_saas_mp_service, SaasMercadoPagoError
-                try:
-                    default_saas_mp_service.update_preapproval_next_payment_date(
-                        billing_setup.provider_subscription_id,
-                        trial_ends_at,
-                    )
-                except SaasMercadoPagoError as exc:
-                    logger.warning(
-                        "Falha ao sincronizar término de trial no Mercado Pago para %s: %s",
-                        protocol,
-                        exc,
-                    )
-
         db.add(
             SuperAdminAuditLog(
                 restaurante_id=tenant_id,
@@ -283,7 +294,7 @@ def provision_restaurant_for_contract(
                     "admin_user_id": initial_admin.id,
                     "admin_email": admin_email,
                     "admin_status": "pendente_ativacao",
-                    "credential_delivery": "whatsapp_scheduled",
+                    "credential_delivery": "outbox_scheduled",
                     "mercado_pago": "disconnected",
                 },
             )

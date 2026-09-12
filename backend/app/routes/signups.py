@@ -2,9 +2,10 @@
 import datetime as dt
 import hashlib
 import json
+import re
 import secrets
 import uuid
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from ..database import get_db, tenant_session_scope
@@ -18,6 +19,7 @@ _signup_rate_limiter = IPRateLimiter(requests_per_minute=20)
 
 router = APIRouter(prefix="/api/signups", tags=["Inscrições"])
 admin_router = APIRouter(prefix="/signups", tags=["SuperAdmin"])
+_CONTRACT_PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
 
 class SignupInput(BaseModel):
     restaurant_name: str = Field(min_length=2, max_length=255)
@@ -197,7 +199,6 @@ class ReleaseSignupRequest(BaseModel):
 def release_signup(
     protocol: str,
     payload: ReleaseSignupRequest | None = None,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     admin=Depends(get_current_admin),
     db=Depends(get_db),
 ):
@@ -208,6 +209,8 @@ def release_signup(
     from ..services.billing_service import get_billing_setup
 
     normalized = protocol.strip().upper()
+    if not _CONTRACT_PROTOCOL_RE.fullmatch(normalized):
+        raise HTTPException(status_code=422, detail="Protocolo contratual inválido.")
     acceptance = resolve_activation_acceptance(db, normalized)
     if not acceptance:
         raise HTTPException(status_code=404, detail="Contrato não encontrado.")
@@ -238,7 +241,6 @@ def release_signup(
         billing_setup=billing_setup,
         actor=f"superadmin:{actor_name}",
         reason=reason,
-        background_tasks=background_tasks,
     )
 
     return {
@@ -251,5 +253,5 @@ def release_signup(
         "invitation_token": provision_res.get("invitation_token"),
         "protocol": normalized,
         "idempotent": False,
-        "message": "Inscrição liberada com sucesso! Restaurante provisionado e convite enviado.",
+        "message": "Inscrição liberada com sucesso! Restaurante provisionado e envio do convite agendado.",
     }

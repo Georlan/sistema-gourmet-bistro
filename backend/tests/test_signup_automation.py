@@ -9,7 +9,7 @@ from app.models import Restaurante, Usuario
 from app.signup_models import RestaurantSignup, SignupNotification
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services import signup_notifications
-from app.services.saas_mercadopago import default_saas_mp_service
+from app.services.saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 from test_saas_billing_checkout import client_and_session, _contract_payload, _verified_pix_payment
 
 DATA = {"restaurant_name": "Novo Bistrô", "responsible_name": "Ana Silva", "email": "ana@example.com", "phone": "85999999999", "plan": "pro", "billing_cycle": "mensal"}
@@ -340,6 +340,36 @@ def test_superadmin_release_rejects_pending_or_unpaid_signup(signup_client):
     assert 'ready' in res.json()['detail']
 
 
+def test_superadmin_release_keeps_database_empty_when_trial_sync_fails(signup_client, monkeypatch):
+    client, Session = signup_client
+    monkeypatch.setattr(settings, 'KOMA_SAAS_MANUAL_RELEASE_REQUIRED', True)
+    protocol = client.post('/api/contracts/accept', json=_contract_payload()).json()['protocol']
+    setup = client.post(
+        f'/api/contracts/{protocol}/billing/setup',
+        json={'payment_method_type': 'credit_card', 'card_token_id': 'tok'},
+    )
+    assert setup.status_code == 200
+
+    def reject_trial_sync(*_args, **_kwargs):
+        raise SaasMercadoPagoError('provider rejected billing date', status_code=400)
+
+    monkeypatch.setattr(
+        default_saas_mp_service,
+        'update_preapproval_next_payment_date',
+        reject_trial_sync,
+    )
+    client.app.dependency_overrides[get_current_admin] = lambda: {'user': 'operator'}
+
+    response = client.post(f'/api/super-admin/signups/{protocol}/release')
+
+    assert response.status_code == 502
+    assert 'não foi liberado' in response.json()['detail'].lower()
+    with Session() as db:
+        assert db.query(Restaurante).count() == 0
+        assert db.query(Usuario).count() == 0
+        assert db.query(SaaSSubscription).count() == 0
+
+
 def test_superadmin_release_is_idempotent(signup_client, monkeypatch):
     from app.routes.super_admin import get_current_admin
     client, Session = signup_client
@@ -356,4 +386,3 @@ def test_superadmin_release_is_idempotent(signup_client, monkeypatch):
     assert second['restaurant_id'] == first['restaurant_id']
     with Session() as db:
         assert db.query(Restaurante).count() == 1
-
