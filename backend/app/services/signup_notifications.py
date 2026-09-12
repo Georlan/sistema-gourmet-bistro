@@ -8,7 +8,7 @@ import uuid
 import httpx
 from sqlalchemy import insert, text
 from ..database import SessionLocal
-from ..signup_models import SignupNotification
+from ..signup_models import SignupNotification, RestaurantSignup
 from ..crypt import encrypt_field, decrypt_field
 from ..config import settings
 
@@ -65,6 +65,8 @@ def dispatch_batch():
         if db.get_bind().dialect.name == "postgresql":
             rows = db.execute(text("SELECT * FROM koma_internal.claim_signup_notifications(:claim)"), {"claim": claim}).mappings().all()
         else:
+            db.query(RestaurantSignup).filter(RestaurantSignup.expires_at < now).delete(synchronize_session=False)
+            db.query(SignupNotification).filter(SignupNotification.expires_at < now, SignupNotification.status.in_(["pending", "sending", "failed"]), SignupNotification.payload_encrypted != "").update({"status": "failed", "last_error": "expired", "payload_encrypted": ""}, synchronize_session=False)
             candidates = db.query(SignupNotification).filter(SignupNotification.status.in_(["pending", "sending"]), SignupNotification.next_attempt_at <= now, SignupNotification.expires_at > now).limit(10).all()
             rows = []
             for row in candidates:

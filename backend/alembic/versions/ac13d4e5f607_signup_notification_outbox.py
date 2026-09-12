@@ -29,7 +29,7 @@ def upgrade():
       LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN
         DELETE FROM public.restaurant_signups WHERE expires_at<now();
         UPDATE public.signup_notifications SET status='failed',last_error='expired',payload_encrypted=''
-          WHERE expires_at<now() AND status IN ('pending','sending');
+          WHERE expires_at<now() AND status IN ('pending','sending','failed') AND payload_encrypted<>'';
         RETURN QUERY WITH candidates AS (SELECT id FROM public.signup_notifications
           WHERE status IN ('pending','sending') AND next_attempt_at<=now() AND expires_at>now()
           ORDER BY next_attempt_at LIMIT 10 FOR UPDATE SKIP LOCKED)

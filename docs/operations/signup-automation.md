@@ -27,7 +27,7 @@ Configurar as credenciais **SaaS do KÔMA**, separadas do recebimento dos pedido
 - Para entrega: `RESEND_API_KEY`, `EMAIL_FROM`; WhatsApp usa a integração já existente, `KOMA_WHATSAPP_AUTOMATION_ENABLED` e, para avisos ao operador, `KOMA_OWNER_WHATSAPP_PHONE`.
 - O worker usa o ciclo de vida já existente e depende de `ENABLE_OUTBOX_WORKER=true` em produção. Sem ele, mensagens continuam persistidas, mas não são despachadas e a limpeza dos rascunhos expirados não roda.
 
-A homologação deve exercitar cartão autorizado, primeira fatura paga/recusada, cancelamento no trial, Pix aprovado, repetição de webhook, retomada e entrega do convite. Não há evidência de transação real ou deploy nesta entrega.
+A homologação deve exercitar cartão autorizado, primeira fatura paga/recusada, cancelamento no trial, Pix aprovado, repetição de webhook, retomada e entrega do convite. Não há homologação de transação real ou deploy em produção nesta entrega.
 
 NuPay, Pix Automático, carteira Mercado Pago e anual parcelado não são anunciados como disponíveis. Dependem de integração/homologação e, no parcelamento, da confirmação das condições de juros e liquidação da conta. Esta entrega prioriza cartão e Pix para reduzir custo de operação. Importação de PDF/foto com IA também permanece fora desta etapa.
 
@@ -35,4 +35,4 @@ NuPay, Pix Automático, carteira Mercado Pago e anual parcelado não são anunci
 
 A regressão completa encontrou 1.207 aprovados, 7 ignorados e 15 falhas. As mesmas 15 falhas foram reproduzidas em checkout separado do commit original `f3d0ef9`, nas áreas de SmartPOS, impressão e contratos estáticos de interface. Elas não foram alteradas nesta tarefa. As suítes específicas da inscrição, pagamento, catálogo e segurança, os testes de frontend e as migrações são executados separadamente sobre a implementação final; consultar também os resultados do CI da PR.
 
-Validação final desta entrega: 95 testes específicos de backend e smoke crítico aprovados; 25 testes de contrato/retomada repetidos após fixar a proveniência jurídica; 515 testes unitários de frontend, TypeScript e build aprovados; 32 cenários de navegador em oito larguras aprovados. Migrações de ida e volta e teste de runtime PostgreSQL 17 aprovados. Esses números são evidências locais, não homologação do Mercado Pago.
+Validação final desta entrega: 95 testes específicos de backend e smoke crítico aprovados; 25 testes de contrato/retomada repetidos após fixar a proveniência jurídica; 517 testes unitários de frontend após incorporar a main, TypeScript e build aprovados; 32 cenários de navegador em oito larguras aprovados. Migrações de ida e volta e teste de runtime PostgreSQL 17 aprovados. Esses números são evidências locais, não homologação do Mercado Pago.

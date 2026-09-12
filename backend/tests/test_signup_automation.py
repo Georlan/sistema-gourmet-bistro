@@ -191,3 +191,15 @@ def test_private_resume_header_is_allowed_by_production_cors():
     response=TestClient(app).options('/api/signups/current',headers={'Origin':'https://app.komafood.com.br','Access-Control-Request-Method':'PUT','Access-Control-Request-Headers':'content-type,x-signup-token'})
     assert response.status_code==200, response.text
     assert 'x-signup-token' in response.headers['access-control-allow-headers'].lower()
+
+
+def test_expired_failed_delivery_erases_private_payload(signup_client, monkeypatch):
+    client, Session = signup_client
+    client.post('/api/contracts/accept', json=_contract_payload())
+    with Session() as db:
+        db.query(SignupNotification).update({'status':'failed','expires_at':dt.datetime.now(dt.timezone.utc)-dt.timedelta(seconds=1)})
+        db.commit()
+    monkeypatch.setattr(signup_notifications,'SessionLocal',Session)
+    signup_notifications.dispatch_batch()
+    with Session() as db:
+        assert all(row.payload_encrypted == '' and row.last_error == 'expired' for row in db.query(SignupNotification))
