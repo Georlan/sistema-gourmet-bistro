@@ -32,7 +32,6 @@ from ..services.atendimento_projection import build_table_family_view
 from ..services.atendimentos import (
     AtendimentoError,
     ensure_atendimento_for_comanda,
-    get_table_family_snapshot,
     materialize_table_accounts_for_write,
     merge_tables,
     principal_command_for_comanda,
@@ -201,7 +200,7 @@ def venda_direta_respeitando_familia_principal(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """PDV em mesa mesclada também grava na família da mesa destino."""
+    """PDV em mesa ocupada continua no mesmo atendimento e avança a letra do pedido."""
     from .orders import criar_venda_direta, lancar_itens
 
     normalized_type = (venda_in.tipo or "").strip().casefold()
@@ -212,12 +211,9 @@ def venda_direta_respeitando_familia_principal(
     rid = require_tenant_id()
     try:
         materialize_table_accounts_for_write(db, rid, venda_in.mesa_id, actor_id=current_user.id)
-        families = get_table_family_snapshot(db, rid, venda_in.mesa_id)
-        if len(families) <= 1:
-            return criar_venda_direta(venda_in, background_tasks, db, current_user)
         principal = principal_command_for_table(db, rid, venda_in.mesa_id)
         if principal is None:
-            raise AtendimentoError("Mesa mesclada sem família principal", status_code=409)
+            return criar_venda_direta(venda_in, background_tasks, db, current_user)
         principal_account = ensure_atendimento_for_comanda(db, principal, actor_id=current_user.id)
 
         garcom_id = venda_in.garcom_id or current_user.id
