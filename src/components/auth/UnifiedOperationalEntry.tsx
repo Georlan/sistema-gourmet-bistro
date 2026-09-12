@@ -70,9 +70,13 @@ export default function UnifiedOperationalEntry() {
     const tokenKey = activePortal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
     const timer = window.setInterval(() => {
       if (!localStorage.getItem(tokenKey)) {
+        // O App legado ainda limpa primeiro o alias escopado ao sair. Esse alias
+        // ausente é a fonte de verdade de logout: eliminamos também a sessão
+        // canônica e voltamos sempre para o único login da equipe.
+        clearOperatorSession();
         setActivePortal(null);
       }
-    }, 500);
+    }, 250);
     return () => window.clearInterval(timer);
   }, [activePortal]);
 
