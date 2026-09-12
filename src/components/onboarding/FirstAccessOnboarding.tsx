@@ -121,8 +121,13 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   }, [loadSnapshot]);
 
   const openCashierAt = (tab: string, subTab: string) => {
-    sessionStorage.setItem('koma_active_tab', tab);
-    sessionStorage.setItem('koma_active_subtab', subTab);
+    try {
+      sessionStorage.setItem('koma_active_tab', tab);
+      sessionStorage.setItem('koma_active_subtab', subTab);
+    } catch {
+      // Storage can be unavailable in private/restricted browser contexts.
+      // Navigation to the cashier must remain available regardless.
+    }
     window.location.href = '/?view=caixa';
   };
 
