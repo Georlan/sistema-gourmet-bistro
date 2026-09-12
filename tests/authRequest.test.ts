@@ -71,3 +71,9 @@ test('timeout has a user-facing recovery message', () => {
     /demorou para responder/i,
   );
 });
+
+test('browser network failure does not leak the raw Failed to fetch message', () => {
+  const message = authRequestErrorMessage(new TypeError('Failed to fetch'), 'fallback');
+  assert.match(message, /servidor do KÔMA está indisponível/i);
+  assert.doesNotMatch(message, /failed to fetch/i);
+});
