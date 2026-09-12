@@ -57,6 +57,24 @@ def resolve_event_name(event: Any) -> str:
     return name_map.get(class_name, f"koma.{class_name.lower()}")
 
 
+def _validate_existing_event(
+    existing: IntegrationOutbox,
+    *,
+    event_name: str,
+    aggregate_type: str,
+    aggregate_id: str,
+    payload: dict[str, Any],
+) -> IntegrationOutbox:
+    if (
+        existing.event_name != event_name
+        or existing.aggregate_type != aggregate_type
+        or str(existing.aggregate_id) != aggregate_id
+        or existing.payload != payload
+    ):
+        raise ValueError("event_id de outbox já utilizado com conteúdo diferente.")
+    return existing
+
+
 def enqueue_outbox_event_in_session(
     db: Session,
     event: Any,
@@ -78,18 +96,53 @@ def enqueue_outbox_event_in_session(
     """
     payload = domain_event_to_payload(event)
     ev_name = event_name or resolve_event_name(event)
-    ev_id = getattr(event, "event_id", str(uuid.uuid4()))
+    ev_id = str(getattr(event, "event_id", str(uuid.uuid4())))
     rest_id = getattr(event, "restaurant_id", payload.get("restaurant_id"))
 
     if not rest_id:
         raise ValueError("Evento de outbox precisa conter restaurant_id explícito.")
 
+    rest_id_int = int(rest_id)
     agg_id = str(aggregate_id or getattr(event, "order_id", payload.get("order_id", "")))
+
+    # SessionLocal usa autoflush=False. Portanto um segundo publish na mesma
+    # transação não enxerga via SELECT o primeiro registro ainda pendente e, sem
+    # esta checagem, o UNIQUE(restaurante_id, event_id) só explode no commit.
+    for pending in db.new:
+        if (
+            isinstance(pending, IntegrationOutbox)
+            and pending.restaurante_id == rest_id_int
+            and pending.event_id == ev_id
+        ):
+            return _validate_existing_event(
+                pending,
+                event_name=ev_name,
+                aggregate_type=aggregate_type,
+                aggregate_id=agg_id,
+                payload=payload,
+            )
+
+    existing = (
+        db.query(IntegrationOutbox)
+        .filter(
+            IntegrationOutbox.restaurante_id == rest_id_int,
+            IntegrationOutbox.event_id == ev_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        return _validate_existing_event(
+            existing,
+            event_name=ev_name,
+            aggregate_type=aggregate_type,
+            aggregate_id=agg_id,
+            payload=payload,
+        )
 
     outbox_record = IntegrationOutbox(
         id=str(uuid.uuid4()),
-        restaurante_id=int(rest_id),
-        event_id=str(ev_id),
+        restaurante_id=rest_id_int,
+        event_id=ev_id,
         event_name=ev_name,
         aggregate_type=aggregate_type,
         aggregate_id=agg_id,
