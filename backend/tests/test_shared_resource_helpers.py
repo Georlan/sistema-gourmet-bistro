@@ -21,6 +21,7 @@ def test_inventory_count_preserves_balance_audit_and_noop(previous, counted):
     )
     assert changed == (previous != counted)
     assert ingredient.estoque_atual == counted
+    db.refresh.assert_called_once_with(ingredient, with_for_update=True)
     db.commit.assert_not_called()
     if not changed:
         db.add.assert_not_called()
@@ -36,6 +37,32 @@ def test_inventory_count_preserves_balance_audit_and_noop(previous, counted):
     assert movement.referencia_id == session.id
     assert movement.usuario_id == "operator"
     assert movement.observacao == "conferência"
+
+
+def test_inventory_count_reloads_locked_balance_before_building_audit_movement():
+    db = Mock()
+    ingredient = SimpleNamespace(id="ingredient", estoque_atual=10, preco_medio_custo=12)
+    session = SimpleNamespace(id="count-session-456")
+
+    def refresh_after_waiting_for_concurrent_writer(instance, *, with_for_update):
+        assert with_for_update is True
+        # Simula a primeira transação confirmando 10 -> 7 enquanto a segunda
+        # aguardava o row lock. A segunda deve auditar a partir de 7, não de 10.
+        instance.estoque_atual = 7
+
+    db.refresh.side_effect = refresh_after_waiting_for_concurrent_writer
+
+    changed = apply_inventory_count(
+        db, insumo=ingredient, counted=5, session=session,
+        restaurant_id=17, observation="segunda contagem", user_id="operator-2",
+    )
+
+    assert changed is True
+    assert ingredient.estoque_atual == 5
+    movement = db.add.call_args.args[0]
+    assert movement.saldo_anterior == 7
+    assert movement.saldo_posterior == 5
+    assert movement.quantidade == 2
 
 
 def test_profile_partial_and_null_ignore_existing_fields_but_empty_values_apply():
