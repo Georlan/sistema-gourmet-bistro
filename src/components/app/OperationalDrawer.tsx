@@ -1,11 +1,43 @@
 import React from 'react';
 import clsx from 'clsx';
-import { X, ArrowDownRight, ArrowUpRight, RefreshCw, Printer, TrendingUp, Utensils, CheckCircle2, UserCheck, UserX, ShoppingBag, Sun, Moon } from 'lucide-react';
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  ChevronRight,
+  CircleDot,
+  ClipboardList,
+  FileText,
+  Grid2X2,
+  Image as ImageIcon,
+  Moon,
+  Printer,
+  RefreshCw,
+  ShoppingBag,
+  Sun,
+  TrendingUp,
+  Type,
+  UserCheck,
+  UserX,
+  Utensils,
+  X,
+} from 'lucide-react';
 import { KomaLogo } from '../KomaLogo';
 import { LoginButton } from '../auth/LoginButton';
-import type { Order, AppSettings, CaixaTurnoResumo } from '../../types';
+import type { Order, AppSettings, CaixaTurnoResumo, DraftItem } from '../../types';
 import type { KomaTheme } from '../../config/theme';
 import { deriveProductionState, getOrderItems } from '../../domain/operationalState';
+
+const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
+const LOCAL_STORAGE_FONT_SIZE_KEY = 'koma_font_size';
+
+type FontSize = 'padrao' | 'grande' | 'gigante';
+type TableFilter = 'todos' | 'livres' | 'ocupadas' | 'prontas';
+
+type DraftSummary = {
+  tableId: number;
+  itemCount: number;
+};
 
 export interface OperationalDrawerProps {
   portal: 'garcom' | 'caixa';
@@ -25,358 +57,347 @@ export interface OperationalDrawerProps {
   onSyncSalon: () => void;
 }
 
-/** Drawer UI only. App retains availability, preferences, visibility and scroll-lock state. */
+const readDraftSummaries = (): DraftSummary[] => {
+  if (typeof window === 'undefined' || !window.localStorage) return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_DRAFTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as Record<string, DraftItem[]>;
+    return Object.entries(parsed)
+      .map(([tableId, items]) => ({
+        tableId: Number(tableId),
+        itemCount: Array.isArray(items)
+          ? items.reduce((total, item) => total + Math.max(1, Number(item?.quantidade || 1)), 0)
+          : 0,
+      }))
+      .filter((entry) => Number.isFinite(entry.tableId) && entry.tableId > 0 && entry.itemCount > 0)
+      .sort((a, b) => a.tableId - b.tableId);
+  } catch {
+    return [];
+  }
+};
+
+const readFontSize = (): FontSize => {
+  if (typeof window === 'undefined' || !window.localStorage) return 'padrao';
+  const stored = window.localStorage.getItem(LOCAL_STORAGE_FONT_SIZE_KEY);
+  return stored === 'grande' || stored === 'gigante' ? stored : 'padrao';
+};
+
+/**
+ * Operational drawer shared by waiter and cashier shells.
+ * Waiter shortcuts intentionally target stable salon element IDs so the drawer can
+ * navigate the already-mounted salon without duplicating ownership of App state.
+ */
 export function OperationalDrawer({
-  portal, restaurantName, activeWaiterName, waiterAvailable, orders, tableCounts,
-  turnoResumo, settings, theme, onWaiterAvailabilityChange, onSettingsChange,
-  onToggleTheme, onClose, onLogout, onSyncSalon,
+  portal,
+  restaurantName,
+  activeWaiterName,
+  waiterAvailable,
+  orders,
+  tableCounts,
+  turnoResumo,
+  settings,
+  theme,
+  onWaiterAvailabilityChange,
+  onSettingsChange,
+  onToggleTheme,
+  onClose,
+  onLogout,
+  onSyncSalon,
 }: OperationalDrawerProps) {
+  const [fontSize, setFontSize] = React.useState<FontSize>(readFontSize);
+  const [draftSummaries] = React.useState<DraftSummary[]>(readDraftSummaries);
+
+  React.useEffect(() => {
+    if (portal !== 'garcom' || typeof window === 'undefined' || !window.localStorage) return;
+    const stored = window.localStorage.getItem('koma_waiter_available_v1');
+    if (stored === 'true' || stored === 'false') {
+      const persisted = stored === 'true';
+      if (persisted !== waiterAvailable) onWaiterAvailabilityChange(persisted);
+    }
+  }, [portal, onWaiterAvailabilityChange]);
+
+  const mesasOcupadasCount = tableCounts.ocupada + tableCounts.pronto;
+  const mesasLivresCount = tableCounts.libre;
+  const pratosProntosCount = deriveProductionState(orders.flatMap(getOrderItems)).readyItemCount;
+  const comandasAbertasCount = orders.length;
+
+  const deliveryPendentesCount = orders.filter((order: any) =>
+    (order.tipo === 'DELIVERY' || order.tipo === 'BALCAO')
+    && (order.status === 'NOVO' || order.status === 'PENDENTE' || order.status === 'AGUARDANDO_ACEITE')
+  ).length;
+  const totalVendasTurno = orders.reduce((acc: number, order: any) =>
+    acc + (parseFloat(order.total) || parseFloat(order.valor_total) || 0), 0);
+  const totalComandasAbertas = orders.filter((order: any) =>
+    order.status === 'ABERTA' || order.status === 'EM_ANDAMENTO' || order.status === 'OPEN'
+  ).length;
+
+  const clickAfterClose = (elementId: string) => {
+    onClose();
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const run = () => document.getElementById(elementId)?.click();
+    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(run);
+    else window.setTimeout(run, 0);
+  };
+
+  const openSalonFilter = (filter: TableFilter) => clickAfterClose(`waiter-filter-${filter}`);
+  const openDraft = (tableId: number) => clickAfterClose(`mesa-card-${tableId}`);
+
+  const handleAvailabilityToggle = () => {
+    const next = !waiterAvailable;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('koma_waiter_available_v1', String(next));
+    }
+    onWaiterAvailabilityChange(next);
+  };
+
+  const handleFontSizeChange = (next: FontSize) => {
+    setFontSize(next);
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    window.localStorage.setItem(LOCAL_STORAGE_FONT_SIZE_KEY, next);
+    window.dispatchEvent(new Event('koma_font_size_changed'));
+  };
+
+  const sectionTitle = 'flex items-center gap-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400';
+  const quickAction = 'group flex min-h-[72px] w-full flex-col justify-between rounded-2xl border border-koma-border bg-koma-card p-3 text-left transition-all hover:border-emerald-500/35 hover:bg-koma-raised active:scale-[0.99]';
+
   return (
-        <div className="fixed inset-0 z-50 flex animate-fade-in">
-          <div
-            id="sidebar-backdrop"
-            onClick={() => onClose()}
-            className="fixed inset-0 bg-black/80"
-          />
+    <div className="fixed inset-0 z-50 flex animate-fade-in">
+      <div
+        id="sidebar-backdrop"
+        onClick={onClose}
+        className="fixed inset-0 bg-black/80 backdrop-blur-[2px]"
+      />
 
-          {/* Drawer content */}
-          <div className="relative w-72 sm:w-80 max-w-sm bg-koma-panel border-r border-koma-border h-full flex flex-col justify-between shadow-2xl z-10 p-4 sm:p-6 text-koma-foreground overflow-y-auto animate-slide-in-left">
-            <div className="space-y-6">
+      <aside className="relative z-10 flex h-full w-[88vw] max-w-[370px] flex-col border-r border-koma-border bg-koma-panel text-koma-foreground shadow-2xl animate-slide-in-left">
+        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-koma-border bg-koma-panel/95 px-4 py-3.5 backdrop-blur-xl sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <KomaLogo size="md" />
+            <div className="min-w-0">
+              <span className="block truncate font-serif text-sm font-bold leading-none text-koma-foreground">{restaurantName}</span>
+              <span className="mt-1 block text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">
+                {portal === 'garcom' ? 'Central do garçom' : 'Operação do caixa'}
+              </span>
+            </div>
+          </div>
+          <button
+            id="close-sidebar-btn"
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar menu lateral"
+            className="rounded-xl border border-transparent p-2 text-koma-muted transition-colors hover:border-koma-border hover:bg-koma-card hover:text-koma-foreground"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
-              {/* Header inside drawer */}
-              <div className={"flex items-center justify-between pb-4 border-b border-koma-border"}>
-                <div className={"flex items-center gap-2.5"}>
-                  <KomaLogo size="md" />
-                  <div>
-                    <span className={"font-serif font-bold text-base text-koma-foreground leading-none block"}>{restaurantName}</span>
-                    <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-sans font-medium block mt-0.5">
-                      {portal === 'garcom' ? 'Operação do salão' : 'Operação do caixa'}
-                    </span>
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          {portal === 'garcom' ? (
+            <div className="space-y-5">
+              <section className="overflow-hidden rounded-[22px] border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.10] via-koma-card to-koma-card p-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-sm font-black text-emerald-700 dark:text-emerald-300">
+                    {(activeWaiterName || 'G').trim().charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-extrabold text-koma-foreground">{activeWaiterName || 'Garçom'}</p>
+                    <p className="mt-0.5 text-[10px] text-koma-subtle">Atendimento • Salão principal</p>
+                  </div>
+                  <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Garçom</span>
+                </div>
+
+                <button
+                  id="waiter-availability-toggle"
+                  type="button"
+                  onClick={handleAvailabilityToggle}
+                  className={clsx(
+                    'mt-3 flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-xs font-bold transition-all',
+                    waiterAvailable
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300',
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    {waiterAvailable ? <UserCheck size={15} /> : <UserX size={15} />}
+                    {waiterAvailable ? 'Disponível no Salão' : 'Ocupado / Em Atendimento'}
+                  </span>
+                  <span className={clsx('h-2 w-2 rounded-full', waiterAvailable ? 'bg-emerald-400' : 'bg-amber-400')} />
+                </button>
+              </section>
+
+              <section className="space-y-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className={sectionTitle}><CircleDot size={13} /> Salão agora</h3>
+                  <span className="text-[9px] text-koma-muted">visão operacional</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-2xl border border-koma-border bg-koma-card p-3">
+                    <div className="flex items-center gap-1.5 text-koma-muted"><Grid2X2 size={13} /><span className="text-[9px] font-bold uppercase">Mesas</span></div>
+                    <div className="mt-2 flex items-end gap-1.5">
+                      <strong className="font-mono text-xl text-emerald-700 dark:text-emerald-300">{mesasOcupadasCount}</strong>
+                      <span className="pb-1 text-[9px] text-koma-muted">ocup.</span>
+                    </div>
+                    <p className="mt-0.5 text-[9px] text-koma-subtle">{mesasLivresCount} livres</p>
+                  </div>
+                  <div className={clsx('rounded-2xl border bg-koma-card p-3', pratosProntosCount > 0 ? 'border-amber-500/30' : 'border-koma-border')}>
+                    <div className={clsx('flex items-center gap-1.5', pratosProntosCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-koma-muted')}><CheckCircle2 size={13} /><span className="text-[9px] font-bold uppercase">Prontos</span></div>
+                    <strong className={clsx('mt-2 block font-mono text-xl', pratosProntosCount > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-koma-foreground')}>{pratosProntosCount}</strong>
+                    <p className="mt-0.5 text-[9px] text-koma-subtle">p/ servir</p>
+                  </div>
+                  <div className="rounded-2xl border border-koma-border bg-koma-card p-3">
+                    <div className="flex items-center gap-1.5 text-koma-muted"><ClipboardList size={13} /><span className="text-[9px] font-bold uppercase">Comandas</span></div>
+                    <strong className="mt-2 block font-mono text-xl text-koma-foreground">{comandasAbertasCount}</strong>
+                    <p className="mt-0.5 text-[9px] text-koma-subtle">abertas</p>
                   </div>
                 </div>
+              </section>
+
+              <section className="space-y-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className={sectionTitle}><Utensils size={13} /> Ações rápidas</h3>
+                  <span className="text-[9px] text-koma-muted">1 toque</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button id="drawer-show-all-tables" type="button" onClick={() => openSalonFilter('todos')} className={quickAction}>
+                    <span className="flex items-center justify-between"><Grid2X2 size={17} className="text-emerald-700 dark:text-emerald-400" /><ChevronRight size={14} className="text-koma-muted transition-transform group-hover:translate-x-0.5" /></span>
+                    <span><strong className="block text-[11px] text-koma-foreground">Todas as mesas</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Voltar ao salão completo</span></span>
+                  </button>
+                  <button id="drawer-show-ready-tables" type="button" onClick={() => openSalonFilter('prontas')} className={quickAction}>
+                    <span className="flex items-center justify-between"><CheckCircle2 size={17} className="text-amber-700 dark:text-amber-300" /><span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-700 dark:text-amber-300">{pratosProntosCount}</span></span>
+                    <span><strong className="block text-[11px] text-koma-foreground">Itens prontos</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Mesas para servir</span></span>
+                  </button>
+                  <button id="drawer-show-occupied-tables" type="button" onClick={() => openSalonFilter('ocupadas')} className={quickAction}>
+                    <span className="flex items-center justify-between"><Utensils size={17} className="text-koma-danger-text" /><span className="font-mono text-[9px] font-bold text-koma-muted">{mesasOcupadasCount}</span></span>
+                    <span><strong className="block text-[11px] text-koma-foreground">Mesas ocupadas</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Focar atendimentos</span></span>
+                  </button>
+                  <button
+                    id="drawer-sync-salon"
+                    type="button"
+                    onClick={() => { onClose(); onSyncSalon(); }}
+                    className={quickAction}
+                  >
+                    <span className="flex items-center justify-between"><RefreshCw size={17} className="text-blue-700 dark:text-blue-300" /><span className="rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-700 dark:text-blue-300">manual</span></span>
+                    <span><strong className="block text-[11px] text-koma-foreground">Sincronizar salão</strong><span className="mt-0.5 block text-[9px] text-koma-muted">Atualizar agora</span></span>
+                  </button>
+                </div>
+              </section>
+
+              {draftSummaries.length > 0 && (
+                <section className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className={sectionTitle}><FileText size={13} /> Continuar pedidos</h3>
+                    <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 font-mono text-[9px] font-bold text-blue-700 dark:text-blue-300">{draftSummaries.length}</span>
+                  </div>
+                  <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-card">
+                    {draftSummaries.slice(0, 3).map((draft, index) => (
+                      <button
+                        key={draft.tableId}
+                        id={`drawer-resume-draft-${draft.tableId}`}
+                        type="button"
+                        onClick={() => openDraft(draft.tableId)}
+                        className={clsx('flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-koma-raised', index > 0 && 'border-t border-koma-border')}
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 font-mono text-xs font-black text-blue-700 dark:text-blue-300">{draft.tableId}</div>
+                        <div className="min-w-0 flex-1">
+                          <strong className="block text-[11px] text-koma-foreground">Mesa {draft.tableId}</strong>
+                          <span className="mt-0.5 block text-[9px] text-koma-muted">{draft.itemCount} {draft.itemCount === 1 ? 'item' : 'itens'} aguardando lançamento</span>
+                        </div>
+                        <span className="text-[9px] font-bold text-blue-700 dark:text-blue-300">Retomar</span>
+                      </button>
+                    ))}
+                  </div>
+                  {draftSummaries.length > 3 && <p className="px-1 text-[9px] text-koma-muted">+ {draftSummaries.length - 3} outros rascunhos salvos neste aparelho.</p>}
+                </section>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-5">
+              <section className="space-y-2.5">
+                <h3 className={sectionTitle}>Operador do caixa</h3>
+                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10 font-bold text-emerald-700 dark:text-emerald-400">{activeWaiterName ? activeWaiterName[0] : 'C'}</div>
+                    <div><h4 className="text-sm font-bold text-koma-foreground">{activeWaiterName || 'Caixa'}</h4><p className="mt-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Caixa operacional ativo</p></div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-2.5">
+                <h3 className={sectionTitle}>Sistema de impressão</h3>
                 <button
-                  id="close-sidebar-btn"
-                  onClick={() => onClose()}
-                  className={"p-1.5 rounded-lg hover:bg-koma-card text-koma-muted hover:text-koma-foreground transition-colors cursor-pointer"}
+                  type="button"
+                  onClick={() => { onClose(); window.dispatchEvent(new CustomEvent('koma-open-impressoras')); }}
+                  className="flex w-full items-center justify-between rounded-2xl border border-koma-border bg-koma-card p-3 text-left transition-all hover:bg-koma-raised"
                 >
-                  <X size={18} />
+                  <div className="flex items-center gap-2.5"><div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-700 dark:text-emerald-400"><Printer size={16} /></div><div><h4 className="text-xs font-bold text-koma-foreground">Agente de Impressão</h4><p className="text-[9px] font-medium text-emerald-700 dark:text-emerald-400">Servidor Online • Pronto</p></div></div>
+                  <span className="rounded-lg border border-koma-border bg-koma-card px-2 py-1 font-mono text-[9px] font-bold text-koma-subtle">0 Falhas</span>
+                </button>
+              </section>
+
+              <section className="space-y-2.5">
+                <h3 className={sectionTitle}>Resumo do turno ao vivo</h3>
+                <div className="space-y-2 rounded-2xl border border-koma-border bg-koma-card p-3">
+                  <div className="flex items-center justify-between rounded-xl border border-koma-border bg-koma-card p-2 text-xs"><div className="flex items-center gap-2"><TrendingUp size={13} className="text-emerald-700 dark:text-emerald-400" /><span className="text-[11px] font-medium text-koma-secondary">Vendas do Turno</span></div><span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">R$ {(turnoResumo?.total_vendas ?? totalVendasTurno).toFixed(2)}</span></div>
+                  <div className="flex items-center justify-between rounded-xl border border-koma-border bg-koma-card p-2 text-xs"><div className="flex items-center gap-2"><Utensils size={13} className="text-blue-700 dark:text-blue-300" /><span className="text-[11px] font-medium text-koma-secondary">Comandas Abertas</span></div><span className="font-mono font-bold text-koma-foreground">{turnoResumo?.comandas_abertas_count ?? totalComandasAbertas} ativas</span></div>
+                  {deliveryPendentesCount > 0 && <div className="flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 p-2 text-xs dark:border-amber-800/30 dark:bg-amber-950/20"><div className="flex items-center gap-2"><ShoppingBag size={13} className="text-amber-700 dark:text-amber-300" /><span className="text-[11px] font-medium text-amber-600 dark:text-amber-300">Delivery Pendente</span></div><span className="rounded bg-amber-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-600 dark:text-amber-300">{deliveryPendentesCount} p/ aceitar</span></div>}
+                </div>
+              </section>
+
+              <section className="space-y-2.5">
+                <h3 className={sectionTitle}>Operações de tesouraria</h3>
+                <div className="space-y-2 rounded-2xl border border-koma-border bg-koma-card p-3">
+                  <button type="button" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent('koma-open-suprimento')); }} className="flex w-full items-center justify-between rounded-xl border border-koma-border bg-koma-card p-2.5 text-xs text-koma-foreground transition-all hover:bg-koma-raised"><div className="flex items-center gap-2.5"><div className="rounded-lg bg-emerald-500/10 p-1.5 text-emerald-700 dark:text-emerald-400"><ArrowDownRight size={14} /></div><span className="font-semibold">Suprimento de Caixa</span></div><span className="font-mono text-[9px] font-bold text-emerald-700 dark:text-emerald-400">+ Troco</span></button>
+                  <button type="button" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent('koma-open-sangria')); }} className="flex w-full items-center justify-between rounded-xl border border-koma-border bg-koma-card p-2.5 text-xs text-koma-foreground transition-all hover:bg-koma-raised"><div className="flex items-center gap-2.5"><div className="rounded-lg bg-rose-500/10 p-1.5 text-rose-700 dark:text-rose-300"><ArrowUpRight size={14} /></div><span className="font-semibold">Sangria de Segurança</span></div><span className="font-mono text-[9px] font-bold text-rose-700 dark:text-rose-300">- Retirada</span></button>
+                  <button type="button" onClick={() => { onClose(); window.dispatchEvent(new CustomEvent('koma-sync-all')); }} className="flex w-full items-center justify-between rounded-xl border border-koma-border bg-koma-card p-2.5 text-xs text-koma-foreground transition-all hover:bg-koma-raised"><div className="flex items-center gap-2.5"><div className="rounded-lg bg-blue-500/10 p-1.5 text-blue-700 dark:text-blue-300"><RefreshCw size={14} /></div><span className="font-semibold">Sincronizar Dados</span></div><span className="flex items-center gap-1 font-mono text-[9px] font-bold text-emerald-700 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Ao Vivo</span></button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          <section className="mt-5 space-y-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className={sectionTitle}><Type size={13} /> Preferências</h3>
+              <span className="text-[9px] text-koma-muted">neste aparelho</span>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-card">
+              <div className="flex items-center justify-between gap-3 border-b border-koma-border px-3 py-3">
+                <div><span className="block text-[11px] font-semibold text-koma-foreground">Tema visual</span><span className="mt-0.5 block text-[9px] text-koma-muted">Claro ou escuro</span></div>
+                <button type="button" onClick={onToggleTheme} className="flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-2.5 py-2 text-[10px] font-bold uppercase text-koma-foreground transition-colors hover:bg-koma-raised" title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}>
+                  {theme === 'dark' ? <Sun size={13} className="text-amber-400" /> : <Moon size={13} className="text-sky-500" />}{theme === 'dark' ? 'Escuro' : 'Claro'}
                 </button>
               </div>
 
-              {/* Calculate real-time metrics for drawer dashboards */}
-              {(() => {
-                const mesasOcupadasCount = tableCounts.ocupada + tableCounts.pronto;
-                const mesasLivresCount = tableCounts.libre;
-                const pratosProntosCount = deriveProductionState(orders.flatMap(getOrderItems)).readyItemCount;
-
-                const deliveryPendentesCount = orders.filter((o: any) =>
-                  (o.tipo === 'DELIVERY' || o.tipo === 'BALCAO') &&
-                  (o.status === 'NOVO' || o.status === 'PENDENTE' || o.status === 'AGUARDANDO_ACEITE')
-                ).length;
-
-                const totalVendasTurno = orders.reduce((acc: number, o: any) => {
-                  return acc + (parseFloat(o.total) || parseFloat(o.valor_total) || 0);
-                }, 0);
-
-                const totalComandasAbertas = orders.filter((o: any) => o.status === 'ABERTA' || o.status === 'EM_ANDAMENTO' || o.status === 'OPEN').length;
-
-                return portal === 'garcom' ? (
-                  <>
-                    {/* GARÇOM - MINHA CONTA & DISPONIBILIDADE */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Garçom em Atendimento</h3>
-                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3.5 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-full flex items-center justify-center font-bold">
-                            {activeWaiterName ? activeWaiterName[0] : 'G'}
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-koma-foreground">{activeWaiterName || 'Garçom'}</h4>
-                            <p className="text-[10px] text-koma-subtle font-sans">Atendimento • Salão Principal</p>
-                          </div>
-                        </div>
-
-                        {/* Disponibilidade Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => onWaiterAvailabilityChange(!waiterAvailable)}
-                          className={clsx(
-                            'w-full py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between border',
-                            waiterAvailable
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800/40 dark:text-emerald-300'
-                              : 'bg-amber-50 border-amber-300 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800/40 dark:text-amber-300'
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            {waiterAvailable ? <UserCheck size={14} /> : <UserX size={14} />}
-                            <span>{waiterAvailable ? 'Disponível no Salão' : 'Ocupado / Em Atendimento'}</span>
-                          </div>
-                          <span className={clsx('w-2 h-2 rounded-full animate-pulse', waiterAvailable ? 'bg-emerald-400' : 'bg-amber-400')} />
-                        </button>
-
-                        <LoginButton
-                          variant="default"
-                          iconType="logout"
-                          onClick={onLogout}
-                          className="w-full font-bold uppercase tracking-wider text-xs py-2.5"
-                        >
-                          LOGOUT / SAIR
-                        </LoginButton>
-                      </div>
-                    </div>
-
-                    {/* GARÇOM - RESUMO DO SALÃO EM TEMPO REAL */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Status do Salão ao Vivo</h3>
-                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between p-2.5 bg-koma-card border border-koma-border rounded-xl text-xs">
-                          <div className="flex items-center gap-2">
-                            <Utensils size={14} className="text-emerald-700 dark:text-emerald-400" />
-                            <span className="text-koma-secondary font-medium">Mesas Salão</span>
-                          </div>
-                          <span className="font-mono font-bold text-koma-foreground">
-                            <strong className="text-emerald-700 dark:text-emerald-400">{mesasOcupadasCount}</strong> ocupadas / {mesasLivresCount} livres
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between p-2.5 bg-koma-card border border-koma-border rounded-xl text-xs">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 size={14} className={pratosProntosCount > 0 ? "text-amber-700 dark:text-amber-300 animate-bounce" : "text-koma-muted"} />
-                            <span className="text-koma-secondary font-medium">Pratos Prontos</span>
-                          </div>
-                          <span className={clsx('font-mono font-bold px-2 py-0.5 rounded-md text-[10px]', pratosProntosCount > 0 ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30' : 'text-koma-subtle bg-koma-raised')}>
-                            {pratosProntosCount} p/ servir
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* GARÇOM - ATALHOS DE ATENDIMENTO */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Atalhos de Atendimento</h3>
-                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            onSyncSalon();
-                          }}
-                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-300 group-hover:bg-blue-500/20">
-                              <RefreshCw size={14} />
-                            </div>
-                            <span className="font-semibold text-xs">Sincronizar Salão</span>
-                          </div>
-                          <span className="text-[9px] text-blue-700 dark:text-blue-300 font-mono font-bold">Manual</span>
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* CAIXA - OPERADOR & TURNO */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Operador do Caixa</h3>
-                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3.5 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-full flex items-center justify-center font-bold">
-                            {activeWaiterName ? activeWaiterName[0] : 'C'}
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-koma-foreground">{activeWaiterName || 'Caixa'}</h4>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">Caixa Operacional Ativo</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <LoginButton
-                          variant="default"
-                          iconType="logout"
-                          onClick={onLogout}
-                          className="w-full font-bold uppercase tracking-wider text-xs py-2.5"
-                        >
-                          LOGOUT / SAIR
-                        </LoginButton>
-                      </div>
-                    </div>
-
-                    {/* CAIXA - AGENTE DE IMPRESSÃO & MONITOR (PRIORIDADE #1) */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Sistema de Impressão</h3>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          window.dispatchEvent(new CustomEvent('koma-open-impressoras'));
-                        }}
-                        className="w-full flex items-center justify-between p-3 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-2xl transition-all cursor-pointer group text-left"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-500/20">
-                            <Printer size={16} />
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-bold text-koma-foreground">Agente de Impressão</h4>
-                            <p className="text-[9px] text-emerald-700 dark:text-emerald-400 font-medium">Servidor Online • Pronto</p>
-                          </div>
-                        </div>
-                        <span className="text-[9px] text-koma-subtle font-mono font-bold bg-koma-card px-2 py-1 rounded-lg border border-koma-border">0 Falhas</span>
-                      </button>
-                    </div>
-
-                    {/* CAIXA - RESUMO DO TURNO EM TEMPO REAL (PRIORIDADE #2 - SINCRONIZADO COM BANCO DE DADOS) */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Resumo do Turno ao Vivo</h3>
-                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between p-2 bg-koma-card border border-koma-border rounded-xl text-xs">
-                          <div className="flex items-center gap-2">
-                            <TrendingUp size={13} className="text-emerald-700 dark:text-emerald-400" />
-                            <span className="text-koma-secondary font-medium text-[11px]">Vendas do Turno</span>
-                          </div>
-                          <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
-                            R$ {(turnoResumo?.total_vendas ?? totalVendasTurno).toFixed(2)}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between p-2 bg-koma-card border border-koma-border rounded-xl text-xs">
-                          <div className="flex items-center gap-2">
-                            <Utensils size={13} className="text-blue-700 dark:text-blue-300" />
-                            <span className="text-koma-secondary font-medium text-[11px]">Comandas Abertas</span>
-                          </div>
-                          <span className="font-mono font-bold text-koma-foreground">
-                            {turnoResumo?.comandas_abertas_count ?? totalComandasAbertas} ativas
-                          </span>
-                        </div>
-
-                        {deliveryPendentesCount > 0 && (
-                          <div className="flex items-center justify-between p-2 bg-amber-50 border border-amber-300 dark:bg-amber-950/20 dark:border-amber-800/30 rounded-xl text-xs">
-                            <div className="flex items-center gap-2">
-                              <ShoppingBag size={13} className="text-amber-700 dark:text-amber-300 animate-pulse" />
-                              <span className="text-amber-600 dark:text-amber-300 font-medium text-[11px]">Delivery Pendente</span>
-                            </div>
-                            <span className="font-mono font-bold text-amber-600 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded text-[10px]">
-                              {deliveryPendentesCount} p/ aceitar
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* CAIXA - ATALHOS RÁPIDOS DE TESOURARIA */}
-                    <div className="space-y-2.5">
-                      <h3 className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans">Operações de Tesouraria</h3>
-                      <div className="bg-koma-card border border-koma-border rounded-2xl p-3 space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            window.dispatchEvent(new CustomEvent('koma-open-suprimento'));
-                          }}
-                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 group-hover:bg-emerald-500/20">
-                              <ArrowDownRight size={14} />
-                            </div>
-                            <span className="font-semibold text-xs">Suprimento de Caixa</span>
-                          </div>
-                          <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-mono font-bold">+ Troco</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            window.dispatchEvent(new CustomEvent('koma-open-sangria'));
-                          }}
-                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 group-hover:bg-rose-500/20">
-                              <ArrowUpRight size={14} />
-                            </div>
-                            <span className="font-semibold text-xs">Sangria de Segurança</span>
-                          </div>
-                          <span className="text-[9px] text-rose-700 dark:text-rose-300 font-mono font-bold">- Retirada</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            window.dispatchEvent(new CustomEvent('koma-sync-all'));
-                          }}
-                          className="w-full flex items-center justify-between p-2.5 bg-koma-card hover:bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground transition-all cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-300 group-hover:bg-blue-500/20">
-                              <RefreshCw size={14} />
-                            </div>
-                            <span className="font-semibold text-xs">Sincronizar Dados</span>
-                          </div>
-                          <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-mono font-bold flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            Ao Vivo
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-
-              {/* SECTION 3: EXIBIÇÃO & PREFERÊNCIAS */}
-              <div className="space-y-2.5">
-                <h3 className={"text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-400 font-sans"}>Exibição e Preferências</h3>
-                <div className={"bg-koma-card border border-koma-border rounded-2xl p-3.5 space-y-2.5"}>
-                  <div className="flex items-center justify-between p-1 rounded">
-                    <span className="text-xs text-koma-foreground font-medium">Tema Visual</span>
-                    <button
-                      type="button"
-                      onClick={onToggleTheme}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-koma-panel border border-koma-border text-xs font-bold text-koma-foreground hover:bg-koma-raised transition-colors cursor-pointer"
-                      title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
-                    >
-                      {theme === 'dark' ? <Sun size={13} className="text-amber-400" /> : <Moon size={13} className="text-sky-500" />}
-                      <span className="text-[10px] font-mono uppercase">{theme === 'dark' ? 'Escuro' : 'Claro'}</span>
-                    </button>
-                  </div>
-
-                  <label className={"flex items-center justify-between text-xs text-koma-foreground cursor-pointer p-1 rounded hover:bg-koma-raised/40"}>
-                    <span>Exibir Imagens dos Pratos</span>
-                    <input
-                      id="sidebar-toggle-images"
-                      type="checkbox"
-                      checked={settings.exibirImagens}
-                      onChange={(e) => onSettingsChange({ ...settings, exibirImagens: e.target.checked })}
-                      className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-koma-card"}
-                    />
-                  </label>
-
-                  <label className={"flex items-center justify-between text-xs text-koma-foreground cursor-pointer p-1 rounded hover:bg-koma-raised/40"}>
-                    <span>Exibir Descrição dos Pratos</span>
-                    <input
-                      id="sidebar-toggle-descriptions"
-                      type="checkbox"
-                      checked={settings.exibirDescricoes}
-                      onChange={(e) => onSettingsChange({ ...settings, exibirDescricoes: e.target.checked })}
-                      className={"rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-koma-card"}
-                    />
-                  </label>
+              <div className="border-b border-koma-border px-3 py-3">
+                <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold text-koma-foreground">Tamanho do texto</span><span className="text-[9px] text-koma-muted">Acessibilidade</span></div>
+                <div className="grid grid-cols-3 gap-1 rounded-xl border border-koma-border bg-koma-panel p-1">
+                  {([['padrao', 'Padrão'], ['grande', 'Grande'], ['gigante', 'Gigante']] as const).map(([value, label]) => (
+                    <button key={value} id={`drawer-font-${value}`} type="button" onClick={() => handleFontSizeChange(value)} aria-pressed={fontSize === value} className={clsx('rounded-lg px-2 py-1.5 text-[9px] font-bold transition-colors', fontSize === value ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'text-koma-muted hover:text-koma-foreground')}>{label}</button>
+                  ))}
                 </div>
               </div>
 
-            </div>
+              <label className="flex cursor-pointer items-center justify-between gap-3 border-b border-koma-border px-3 py-3 hover:bg-koma-raised/40">
+                <span className="flex items-center gap-2.5"><ImageIcon size={15} className="text-koma-muted" /><span className="text-[11px] font-medium text-koma-foreground">Exibir imagens dos pratos</span></span>
+                <input id="sidebar-toggle-images" type="checkbox" checked={settings.exibirImagens} onChange={(event) => onSettingsChange({ ...settings, exibirImagens: event.target.checked })} className="sr-only" />
+                <span aria-hidden="true" className={clsx('relative h-5 w-9 shrink-0 rounded-full border transition-colors', settings.exibirImagens ? 'border-emerald-500/40 bg-emerald-500/25' : 'border-koma-border bg-koma-panel')}><span className={clsx('absolute top-0.5 h-3.5 w-3.5 rounded-full transition-transform', settings.exibirImagens ? 'translate-x-[18px] bg-emerald-400' : 'translate-x-0.5 bg-koma-muted')} /></span>
+              </label>
 
-            <div className={"pt-4 border-t border-koma-border text-center text-[10px] text-koma-muted font-sans"}>
-              <p>{restaurantName}</p>
-              <p className={"mt-0.5 font-mono"}>v3.5 • Dark Engine</p>
+              <label className="flex cursor-pointer items-center justify-between gap-3 px-3 py-3 hover:bg-koma-raised/40">
+                <span className="flex items-center gap-2.5"><FileText size={15} className="text-koma-muted" /><span className="text-[11px] font-medium text-koma-foreground">Exibir descrição dos pratos</span></span>
+                <input id="sidebar-toggle-descriptions" type="checkbox" checked={settings.exibirDescricoes} onChange={(event) => onSettingsChange({ ...settings, exibirDescricoes: event.target.checked })} className="sr-only" />
+                <span aria-hidden="true" className={clsx('relative h-5 w-9 shrink-0 rounded-full border transition-colors', settings.exibirDescricoes ? 'border-emerald-500/40 bg-emerald-500/25' : 'border-koma-border bg-koma-panel')}><span className={clsx('absolute top-0.5 h-3.5 w-3.5 rounded-full transition-transform', settings.exibirDescricoes ? 'translate-x-[18px] bg-emerald-400' : 'translate-x-0.5 bg-koma-muted')} /></span>
+              </label>
             </div>
-          </div>
+          </section>
         </div>
+
+        <div className="border-t border-koma-border bg-koma-panel/95 px-4 pb-[calc(0.8rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:px-5">
+          <LoginButton variant="default" iconType="logout" onClick={onLogout} className="w-full py-2 text-[10px] uppercase tracking-[0.14em]">
+            LOGOUT / SAIR
+          </LoginButton>
+          <div className="mt-2 flex items-center justify-center gap-2 text-[9px] text-koma-muted"><span>{restaurantName}</span><span className="h-1 w-1 rounded-full bg-koma-border" /><span className="font-mono">v3.5 • Dark Engine</span></div>
+        </div>
+      </aside>
+    </div>
   );
 }
