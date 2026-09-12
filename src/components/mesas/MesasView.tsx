@@ -228,7 +228,7 @@ export function MesasView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 w-full">
+      <div className="grid w-full auto-rows-[184px] grid-cols-2 items-stretch gap-2.5 min-[380px]:grid-cols-3 sm:grid-cols-4 sm:gap-3.5 md:grid-cols-5 xl:grid-cols-6">
         {filteredRows.length === 0 ? (
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
             {tableQuery.trim() ? 'Nenhuma mesa encontrada para esta busca.' : 'Nenhuma mesa encontrada neste status.'}

@@ -58,7 +58,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
   ) : undefined;
 
   return (
-    <div className="relative h-[176px] min-w-0 sm:h-[184px]">
+    <div className="relative h-full w-full min-w-0">
       <SharedTableCard
         {...view}
         table={table}
@@ -74,7 +74,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
         onClick={() => onClick(table.id)}
         aria-label={`Abrir ${tableLabel}`}
         title={`Abrir ${tableLabel}`}
-        className="absolute inset-0 z-10 rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
+        className="absolute inset-0 z-10 h-full w-full rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
       />
     </div>
   );
