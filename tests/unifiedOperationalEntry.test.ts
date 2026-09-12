@@ -44,12 +44,11 @@ test('canonical app shell bypasses stale browser/service-worker caches', () => {
   assert.match(headers, /\/assets\/\*[\s\S]*Cache-Control: public, max-age=31536000, immutable/);
 });
 
-test('canonical app always starts on team login instead of restoring waiter or cashier portal', () => {
+test('canonical app restores a valid persisted staff session after reload', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
-  assert.match(entry, /useState<OperationalPortal \| null>\(null\)/);
-  assert.doesNotMatch(entry, /getPersistedOperationalPortal/);
-  assert.doesNotMatch(entry, /detectPersistedPortal/);
-  assert.match(entry, /Toda nova abertura\/reload começa no login unificado/);
+  assert.match(entry, /getPersistedOperationalPortal/);
+  assert.match(entry, /useState<OperationalPortal \| null>\([\s\S]*\(\) => getPersistedOperationalPortal\(\)/);
+  assert.match(entry, /sessão operacional válida deve sobreviver[\s\S]*reload/);
 });
 
 test('logout from resolved portal clears canonical auth and returns to team login', () => {
