@@ -64,7 +64,7 @@ export function MesaTransferMergePanel({
                 setSelectedItemsForTransfer([]);
               }}
               className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                transferType === 'total' ? 'bg-rose-900/40 border border-rose-800/50 text-koma-foreground shadow-lg' : 'text-koma-subtle hover:text-koma-foreground'
+                transferType === 'total' ? 'bg-emerald-500/15 border border-emerald-500/35 text-emerald-700 dark:text-emerald-300 shadow-sm' : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
               Mesa Inteira
@@ -75,7 +75,7 @@ export function MesaTransferMergePanel({
               type="button"
               onClick={() => setTransferType('parcial')}
               className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
-                transferType === 'parcial' ? 'bg-rose-900/40 border border-rose-800/50 text-koma-foreground shadow-lg' : 'text-koma-subtle hover:text-koma-foreground'
+                transferType === 'parcial' ? 'bg-emerald-500/15 border border-emerald-500/35 text-emerald-700 dark:text-emerald-300 shadow-sm' : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
               Selecionar Itens
@@ -108,7 +108,7 @@ export function MesaTransferMergePanel({
                               setSelectedItemsForTransfer(prev => [...prev, item.id]);
                             }
                           }}
-                          className="rounded border-koma-border text-rose-400 focus:ring-rose-500 h-3.5 w-3.5 bg-koma-input"
+                          className="rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-3.5 w-3.5 bg-koma-input"
                         />
                         <span>{item.nome}</span>
                         {item.clienteNome && <span className="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 rounded">Para: {item.clienteNome}</span>}
