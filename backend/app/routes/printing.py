@@ -209,6 +209,7 @@ def imprimir_teste_extremo_cardapio(
             operator_label=None,
             customer_name="CLIENTE TESTE EXTREMO COM NOME MUITO COMPRIDO",
             customer_phone="88999990000",
+            loyalty_previous_orders=15,
             event_at=now,
             via_label="TESTE EXTREMO - NÃO É PEDIDO REAL",
             delivery_phone="88999990000",
