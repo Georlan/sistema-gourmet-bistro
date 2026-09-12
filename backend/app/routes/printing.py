@@ -226,13 +226,14 @@ def imprimir_teste_extremo_cardapio(
             show_financial_breakdown=True,
         ),
     )
+    safe_payload = payload.replace("\x00", "\\x00")
     job = PrintJob(
         restaurante_id=restaurante_id,
         document_type="producao",
         destination="COZINHA",
         source_type="teste_extremo_cardapio",
         source_id=source_id,
-        payload_text=payload,
+        payload_text=safe_payload,
         status="pending",
         idempotency_key=f"teste-extremo-cardapio:{source_id}",
     )
