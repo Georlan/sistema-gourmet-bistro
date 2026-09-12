@@ -12,6 +12,7 @@ from ...domain.printing import (
 from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
 from ...printer_service import printer_service
 from ...services.atendimentos import AtendimentoError, ensure_launch_identity
+from ...services.clientes import buscar_cliente_por_telefone
 from ...services.customer_relationship import load_customer_relationship_metrics
 from ...services.printing import (
     PrintingRequestError,
@@ -347,16 +348,17 @@ class PrintingApplicationService:
         is_delivery = cls._is_delivery_type(comanda.tipo)
         operator_name = cls._operator_name(lancamento, comanda)
         loyalty_previous_orders: Optional[int] = None
-        if (
-            is_online_order
-            and comanda.cliente_id
-            and float(comanda.valor_desconto_cashback or 0.0) > 0
-        ):
+        customer_id = cls._resolve_registered_customer_id(
+            db,
+            restaurant_id=intent.restaurant_id,
+            comanda=comanda,
+        )
+        if customer_id and float(comanda.valor_desconto_cashback or 0.0) > 0:
             relationship = load_customer_relationship_metrics(
                 db,
                 restaurante_id=intent.restaurant_id,
-                cliente_ids=[str(comanda.cliente_id)],
-            ).get(str(comanda.cliente_id))
+                cliente_ids=[customer_id],
+            ).get(customer_id)
             if relationship is not None:
                 loyalty_previous_orders = relationship.pedidos_concluidos
 
@@ -620,6 +622,31 @@ class PrintingApplicationService:
         printed_at = datetime.datetime.now(datetime.timezone.utc)
         for item in items:
             item.impresso_em = printed_at
+
+    @staticmethod
+    def _resolve_registered_customer_id(
+        db: Session,
+        *,
+        restaurant_id: int,
+        comanda: Comanda,
+    ) -> Optional[str]:
+        """Resolve cadastro canônico por cliente_id; telefone é somente fallback de busca."""
+        direct_id = str(comanda.cliente_id or "").strip()
+        if direct_id:
+            return direct_id
+
+        phone = str(comanda.delivery_telefone or "").strip()
+        if not phone:
+            return None
+        try:
+            cliente = buscar_cliente_por_telefone(
+                db,
+                restaurante_id=restaurant_id,
+                telefone=phone,
+            )
+        except ValueError:
+            return None
+        return str(cliente.id) if cliente is not None else None
 
     @staticmethod
     def _operator_name(
