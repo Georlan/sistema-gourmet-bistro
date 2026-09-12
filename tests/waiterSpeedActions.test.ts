@@ -42,6 +42,9 @@ test('card da mesa comunica a ação antes do toque sem criar segundo caminho op
   assert.match(card, /'Ver consumo'/);
   assert.match(card, /data-waiter-action=\{actionLabel\}/);
   assert.match(card, /aria-label=\{`\$\{actionLabel\} na \$\{tableLabel\}`\}/);
+  assert.match(card, /w-full min-w-0 max-w-full/);
+  assert.match(card, /justify-center whitespace-normal/);
+  assert.match(card, /text-center text-\[9px\].*leading-tight/);
   assert.equal((card.match(/onClick\(table\.id\)/g) || []).length, 2);
 });
 
@@ -68,18 +71,20 @@ test('card do garçom usa Pedido como referência visual sem alterar a identidad
   assert.doesNotMatch(card, /footerAction/);
 });
 
-test('grade do salão padroniza largura e altura de todos os cards', () => {
+test('grade do salão padroniza largura e altura de todos os cards sem cortar conteúdo no mobile', () => {
   const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
   const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
 
-  assert.match(view, /auto-rows-\[184px\]/);
+  assert.match(view, /auto-rows-\[208px\]/);
+  assert.match(view, /sm:auto-rows-\[184px\]/);
   assert.match(view, /items-stretch/);
   assert.match(card, /relative h-full w-full min-w-0/);
   assert.match(card, /absolute inset-0 z-10 h-full w-full/);
   assert.match(card, /fillHeight/);
   assert.match(shared, /fillHeight\?: boolean/);
   assert.match(shared, /fillHeight \? 'h-full' : ''/);
+  assert.doesNotMatch(view, /grid w-full auto-rows-\[184px\] grid-cols-2/);
   assert.doesNotMatch(card, /h-\[176px\]/);
   assert.doesNotMatch(card, /sm:h-\[184px\]/);
 });
