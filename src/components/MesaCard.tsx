@@ -32,10 +32,18 @@ export const MesaCard = React.memo<MesaCardProps>(({
     table, orders, hasPendingPayment, mergedIntoMesaId, now: currentTime,
   });
   const tableLabel = table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`;
+  const actionLabel = operational.mergedIntoMesaId
+    ? 'Ver atendimento'
+    : operational.occupancy === 'FREE'
+      ? 'Novo pedido'
+      : operational.production.hasReadyItems
+        ? 'Ver itens prontos'
+        : 'Ver consumo';
 
   return (
     <div
       id={`mesa-card-${table.id}`}
+      data-waiter-action={actionLabel}
       onClick={() => onClick(table.id)}
       className="relative h-full w-full min-w-0"
     >
@@ -48,15 +56,19 @@ export const MesaCard = React.memo<MesaCardProps>(({
         identityLabel="Pedido"
         fillHeight
         showItemCount={false}
-      />
+      >
+        <span className="mt-auto inline-flex w-fit items-center rounded-lg border border-current/20 bg-black/5 px-2 py-1 text-[9px] font-bold uppercase tracking-wide dark:bg-white/5">
+          {actionLabel}
+        </span>
+      </SharedTableCard>
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation();
           onClick(table.id);
         }}
-        aria-label={`Abrir ${tableLabel}`}
-        title={`Abrir ${tableLabel}`}
+        aria-label={`${actionLabel} na ${tableLabel}`}
+        title={`${actionLabel} · ${tableLabel}`}
         className="absolute inset-0 z-10 h-full w-full rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
       />
     </div>
