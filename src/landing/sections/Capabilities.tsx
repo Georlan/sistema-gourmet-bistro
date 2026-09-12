@@ -6,8 +6,8 @@ const BENEFITS = [
     num: '01',
     eyebrow: 'MAIS CONTROLE',
     title: 'SAIBA ONDE O DINHEIRO VAI.',
-    description: 'Caixa, estoque e relatórios mostram o que vendeu, o que saiu e o que precisa de atenção.',
-    items: ['CAIXA E FINANCEIRO', 'ESTOQUE E COMPRAS', 'RELATÓRIOS'],
+    description: 'Caixa e histórico começam no Pocket. Estoque, financeiro e relatórios completos entram no Pro e Premium.',
+    items: ['CAIXA E HISTÓRICO — TODOS OS PLANOS', 'ESTOQUE E FINANCEIRO — PRO E PREMIUM', 'RELATÓRIOS COMPLETOS — PRO E PREMIUM'],
     result: 'DECIDA COM NÚMEROS, NÃO COM ACHISMO.',
     icon: WalletCards,
     tone: 'dark',
@@ -16,8 +16,8 @@ const BENEFITS = [
     num: '02',
     eyebrow: 'MAIS RETORNO',
     title: 'DÊ MOTIVOS PARA O CLIENTE VOLTAR.',
-    description: 'Histórico, fidelidade e cupons ajudam você a reconhecer quem compra e criar novas visitas.',
-    items: ['HISTÓRICO DO CLIENTE', 'FIDELIDADE', 'CUPONS'],
+    description: 'Histórico de clientes faz parte da base. Pontos, cashback e cupons são recursos do Premium.',
+    items: ['HISTÓRICO DO CLIENTE — TODOS OS PLANOS', 'PONTOS E CASHBACK — PREMIUM', 'CUPONS — PREMIUM'],
     result: 'A VENDA TERMINA. O RELACIONAMENTO CONTINUA.',
     icon: RotateCcw,
     tone: 'light',
@@ -26,8 +26,8 @@ const BENEFITS = [
     num: '03',
     eyebrow: 'MAIS TEMPO',
     title: 'DEIXE O SISTEMA FAZER O REPETITIVO.',
-    description: 'Delivery, impressão, permissões e avisos mantêm a operação andando com menos cobrança manual.',
-    items: ['DELIVERY E MOTOBOY', 'EQUIPE E PERMISSÕES', 'IMPRESSÃO E AVISOS'],
+    description: 'Delivery está na base. Equipe com permissões e impressão automática entram no Pro e Premium; app do entregador é Premium.',
+    items: ['DELIVERY — TODOS OS PLANOS', 'EQUIPE E IMPRESSÃO — PRO E PREMIUM', 'APP DO ENTREGADOR — PREMIUM'],
     result: 'MENOS CORRERIA. MAIS TEMPO PARA ATENDER.',
     icon: Clock3,
     tone: 'green',
@@ -43,7 +43,7 @@ export function Capabilities() {
           <h2 id="benefits-title">MENOS CORRERIA.<br />MAIS CONTROLE.</h2>
         </div>
         <div>
-          <p>O Kôma não termina no pedido. Ele ajuda você a cuidar do dinheiro, trazer clientes de volta e ganhar tempo na rotina.</p>
+          <p>O Kôma vai além do pedido com recursos de controle e relacionamento que crescem conforme o plano escolhido.</p>
           <a href="#implantacao">VEJA COMO É COMEÇAR <ArrowDownRight size={17} aria-hidden="true" /></a>
         </div>
       </div>
