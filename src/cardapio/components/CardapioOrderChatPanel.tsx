@@ -137,10 +137,20 @@ export default function CardapioOrderChatPanel({
         fallbackInterval = null;
       }
     };
+    const fallbackTick = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
     const startFallback = () => {
       if (fallbackInterval !== null) return;
-      fallbackInterval = window.setInterval(() => void refresh(), 15000);
+      fallbackInterval = window.setInterval(fallbackTick, 15000);
     };
+    const handleFallbackVisibility = () => {
+      if (document.visibilityState === "visible" && fallbackInterval !== null) {
+        void refresh();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleFallbackVisibility);
 
     try {
       source = new EventSource(`${apiRoot}/events`);
@@ -165,6 +175,7 @@ export default function CardapioOrderChatPanel({
     }
 
     return () => {
+      document.removeEventListener("visibilitychange", handleFallbackVisibility);
       stopFallback();
       source?.close();
     };

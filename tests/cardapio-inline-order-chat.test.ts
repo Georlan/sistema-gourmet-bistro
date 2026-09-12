@@ -27,6 +27,15 @@ test('painel lateral oferece timeline, historico e envio de mensagem', () => {
   assert.match(panel, /\["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"\]/);
 });
 
+test('fallback do chat nao gera polling com a aba oculta e reconcilia ao voltar', () => {
+  assert.match(panel, /const fallbackTick = \(\) => \{/);
+  assert.match(panel, /document\.visibilityState === "visible"\) void refresh\(\)/);
+  assert.match(panel, /window\.setInterval\(fallbackTick, 15000\)/);
+  assert.match(panel, /document\.addEventListener\("visibilitychange", handleFallbackVisibility\)/);
+  assert.match(panel, /fallbackInterval !== null[\s\S]*void refresh\(\)/);
+  assert.match(panel, /document\.removeEventListener\("visibilitychange", handleFallbackVisibility\)/);
+});
+
 test('cabecalho deixa o retorno ao pedido e chat explicito', () => {
   assert.match(header, /Pedido \/ Chat/);
   assert.match(header, /Abrir acompanhamento e chat dos pedidos/);
