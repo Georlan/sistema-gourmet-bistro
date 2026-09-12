@@ -112,13 +112,13 @@ test('consumo mantém lotes, IDs de DOM, valores e ações técnicas por lançam
   ]);
 });
 
-test('consumo preserva permissões e só encaminha a confirmação de fechamento ao owner', () => {
+test('consumo preserva permissões e só encaminha a confirmação de encerramento ao owner', () => {
   let confirmations = 0;
   const props = consumptionProps({ onCloseTable: () => { confirmations += 1; } });
   assert.doesNotMatch(renderToStaticMarkup(createElement(MesaConsumptionPanel, props)), /close-table-btn-consumo/);
   const allowed = { ...props, restauranteConfig: { perm_garcom_fechar: true }, confirmClear: true };
   const node = elements(MesaConsumptionPanel(allowed)).find(entry => entry.props.id === 'close-table-btn-consumo')!;
-  assert.equal(textOf(node.props.children), 'Confirmar Fechamento?');
+  assert.equal(textOf(node.props.children), 'Confirmar encerramento?');
   node.props.onClick!();
   assert.equal(confirmations, 1);
 });
