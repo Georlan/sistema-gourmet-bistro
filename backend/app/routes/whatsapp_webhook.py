@@ -24,6 +24,11 @@ _META_STATUS_TO_STATUS_ENVIO = {
     "read": "entregue",
     "failed": "falhou",
 }
+_META_SUCCESS_STATUS_RANK = {
+    "sent": 1,
+    "delivered": 2,
+    "read": 3,
+}
 _MAX_WEBHOOK_BODY_BYTES = 1_048_576
 
 
@@ -36,6 +41,27 @@ def _constant_time_equal(received: str, expected: str) -> bool:
         received.encode("utf-8"),
         expected.encode("utf-8"),
     )
+
+
+def _should_apply_status_transition(current_status: str | None, incoming_status: str) -> bool:
+    """Recusa replay/out-of-order que faria o estado Meta regredir.
+
+    O fluxo documentado de sucesso é sent -> delivered -> read; failed é terminal
+    alternativo. Uma vez entregue/lido, replay de sent/failed não pode apagar a
+    confirmação já observada. Uma falha também não deve ser reaberta por evento
+    atrasado de sucesso do mesmo wamid.
+    """
+    current = str(current_status or "").strip().lower()
+    incoming = str(incoming_status or "").strip().lower()
+    if current == incoming:
+        return False
+    if current == "failed":
+        return False
+    if incoming == "failed":
+        return current not in {"delivered", "read"}
+    current_rank = _META_SUCCESS_STATUS_RANK.get(current, 0)
+    incoming_rank = _META_SUCCESS_STATUS_RANK.get(incoming, 0)
+    return incoming_rank > current_rank
 
 
 async def _read_limited_body(request: Request) -> bytes:
@@ -213,6 +239,8 @@ def _update_known_statuses(values: list[dict[str, Any]]) -> None:
 
             if notification is None:
                 # Um status não cria uma notificação sem vínculo de tenant.
+                continue
+            if not _should_apply_status_transition(notification.status, meta_status):
                 continue
 
             error_code, error_title = _status_error(status_payload)
