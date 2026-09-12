@@ -35,6 +35,14 @@ test('canonical app shell bypasses stale browser/service-worker caches', () => {
   assert.match(headers, /\/assets\/\*[\s\S]*Cache-Control: public, max-age=31536000, immutable/);
 });
 
+test('canonical app always starts on team login instead of restoring waiter or cashier portal', () => {
+  const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+  assert.match(entry, /useState<OperationalPortal \| null>\(null\)/);
+  assert.doesNotMatch(entry, /getPersistedOperationalPortal/);
+  assert.doesNotMatch(entry, /detectPersistedPortal/);
+  assert.match(entry, /Toda nova abertura\/reload começa no login unificado/);
+});
+
 test('unified login lets backend identity choose restaurant and role choose portal', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
 
@@ -46,7 +54,6 @@ test('unified login lets backend identity choose restaurant and role choose port
   assert.match(entry, /MANAGEMENT_ROLES\.has\(role\)/);
   assert.match(entry, /clearOperatorSession\(\)/);
   assert.match(entry, /saveOperatorSession\(data\.access_token, \{ \.\.\.data\.usuario, role \}\)/);
-  assert.match(entry, /getPersistedOperationalPortal\(\)/);
   assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
 });
 
