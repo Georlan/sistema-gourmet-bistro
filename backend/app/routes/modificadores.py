@@ -122,6 +122,78 @@ def _serialize_grupo(
     )
 
 
+def _serialize_grupos(
+    grupos: List[GrupoModificador],
+    db: Session,
+    *,
+    include_inactive_options: bool = True,
+) -> List[GrupoModificadorResponseV2]:
+    """Serializa uma coleção em lote sem fazer três consultas por grupo."""
+    if not grupos:
+        return []
+
+    restaurante_id = grupos[0].restaurante_id
+    group_ids = [grupo.id for grupo in grupos]
+
+    options_query = db.query(OpcaoModificador).filter(
+        OpcaoModificador.restaurante_id == restaurante_id,
+        OpcaoModificador.grupo_id.in_(group_ids),
+    )
+    if not include_inactive_options:
+        options_query = options_query.filter(OpcaoModificador.ativo.is_(True))
+    options_by_group: dict[str, list[OpcaoModificador]] = {}
+    for option in options_query.all():
+        options_by_group.setdefault(str(option.grupo_id), []).append(option)
+
+    product_ids_by_group: dict[str, list[str]] = {}
+    for product_id, group_id in db.query(
+        ProdutoGrupoModificador.produto_id,
+        ProdutoGrupoModificador.grupo_id,
+    ).filter(
+        ProdutoGrupoModificador.restaurante_id == restaurante_id,
+        ProdutoGrupoModificador.grupo_id.in_(group_ids),
+    ).all():
+        product_ids_by_group.setdefault(str(group_id), []).append(str(product_id))
+
+    categories_by_group: dict[str, list[CategoriaGrupoModificador]] = {}
+    for link in db.query(CategoriaGrupoModificador).filter(
+        CategoriaGrupoModificador.restaurante_id == restaurante_id,
+        CategoriaGrupoModificador.grupo_id.in_(group_ids),
+    ).all():
+        categories_by_group.setdefault(str(link.grupo_id), []).append(link)
+
+    payloads: list[GrupoModificadorResponseV2] = []
+    for grupo in grupos:
+        opcoes = options_by_group.get(str(grupo.id), [])
+        categorias_vinculadas = categories_by_group.get(str(grupo.id), [])
+        payloads.append(
+            GrupoModificadorResponseV2(
+                id=grupo.id,
+                nome=grupo.nome,
+                min_selecoes=grupo.min_selecoes,
+                max_selecoes=grupo.max_selecoes,
+                tipo=grupo.tipo,
+                opcoes=[
+                    OpcaoModificadorResponse(
+                        id=op.id,
+                        grupo_id=op.grupo_id,
+                        nome=op.nome,
+                        preco_adicional=float(op.preco_adicional or 0.0),
+                        ativo=op.ativo,
+                    )
+                    for op in opcoes
+                ],
+                produto_ids=product_ids_by_group.get(str(grupo.id), []),
+                categoria_ids=[str(link.categoria_id) for link in categorias_vinculadas],
+                incluir_subcategorias=(
+                    all(bool(link.incluir_subcategorias) for link in categorias_vinculadas)
+                    if categorias_vinculadas else True
+                ),
+            )
+        )
+    return payloads
+
+
 def _validate_product_ids(db: Session, restaurante_id: int, product_ids: List[str]) -> None:
     normalized = list(dict.fromkeys(str(pid).strip() for pid in product_ids if str(pid).strip()))
     if not normalized:
@@ -145,7 +217,7 @@ def listar_grupos(db: Session = Depends(get_db), current_user: Usuario = Depends
         GrupoModificador.restaurante_id == rest_id,
         GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
     ).all()
-    return [_serialize_grupo(g, db) for g in grupos]
+    return _serialize_grupos(grupos, db)
 
 
 @router.get("/categorias-hierarquia")
@@ -168,10 +240,7 @@ def listar_grupos_publico(restaurante_id: int, db: Session = Depends(get_db)):
         GrupoModificador.restaurante_id == restaurante_id,
         GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
     ).all()
-    return [
-        _serialize_grupo(g, db, include_inactive_options=False)
-        for g in grupos
-    ]
+    return _serialize_grupos(grupos, db, include_inactive_options=False)
 
 
 @router.post("/grupos", response_model=GrupoModificadorResponseV2, status_code=status.HTTP_201_CREATED)
