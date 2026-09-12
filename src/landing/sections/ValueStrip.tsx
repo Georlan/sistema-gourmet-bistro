@@ -16,25 +16,21 @@ const KOMA_STEPS = [
 export function ValueStrip() {
   return (
     <section className="koma-value-strip" aria-labelledby="value-title">
-      <header
-        className="koma-value-header"
-      >
-        <p className="koma-value-intro">01 / ANTES E DEPOIS</p>
+      <header className="koma-value-header">
+        <p className="koma-value-intro">01 / UM FLUXO MAIS SIMPLES</p>
         <h2 id="value-title">MENOS REPASSE.<br /><span>MAIS CONTROLE.</span></h2>
         <p>
           O pedido entra uma vez. Sua equipe acompanha até o pagamento.
         </p>
       </header>
 
-      <div className="koma-value-comparison" aria-label="Comparação entre operar sem Kôma e operar com Kôma">
-        <article
-          className="koma-value-lane koma-value-lane--fragmented"
-        >
+      <div className="koma-value-comparison" aria-label="Exemplo de uma operação fragmentada comparada ao fluxo do Kôma">
+        <article className="koma-value-lane koma-value-lane--fragmented">
           <div className="koma-value-lane-head">
             <div>
-              <strong>SEM KÔMA</strong>
+              <strong>OPERAÇÃO FRAGMENTADA</strong>
             </div>
-            <span>4 REPASSES</span>
+            <span>EXEMPLO: 4 REPASSES</span>
           </div>
 
           <div className="koma-value-route">
@@ -55,9 +51,7 @@ export function ValueStrip() {
 
         <div className="koma-value-versus" aria-hidden="true"><span>VS</span></div>
 
-        <article
-          className="koma-value-lane koma-value-lane--koma"
-        >
+        <article className="koma-value-lane koma-value-lane--koma">
           <div className="koma-value-lane-head">
             <div>
               <strong>COM KÔMA</strong>
