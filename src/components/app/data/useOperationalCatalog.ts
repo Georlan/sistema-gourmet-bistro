@@ -98,10 +98,22 @@ export function useOperationalCatalog({
   useEffect(() => {
     if (!isAuthenticated) return;
     if (isWsConnected) return;
-    const interval = setInterval(() => {
+
+    const refreshIfVisible = () => {
+      if (document.hidden) return;
       fetchLiveCatalog();
-    }, 40000); // refresh every 40s if not connected to WS
-    return () => clearInterval(interval);
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchLiveCatalog();
+    };
+
+    const interval = setInterval(refreshIfVisible, 40000); // fallback only while the app is visible
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [isAuthenticated, isWsConnected, fetchLiveCatalog]);
 
   useEffect(() => {
