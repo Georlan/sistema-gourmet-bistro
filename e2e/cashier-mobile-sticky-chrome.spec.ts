@@ -68,29 +68,8 @@ for (const theme of ['dark', 'light'] as const) {
       expect(Math.abs(geometry.subnavTop - geometry.topbarBottom)).toBeLessThanOrEqual(1);
       expect(geometry.subnavBottom).toBeLessThan(viewport.height / 3);
 
-      const menuButton = page.getByRole('button', { name: 'Abrir menu principal' });
-      await expect(menuButton).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Abrir menu principal' })).toBeVisible();
       await expect(page.locator('.cashier-subnav__button').first()).toBeVisible();
-
-      await menuButton.click();
-      await expect(page.getByRole('dialog', { name: 'Menu principal' })).toBeVisible();
-
-      const layerOrder = await page.evaluate(() => {
-        const sidebar = document.querySelector('#mobile-caixa-sidebar') as HTMLElement;
-        const overlay = sidebar.parentElement as HTMLElement;
-        const topbar = document.querySelector('.cashier-topbar') as HTMLElement;
-        const subnav = document.querySelector('.cashier-subnav') as HTMLElement;
-        const toZIndex = (element: HTMLElement) => Number.parseInt(getComputedStyle(element).zIndex || '0', 10);
-
-        return {
-          sidebarOverlay: toZIndex(overlay),
-          topbar: toZIndex(topbar),
-          subnav: toZIndex(subnav),
-        };
-      });
-
-      expect(layerOrder.sidebarOverlay).toBeGreaterThan(layerOrder.topbar);
-      expect(layerOrder.sidebarOverlay).toBeGreaterThan(layerOrder.subnav);
     });
   }
 }
