@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
@@ -53,13 +54,30 @@ def get_cargos_permissoes(
     """Returns cargo permission matrix with real employee counts per role for this tenant."""
     rest_id = require_tenant_id()
 
-    # Count employees per role (real DB data)
-    membros = db.query(Usuario).filter(Usuario.restaurante_id == rest_id).all()
+    # Aggregate inside the database instead of materializing every employee as
+    # a full ORM entity. The number of rows returned now scales with distinct
+    # roles, not with the tenant's headcount.
+    raw_role_expr = func.lower(
+        func.trim(
+            case(
+                (Usuario.role.is_not(None), Usuario.role),
+                (Usuario.cargo.is_not(None), Usuario.cargo),
+                else_="garcom",
+            )
+        )
+    )
+    role_rows = (
+        db.query(raw_role_expr.label("raw_role"), func.count(Usuario.id).label("total"))
+        .filter(Usuario.restaurante_id == rest_id)
+        .group_by(raw_role_expr)
+        .all()
+    )
+
     counts_by_role: Dict[str, int] = {}
-    for m in membros:
-        raw_role = (m.role or m.cargo or "garcom").lower().strip()
-        role = ROLE_ALIASES.get(raw_role, raw_role)
-        counts_by_role[role] = counts_by_role.get(role, 0) + 1
+    for raw_role, total in role_rows:
+        normalized = str(raw_role or "garcom")
+        role = ROLE_ALIASES.get(normalized, normalized)
+        counts_by_role[role] = counts_by_role.get(role, 0) + int(total or 0)
 
     cargos = []
     for role_key in ["admin", "gerente", "caixa", "garcom"]:
