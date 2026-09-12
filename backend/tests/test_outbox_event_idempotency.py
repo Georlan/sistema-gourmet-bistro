@@ -5,7 +5,11 @@ import pytest
 from app.database import SessionLocal
 from app.models import IntegrationOutbox
 from app.services.outbox.publisher import enqueue_outbox_event_in_session
-from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_setup
+from tests.characterization.orders.fixtures import (
+    CHAR_RESTAURANT_ID,
+    char_client,
+    char_setup,
+)
 
 
 @dataclass(frozen=True)
