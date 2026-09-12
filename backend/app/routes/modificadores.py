@@ -76,11 +76,19 @@ def _notify_catalog_update(
     )
 
 
-def _serialize_grupo(grupo: GrupoModificador, db: Session) -> GrupoModificadorResponseV2:
-    opcoes = db.query(OpcaoModificador).filter(
+def _serialize_grupo(
+    grupo: GrupoModificador,
+    db: Session,
+    *,
+    include_inactive_options: bool = True,
+) -> GrupoModificadorResponseV2:
+    options_query = db.query(OpcaoModificador).filter(
         OpcaoModificador.grupo_id == grupo.id,
         OpcaoModificador.restaurante_id == grupo.restaurante_id,
-    ).all()
+    )
+    if not include_inactive_options:
+        options_query = options_query.filter(OpcaoModificador.ativo.is_(True))
+    opcoes = options_query.all()
     produtos_vinculados = db.query(ProdutoGrupoModificador.produto_id).filter(
         ProdutoGrupoModificador.grupo_id == grupo.id,
         ProdutoGrupoModificador.restaurante_id == grupo.restaurante_id,
@@ -160,7 +168,10 @@ def listar_grupos_publico(restaurante_id: int, db: Session = Depends(get_db)):
         GrupoModificador.restaurante_id == restaurante_id,
         GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
     ).all()
-    return [_serialize_grupo(g, db) for g in grupos]
+    return [
+        _serialize_grupo(g, db, include_inactive_options=False)
+        for g in grupos
+    ]
 
 
 @router.post("/grupos", response_model=GrupoModificadorResponseV2, status_code=status.HTTP_201_CREATED)
