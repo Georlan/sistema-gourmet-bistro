@@ -26,7 +26,7 @@ import { countWaiterSalonTables, projectWaiterSalonTables } from './domain/waite
 import { resolveKomaHost } from './domain/komaHost';
 import { AppRole, AppSettings, CaixaTurnoResumo } from './types';
 import { authFetch, authRequestErrorMessage } from './utils/authRequest';
-import { getOperatorSession, saveOperatorSession } from './utils/authSession';
+import { getOperatorSession, saveOperatorSession, type OperationalPortal } from './utils/authSession';
 import { openAuthenticatedWebSocket } from './utils/authenticatedWebSocket';
 import { operationalFetch } from './utils/operationalRequest';
 import { aplicarMascaraTelefoneInput } from './utils/phonePresentation';
@@ -73,7 +73,7 @@ const readJwtSubject = (token: string): string => {
   }
 };
 
-export default function App() {
+export default function App({ initialPortal }: { initialPortal?: OperationalPortal } = {}) {
   const hostConfig = useMemo(() => resolveKomaHost(), []);
 
   if (hostConfig.surface === 'central') {
@@ -110,6 +110,12 @@ export default function App() {
   // 1. Roles & Active user state (Strictly 'garcom' or 'caixa')
   // 1. Detect portal from resolved host surface, URL query parameters or hashes
   const [portal, setPortal] = useState<'garcom' | 'caixa'>(() => {
+    // A entrada unificada já resolveu o perfil autenticado. Receber essa
+    // decisão como prop evita depender de um query param temporário enquanto
+    // o chunk do App é carregado, o que fazia contas de Caixa voltarem ao login.
+    if (initialPortal) {
+      return initialPortal;
+    }
     if (hostConfig.surface === 'caixa') {
       return 'caixa';
     }
