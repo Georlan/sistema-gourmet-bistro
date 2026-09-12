@@ -9,7 +9,7 @@ import { useLeadCapture } from '../components/LeadCaptureProvider';
 const NEXT_STEPS = [
   'Escolha o plano e o período de cobrança.',
   'Leia os documentos e informe os dados do responsável.',
-  'Conclua a ativação do restaurante.',
+  'Após a confirmação, liberamos o acesso e enviamos o convite para o primeiro login.',
 ] as const;
 
 export function FinalCTA() {
@@ -24,7 +24,7 @@ export function FinalCTA() {
           <p>Escolha o plano que faz sentido para a sua operação ou peça uma demonstração antes de decidir.</p>
 
           <div className="koma-final-conversion-actions">
-            <a href="/landing#planos" className="koma-btn koma-btn--primary">
+            <a href="/#planos" className="koma-btn koma-btn--primary">
               ESCOLHER MEU PLANO <ArrowDownRight size={17} aria-hidden="true" />
             </a>
             <button type="button" className="koma-btn koma-btn--outline-dark" onClick={() => openDemo()}>
@@ -52,12 +52,13 @@ export function FinalCTA() {
       </section>
 
       <footer className="koma-footer" role="contentinfo">
-        <a href="/landing" aria-label="Kôma, início" className="koma-footer-brand">
+        <a href="/" aria-label="Kôma, início" className="koma-footer-brand">
           <KomaLogo size="md" variant="dark" />
           <span>{KOMA_SLOGAN}</span>
         </a>
         <span>© {new Date().getFullYear()} KÔMA. TODOS OS DIREITOS RESERVADOS.</span>
         <nav aria-label="Navegação do rodapé">
+          <a href="#gestao">Recursos</a>
           <a href="#como-funciona">Como funciona</a>
           <a href="#duvidas">Dúvidas</a>
           <a href="#planos">Planos</a>
