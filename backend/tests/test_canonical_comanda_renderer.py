@@ -76,19 +76,20 @@ def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warni
     assert "CLIENTE" in ticket
     assert "NOME: GEORLAN" in ticket
     assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "FIDELIDADE:" not in ticket
     assert "ITENS" in ticket
     assert "VALOR" in ticket
     assert "1x REFRIGERANTE 1L" in ticket
     assert "R$ 12,00" in ticket
     assert "PAGAMENTO" in ticket
-    assert "FORMA: PIX ONLINE" in ticket
+    assert ESC_BOLD_ON + "FORMA: PIX ONLINE" + ESC_BOLD_OFF in ticket
     assert "VALOR PAGO: R$ 12,00" in ticket
     assert "PAGO ONLINE" in ticket
     assert "NÃO COBRAR DO CLIENTE" in ticket
     assert "SUBTOTAL ITENS:" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert "TOTAL GERAL DA MESA:" not in ticket
-    assert "Gerenciado por Kôma" in ticket
+    assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
     assert "Documento não fiscal" in ticket
 
 
@@ -112,11 +113,11 @@ def test_online_reprint_is_same_base_plus_reprint_marker_without_operator_metada
     assert "PEDIDO #93" in ticket
     assert "OPERADOR:" not in ticket
     assert "CANAL:" not in ticket
-    assert "FORMA: DINHEIRO" in ticket
+    assert ESC_BOLD_ON + "FORMA: DINHEIRO" + ESC_BOLD_OFF in ticket
     assert "TOTAL DO PEDIDO:" in ticket
 
 
-def test_delivery_keeps_customer_delivery_payment_and_full_financial_breakdown():
+def test_delivery_keeps_customer_loyalty_payment_and_full_financial_breakdown():
     ticket = _render(
         [
             PrintItem(codigo="001", nome="HAMBÚRGUER", preco_unit=27.0),
@@ -128,6 +129,7 @@ def test_delivery_keeps_customer_delivery_payment_and_full_financial_breakdown()
             operator_label=None,
             customer_name="MARIA",
             customer_phone="88999991234",
+            loyalty_previous_orders=15,
             event_at=datetime.datetime(2026, 8, 31, 22, 20, tzinfo=LOCAL_TIMEZONE),
             delivery_address="Rua José de Alencar, 124, Apto 302",
             delivery_neighborhood="Centro",
@@ -150,11 +152,12 @@ def test_delivery_keeps_customer_delivery_payment_and_full_financial_breakdown()
     assert "CLIENTE" in ticket
     assert "NOME: MARIA" in ticket
     assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "FIDELIDADE: 15 PEDIDOS ANTERIORES" in ticket
     assert "ENTREGA" in ticket
     assert "ENDEREÇO: Rua José de Alencar, 124," in ticket
     assert "BAIRRO: Centro" in ticket
     assert "PAGAMENTO" in ticket
-    assert "FORMA: DINHEIRO" in ticket
+    assert ESC_BOLD_ON + "FORMA: DINHEIRO" + ESC_BOLD_OFF in ticket
     assert "TROCO PARA: R$ 50,00" in ticket
     assert "SUBTOTAL ITENS:" in ticket
     assert "R$ 35,00" in ticket
@@ -162,10 +165,31 @@ def test_delivery_keeps_customer_delivery_payment_and_full_financial_breakdown()
     assert "R$ 5,00" in ticket
     assert "DESCONTO CUPOM:" in ticket
     assert "-R$ 3,00" in ticket
-    assert "CASHBACK:" in ticket
+    assert "DESCONTO CASHBACK:" in ticket
     assert "-R$ 2,00" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert ticket.count("R$ 35,00") >= 2
+
+
+def test_cashback_without_registered_loyalty_keeps_basic_customer_block_only():
+    ticket = _render(
+        [PrintItem(codigo="001", nome="HAMBÚRGUER", preco_unit=27.0)],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="VISITANTE",
+            customer_phone="88999991234",
+            payment_method="pix",
+            cashback_discount=2.0,
+            show_financial_breakdown=True,
+        ),
+    )
+
+    assert "NOME: VISITANTE" in ticket
+    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "FIDELIDADE:" not in ticket
+    assert "DESCONTO CASHBACK:" in ticket
 
 
 def test_secondary_sector_still_uses_same_visual_base():
@@ -184,4 +208,4 @@ def test_secondary_sector_still_uses_same_visual_base():
     assert "PEDIDO #93" in ticket
     assert "ITENS" in ticket
     assert "VALOR" in ticket
-    assert "Gerenciado por Kôma" in ticket
+    assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
