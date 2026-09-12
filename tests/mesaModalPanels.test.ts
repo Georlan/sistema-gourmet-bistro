@@ -169,7 +169,7 @@ test('diálogos não habilitam impressão nem exibem sucesso sem handlers reais'
   assert.doesNotMatch(html, /enviada com sucesso/);
 });
 
-test('diálogos encaminham extrato, valores e lançamento sem confundir identidade humana com técnica', () => {
+test('diálogos encaminham reimpressão, conta e lançamento sem confundir identidade humana com técnica', () => {
   const calls: unknown[] = [];
   const props = printProps({
     showPrintPreview: true, selectedOrderToPrint: orders[1],
@@ -177,13 +177,13 @@ test('diálogos encaminham extrato, valores e lançamento sem confundir identida
     onPrintKitchenLaunch: launchId => { calls.push(['kitchen', launchId]); },
   });
   const nodes = elements(MesaPrintDialogs(props));
-  for (const label of ['Extrato Completo', 'Apenas Valores', 'Imprimir Via Cozinha']) {
+  for (const label of ['Reimpressão total', 'Imprimir Conta', 'Imprimir Via Cozinha']) {
     nodes.find(node => node.type === 'button' && textOf(node.props.children) === label)!.props.onClick!();
   }
   assert.deepEqual(calls, [['receipt', false], ['receipt', true], ['kitchen', 'technical-launch-1']]);
   const html = renderToStaticMarkup(createElement(MesaPrintDialogs, props));
   assert.match(html, /<strong>LOTE:<\/strong> #124-AA/);
-  assert.doesNotMatch(html, /disabled=""|enviada com sucesso/);
+  assert.doesNotMatch(html, /Apenas Valores|Extrato Completo|disabled=""|enviada com sucesso/);
 });
 
 test('editor recebe cliente e quantidade válida antes da confirmação', () => {
