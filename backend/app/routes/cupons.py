@@ -511,6 +511,20 @@ def validar_cupom_publico(
                 mensagem="Cupom inválido ou não encontrado.",
             )
 
+        if cupom.cliente_id and not customer_matches_targeted_coupon(
+            db,
+            restaurante_id=cupom.restaurante_id,
+            targeted_cliente_id=cupom.cliente_id,
+            cliente_telefone=payload.telefone,
+        ):
+            # Cupons direcionados são capacidades privadas do cliente. Para quem
+            # não comprova a identidade elegível, responder exatamente como um
+            # código inexistente evita enumeração de campanhas, valores e regras.
+            return CupomValidateResponse(
+                valido=False,
+                mensagem="Cupom inválido ou não encontrado.",
+            )
+
         valido, msg, desconto = _validar_regras_cupom(
             cupom,
             subtotal=payload.subtotal,
