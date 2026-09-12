@@ -58,7 +58,7 @@ export const MesaCard = React.memo<MesaCardProps>(({
   ) : undefined;
 
   return (
-    <div className="relative h-full min-w-0">
+    <div className="relative h-[176px] min-w-0 sm:h-[184px]">
       <SharedTableCard
         {...view}
         table={table}
