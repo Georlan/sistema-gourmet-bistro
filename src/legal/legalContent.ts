@@ -25,7 +25,7 @@ export type LegalDocument = {
   sections: LegalSection[];
 };
 
-export const LEGAL_VERSION = '1.1';
+export const LEGAL_VERSION = '1.2';
 export const LEGAL_EFFECTIVE_DATE = '05/09/2026';
 export const LEGAL_PROVIDER_NAME = 'Georlan Gomes e Silva Júnior';
 export const LEGAL_PROVIDER_LOCATION = 'Limoeiro do Norte/CE';
@@ -217,7 +217,7 @@ export const LEGAL_DOCUMENTS: LegalDocument[] = [
         paragraphs: [
           'Na modalidade anual, a cobrança da mensalidade fixa é feita em uma única parcela antecipada equivalente a 12 mensalidades com desconto de 10% sobre esse componente fixo. A taxa percentual sobre pagamentos online permanece a mesma do plano.',
           'Valores anuais desta versão: Pocket R$ 1.177,20; Pro R$ 2.257,20; Premium R$ 3.337,20. O resumo individual da contratação prevalece caso uma promoção válida e expressamente identificada altere esses valores.',
-          'Enquanto a cobrança do KÔMA for manual, o plano anual não será debitado novamente de forma automática ao final de 12 meses. Renovação automática futura somente poderá ocorrer após autorização específica do contratante.',
+          'No Pix anual antecipado, o acesso inclui 12 meses e 7 dias adicionais de bônus, sem renovação automática do Pix. No cartão anual, a cobrança única do valor anual acontece após o teste e se repete a cada 12 meses somente mediante a autorização expressa dada na contratação. Parcelamento depende de oferta específica do provedor e não equivale a uma assinatura mensal.',
         ],
       },
       {
@@ -232,14 +232,14 @@ export const LEGAL_DOCUMENTS: LegalDocument[] = [
         title: '7. Teste gratuito de 7 dias',
         paragraphs: [
           'Salvo oferta individual diferente, o primeiro teste do estabelecimento dura 7 dias a partir da ativação e isenta somente a mensalidade fixa. Transações online reais processadas durante o teste continuam sujeitas à taxa percentual do plano.',
-          'O término do trial não autoriza débito automático. Sem confirmação da contratação paga, o KÔMA poderá suspender as funcionalidades pagas ao final do período, preservando os dados conforme as regras de retenção e exportação.',
+          'A cobrança após o teste exige autorização expressa do contratante. Ao escolher cartão e autorizar a recorrência no checkout, a primeira cobrança ocorre após os 7 dias; é possível cancelar antes dessa cobrança. Sem autorização ou pagamento confirmado, o KÔMA poderá suspender funcionalidades pagas, preservando os dados conforme as regras de retenção e exportação.',
         ],
       },
       {
         title: '8. Cobrança mensal, vencimento e renovação',
         paragraphs: [
-          'Na fase atual, a cobrança da assinatura é realizada manualmente pelo KÔMA. O vencimento e o meio de pagamento aparecem no resumo individual ou na cobrança enviada ao contato oficial do restaurante.',
-          'O plano mensal se renova por períodos mensais sucessivos enquanto não for cancelado. A cobrança manual não autoriza débito em conta ou cartão sem autorização específica. Quando houver automação futura, o contratante deverá ser informado previamente do meio, valor, periodicidade e mecanismo de cancelamento.',
+          'A cobrança da assinatura pode ocorrer automaticamente pelo provedor de pagamento, conforme meio, valor, periodicidade e autorização apresentados no resumo individual da contratação. Autorizar um cartão não significa que uma cobrança já foi paga.',
+          'O plano mensal se renova por períodos mensais sucessivos enquanto não for cancelado. A autorização de recorrência no cartão permite as cobranças descritas no resumo. Pagamentos recusados ou vencidos podem exigir regularização para manter o acesso. Cobranças manuais não autorizam débitos automáticos.',
         ],
       },
       {
@@ -308,6 +308,7 @@ export const LEGAL_DOCUMENTS: LegalDocument[] = [
           'Nome, e-mail, telefone, CPF ou CNPJ informado na contratação, cargo/função e dados do estabelecimento.',
           'Dados de autenticação, perfis, permissões, registros de sessão e eventos de segurança.',
           'Plano, modalidade de cobrança, pagamentos da assinatura, histórico de suporte e relacionamento.',
+          'Na inscrição inicial, nome do restaurante, responsável e contatos são usados para salvar e acompanhar a adesão. O rascunho pode ser retomado neste dispositivo por até 30 dias; após esse prazo é excluído. Evidências de contratos aceitos seguem os prazos próprios de retenção contratual.',
           'Endereço IP, User-Agent, identificadores técnicos, horário de acesso, rota, request-id e outros metadados necessários para segurança, diagnóstico e obrigação legal.',
           'Conteúdo enviado voluntariamente em chamados de suporte, desde que necessário à solução do problema.',
         ],
