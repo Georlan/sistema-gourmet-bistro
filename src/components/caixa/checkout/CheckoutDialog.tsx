@@ -351,14 +351,14 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 );
               })()}
 
-              {/* BOTÕES DE REIMPRESSÃO DO EXTRATO */}
+              {/* BOTÕES DE IMPRESSÃO DA MESA */}
               <div
                 className={"bg-koma-card/40 border border-koma-border/50 p-4 rounded-2xl space-y-3 text-left"}
               >
                 <span
                   className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
                 >
-                  Reimpressão de Extrato
+                  Impressão da Mesa
                 </span>
                 <div className={"flex gap-2"}>
                   <button
@@ -367,15 +367,15 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                     className={"flex-1 py-2 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"}
                     title="Imprime a via térmica completa com todos os itens consumidos"
                   >
-                    Extrato Completo
+                    Reimpressão total
                   </button>
                   <button
                     type="button"
                     onClick={printCheckoutValues}
                     className={"flex-1 py-2 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"}
-                    title="Imprime apenas o resumo de subtotais e taxas de serviço para economizar papel"
+                    title="Imprime a Conta da Mesa com subtotal e taxa de serviço"
                   >
-                    Apenas Valores
+                    Imprimir Conta
                   </button>
                 </div>
               </div>

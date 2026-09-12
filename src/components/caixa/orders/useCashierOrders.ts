@@ -697,7 +697,7 @@ export function useCashierOrders({
       }
     } catch (err) {
       console.error(err);
-      showToast('Erro ao imprimir apenas valores.', 'error');
+      showToast('Erro ao imprimir Conta da Mesa.', 'error');
     }
   };
 

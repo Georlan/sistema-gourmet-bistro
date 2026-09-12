@@ -287,11 +287,11 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                   <button
                     type="button"
                     onClick={actions.printTableValues}
-                    title="Imprime o documento de fechamento da conta"
+                    title="Imprime a Conta da Mesa"
                     className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
                   >
                     <Printer size={13} />
-                    <span>Fechamento</span>
+                    <span>Conta da Mesa</span>
                   </button>
                 </div>
                 {selectedKanbanOrder.contextoSalao && (

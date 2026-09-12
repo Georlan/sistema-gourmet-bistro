@@ -13,7 +13,7 @@ from app.printer_service import (
 
 
 def test_table_full_reprint_uses_order_identity_and_reprint_marker():
-    """A antiga via completa de mesa é segunda via do pedido, nunca conta."""
+    """O helper visual legado ainda normaliza CONTA; o serviço corrige a via completa."""
     old_width = printer_service.width
     printer_service.width = 40
     try:
@@ -31,8 +31,6 @@ def test_table_full_reprint_uses_order_identity_and_reprint_marker():
             ]
         )
 
-        # O caller legado ainda chega com CONTA; o Core Universal normaliza a
-        # semântica para reimpressão total do pedido até o alias ser removido.
         ticket = apply_operational_visual_hierarchy(
             legacy,
             order_number="2",
@@ -62,7 +60,7 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     try:
         legacy = "\n".join(
             [
-                ESC_BOLD_ON + "FECHAMENTO".center(40) + ESC_BOLD_OFF,
+                ESC_BOLD_ON + "CONTA DA MESA".center(40) + ESC_BOLD_OFF,
                 ESC_BOLD_ON + "MESA: 5".ljust(27) + "ABERTURA: 19:20" + ESC_BOLD_OFF,
                 "CONTA: #2",
                 "DATA: 04/09/2026".ljust(29) + "HORA: 20:23",
@@ -74,7 +72,7 @@ def test_table_closing_uses_same_title_and_items_visual_system():
 
         ticket = apply_operational_visual_hierarchy(
             legacy,
-            document_title="FECHAMENTO",
+            document_title="CONTA DA MESA",
         )
     finally:
         printer_service.width = old_width
@@ -82,7 +80,7 @@ def test_table_closing_uses_same_title_and_items_visual_system():
     assert (
         ESC_DOUBLE_HEIGHT_ON
         + ESC_BOLD_ON
-        + "FECHAMENTO".center(40)
+        + "CONTA DA MESA".center(40)
         + ESC_BOLD_OFF
         + ESC_NORMAL_SIZE
     ) in ticket
@@ -150,4 +148,5 @@ def test_table_receipt_renderer_delegates_visuals_to_shared_hierarchy():
 
     assert "apply_operational_visual_hierarchy(" in renderer
     assert 'identity_label=identity_label' in renderer
-    assert 'document_title="FECHAMENTO"' in renderer
+    assert 'document_title="CONTA DA MESA"' in renderer
+    assert "_format_full_table_reprint" in renderer

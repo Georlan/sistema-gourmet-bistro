@@ -47,7 +47,7 @@ export function MesaPrintDialogs({
             {/* Invoice Header */}
             <div className="space-y-2 pb-3 border-b border-koma-border">
               <div className="flex justify-between items-center font-sans">
-                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">Extrato de Mesa</span>
+                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">Reimpressão da Mesa</span>
                 <button
                   id="close-print-preview-btn"
                   onClick={() => setShowPrintPreview(false)}
@@ -207,7 +207,7 @@ export function MesaPrintDialogs({
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-emerald-500/20 transition-all shadow-lg shadow-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Printer size={13} className="text-koma-foreground" />
-                <span>Extrato Completo</span>
+                <span>Reimpressão total</span>
               </button>
 
               <button
@@ -216,7 +216,7 @@ export function MesaPrintDialogs({
                 className="flex-1 py-3 bg-amber-600 hover:bg-amber-500 text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider border border-amber-500/20 transition-all shadow-lg shadow-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Printer size={13} className="text-koma-foreground" />
-                <span>Apenas Valores</span>
+                <span>Imprimir Conta</span>
               </button>
             </div>
           </div>

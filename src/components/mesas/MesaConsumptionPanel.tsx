@@ -135,7 +135,7 @@ export function MesaConsumptionPanel({
                 </div>
               )}
 
-              {/* Action Row 1: Fechamento + reimpressão total com impressão direta */}
+              {/* Action Row 1: Conta da Mesa + reimpressão total com impressão direta */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   id="quick-print-values-btn"
@@ -143,10 +143,10 @@ export function MesaConsumptionPanel({
                   disabled={isPrintingDirect}
                   onClick={onPrintValues}
                   className="py-2.5 px-2 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Imprimir fechamento apenas com valores"
+                  title="Imprimir Conta da Mesa"
                 >
                   <Zap size={14} className="shrink-0 text-koma-subtle" />
-                  <span>Fechamento</span>
+                  <span>Conta da Mesa</span>
                 </button>
 
                 <button
@@ -162,7 +162,7 @@ export function MesaConsumptionPanel({
                 </button>
               </div>
 
-              {/* Action Row 2: Adicionar Itens e Fechamento da Mesa (Dinâmico sem buracos vazios) */}
+              {/* Action Row 2: Adicionar Itens e encerramento da Mesa (Dinâmico sem buracos vazios) */}
               {(() => {
                 const canCloseTable = Boolean(onCloseTable && !(activeRole === 'garcom' && !restauranteConfig?.perm_garcom_fechar));
                 return (
@@ -187,7 +187,7 @@ export function MesaConsumptionPanel({
                         }`}
                       >
                         <CheckCircle2 size={13} className="shrink-0" />
-                        <span>{confirmClear ? 'Confirmar Fechamento?' : 'Fechar Mesa'}</span>
+                        <span>{confirmClear ? 'Confirmar encerramento?' : 'Fechar Mesa'}</span>
                       </button>
                     )}
                   </div>
