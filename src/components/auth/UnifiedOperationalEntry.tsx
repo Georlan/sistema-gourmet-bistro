@@ -11,6 +11,7 @@ import type { AppRole } from '../../types';
 import { authFetch, authRequestErrorMessage } from '../../utils/authRequest';
 import {
   clearOperatorSession,
+  getPersistedOperationalPortal,
   saveOperatorSession,
   type OperationalPortal,
 } from '../../utils/authSession';
@@ -43,10 +44,12 @@ function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
 }
 
 export default function UnifiedOperationalEntry() {
-  // A URL canônica da equipe nunca escolhe um portal a partir de uma sessão
-  // persistida. Toda nova abertura/reload começa no login unificado; somente a
-  // resposta autenticada do backend decide se a pessoa entra em Caixa ou Garçom.
-  const [activePortal, setActivePortal] = useState<OperationalPortal | null>(null);
+  // A URL continua sendo única, mas uma sessão operacional válida deve sobreviver
+  // a reload/fechar-e-abrir. O perfil persistido só é restaurado quando a sessão
+  // canônica e o alias escopado ainda correspondem ao mesmo token.
+  const [activePortal, setActivePortal] = useState<OperationalPortal | null>(
+    () => getPersistedOperationalPortal(),
+  );
   const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

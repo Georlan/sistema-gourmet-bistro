@@ -20,7 +20,7 @@ export interface OperatorSession {
 export type OperationalPortal = 'caixa' | 'garcom';
 
 const SESSION_KEY = 'koma_operator_session';
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const FALLBACK_SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const CAIXA_ALIAS_KEYS = [
   'koma_caixa_token',
   'koma_caixa_id',
@@ -65,6 +65,21 @@ function scopedAliasToken(portal: OperationalPortal): string {
     : localStorage.getItem('koma_caixa_token') || '';
 }
 
+function readJwtExpiryMs(token: string): number | null {
+  try {
+    const payloadPart = token.split('.')[1];
+    if (!payloadPart || typeof atob !== 'function') return null;
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const payload = JSON.parse(atob(padded));
+    const expSeconds = Number(payload?.exp);
+    if (!Number.isFinite(expSeconds) || expSeconds <= 0) return null;
+    return expSeconds * 1000;
+  } catch {
+    return null;
+  }
+}
+
 function persistCanonicalSession(session: OperatorSession): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify({
     ...session,
@@ -94,22 +109,22 @@ function persistScopedAliases(token: string, user: OperatorIdentitySnapshot): vo
   }
 }
 
-// Salva a sessão operacional canônica com 24 horas de validade. O papel
-// autenticado decide quais aliases legados permanecem ativos: nunca deixamos
-// credenciais simultâneas de Caixa e Garçom disputarem a mesma URL.
+// A sessão local acompanha o vencimento real do JWT emitido pelo backend. Para
+// tokens legados/opacos sem claim `exp`, mantemos uma janela conservadora de 30 dias.
 export function saveOperatorSession(token: string, user: any): void {
   const minimalUser = minimalOperatorIdentity(user);
   const session: OperatorSession = {
     token,
     user: minimalUser,
-    expiresAt: Date.now() + TWENTY_FOUR_HOURS_MS,
+    expiresAt: readJwtExpiryMs(token) ?? (Date.now() + FALLBACK_SESSION_MS),
   };
   persistCanonicalSession(session);
   localStorage.removeItem('token');
   persistScopedAliases(token, minimalUser);
 }
 
-// Recupera a sessão operacional e limpa automaticamente se tiver mais de 24h.
+// Recupera a sessão operacional até o vencimento real do token. Sessões criadas
+// por versões antigas com janela local de 24h são migradas para o `exp` do JWT.
 export function getOperatorSession(): OperatorSession | null {
   // Limpa o alias genérico deixado por versões antigas assim que o app inicia.
   localStorage.removeItem('token');
@@ -122,37 +137,42 @@ export function getOperatorSession(): OperatorSession | null {
       const legacySession: OperatorSession = {
         token: legacyToken,
         user: { role: localStorage.getItem('koma_caixa_role') || 'operador' },
-        expiresAt: Date.now() + TWENTY_FOUR_HOURS_MS,
+        expiresAt: readJwtExpiryMs(legacyToken) ?? (Date.now() + FALLBACK_SESSION_MS),
       };
       saveOperatorSession(legacyToken, legacySession.user);
-      return legacySession;
+      return getOperatorSession();
     }
     return null;
   }
 
   try {
     const parsed = JSON.parse(rawSession) as OperatorSession;
+    const token = String(parsed.token || '');
+    const storedExpiry = Number(parsed.expiresAt);
+    const tokenExpiry = readJwtExpiryMs(token);
+    const expiresAt = tokenExpiry ?? storedExpiry;
 
-    if (Date.now() > parsed.expiresAt) {
-      console.warn("⚠️ Sessão de operador expirada (mais de 24h). Efetuando logout...");
+    if (!token || !Number.isFinite(expiresAt)) {
+      clearOperatorSession();
+      return null;
+    }
+
+    if (Date.now() > expiresAt) {
+      console.warn('⚠️ Sessão de operador expirada. Efetuando logout...');
       clearOperatorSession();
       return null;
     }
 
     const session: OperatorSession = {
-      token: String(parsed.token || ''),
+      token,
       user: minimalOperatorIdentity(parsed.user),
-      expiresAt: Number(parsed.expiresAt),
+      expiresAt,
     };
-    if (!session.token || !Number.isFinite(session.expiresAt)) {
-      clearOperatorSession();
-      return null;
-    }
 
-    // Migração one-way: versões antigas persistiam o objeto completo de usuário.
-    // Reescrevemos a sessão canônica para remover PII. Só reparamos aliases quando
-    // o mesmo token está comprovadamente no portal errado; ausência de alias é
-    // sinal de logout e nunca pode recriar credenciais.
+    // Migração one-way: versões antigas persistiam PII e uma validade local de
+    // apenas 24h. Reescrever remove PII e atualiza a validade para o `exp` real.
+    // Só reparamos aliases quando o mesmo token está comprovadamente no portal
+    // errado; ausência de alias é sinal de logout e nunca pode recriar credenciais.
     persistCanonicalSession(session);
     const portal = identityPortal(session.user);
     const misplacedAliasToken = portal === 'garcom'
