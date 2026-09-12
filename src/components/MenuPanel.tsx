@@ -126,6 +126,16 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     [liveProdutos],
   );
 
+  const unavailableSearchMatches = useMemo(() => {
+    const query = searchQuery.trim();
+    if (!query) return [];
+    return liveProdutos.filter((product) => {
+      const decorated = product as ProductWithModifiers;
+      return decorated.ativo === false
+        && smartSearchMatch(`${product.nome} ${product.descricao || ''}`, query);
+    });
+  }, [liveProdutos, searchQuery]);
+
   const categoriesList = useMemo(() => {
     const activeCategoryIds = new Set(
       activeProducts
@@ -572,6 +582,46 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
           </div>
 
           <div className="p-3 sm:p-5 pb-28 sm:pb-8 space-y-6 sm:max-h-[58vh] sm:overflow-y-auto">
+            {unavailableSearchMatches.length > 0 && (
+              <section id="unavailable-search-results" className="space-y-2.5">
+                <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-koma-muted" />
+                    <h4 className="font-serif text-xs font-bold uppercase tracking-wider text-koma-muted">Indisponíveis encontrados</h4>
+                  </div>
+                  <span className="text-[9px] text-koma-muted">somente consulta</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 sm:gap-4">
+                  {unavailableSearchMatches.map((product) => (
+                    <article
+                      key={product.id}
+                      id={`unavailable-product-${product.id}`}
+                      aria-disabled="true"
+                      className="flex flex-col justify-between rounded-2xl border border-dashed border-koma-border bg-koma-card/50 p-3 opacity-80 sm:p-4"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4>
+                            <span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">
+                              Esgotado
+                            </span>
+                          </div>
+                          <span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted">R$ {Number(product.preco).toFixed(2)}</span>
+                        </div>
+                        {product.descricao && (
+                          <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>
+                        )}
+                      </div>
+                      <p className="mt-3 border-t border-koma-border/60 pt-2 text-[10px] font-semibold text-koma-muted">
+                        Indisponível para lançamento
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {categoriesList.map((category) => {
               const products = activeProducts.filter((product) => {
                 const decorated = product as ProductWithModifiers;
@@ -652,7 +702,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               );
             })}
 
-            {catalogReady && activeProducts.length === 0 && (
+            {catalogReady && activeProducts.length === 0 && unavailableSearchMatches.length === 0 && (
               <div className="py-12 text-center text-sm text-koma-muted">Nenhum item disponível no cardápio.</div>
             )}
             {!catalogReady && (
