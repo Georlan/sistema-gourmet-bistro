@@ -66,6 +66,7 @@ def test_criar_e_listar_grupos_modificadores():
             "opcoes": [
                 {"nome": "Ao Ponto", "preco_adicional": 0.0, "ativo": True},
                 {"nome": "Bem Passado", "preco_adicional": 0.0, "ativo": True},
+                {"nome": "Opção Interna Futura", "preco_adicional": 7.5, "ativo": False},
             ],
             "produto_ids": ["prod-burger-1"],
         }
@@ -76,11 +77,14 @@ def test_criar_e_listar_grupos_modificadores():
     assert data["min_selecoes"] == 1
     assert data["max_selecoes"] == 1
     assert data["tipo"] == "obrigatorio"
-    assert len(data["opcoes"]) == 2
+    assert len(data["opcoes"]) == 3
+    assert any(op["nome"] == "Opção Interna Futura" and op["ativo"] is False for op in data["opcoes"])
     assert "prod-burger-1" in data["produto_ids"]
 
-    # Consulta pública
+    # Consulta pública: configuração desativada não pode vazar para cliente anônimo.
     res_pub = client.get("/cardapio/modificadores/publico/999")
     assert res_pub.status_code == 200
     grupos_pub = res_pub.json()
-    assert any(g["nome"] == "Ponto da Carne" for g in grupos_pub)
+    grupo_publico = next(g for g in grupos_pub if g["nome"] == "Ponto da Carne")
+    assert {op["nome"] for op in grupo_publico["opcoes"]} == {"Ao Ponto", "Bem Passado"}
+    assert all(op["ativo"] is True for op in grupo_publico["opcoes"])
