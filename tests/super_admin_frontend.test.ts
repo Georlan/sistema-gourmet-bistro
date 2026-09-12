@@ -160,3 +160,12 @@ test("painel expõe inbox real e ativação contratual sem revelar credenciais",
   assert.match(inbox, /sem expor credenciais/);
   assert.doesNotMatch(inbox, /temporary_password|senha_hash|token_convite/);
 });
+
+test("editar credenciais remove erro de login obsoleto antes de uma nova tentativa", () => {
+  const source = readFileSync(new URL("../src/super-admin/SuperAdminGate.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /const updateUsername = \(value: string\) => \{[\s\S]*setUsername\(value\);[\s\S]*if \(error\) setError\(""\);/);
+  assert.match(source, /const updatePassword = \(value: string\) => \{[\s\S]*setPassword\(value\);[\s\S]*if \(error\) setError\(""\);/);
+  assert.match(source, /onChange=\{event => updateUsername\(event\.target\.value\)\}/);
+  assert.match(source, /onChange=\{event => updatePassword\(event\.target\.value\)\}/);
+});
