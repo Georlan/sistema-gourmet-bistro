@@ -24,6 +24,27 @@ test('toque na mesa usa a navegação canônica: livre abre Pedido e ocupada abr
   assert.match(modal, /orders\.length === 0 \? 'lancamento' : 'consumo'/);
 });
 
+test('salão evita resumo duplicado e orienta a próxima ação em uma única faixa compacta', () => {
+  const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
+
+  assert.match(view, /Mesa livre abre um novo pedido/);
+  assert.match(view, /\{counts\.todos\} \{counts\.todos === 1 \? 'mesa' : 'mesas'\}/);
+  assert.doesNotMatch(view, /Grid2X2|CheckCircle2|Utensils/);
+  assert.doesNotMatch(view, /grid grid-cols-3 gap-px overflow-hidden/);
+});
+
+test('card da mesa comunica a ação antes do toque sem criar segundo caminho operacional', () => {
+  const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
+
+  assert.match(card, /const actionLabel = operational\.mergedIntoMesaId/);
+  assert.match(card, /'Novo pedido'/);
+  assert.match(card, /'Ver itens prontos'/);
+  assert.match(card, /'Ver consumo'/);
+  assert.match(card, /data-waiter-action=\{actionLabel\}/);
+  assert.match(card, /aria-label=\{`\$\{actionLabel\} na \$\{tableLabel\}`\}/);
+  assert.equal((card.match(/onClick\(table\.id\)/g) || []).length, 2);
+});
+
 test('produto esgotado continua bloqueado e só ganha visibilidade durante busca', () => {
   const menu = readFileSync(new URL('../src/components/MenuPanel.tsx', import.meta.url), 'utf8');
   assert.match(menu, /activeProducts = useMemo/);
