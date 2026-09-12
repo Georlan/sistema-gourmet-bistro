@@ -206,6 +206,15 @@ export function useCheckoutController({
 
   const [paymentCPF, setPaymentCPF] = useState('');
 
+  const selectPaymentMetodo = (
+    metodo: '' | 'dinheiro' | 'pix' | 'cartao' | 'cartao_debito' | 'cartao_credito'
+  ) => {
+    setPaymentMetodo(metodo);
+    if (metodo) {
+      setErrorMsg('');
+    }
+  };
+
   // A chave é criada somente no início da operação. Assim, ausência de CSPRNG
   // vira erro controlado dentro do fluxo financeiro em vez de exceção de render/effect.
   useEffect(() => {
@@ -647,7 +656,7 @@ export function useCheckoutController({
     splitPeople,
     setSplitPeople,
     paymentMetodo,
-    setPaymentMetodo,
+    setPaymentMetodo: selectPaymentMetodo,
     paymentValor,
     setPaymentValor,
     selectedItemIds,
