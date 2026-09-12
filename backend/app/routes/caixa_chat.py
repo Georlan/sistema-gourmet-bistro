@@ -1,7 +1,7 @@
 """Rotas do Caixa / Operação para Chat com Clientes sobre Pedidos.
 
 Segurança P0:
-- Acesso restrito a operadores autenticados do restaurante (get_current_user).
+- Acesso restrito a operadores com permissão de Caixa (caixa:operar).
 - Isolamento multi-tenant intransponível: operários só acessam conversas do próprio restaurante_id.
 - Atualização em tempo real via Server-Sent Events (SSE).
 """
@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db, tenant_session_scope
 from ..models import Usuario
 from ..order_chat_models import OrderConversation, OrderMessage
-from ..security import get_current_user
+from ..security import require_permission
 from ..services.order_chat_archive_service import list_caixa_conversations_for_central
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
@@ -55,7 +55,7 @@ def _get_tenant_id(user: Usuario) -> int:
 @router.get("", summary="Lista as conversas de pedidos do restaurante")
 def listar_conversas(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     """Retorna fila ativa e histórico arquivado recente para a Central de Conversas."""
     restaurante_id = _get_tenant_id(current_user)
@@ -66,7 +66,7 @@ def listar_conversas(
 @router.get("/unread-count", summary="Total global de mensagens não lidas no Caixa")
 def obter_total_nao_lidas(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     """Retorna a contagem global de mensagens de clientes não lidas para exibição do badge."""
     restaurante_id = _get_tenant_id(current_user)
@@ -79,7 +79,7 @@ def obter_total_nao_lidas(
 def obter_mensagens_conversa(
     conversation_id: str,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     """Retorna o histórico cronológico completo de mensagens de um pedido."""
     restaurante_id = _get_tenant_id(current_user)
@@ -115,7 +115,7 @@ def responder_cliente(
     conversation_id: str,
     payload: StaffMessagePayload,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     """Envia uma resposta oficial do restaurante para o cliente."""
     restaurante_id = _get_tenant_id(current_user)
@@ -144,7 +144,7 @@ def responder_cliente(
 def marcar_lida_operador(
     conversation_id: str,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     """Atualiza o timestamp de leitura da equipe para zerar as notificações pendentes."""
     restaurante_id = _get_tenant_id(current_user)
@@ -157,7 +157,7 @@ def marcar_lida_operador(
 @router.get("/events", summary="Stream SSE de novas mensagens e atualizações para o Caixa")
 async def stream_eventos_caixa(
     request: Request,
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
     """Conexão Server-Sent Events (SSE) para atualização instantânea do painel do Caixa."""
     restaurante_id = _get_tenant_id(current_user)
