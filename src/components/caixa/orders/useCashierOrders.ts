@@ -15,6 +15,11 @@ type Props = Pick<
   setIsLoading: (value: boolean) => void;
 };
 
+type PendingDeliveryMutation = {
+  status?: DeliveryOrderView['status'];
+  requestId: number;
+};
+
 /** Owns orders state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierOrders({
   orders,
@@ -233,6 +238,8 @@ export function useCashierOrders({
 
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
   const deliveryOrdersRequestRef = useRef(0);
+  const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
+  const deliveryMutationSequenceRef = useRef(0);
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const motoboysRequestRef = useRef(0);
@@ -358,7 +365,10 @@ export function useCashierOrders({
       if (res.ok) {
         const data = await res.json();
         if (requestId !== deliveryOrdersRequestRef.current) return;
-        const mapped = data.map(mapComandaToDeliveryView);
+        const mapped = data.map(mapComandaToDeliveryView).map((order: DeliveryOrderView) => {
+          const pending = pendingDeliveryMutationRef.current[String(order.id)];
+          return pending?.status ? { ...order, status: pending.status } : order;
+        });
         setDeliveryOrders(mapped);
       }
     } catch (err) {
@@ -448,6 +458,51 @@ export function useCashierOrders({
   };
 
   const handleUpdateDeliveryStatus = async (orderId: string, statusNovo: string) => {
+    const orderKey = String(orderId);
+    if (pendingDeliveryMutationRef.current[orderKey]) return false;
+
+    const previousIndex = deliveryOrders.findIndex((order) => String(order.id) === orderKey);
+    const previousOrder = previousIndex >= 0 ? deliveryOrders[previousIndex] : undefined;
+    const optimisticStatus = ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(statusNovo)
+      ? statusNovo as DeliveryOrderView['status']
+      : undefined;
+    const requestId = ++deliveryMutationSequenceRef.current;
+
+    pendingDeliveryMutationRef.current[orderKey] = { status: optimisticStatus, requestId };
+    // Qualquer leitura iniciada antes da mutação deixa de poder sobrescrever a projeção otimista.
+    deliveryOrdersRequestRef.current += 1;
+
+    if (optimisticStatus) {
+      setDeliveryOrders((current) =>
+        current.map((order) => String(order.id) === orderKey ? { ...order, status: optimisticStatus } : order)
+      );
+    }
+
+    const finishCurrentMutation = () => {
+      if (pendingDeliveryMutationRef.current[orderKey]?.requestId !== requestId) return false;
+      delete pendingDeliveryMutationRef.current[orderKey];
+      // Também invalida GETs disparados durante a mutação antes de liberar o overlay.
+      deliveryOrdersRequestRef.current += 1;
+      return true;
+    };
+
+    const rollbackCurrentMutation = () => {
+      if (!finishCurrentMutation()) return false;
+      if (previousOrder && optimisticStatus) {
+        setDeliveryOrders((current) => {
+          const existingIndex = current.findIndex((order) => String(order.id) === orderKey);
+          if (existingIndex >= 0) {
+            return current.map((order) => String(order.id) === orderKey ? previousOrder : order);
+          }
+          const restored = [...current];
+          restored.splice(Math.min(previousIndex, restored.length), 0, previousOrder);
+          return restored;
+        });
+      }
+      void fetchDeliveryOrders();
+      return true;
+    };
+
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/delivery/status?status_novo=${statusNovo}`, {
         method: 'PUT',
@@ -455,21 +510,25 @@ export function useCashierOrders({
       });
       if (res.ok) {
         const updatedComanda = await res.json().catch(() => null);
+        if (!finishCurrentMutation()) return true;
         if (updatedComanda) {
           const projected = mapComandaToDeliveryView(updatedComanda);
           setDeliveryOrders((current) =>
-            current.map((order) => (String(order.id) === String(orderId) ? projected : order))
+            current.map((order) => (String(order.id) === orderKey ? projected : order))
           );
         }
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
         showToast('Status atualizado e cliente avisado automaticamente!');
         return true;
-      } else {
-        showToast('Erro ao atualizar status do pedido.', 'error');
-        return false;
       }
+
+      const errorData = await res.json().catch(() => ({}));
+      rollbackCurrentMutation();
+      showToast(errorData?.detail || 'Erro ao atualizar status do pedido.', 'error');
+      return false;
     } catch (err) {
       console.error(err);
+      rollbackCurrentMutation();
       showToast('Erro de conexão ao atualizar status.', 'error');
       return false;
     }
@@ -639,7 +698,6 @@ export function useCashierOrders({
   };
 
   const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
-    if (isLoading) return;
     const isDeliveryOrder = order.modalidade === 'delivery';
     await handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
   };
