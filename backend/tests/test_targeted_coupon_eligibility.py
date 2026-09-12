@@ -60,12 +60,19 @@ def _seed_targeted_coupon():
 def test_public_validation_only_accepts_targeted_coupon_for_its_customer():
     code, _target_id, target_phone, other_phone = _seed_targeted_coupon()
 
+    unknown_coupon = client.post(
+        "/cardapio/cupons/validar",
+        json={"restaurante_id": TENANT_ID, "codigo": "NAO-EXISTE", "subtotal": 100.0},
+    )
+    assert unknown_coupon.status_code == 200
+
     missing_identity = client.post(
         "/cardapio/cupons/validar",
         json={"restaurante_id": TENANT_ID, "codigo": code, "subtotal": 100.0},
     )
     assert missing_identity.status_code == 200
     assert missing_identity.json()["valido"] is False
+    assert missing_identity.json() == unknown_coupon.json()
 
     wrong_customer = client.post(
         "/cardapio/cupons/validar",
@@ -78,7 +85,11 @@ def test_public_validation_only_accepts_targeted_coupon_for_its_customer():
     )
     assert wrong_customer.status_code == 200
     assert wrong_customer.json()["valido"] is False
+    assert wrong_customer.json() == unknown_coupon.json()
     assert wrong_customer.json()["desconto_calculado"] == 0.0
+    assert wrong_customer.json()["codigo"] is None
+    assert wrong_customer.json()["tipo_desconto"] is None
+    assert wrong_customer.json()["valor_desconto"] is None
 
     target_customer = client.post(
         "/cardapio/cupons/validar",
