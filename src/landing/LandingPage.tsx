@@ -36,18 +36,18 @@ export default function LandingPage() {
       el.setAttribute('content', content);
     };
 
-    setMeta('description', 'Sistema para restaurantes com PDV, gestão de mesas, comandas, KDS, caixa, cardápio digital e impressão automática. Conheça o Kôma.');
+    setMeta('description', 'Sistema para restaurantes com PDV, mesas, comandas, caixa e cardápio digital. KDS, impressão automática e recursos avançados disponíveis conforme o plano.');
     setMeta('robots', 'index, follow, max-image-preview:large');
     setMeta('theme-color', '#0a0a0a');
     setMeta('og:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha', true);
-    setMeta('og:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.', true);
+    setMeta('og:description', 'Pedidos, salão, preparo e caixa conectados. KDS, impressão automática e recursos avançados disponíveis conforme o plano.', true);
     setMeta('og:type', 'website', true);
-    setMeta('og:url', 'https://komafood.com.br/landing', true);
+    setMeta('og:url', 'https://komafood.com.br/', true);
     setMeta('og:locale', 'pt_BR', true);
     setMeta('og:site_name', 'KÔMA', true);
     setMeta('twitter:card', 'summary_large_image');
     setMeta('twitter:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha');
-    setMeta('twitter:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.');
+    setMeta('twitter:description', 'Pedidos, salão, preparo e caixa conectados. Recursos avançados variam conforme o plano.');
 
     let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!canonical) {
@@ -55,7 +55,7 @@ export default function LandingPage() {
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = 'https://komafood.com.br/landing';
+    canonical.href = 'https://komafood.com.br/';
 
     const structuredData = document.createElement('script');
     structuredData.type = 'application/ld+json';
@@ -68,16 +68,16 @@ export default function LandingPage() {
       name: 'KÔMA',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
-      url: 'https://komafood.com.br/landing',
+      url: 'https://komafood.com.br/',
       inLanguage: 'pt-BR',
-      description: 'Sistema de gestão para restaurantes com PDV, gestão de mesas, KDS, caixa e cardápio digital.',
+      description: 'Sistema de gestão para restaurantes com PDV, mesas, comandas, caixa e cardápio digital, além de recursos avançados conforme o plano.',
       slogan: KOMA_SLOGAN,
       featureList: [
         'PDV e frente de caixa',
         'Gestão de mesas e comandas',
-        'KDS para cozinha',
         'Cardápio digital por QR Code',
-        'Impressão automática de pedidos',
+        'Fila de preparo na tela',
+        'KDS e impressão automática nos planos compatíveis',
       ],
       offers: {
         '@type': 'AggregateOffer',
@@ -102,8 +102,8 @@ export default function LandingPage() {
         <main>
           <Hero />
           <AngleDivider variant="dark-light" />
-          <ValueStrip />
           <SocialProof />
+          <ValueStrip />
           <Management />
           <AngleDivider variant="light-dark" />
           <HowItWorks />
