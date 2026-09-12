@@ -24,14 +24,14 @@ export function Ecosystem() {
           <div>
             <span className="koma-eco-tag">04 / O KÔMA NA PRÁTICA</span>
             <h2 id="ecosystem-title" className="koma-eco-title">
-              TUDO O QUE O RESTAURANTE PRECISA.<br />
-              <em>UM SÓ SISTEMA.</em>
+              VENDA, SALÃO, PREPARO E CAIXA.<br />
+              <em>UM FLUXO CONECTADO.</em>
             </h2>
           </div>
 
           <div className="koma-eco-intro">
             <p>
-              Venda, salão, cozinha e caixa trabalham juntos. Você acompanha a operação sem depender de várias ferramentas.
+              Os canais atendidos pelo Kôma alimentam a mesma operação. Recursos avançados de cozinha, equipe e automação variam conforme o plano.
             </p>
             <button type="button" onClick={() => setLeadModalOpen(true)}>
               Quero começar com o Kôma
@@ -61,8 +61,8 @@ export function Ecosystem() {
               </div>
             </div>
             <div className="koma-eco-card-copy">
-              <h3>ACEITE PEDIDOS DE TODO LUGAR.</h3>
-              <p>Todos os canais entram na mesma operação, prontos para salão, cozinha e caixa acompanharem.</p>
+              <h3>REÚNA OS CANAIS QUE O KÔMA ATENDE.</h3>
+              <p>Retirada, delivery, garçom e cardápio digital entram na mesma operação para atendimento, preparo e caixa acompanharem.</p>
             </div>
             <strong className="koma-eco-result">MAIS FORMAS DE VENDER. MENOS INFORMAÇÃO ESPALHADA.</strong>
           </article>
@@ -86,9 +86,9 @@ export function Ecosystem() {
             </div>
             <div className="koma-eco-card-copy">
               <h3>SAIBA O QUE ACONTECE EM CADA MESA.</h3>
-              <p>Status, consumo e tempo de atendimento ficam visíveis para a equipe agir antes do cliente chamar.</p>
+              <p>Status e consumo ficam visíveis para a equipe acompanhar o atendimento com menos conferência manual.</p>
             </div>
-            <strong className="koma-eco-result">ATENDIMENTO MAIS RÁPIDO. MENOS CONFERÊNCIA.</strong>
+            <strong className="koma-eco-result">ATENDIMENTO MAIS CLARO. MENOS CONFERÊNCIA.</strong>
           </article>
 
           <article className="koma-eco-card koma-eco-card--kitchen">
@@ -114,10 +114,10 @@ export function Ecosystem() {
               </div>
             </div>
             <div className="koma-eco-card-copy">
-              <h3>PRODUZA NA ORDEM CERTA.</h3>
-              <p>A cozinha vê itens, observações, tempo e prioridade em uma fila clara, sem depender de recados.</p>
+              <h3>ORGANIZE O PREPARO.</h3>
+              <p>A fila de preparo existe em todos os planos. KDS e impressão automática ficam disponíveis no Pro e Premium.</p>
             </div>
-            <strong className="koma-eco-result">PRIORIDADE VISÍVEL. PRODUÇÃO SOB CONTROLE.</strong>
+            <strong className="koma-eco-result">PRIORIDADE VISÍVEL. PREPARO ORGANIZADO.</strong>
           </article>
 
           <article className="koma-eco-card koma-eco-card--sync">
@@ -135,21 +135,21 @@ export function Ecosystem() {
                 <span><CircleDollarSign />Caixa</span>
                 <span><Store />Garçom</span>
                 <span><QrCode />Cardápio</span>
-                <span><Printer />Impressão</span>
+                <span><Printer />Impressão Pro+</span>
               </div>
             </div>
             <div className="koma-eco-card-copy">
-              <h3>MUDE UMA VEZ. ATUALIZE TODA A OPERAÇÃO.</h3>
-              <p>Preço, produto e disponibilidade seguem a mesma base no caixa, no app do garçom e no cardápio digital.</p>
+              <h3>ATUALIZE A BASE DA OPERAÇÃO EM UM SÓ LUGAR.</h3>
+              <p>Preço, produto e disponibilidade seguem a mesma base no caixa, no atendimento e no cardápio digital.</p>
             </div>
-            <strong className="koma-eco-result">MENOS CADASTRO REPETIDO. MAIS TEMPO PARA VENDER.</strong>
+            <strong className="koma-eco-result">MENOS CADASTRO REPETIDO. MAIS CONSISTÊNCIA.</strong>
           </article>
         </div>
 
         <div className="koma-eco-conversion">
           <div>
             <span>SEU RESTAURANTE JÁ FUNCIONA.</span>
-            <strong>O KÔMA FAZ TUDO TRABALHAR JUNTO.</strong>
+            <strong>O KÔMA CONECTA AS PARTES CENTRAIS DA OPERAÇÃO.</strong>
           </div>
           <button type="button" onClick={() => setLeadModalOpen(true)}>
             Começar meu cadastro

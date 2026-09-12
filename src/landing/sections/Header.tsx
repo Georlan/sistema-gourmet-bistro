@@ -50,13 +50,13 @@ export function Header() {
         className={`koma-header ${scrolled ? 'koma-header--scrolled' : ''}`}
         role="banner"
       >
-        <a href="/landing" className="koma-header-logo" aria-label="Kôma, início">
+        <a href="/" className="koma-header-logo" aria-label="Kôma, início">
           <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="Kôma" />
         </a>
 
         <nav className="koma-header-nav" aria-label="Navegação principal">
+          <a href="#gestao" className="koma-header-link">Recursos</a>
           <a href="#como-funciona" className="koma-header-link">Como funciona</a>
-          <a href="#duvidas" className="koma-header-link">Dúvidas</a>
           <a href="#planos" className="koma-header-link">Planos</a>
         </nav>
 
@@ -70,12 +70,12 @@ export function Header() {
             <WhatsAppIcon />
             Falar no WhatsApp
           </a>
-          <a href="/landing#planos" className="koma-btn koma-btn--primary koma-btn--sm">
+          <a href="/#planos" className="koma-btn koma-btn--primary koma-btn--sm">
             Escolher plano
           </a>
         </div>
 
-        <a href="/landing#planos" className="koma-mobile-demo koma-btn koma-btn--primary" onClick={() => setMenuOpen(false)}>Planos</a>
+        <a href="/#planos" className="koma-mobile-demo koma-btn koma-btn--primary" onClick={() => setMenuOpen(false)}>Planos</a>
         <button
           ref={toggleRef}
           type="button"
@@ -98,9 +98,10 @@ export function Header() {
         inert={!menuOpen}
       >
         <nav aria-label="Menu mobile">
+          <a href="#gestao" onClick={() => setMenuOpen(false)}>Recursos</a>
           <a href="#como-funciona" onClick={() => setMenuOpen(false)}>Como funciona</a>
-          <a href="#duvidas" onClick={() => setMenuOpen(false)}>Dúvidas</a>
           <a href="#planos" onClick={() => setMenuOpen(false)}>Planos</a>
+          <a href="#duvidas" onClick={() => setMenuOpen(false)}>Dúvidas</a>
           <button
             type="button"
             className="koma-btn koma-btn--outline"
@@ -109,7 +110,7 @@ export function Header() {
             Ver o Kôma em ação
           </button>
           <a
-            href="/landing#planos"
+            href="/#planos"
             className="koma-btn koma-btn--primary"
             onClick={() => setMenuOpen(false)}
           >

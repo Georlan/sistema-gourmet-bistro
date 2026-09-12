@@ -9,16 +9,16 @@ const GROUPS = [
     icon: ShoppingBag,
     title: 'ATENDA EM TODOS OS CANAIS.',
     text: 'Salão, balcão, retirada, delivery e cardápio digital alimentam a mesma operação.',
-    features: ['PDV, mesas e comandas', 'Retirada e delivery', 'Cardápio digital e QR Code'],
+    features: ['PDV, mesas e comandas', 'Retirada e delivery', 'Cardápio digital e QR Code em todos os planos'],
   },
   {
     num: '02',
     slug: 'operar',
     eyebrow: 'OPERAR',
     icon: Workflow,
-    title: 'AGILIZE A COZINHA.',
+    title: 'AGILIZE O PREPARO.',
     text: 'Itens e observações chegam à produção sem precisar repetir o pedido.',
-    features: ['Salão atualizado ao vivo', 'KDS e impressão automática', 'Status compartilhado pela equipe'],
+    features: ['Fila de preparo na tela em todos os planos', 'KDS e impressão automática no Pro e Premium', 'Status compartilhado pela equipe'],
   },
   {
     num: '03',
@@ -27,7 +27,7 @@ const GROUPS = [
     icon: ChartNoAxesCombined,
     title: 'SAIBA COMO SEU NEGÓCIO VAI.',
     text: 'Acompanhe vendas, custos e clientes para decidir com mais clareza.',
-    features: ['Caixa e financeiro', 'Estoque e relatórios', 'CRM, fidelidade e cupons'],
+    features: ['Caixa e histórico em todos os planos', 'Estoque, relatórios e financeiro no Pro e Premium', 'Fidelidade e cupons no Premium'],
   },
 ];
 
@@ -35,9 +35,9 @@ export function Management() {
   return (
     <section className="koma-management-section" id="gestao" aria-labelledby="management-title">
       <div className="koma-section-heading koma-section-heading--light">
-        <span>02 / SEU RESTAURANTE CONECTADO</span>
+        <span>02 / O QUE VOCÊ RESOLVE</span>
         <h2 id="management-title">VENDER. OPERAR.<br />CONTROLAR.</h2>
-        <p>Do atendimento à gestão, cada pessoa sabe o que fazer.</p>
+        <p>Veja primeiro o que muda na rotina. Depois compare os planos sem misturar recursos.</p>
       </div>
 
       <div className="koma-management-grid">

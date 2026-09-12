@@ -34,15 +34,15 @@ const HERO_STRIP_ITEMS = [
   },
   {
     num: '05',
-    name: 'COMANDA SAI AUTOMATICAMENTE',
-    detail: 'A impressão acompanha o pedido certo.',
-    href: '#salao',
+    name: 'PEDIDO SEGUE PARA O PREPARO',
+    detail: 'Fila na tela em todos os planos. KDS e impressão automática no Pro e Premium.',
+    href: '#como-funciona',
   },
 ];
 
 const HERO_LIVE_STEPS = [
   { view: 'pdv' as const, label: 'PEDIDOS ORGANIZADOS', detail: 'Cada etapa fica visível' },
-  { view: 'kds' as const, label: 'COZINHA ATUALIZADA', detail: 'Produção recebeu os itens' },
+  { view: 'kds' as const, label: 'PREPARO ORGANIZADO', detail: 'Fila na tela; KDS no Pro e Premium' },
   { view: 'mesas' as const, label: 'MESA SINCRONIZADA', detail: 'Salão acompanha o status' },
   { view: 'cardapio' as const, label: 'CARDÁPIO CONECTADO', detail: 'Disponibilidade em um só lugar' },
 ];
@@ -50,7 +50,7 @@ const HERO_LIVE_STEPS = [
 const HERO_BENEFITS = [
   'PEDIDO ENTRA UMA VEZ',
   'OPERAÇÃO ATUALIZADA AO VIVO',
-  'CAIXA COM HISTÓRICO COMPLETO',
+  'CARDÁPIO DIGITAL DESDE O POCKET',
 ];
 
 export function Hero() {
@@ -88,7 +88,7 @@ export function Hero() {
             SISTEMA PARA RESTAURANTES
           </motion.p>
 
-          <h1 className="koma-hero-headline" aria-label="Venda mais. Controle toda a operação do restaurante.">
+          <h1 className="koma-hero-headline" aria-label="Venda mais. Controle a operação do restaurante.">
             <span className="koma-hero-line koma-hero-line--sm">VENDA</span>
             <span className="koma-hero-title-axis">
               <span className="koma-hero-line koma-hero-line--xl">MAIS.</span>
@@ -101,7 +101,7 @@ export function Hero() {
                 />
               </span>
             </span>
-            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent koma-hero-line--benefit">CONTROLE TUDO.</span>
+            <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent koma-hero-line--benefit">CONTROLE A OPERAÇÃO.</span>
           </h1>
 
           <motion.p
@@ -110,7 +110,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Mesas, delivery e caixa em um só lugar. Com cardápio digital incluído desde o primeiro plano.
+            Mesas, balcão, retirada, delivery e caixa em um só lugar. Com cardápio digital incluído desde o primeiro plano.
           </motion.p>
 
           <motion.ul
