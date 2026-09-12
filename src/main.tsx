@@ -7,7 +7,12 @@ import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoun
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
 
-import { isOperationalAppHost, resolveKomaHost } from "./domain/komaHost";
+import {
+  KOMA_OPERATIONAL_APP_URL,
+  isOperationalAppHost,
+  parseTenantSubdomain,
+  resolveKomaHost,
+} from "./domain/komaHost";
 
 function isPublicMenuRoute(): boolean {
   const pathname = window.location.pathname;
@@ -32,32 +37,47 @@ function isPublicCommercialRoute(): boolean {
     || pathname.startsWith("/contratar");
 }
 
+function isOperationalUtilityRoute(): boolean {
+  const pathname = window.location.pathname;
+  return pathname === "/recuperar-senha"
+    || pathname.startsWith("/smartpos")
+    || pathname.startsWith("/ativar")
+    || pathname.startsWith("/acompanhar")
+    || pathname.startsWith("/entregador");
+}
+
 function isCanonicalOperationalEntryRoute(): boolean {
   if (!isOperationalAppHost()) return false;
 
-  const pathname = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
   const viewParam = params.get("view")?.toLowerCase() || "";
 
   // app.komafood.com.br é autoridade canônica da equipe. Links operacionais
   // antigos (/garcom, /caixa, ?view=garcom, ?view=caixa etc.) também entram
   // pelo login unificado; somente superfícies públicas/utilitárias escapam.
-  if (isPublicMenuRoute() || isPublicCommercialRoute()) return false;
-  if (
-    pathname === "/recuperar-senha"
-    || pathname.startsWith("/smartpos")
-    || pathname.startsWith("/ativar")
-    || pathname.startsWith("/acompanhar")
-    || pathname.startsWith("/entregador")
-  ) {
-    return false;
-  }
+  if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
 
   return viewParam !== "cardapio"
     && viewParam !== "landing"
     && viewParam !== "ativar"
     && viewParam !== "acompanhar"
     && viewParam !== "entregador";
+}
+
+function redirectLegacyOperationalStaffHost(): boolean {
+  const hostname = window.location.hostname.trim().toLowerCase();
+  if (!hostname.endsWith(".komafood.com.br") || isOperationalAppHost(hostname)) return false;
+
+  const subdomain = hostname.replace(/\.komafood\.com\.br$/, "");
+  const parsed = parseTenantSubdomain(subdomain);
+  const isLegacyStaffSurface = parsed?.surface === "caixa" || parsed?.surface === "garcom";
+  if (!isLegacyStaffSurface) return false;
+
+  // Links antigos como restaurante-caixa/restaurante-garcom não são mais uma
+  // segunda autenticação. Em produção eles convergem para o único acesso da equipe.
+  if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  window.location.replace(KOMA_OPERATIONAL_APP_URL);
+  return true;
 }
 
 function bypassTenantSuspensionBoundary(): boolean {
@@ -79,6 +99,8 @@ function bypassTenantSuspensionBoundary(): boolean {
     || resolved.surface === "entregador"
     || isPublicCommercialRoute();
 }
+
+const isLegacyOperationalRedirect = redirectLegacyOperationalStaffHost();
 
 // O cardápio público preserva seu contrato explícito de isolamento do tema
 // operacional. As demais rotas públicas comerciais seguem o mesmo tema escuro,
@@ -119,7 +141,7 @@ const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
-const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute();
+const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Antes de montar o shell, convertemos toda entrada
