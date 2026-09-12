@@ -26,6 +26,16 @@ export function SuperAdminGate() {
     return () => window.removeEventListener(SUPER_ADMIN_AUTH_REQUIRED_EVENT, requireLogin);
   }, []);
 
+  const updateUsername = (value: string) => {
+    setUsername(value);
+    if (error) setError("");
+  };
+
+  const updatePassword = (value: string) => {
+    setPassword(value);
+    if (error) setError("");
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!username.trim() || !password) return;
@@ -77,7 +87,7 @@ export function SuperAdminGate() {
               required
               disabled={isSubmitting}
               value={username}
-              onChange={event => setUsername(event.target.value)}
+              onChange={event => updateUsername(event.target.value)}
               className="w-full rounded border border-[#334155] bg-black/30 px-3 py-2 text-sm outline-none focus:border-[#00b894]"
             />
           </div>
@@ -94,7 +104,7 @@ export function SuperAdminGate() {
               required
               disabled={isSubmitting}
               value={password}
-              onChange={event => setPassword(event.target.value)}
+              onChange={event => updatePassword(event.target.value)}
               className="w-full rounded border border-[#334155] bg-black/30 px-3 py-2 text-sm outline-none focus:border-[#00b894]"
             />
           </div>
