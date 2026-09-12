@@ -12,6 +12,7 @@ from ...domain.printing import (
 from ...models import Comanda, ConfiguracaoRestaurante, Item, Lancamento, PrintJob
 from ...printer_service import printer_service
 from ...services.atendimentos import AtendimentoError, ensure_launch_identity
+from ...services.customer_relationship import load_customer_relationship_metrics
 from ...services.printing import (
     PrintingRequestError,
     enqueue_cash_closing_receipt,
@@ -345,6 +346,19 @@ class PrintingApplicationService:
         customer_name = str(comanda.identificador or "").strip() or None
         is_delivery = cls._is_delivery_type(comanda.tipo)
         operator_name = cls._operator_name(lancamento, comanda)
+        loyalty_previous_orders: Optional[int] = None
+        if (
+            is_online_order
+            and comanda.cliente_id
+            and float(comanda.valor_desconto_cashback or 0.0) > 0
+        ):
+            relationship = load_customer_relationship_metrics(
+                db,
+                restaurante_id=intent.restaurant_id,
+                cliente_ids=[str(comanda.cliente_id)],
+            ).get(str(comanda.cliente_id))
+            if relationship is not None:
+                loyalty_previous_orders = relationship.pedidos_concluidos
 
         jobs: list[PrintJob] = []
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
@@ -363,6 +377,9 @@ class PrintingApplicationService:
                 operator_label=(None if is_online_order else "OPERADOR"),
                 customer_name=customer_name if is_primary else None,
                 customer_phone=(comanda.delivery_telefone if is_primary else None),
+                loyalty_previous_orders=(
+                    loyalty_previous_orders if is_primary else None
+                ),
                 is_reprint=(intent.action == PrintAction.REPRINT),
                 event_at=source_time,
                 via_label=None if is_primary else destination_key,
