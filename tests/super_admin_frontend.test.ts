@@ -93,6 +93,17 @@ test("requisição autenticada usa API_BASE_URL e substitui Authorization pelo b
   assert.equal(authorization, "Bearer dedicated-token");
 });
 
+test("requisições autenticadas usam o wrapper com timeout para não prender o painel", () => {
+  const source = readFileSync(new URL("../src/super-admin/superAdminApi.ts", import.meta.url), "utf8");
+  const authenticatedFetch = source.slice(
+    source.indexOf("export async function superAdminFetch"),
+    source.indexOf("export async function publicApiFetch"),
+  );
+
+  assert.match(authenticatedFetch, /rejectSimulated: true, authTimeout: true/);
+  assert.match(source, /options\.authTimeout \? authFetch\(url, init\) : fetch\(url, init\)/);
+});
+
 test("401 remove a sessão e solicita retorno ao login", async () => {
   api.setSuperAdminToken("expired-token");
   let authEvents = 0;
