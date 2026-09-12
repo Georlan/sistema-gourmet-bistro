@@ -24,11 +24,45 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
   await expect(dinheiro).not.toHaveClass(/bg-emerald-600/);
   await expect(page.getByText(/Pagando \d+ item\(ns\)/)).toHaveCount(0);
 
-  // O saldo pode vir preenchido para reduzir digitação, mas continua editável e
+  // O saldo vem preenchido para reduzir digitação, mas continua editável e
   // não implica seleção de itens nem método financeiro.
-  await expect(page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' })).toHaveValue('160,00');
+  const valueInput = page.getByRole('textbox', { name: /valor/i });
+  await expect(valueInput).toHaveValue('160,00');
 
-  await page.getByRole('button', { name: 'Registrar adiantamento', exact: true }).click();
+  // Botão principal é explícito e não ambíguo: informa a ação e o valor
+  const submitButton = page.locator('button[type="submit"]');
+  await expect(submitButton).toHaveText(/Receber saldo total · R\$\s*160,00/);
+
+  // Tentativa de submissão sem selecionar forma de pagamento bloqueia
+  await submitButton.click();
   await expect(page.getByText('Escolha a forma de pagamento antes de receber.', { exact: true })).toBeVisible();
+  expect(state.actions.filter((action) => /pagar/.test(action.path))).toEqual([]);
+
+  // Selecionar forma de pagamento limpa o erro imediatamente
+  await pix.click();
+  await expect(pix).toHaveClass(/bg-emerald-600/);
+  await expect(page.getByText('Escolha a forma de pagamento antes de receber.', { exact: true })).toHaveCount(0);
+
+  // Alterar valor para parcial atualiza rótulo do botão de forma coerente
+  await valueInput.fill('50,00');
+  await expect(submitButton).toHaveText(/Receber parcial · R\$\s*50,00/);
+
+  // Restaurar saldo total
+  await page.getByRole('button', { name: 'Usar saldo total', exact: true }).click();
+  await expect(valueInput).toHaveValue('160,00');
+  await expect(submitButton).toHaveText(/Receber saldo total · R\$\s*160,00/);
+
+  // Selecionar item pronto atualiza valor e botão principal
+  const itemRow = page.locator('text=Prato da segunda rodada').first();
+  await itemRow.click();
+  await expect(valueInput).toHaveValue('48,00');
+  await expect(submitButton).toHaveText(/Receber itens selecionados · R\$\s*48,00/);
+
+  // Desselecionar/Limpar seleção retorna ao saldo total
+  await page.getByRole('button', { name: 'Limpar', exact: true }).click();
+  await expect(valueInput).toHaveValue('160,00');
+  await expect(submitButton).toHaveText(/Receber saldo total · R\$\s*160,00/);
+
+  // Nenhuma baixa foi efetivada
   expect(state.actions.filter((action) => /pagar/.test(action.path))).toEqual([]);
 });

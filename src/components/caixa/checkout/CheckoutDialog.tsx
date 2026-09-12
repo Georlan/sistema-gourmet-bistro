@@ -1,8 +1,9 @@
 import clsx from 'clsx';
-import { Check, RefreshCw, Smartphone, User, X } from 'lucide-react';
+import { Check, Printer, RefreshCw, Smartphone, User, X } from 'lucide-react';
 import { isCashierTableOrder as isTableCheckoutOrder } from '../../../domain/cashierOrderProjection';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import MoneyInput from '../../MoneyInput';
+import { formatCurrency } from '../cashierPresentation';
 import type { useCashierSmartPos } from '../smartpos/useCashierSmartPos';
 import type { CheckoutController } from './useCheckoutController';
 
@@ -59,19 +60,41 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
     refreshSmartPosCashProjection,
   } = smartPos;
   const selectedCheckoutSmartPosState = selectedOrder ? getSmartPosCardState(selectedOrder) : null;
+
+  const currentBalance = selectedOrder ? getCheckoutBalance(selectedOrder) : 0;
+  const inputVal = Number(paymentValor || 0);
+  const selectedTotal =
+    selectedOrder && selectedItemIds.length > 0 ? getSelectedItemsTotal(selectedOrder, selectedItemIds) : 0;
+
+  const primaryButtonLabel = (() => {
+    if (selectedItemIds.length > 0) {
+      return `Receber itens selecionados · ${formatCurrency(selectedTotal)}`;
+    }
+    if (inputVal > 0) {
+      if (Math.abs(inputVal - currentBalance) < 0.01) {
+        return `Receber saldo total · ${formatCurrency(currentBalance)}`;
+      }
+      return `Receber parcial · ${formatCurrency(inputVal)}`;
+    }
+    if (currentBalance > 0) {
+      return `Receber saldo total · ${formatCurrency(currentBalance)}`;
+    }
+    return 'Receber pagamento';
+  })();
+
   return (
     selectedOrder &&
     showCheckoutModal && (
       <div
-        className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto"}
+        className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-2 sm:p-4"
         onClick={() => setShowCheckoutModal(false)}
       >
         <div
-          className={"bg-koma-input/95 backdrop-blur-xl rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col my-4"}
+          className="bg-koma-input/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            className={"bg-koma-raised text-koma-foreground p-5 flex justify-between items-center shrink-0 border-b border-koma-border"}
+            className="bg-koma-raised text-koma-foreground px-4 py-3.5 sm:px-5 sm:py-4 flex justify-between items-center shrink-0 border-b border-koma-border"
           >
             <div>
               <span
@@ -169,18 +192,14 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
           )}
 
           <div
-            className={"p-5 overflow-y-auto flex-1 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-5"}
+            className="p-3.5 sm:p-5 overflow-y-auto flex-1 min-h-0 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"
           >
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
               <div
-                className={"flex items-center justify-between border-b border-koma-border pb-1.5"}
+                className="flex items-center justify-between border-b border-koma-border pb-1.5 shrink-0"
               >
                 <div>
-                  <h4 className={"font-serif font-bold text-koma-secondary"}>Extrato Consumo</h4>
-                  <span className={"text-[8px] text-koma-muted"}>
-                    Itens prontos já podem ser recebidos. Itens em preparo ficam visíveis, mas bloqueados até avançarem
-                    na cozinha.
-                  </span>
+                  <h4 className="font-serif font-bold text-koma-secondary">Extrato Consumo</h4>
                 </div>
                 {taxaServicoAtiva && (
                   <label
@@ -351,20 +370,16 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                 );
               })()}
 
-              {/* BOTÕES DE IMPRESSÃO DA MESA */}
-              <div
-                className={"bg-koma-card/40 border border-koma-border/50 p-4 rounded-2xl space-y-3 text-left"}
-              >
-                <span
-                  className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                >
-                  Impressão da Mesa
+              {/* BARRA COMPACTA DE IMPRESSÃO */}
+              <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-koma-border/40 bg-koma-card/40 shrink-0">
+                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider flex items-center gap-1.5">
+                  <Printer size={12} /> Impressão:
                 </span>
-                <div className={"flex gap-2"}>
+                <div className="flex gap-1.5">
                   <button
                     type="button"
                     onClick={printCheckoutReceipt}
-                    className={"flex-1 py-2 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"}
+                    className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
                     title="Imprime a via térmica completa com todos os itens consumidos"
                   >
                     Reimpressão total
@@ -372,7 +387,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                   <button
                     type="button"
                     onClick={printCheckoutValues}
-                    className={"flex-1 py-2 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-xl text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"}
+                    className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
                     title="Imprime a Conta da Mesa com subtotal e taxa de serviço"
                   >
                     Imprimir Conta
@@ -381,354 +396,278 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h4
-                className={"font-serif font-bold text-koma-secondary border-b border-koma-border pb-1.5"}
-              >
-                Divisão e Recebimento
+            <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
+              <h4 className="font-serif font-bold text-koma-secondary border-b border-koma-border pb-1.5 shrink-0">
+                Receber Pagamento
               </h4>
 
               {selectedItemIds.length > 0 ? (
-                <div
-                  className={"grid grid-cols-2 gap-3 bg-koma-card p-3 rounded-2xl border border-koma-border"}
-                >
+                <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/25 shrink-0">
                   <div>
-                    <span
-                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                    >
-                      Itens prontos
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+                      Itens Selecionados
                     </span>
-                    <strong className={"mt-1 block text-sm text-koma-foreground font-mono"}>
-                      {selectedItemIds.length}
+                    <strong className="text-sm font-bold text-koma-foreground font-mono">
+                      {selectedItemIds.length} {selectedItemIds.length === 1 ? 'item' : 'itens'}
                     </strong>
                   </div>
-                  <div className="text-right">
-                    <span
-                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+                        Valor dos Itens
+                      </span>
+                      <strong className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                        R$ {selectedTotal.toFixed(2)}
+                      </strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedItemIds([]);
+                        setSplitPeople('1');
+                        setPaymentValor(currentBalance);
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-bold uppercase rounded-lg border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 transition-colors cursor-pointer"
                     >
-                      Recebendo agora
-                    </span>
-                    <strong
-                      className={"mt-1 block text-sm text-emerald-700 dark:text-emerald-300 font-mono"}
-                    >
-                      R$ {getSelectedItemsTotal(selectedOrder, selectedItemIds).toFixed(2)}
-                    </strong>
+                      Limpar
+                    </button>
                   </div>
                 </div>
               ) : (
-                <div
-                  className={"grid grid-cols-2 gap-3 bg-koma-card p-3 rounded-2xl border border-koma-border"}
-                >
-                  <div className="space-y-1">
-                    <label
-                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                    >
-                      Pessoas:
+                <div className="flex items-center justify-between p-3 bg-koma-card/60 rounded-2xl border border-koma-border shrink-0 text-xs">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">
+                      Dividir por:
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={splitPeople}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setSplitPeople(val);
-                        const peopleNum = parseInt(val, 10) || 1;
-                        setPaymentValor(getCheckoutBalance(selectedOrder) / peopleNum);
-                      }}
-                      className={"w-full px-3 py-1.5 text-xs bg-koma-panel border border-koma-border rounded-xl focus:outline-none text-koma-foreground text-center font-mono"}
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="1"
+                        value={splitPeople}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSplitPeople(val);
+                          const peopleNum = Math.max(1, parseInt(val, 10) || 1);
+                          setPaymentValor(currentBalance / peopleNum);
+                        }}
+                        className="w-12 px-2 py-1 text-center font-mono font-bold bg-koma-panel border border-koma-border rounded-lg text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-[10px] text-koma-muted">pessoa(s)</span>
+                    </div>
                   </div>
-                  <div className={"space-y-1 flex flex-col justify-end text-right"}>
-                    <span
-                      className={"text-[9px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                    >
-                      Valor por pessoa:
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                      {Number(splitPeople) > 1 ? 'Cada um paga:' : 'Saldo a receber:'}
                     </span>
-                    <span
-                      className={"text-sm font-bold text-koma-foreground font-mono leading-relaxed"}
-                    >
-                      R${' '}
-                      {(() => {
-                        const peopleNum = parseInt(splitPeople, 10) || 1;
-                        return (getCheckoutBalance(selectedOrder) / peopleNum).toFixed(2);
-                      })()}
-                    </span>
+                    <strong className="text-sm font-bold text-koma-foreground font-mono">
+                      R$ {(currentBalance / Math.max(1, parseInt(splitPeople, 10) || 1)).toFixed(2)}
+                    </strong>
                   </div>
                 </div>
               )}
 
               <form
                 onSubmit={handleProcessPayment}
-                className={"space-y-4 bg-koma-card/40 p-4 rounded-2xl border border-koma-border/50"}
+                className="space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
               >
-                <span
-                  className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block"}
-                >
-                  Receber Pagamento
-                </span>
-
-                <div className="space-y-1.5">
-                  <label
-                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                  >
-                    Método de Baixa:
-                  </label>
-                  <div
-                    className={"flex gap-1.5 p-1 bg-koma-card border border-koma-border rounded-xl shrink-0 flex-wrap"}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMetodo('pix')}
-                      className={`flex-1 min-w-[50px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${
-                        paymentMetodo === 'pix'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-koma-subtle hover:text-white'
-                      }`}
-                    >
-                      Pix
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMetodo('dinheiro')}
-                      className={`flex-1 min-w-[60px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${
-                        paymentMetodo === 'dinheiro'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-koma-subtle hover:text-white'
-                      }`}
-                    >
-                      Dinheiro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMetodo('cartao_debito')}
-                      className={`flex-1 min-w-[70px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${
-                        paymentMetodo === 'cartao_debito'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-koma-subtle hover:text-white'
-                      }`}
-                    >
-                      C. Débito
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMetodo('cartao_credito')}
-                      className={`flex-1 min-w-[70px] py-2 text-[9px] font-bold rounded-lg transition-all cursor-pointer ${
-                        paymentMetodo === 'cartao_credito'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-koma-subtle hover:text-white'
-                      }`}
-                    >
-                      C. Crédito
-                    </button>
-                  </div>
-                </div>
-
-                <div className={"space-y-1.5 font-sans"}>
-                  <label
-                    className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                  >
-                    Valor a Lançar (R$):
-                  </label>
-                  <div className={"flex gap-2"}>
-                    <div className={"relative flex-1"}>
-                      <span
-                        className={"absolute left-3.5 top-2.5 text-koma-subtle font-mono text-[11px]"}
-                      >
-                        R$
-                      </span>
-                      <MoneyInput
-                        required
-                        value={paymentValor}
-                        onValueChange={setPaymentValor}
-                        readOnly={selectedItemIds.length > 0}
-                        title={
-                          selectedItemIds.length > 0
-                            ? 'O valor é calculado automaticamente pelos itens selecionados.'
-                            : 'Digite qualquer valor para abater do saldo.'
-                        }
-                        className={clsx(
-                          'w-full',
-                          'pl-9',
-                          'pr-4',
-                          'py-2',
-                          'text-xs',
-                          'bg-koma-card',
-                          'border',
-                          'border-koma-border',
-                          'rounded-xl',
-                          'focus:outline-none',
-                          'focus:border-[#10b981]',
-                          'text-koma-foreground',
-                          'font-mono',
-                          selectedItemIds.length > 0 && 'cursor-not-allowed text-emerald-600 dark:text-emerald-300'
-                        )}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!selectedOrder) return;
-                        setSplitPeople('1');
-                        if (selectedItemIds.length > 0) {
-                          setSelectedItemIds([]);
-                          setPaymentValor('');
-                        } else {
-                          setPaymentValor(getCheckoutBalance(selectedOrder));
-                        }
-                      }}
-                      className={"px-3.5 py-2 bg-emerald-500/15 hover:bg-[#10b981]/25 border border-emerald-500/30 rounded-xl text-[10px] font-bold text-emerald-700 dark:text-emerald-400 transition-all cursor-pointer whitespace-nowrap"}
-                    >
-                      {selectedItemIds.length > 0 ? 'Adiantar outro valor' : 'Usar saldo total'}
-                    </button>
-                  </div>
-                  <span className={"text-[8px] text-koma-muted block mt-1.5 leading-normal"}>
-                    <strong>Dica:</strong>{' '}
-                    {selectedItemIds.length > 0
-                      ? 'Os itens prontos marcados serão baixados juntos. “Adiantar outro valor” limpa a seleção e libera um valor manual.'
-                      : isTableCheckoutOrder(selectedOrder)
-                        ? 'Sem itens marcados, o lançamento é um adiantamento sobre o saldo geral da mesa; itens em preparo continuam sem baixa individual.'
-                        : 'Para pagamentos múltiplos, digite qualquer valor e faça as baixas em sequência.'}
-                  </span>
-                </div>
-
-                {paymentMetodo === 'dinheiro' && <div className="space-y-1" role="group" aria-label="Atalhos de cédulas">
-                  <label
-                    className={"text-[8px] font-bold text-koma-muted uppercase tracking-wider block"}
-                  >
-                    Atalhos de Cédulas:
-                  </label>
-                  <div className={"flex flex-wrap gap-1"}>
-                    {[2, 5, 10, 20, 50, 100, 200].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => {
-                          setSelectedItemIds([]);
-                          setPaymentValor(val);
-                        }}
-                        className={"px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[9px] font-bold text-koma-secondary font-mono transition-all cursor-pointer hover:border-gray-500 hover:text-koma-foreground"}
-                      >
-                        R$ {val}
-                      </button>
-                    ))}
-                  </div>
-                </div>}
-
-                {identifiedCustomer && identifiedCustomer.telefone ? (
-                  <div
-                    className={"p-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-koma-foreground space-y-1"}
-                  >
+                <div className="space-y-3.5">
+                  {/* Forma de Pagamento */}
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-400">
-                        <Check size={11} className="stroke-[3]" />
-                        <span>Cliente Identificado</span>
-                      </div>
-                      {(Number(identifiedCustomer.saldoCashback || 0) > 0 ||
-                        Number(identifiedCustomer.pontos || 0) > 0) && (
-                        <span className="text-[9px] font-bold text-emerald-300">
-                          Cashback: R$ {Number(identifiedCustomer.saldoCashback || 0).toFixed(2)}
+                      <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                        Forma de Pagamento:
+                      </label>
+                      {!paymentMetodo && errorMsg && (
+                        <span className="text-[10px] font-bold text-rose-500 dark:text-rose-400 animate-pulse">
+                          Selecione uma opção abaixo
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between text-xs font-bold pt-0.5">
-                      <span className="text-white flex items-center gap-1.5 min-w-0">
-                        <User size={12} className="text-emerald-400 shrink-0" />
-                        <span className="truncate">{identifiedCustomer.nome}</span>
-                      </span>
-                      <span className="font-mono text-emerald-300 text-[11px] shrink-0 ml-2">
-                        {aplicarMascaraTelefoneInput(identifiedCustomer.telefone)}
-                      </span>
+                    <div
+                      className={clsx(
+                        'grid grid-cols-2 sm:grid-cols-4 gap-2',
+                        !paymentMetodo && errorMsg && 'p-1 rounded-2xl border border-rose-500/40 bg-rose-500/5'
+                      )}
+                    >
+                      {[
+                        { id: 'pix' as const, label: 'Pix' },
+                        { id: 'dinheiro' as const, label: 'Dinheiro' },
+                        { id: 'cartao_debito' as const, label: 'C. Débito' },
+                        { id: 'cartao_credito' as const, label: 'C. Crédito' },
+                      ].map((method) => (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() => setPaymentMetodo(method.id)}
+                          className={clsx(
+                            'min-h-11 py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center text-center',
+                            paymentMetodo === method.id
+                              ? 'bg-emerald-600 border border-emerald-500 text-white shadow-md ring-2 ring-emerald-500/30'
+                              : 'bg-koma-card border border-koma-border text-koma-secondary hover:border-koma-accent/40 hover:text-koma-foreground'
+                          )}
+                        >
+                          {method.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
-                ) : (
-                  <div className={"space-y-1.5 font-sans"}>
-                    <label
-                      className={"text-[10px] font-bold text-koma-subtle uppercase tracking-wider block"}
-                    >
-                      Celular do cliente (Opcional - Fidelidade):
-                    </label>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="tel"
-                      value={paymentCPF}
-                      onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
-                      placeholder="(00) 00000-0000"
-                      className={"w-full px-3 py-2 text-xs bg-koma-card border border-koma-border rounded-xl focus:outline-none focus:border-[#10b981] text-koma-foreground"}
-                    />
-                  </div>
-                )}
 
-                {/* TROCO EM TEMPO REAL */}
-                {(() => {
-                  if (!selectedOrder) return null;
-                  const restante = getCheckoutBalance(selectedOrder);
-                  const inputVal = Number(paymentValor || 0) || 0;
-                  if (paymentMetodo === 'dinheiro' && inputVal > restante) {
-                    const troco = inputVal - restante;
-                    return (
-                      <div
-                        className={"bg-emerald-950/45 border border-emerald-800/40 text-emerald-600 dark:text-emerald-300 p-3 rounded-xl text-xs font-mono flex justify-between items-center shadow-md shadow-emerald-950/20"}
-                      >
-                        <span
-                          className={"font-bold uppercase text-[9px] tracking-wider text-emerald-400"}
-                        >
-                          Troco devido:
+                  {/* Valor a Lançar */}
+                  <div className="space-y-1.5 font-sans">
+                    <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                      Valor a Lançar (R$):
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3.5 top-2.5 text-koma-subtle font-mono text-[11px]">
+                          R$
                         </span>
-                        <span className={"font-extrabold text-sm text-emerald-600 dark:text-emerald-300"}>
-                          R$ {troco.toFixed(2)}
+                        <MoneyInput
+                          required
+                          value={paymentValor}
+                          onValueChange={setPaymentValor}
+                          readOnly={selectedItemIds.length > 0}
+                          title={
+                            selectedItemIds.length > 0
+                              ? 'O valor é calculado automaticamente pelos itens selecionados.'
+                              : 'Digite qualquer valor para abater do saldo.'
+                          }
+                          className={clsx(
+                            'w-full pl-9 pr-4 py-2 text-xs bg-koma-card border border-koma-border rounded-xl focus:outline-none focus:border-[#10b981] text-koma-foreground font-mono',
+                            selectedItemIds.length > 0 && 'cursor-not-allowed text-emerald-600 dark:text-emerald-300'
+                          )}
+                        />
+                      </div>
+                      {selectedItemIds.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedItemIds([]);
+                            setPaymentValor(currentBalance);
+                          }}
+                          className="px-3.5 py-2 bg-emerald-500/15 hover:bg-[#10b981]/25 border border-emerald-500/30 rounded-xl text-[10px] font-bold text-emerald-700 dark:text-emerald-400 transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          Digitar outro valor
+                        </button>
+                      ) : Number(paymentValor || 0) !== currentBalance ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSplitPeople('1');
+                            setPaymentValor(currentBalance);
+                          }}
+                          className="px-3.5 py-2 bg-emerald-500/15 hover:bg-[#10b981]/25 border border-emerald-500/30 rounded-xl text-[10px] font-bold text-emerald-700 dark:text-emerald-400 transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          Usar saldo total
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {/* Atalhos de Cédulas para Dinheiro */}
+                  {paymentMetodo === 'dinheiro' && (
+                    <div className="space-y-1" role="group" aria-label="Atalhos de cédulas">
+                      <label className="text-[8px] font-bold text-koma-muted uppercase tracking-wider block">
+                        Atalhos de Cédulas:
+                      </label>
+                      <div className="flex flex-wrap gap-1">
+                        {[2, 5, 10, 20, 50, 100, 200].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => {
+                              setSelectedItemIds([]);
+                              setPaymentValor(val);
+                            }}
+                            className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[9px] font-bold text-koma-secondary font-mono transition-all cursor-pointer hover:border-gray-500 hover:text-koma-foreground"
+                          >
+                            R$ {val}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Celular / Fidelidade */}
+                  {identifiedCustomer && identifiedCustomer.telefone ? (
+                    <div className="p-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-koma-foreground space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-400">
+                          <Check size={11} className="stroke-[3]" />
+                          <span>Cliente Identificado</span>
+                        </div>
+                        {(Number(identifiedCustomer.saldoCashback || 0) > 0 ||
+                          Number(identifiedCustomer.pontos || 0) > 0) && (
+                          <span className="text-[9px] font-bold text-emerald-300">
+                            Cashback: R$ {Number(identifiedCustomer.saldoCashback || 0).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs font-bold pt-0.5">
+                        <span className="text-white flex items-center gap-1.5 min-w-0">
+                          <User size={12} className="text-emerald-400 shrink-0" />
+                          <span className="truncate">{identifiedCustomer.nome}</span>
+                        </span>
+                        <span className="font-mono text-emerald-300 text-[11px] shrink-0 ml-2">
+                          {aplicarMascaraTelefoneInput(identifiedCustomer.telefone)}
                         </span>
                       </div>
-                    );
-                  }
-                  return null;
-                })()}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 font-sans">
+                      <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+                        Celular do cliente (Opcional - Fidelidade):
+                      </label>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        value={paymentCPF}
+                        onChange={(e) => setPaymentCPF(aplicarMascaraTelefoneInput(e.target.value))}
+                        placeholder="(00) 00000-0000"
+                        className="w-full px-3 py-2 text-xs bg-koma-card border border-koma-border rounded-xl focus:outline-none focus:border-[#10b981] text-koma-foreground"
+                      />
+                    </div>
+                  )}
 
-                {selectedItemIds.length > 0 && (
-                  <div
-                    className={"bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 p-2.5 rounded-xl text-[10px] flex items-center justify-between gap-2"}
+                  {/* Troco em tempo real */}
+                  {(() => {
+                    if (!selectedOrder) return null;
+                    const restante = currentBalance;
+                    if (paymentMetodo === 'dinheiro' && inputVal > restante) {
+                      const troco = inputVal - restante;
+                      return (
+                        <div className="bg-emerald-950/45 border border-emerald-800/40 text-emerald-600 dark:text-emerald-300 p-2.5 rounded-xl text-xs font-mono flex justify-between items-center shadow-md shadow-emerald-950/20">
+                          <span className="font-bold uppercase text-[9px] tracking-wider text-emerald-400">
+                            Troco devido:
+                          </span>
+                          <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-300">
+                            R$ {troco.toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  {errorMsg && (
+                    <div className="bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center text-xs font-semibold block">
+                      {errorMsg}
+                    </div>
+                  )}
+
+                  {/* Botão Principal sem ambiguidade com ação e valor explícitos */}
+                  <button
+                    type="submit"
+                    disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer uppercase tracking-wider text-xs disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <span>
-                      Pagando <strong>{selectedItemIds.length} item(ns)</strong> selecionado(s).
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedItemIds([]);
-                        setSplitPeople('1');
-                        setPaymentValor('');
-                      }}
-                      className={"shrink-0 rounded-lg border border-emerald-500/30 px-2 py-1 text-[8px] font-bold uppercase hover:bg-emerald-500/15"}
-                    >
-                      Outro valor
-                    </button>
-                  </div>
-                )}
-
-                {errorMsg && (
-                  <div
-                    className={"bg-rose-500/10 border border-rose-500/25 text-rose-400 p-2.5 rounded-xl text-center font-medium block"}
-                  >
-                    {errorMsg}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment}
-                  className={"w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer uppercase tracking-wider text-[10px] disabled:cursor-not-allowed disabled:opacity-50"}
-                >
-                  <Check size={14} />
-                  <span>
-                    {selectedItemIds.length > 0
-                      ? isTableCheckoutOrder(selectedOrder)
-                        ? 'Receber itens prontos'
-                        : 'Receber itens selecionados'
-                      : isTableCheckoutOrder(selectedOrder)
-                        ? 'Registrar adiantamento'
-                        : 'Lançar pagamento / baixa'}
-                  </span>
-                </button>
+                    <Check size={16} />
+                    <span>{primaryButtonLabel}</span>
+                  </button>
+                </div>
               </form>
             </div>
           </div>
