@@ -4,6 +4,7 @@ import test, { beforeEach } from 'node:test';
 import {
   clearOperatorSession,
   getOperatorSession,
+  getPersistedOperationalPortal,
   saveOperatorSession,
 } from '../src/utils/authSession';
 
@@ -53,6 +54,34 @@ test('saveOperatorSession persiste somente identidade operacional mínima', () =
   });
   assert.doesNotMatch(raw, /nao-deve-persistir|85999999999|Rua privada|nunca-aqui/);
   assert.equal(localStorage.getItem('token'), null);
+  assert.equal(localStorage.getItem('koma_caixa_token'), 'test-access-token');
+  assert.equal(localStorage.getItem('koma_waiter_token'), null);
+  assert.equal(getPersistedOperationalPortal(), 'caixa');
+});
+
+test('sessão canônica de garçom usa apenas aliases de garçom', () => {
+  saveOperatorSession('waiter-access-token', {
+    id: 'waiter-1',
+    nome: 'Garçom QA',
+    role: 'garcom',
+    restaurante_id: 3,
+  });
+
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'waiter-access-token');
+  assert.equal(localStorage.getItem('koma_waiter_id'), 'waiter-1');
+  assert.equal(localStorage.getItem('koma_waiter_name'), 'Garçom QA');
+  assert.equal(localStorage.getItem('koma_user_role'), 'garcom');
+  assert.equal(localStorage.getItem('koma_caixa_token'), null);
+  assert.equal(getPersistedOperationalPortal(), 'garcom');
+});
+
+test('token legado isolado de garçom não escolhe sozinho a entrada canônica', () => {
+  localStorage.setItem('koma_waiter_token', 'legacy-waiter-token');
+  localStorage.setItem('koma_waiter_id', 'legacy-waiter');
+  localStorage.setItem('koma_user_role', 'garcom');
+
+  assert.equal(getPersistedOperationalPortal(), null);
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'legacy-waiter-token');
 });
 
 test('getOperatorSession sanitiza sessão legada com PII no primeiro acesso', () => {
