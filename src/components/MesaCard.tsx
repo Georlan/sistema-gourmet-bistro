@@ -34,7 +34,11 @@ export const MesaCard = React.memo<MesaCardProps>(({
   const tableLabel = table.nome && table.nome !== `Mesa ${table.id}` ? table.nome : `Mesa ${table.id}`;
 
   return (
-    <div className="relative h-full w-full min-w-0">
+    <div
+      id={`mesa-card-${table.id}`}
+      onClick={() => onClick(table.id)}
+      className="relative h-full w-full min-w-0"
+    >
       <SharedTableCard
         {...view}
         table={table}
@@ -46,9 +50,11 @@ export const MesaCard = React.memo<MesaCardProps>(({
         showItemCount={false}
       />
       <button
-        id={`mesa-card-${table.id}`}
         type="button"
-        onClick={() => onClick(table.id)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick(table.id);
+        }}
         aria-label={`Abrir ${tableLabel}`}
         title={`Abrir ${tableLabel}`}
         className="absolute inset-0 z-10 h-full w-full rounded-2xl bg-transparent transition-shadow hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400"
