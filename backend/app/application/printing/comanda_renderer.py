@@ -28,6 +28,7 @@ class ComandaVariant:
     operator_label: Optional[str] = "OPERADOR"
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
+    loyalty_previous_orders: Optional[int] = None
     is_reprint: bool = False
     event_at: Optional[datetime.datetime] = None
     via_label: Optional[str] = None
@@ -150,6 +151,20 @@ def _style_operational_type(lines: list[str], *, width: int) -> None:
             + align_center(clean.upper(), width)
             + ESC_BOLD_OFF
             + ESC_NORMAL_SIZE
+        )
+        break
+
+
+def _style_koma_footer(lines: list[str]) -> None:
+    """Destaca somente a marca Kôma no rodapé, sem alterar o alinhamento."""
+    target = "Gerenciado por Kôma"
+    for index, line in enumerate(lines):
+        if _clean_esc_text(line) != target:
+            continue
+        lines[index] = line.replace(
+            "Kôma",
+            ESC_BOLD_ON + "Kôma" + ESC_BOLD_OFF,
+            1,
         )
         break
 
@@ -356,6 +371,21 @@ def _insert_context_block(
             block.extend(customer_lines)
         if customer_phone:
             block.append(f"TELEFONE: {mask_phone(customer_phone)}")
+        if (
+            float(variant.cashback_discount or 0.0) > 0
+            and variant.loyalty_previous_orders is not None
+        ):
+            previous_orders = max(int(variant.loyalty_previous_orders), 0)
+            order_label = (
+                "PEDIDO ANTERIOR"
+                if previous_orders == 1
+                else "PEDIDOS ANTERIORES"
+            )
+            block.append(
+                ESC_BOLD_ON
+                + f"FIDELIDADE: {previous_orders} {order_label}"
+                + ESC_BOLD_OFF
+            )
 
     has_delivery_data = any(
         (
@@ -407,7 +437,7 @@ def _insert_payment_block(
 
     block: list[str] = ["-" * width, ESC_BOLD_ON + "PAGAMENTO" + ESC_BOLD_OFF]
     if payment_label:
-        block.append(f"FORMA: {payment_label}")
+        block.append(ESC_BOLD_ON + f"FORMA: {payment_label}" + ESC_BOLD_OFF)
     if has_change:
         block.append(f"TROCO PARA: {_format_brl(float(variant.change_for or 0.0))}")
 
@@ -481,6 +511,7 @@ def apply_operational_visual_hierarchy(
         width=width,
     )
     _style_items_header(lines, width=width)
+    _style_koma_footer(lines)
     return "\n".join(lines)
 
 
@@ -527,7 +558,7 @@ def _replace_total(
         if cashback_discount > 0:
             charge_lines.append(
                 split_justified(
-                    "CASHBACK:",
+                    "DESCONTO CASHBACK:",
                     _format_discount_brl(cashback_discount),
                     width,
                 )
