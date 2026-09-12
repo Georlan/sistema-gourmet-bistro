@@ -14,6 +14,12 @@ def apply_inventory_count(
     observation: str | None,
     user_id: str | None,
 ) -> bool:
+    # Physical counts compete with other inventory writes. Re-read the row while
+    # taking a database lock so a concurrent confirmation cannot build its audit
+    # movement from a stale balance. On PostgreSQL the second writer waits here
+    # and then observes the balance committed by the first writer.
+    db.refresh(insumo, with_for_update=True)
+
     previous = insumo.estoque_atual or 0.0
     difference = counted - previous
     if difference == 0:
