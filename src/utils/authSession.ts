@@ -59,6 +59,12 @@ function clearKeys(keys: readonly string[]): void {
   for (const key of keys) localStorage.removeItem(key);
 }
 
+function scopedAliasToken(portal: OperationalPortal): string {
+  return portal === 'garcom'
+    ? localStorage.getItem('koma_waiter_token') || ''
+    : localStorage.getItem('koma_caixa_token') || '';
+}
+
 function persistCanonicalSession(session: OperatorSession): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify({
     ...session,
@@ -144,10 +150,19 @@ export function getOperatorSession(): OperatorSession | null {
     }
 
     // Migração one-way: versões antigas persistiam o objeto completo de usuário.
-    // Reescrever no primeiro acesso remove PII e também corrige aliases de portal
-    // deixados por versões que gravavam garçom como se fosse Caixa.
+    // Reescrevemos a sessão canônica para remover PII. Só reparamos aliases quando
+    // o mesmo token está comprovadamente no portal errado; ausência de alias é
+    // sinal de logout e nunca pode recriar credenciais.
     persistCanonicalSession(session);
-    persistScopedAliases(session.token, session.user);
+    const portal = identityPortal(session.user);
+    const misplacedAliasToken = portal === 'garcom'
+      ? localStorage.getItem('koma_caixa_token') || ''
+      : portal === 'caixa'
+        ? localStorage.getItem('koma_waiter_token') || ''
+        : '';
+    if (misplacedAliasToken === session.token) {
+      persistScopedAliases(session.token, session.user);
+    }
     return session;
   } catch (e) {
     clearOperatorSession();
@@ -160,7 +175,7 @@ export function getPersistedOperationalPortal(): OperationalPortal | null {
   if (!session?.token) return null;
 
   const portal = identityPortal(session.user);
-  if (portal) return portal;
+  if (portal && scopedAliasToken(portal) === session.token) return portal;
 
   // Compatibilidade para sessões antigas do Caixa que não persistiam cargo/role.
   if (localStorage.getItem('koma_caixa_token') === session.token) return 'caixa';
@@ -168,17 +183,30 @@ export function getPersistedOperationalPortal(): OperationalPortal | null {
 }
 
 export function getOperationalAccessToken(portal: OperationalPortal): string {
-  const session = getOperatorSession();
-  if (session?.token && identityPortal(session.user) === portal) return session.token;
+  const aliasToken = scopedAliasToken(portal);
+  if (!aliasToken) return '';
 
-  if (portal === 'garcom') {
-    return localStorage.getItem('koma_waiter_token') || '';
+  const session = getOperatorSession();
+  if (session?.token && identityPortal(session.user) === portal) {
+    return session.token === aliasToken ? session.token : '';
   }
-  return localStorage.getItem('koma_caixa_token') || '';
+
+  // Compatibilidade temporária com sessões legadas que ainda só possuem o alias.
+  return aliasToken;
 }
 
 export function getOperatorAccessToken(): string {
-  return getOperatorSession()?.token || localStorage.getItem('koma_waiter_token') || '';
+  const waiterToken = scopedAliasToken('garcom');
+  const caixaToken = scopedAliasToken('caixa');
+  const session = getOperatorSession();
+
+  if (session?.token) {
+    const portal = identityPortal(session.user);
+    if (portal === 'garcom') return waiterToken === session.token ? session.token : '';
+    if (portal === 'caixa') return caixaToken === session.token ? session.token : '';
+  }
+
+  return waiterToken || caixaToken || '';
 }
 
 // Limpa toda a autenticação operacional no logout ou expiração, preservando
