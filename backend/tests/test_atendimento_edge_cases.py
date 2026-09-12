@@ -402,7 +402,8 @@ def test_partial_full_and_table_account_prints_use_the_new_identity_semantics():
         )
         assert "CONTA DA MESA" in table_account
         assert "FECHAMENTO" not in table_account
-        assert "RESTAURANTE EDGE" in table_account
+        # Sem ConfiguracaoRestaurante no fixture, o cabeçalho canônico usa o fallback Kôma.
+        assert "KÔMA GOURMET BISTRÔ" in table_account
         assert "CONTA: #46" in table_account
         assert "MESA: 1" in table_account
         assert "ABERTURA:" in table_account
