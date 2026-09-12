@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
+  ArrowLeft,
   ExternalLink,
   MessageSquare,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../../../config/api';
+import { getCashierDeliveryStatusLabel } from '../../../domain/cashierOrderProjection';
 import { consumeCashierChatEvents } from './cashierChatRealtime';
 
 export interface CaixaConversationItem {
@@ -97,6 +99,27 @@ const normalizeStatus = (value: string) => value
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '');
 
+const conversationStatusLabel = (conversation: CaixaConversationItem) => {
+  const normalizedStatus = normalizeStatus(conversation.status_pedido || '');
+  const rawFulfillment = normalizeStatus(conversation.tipo_pedido || '');
+  const fulfillment = ['delivery', 'entrega'].includes(rawFulfillment) ? 'delivery' : rawFulfillment;
+
+  if (['finalizado', 'finalizada', 'concluido', 'concluida', 'completed'].includes(normalizedStatus)) {
+    return 'Concluído';
+  }
+  if (['recusado', 'recusada', 'rejected'].includes(normalizedStatus)) return 'Recusado';
+  if (['cancelado', 'cancelada', 'cancelled'].includes(normalizedStatus)) return 'Cancelado';
+
+  const projectionStatus = normalizedStatus === 'saiu_para_entrega' ? 'transito' : normalizedStatus;
+  const projected = getCashierDeliveryStatusLabel(projectionStatus, fulfillment);
+  if (projected !== 'Em atendimento') return projected;
+
+  const rawLabel = String(conversation.status_pedido || '').replace(/[_-]+/g, ' ').trim();
+  return rawLabel
+    ? rawLabel.charAt(0).toLocaleUpperCase('pt-BR') + rawLabel.slice(1)
+    : 'Em atendimento';
+};
+
 const conversationTimestamp = (conversation: CaixaConversationItem) => {
   const source = conversation.last_message?.created_at || conversation.updated_at;
   const parsed = source ? Date.parse(source) : Number.NaN;
@@ -126,6 +149,7 @@ const matchesConversationSearch = (conversation: CaixaConversationItem, rawQuery
     conversation.cliente_nome,
     conversation.tipo_pedido,
     conversation.status_pedido,
+    conversationStatusLabel(conversation),
     conversation.last_message?.body || '',
   ].some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(query));
 };
@@ -611,11 +635,11 @@ export function CashierConversationsDrawer({
         <div className="flex-1 flex overflow-hidden">
           <div
             className={clsx(
-              'w-full sm:w-96 border-r border-zinc-800 flex flex-col bg-zinc-900/45 overflow-y-auto',
+              'w-full sm:w-96 border-r border-zinc-800 flex flex-col bg-zinc-900/45 overflow-hidden',
               selectedId ? 'hidden sm:flex' : 'flex',
             )}
           >
-            <div className="sticky top-0 z-10 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur space-y-2">
+            <div className="shrink-0 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur space-y-2">
               <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
                 {filterButton('active', 'Ativas', activeCount)}
                 {filterButton('archived', 'Arquivadas', archivedCount)}
@@ -629,79 +653,84 @@ export function CashierConversationsDrawer({
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none transition focus:border-emerald-500"
                 aria-label="Buscar conversas"
               />
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+              <p className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500 sm:block">
                 Não lidas primeiro · depois aguardando resposta
               </p>
             </div>
 
-            {sortedConversations.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs">
-                <MessageSquare size={32} className="opacity-20 mb-3" />
-                <p>{conversationFilter === 'archived' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa ativa no momento.'}</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-zinc-800/70">
-                {sortedConversations.map((conversation) => {
-                  const isSelected = conversation.id === selectedId;
-                  const awaitingReply = isWaitingForStaff(conversation);
-                  const archived = isArchivedConversation(conversation);
-                  const postSale = isTerminalConversation(conversation) && !archived;
-                  return (
-                    <button
-                      key={conversation.id}
-                      type="button"
-                      onClick={() => openConversation(conversation.id)}
-                      className={clsx(
-                        'relative w-full text-left p-3.5 transition flex flex-col gap-1.5 border-l-4',
-                        isSelected
-                          ? 'bg-emerald-500/10 border-emerald-400'
-                          : conversation.unread_count > 0
-                            ? 'bg-emerald-500/[0.06] border-emerald-500/50 hover:bg-emerald-500/10'
-                            : 'border-transparent hover:bg-zinc-800/50',
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="text-xs font-bold text-white">Pedido #{conversation.numero_pedido || '—'}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium capitalize">
-                            {conversation.tipo_pedido}
-                          </span>
-                          {archived && <span className="text-[9px] font-bold text-zinc-500">Arquivada</span>}
-                          {postSale && <span className="text-[9px] font-bold text-amber-300">Pós-venda</span>}
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+              aria-label="Lista de conversas"
+            >
+              {sortedConversations.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center text-zinc-500 text-xs">
+                  <MessageSquare size={32} className="opacity-20 mb-3" />
+                  <p>{conversationFilter === 'archived' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa ativa no momento.'}</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-800/70">
+                  {sortedConversations.map((conversation) => {
+                    const isSelected = conversation.id === selectedId;
+                    const awaitingReply = isWaitingForStaff(conversation);
+                    const archived = isArchivedConversation(conversation);
+                    const postSale = isTerminalConversation(conversation) && !archived;
+                    return (
+                      <button
+                        key={conversation.id}
+                        type="button"
+                        onClick={() => openConversation(conversation.id)}
+                        className={clsx(
+                          'relative w-full text-left p-3.5 transition flex flex-col gap-1.5 border-l-4',
+                          isSelected
+                            ? 'bg-emerald-500/10 border-emerald-400'
+                            : conversation.unread_count > 0
+                              ? 'bg-emerald-500/[0.06] border-emerald-500/50 hover:bg-emerald-500/10'
+                              : 'border-transparent hover:bg-zinc-800/50',
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="text-xs font-bold text-white">Pedido #{conversation.numero_pedido || '—'}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-medium capitalize">
+                              {conversation.tipo_pedido}
+                            </span>
+                            {archived && <span className="text-[9px] font-bold text-zinc-500">Arquivada</span>}
+                            {postSale && <span className="text-[9px] font-bold text-amber-300">Pós-venda</span>}
+                          </div>
+                          {conversation.unread_count > 0 && (
+                            <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black flex items-center justify-center">
+                              {conversation.unread_count}
+                            </span>
+                          )}
                         </div>
-                        {conversation.unread_count > 0 && (
-                          <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black flex items-center justify-center">
-                            {conversation.unread_count}
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-zinc-200 font-semibold truncate">{conversation.cliente_nome}</span>
+                          <span className="text-[10px] text-zinc-500 shrink-0">{conversationStatusLabel(conversation)}</span>
+                        </div>
+                        {awaitingReply && (
+                          <span className="w-fit rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300">
+                            Cliente aguardando resposta
                           </span>
                         )}
-                      </div>
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="text-zinc-200 font-semibold truncate">{conversation.cliente_nome}</span>
-                        <span className="text-[10px] text-zinc-500 capitalize shrink-0">{conversation.status_pedido}</span>
-                      </div>
-                      {awaitingReply && (
-                        <span className="w-fit rounded-full bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-300">
-                          Cliente aguardando resposta
-                        </span>
-                      )}
-                      {conversation.last_message && (
-                        <p className={clsx(
-                          'text-[11px] line-clamp-2 break-words leading-relaxed',
-                          awaitingReply ? 'text-zinc-200' : 'text-zinc-400',
-                        )}>
-                          {conversation.last_message.sender_type === 'staff' ? (
-                            <span className="text-zinc-500">Você: </span>
-                          ) : conversation.last_message.sender_type === 'customer' ? (
-                            <span className="text-emerald-400 font-semibold">Cliente: </span>
-                          ) : null}
-                          {conversation.last_message.body}
-                        </p>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                        {conversation.last_message && (
+                          <p className={clsx(
+                            'text-[11px] line-clamp-2 break-words leading-relaxed',
+                            awaitingReply ? 'text-zinc-200' : 'text-zinc-400',
+                          )}>
+                            {conversation.last_message.sender_type === 'staff' ? (
+                              <span className="text-zinc-500">Você: </span>
+                            ) : conversation.last_message.sender_type === 'customer' ? (
+                              <span className="text-emerald-400 font-semibold">Cliente: </span>
+                            ) : null}
+                            {conversation.last_message.body}
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className={clsx('flex-1 flex flex-col bg-zinc-950 min-w-0', !selectedId ? 'hidden sm:flex items-center justify-center' : 'flex')}>
@@ -709,11 +738,19 @@ export function CashierConversationsDrawer({
               <>
                 <div className="px-4 sm:px-5 py-3 border-b border-zinc-800 flex items-center justify-between gap-3 bg-zinc-900/45">
                   <div className="flex min-w-0 items-center gap-3">
-                    <button type="button" onClick={clearSelection} className="sm:hidden p-1 text-zinc-400 hover:text-white" aria-label="Voltar para conversas">←</button>
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="sm:hidden flex size-11 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400 transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+                      aria-label="Voltar para conversas"
+                      title="Voltar para conversas"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-sm font-bold text-white">Pedido #{selectedConv.numero_pedido || '—'}</h3>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 capitalize">{selectedConv.status_pedido}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">{conversationStatusLabel(selectedConv)}</span>
                         {selectedArchived && <span className="text-[10px] font-bold text-zinc-500">arquivada</span>}
                         {selectedPostSale && <span className="text-[10px] font-bold text-amber-300">pós-venda</span>}
                         {isWaitingForStaff(selectedConv) && <span className="text-[10px] font-bold text-amber-300">aguardando sua resposta</span>}
@@ -776,19 +813,25 @@ export function CashierConversationsDrawer({
                     </div>
                   ) : (
                     <>
-                      <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1" aria-label="Respostas rápidas">
-                        {QUICK_REPLIES.map((reply) => (
-                          <button
-                            key={reply}
-                            type="button"
-                            onClick={() => setReplyText(reply)}
-                            disabled={sending}
-                            className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
-                            title={`Usar resposta: ${reply}`}
-                          >
-                            {reply}
-                          </button>
-                        ))}
+                      <div className="relative">
+                        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 pr-7 sm:pr-0" aria-label="Respostas rápidas">
+                          {QUICK_REPLIES.map((reply) => (
+                            <button
+                              key={reply}
+                              type="button"
+                              onClick={() => setReplyText(reply)}
+                              disabled={sending}
+                              className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
+                              title={`Usar resposta: ${reply}`}
+                            >
+                              {reply}
+                            </button>
+                          ))}
+                        </div>
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-zinc-900 via-zinc-900/80 to-transparent sm:hidden"
+                        />
                       </div>
                       {errorText && (
                         <div className="text-[11px] text-rose-400 mb-1.5 px-1 flex items-center gap-1">
@@ -808,7 +851,8 @@ export function CashierConversationsDrawer({
                             className="min-h-[46px] max-h-32 w-full resize-y bg-zinc-950 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:opacity-50 transition"
                           />
                           <div className="mt-1 flex items-center justify-between px-1 text-[9px] text-zinc-600">
-                            <span>Enter envia · Shift+Enter quebra linha</span><span>{replyText.length}/1000</span>
+                            <span className="hidden sm:inline">Enter envia · Shift+Enter quebra linha</span>
+                            <span className="ml-auto">{replyText.length}/1000</span>
                           </div>
                         </div>
                         <button
