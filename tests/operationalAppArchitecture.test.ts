@@ -62,8 +62,11 @@ test('catalog listeners and polling keep their cleanup next to their owner', () 
   const polling = effects.find(effect => effect.getText().includes('setInterval'))!.getText();
   assert.match(polling, /if \(!isAuthenticated\) return/);
   assert.match(polling, /if \(isWsConnected\) return/);
+  assert.match(polling, /if \(document\.hidden\) return/);
+  assert.match(polling, /addEventListener\('visibilitychange', handleVisibilityChange\)/);
+  assert.match(polling, /removeEventListener\('visibilitychange', handleVisibilityChange\)/);
   assert.match(polling, /clearInterval\(interval\)/);
-  const connectivity = effects.find(effect => effect.getText().includes('addEventListener'))!.getText();
+  const connectivity = effects.find(effect => effect.getText().includes('handleOnline'))!.getText();
   for (const [event, callback] of [['online', 'handleOnline'], ['offline', 'handleOffline']]) {
     assert.ok(connectivity.includes(`addEventListener('${event}', ${callback})`));
     assert.ok(connectivity.includes(`removeEventListener('${event}', ${callback})`));
