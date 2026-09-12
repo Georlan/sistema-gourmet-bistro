@@ -68,6 +68,8 @@ type SetupStep = {
   icon: React.ComponentType<{ size?: number; className?: string }>;
 };
 
+const ONBOARDING_LOAD_TIMEOUT_MS = 10_000;
+
 const planLabel = (plan: string) => {
   if (plan === 'pocket' || plan === 'pro' || plan === 'premium') {
     return getSubscriptionPlan(plan as SubscriptionPlanId).name;
@@ -97,11 +99,14 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const loadSnapshot = useCallback(async () => {
     setState('loading');
     setErrorMessage('');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ONBOARDING_LOAD_TIMEOUT_MS);
     try {
       const response = await fetch(`${API_BASE_URL}/api/onboarding/status`, {
         method: 'GET',
         headers,
         cache: 'no-store',
+        signal: controller.signal,
       });
       const payload = await response.json().catch(() => null) as OnboardingStatus | { detail?: string } | null;
       if (!response.ok) {
@@ -112,7 +117,15 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       setState('ready');
     } catch (error) {
       setState('error');
-      setErrorMessage(error instanceof Error ? error.message : 'Não foi possível carregar o checklist inicial.');
+      setErrorMessage(
+        error instanceof DOMException && error.name === 'AbortError'
+          ? 'O checklist demorou para responder. Você pode tentar novamente ou seguir para o Caixa.'
+          : error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar o checklist inicial.',
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }, [headers]);
 
