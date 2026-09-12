@@ -164,7 +164,7 @@ export async function superAdminFetch(path: string, init: RequestInit = {}): Pro
       cache: init.cache ?? "no-store",
       headers: requestHeaders(init.headers, token),
     },
-    { rejectSimulated: true },
+    { rejectSimulated: true, authTimeout: true },
   );
 }
 
