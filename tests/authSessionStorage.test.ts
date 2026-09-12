@@ -3,6 +3,7 @@ import test, { beforeEach } from 'node:test';
 
 import {
   clearOperatorSession,
+  getOperatorAccessToken,
   getOperatorSession,
   getPersistedOperationalPortal,
   saveOperatorSession,
@@ -73,6 +74,25 @@ test('sessão canônica de garçom usa apenas aliases de garçom', () => {
   assert.equal(localStorage.getItem('koma_user_role'), 'garcom');
   assert.equal(localStorage.getItem('koma_caixa_token'), null);
   assert.equal(getPersistedOperationalPortal(), 'garcom');
+});
+
+test('logout de garçom não ressuscita alias a partir da sessão canônica', () => {
+  saveOperatorSession('waiter-access-token', {
+    id: 'waiter-1',
+    nome: 'Garçom QA',
+    role: 'garcom',
+    restaurante_id: 3,
+  });
+
+  localStorage.removeItem('koma_waiter_token');
+  localStorage.removeItem('koma_waiter_id');
+  localStorage.removeItem('koma_waiter_name');
+  localStorage.removeItem('koma_user_role');
+
+  assert.equal(getOperatorAccessToken(), '');
+  assert.equal(getPersistedOperationalPortal(), null);
+  assert.equal(localStorage.getItem('koma_waiter_token'), null);
+  assert.ok(localStorage.getItem('koma_operator_session'));
 });
 
 test('token legado isolado de garçom não escolhe sozinho a entrada canônica', () => {
