@@ -44,3 +44,14 @@ test('final conversion copy supports manual or automatic release', () => {
   assert.match(finalCta, /Após a confirmação, liberamos o acesso e enviamos o convite/);
   assert.doesNotMatch(finalCta, /Conclua a ativação do restaurante/);
 });
+
+test('inactive landing sections are safe if reintroduced later', () => {
+  const ecosystem = source('src/landing/sections/Ecosystem.tsx');
+  const capabilities = source('src/landing/sections/Capabilities.tsx');
+
+  assert.doesNotMatch(ecosystem, /TUDO O QUE O RESTAURANTE PRECISA/);
+  assert.doesNotMatch(ecosystem, /ACEITE PEDIDOS DE TODO LUGAR/);
+  assert.match(ecosystem, /KDS e impressão automática ficam disponíveis no Pro e Premium/);
+  assert.match(capabilities, /ESTOQUE E FINANCEIRO — PRO E PREMIUM/);
+  assert.match(capabilities, /APP DO ENTREGADOR — PREMIUM/);
+});
