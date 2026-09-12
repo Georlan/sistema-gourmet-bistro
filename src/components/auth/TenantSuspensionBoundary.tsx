@@ -114,14 +114,19 @@ function SuspensionScreen({ checking, onRetry, onLogout }: {
 
 function AccessCheckingScreen() {
   return (
-    <main className="min-h-dvh bg-koma-page px-6 text-koma-foreground flex items-center justify-center">
+    <div
+      className="fixed inset-0 z-[200] flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground"
+      role="status"
+      aria-live="polite"
+      aria-label="Verificando acesso do estabelecimento"
+    >
       <div className="text-center">
         <RefreshCw className="mx-auto h-5 w-5 animate-spin text-koma-accent" />
         <p className="mt-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
           Verificando acesso do estabelecimento…
         </p>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -252,7 +257,17 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
   if (accessState === 'suspended') {
     return <SuspensionScreen checking={checking} onRetry={retry} onLogout={logout} />;
   }
-  if (accessState === 'checking') return <AccessCheckingScreen />;
+  if (accessState === 'checking') {
+    // Não substitua `children` durante a checagem. No app canônico, o login
+    // recém-autenticado vive dentro de UnifiedOperationalEntry; desmontá-lo aqui
+    // apaga `activePortal` e faz a tela voltar imediatamente para o login.
+    return (
+      <>
+        {children}
+        <AccessCheckingScreen />
+      </>
+    );
+  }
   return <>{children}</>;
 }
 
