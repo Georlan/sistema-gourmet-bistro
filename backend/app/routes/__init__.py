@@ -6,6 +6,7 @@ from .. import financial_models as _financial_models  # noqa: F401
 from .. import financial_refund_models as _financial_refund_models  # noqa: F401,E402
 from .. import financial_cash_constraints as _financial_cash_constraints  # noqa: F401,E402
 from .. import contract_models as _contract_models  # noqa: F401,E402
+from .. import print_job_invariants as _print_job_invariants  # noqa: F401,E402
 
 # O main já monta `super_admin.router` em /api. As centrais administrativas são
 # compostas como sub-routers para manter os poderes em um único control plane
