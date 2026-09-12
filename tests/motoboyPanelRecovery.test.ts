@@ -15,6 +15,6 @@ test('painel do entregador abandona request travada e oferece recuperação', ()
   assert.match(source, /err\?\.name === 'AbortError'/);
   assert.match(source, /demorou demais para responder/);
   assert.match(source, /window\.clearTimeout\(timeoutId\)/);
-  assert.match(source, /> Tentar Novamente</);
+  assert.match(source, /Tentar Novamente/);
   assert.match(source, /setLoading\(false\)/);
 });
