@@ -37,6 +37,8 @@ interface Props {
   onClick?: () => void;
   /** Optional role-specific action placed beside the total in regular occupied cards. */
   footerAction?: React.ReactNode;
+  /** Lets a role-specific grid define a uniform row height without changing other consumers. */
+  fillHeight?: boolean;
   /** Compatibility with cashier filters, not a second presentation authority. */
   filterStatus?: string;
   note?: string;
@@ -48,7 +50,8 @@ interface Props {
 /** Common shell; caller owns navigation, payment and any role-specific actions. */
 export function SharedTableCard({
   id, table, orders, operational, total, draftCount = 0, mergedSources = [],
-  otherWaitersServing = [], showOperationalStatus = true, onClick, footerAction, filterStatus, note, density = 'regular', children,
+  otherWaitersServing = [], showOperationalStatus = true, onClick, footerAction, fillHeight = false,
+  filterStatus, note, density = 'regular', children,
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
@@ -67,7 +70,7 @@ export function SharedTableCard({
       data-table-status={filterStatus}
       data-operational-state={presentation.key}
       data-density={density}
-      className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${compact ? 'gap-2 p-3' : 'gap-3 p-3 sm:p-4'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+      className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${fillHeight ? 'h-full' : ''} ${compact ? 'gap-2 p-3' : 'gap-3 p-3 sm:p-4'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
     >
       <span className="absolute left-0 top-0 h-[3px] w-full bg-current opacity-70" aria-hidden="true" />
       <div className="flex items-start justify-between gap-2">
