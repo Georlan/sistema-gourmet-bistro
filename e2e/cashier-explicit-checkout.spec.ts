@@ -16,7 +16,7 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
   const details = page.getByRole('dialog', { name: 'Mesa 7', exact: true });
   await details.getByRole('button', { name: 'Receber', exact: true }).click();
   await expect(details).toBeHidden();
-  await expect(page.getByText('Recebimento', { exact: true })).toBeVisible();
+  await expect(page.getByText('Receber Pagamento', { exact: true })).toBeVisible();
 
   const pix = page.getByRole('button', { name: 'Pix', exact: true });
   const dinheiro = page.getByRole('button', { name: 'Dinheiro', exact: true });
@@ -26,7 +26,7 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
 
   // O saldo vem preenchido para reduzir digitação, mas continua editável e
   // não implica seleção de itens nem método financeiro.
-  const valueInput = page.getByRole('textbox', { name: 'Valor a lançar' });
+  const valueInput = page.getByRole('textbox', { name: /valor/i });
   await expect(valueInput).toHaveValue('160,00');
 
   // Botão principal é explícito e não ambíguo: informa a ação e o valor

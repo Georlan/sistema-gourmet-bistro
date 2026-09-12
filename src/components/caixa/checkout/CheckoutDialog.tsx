@@ -398,7 +398,7 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
 
             <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
               <h4 className="font-serif font-bold text-koma-secondary border-b border-koma-border pb-1.5 shrink-0">
-                Recebimento
+                Receber Pagamento
               </h4>
 
               {selectedItemIds.length > 0 ? (
@@ -524,7 +524,6 @@ export function CheckoutDialog({ controller, smartPos, errorMsg, taxaServicoAtiv
                         </span>
                         <MoneyInput
                           required
-                          aria-label="Valor a lançar"
                           value={paymentValor}
                           onValueChange={setPaymentValor}
                           readOnly={selectedItemIds.length > 0}
