@@ -34,3 +34,24 @@ test('unified operational URL stays tenantless after the management bridge initi
   assert.match(login, /Acesso da equipe/);
   assert.match(login, /identifica automaticamente o estabelecimento e o perfil de acesso/);
 });
+
+test('operational staff links and mockups eliminate legacy URLs in favor of app.komafood.com.br', () => {
+  const modal = source('../src/super-admin/SuperAdminNewTenantModal.tsx');
+  assert.match(modal, /getOperationalAppUrl\(\)/);
+  assert.match(modal, /getTenantPublicMenuUrl\(created\.subdomain\)/);
+  assert.doesNotMatch(modal, /-caixa\.komafood\.com\.br/);
+  assert.doesNotMatch(modal, /-garcom\.komafood\.com\.br/);
+
+  const desktopFrame = source('../src/landing/product/DesktopFrame.tsx');
+  assert.match(desktopFrame, /app\.komafood\.com\.br/);
+  assert.doesNotMatch(desktopFrame, /sistema-gourmet-bistro\.pages\.dev/);
+
+  const landing = source('../src/landing/LandingPage.tsx');
+  assert.match(landing, /https:\/\/komafood\.com\.br\/landing/);
+  assert.doesNotMatch(landing, /sistema-gourmet-bistro\.pages\.dev/);
+
+  const pairing = source('../print-agent/pairing.py');
+  assert.match(pairing, /https:\/\/app\.komafood\.com\.br\//);
+  assert.match(pairing, /"https:\/\/app\.komafood\.com\.br"/);
+});
+

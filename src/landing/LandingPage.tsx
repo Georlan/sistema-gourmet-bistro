@@ -42,7 +42,7 @@ export default function LandingPage() {
     setMeta('og:title', 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha', true);
     setMeta('og:description', 'Pedidos, salão, cozinha, impressão e caixa conectados no mesmo sistema para restaurantes.', true);
     setMeta('og:type', 'website', true);
-    setMeta('og:url', 'https://sistema-gourmet-bistro.pages.dev/landing', true);
+    setMeta('og:url', 'https://komafood.com.br/landing', true);
     setMeta('og:locale', 'pt_BR', true);
     setMeta('og:site_name', 'KÔMA', true);
     setMeta('twitter:card', 'summary_large_image');
@@ -55,7 +55,7 @@ export default function LandingPage() {
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = 'https://sistema-gourmet-bistro.pages.dev/landing';
+    canonical.href = 'https://komafood.com.br/landing';
 
     const structuredData = document.createElement('script');
     structuredData.type = 'application/ld+json';
@@ -68,7 +68,7 @@ export default function LandingPage() {
       name: 'KÔMA',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web',
-      url: 'https://sistema-gourmet-bistro.pages.dev/landing',
+      url: 'https://komafood.com.br/landing',
       inLanguage: 'pt-BR',
       description: 'Sistema de gestão para restaurantes com PDV, gestão de mesas, KDS, caixa e cardápio digital.',
       slogan: KOMA_SLOGAN,
