@@ -5,6 +5,7 @@ import {
   formatCurrency,
   formatPercentage,
 } from "../config/subscriptionPlans";
+import { getOperationalAppUrl, getTenantPublicMenuUrl } from "../domain/komaHost";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
 const OPERATION_PROFILES = [
@@ -168,8 +169,8 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
   };
 
   if (created) {
-    const cashierUrl = `https://${created.subdomain}-caixa.komafood.com.br/`;
-    const menuUrl = `https://${created.subdomain}.komafood.com.br/`;
+    const operationalUrl = getOperationalAppUrl();
+    const menuUrl = getTenantPublicMenuUrl(created.subdomain);
     const officialCreatedPlan = SUBSCRIPTION_PLANS.find(item => item.id === created.plan);
 
     return (
@@ -212,7 +213,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
 
           <div className="mt-4 space-y-2 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs">
             <p className="font-bold text-koma-foreground">Acessos oficiais</p>
-            <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-koma-muted">Caixa</span><div className="flex items-center gap-1.5"><CopyButton value={cashierUrl} label="link do Caixa" /><a href={cashierUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md bg-[#00b894] px-2 py-1 text-[10px] font-bold text-black"><ExternalLink className="h-3 w-3" /> Abrir</a></div></div>
+            <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-koma-muted">Acesso da equipe</span><div className="flex items-center gap-1.5"><CopyButton value={operationalUrl} label="link de acesso da equipe" /><a href={operationalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md bg-[#00b894] px-2 py-1 text-[10px] font-bold text-black"><ExternalLink className="h-3 w-3" /> Abrir</a></div></div>
             <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-koma-muted">Cardápio</span><div className="flex items-center gap-1.5"><CopyButton value={menuUrl} label="link do cardápio" /><a href={menuUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-md bg-zinc-900 border border-zinc-700 px-2 py-1 text-[10px] font-bold text-koma-secondary"><ExternalLink className="h-3 w-3" /> Abrir</a></div></div>
           </div>
 

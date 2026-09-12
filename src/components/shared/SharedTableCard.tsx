@@ -35,10 +35,12 @@ interface Props {
   otherWaitersServing?: readonly string[];
   showOperationalStatus?: boolean;
   onClick?: () => void;
-  /** Optional role-specific action placed beside the total in regular occupied cards. */
-  footerAction?: React.ReactNode;
+  /** Visible label for the table-level reference. Internal identity stays unchanged. */
+  identityLabel?: string;
   /** Lets a role-specific grid define a uniform row height without changing other consumers. */
   fillHeight?: boolean;
+  /** Some operational views do not need item quantity inside each table card. */
+  showItemCount?: boolean;
   /** Compatibility with cashier filters, not a second presentation authority. */
   filterStatus?: string;
   note?: string;
@@ -50,8 +52,8 @@ interface Props {
 /** Common shell; caller owns navigation, payment and any role-specific actions. */
 export function SharedTableCard({
   id, table, orders, operational, total, draftCount = 0, mergedSources = [],
-  otherWaitersServing = [], showOperationalStatus = true, onClick, footerAction, fillHeight = false,
-  filterStatus, note, density = 'regular', children,
+  otherWaitersServing = [], showOperationalStatus = true, onClick, identityLabel = 'Comanda', fillHeight = false,
+  showItemCount = true, filterStatus, note, density = 'regular', children,
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
@@ -66,7 +68,7 @@ export function SharedTableCard({
       id={id}
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      aria-label={`${customName ? table.nome : `Mesa ${table.id}`}: ${presentation.label}${numbersText ? `, comanda ${numbersText}` : ''}`}
+      aria-label={`${customName ? table.nome : `Mesa ${table.id}`}: ${presentation.label}${numbersText ? `, ${identityLabel.toLocaleLowerCase('pt-BR')} ${numbersText}` : ''}`}
       data-table-status={filterStatus}
       data-operational-state={presentation.key}
       data-density={density}
@@ -79,8 +81,8 @@ export function SharedTableCard({
           <strong className={`block text-koma-foreground ${customName ? 'break-words text-sm' : 'font-serif text-3xl leading-none'}`}>{customName ? table.nome : table.id}</strong>
           {mergedSources.length > 0 && <span className="block text-[9px] text-koma-muted">+ mesas {mergedSources.join(', ')}</span>}
         </div>
-        {compact && occupied && <strong className="shrink-0 font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
-        {!compact && checkNumbers.length > 0 && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`Comanda ${numbersText}`}>Comanda {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
+        {compact && occupied && <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
+        {!compact && checkNumbers.length > 0 && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-1">
@@ -89,28 +91,22 @@ export function SharedTableCard({
         </div>
         {occupied && compact && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-koma-secondary">
           <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={11} aria-hidden="true" />{operational.elapsed}</span>
-          {operational.production.activeItemCount > 0 && <span>{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
+          {showItemCount && operational.production.activeItemCount > 0 && <span>{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>}
         </div>}
         {occupied && !compact && (
           <div className="border-t border-koma-border-subtle pt-2">
-            {footerAction ? (
-              <>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-koma-secondary">
-                  <span className="inline-flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
-                  <span className="inline-flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
-                </div>
-                <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
-                  <strong className="min-w-0 font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
-                  <div className="shrink-0">{footerAction}</div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-wrap items-end justify-between gap-2">
+            {showItemCount ? (
+              <div className="flex items-end justify-between gap-2">
                 <div className="space-y-1 text-[10px] text-koma-secondary">
-                  <span className="flex items-center gap-1 font-mono"><Clock3 size={10} />{operational.elapsed}</span>
+                  <span className="flex items-center gap-1 whitespace-nowrap font-mono"><Clock3 size={10} />{operational.elapsed}</span>
                   <span className="flex items-center gap-1"><UsersRound size={10} />{operational.production.activeItemCount} {operational.production.activeItemCount === 1 ? 'item' : 'itens'}</span>
                 </div>
-                <strong className="font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
+                <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <span className="flex items-center gap-1 whitespace-nowrap font-mono text-[10px] text-koma-secondary"><Clock3 size={10} />{operational.elapsed}</span>
+                <strong className="block whitespace-nowrap font-mono text-sm leading-none text-koma-foreground">{formattedTotal}</strong>
               </div>
             )}
           </div>

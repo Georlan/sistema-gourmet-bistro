@@ -35,18 +35,6 @@ export function waiterTableMatchesQuery(table: Table, query: string): boolean {
     || customName.includes(numberQuery);
 }
 
-export function openWaiterQuickOrder(tableId: number, onTableClick?: (tableId: number) => void) {
-  if (!onTableClick) return;
-  onTableClick(tableId);
-  if (typeof window === 'undefined' || typeof document === 'undefined') return;
-  const openOrderTab = () => document.getElementById('tab-lancamento-btn')?.click();
-  if (typeof window.requestAnimationFrame === 'function') {
-    window.requestAnimationFrame(() => window.requestAnimationFrame(openOrderTab));
-  } else {
-    window.setTimeout(openOrderTab, 0);
-  }
-}
-
 export function MesasView({
   salonTables,
   orders = [],
@@ -228,7 +216,7 @@ export function MesasView({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 w-full">
+      <div className="grid w-full auto-rows-[184px] grid-cols-2 items-stretch gap-2.5 min-[380px]:grid-cols-3 sm:grid-cols-4 sm:gap-3.5 md:grid-cols-5 xl:grid-cols-6">
         {filteredRows.length === 0 ? (
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
             {tableQuery.trim() ? 'Nenhuma mesa encontrada para esta busca.' : 'Nenhuma mesa encontrada neste status.'}
@@ -258,9 +246,6 @@ export function MesasView({
               onClick={(id) => {
                 if (!readOnly && onTableClick) onTableClick(id);
               }}
-              onQuickOrder={!readOnly && onTableClick
-                ? (id) => openWaiterQuickOrder(id, onTableClick)
-                : undefined}
               hasPendingPayment={hasPendingPayment}
               mergedSources={mergedSources}
               mergedIntoMesaId={mergedIntoMesaId}
