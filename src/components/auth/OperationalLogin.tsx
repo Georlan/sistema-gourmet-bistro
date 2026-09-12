@@ -3,6 +3,7 @@ import React from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { KomaLogo } from '../KomaLogo';
 import type { KomaTheme } from '../../config/theme';
+import { isOperationalAppHost } from '../../domain/komaHost';
 
 export interface LoginRestaurantOption {
   id: number;
@@ -31,6 +32,24 @@ export function OperationalLogin({
   restaurantOptions = [], restaurantId = '', onRestaurantChange,
   onToggleTheme, onUsernameChange, onPasswordChange, onSubmit,
 }: OperationalLoginProps) {
+  // app.komafood.com.br possui uma única tela de autenticação. Se o shell interno
+  // perder a sessão antes de o UnifiedOperationalEntry desmontá-lo, não exponha
+  // novamente os logins históricos de Caixa/Garçom nem por um frame perceptível.
+  if (portal !== 'unified' && isOperationalAppHost()) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
+        <div className="text-center">
+          <div className="flex justify-center">
+            <KomaLogo withText size="xl" />
+          </div>
+          <p className="mt-5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
+            Retornando ao acesso da equipe…
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const portalLabel = portal === 'unified'
     ? 'Acesso da equipe'
     : portal === 'caixa'
