@@ -19,6 +19,7 @@ export function useCashShift({
 }: Props) {
   // Turno & Sync state
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
+  const turnoRequestIdRef = useRef(0);
 
   // Modals state
   const [showAbrirModal, setShowAbrirModal] = useState(false);
@@ -41,6 +42,7 @@ export function useCashShift({
 
   // Fetch current shift status
   const fetchTurno = async () => {
+    const requestId = ++turnoRequestIdRef.current;
     try {
       setIsLoading(true);
       const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, {
@@ -48,12 +50,17 @@ export function useCashShift({
       });
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== turnoRequestIdRef.current) return;
         setTurno(data);
       }
     } catch (err) {
-      console.error('Error fetching shift status', err);
+      if (requestId === turnoRequestIdRef.current) {
+        console.error('Error fetching shift status', err);
+      }
     } finally {
-      setIsLoading(false);
+      if (requestId === turnoRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

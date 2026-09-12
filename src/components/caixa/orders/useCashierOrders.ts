@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { deriveProductionState } from '../../../domain/operationalState';
 import { describeTableOrders } from '../../../domain/tableReadModel';
 import type { Order } from '../../../types';
@@ -232,8 +232,10 @@ export function useCashierOrders({
   };
 
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
+  const deliveryOrdersRequestRef = useRef(0);
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
+  const motoboysRequestRef = useRef(0);
 
   const [selectedMotoboys, setSelectedMotoboys] = useState<{
     [orderId: string]: string;
@@ -348,31 +350,39 @@ export function useCashierOrders({
   };
 
   const fetchDeliveryOrders = async () => {
+    const requestId = ++deliveryOrdersRequestRef.current;
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, {
         headers: authHeaders,
       });
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== deliveryOrdersRequestRef.current) return;
         const mapped = data.map(mapComandaToDeliveryView);
         setDeliveryOrders(mapped);
       }
     } catch (err) {
-      console.error('Error fetching delivery orders', err);
+      if (requestId === deliveryOrdersRequestRef.current) {
+        console.error('Error fetching delivery orders', err);
+      }
     }
   };
 
   const fetchMotoboys = async () => {
+    const requestId = ++motoboysRequestRef.current;
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/motoboys/lista`, {
         headers: authHeaders,
       });
       if (res.ok) {
         const data = await res.json();
+        if (requestId !== motoboysRequestRef.current) return;
         setMotoboys(data);
       }
     } catch (err) {
-      console.error('Error fetching motoboys', err);
+      if (requestId === motoboysRequestRef.current) {
+        console.error('Error fetching motoboys', err);
+      }
     }
   };
 
