@@ -104,7 +104,9 @@ type BillingMethod = 'credit_card' | 'pix';
 type PaymentPreview = SubscriptionPaymentOptionId;
 
 type ActivationResult = {
-  restaurantId: string;
+  restaurantId?: string;
+  status?: 'ready' | 'awaiting_release';
+  message?: string;
   slug?: string;
   trialDays?: number;
   trialEndsAt?: string;
@@ -299,6 +301,14 @@ export default function PlanContractPage() {
         const response = await fetch(`${API_BASE_URL}/api/contracts/${receipt.protocol}/billing/status`);
         if (!response.ok) return;
         const payload = await response.json();
+        if (payload.billingStatus === 'ready' && !payload.isActivated) {
+          setPixData(null);
+          setActivationResult({
+            status: 'awaiting_release',
+            message: 'Pagamento confirmado. A equipe KÔMA foi avisada e fará a liberação do restaurante.',
+          });
+          return;
+        }
         if (payload.isActivated && payload.restaurantId) {
           if (signupToken) {
             const resumed = await fetch(`${API_BASE_URL}/api/signups/current`, { headers: { 'X-Signup-Token': signupToken } });
@@ -482,7 +492,9 @@ export default function PlanContractPage() {
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.detail || 'Falha ao autorizar o pagamento do plano.');
         setActivationResult({
-          restaurantId: String(payload.restaurantId),
+          restaurantId: payload.restaurantId ? String(payload.restaurantId) : undefined,
+          status: payload.status,
+          message: payload.message,
           slug: payload.slug || undefined,
           trialDays: payload.trialDays || 7,
           trialEndsAt: payload.trialEndsAt || undefined,
@@ -528,12 +540,13 @@ export default function PlanContractPage() {
         <main className="koma-sub-success-page">
           <section className="koma-sub-success-card">
             <span className="koma-sub-success-icon"><CheckCircle2 size={32} /></span>
-            <span className="koma-sub-eyebrow">CONTRATAÇÃO CONCLUÍDA</span>
-            <h1>Seu KÔMA está pronto.</h1>
-            <p>
-              O restaurante foi provisionado com sucesso. {billingMethod === 'credit_card'
+            <span className="koma-sub-eyebrow">{activationResult.status === 'awaiting_release' ? 'PAGAMENTO CONFIRMADO' : 'CONTRATAÇÃO CONCLUÍDA'}</span>
+            <h1>{activationResult.status === 'awaiting_release' ? 'Recebemos sua contratação.' : 'Seu KÔMA está pronto.'}</h1>
+            <p>{activationResult.status === 'awaiting_release'
+              ? (activationResult.message || 'A equipe KÔMA foi avisada e está revisando a liberação do restaurante. Você receberá o convite para criar sua senha assim que o acesso for aprovado.')
+              : <>O restaurante foi provisionado com sucesso. {billingMethod === 'credit_card'
                 ? `Seu período de ${activationResult.trialDays || 7} dias sem mensalidade fixa já começou.`
-                : 'O pagamento Pix foi confirmado e a ativação foi concluída.'}
+                : 'O pagamento Pix foi confirmado e a ativação foi concluída.'}</>}
             </p>
 
             {activationResult.trialEndsAt && (
@@ -549,7 +562,12 @@ export default function PlanContractPage() {
               </div>
             )}
 
-            {activationResult.activationToken ? (
+            {activationResult.status === 'awaiting_release' ? (
+              <div className="koma-sub-success-detail koma-sub-activation-pending">
+                <span>Próximo passo</span>
+                <strong>Aguarde o convite por e-mail ou WhatsApp para criar sua senha.</strong>
+              </div>
+            ) : activationResult.activationToken ? (
               <a
                 href={`/ativar#token=${encodeURIComponent(activationResult.activationToken)}`}
                 className="koma-sub-primary-action"

@@ -245,6 +245,13 @@ class Settings:
     KOMA_SAAS_BILLING_ENFORCEMENT_ENABLED: bool = (
         os.getenv("KOMA_SAAS_BILLING_ENFORCEMENT_ENABLED", "false").lower() == "true"
     )
+    # Mantém o pagamento e o provisionamento como etapas separadas. Quando
+    # habilitado, somente o SuperAdmin pode criar o restaurante depois que o
+    # gateway confirmar a cobrança.
+    KOMA_SAAS_MANUAL_RELEASE_REQUIRED: bool = (
+        os.getenv("KOMA_SAAS_MANUAL_RELEASE_REQUIRED", "false").lower() == "true"
+    )
+    KOMA_OWNER_EMAIL: str = os.getenv("KOMA_OWNER_EMAIL", "").strip().lower()
 
     # Mercado Pago SaaS Billing (Plataforma KÔMA - Assinaturas Recorrentes)
     KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN: str = (

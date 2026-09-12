@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { superAdminFetch } from './superAdminApi';
 type Signup = { id: string; restaurant_name: string; responsible_name: string; email: string; phone: string; plan: string; billing_cycle: string; status: string; inactive: boolean; updated_at: string; protocol: string | null };
-const labels: Record<string, string> = { started: 'Cadastro iniciado', payment_pending: 'Pagamento pendente', payment_failed: 'Pagamento recusado', activated: 'Acesso liberado' };
+const labels: Record<string, string> = { started: 'Cadastro iniciado', payment_pending: 'Pagamento pendente', payment_failed: 'Pagamento recusado', awaiting_release: 'Aguardando liberação', activated: 'Acesso liberado' };
 export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string }) {
   const [items, setItems] = useState<Signup[]>([]);
   const [deliveryFailures, setDeliveryFailures] = useState<{ id: string; status: string; attempts: number; last_error?: string }[]>([]);
