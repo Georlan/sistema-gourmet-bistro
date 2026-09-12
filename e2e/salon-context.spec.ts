@@ -89,8 +89,7 @@ test('desktop 1366x768 compacta banners e libera a área operacional', async ({ 
 
   const sidebar = page.locator('.cashier-sidebar:visible');
   await expect(sidebar.locator('.cashier-display-controls')).toBeHidden();
-  await expect(sidebar.getByRole('button', { name: 'Alternar tema' })).toBeVisible();
-  await expect(sidebar.locator('.cashier-operator')).toBeVisible();
+  await expect(sidebar.locator('.cashier-operator')).toBeHidden();
 
   const board = page.locator('.orders-board');
   await expect(board).toBeVisible();

@@ -56,7 +56,7 @@ jobs:
 
           specs=("${canonical_specs[@]}")
           for changed_spec in "${changed_specs[@]}"; do
-            if [[ ! " ${specs[*]} " =~ " ${changed_spec} " ]]; then
+            if [[ -n "${changed_spec}" ]] && [[ -f "${changed_spec}" ]] && [[ ! " ${specs[*]} " =~ " ${changed_spec} " ]]; then
               specs+=("${changed_spec}")
             fi
           done
