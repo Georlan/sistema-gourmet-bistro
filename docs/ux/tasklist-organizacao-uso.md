@@ -9,7 +9,7 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [x] Caixa: revisar hierarquia visual do checkout em mobile e desktop com fluxo real de recebimento; ação principal agora explicita contexto + valor e modais ficam acima do chrome móvel.
 - [x] Caixa: reconciliar pedidos digitais e turno imediatamente ao retomar aba/janela, sem adicionar polling concorrente ao WebSocket.
 - [x] Caixa: impedir respostas de leitura fora de ordem de regredirem pedidos/turno após retomada do background.
-- [ ] Caixa: tornar avanço do Kanban otimista com rollback seguro e proteção contra respostas fora de ordem; concluir a fatia restante do PR #319 sobre a main atual.
+- [x] Caixa: avanço do Kanban digital otimista, com trava por pedido, rollback em erro e proteção contra leituras/realtime que tentem regredir a mutação pendente.
 - [ ] App do Garçom: testar fluxo mesa livre → pedido → consumo → fechamento em mobile real/simulado e remover passos redundantes.
 - [ ] Impressão: consolidar diagnóstico, configuração e teste em uma sequência operacional curta.
 
