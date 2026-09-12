@@ -193,7 +193,10 @@ export default function PlanContractPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(initialPlanId);
   const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>(initialBillingCycle);
-  const [billingMethod, setBillingMethod] = useState<BillingMethod>(initialBillingCycle === 'anual' ? 'pix' : 'credit_card');
+  // Lead with the no-charge trial on both cycles. Pix remains available as the
+  // upfront annual alternative, but should not be the default choice because
+  // its full annual amount is due immediately.
+  const [billingMethod, setBillingMethod] = useState<BillingMethod>('credit_card');
   const [paymentPreview, setPaymentPreview] = useState<PaymentPreview | null>(null);
   const [form, setForm] = useState<ContractForm>(EMPTY_FORM);
   const [accepted, setAccepted] = useState(false);
@@ -716,7 +719,7 @@ export default function PlanContractPage() {
                   <strong>{formatCurrency(pricing.monthly)}/mês</strong>
                   <small>Flexível, renovação mensal.</small>
                 </button>
-                <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => { setBillingCycle('anual'); setBillingMethod('pix'); }}>
+                  <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => { setBillingCycle('anual'); setBillingMethod('credit_card'); }}>
                   <span>Anual <em>Economize 10%</em></span>
                   <strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong>
                   <small>{formatCurrency(pricing.annualTotal)} no ano · economia de {formatCurrency(pricing.annualSavings)}. Valor mensal equivalente não representa 12 parcelas.</small>
