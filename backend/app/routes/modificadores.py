@@ -23,6 +23,11 @@ from ..schemas import (
     VendaDiretaCreate,
 )
 from ..security import get_current_user, require_permission
+from ..services.atendimentos import (
+    AtendimentoError,
+    materialize_table_accounts_for_write,
+    principal_command_for_table,
+)
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -385,7 +390,47 @@ def criar_venda_direta_com_modificadores(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Venda do Caixa com o mesmo Core de Pedidos e IDs de complementos."""
+    """Venda do Caixa preservando complementos e a família ativa da mesa."""
+    normalized_type = (payload.tipo or "").strip().casefold()
+    is_local = normalized_type in {"consumo no local", "mesa", "local"}
+
+    # O PDV do Caixa usa sempre este endpoint, inclusive quando nenhum item tem
+    # complemento. Se a mesa já possui atendimento, um novo clique é um novo
+    # lote da MESMA família (#9-A -> #9-B), não uma nova conta numérica.
+    if is_local and payload.mesa_id is not None:
+        rid = require_tenant_id()
+        try:
+            materialize_table_accounts_for_write(
+                db,
+                rid,
+                int(payload.mesa_id),
+                actor_id=current_user.id,
+            )
+            principal = principal_command_for_table(db, rid, int(payload.mesa_id))
+            if principal is not None:
+                launch_payload = LancamentoComModificadoresCreate(
+                    garcom_id=payload.garcom_id or current_user.id,
+                    origem=(
+                        "smartpos"
+                        if getattr(payload, "origem", None) == "smartpos"
+                        else None
+                    ),
+                    idempotency_key=payload.idempotency_key,
+                    itens=payload.itens,
+                )
+                WaiterModifiersAdapter.handle_launch_items(
+                    comanda_id=principal.id,
+                    lancamento_in=launch_payload,
+                    background_tasks=background_tasks,
+                    db=db,
+                    current_user=current_user,
+                )
+                db.refresh(principal)
+                return principal
+        except AtendimentoError as exc:
+            db.rollback()
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
     return PosAdapter.handle_create_pos_order(
         venda_in=payload,
         background_tasks=background_tasks,

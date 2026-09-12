@@ -194,3 +194,64 @@ def test_direct_sale_on_occupied_table_keeps_base_number_and_advances_letter():
         assert "SEGUNDO LOTE" in job.payload_text
     finally:
         db.close()
+
+
+def test_cashier_modifier_endpoint_keeps_same_table_family_across_three_orders():
+    endpoint = "/cardapio/modificadores/venda-direta"
+
+    def submit(observation: str, key: str):
+        return client.post(
+            endpoint,
+            headers=_headers(),
+            json={
+                "mesa_id": 1,
+                "garcom_id": USER,
+                "tipo": "Mesa",
+                "identificador": None,
+                "idempotency_key": key,
+                "itens": [
+                    {
+                        "produto_id": PRODUCT,
+                        "observacao": observation,
+                        "cliente_nome": "Consumo Geral",
+                        "modificador_ids": [],
+                    }
+                ],
+            },
+        )
+
+    first = submit("LOTE A PELO PDV REAL", "same-table-mod-a-1972")
+    assert first.status_code == 200, first.text
+    base = first.json()["numero_pedido"]
+
+    second = submit("LOTE B PELO PDV REAL", "same-table-mod-b-1972")
+    assert second.status_code == 200, second.text
+    assert second.json()["numero_pedido"] == base
+
+    third = submit("LOTE C PELO PDV REAL", "same-table-mod-c-1972")
+    assert third.status_code == 200, third.text
+    assert third.json()["numero_pedido"] == base
+
+    families = _families()
+    assert len(families) == 1
+    assert families[0]["numero_conta"] == base
+    assert [entry["pedido_id"] for entry in families[0]["lancamentos"]] == [
+        f"{base}-A",
+        f"{base}-B",
+        f"{base}-C",
+    ]
+
+    db = SessionLocal()
+    try:
+        payloads = [
+            job.payload_text
+            for job in db.query(PrintJob)
+            .filter(PrintJob.restaurante_id == TENANT)
+            .order_by(PrintJob.id.asc())
+            .all()
+        ]
+        assert any(f"PEDIDO #{base}-A" in payload for payload in payloads)
+        assert any(f"PEDIDO #{base}-B" in payload for payload in payloads)
+        assert any(f"PEDIDO #{base}-C" in payload for payload in payloads)
+    finally:
+        db.close()
