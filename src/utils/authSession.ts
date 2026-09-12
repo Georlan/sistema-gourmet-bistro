@@ -66,6 +66,28 @@ function persistCanonicalSession(session: OperatorSession): void {
   }));
 }
 
+function persistScopedAliases(token: string, user: OperatorIdentitySnapshot): void {
+  const portal = identityPortal(user);
+  if (portal === 'garcom') {
+    clearKeys(CAIXA_ALIAS_KEYS);
+    localStorage.setItem('koma_waiter_token', token);
+    if (user.id != null) localStorage.setItem('koma_waiter_id', String(user.id));
+    if (user.nome) localStorage.setItem('koma_waiter_name', user.nome);
+    localStorage.setItem('koma_user_role', String(user.role || user.cargo || 'garcom'));
+    return;
+  }
+
+  clearKeys(WAITER_ALIAS_KEYS);
+  localStorage.setItem('koma_caixa_token', token);
+  // O app operacional e o WebSocket ainda compartilham estas chaves legadas.
+  // Elas serão retiradas na fase seguinte, junto da migração para sessão HttpOnly.
+  if (user.id != null) localStorage.setItem('koma_caixa_id', String(user.id));
+  if (user.nome) localStorage.setItem('koma_caixa_name', user.nome);
+  if (user.role || user.cargo) {
+    localStorage.setItem('koma_caixa_role', String(user.role || user.cargo));
+  }
+}
+
 // Salva a sessão operacional canônica com 24 horas de validade. O papel
 // autenticado decide quais aliases legados permanecem ativos: nunca deixamos
 // credenciais simultâneas de Caixa e Garçom disputarem a mesma URL.
@@ -78,30 +100,7 @@ export function saveOperatorSession(token: string, user: any): void {
   };
   persistCanonicalSession(session);
   localStorage.removeItem('token');
-
-  const portal = identityPortal(minimalUser);
-  if (portal === 'garcom') {
-    clearKeys(CAIXA_ALIAS_KEYS);
-    localStorage.setItem('koma_waiter_token', token);
-    if (minimalUser.id != null) localStorage.setItem('koma_waiter_id', String(minimalUser.id));
-    if (minimalUser.nome) localStorage.setItem('koma_waiter_name', minimalUser.nome);
-    localStorage.setItem('koma_user_role', String(minimalUser.role || minimalUser.cargo || 'garcom'));
-    return;
-  }
-
-  clearKeys(WAITER_ALIAS_KEYS);
-  localStorage.setItem('koma_caixa_token', token);
-  // O app operacional e o WebSocket ainda compartilham estas chaves legadas.
-  // Elas serão retiradas na fase seguinte, junto da migração para sessão HttpOnly.
-  if (minimalUser.id != null) {
-    localStorage.setItem('koma_caixa_id', String(minimalUser.id));
-  }
-  if (minimalUser.nome) {
-    localStorage.setItem('koma_caixa_name', minimalUser.nome);
-  }
-  if (minimalUser.role || minimalUser.cargo) {
-    localStorage.setItem('koma_caixa_role', String(minimalUser.role || minimalUser.cargo));
-  }
+  persistScopedAliases(token, minimalUser);
 }
 
 // Recupera a sessão operacional e limpa automaticamente se tiver mais de 24h.
@@ -145,8 +144,10 @@ export function getOperatorSession(): OperatorSession | null {
     }
 
     // Migração one-way: versões antigas persistiam o objeto completo de usuário.
-    // Reescrever no primeiro acesso remove PII que não é necessária ao shell.
+    // Reescrever no primeiro acesso remove PII e também corrige aliases de portal
+    // deixados por versões que gravavam garçom como se fosse Caixa.
     persistCanonicalSession(session);
+    persistScopedAliases(session.token, session.user);
     return session;
   } catch (e) {
     clearOperatorSession();
