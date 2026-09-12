@@ -4,6 +4,8 @@ import pytest
 from sqlalchemy import text
 from app.routes import signups, saas_billing
 from app.routes.super_admin import get_current_admin
+from app.config import settings
+from app.models import Restaurante
 from app.signup_models import RestaurantSignup, SignupNotification
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services import signup_notifications
@@ -115,6 +117,55 @@ def test_card_without_authorization_never_activates(client_and_session, monkeypa
     with Session() as db:
         assert db.query(SaaSSubscription).count() == 0
         assert db.query(SaaSBillingSetup).one().status == 'pending'
+
+
+def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    monkeypatch.setattr(settings, 'KOMA_SAAS_MANUAL_RELEASE_REQUIRED', True)
+    monkeypatch.setattr(settings, 'KOMA_OWNER_EMAIL', 'owner@example.com')
+    monkeypatch.setenv('KOMA_OWNER_WHATSAPP_PHONE', '5585999999999')
+    protocol = client.post('/api/contracts/accept', json=_contract_payload()).json()['protocol']
+
+    response = client.post(
+        f'/api/contracts/{protocol}/billing/setup',
+        json={'payment_method_type':'credit_card','card_token_id':'test-token'},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'awaiting_release'
+    assert response.json().get('restaurantId') is None
+    with Session() as db:
+        assert db.query(Restaurante).count() == 0
+        setup = db.query(SaaSBillingSetup).one()
+        assert setup.status == 'ready'
+        assert setup.restaurante_id is None
+        releases = db.query(SignupNotification).filter(SignupNotification.id.like(f'{protocol}:release-required:%')).all()
+        assert {item.id.rsplit(':', 1)[-1] for item in releases} == {'email', 'whatsapp'}
+
+
+def test_approved_pix_waits_for_manual_release(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    monkeypatch.setattr(settings, 'KOMA_SAAS_MANUAL_RELEASE_REQUIRED', True)
+    protocol = client.post('/api/contracts/accept', json=_contract_payload('pocket','anual')).json()['protocol']
+    payment_id = client.post(
+        f'/api/contracts/{protocol}/billing/setup', json={'payment_method_type':'pix'}
+    ).json()['paymentId']
+    monkeypatch.setattr(default_saas_mp_service, 'verify_webhook_signature', lambda **kwargs: True)
+    monkeypatch.setattr(default_saas_mp_service, 'get_payment', lambda key: _verified_pix_payment(key, protocol))
+
+    response = client.post(
+        '/api/integrations/saas-billing/mercado-pago/webhook',
+        json={'type':'payment', 'data':{'id':payment_id}},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()['releaseStatus'] == 'awaiting_release'
+    assert response.json()['activated'] is False
+    with Session() as db:
+        setup = db.query(SaaSBillingSetup).one()
+        assert setup.status == 'ready'
+        assert setup.restaurante_id is None
+        assert db.query(Restaurante).count() == 0
 
 
 def test_recurring_authorization_is_not_payment_and_invoice_replay_does_not_extend_access(client_and_session, monkeypatch):

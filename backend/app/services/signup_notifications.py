@@ -42,6 +42,25 @@ def enqueue_activation(db, *, protocol, restaurant_name, representative_name, em
     enqueue(db, protocol=protocol, kind="activation", email=email, phone=phone, subject="Crie sua senha — KÔMA", message=f"Olá, {representative_name}! O {restaurant_name} está liberado. Crie sua senha: {link} . Link pessoal válido por 72 horas. No primeiro acesso, importe o cardápio, confira preços, configure horários e faça um pedido de teste.")
 
 
+def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cycle):
+    """Avisa o operador uma única vez quando um pagamento aguarda liberação manual."""
+    owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
+    message = (
+        f"Pagamento confirmado para {restaurant_name}. Protocolo: {protocol}. "
+        f"Plano: {plan} ({billing_cycle}). Revise e libere o acesso na aba "
+        f"Contratações do SuperAdmin: {settings.KOMA_PUBLIC_APP_URL}/super-admin"
+    )
+    enqueue(
+        db,
+        protocol=protocol,
+        kind="release-required",
+        email=settings.KOMA_OWNER_EMAIL,
+        phone=owner_phone,
+        subject="Restaurante aguardando liberação — KÔMA",
+        message=message,
+    )
+
+
 def _deliver(payload, delivery_id):
     if payload["channel"] == "email":
         if not settings.RESEND_API_KEY or not settings.EMAIL_FROM:

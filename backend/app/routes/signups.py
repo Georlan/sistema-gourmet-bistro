@@ -144,7 +144,13 @@ def list_signups(response: Response, admin=Depends(get_current_admin), db=Depend
         updated = row["updated_at"]
         if isinstance(updated, str): updated = dt.datetime.fromisoformat(updated)
         if updated.tzinfo is None: updated = updated.replace(tzinfo=dt.timezone.utc)
-        status = "activated" if row["restaurante_id"] else "payment_failed" if row["billing_status"] == "failed" else "payment_pending" if row["protocol"] else "started"
+        status = (
+            "activated" if row["restaurante_id"]
+            else "awaiting_release" if row["billing_status"] == "ready"
+            else "payment_failed" if row["billing_status"] == "failed"
+            else "payment_pending" if row["protocol"]
+            else "started"
+        )
         items.append({"id": row["id"], **json.loads(decrypt_field(row["payload_encrypted"])), "status": status, "inactive": status != "activated" and now-updated > dt.timedelta(hours=24), "updated_at": updated.isoformat(), "protocol": row["protocol"], "restaurant_id": row["restaurante_id"]})
     return {"items": items, "limit": 200}
 

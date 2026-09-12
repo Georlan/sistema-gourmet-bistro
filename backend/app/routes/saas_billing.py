@@ -28,6 +28,7 @@ from ..services.saas_mercadopago import (
     SaasMercadoPagoError,
     default_saas_mp_service,
 )
+from ..services.signup_notifications import enqueue_release_required
 from ..subscription import subscription_annual_total, subscription_monthly_price
 
 logger = logging.getLogger("koma.routes.saas_billing")
@@ -93,7 +94,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
     """
     Configura o método de pagamento para o contrato assinado.
     Para cartão de crédito (Arquitetura B): cria o preapproval com 7 dias de trial no Mercado Pago
-    e ativa atomicamente o tenant e sua assinatura no KÔMA.
+    e, conforme a configuração operacional, aguarda liberação manual ou ativa o tenant.
     Para Pix: gera o pagamento Pix para plano anual.
     """
     if not default_saas_mp_service.checkout_capabilities().get(payload.payment_method_type):
@@ -131,6 +132,20 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
     renewal_reference = None
     existing = get_billing_setup(db, normalized_protocol)
     if existing and existing.status == "ready":
+        if settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED:
+            enqueue_release_required(
+                db,
+                protocol=normalized_protocol,
+                restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
+                plan=plan,
+                billing_cycle=canonical_cycle,
+            )
+            db.commit()
+            return {
+                "success": True,
+                "status": "awaiting_release",
+                "message": "Pagamento confirmado. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
+            }
         provision_res = provision_restaurant_for_contract(db, acceptance=acceptance, billing_setup=existing, actor="saas_checkout", background_tasks=background_tasks)
         return {"success": True, "status": "ready", "restaurantId": str(provision_res["restaurant_id"]), "slug": provision_res["slug"], "trialDays": 7, "trialEndsAt": provision_res["trial_ends_at"].isoformat(), "activationToken": provision_res.get("invitation_token")}
     if existing and existing.status == "pending" and existing.payment_method_type == "credit_card":
@@ -216,7 +231,22 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
         )
         db.commit()
 
-        # Ativação imediata do tenant (Arquitetura B)
+        if settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED:
+            enqueue_release_required(
+                db,
+                protocol=normalized_protocol,
+                restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
+                plan=plan,
+                billing_cycle=canonical_cycle,
+            )
+            db.commit()
+            return {
+                "success": True,
+                "status": "awaiting_release",
+                "message": "Pagamento autorizado. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
+            }
+
+        # Ativação imediata quando a operação não exige revisão manual.
         billing_setup = get_billing_setup(db, normalized_protocol)
         provision_res = provision_restaurant_for_contract(
             db,
@@ -290,7 +320,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             "qrCodeBase64": pix_res.get("qr_code_base64"),
             "ticketUrl": pix_res.get("ticket_url"),
             "expiresAt": pix_res.get("expires_at"),
-            "message": "Pix gerado com sucesso. Seu restaurante será ativado automaticamente assim que o pagamento for aprovado.",
+            "message": "Pix gerado com sucesso. A confirmação do pagamento será verificada automaticamente.",
         }
 
 
@@ -490,6 +520,18 @@ async def mercado_pago_saas_webhook(
                     billing_cycle=billing.billing_cycle,
                 )
                 db.commit()
+
+                if settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED:
+                    enqueue_release_required(
+                        db,
+                        protocol=billing.protocol,
+                        restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
+                        plan=plan,
+                        billing_cycle=str(billing.billing_cycle or "annual"),
+                    )
+                    db.commit()
+                    logger.info("Payment confirmed; protocol %s awaits manual release", billing.protocol)
+                    return {"status": "received", "activated": False, "paymentStatus": provider_status, "releaseStatus": "awaiting_release"}
 
                 if not billing.restaurante_id:
                     billing_setup_data = get_billing_setup(db, billing.protocol)
