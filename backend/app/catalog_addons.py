@@ -3,7 +3,7 @@
 Este módulo mantém os vínculos por categoria separados do cadastro de produtos:
 - CategoriaRelacao representa a árvore lógica sem mover produtos de categoria.
 - CategoriaGrupoModificador define prioridade/recomendação por categoria e herança.
-- Grupos opcionais continuam disponíveis globalmente no restaurante.
+- Grupos só aparecem quando vinculados ao produto, categoria ou ancestral aplicável.
 - effective_modifier_payloads_by_product é a única resolução usada pelos canais.
 """
 from __future__ import annotations
@@ -189,12 +189,12 @@ def effective_modifier_group_ids_by_product(
     restaurante_id: int,
     products: Sequence[Produto] | None = None,
 ) -> dict[str, tuple[str, ...]]:
-    """Resolve grupos válidos: recomendados primeiro + opcionais globais.
+    """Resolve apenas grupos explicitamente aplicáveis a cada produto.
 
-    Grupos obrigatórios permanecem restritos aos vínculos explícitos para não
-    transformar uma configuração específica em exigência para todo o cardápio.
-    Grupos opcionais (min=0 e tipo opcional) ficam disponíveis em qualquer
-    produto do mesmo tenant, permitindo pedidos operacionais fora do padrão.
+    Um grupo entra no produto por vínculo direto ou por categoria/ancestral com
+    herança habilitada. Grupos opcionais sem vínculo não vazam para o restante
+    do cardápio; isso evita combinações sem sentido, como adicionais de
+    hambúrguer em bebidas.
     """
     if products is None:
         products = (
@@ -203,37 +203,11 @@ def effective_modifier_group_ids_by_product(
             .all()
         )
     products = list(products)
-
-    recommended = _recommended_modifier_group_ids_by_product(
+    return _recommended_modifier_group_ids_by_product(
         db,
         restaurante_id,
         products,
     )
-    global_optional_groups = (
-        db.query(GrupoModificador)
-        .filter(GrupoModificador.restaurante_id == restaurante_id)
-        .all()
-    )
-    global_optional_ids = [
-        str(group.id)
-        for group in sorted(
-            global_optional_groups,
-            key=lambda item: (normalize_catalog_name(item.nome), str(item.id)),
-        )
-        if int(group.min_selecoes or 0) == 0
-        and normalize_catalog_name(group.tipo or "opcional") == "opcional"
-    ]
-
-    resolved: dict[str, tuple[str, ...]] = {}
-    for product in products:
-        ordered = list(recommended.get(str(product.id), ()))
-        seen = set(ordered)
-        for group_id in global_optional_ids:
-            if group_id not in seen:
-                seen.add(group_id)
-                ordered.append(group_id)
-        resolved[str(product.id)] = tuple(ordered)
-    return resolved
 
 
 def effective_modifier_payloads_by_product(

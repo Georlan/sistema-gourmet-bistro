@@ -115,7 +115,7 @@ def test_hamburger_suggestions_are_idempotent_and_inherited_by_children():
         db.close()
 
 
-def test_optional_addons_are_global_but_required_groups_stay_scoped():
+def test_hamburger_addons_do_not_leak_to_drinks_and_category_links_remain_available():
     db = _session()
     try:
         _seed_restaurant(db, 776, "addons-776")
@@ -125,19 +125,13 @@ def test_optional_addons_are_global_but_required_groups_stay_scoped():
             nome="Hambúrgueres Bovinos",
             destino_impressao="COZINHA",
         )
-        baguettes = Categoria(
-            id="cat-baguettes",
+        juices = Categoria(
+            id="cat-juices",
             restaurante_id=776,
-            nome="Baguetes",
-            destino_impressao="COZINHA",
+            nome="Sucos",
+            destino_impressao="BAR",
         )
-        pasteis = Categoria(
-            id="cat-pasteis",
-            restaurante_id=776,
-            nome="Pastéis",
-            destino_impressao="COZINHA",
-        )
-        db.add_all([burgers, baguettes, pasteis])
+        db.add_all([burgers, juices])
         db.flush()
         burger = Produto(
             id="burger-1",
@@ -146,24 +140,18 @@ def test_optional_addons_are_global_but_required_groups_stay_scoped():
             nome="Burger",
             preco=25.0,
         )
-        baguette = Produto(
-            id="baguette-1",
+        juice = Produto(
+            id="juice-1",
             restaurante_id=776,
-            categoria_id=baguettes.id,
-            nome="Baguete de Cupim",
-            preco=36.0,
+            categoria_id=juices.id,
+            nome="Suco de Goiaba 500mL",
+            preco=8.0,
         )
-        pastel = Produto(
-            id="pastel-1",
-            restaurante_id=776,
-            categoria_id=pasteis.id,
-            nome="Pastel de Frango",
-            preco=22.0,
-        )
-        db.add_all([burger, baguette, pastel])
+        db.add_all([burger, juice])
         db.flush()
 
         ensure_hamburger_addon_suggestions(db, 776)
+
         required = GrupoModificador(
             id="gmod-required-point",
             restaurante_id=776,
@@ -172,9 +160,17 @@ def test_optional_addons_are_global_but_required_groups_stay_scoped():
             max_selecoes=1,
             tipo="obrigatorio",
         )
-        db.add(required)
+        drink_size = GrupoModificador(
+            id="gmod-drink-size",
+            restaurante_id=776,
+            nome="Tamanho da bebida",
+            min_selecoes=0,
+            max_selecoes=1,
+            tipo="opcional",
+        )
+        db.add_all([required, drink_size])
         db.flush()
-        db.add(
+        db.add_all([
             OpcaoModificador(
                 id="opmod-required-well",
                 restaurante_id=776,
@@ -182,21 +178,32 @@ def test_optional_addons_are_global_but_required_groups_stay_scoped():
                 nome="Bem passado",
                 preco_adicional=0,
                 ativo=True,
-            )
-        )
-        db.add(
+            ),
+            OpcaoModificador(
+                id="opmod-drink-700",
+                restaurante_id=776,
+                grupo_id=drink_size.id,
+                nome="700mL",
+                preco_adicional=3,
+                ativo=True,
+            ),
             ProdutoGrupoModificador(
                 restaurante_id=776,
                 produto_id=burger.id,
                 grupo_id=required.id,
-            )
-        )
+            ),
+            CategoriaGrupoModificador(
+                restaurante_id=776,
+                categoria_id=juices.id,
+                grupo_id=drink_size.id,
+                incluir_subcategorias=True,
+            ),
+        ])
         db.commit()
 
-        payload = effective_modifier_payloads_by_product(db, 776, [burger, baguette, pastel])
+        payload = effective_modifier_payloads_by_product(db, 776, [burger, juice])
         burger_groups = payload[burger.id]
-        baguette_groups = payload[baguette.id]
-        pastel_groups = payload[pastel.id]
+        juice_groups = payload[juice.id]
 
         assert {group["nome"] for group in burger_groups} >= {
             "Queijos e Cremosos",
@@ -208,16 +215,14 @@ def test_optional_addons_are_global_but_required_groups_stay_scoped():
         }
         assert next(group for group in burger_groups if group["nome"] == "Ponto da Carne")["recomendado"] is True
 
-        for general_groups in (baguette_groups, pastel_groups):
-            assert {group["nome"] for group in general_groups} == {
-                "Queijos e Cremosos",
-                "Carnes e Proteínas",
-                "Molhos e Sabores",
-                "Vegetais e Extras",
-                "Pães",
-            }
-            assert all(group["recomendado"] is False for group in general_groups)
-            assert "Ponto da Carne" not in {group["nome"] for group in general_groups}
+        assert {group["nome"] for group in juice_groups} == {"Tamanho da bebida"}
+        assert all(group["recomendado"] is True for group in juice_groups)
+        assert "Carnes e Proteínas" not in {group["nome"] for group in juice_groups}
+        assert "Bacon Fatiado" not in {
+            option["nome"]
+            for group in juice_groups
+            for option in group["opcoes"]
+        }
     finally:
         db.close()
 
