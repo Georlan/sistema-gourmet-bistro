@@ -5,6 +5,8 @@ import test from 'node:test';
 const settings = readFileSync('src/components/caixa/settings/CashierSettings.tsx', 'utf8');
 const appearance = readFileSync('src/components/caixa/settings/CashierAppearanceSettings.tsx', 'utf8');
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
+const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiterSettings.tsx', 'utf8');
+const waiterPermissions = readFileSync('src/components/caixa/settings/waiterPermissions.ts', 'utf8');
 
 test('cashier settings expose task groups and remember the last operator section', () => {
   assert.match(settings, /CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab'/);
@@ -75,4 +77,26 @@ test('cashier printing settings separates state and diagnostics, coupon, and del
 
   // Contrato do controller preservado
   assert.match(printing, /ReturnType<typeof useCashierSettings>/);
+});
+
+test('waiter settings separate actionable permissions from future capabilities and use operational labels', () => {
+  assert.match(waiterSettings, /WAITER_SETTINGS_GROUPS/);
+  assert.match(waiterSettings, /label: 'Pedidos'/);
+  assert.match(waiterSettings, /label: 'Fechamento'/);
+  assert.match(waiterSettings, /label: 'Atendimento'/);
+  assert.match(waiterSettings, /Ações disponíveis agora/);
+  assert.match(waiterSettings, /Ainda não disponível/);
+  assert.match(waiterSettings, /Em preparação/);
+  assert.match(waiterSettings, /availablePermissions\.map/);
+  assert.match(waiterSettings, /unavailablePermissions\.map/);
+  assert.match(waiterSettings, /setConfigSalSubTab\(group\.id\)/);
+  assert.doesNotMatch(waiterSettings, /as any/);
+  assert.match(waiterSettings, /updateConfiguracoes\(\{ \[item\.key\]: event\.target\.checked \}\)/);
+  assert.match(waiterSettings, /ReturnType<typeof useCashierSettings>/);
+
+  assert.match(waiterPermissions, /title: 'Criar pedidos de delivery'/);
+  assert.match(waiterPermissions, /title: 'Editar pedidos em andamento'/);
+  assert.match(waiterPermissions, /title: 'Fechar conta pelo app'/);
+  assert.match(waiterPermissions, /title: 'Transferir mesa ou comanda'/);
+  assert.doesNotMatch(waiterPermissions, /title: 'Permitir que/);
 });
