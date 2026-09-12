@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Activity, CheckCircle2, Grid2X2, Utensils } from 'lucide-react';
+import { Activity, CheckCircle2, Grid2X2, Search, Utensils, X } from 'lucide-react';
 import { Table, Order, DraftItem } from '../../types';
 import { MesaCard } from '../MesaCard';
 import { countWaiterSalonTables, projectWaiterSalonTables, type WaiterSalonRow } from '../../domain/waiterSalonProjection';
@@ -25,6 +25,28 @@ export interface MesasViewProps {
   rows?: readonly WaiterSalonRow[];
 }
 
+export function waiterTableMatchesQuery(table: Table, query: string): boolean {
+  const normalized = query.trim().toLocaleLowerCase('pt-BR');
+  if (!normalized) return true;
+  const numberQuery = normalized.replace(/^mesa\s*/i, '').trim();
+  const customName = String(table.nome || '').toLocaleLowerCase('pt-BR');
+  return String(table.id).includes(numberQuery)
+    || customName.includes(normalized)
+    || customName.includes(numberQuery);
+}
+
+export function openWaiterQuickOrder(tableId: number, onTableClick?: (tableId: number) => void) {
+  if (!onTableClick) return;
+  onTableClick(tableId);
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const openOrderTab = () => document.getElementById('tab-lancamento-btn')?.click();
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(openOrderTab));
+  } else {
+    window.setTimeout(openOrderTab, 0);
+  }
+}
+
 export function MesasView({
   salonTables,
   orders = [],
@@ -41,6 +63,8 @@ export function MesasView({
   rows,
 }: MesasViewProps) {
   const [internalFilter, setInternalFilter] = useState<'todos' | 'livres' | 'ocupadas' | 'prontas'>('todos');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [tableQuery, setTableQuery] = useState('');
   const currentFilter = externalFilter ?? internalFilter;
 
   const tableRows = useMemo(() =>
@@ -50,16 +74,35 @@ export function MesasView({
   const counts = useMemo(() => countWaiterSalonTables(tableRows, showOperationalStatus),
     [tableRows, showOperationalStatus]);
 
-  const filteredRows = useMemo(() => tableRows.filter(({ operationalState }) => {
+  const filteredRows = useMemo(() => tableRows.filter(({ table, operationalState }) => {
+    if (!waiterTableMatchesQuery(table, tableQuery)) return false;
     if (currentFilter === 'livres') return operationalState.occupancy === 'FREE';
     if (currentFilter === 'ocupadas') return operationalState.occupancy === 'IN_SERVICE';
     if (currentFilter === 'prontas') return showOperationalStatus && operationalState.production.hasReadyItems;
     return true;
-  }), [currentFilter, tableRows, showOperationalStatus]);
+  }), [currentFilter, tableRows, showOperationalStatus, tableQuery]);
 
   const handleFilterSelect = (filter: typeof currentFilter) => {
     if (onFilterChange) onFilterChange(filter);
     else setInternalFilter(filter);
+  };
+
+  const openSearch = () => {
+    setSearchOpen(true);
+    if (currentFilter !== 'todos') handleFilterSelect('todos');
+  };
+
+  const closeSearch = () => {
+    setTableQuery('');
+    setSearchOpen(false);
+  };
+
+  const openSearchResult = () => {
+    if (readOnly || !onTableClick || !tableQuery.trim()) return;
+    const normalized = tableQuery.trim().toLocaleLowerCase('pt-BR').replace(/^mesa\s*/i, '').trim();
+    const exact = filteredRows.find(({ table }) => String(table.id) === normalized);
+    const target = exact || (filteredRows.length === 1 ? filteredRows[0] : undefined);
+    if (target) onTableClick(target.table.id);
   };
 
   const filters = [
@@ -115,9 +158,49 @@ export function MesasView({
       </section>
 
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-koma-border-subtle pb-4">
-        <div className="flex items-center gap-2 text-koma-subtle">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-koma-subtle">
           <Activity size={14} className="text-koma-accent" />
           <span className="text-[10px] font-bold uppercase tracking-[0.14em]">Filtrar mesas</span>
+
+          {!readOnly && !searchOpen && (
+            <button
+              id="waiter-table-search-toggle"
+              type="button"
+              onClick={openSearch}
+              className="ml-1 inline-flex min-h-8 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-2.5 text-[10px] font-bold text-koma-muted transition-colors hover:bg-koma-raised hover:text-koma-foreground"
+              aria-label="Ir para uma mesa"
+            >
+              <Search size={13} /> Ir para mesa
+            </button>
+          )}
+
+          {!readOnly && searchOpen && (
+            <div className="relative ml-1 min-w-[180px] flex-1 sm:flex-initial">
+              <Search size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-koma-muted" />
+              <input
+                id="waiter-table-search-input"
+                autoFocus
+                inputMode="numeric"
+                value={tableQuery}
+                onChange={(event) => setTableQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') openSearchResult();
+                  if (event.key === 'Escape') closeSearch();
+                }}
+                placeholder="Mesa 27..."
+                aria-label="Buscar mesa por número ou nome"
+                className="h-8 w-full rounded-xl border border-koma-border bg-koma-input pl-8 pr-8 text-xs text-koma-foreground outline-none focus:border-emerald-500 sm:w-48"
+              />
+              <button
+                type="button"
+                onClick={closeSearch}
+                className="absolute right-1.5 top-1.5 rounded-lg p-1 text-koma-muted hover:text-koma-foreground"
+                aria-label="Fechar busca de mesa"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          )}
         </div>
 
         <div role="group" aria-label="Filtrar mesas por status" className="flex w-full min-w-0 max-w-full gap-1.5 overflow-x-auto rounded-xl p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 lg:w-auto">
@@ -148,7 +231,7 @@ export function MesasView({
       <div className="grid grid-cols-2 min-[380px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3.5 w-full">
         {filteredRows.length === 0 ? (
           <div className="col-span-full py-16 rounded-2xl border border-dashed border-koma-border text-center text-koma-muted text-sm">
-            Nenhuma mesa encontrada neste status.
+            {tableQuery.trim() ? 'Nenhuma mesa encontrada para esta busca.' : 'Nenhuma mesa encontrada neste status.'}
           </div>
         ) : filteredRows.map(({ table, tableOrders, operationalState }) => {
           const waiterDrafts = draftItemsMap[table.id] || [];
@@ -175,6 +258,9 @@ export function MesasView({
               onClick={(id) => {
                 if (!readOnly && onTableClick) onTableClick(id);
               }}
+              onQuickOrder={!readOnly && onTableClick
+                ? (id) => openWaiterQuickOrder(id, onTableClick)
+                : undefined}
               hasPendingPayment={hasPendingPayment}
               mergedSources={mergedSources}
               mergedIntoMesaId={mergedIntoMesaId}
