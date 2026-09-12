@@ -18,10 +18,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db, tenant_session_scope
-from ..models import Comanda, Restaurante
+from ..models import Comanda, Item, Restaurante
 from ..order_chat_models import OrderConversation, OrderMessage
 from ..services.order_chat_archive_service import reopen_completed_conversation_if_needed
 from ..services.order_chat_hub import order_chat_hub
@@ -88,6 +88,7 @@ def consultar_pedido_por_token(
     with tenant_session_scope(db, restaurante_id):
         comanda = (
             db.query(Comanda)
+            .options(selectinload(Comanda.itens).joinedload(Item.produto))
             .filter(Comanda.restaurante_id == restaurante_id, Comanda.id == pedido_id)
             .first()
         )
