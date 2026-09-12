@@ -32,6 +32,22 @@ function isPublicCommercialRoute(): boolean {
     || pathname.startsWith("/contratar");
 }
 
+function isCanonicalOperationalEntryRoute(): boolean {
+  if (!isOperationalAppHost()) return false;
+
+  const pathname = window.location.pathname;
+  const params = new URLSearchParams(window.location.search);
+  const viewParam = params.get("view")?.toLowerCase() || "";
+
+  // app.komafood.com.br é autoridade canônica da equipe. Somente superfícies
+  // explicitamente públicas/utilitárias podem escapar do login unificado.
+  return pathname === "/"
+    && viewParam !== "cardapio"
+    && viewParam !== "ativar"
+    && viewParam !== "acompanhar"
+    && viewParam !== "entregador";
+}
+
 function bypassTenantSuspensionBoundary(): boolean {
   const pathname = window.location.pathname;
   const resolved = resolveKomaHost();
@@ -66,7 +82,7 @@ if (isPublicMenuRoute()) {
 // pedida depois de gesto explícito do cliente no acompanhamento do pedido.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/koma-sw.js", { scope: "/" }).catch((error: unknown) => {
+    void navigator.serviceWorker.register("/koma-sw.js", { scope: "/", updateViaCache: "none" }).catch((error: unknown) => {
       console.warn("[push] Service Worker indisponível.", error);
     });
   }, { once: true });
@@ -86,12 +102,10 @@ if (sentryDsn) {
 }
 
 const pathname = window.location.pathname;
-const resolvedHost = resolveKomaHost();
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
-const isUnifiedOperationalRoute = isOperationalAppHost()
-  && (resolvedHost.surface === "garcom" || resolvedHost.surface === "caixa");
+const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute();
 
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
