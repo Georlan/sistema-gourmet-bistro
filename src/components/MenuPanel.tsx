@@ -70,6 +70,9 @@ const productModifierGroups = (product: Product | null): CatalogModifierGroup[] 
   return (product as ProductWithModifiers).grupos_modificadores || [];
 };
 
+export const productRequiresConfiguration = (product: Product): boolean =>
+  productModifierGroups(product).some((group) => Number(group.min_selecoes || 0) > 0);
+
 const modifierSelectionsFor = (
   groups: CatalogModifierGroup[],
   selectedIds: string[],
@@ -83,6 +86,11 @@ const modifierSelectionsFor = (
       preco: Number(option.preco_adicional || 0),
     }));
 };
+
+const money = (value: number) => value.toLocaleString('pt-BR', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 export const MenuPanel: React.FC<MenuPanelProps> = ({
   tableId,
@@ -107,7 +115,6 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [orderType, setOrderType] = useState<'Consumo no Local' | 'Retirada'>('Consumo no Local');
-
   const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(null);
   const [editingDraftItemId, setEditingDraftItemId] = useState<string | null>(null);
   const [configQty, setConfigQty] = useState(1);
@@ -174,6 +181,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     (sum, item) => sum + Number(item.preco || 0) * (item.quantidade || 1),
     0,
   );
+  const itemWord = totalDraftQty === 1 ? 'item' : 'itens';
+  const reviewCta = `Revisar ${totalDraftQty} ${itemWord} · R$ ${money(draftTotal)}`;
+  const submitCta = `Lançar ${totalDraftQty} ${itemWord} · R$ ${money(draftTotal)}`;
 
   const currentGroups = productModifierGroups(selectedProductToConfigure);
   const selectedModifierOptions = useMemo(
@@ -182,7 +192,6 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   );
   const modifierTotal = selectedModifierOptions.reduce((sum, option) => sum + option.preco, 0);
   const configUnitTotal = Number(selectedProductToConfigure?.preco || 0) + modifierTotal;
-
   const modifierSelectionValid = currentGroups.every((group) => {
     const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
     const count = selectedModifierIds.filter((id) => optionIds.has(id)).length;
@@ -196,55 +205,50 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   };
 
   const openMenu = () => {
+    if (isSubmitting) return;
     setView('menu');
     scrollPanelToTop();
   };
 
   const openCart = () => {
+    if (isSubmitting) return;
     setView('cart');
     scrollPanelToTop();
   };
 
   const closeProductConfig = () => {
+    if (isSubmitting) return;
     setSelectedProductToConfigure(null);
     setEditingDraftItemId(null);
     setSelectedModifierIds([]);
   };
 
   const handleOpenConfig = (product: Product, draftItem?: DraftItem) => {
+    if (isSubmitting) return;
     const draft = draftItem as DraftWithModifiers | undefined;
     setSelectedProductToConfigure(product);
     setEditingDraftItemId(draft?.id || null);
     setConfigQty(draft?.quantidade || 1);
     setConfigObs(draft?.observacao || '');
-    setConfigClient(
-      draft?.clienteNome
-        || (draftItems.length > 0 ? draftItems[0].clienteNome || '' : ''),
-    );
+    setConfigClient(draft?.clienteNome || (draftItems[0]?.clienteNome || ''));
     setSelectedModifierIds([...(draft?.modificadorIds || [])]);
   };
 
   const toggleModifier = (group: CatalogModifierGroup, optionId: string) => {
+    if (isSubmitting) return;
     setSelectedModifierIds((current) => {
       const groupOptionIds = new Set(group.opcoes.map((option) => option.id));
-      const isSelected = current.includes(optionId);
-      if (isSelected) {
-        return current.filter((id) => id !== optionId);
-      }
-
+      if (current.includes(optionId)) return current.filter((id) => id !== optionId);
       const selectedInGroup = current.filter((id) => groupOptionIds.has(id));
       const max = Math.max(1, Number(group.max_selecoes || 1));
-      if (max === 1) {
-        return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
-      }
+      if (max === 1) return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
       if (selectedInGroup.length >= max) return current;
       return [...current, optionId];
     });
   };
 
   const handleConfirmAdd = () => {
-    if (!selectedProductToConfigure || !modifierSelectionValid) return;
-
+    if (isSubmitting || !selectedProductToConfigure || !modifierSelectionValid) return;
     const modifierMeta = {
       modificadorIds: [...selectedModifierIds],
       modificadoresSelecionados: selectedModifierOptions,
@@ -252,15 +256,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     };
 
     if (editingDraftItemId) {
-      onEditDraftItems(
-        [editingDraftItemId],
-        {
-          quantidade: configQty,
-          observacao: configObs,
-          clienteNome: configClient,
-          ...modifierMeta,
-        } as any,
-      );
+      onEditDraftItems([editingDraftItemId], {
+        quantidade: configQty,
+        observacao: configObs,
+        clienteNome: configClient,
+        ...modifierMeta,
+      } as any);
     } else {
       const decoratedProduct = {
         ...selectedProductToConfigure,
@@ -270,13 +271,18 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       } as ProductWithModifiers;
       onAddToDraft(decoratedProduct as Product, configQty, configObs, configClient);
     }
-
     closeProductConfig();
   };
 
   const handleQuickAdd = (product: Product, event?: React.MouseEvent) => {
     event?.stopPropagation();
-    const defaultClient = draftItems.length > 0 ? draftItems[0].clienteNome || '' : '';
+    if (isSubmitting) return;
+    if (productRequiresConfiguration(product)) {
+      handleOpenConfig(product);
+      return;
+    }
+
+    const defaultClient = draftItems[0]?.clienteNome || '';
     const compatibleDraft = draftItems.find((item) => {
       const decorated = item as DraftWithModifiers;
       return item.produtoId === product.id
@@ -285,9 +291,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
         && (decorated.modificadorIds || []).length === 0;
     });
     if (compatibleDraft) {
-      onUpdateDraftItem(compatibleDraft.id, {
-        quantidade: (compatibleDraft.quantidade || 1) + 1,
-      });
+      onUpdateDraftItem(compatibleDraft.id, { quantidade: (compatibleDraft.quantidade || 1) + 1 });
       return;
     }
     onAddToDraft(product, 1, '', defaultClient);
@@ -295,6 +299,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
   const handleQuickSubtract = (product: Product, event?: React.MouseEvent) => {
     event?.stopPropagation();
+    if (isSubmitting) return;
     const matching = draftItems.filter((item) => item.produtoId === product.id);
     if (matching.length === 0) return;
     const cleanItem = [...matching].reverse().find((item) => {
@@ -310,23 +315,26 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   };
 
   return (
-    <div className="relative sm:h-full">
+    <div className="relative sm:h-full" aria-busy={isSubmitting}>
       {view === 'cart' && (
         <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-24 sm:pb-5 flex flex-col sm:h-full max-w-2xl mx-auto">
           <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <ShoppingCart size={16} className="text-emerald-400 shrink-0" />
-              <h3 className="font-serif font-bold text-sm sm:text-base text-koma-foreground">Revisar Pedido</h3>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-400">
-                {totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'}
-              </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={16} className="text-emerald-400 shrink-0" />
+                <h3 className="font-serif font-bold text-sm sm:text-base text-koma-foreground">Mesa {tableId} · Revisar pedido</h3>
+              </div>
+              {totalDraftQty > 0 && (
+                <p className="mt-1 text-[10px] text-koma-muted">Confira itens, observações e destino antes de enviar.</p>
+              )}
             </div>
             <button
               type="button"
               onClick={openMenu}
-              className="min-h-9 px-3 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center gap-1"
+              disabled={isSubmitting}
+              className="min-h-9 px-3 rounded-xl bg-koma-raised border border-koma-border text-koma-foreground text-xs font-bold inline-flex items-center gap-1 disabled:opacity-50"
             >
-              <Plus size={13} /> Adicionar
+              <Plus size={13} /> Mais itens
             </button>
           </div>
 
@@ -334,7 +342,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             <div className="py-12 text-center flex-1 flex flex-col items-center justify-center gap-3">
               <p className="text-sm font-semibold text-koma-foreground">Nenhum item no pedido</p>
               <p className="text-xs text-koma-muted">Escolha os produtos da Mesa {tableId}.</p>
-              <button type="button" onClick={openMenu} className="koma-btn-primary px-5 py-2.5 rounded-xl text-xs font-bold">
+              <button type="button" onClick={openMenu} disabled={isSubmitting} className="koma-btn-primary px-5 py-2.5 rounded-xl text-xs font-bold disabled:opacity-50">
                 Abrir cardápio
               </button>
             </div>
@@ -347,9 +355,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <input
                   id="overall-client-name"
                   value={draftItems[0]?.clienteNome || ''}
+                  disabled={isSubmitting}
                   onChange={(event) => draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: event.target.value }))}
                   placeholder="Ex: Pedro, Cláudia, Família..."
-                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50"
                 />
                 {combinedSuggestions.length > 0 && (
                   <div className="flex flex-wrap gap-1">
@@ -357,8 +366,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       <button
                         key={name}
                         type="button"
+                        disabled={isSubmitting}
                         onClick={() => draftItems.forEach((item) => onUpdateDraftItem(item.id, { clienteNome: name }))}
-                        className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
+                        className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground disabled:opacity-50"
                       >
                         {name}
                       </button>
@@ -382,35 +392,18 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                           {decorated.modificadoresSelecionados && decorated.modificadoresSelecionados.length > 0 && (
                             <div className="mt-1 ml-7 flex flex-wrap gap-1">
                               {decorated.modificadoresSelecionados.map((option) => (
-                                <span key={option.id} className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-[9px] text-emerald-400 border border-emerald-500/20">
-                                  + {option.nome}
-                                </span>
+                                <span key={option.id} className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-[9px] text-emerald-400 border border-emerald-500/20">+ {option.nome}</span>
                               ))}
                             </div>
                           )}
-                          {item.clienteNome && (
-                            <span className="ml-7 text-[9px] uppercase font-bold text-emerald-400">Para: {item.clienteNome}</span>
-                          )}
+                          {item.clienteNome && <span className="ml-7 text-[9px] uppercase font-bold text-emerald-400">Para: {item.clienteNome}</span>}
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs font-mono font-bold text-emerald-400">
-                            R$ {(Number(item.preco) * (item.quantidade || 1)).toFixed(2)}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => product && handleOpenConfig(product, item)}
-                            className="p-1.5 rounded-lg text-koma-muted hover:text-emerald-400 hover:bg-koma-raised"
-                            title="Editar item e complementos"
-                          >
+                          <span className="text-xs font-mono font-bold text-emerald-400">R$ {money(Number(item.preco) * (item.quantidade || 1))}</span>
+                          <button type="button" disabled={isSubmitting || !product} onClick={() => product && handleOpenConfig(product, item)} className="p-1.5 rounded-lg text-koma-muted hover:text-emerald-400 hover:bg-koma-raised disabled:opacity-40" title="Editar item e complementos" aria-label={`Editar ${item.nome}`}>
                             <Edit3 size={13} />
                           </button>
-                          <button
-                            id={`remove-draft-item-${item.id}`}
-                            type="button"
-                            onClick={() => onRemoveFromDraft(item.id)}
-                            className="p-1.5 rounded-lg text-koma-muted hover:text-rose-400 hover:bg-rose-500/10"
-                            title="Remover item"
-                          >
+                          <button id={`remove-draft-item-${item.id}`} type="button" disabled={isSubmitting} onClick={() => onRemoveFromDraft(item.id)} className="p-1.5 rounded-lg text-koma-muted hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40" title="Remover item" aria-label={`Remover ${item.nome}`}>
                             <Trash2 size={13} />
                           </button>
                         </div>
@@ -418,33 +411,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
                       <div className="flex items-center justify-between gap-2 border-t border-koma-border pt-2">
                         <div className="flex items-center gap-1 bg-koma-raised border border-koma-border rounded-lg p-0.5">
-                          <button
-                            type="button"
-                            onClick={() => (item.quantidade || 1) > 1
-                              ? onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 })
-                              : onRemoveFromDraft(item.id)}
-                            className="p-1.5 text-koma-muted hover:text-rose-400"
-                          >
-                            <Minus size={12} />
-                          </button>
+                          <button type="button" disabled={isSubmitting} onClick={() => (item.quantidade || 1) > 1 ? onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 }) : onRemoveFromDraft(item.id)} className="p-1.5 text-koma-muted hover:text-rose-400 disabled:opacity-40" aria-label={`Diminuir ${item.nome}`}><Minus size={12} /></button>
                           <span className="px-2 text-xs font-mono font-bold text-koma-foreground">{item.quantidade || 1}</span>
-                          <button
-                            type="button"
-                            onClick={() => onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 })}
-                            className="p-1.5 text-koma-muted hover:text-emerald-400"
-                          >
-                            <Plus size={12} />
-                          </button>
+                          <button type="button" disabled={isSubmitting} onClick={() => onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 })} className="p-1.5 text-koma-muted hover:text-emerald-400 disabled:opacity-40" aria-label={`Aumentar ${item.nome}`}><Plus size={12} /></button>
                         </div>
-
                         <div className="flex-1 relative">
                           <FileText size={11} className="absolute left-2.5 top-2.5 text-koma-subtle" />
-                          <input
-                            value={item.observacao}
-                            onChange={(event) => onUpdateDraftItem(item.id, { observacao: event.target.value })}
-                            placeholder="Observação de preparo..."
-                            className="w-full pl-7 pr-2 py-2 bg-koma-input border border-koma-border rounded-lg text-[11px] text-koma-foreground focus:outline-none focus:border-emerald-500"
-                          />
+                          <input value={item.observacao} disabled={isSubmitting} onChange={(event) => onUpdateDraftItem(item.id, { observacao: event.target.value })} placeholder="Observação de preparo..." aria-label={`Observação de ${item.nome}`} className="w-full pl-7 pr-2 py-2 bg-koma-input border border-koma-border rounded-lg text-[11px] text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
                         </div>
                       </div>
                     </div>
@@ -453,57 +426,30 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               </div>
 
               <div className="mt-auto border-t border-koma-border pt-4 space-y-3">
-                <div className={`${allowExternalOrders ? 'grid-cols-2' : 'grid-cols-1'} grid gap-1 bg-koma-card border border-koma-border rounded-xl p-1`}>
-                  <button
-                    type="button"
-                    onClick={() => setOrderType('Consumo no Local')}
-                    className={`py-2 text-xs font-bold rounded-lg ${orderType === 'Consumo no Local' ? 'bg-emerald-500/20 text-emerald-400' : 'text-koma-muted'}`}
-                  >
-                    Consumo no Local
-                  </button>
-                  {allowExternalOrders && (
-                    <button
-                      type="button"
-                      onClick={() => setOrderType('Retirada')}
-                      className={`py-2 text-xs font-bold rounded-lg ${orderType === 'Retirada' ? 'bg-emerald-500/20 text-emerald-400' : 'text-koma-muted'}`}
-                    >
-                      Retirada (Balcão)
-                    </button>
-                  )}
-                </div>
+                {allowExternalOrders && (
+                  <div>
+                    <span className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-koma-muted">Destino</span>
+                    <div className="grid grid-cols-2 gap-1 bg-koma-card border border-koma-border rounded-xl p-1">
+                      <button type="button" disabled={isSubmitting} onClick={() => setOrderType('Consumo no Local')} className={`py-2 text-xs font-bold rounded-lg disabled:opacity-50 ${orderType === 'Consumo no Local' ? 'bg-emerald-500/20 text-emerald-400' : 'text-koma-muted'}`}>Mesa {tableId}</button>
+                      <button type="button" disabled={isSubmitting} onClick={() => setOrderType('Retirada')} className={`py-2 text-xs font-bold rounded-lg disabled:opacity-50 ${orderType === 'Retirada' ? 'bg-emerald-500/20 text-emerald-400' : 'text-koma-muted'}`}>Retirada no balcão</button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-bold text-koma-muted">Subtotal</span>
-                  <span className="text-xl font-mono font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
+                  <span className="text-[10px] uppercase font-bold text-koma-muted">Total deste lançamento</span>
+                  <span className="text-xl font-mono font-bold text-emerald-400">R$ {money(draftTotal)}</span>
                 </div>
 
-                <button
-                  id="submit-draft-order-btn"
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => onSubmitDraft(orderType)}
-                  className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Lançando...' : 'Lançar Pedido'} <ArrowRight size={15} />
+                <button id="submit-draft-order-btn" type="button" disabled={isSubmitting} onClick={() => onSubmitDraft(orderType)} className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
+                  {isSubmitting ? 'Enviando pedido…' : submitCta} <ArrowRight size={15} />
                 </button>
               </div>
 
               <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl">
-                <div className="mx-auto flex max-w-2xl items-center gap-3">
-                  <div className="min-w-[100px]">
-                    <span className="block text-[9px] uppercase font-bold text-koma-muted">Total</span>
-                    <span className="font-mono text-lg font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
-                  </div>
-                  <button
-                    id="submit-draft-order-btn-mobile"
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => onSubmitDraft(orderType)}
-                    className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-black text-sm font-bold disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Lançando...' : 'Lançar pedido'} <ArrowRight size={15} />
-                  </button>
-                </div>
+                <button id="submit-draft-order-btn-mobile" type="button" disabled={isSubmitting} onClick={() => onSubmitDraft(orderType)} className="mx-auto flex min-h-12 w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-black text-sm font-bold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
+                  {isSubmitting ? 'Enviando pedido…' : submitCta} <ArrowRight size={15} />
+                </button>
               </div>
             </div>
           )}
@@ -516,47 +462,15 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search size={15} className="absolute left-3 top-2.5 text-koma-subtle" />
-                <input
-                  id="search-products-input"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Buscar no cardápio..."
-                  className="w-full pl-9 pr-8 py-2 bg-koma-input border border-koma-border rounded-xl text-xs sm:text-sm text-koma-foreground focus:outline-none focus:border-emerald-500"
-                />
-                {searchQuery && (
-                  <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2.5 text-koma-muted">
-                    <X size={14} />
-                  </button>
-                )}
+                <input id="search-products-input" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={`Buscar produto para a Mesa ${tableId}...`} className="w-full pl-9 pr-8 py-2 bg-koma-input border border-koma-border rounded-xl text-xs sm:text-sm text-koma-foreground focus:outline-none focus:border-emerald-500" />
+                {searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2.5 text-koma-muted" aria-label="Limpar busca"><X size={14} /></button>}
               </div>
               <div className="relative">
-                <button
-                  id="toggle-menu-settings"
-                  type="button"
-                  onClick={() => setShowSettings((current) => !current)}
-                  className="p-2 rounded-xl bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground"
-                  title="Ajustar visualização"
-                >
-                  <Settings2 size={15} />
-                </button>
+                <button id="toggle-menu-settings" type="button" onClick={() => setShowSettings((current) => !current)} className="p-2 rounded-xl bg-koma-card border border-koma-border text-koma-muted hover:text-koma-foreground" title="Ajustar visualização" aria-label="Ajustar visualização do cardápio"><Settings2 size={15} /></button>
                 {showSettings && (
                   <div className="absolute right-0 top-full mt-2 z-50 w-52 bg-koma-dialog border border-koma-border rounded-xl p-3 shadow-2xl space-y-2">
-                    <label className="flex items-center justify-between gap-3 text-xs text-koma-muted">
-                      <span>Exibir imagens</span>
-                      <input
-                        type="checkbox"
-                        checked={settings.exibirImagens}
-                        onChange={(event) => onUpdateSettings({ ...settings, exibirImagens: event.target.checked })}
-                      />
-                    </label>
-                    <label className="flex items-center justify-between gap-3 text-xs text-koma-muted">
-                      <span>Exibir descrições</span>
-                      <input
-                        type="checkbox"
-                        checked={settings.exibirDescricoes}
-                        onChange={(event) => onUpdateSettings({ ...settings, exibirDescricoes: event.target.checked })}
-                      />
-                    </label>
+                    <label className="flex items-center justify-between gap-3 text-xs text-koma-muted"><span>Exibir imagens</span><input type="checkbox" checked={settings.exibirImagens} onChange={(event) => onUpdateSettings({ ...settings, exibirImagens: event.target.checked })} /></label>
+                    <label className="flex items-center justify-between gap-3 text-xs text-koma-muted"><span>Exibir descrições</span><input type="checkbox" checked={settings.exibirDescricoes} onChange={(event) => onUpdateSettings({ ...settings, exibirDescricoes: event.target.checked })} /></label>
                   </div>
                 )}
               </div>
@@ -564,19 +478,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
             <div className="flex gap-1.5 overflow-x-auto scrollbar-none no-scrollbar">
               {categoriesList.map((category) => (
-                <button
-                  key={category.id}
-                  id={`cat-btn-${category.nome.toLowerCase().replace(/\s+/g, '-')}`}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(category.nome);
-                    setSearchQuery('');
-                    setTimeout(() => document.getElementById(`category-sec-${category.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 40);
-                  }}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap ${selectedCategory === category.nome ? 'bg-emerald-500 text-zinc-950' : 'bg-koma-card border border-koma-border text-koma-muted'}`}
-                >
-                  {category.nome}
-                </button>
+                <button key={category.id} id={`cat-btn-${category.nome.toLowerCase().replace(/\s+/g, '-')}`} type="button" onClick={() => { setSelectedCategory(category.nome); setSearchQuery(''); setTimeout(() => document.getElementById(`category-sec-${category.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 40); }} className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap ${selectedCategory === category.nome ? 'bg-emerald-500 text-zinc-950' : 'bg-koma-card border border-koma-border text-koma-muted'}`}>{category.nome}</button>
               ))}
             </div>
           </div>
@@ -585,37 +487,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {unavailableSearchMatches.length > 0 && (
               <section id="unavailable-search-results" className="space-y-2.5">
                 <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-koma-muted" />
-                    <h4 className="font-serif text-xs font-bold uppercase tracking-wider text-koma-muted">Indisponíveis encontrados</h4>
-                  </div>
+                  <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-koma-muted" /><h4 className="font-serif text-xs font-bold uppercase tracking-wider text-koma-muted">Indisponíveis encontrados</h4></div>
                   <span className="text-[9px] text-koma-muted">somente consulta</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 sm:gap-4">
                   {unavailableSearchMatches.map((product) => (
-                    <article
-                      key={product.id}
-                      id={`unavailable-product-${product.id}`}
-                      aria-disabled="true"
-                      className="flex flex-col justify-between rounded-2xl border border-dashed border-koma-border bg-koma-card/50 p-3 opacity-80 sm:p-4"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4>
-                            <span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">
-                              Esgotado
-                            </span>
-                          </div>
-                          <span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted">R$ {Number(product.preco).toFixed(2)}</span>
-                        </div>
-                        {product.descricao && (
-                          <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>
-                        )}
-                      </div>
-                      <p className="mt-3 border-t border-koma-border/60 pt-2 text-[10px] font-semibold text-koma-muted">
-                        Indisponível para lançamento
-                      </p>
+                    <article key={product.id} id={`unavailable-product-${product.id}`} aria-disabled="true" className="flex flex-col justify-between rounded-2xl border border-dashed border-koma-border bg-koma-card/50 p-3 opacity-80 sm:p-4">
+                      <div className="space-y-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4><span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">Esgotado</span></div><span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted">R$ {money(Number(product.preco))}</span></div>{product.descricao && <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>}</div>
+                      <p className="mt-3 border-t border-koma-border/60 pt-2 text-[10px] font-semibold text-koma-muted">Indisponível para lançamento</p>
                     </article>
                   ))}
                 </div>
@@ -625,73 +504,36 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
             {categoriesList.map((category) => {
               const products = activeProducts.filter((product) => {
                 const decorated = product as ProductWithModifiers;
-                const matchesCategory = decorated.categoria_id === category.id
-                  || obterNomeCategoria(product.categoria) === category.nome;
-                const matchesSearch = !searchQuery
-                  || smartSearchMatch(`${product.nome} ${product.descricao || ''}`, searchQuery);
+                const matchesCategory = decorated.categoria_id === category.id || obterNomeCategoria(product.categoria) === category.nome;
+                const matchesSearch = !searchQuery || smartSearchMatch(`${product.nome} ${product.descricao || ''}`, searchQuery);
                 return matchesCategory && matchesSearch;
               });
               if (products.length === 0) return null;
 
               return (
                 <section key={category.id} id={`category-sec-${category.id}`} className="space-y-2.5 scroll-mt-24">
-                  <div className="flex items-center gap-2 border-b border-koma-border pb-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <h4 className="font-serif text-xs font-bold text-emerald-400 uppercase tracking-wider">{category.nome}</h4>
-                  </div>
+                  <div className="flex items-center gap-2 border-b border-koma-border pb-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /><h4 className="font-serif text-xs font-bold text-emerald-400 uppercase tracking-wider">{category.nome}</h4></div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
                     {products.map((product) => {
                       const groups = productModifierGroups(product);
+                      const requiredConfig = productRequiresConfiguration(product);
                       const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
-                      const currentCount = draftItems
-                        .filter((item) => item.produtoId === product.id)
-                        .reduce((sum, item) => sum + (item.quantidade || 1), 0);
+                      const currentCount = draftItems.filter((item) => item.produtoId === product.id).reduce((sum, item) => sum + (item.quantidade || 1), 0);
                       return (
-                        <article
-                          key={product.id}
-                          id={`product-card-${product.id}`}
-                          onClick={() => handleOpenConfig(product)}
-                          className={`border rounded-2xl p-3 sm:p-4 flex flex-col justify-between cursor-pointer transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`}
-                          title="Clique no card para personalizar. Use + Adicionar para lançar rapidamente."
-                        >
+                        <article key={product.id} id={`product-card-${product.id}`} onClick={() => handleOpenConfig(product)} className={`border rounded-2xl p-3 sm:p-4 flex flex-col justify-between cursor-pointer transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`} title={requiredConfig ? 'Este item exige escolhas antes de adicionar.' : 'Clique no card para personalizar ou use Adicionar para lançar rapidamente.'}>
                           <div className="space-y-2">
-                            {settings.exibirImagens && product.imagem && (
-                              <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised">
-                                <img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              </div>
-                            )}
+                            {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
                             <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>
-                                {groups.length > 0 && (
-                                  <span className="mt-1 inline-flex px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400">
-                                    Personalizável{recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {Number(product.preco).toFixed(2)}</span>
+                              <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
+                              <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {money(Number(product.preco))}</span>
                             </div>
-                            {settings.exibirDescricoes && product.descricao && (
-                              <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>
-                            )}
+                            {settings.exibirDescricoes && product.descricao && <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>}
                           </div>
 
                           <div className="mt-3 pt-2 border-t border-koma-border/60 flex items-center gap-1.5">
-                            {currentCount > 0 && (
-                              <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5">
-                                <button type="button" onClick={(event) => handleQuickSubtract(product, event)} className="p-1.5 text-koma-muted hover:text-rose-400" aria-label={`Remover uma unidade de ${product.nome}`}>
-                                  <Minus size={13} />
-                                </button>
-                                <span className="font-mono text-xs font-bold text-emerald-400 px-2">{currentCount}</span>
-                              </div>
-                            )}
-                            <button
-                              id={`add-product-btn-${product.id}`}
-                              type="button"
-                              onClick={(event) => handleQuickAdd(product, event)}
-                              className="flex-1 min-h-10 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center justify-center gap-1"
-                            >
-                              <Plus size={14} /> Adicionar
+                            {currentCount > 0 && <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5"><button type="button" disabled={isSubmitting} onClick={(event) => handleQuickSubtract(product, event)} className="p-1.5 text-koma-muted hover:text-rose-400 disabled:opacity-40" aria-label={`Remover uma unidade de ${product.nome}`}><Minus size={13} /></button><span className="font-mono text-xs font-bold text-emerald-400 px-2">{currentCount}</span></div>}
+                            <button id={`add-product-btn-${product.id}`} type="button" disabled={isSubmitting} onClick={(event) => handleQuickAdd(product, event)} className="flex-1 min-h-10 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center justify-center gap-1 disabled:opacity-50" aria-label={requiredConfig ? `Escolher opções de ${product.nome}` : `Adicionar ${product.nome}`}>
+                              {requiredConfig ? <Settings2 size={14} /> : <Plus size={14} />} {requiredConfig ? 'Escolher opções' : 'Adicionar'}
                             </button>
                           </div>
                         </article>
@@ -702,28 +544,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               );
             })}
 
-            {catalogReady && activeProducts.length === 0 && unavailableSearchMatches.length === 0 && (
-              <div className="py-12 text-center text-sm text-koma-muted">Nenhum item disponível no cardápio.</div>
-            )}
-            {!catalogReady && (
-              <div className="py-12 text-center text-sm text-koma-muted">Carregando o cardápio…</div>
-            )}
+            {catalogReady && activeProducts.length === 0 && unavailableSearchMatches.length === 0 && <div className="py-12 text-center text-sm text-koma-muted">Nenhum item disponível no cardápio.</div>}
+            {!catalogReady && <div className="py-12 text-center text-sm text-koma-muted">Carregando o cardápio…</div>}
           </div>
 
           {totalDraftQty > 0 && (
-            <div className="fixed inset-x-0 bottom-0 z-[70] border-t border-emerald-500/20 bg-koma-panel/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:sticky sm:z-40 sm:p-3 sm:pb-3 flex items-center justify-between gap-3">
-              <div>
-                <span className="block text-[10px] text-koma-muted">{totalDraftQty} {totalDraftQty === 1 ? 'item' : 'itens'} no pedido</span>
-                <span className="font-mono text-sm font-bold text-emerald-400">R$ {draftTotal.toFixed(2)}</span>
-              </div>
-              <button
-                id="open-draft-cart-btn"
-                type="button"
-                onClick={openCart}
-                className="min-h-10 px-4 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center gap-2"
-                aria-label={`Ver pedido com ${totalDraftQty} ${totalDraftQty === 1 ? 'item' : 'itens'}`}
-              >
-                <ShoppingCart size={14} /> Ver pedido <ArrowRight size={14} />
+            <div className="fixed inset-x-0 bottom-0 z-[70] border-t border-emerald-500/20 bg-koma-panel/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:sticky sm:z-40 sm:p-3 sm:pb-3">
+              <button id="open-draft-cart-btn" type="button" disabled={isSubmitting} onClick={openCart} className="mx-auto flex min-h-11 w-full max-w-xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-extrabold text-zinc-950 disabled:opacity-50" aria-label={reviewCta}>
+                <ShoppingCart size={14} /> {reviewCta} <ArrowRight size={14} />
               </button>
             </div>
           )}
@@ -731,131 +559,35 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       )}
 
       {selectedProductToConfigure && (
-        <div
-          className="fixed inset-0 z-50 bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4"
-          onClick={(event) => event.target === event.currentTarget && closeProductConfig()}
-        >
+        <div className="fixed inset-0 z-50 bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(event) => event.target === event.currentTarget && closeProductConfig()}>
           <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 space-y-4 shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span>
-                <h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>
-                {editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}
-              </div>
-              <button type="button" onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground">
-                <X size={18} />
-              </button>
-            </div>
-
-            {selectedProductToConfigure.descricao && (
-              <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">
-                {selectedProductToConfigure.descricao}
-              </p>
-            )}
+            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
+            {selectedProductToConfigure.descricao && <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">{selectedProductToConfigure.descricao}</p>}
 
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <span className="block text-[10px] uppercase font-bold text-koma-muted mb-1">Quantidade</span>
-                <div className="flex items-center bg-koma-input border border-koma-border rounded-xl p-1">
-                  <button type="button" onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400">
-                    <Minus size={14} />
-                  </button>
-                  <span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span>
-                  <button type="button" onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400">
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span>
-                <span className="font-mono text-lg font-bold text-emerald-400">R$ {(configUnitTotal * configQty).toFixed(2)}</span>
-                {modifierTotal > 0 && (
-                  <span className="block text-[9px] text-koma-subtle">+ R$ {modifierTotal.toFixed(2)} por unidade</span>
-                )}
-              </div>
+              <div><span className="block text-[10px] uppercase font-bold text-koma-muted mb-1">Quantidade</span><div className="flex items-center bg-koma-input border border-koma-border rounded-xl p-1"><button type="button" disabled={isSubmitting} onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400 disabled:opacity-40"><Minus size={14} /></button><span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span><button type="button" disabled={isSubmitting} onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400 disabled:opacity-40"><Plus size={14} /></button></div></div>
+              <div className="text-right"><span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span><span className="font-mono text-lg font-bold text-emerald-400">R$ {money(configUnitTotal * configQty)}</span>{modifierTotal > 0 && <span className="block text-[9px] text-koma-subtle">+ R$ {money(modifierTotal)} por unidade</span>}</div>
             </div>
 
-            {currentGroups.length > 0 && (
-              <div className="space-y-3 border-t border-koma-border pt-4">
-                <div>
-                  <h5 className="text-xs font-bold text-koma-foreground">Complementos</h5>
-                  <p className="text-[10px] text-koma-muted">Recomendados aparecem primeiro. Se o cliente pedir algo fora do padrão, busque no catálogo geral.</p>
-                </div>
-                <ModifierPicker
-                  key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`}
-                  groups={currentGroups}
-                  selectedIds={selectedModifierIds}
-                  onToggle={toggleModifier}
-                />
-              </div>
-            )}
+            {currentGroups.length > 0 && <div className="space-y-3 border-t border-koma-border pt-4"><div><h5 className="text-xs font-bold text-koma-foreground">Complementos</h5><p className="text-[10px] text-koma-muted">Complete as escolhas obrigatórias antes de adicionar.</p></div><ModifierPicker key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`} groups={currentGroups} selectedIds={selectedModifierIds} onToggle={toggleModifier} /></div>}
 
             <div className="space-y-2 border-t border-koma-border pt-4">
               <label htmlFor="config-item-obs" className="text-[10px] uppercase font-bold text-koma-muted">Observação de preparo</label>
-              <input
-                id="config-item-obs"
-                value={configObs}
-                onChange={(event) => setConfigObs(event.target.value)}
-                placeholder="Ex: sem cebola, mal passado, molho à parte..."
-                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
-              />
+              <input id="config-item-obs" value={configObs} disabled={isSubmitting} onChange={(event) => setConfigObs(event.target.value)} placeholder="Ex: sem cebola, mal passado, molho à parte..." className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50" />
               <div className="flex flex-wrap gap-1">
                 {getProductPresets(selectedProductToConfigure).map((preset) => {
                   const parts = configObs ? configObs.split(',').map((part) => part.trim()).filter(Boolean) : [];
                   const active = parts.some((part) => part.toLocaleLowerCase('pt-BR') === preset.toLocaleLowerCase('pt-BR'));
-                  return (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => {
-                        const next = active
-                          ? parts.filter((part) => part.toLocaleLowerCase('pt-BR') !== preset.toLocaleLowerCase('pt-BR'))
-                          : [...parts, preset];
-                        setConfigObs(next.join(', '));
-                      }}
-                      className={`px-2 py-1 text-[9px] rounded-lg border ${active ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-koma-raised border-koma-border text-koma-muted'}`}
-                    >
-                      {active ? preset : `+${preset}`}
-                    </button>
-                  );
+                  return <button key={preset} type="button" disabled={isSubmitting} onClick={() => { const next = active ? parts.filter((part) => part.toLocaleLowerCase('pt-BR') !== preset.toLocaleLowerCase('pt-BR')) : [...parts, preset]; setConfigObs(next.join(', ')); }} className={`px-2 py-1 text-[9px] rounded-lg border disabled:opacity-40 ${active ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-koma-raised border-koma-border text-koma-muted'}`}>{active ? preset : `+${preset}`}</button>;
                 })}
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="config-client-name" className="text-[10px] uppercase font-bold text-koma-muted">Identificar Cliente (Opcional)</label>
-              <input
-                id="config-client-name"
-                value={configClient}
-                onChange={(event) => setConfigClient(event.target.value)}
-                placeholder="Ex: Pedro, Cláudia, Mesa Direita..."
-                className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
-              />
-              {combinedSuggestions.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {combinedSuggestions.map((name) => (
-                    <button key={name} type="button" onClick={() => setConfigClient(name)} className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-raised text-koma-muted">
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <div className="space-y-2"><label htmlFor="config-client-name" className="text-[10px] uppercase font-bold text-koma-muted">Identificar cliente (opcional)</label><input id="config-client-name" value={configClient} disabled={isSubmitting} onChange={(event) => setConfigClient(event.target.value)} placeholder="Ex: Pedro, Cláudia, Mesa Direita..." className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 disabled:opacity-50" />{combinedSuggestions.length > 0 && <div className="flex flex-wrap gap-1">{combinedSuggestions.map((name) => <button key={name} type="button" disabled={isSubmitting} onClick={() => setConfigClient(name)} className="px-2 py-1 text-[9px] rounded-lg border border-koma-border bg-koma-raised text-koma-muted disabled:opacity-40">{name}</button>)}</div>}</div>
 
             <div className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-3 pb-[calc(0.35rem+env(safe-area-inset-bottom))] sm:pb-1 bg-koma-card/95 backdrop-blur-xl border-t border-koma-border flex items-center gap-3">
-              <button type="button" onClick={closeProductConfig} className="flex-1 py-2.5 rounded-xl border border-koma-border text-xs font-bold text-koma-muted hover:text-koma-foreground">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmAdd}
-                disabled={!modifierSelectionValid}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {!modifierSelectionValid
-                  ? 'Complete as escolhas'
-                  : editingDraftItemId ? 'Salvar alterações' : 'Adicionar ao Pedido'}
-              </button>
+              <button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="flex-1 py-2.5 rounded-xl border border-koma-border text-xs font-bold text-koma-muted hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={handleConfirmAdd} disabled={isSubmitting || !modifierSelectionValid} className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-extrabold disabled:opacity-40 disabled:cursor-not-allowed">{isSubmitting ? 'Aguarde…' : !modifierSelectionValid ? 'Complete as escolhas' : editingDraftItemId ? 'Salvar alterações' : 'Adicionar ao pedido'}</button>
             </div>
           </div>
         </div>
