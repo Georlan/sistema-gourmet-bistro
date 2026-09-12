@@ -48,6 +48,17 @@ class SaasMercadoPagoService:
             timeout=15.0,
         )
 
+    @staticmethod
+    def _annual_pix_idempotency_key(protocol: str) -> str:
+        """Stable provider key for the single annual Pix setup of a contract."""
+        normalized_protocol = protocol.strip().upper()
+        return str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"https://komafood.com.br/saas-billing/annual-pix/{normalized_protocol}",
+            )
+        )
+
     def create_preapproval(
         self,
         *,
@@ -219,10 +230,15 @@ class SaasMercadoPagoService:
                 },
             },
         }
+        idempotency_key = self._annual_pix_idempotency_key(protocol)
 
         try:
             with self._client() as client:
-                resp = client.post("/v1/payments", json=payload)
+                resp = client.post(
+                    "/v1/payments",
+                    json=payload,
+                    headers={"X-Idempotency-Key": idempotency_key},
+                )
                 if resp.status_code >= 400:
                     data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     detail = data.get("message") or data.get("error") or resp.text
