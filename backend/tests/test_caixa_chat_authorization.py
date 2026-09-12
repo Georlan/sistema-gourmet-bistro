@@ -4,7 +4,7 @@ from app.security import PERMISSION_ROLES
 
 
 def test_caixa_chat_requires_cashier_permission_on_every_route():
-    source = Path("app/routes/caixa_chat.py").read_text(encoding="utf-8")
+    source = Path("backend/app/routes/caixa_chat.py").read_text(encoding="utf-8")
 
     assert "get_current_user" not in source
     assert source.count('Depends(require_permission("caixa:operar"))') == 6
