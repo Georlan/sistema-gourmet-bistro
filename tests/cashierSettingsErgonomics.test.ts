@@ -6,15 +6,21 @@ const settings = readFileSync('src/components/caixa/settings/CashierSettings.tsx
 const appearance = readFileSync('src/components/caixa/settings/CashierAppearanceSettings.tsx', 'utf8');
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
 
-test('cashier settings expose appearance as a first-class operator task', () => {
-  assert.match(settings, /useState<CashierSettingsTab>\('aparencia'\)/);
+test('cashier settings expose task groups and remember the last operator section', () => {
+  assert.match(settings, /CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab'/);
+  assert.match(settings, /useState<CashierSettingsTab>\(readInitialCashierSettingsTab\)/);
+  assert.match(settings, /window\.localStorage\.getItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY\)/);
+  assert.match(settings, /window\.localStorage\.setItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY, tab\)/);
   assert.match(settings, /Configurações do Caixa/);
   assert.match(settings, /aria-label="Configurações do caixa"/);
+  assert.match(settings, /label: 'Neste dispositivo'/);
+  assert.match(settings, /label: 'Operação do salão'/);
   assert.match(settings, /label: 'Aparência'/);
   assert.match(settings, /label: 'Impressão'/);
   assert.match(settings, /label: 'Mesas'/);
   assert.match(settings, /label: 'App do Garçom'/);
   assert.match(settings, /label: 'Taxa de Serviço'/);
+  assert.match(settings, /onClick=\{\(\) => selectSettingsTab\(tab\.id\)\}/);
   assert.match(settings, /<CashierAppearanceSettings \/>/);
 });
 
