@@ -19,7 +19,7 @@ from ..models import (
     Restaurante,
     Usuario,
 )
-from ..printer_service import printer_service
+from ..printer_service import ESC_BOLD_OFF, ESC_BOLD_ON, align_center, printer_service
 from ..subscription import subscription_has_printing
 from ..timezone_utils import get_operational_now, to_operational_local_time
 from .atendimentos import (
@@ -143,7 +143,7 @@ def load_open_table_snapshot(
     restaurante_id: int,
     mesa_id: int,
 ) -> TableReceiptSnapshot:
-    """Fotografia financeira da mesa inteira para Extrato/Fechamento."""
+    """Fotografia financeira da mesa inteira para reimpressão e Conta da Mesa."""
     db.flush()
 
     mesa = db.query(Mesa).filter(
@@ -338,13 +338,13 @@ def _replace_account_header(receipt: str, snapshot: TableReceiptSnapshot) -> str
     return receipt.replace("PEDIDO: #", f"{label}: #", 1)
 
 
-def _inject_closing_metadata(
+def _inject_table_account_metadata(
     receipt: str,
     snapshot: TableReceiptSnapshot,
     *,
     printed_by: Optional[str],
 ) -> str:
-    """Acrescenta auditoria humana sem criar um segundo formatter térmico."""
+    """Acrescenta auditoria humana à Conta da Mesa sem criar outro formatter."""
     lines = receipt.split("\n")
     width = int(getattr(printer_service, "width", 40) or 40)
     now = get_operational_now()
@@ -363,10 +363,70 @@ def _inject_closing_metadata(
     )
     if insert_at is None:
         insert_at = next(
-            (index + 1 for index, line in enumerate(lines) if "FECHAMENTO" in line),
+            (index + 1 for index, line in enumerate(lines) if "CONTA DA MESA" in line or "FECHAMENTO" in line),
             1,
         )
     lines[insert_at:insert_at] = metadata
+    return "\n".join(lines)
+
+
+def _format_table_account_document(
+    receipt: str,
+    *,
+    restaurant_name: str,
+    restaurant_name_position: str,
+) -> str:
+    """Aplica o nome público Conta da Mesa e preserva a identidade do restaurante."""
+    lines = receipt.replace("FECHAMENTO", "CONTA DA MESA", 1).split("\n")
+    width = int(getattr(printer_service, "width", 40) or 40)
+    position = (
+        restaurant_name_position
+        if restaurant_name_position in {"cabecalho", "rodape", "oculto"}
+        else "cabecalho"
+    )
+    brand = str(restaurant_name or "").strip()
+    if not brand or position == "oculto":
+        return "\n".join(lines)
+
+    brand_line = ESC_BOLD_ON + align_center(brand.upper(), width) + ESC_BOLD_OFF
+    if position == "cabecalho":
+        title_index = next(
+            (index for index, line in enumerate(lines) if "CONTA DA MESA" in line),
+            None,
+        )
+        if title_index is not None:
+            lines[title_index:title_index] = [brand_line, "=" * width]
+    else:
+        footer_index = next(
+            (index for index, line in enumerate(lines) if "Gerenciado por Kôma" in line),
+            len(lines),
+        )
+        lines[footer_index:footer_index] = [brand_line]
+    return "\n".join(lines)
+
+
+def _format_full_table_reprint(receipt: str, snapshot: TableReceiptSnapshot) -> str:
+    """Distingue a via completa da mesa de um pedido/lote individual."""
+    lines = receipt.split("\n")
+    width = int(getattr(printer_service, "width", 40) or 40)
+    account_label = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
+    generated_label = "PEDIDOS" if len(snapshot.account_numbers) > 1 else "PEDIDO"
+    for index, line in enumerate(lines):
+        if f"{generated_label} #" in line:
+            lines[index] = line.replace(f"{generated_label} #", f"{account_label}: #", 1)
+            break
+
+    marker = "VIA COMPLETA DA MESA"
+    if not any(marker in line for line in lines):
+        reprint_index = next(
+            (index for index, line in enumerate(lines) if "REIMPRESSÃO" in line),
+            None,
+        )
+        if reprint_index is not None:
+            lines.insert(
+                reprint_index + 1,
+                ESC_BOLD_ON + align_center(marker, width) + ESC_BOLD_OFF,
+            )
     return "\n".join(lines)
 
 
@@ -386,6 +446,7 @@ def render_table_receipt(
 
     snapshot = load_open_table_snapshot(db, restaurante_id, mesa_id)
     preferences = get_print_preferences(db, restaurante_id)
+    effective_header = print_header or preferences.restaurant_name
     receipt = printer_service.generate_receipt(
         num_pedido=snapshot.numero_pedido,
         tipo=snapshot.tipo,
@@ -393,7 +454,7 @@ def render_table_receipt(
         garcom_nome=snapshot.garcom_nome,
         comandas_details=snapshot.comandas_details,
         opened_at=snapshot.opened_at,
-        print_header=print_header or preferences.restaurant_name,
+        print_header=effective_header,
         print_footer=(print_footer if print_footer is not None else preferences.print_footer),
         taxa_servico_ativa=preferences.taxa_servico_ativa,
         taxa_servico_padrao=preferences.taxa_servico_padrao,
@@ -401,14 +462,19 @@ def render_table_receipt(
         restaurant_name_position=preferences.restaurant_name_position,
     )
     if apenas_valores:
-        receipt = _inject_closing_metadata(receipt, snapshot, printed_by=printed_by)
+        receipt = _format_table_account_document(
+            receipt,
+            restaurant_name=effective_header,
+            restaurant_name_position=preferences.restaurant_name_position,
+        )
+        receipt = _inject_table_account_metadata(receipt, snapshot, printed_by=printed_by)
         return apply_operational_visual_hierarchy(
             receipt,
-            document_title="FECHAMENTO",
+            document_title="CONTA DA MESA",
         )
 
     identity_label = "CONTAS" if len(snapshot.account_numbers) > 1 else "CONTA"
-    return apply_operational_visual_hierarchy(
+    rendered = apply_operational_visual_hierarchy(
         receipt,
         order_number=snapshot.numero_pedido,
         operator_label="GARÇOM",
@@ -416,6 +482,7 @@ def render_table_receipt(
         location_label=None,
         identity_label=identity_label,
     )
+    return _format_full_table_reprint(rendered, snapshot)
 
 
 def render_table_source_receipt(
