@@ -140,11 +140,13 @@ async function openWaiterScenario(
           ],
         }],
       };
-    } else if (method === 'GET' && path === '/produtos/catalogo') {
-      body = {
-        categorias: [{ id: 'waiter-meals', nome: 'Pratos', destino_impressao: 'COZINHA' }],
-        produtos: items.map(item => ({ ...item.produto, categoria_id: 'waiter-meals' })),
-      };
+    } else if (method === 'GET' && (path === '/produtos/catalogo' || path === '/produtos/categorias')) {
+      body = path === '/produtos/categorias'
+        ? [{ id: 'waiter-meals', nome: 'Pratos', destino_impressao: 'COZINHA' }]
+        : {
+            categorias: [{ id: 'waiter-meals', nome: 'Pratos', destino_impressao: 'COZINHA' }],
+            produtos: items.map(item => ({ ...item.produto, categoria_id: 'waiter-meals' })),
+          };
     } else if (method === 'GET' && path === '/caixa/configuracoes') {
       body = {
         taxa_servico_ativa: false,

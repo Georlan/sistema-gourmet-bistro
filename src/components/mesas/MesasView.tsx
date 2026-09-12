@@ -87,10 +87,18 @@ export function MesasView({
 
   const openSearchResult = () => {
     if (readOnly || !onTableClick || !tableQuery.trim()) return;
-    const normalized = tableQuery.trim().toLocaleLowerCase('pt-BR').replace(/^mesa\s*/i, '').trim();
-    const exact = filteredRows.find(({ table }) => String(table.id) === normalized);
+    const queryTrimmed = tableQuery.trim();
+    const normalized = queryTrimmed.toLocaleLowerCase('pt-BR').replace(/^mesa\s*/i, '').trim();
+    const queryLower = queryTrimmed.toLocaleLowerCase('pt-BR');
+    const exact = filteredRows.find(({ table }) =>
+      String(table.id) === normalized ||
+      table.nome?.trim().toLocaleLowerCase('pt-BR') === queryLower
+    );
     const target = exact || (filteredRows.length === 1 ? filteredRows[0] : undefined);
-    if (target) onTableClick(target.table.id);
+    if (target) {
+      closeSearch();
+      onTableClick(target.table.id);
+    }
   };
 
   const filters = [
