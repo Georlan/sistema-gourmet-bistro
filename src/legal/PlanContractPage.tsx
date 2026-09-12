@@ -531,7 +531,7 @@ export default function PlanContractPage() {
     return (
       <div className="koma-sub-wrapper">
         <header className="koma-sub-header">
-          <a href="/landing" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
+          <a href="/" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
             <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="KÔMA" />
           </a>
           <span className="koma-sub-secure"><ShieldCheck size={15} /> Ativação segura</span>
@@ -558,7 +558,7 @@ export default function PlanContractPage() {
             {activationResult.slug && (
               <div className="koma-sub-success-detail">
                 <span>Endereço do estabelecimento</span>
-                <strong>https://{activationResult.slug}.koma.com.br</strong>
+                <strong>https://{activationResult.slug}.komafood.com.br</strong>
               </div>
             )}
 
@@ -627,7 +627,7 @@ export default function PlanContractPage() {
     return (
       <div className="koma-sub-wrapper">
         <header className="koma-sub-header">
-          <a href="/landing" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
+          <a href="/" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
             <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="KÔMA" />
           </a>
           <span className="koma-sub-secure"><ShieldCheck size={15} /> Pagamento seguro</span>
@@ -636,9 +636,9 @@ export default function PlanContractPage() {
         <main className="koma-sub-pix-page">
           <section className="koma-sub-pix-card">
             <span className="koma-sub-eyebrow">PIX ANUAL · AGUARDANDO CONFIRMAÇÃO</span>
-            <h1>Finalize o pagamento para ativar o restaurante.</h1>
+            <h1>Finalize o pagamento para seguir com a liberação.</h1>
             <p>
-              O Pix é uma cobrança anual antecipada de <strong>{formatCurrency(pricing.annualTotal)}</strong>. A ativação acontece automaticamente após a confirmação do pagamento.
+              O Pix é uma cobrança anual antecipada de <strong>{formatCurrency(pricing.annualTotal)}</strong>. Após a confirmação, a contratação segue para liberação do restaurante.
             </p>
             {pixData.qrCode && (
               <div className="koma-sub-qr">
@@ -680,11 +680,11 @@ export default function PlanContractPage() {
   return (
     <div className="koma-sub-wrapper">
       <header className="koma-sub-header">
-        <a href="/landing" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
+        <a href="/" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
           <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="KÔMA" />
         </a>
         <nav className="koma-sub-nav" aria-label="Navegação da contratação">
-          <a href="/landing#planos">Ver planos</a>
+          <a href="/#planos">Ver planos</a>
           <a href="/legal">Legal e privacidade</a>
           <span className="koma-sub-secure"><ShieldCheck size={14} /> Conexão segura</span>
         </nav>
@@ -917,11 +917,11 @@ export default function PlanContractPage() {
               </div>
               <div>
                 <span><Info size={16} /></span>
-                <div><strong>{formatDisplayDate(reminderDate)}</strong><p>{billingMethod === 'pix' ? 'Pix confirmado: ativação acontece automaticamente.' : 'Você pode cancelar antes da primeira cobrança.'}</p></div>
+                <div><strong>{formatDisplayDate(reminderDate)}</strong><p>{billingMethod === 'pix' ? 'Pix confirmado: contratação segue para liberação.' : 'Você pode cancelar antes da primeira cobrança.'}</p></div>
               </div>
               <div>
                 <span><CreditCard size={16} /></span>
-                <div><strong>{billingMethod === 'pix' ? 'Após confirmação' : formatDisplayDate(renewalDate)}</strong><p>{billingMethod === 'pix' ? 'Restaurante liberado para o primeiro acesso.' : `Primeira cobrança: ${formatCurrency(nextChargeAmount)}.`}</p></div>
+                <div><strong>{billingMethod === 'pix' ? 'Após a liberação' : formatDisplayDate(renewalDate)}</strong><p>{billingMethod === 'pix' ? 'Você recebe o convite para o primeiro acesso.' : `Primeira cobrança: ${formatCurrency(nextChargeAmount)}.`}</p></div>
               </div>
             </div>
 
