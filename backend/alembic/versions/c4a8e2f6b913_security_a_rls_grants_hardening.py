@@ -109,9 +109,13 @@ def upgrade() -> None:
     # Preserve the forward security defaults for future objects. PostgreSQL
     # does not grant table DML to PUBLIC by default; this explicitly prevents
     # accidental reintroduction by a future default-privilege change.
+    migration_owner = _quote(
+        bind,
+        bind.execute(sa.text("SELECT current_user")).scalar_one(),
+    )
     op.execute(
-        """
-        ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+        f"""
+        ALTER DEFAULT PRIVILEGES FOR ROLE {migration_owner} IN SCHEMA public
         REVOKE SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER,
         MAINTAIN ON TABLES FROM PUBLIC
         """
