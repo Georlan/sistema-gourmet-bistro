@@ -439,11 +439,11 @@ export default function PlanContractPage() {
       const response = await fetch(`${API_BASE_URL}/api/contracts/${receipt.protocol}/billing/status`);
       if (response.ok) {
         const payload = await response.json();
-        const hasBilling =
-          Boolean(payload.paymentMethodType) ||
+        const hasActiveBilling =
           Boolean(payload.isActivated) ||
-          Boolean(payload.restaurantId);
-        if (hasBilling) {
+          Boolean(payload.restaurantId) ||
+          (Boolean(payload.paymentMethodType) && payload.billingStatus !== 'failed');
+        if (hasActiveBilling) {
           setError('Esta contratação já possui uma autorização financeira em andamento. Conclua ou cancele essa autorização antes de alterar o plano.');
           return;
         }
