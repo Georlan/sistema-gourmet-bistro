@@ -9,7 +9,7 @@ test.describe('checkout público de adesão KÔMA', () => {
   test('salva o contato antes de pedir documento ou cartão e retoma após recarregar', async ({ page }) => {
     const data = { restaurant_name: 'Bistrô Novo', responsible_name: 'Ana Silva', email: 'ana@example.com', phone: '85999999999', plan: 'premium', billing_cycle: 'anual' };
     let saved = false;
-    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: true, pix: true, publicKey: 'TEST-public' } }));
+    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: true, pix: false, pix_automatic: true, publicKey: 'TEST-public' } }));
     await page.route('**/api/signups', async route => {
       expect(route.request().postDataJSON()).toEqual(data); saved = true;
       await route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } });
@@ -42,16 +42,16 @@ test.describe('checkout público de adesão KÔMA', () => {
     await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: false, pix: false, pix_automatic: false, publicKey: '' } }));
     await page.route('**/api/signups', route => route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } }));
     await page.goto('/contratar/pocket?cobranca=mensal');
-    await expect(page.getByText('7 dias sem mensalidade fixa no cartão.', { exact: true })).toBeVisible();
+    await expect(page.getByText('7 dias grátis em qualquer forma de pagamento.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByLabel('Nome do restaurante', { exact: true }).fill('Bistrô Novo');
     await page.getByLabel('Seu nome', { exact: true }).fill('Ana Silva');
     await page.getByLabel('E-mail', { exact: true }).fill('ana@example.com');
     await page.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
     await page.getByRole('button', { name: 'Salvar e continuar' }).click();
-    await expect(page.getByText(/Os pagamentos estão temporariamente indisponíveis/)).toBeVisible();
+    await expect(page.getByText(/temporariamente indisponíveis/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
-    await expect(page.getByRole('radio', { name: /Pix/ })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: /Pix Automático/ })).toContainText('indisponível no momento');
     await expectNoHorizontalOverflow(page);
   });
 
