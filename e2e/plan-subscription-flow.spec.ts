@@ -9,7 +9,7 @@ test.describe('checkout público de adesão KÔMA', () => {
   test('salva o contato antes de pedir documento ou cartão e retoma após recarregar', async ({ page }) => {
     const data = { restaurant_name: 'Bistrô Novo', responsible_name: 'Ana Silva', email: 'ana@example.com', phone: '85999999999', plan: 'premium', billing_cycle: 'anual' };
     let saved = false;
-    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: true, pix: false, pix_automatic: true, publicKey: 'TEST-public' } }));
+    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: true, pix: false, pix_automatic: true, account_money: true, publicKey: 'TEST-public' } }));
     await page.route('**/api/signups', async route => {
       expect(route.request().postDataJSON()).toEqual(data); saved = true;
       await route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } });
@@ -32,6 +32,7 @@ test.describe('checkout público de adesão KÔMA', () => {
     await page.reload();
     await expect(page.getByText('Sua inscrição foi recuperada. Continue de onde parou.')).toBeVisible();
     await expect(page.getByLabel('E-mail', { exact: true })).toHaveValue(data.email);
+    await expect(page.getByRole('radio', { name: /Saldo Mercado Pago/ })).toBeVisible();
     await page.getByRole('radio', { name: /Pix Automático/ }).click();
     await expect(page.getByText('Número do cartão', { exact: true })).toHaveCount(0);
     await expect(page.getByText(/Nenhum Pix avulso será gerado e nenhuma mensalidade fixa será cobrada hoje/)).toBeVisible();
@@ -39,7 +40,7 @@ test.describe('checkout público de adesão KÔMA', () => {
   });
 
   test('mensal permite salvar a inscrição mesmo com pagamentos indisponíveis', async ({ page }) => {
-    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: false, pix: false, pix_automatic: false, publicKey: '' } }));
+    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: false, pix: false, pix_automatic: false, account_money: false, publicKey: '' } }));
     await page.route('**/api/signups', route => route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } }));
     await page.goto('/contratar/pocket?cobranca=mensal');
     await expect(page.getByText('7 dias grátis em qualquer forma de pagamento.', { exact: true })).toBeVisible();
@@ -52,6 +53,7 @@ test.describe('checkout público de adesão KÔMA', () => {
     await expect(page.getByText(/temporariamente indisponíveis/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Aceitar e registrar contratação' })).toBeDisabled();
     await expect(page.getByRole('radio', { name: /Pix Automático/ })).toContainText('indisponível no momento');
+    await expect(page.getByRole('radio', { name: /Saldo Mercado Pago/ })).toContainText('indisponível no momento');
     await expectNoHorizontalOverflow(page);
   });
 

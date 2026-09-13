@@ -62,7 +62,7 @@ class SaasBillingSetupRequest(BaseModel):
                 "Pix avulso antecipado foi removido. Use 'pix_automatic' para autorizar a recorrência com 7 dias grátis."
             )
         if norm not in RECURRING_TRIAL_PAYMENT_METHODS:
-            raise ValueError("Método de pagamento inválido. Use 'credit_card' ou 'pix_automatic'.")
+            raise ValueError("Método de pagamento inválido. Use 'credit_card', 'pix_automatic' ou 'account_money'.")
         return norm
 
 
@@ -106,6 +106,20 @@ def _validate_recurring_mandate(
             raise HTTPException(
                 409,
                 "A autorização concluída não é Pix Automático. Volte ao checkout e autorize a recorrência por Pix.",
+            )
+    elif payment_method_type == "account_money":
+        provider_method = str(mandate.get("payment_method_id") or "").strip().lower()
+        if provider_method != "account_money":
+            raise HTTPException(
+                409,
+                "A autorização concluída não é Saldo Mercado Pago. Volte ao checkout e autorize usando sua conta Mercado Pago.",
+            )
+    elif payment_method_type == "credit_card":
+        provider_method = str(mandate.get("payment_method_id") or "").strip().lower()
+        if provider_method in ("pix", "account_money"):
+            raise HTTPException(
+                409,
+                "A autorização concluída não é cartão de crédito. Volte ao checkout e informe um cartão válido.",
             )
 
 
@@ -218,17 +232,18 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             db.commit()
             return _setup_contract_billing(protocol, payload, background_tasks, db)
 
-        if existing.payment_method_type == "pix_automatic" and recovered:
+        if existing.payment_method_type in ("pix_automatic", "account_money") and recovered:
             authorization_url = str(recovered.get("init_point") or "").strip()
+            method_label = "Saldo Mercado Pago" if existing.payment_method_type == "account_money" else "Pix Automático"
             return {
                 "success": True,
                 "status": "authorization_required",
-                "paymentMethodType": "pix_automatic",
+                "paymentMethodType": existing.payment_method_type,
                 "subscriptionId": existing.provider_subscription_id,
                 "authorizationUrl": authorization_url or None,
                 "amountDueToday": 0,
                 "trialDays": SAAS_TRIAL_DAYS,
-                "message": "Autorize o Pix Automático. Nenhuma mensalidade fixa será cobrada antes do fim dos 7 dias grátis.",
+                "message": f"Autorize o {method_label}. Nenhuma mensalidade fixa será cobrada antes do fim dos 7 dias grátis.",
             }
 
         raise HTTPException(409, "A autorização anterior ainda está em confirmação. Aguarde antes de tentar novamente.")
@@ -347,6 +362,60 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
             "message": "Autorize o Pix Automático no ambiente seguro do Mercado Pago. A primeira cobrança será somente após os 7 dias grátis.",
+        }
+
+    if payload.payment_method_type == "account_money":
+        upsert_billing_setup(
+            db,
+            protocol=normalized_protocol,
+            contract_acceptance_id=str(acceptance["acceptance_id"]),
+            provider="mercado_pago",
+            payment_method_type="account_money",
+            status="pending",
+            billing_cycle=canonical_cycle,
+        )
+        db.commit()
+        try:
+            mp_res = default_saas_mp_service.create_account_money_preapproval(
+                protocol=normalized_protocol,
+                plan=plan,
+                billing_cycle=canonical_cycle,
+                amount=amount,
+                payer_email=payer_email,
+                trial_days=SAAS_TRIAL_DAYS,
+            )
+        except SaasMercadoPagoError as exc:
+            upsert_billing_setup(db, protocol=normalized_protocol, payment_method_type="account_money", status="failed", billing_cycle=canonical_cycle)
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+        sub_id = str(mp_res.get("id") or "").strip()
+        authorization_url = str(mp_res.get("init_point") or "").strip()
+        if not sub_id or not authorization_url:
+            upsert_billing_setup(db, protocol=normalized_protocol, payment_method_type="account_money", status="failed", billing_cycle=canonical_cycle)
+            db.commit()
+            raise HTTPException(502, "O gateway não retornou a autorização do Saldo Mercado Pago.")
+
+        upsert_billing_setup(
+            db,
+            protocol=normalized_protocol,
+            contract_acceptance_id=str(acceptance["acceptance_id"]),
+            provider="mercado_pago",
+            payment_method_type="account_money",
+            status="pending",
+            provider_subscription_id=sub_id,
+            billing_cycle=canonical_cycle,
+        )
+        db.commit()
+        return {
+            "success": True,
+            "status": "authorization_required",
+            "paymentMethodType": "account_money",
+            "subscriptionId": sub_id,
+            "authorizationUrl": authorization_url,
+            "amountDueToday": 0,
+            "trialDays": SAAS_TRIAL_DAYS,
+            "message": "Autorize a assinatura com seu Saldo Mercado Pago no ambiente seguro. A primeira cobrança será somente após os 7 dias grátis.",
         }
 
     raise HTTPException(422, "Método recorrente não suportado.")

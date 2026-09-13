@@ -55,6 +55,7 @@ class SaasMercadoPagoService:
         return {
             "pix": False,
             "pix_automatic": bool(ready),
+            "account_money": bool(ready),
             "credit_card": bool(ready and (self.mock_allowed or settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY)),
             "publicKey": settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY if ready else "",
             "environment": "homologation" if is_homolog else "production",
@@ -255,6 +256,75 @@ class SaasMercadoPagoService:
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao iniciar o Pix Automático.") from exc
 
+    def create_account_money_preapproval(
+        self,
+        *,
+        protocol: str,
+        plan: str,
+        billing_cycle: str,
+        amount: Decimal,
+        payer_email: str,
+        back_url: str | None = None,
+        trial_days: int = 7,
+    ) -> dict[str, Any]:
+        """
+        Cria assinatura pendente no checkout hospedado do Mercado Pago para Saldo Mercado Pago.
+
+        O cliente conclui a autorização recorrente no `init_point`. O KÔMA só
+        considera o setup pronto depois que o preapproval retornar `authorized`
+        e `payment_method_id=account_money`, preservando R$ 0 hoje e a primeira cobrança
+        somente depois dos 7 dias grátis.
+        """
+        self._ensure_provider_ready()
+        self._ensure_no_environment_mismatch(payer_email)
+        resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        payload = self._recurring_payload(
+            protocol=protocol,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            amount=amount,
+            payer_email=payer_email,
+            trial_days=trial_days,
+            back_url=resolved_back_url,
+            status="pending",
+        )
+
+        if self.is_mock:
+            mock_sub_id = f"mock-acc-money-{uuid.uuid4().hex[:12]}"
+            return {
+                "id": mock_sub_id,
+                "status": "pending",
+                "external_reference": protocol,
+                "payer_email": payer_email,
+                "auto_recurring": payload["auto_recurring"],
+                "init_point": f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id={mock_sub_id}",
+                "date_created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+
+        try:
+            with self._client() as client:
+                resp = client.post(
+                    "/preapproval",
+                    json=payload,
+                    headers={"X-Idempotency-Key": self._recurring_idempotency_key(protocol, "account-money")},
+                )
+                if resp.status_code >= 400:
+                    data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                    detail = data.get("message") or data.get("error") or resp.text
+                    raise SaasMercadoPagoError(
+                        f"Falha ao iniciar a autorização com Saldo Mercado Pago: {detail}",
+                        status_code=resp.status_code,
+                    )
+                result = resp.json()
+                if not result.get("id") or not result.get("init_point"):
+                    raise SaasMercadoPagoError(
+                        "O gateway não retornou o link de autorização do Saldo Mercado Pago.",
+                        status_code=502,
+                    )
+                return result
+        except httpx.RequestError as exc:
+            raise SaasMercadoPagoError("Erro de comunicação ao iniciar o Saldo Mercado Pago.") from exc
+
     def find_preapproval(self, protocol: str, payer_email: str) -> dict[str, Any] | None:
         self._ensure_provider_ready()
         try:
@@ -283,10 +353,16 @@ class SaasMercadoPagoService:
     def get_preapproval(self, preapproval_id: str) -> dict[str, Any]:
         self._ensure_provider_ready()
         if self.is_mock:
+            if preapproval_id.startswith("mock-acc-money-"):
+                mock_method = "account_money"
+            elif preapproval_id.startswith("mock-pix-auto-"):
+                mock_method = "pix"
+            else:
+                mock_method = "visa"
             return {
                 "id": preapproval_id,
                 "status": "authorized",
-                "payment_method_id": "pix" if preapproval_id.startswith("mock-pix-auto-") else "visa",
+                "payment_method_id": mock_method,
                 "date_created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
         try:

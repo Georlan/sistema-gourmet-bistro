@@ -91,6 +91,7 @@ def client_and_session(monkeypatch):
         lambda: {
             "credit_card": True,
             "pix_automatic": True,
+            "account_money": True,
             "pix": False,
             "publicKey": "TEST-public",
             "environment": "test",
@@ -132,8 +133,20 @@ def client_and_session(monkeypatch):
             "init_point": f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id={sub_id}",
         }
 
+    def create_account_money(**kwargs):
+        sub_id = f"sub-acc-money-{uuid.uuid4().hex[:8]}"
+        authorized = recurring_response(kwargs, subscription_id=sub_id, payment_method_id="account_money")
+        state[sub_id] = authorized
+        return {
+            **authorized,
+            "status": "pending",
+            "payment_method_id": None,
+            "init_point": f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id={sub_id}",
+        }
+
     monkeypatch.setattr(service, "create_preapproval", create_card)
     monkeypatch.setattr(service, "create_pix_automatic_preapproval", create_pix_auto)
+    monkeypatch.setattr(service, "create_account_money_preapproval", create_account_money)
     monkeypatch.setattr(service, "get_preapproval", lambda sub_id: state[sub_id])
     monkeypatch.setattr(service, "verify_webhook_signature", lambda **_kwargs: True)
     monkeypatch.setattr(
@@ -305,6 +318,97 @@ def test_payment_capabilities_do_not_advertise_upfront_pix(client_and_session):
     data = response.json()
     assert data["credit_card"] is True
     assert data["pix_automatic"] is True
+    assert data["account_money"] is True
     assert data["pix"] is False
     assert data["trialDays"] == 7
     assert data["upfrontPaymentAllowed"] is False
+
+
+def test_account_money_returns_authorization_url_with_zero_due_today(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pro", "mensal")
+
+    response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "account_money"},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "authorization_required"
+    assert data["paymentMethodType"] == "account_money"
+    assert data["amountDueToday"] == 0
+    assert data["trialDays"] == 7
+    assert data["authorizationUrl"].startswith("https://www.mercadopago.com.br/")
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None
+        assert setup.payment_method_type == "account_money"
+        assert setup.status == "pending"
+        assert setup.restaurante_id is None
+        assert db.query(SaaSSubscription).count() == 0
+
+
+def test_account_money_webhook_activates_after_provider_confirms_mandate(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pocket", "anual")
+    setup_response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "account_money"},
+    )
+    subscription_id = setup_response.json()["subscriptionId"]
+
+    webhook = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook",
+        json={"type": "subscription_preapproval", "data": {"id": subscription_id}},
+    )
+    assert webhook.status_code == 200, webhook.text
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None
+        assert setup.status == "ready"
+        assert setup.payment_method_type == "account_money"
+        assert setup.restaurante_id is not None
+        sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == setup.restaurante_id).one()
+        assert sub.status == "trialing"
+        assert sub.payment_method_type == "account_money"
+
+
+def test_account_money_rejects_mismatched_payment_method(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    protocol = _accept(client, "pro", "mensal")
+    setup_response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "account_money"},
+    )
+    subscription_id = setup_response.json()["subscriptionId"]
+
+    # Gateway returns card/visa instead of account_money
+    service = saas_billing.default_saas_mp_service
+    monkeypatch.setattr(
+        service,
+        "get_preapproval",
+        lambda _sub_id: {
+            "id": subscription_id,
+            "status": "authorized",
+            "payer_id": "payer-test",
+            "payment_method_id": "visa",
+            "external_reference": protocol,
+            "auto_recurring": {
+                "frequency": 1,
+                "frequency_type": "months",
+                "transaction_amount": 209.0,
+                "currency_id": "BRL",
+                "free_trial": {"frequency": 7, "frequency_type": "days"},
+            },
+        },
+    )
+
+    webhook = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook",
+        json={"type": "subscription_preapproval", "data": {"id": subscription_id}},
+    )
+    assert webhook.status_code == 409
+    assert "não é Saldo Mercado Pago" in webhook.text
+
