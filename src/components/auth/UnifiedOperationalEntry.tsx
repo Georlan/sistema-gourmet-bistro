@@ -15,6 +15,7 @@ import {
   saveOperatorSession,
   type OperationalPortal,
 } from '../../utils/authSession';
+import { OnboardingOperationalBoundary } from '../onboarding/OnboardingOperationalBoundary';
 import { OperationalLogin, type LoginRestaurantOption } from './OperationalLogin';
 
 const OperationalApp = React.lazy(() => import('../../App'));
@@ -181,7 +182,11 @@ export default function UnifiedOperationalEntry() {
   };
 
   if (activePortal) {
-    return <OperationalAppBridge key={activePortal} portal={activePortal} />;
+    return (
+      <OnboardingOperationalBoundary portal={activePortal}>
+        <OperationalAppBridge key={activePortal} portal={activePortal} />
+      </OnboardingOperationalBoundary>
+    );
   }
 
   return (
