@@ -63,7 +63,10 @@ export function OperationalLogin({
     // entrada unificada e impede que um login em outra guia assuma esta navegação.
     await onSubmit(event);
 
-    if (portal === 'garcom' && localStorage.getItem('koma_waiter_token')) {
+    if (
+      portal === 'garcom'
+      && (localStorage.getItem('koma_waiter_token') || localStorage.getItem('authToken'))
+    ) {
       sessionStorage.setItem('koma_active_operational_portal', 'garcom');
       sessionStorage.removeItem('koma_operational_logged_out');
     } else if (portal === 'caixa' && localStorage.getItem('koma_caixa_token')) {
