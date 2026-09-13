@@ -20,6 +20,7 @@ from app.routes import contracts, saas_billing
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services.billing_service import get_billing_setup, resolve_tenant_entitlement
+from app.services.saas_mercadopago import SaasMercadoPagoError
 from app.subscription import subscription_annual_total, subscription_monthly_price
 
 VALID_CPF = "52998224725"
@@ -147,7 +148,17 @@ def client_and_session(monkeypatch):
     monkeypatch.setattr(service, "create_preapproval", create_card)
     monkeypatch.setattr(service, "create_pix_automatic_preapproval", create_pix_auto)
     monkeypatch.setattr(service, "create_account_money_preapproval", create_account_money)
-    monkeypatch.setattr(service, "get_preapproval", lambda sub_id: state[sub_id])
+    def get_preapproval_mock(sub_id: str):
+        if sub_id in state:
+            return state[sub_id]
+        raise SaasMercadoPagoError("Assinatura não encontrada", status_code=404)
+
+    monkeypatch.setattr(service, "get_preapproval", get_preapproval_mock)
+    monkeypatch.setattr(
+        service,
+        "get_authorized_payment",
+        lambda inv_id: (_ for _ in ()).throw(SaasMercadoPagoError("Fatura não encontrada", status_code=404)),
+    )
     monkeypatch.setattr(service, "verify_webhook_signature", lambda **_kwargs: True)
     monkeypatch.setattr(
         service,
@@ -309,6 +320,39 @@ def test_webhook_accepts_query_parameters_data_id(client_and_session):
         setup = get_billing_setup(db, protocol)
         assert setup is not None
         assert setup.status == "ready"
+
+
+def test_webhook_handles_simulation_preapproval_with_200(client_and_session):
+    client, _Session = client_and_session
+    webhook = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook?data.id=123456&type=subscription_preapproval",
+        json={
+            "action": "updated",
+            "application_id": "815955951076095",
+            "data": {"id": "123456"},
+            "date": "2021-11-01T02:02:02Z",
+            "entity": "preapproval",
+            "id": "123456",
+            "type": "subscription_preapproval",
+            "version": 0,
+        },
+    )
+    assert webhook.status_code == 200, webhook.text
+    assert webhook.json().get("status") == "received"
+
+
+def test_webhook_handles_simulation_authorized_payment_with_200(client_and_session):
+    client, _Session = client_and_session
+    webhook = client.post(
+        "/api/integrations/saas-billing/mercado-pago/webhook?data.id=123456&type=subscription_authorized_payment",
+        json={
+            "action": "payment.created",
+            "data": {"id": "123456"},
+            "type": "subscription_authorized_payment",
+        },
+    )
+    assert webhook.status_code == 200, webhook.text
+    assert webhook.json().get("status") == "received"
 
 
 def test_card_setup_is_idempotent_after_activation(client_and_session):
