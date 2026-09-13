@@ -25,6 +25,8 @@ from ..services.restaurant_provisioning import (
     resolve_activation_acceptance,
 )
 from ..services.saas_mercadopago import (
+    SAAS_MERCADO_PAGO_WEBHOOK_PREFIX,
+    SAAS_MERCADO_PAGO_WEBHOOK_SUBPATH,
     SaasMercadoPagoError,
     default_saas_mp_service,
 )
@@ -34,7 +36,7 @@ from ..subscription import subscription_annual_total, subscription_monthly_price
 logger = logging.getLogger("koma.routes.saas_billing")
 
 router = APIRouter(prefix="/api/contracts", tags=["SaaS Billing"])
-webhook_router = APIRouter(prefix="/api/integrations/saas-billing/mercado-pago", tags=["SaaS Billing Webhook"])
+webhook_router = APIRouter(prefix=SAAS_MERCADO_PAGO_WEBHOOK_PREFIX, tags=["SaaS Billing Webhook"])
 
 _PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
 _MONEY_QUANTUM = Decimal("0.01")
@@ -356,7 +358,7 @@ def get_contract_billing_status(
     }
 
 
-@webhook_router.post("/webhook")
+@webhook_router.post(SAAS_MERCADO_PAGO_WEBHOOK_SUBPATH)
 async def mercado_pago_saas_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
