@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { SlidersHorizontal } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
+import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +19,14 @@ import { CashierSidebarNavigation } from './CashierSidebarNavigation';
 
 type BoundaryProps = CashierSidebarProps;
 
+function readSetupMode(): boolean {
+  try {
+    return sessionStorage.getItem(ONBOARDING_SETUP_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Desktop shell; Navigation Tree v2 owns the actual information architecture. */
 export function CashierDesktopSidebar({
   setIsOperatorDrawerOpen,
@@ -33,6 +42,8 @@ export function CashierDesktopSidebar({
   theme,
   activeWaiterNome,
 }: BoundaryProps) {
+  const setupMode = readSetupMode();
+
   return (
     <Sidebar
       collapsible="icon"
@@ -52,7 +63,7 @@ export function CashierDesktopSidebar({
             </span>
             <span className="cashier-sidebar__brand-copy">
               <strong>Kôma</strong>
-              <small>Se você está com fome, Kôma</small>
+              <small>{setupMode ? 'Configuração inicial' : 'Se você está com fome, Kôma'}</small>
             </span>
           </div>
           <button
@@ -66,37 +77,45 @@ export function CashierDesktopSidebar({
           </button>
         </div>
 
-        <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
-          <div className="cashier-shift-card__status">
-            <span className="cashier-shift-card__dot" />
-            <span className="cashier-shift-card__copy">
-              <small>Turno atual</small>
-              <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
-            </span>
+        {!setupMode && (
+          <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
+            <div className="cashier-shift-card__status">
+              <span className="cashier-shift-card__dot" />
+              <span className="cashier-shift-card__copy">
+                <small>Turno atual</small>
+                <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
+              </span>
+            </div>
+            {turno?.status !== 'aberto' && (
+              <button onClick={() => setShowAbrirModal(true)} className="cashier-shift-card__action is-open">
+                Abrir caixa
+              </button>
+            )}
           </div>
-          {turno?.status !== 'aberto' && (
-            <button onClick={() => setShowAbrirModal(true)} className="cashier-shift-card__action is-open">
-              Abrir caixa
-            </button>
-          )}
-        </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="cashier-sidebar__content p-2">
         <div className="mb-2">
           <CashierOnboardingShortcut />
         </div>
-        <CashierSidebarNavigation
-          groups={CASHIER_SIDEBAR_GROUPS}
-          hasOnlineMenu={hasOnlineMenu}
-          isSidebarTabActive={isSidebarTabActive}
-          sidebarOrderCount={sidebarOrderCount}
-          handleSidebarNavigation={handleSidebarNavigation}
-        />
+        {setupMode ? (
+          <div className="rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-[10px] leading-relaxed text-koma-muted group-data-[collapsible=icon]:hidden">
+            Conclua dados do restaurante, horários e cardápio. A operação será liberada depois desses 3 passos.
+          </div>
+        ) : (
+          <CashierSidebarNavigation
+            groups={CASHIER_SIDEBAR_GROUPS}
+            hasOnlineMenu={hasOnlineMenu}
+            isSidebarTabActive={isSidebarTabActive}
+            sidebarOrderCount={sidebarOrderCount}
+            handleSidebarNavigation={handleSidebarNavigation}
+          />
+        )}
       </SidebarContent>
 
       <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
-        {hasOnlineMenu && <OnlineOrderEmergencyControl />}
+        {!setupMode && hasOnlineMenu && <OnlineOrderEmergencyControl />}
         <CashierSidebarFooter
           changeFontSize={changeFontSize}
           fontSize={fontSize}
