@@ -234,7 +234,7 @@ test('SuperAdmin mantém token na sessão da aba após reload', async ({ page })
   await expect(page.locator('#superadmin-login')).toHaveCount(0);
 });
 
-test('Cardápio restaura sessão de cliente por restaurante em reloads', async ({ page }) => {
+test('Cardápio migra sessão legada para a aba e a restaura em reloads', async ({ page }) => {
   let profileReads = 0;
   await page.addInitScript(() => {
     localStorage.setItem('koma_customer_session:1', JSON.stringify({
@@ -270,5 +270,6 @@ test('Cardápio restaura sessão de cliente por restaurante em reloads', async (
   const beforeReload = profileReads;
   await page.reload();
   await expect.poll(() => profileReads).toBeGreaterThan(beforeReload);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
+  expect(await page.evaluate(() => localStorage.getItem('koma_customer_session:1'))).toBeNull();
 });
