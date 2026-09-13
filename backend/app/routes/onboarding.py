@@ -77,6 +77,18 @@ def _profile_is_configured(restaurant: Restaurante) -> bool:
     )
 
 
+def _required_progress(steps: dict[str, bool]) -> dict[str, int]:
+    """Progresso da implantação sem transformar passos opcionais em bloqueadores."""
+    required_ids = ("profile", "hours", "catalog")
+    completed = sum(1 for step_id in required_ids if steps.get(step_id, False))
+    total = len(required_ids)
+    return {
+        "completed": completed,
+        "total": total,
+        "percent": round((completed / total) * 100),
+    }
+
+
 @router.get("/status")
 def get_onboarding_status(
     db: Session = Depends(get_db),
@@ -145,7 +157,6 @@ def get_onboarding_status(
         "mercadoPago": mercado_pago_connected,
         "firstOrder": first_order_detected,
     }
-    completed = sum(1 for done in steps.values() if done)
 
     return {
         "restaurant": {
@@ -163,9 +174,5 @@ def get_onboarding_status(
             "orders": order_count,
         },
         "steps": steps,
-        "progress": {
-            "completed": completed,
-            "total": len(steps),
-            "percent": round((completed / len(steps)) * 100),
-        },
+        "progress": _required_progress(steps),
     }
