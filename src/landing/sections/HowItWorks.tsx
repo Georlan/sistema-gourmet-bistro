@@ -45,7 +45,7 @@ export function HowItWorks({ cardapioScreenshot, cozinhaScreenshot, pedidosScree
       const index = PRODUCT_TOUR.findIndex(screen => `#${screen.id}` === window.location.hash);
       if (index < 0) return;
       setActive(index);
-      requestAnimationFrame(() => section.current?.scrollIntoView({ block: 'start' }));
+      requestAnimationFrame(() => section.current?.scrollIntoView());
     };
     followHash();
     window.addEventListener('hashchange', followHash);

@@ -54,6 +54,37 @@ test('post-contract flow uses the public tenant domain and does not promise auto
   assert.match(contract, /contratação segue para liberação/i);
 });
 
+test('hero benefit line does not use oversized font that overlaps the tablet mockup', () => {
+  const css = source('src/landing/landing.css');
+
+  assert.doesNotMatch(css, /\.koma-hero-line--benefit\s*\{\s*font-size:\s*clamp\([^)]*6\.25vw/);
+  assert.match(css, /\.koma-hero-line--benefit\s*\{[^}]*white-space:\s*nowrap/);
+});
+
+test('hero strip items point to valid product tour anchors and do not strand navigation', () => {
+  const hero = source('src/landing/sections/Hero.tsx');
+
+  assert.match(hero, /name:\s*'COZINHA RECEBE NA HORA'[\s\S]*?href:\s*'#salao'/);
+  assert.match(hero, /name:\s*'CLIENTE PEDE PELO CELULAR'[\s\S]*?href:\s*'#cardapio'/);
+  assert.match(hero, /name:\s*'PEDIDO SEGUE PARA O PREPARO'[\s\S]*?href:\s*'#salao'/);
+});
+
+test('how it works tour scrolls cleanly without forcing block start against fixed header', () => {
+  const howItWorks = source('src/landing/sections/HowItWorks.tsx');
+
+  assert.doesNotMatch(howItWorks, /scrollIntoView\(\{\s*block:\s*'start'\s*\}\)/);
+  assert.match(howItWorks, /scrollIntoView\(\)/);
+});
+
+test('legal page links never revive /landing or /landing#planos', () => {
+  const legalPage = source('src/legal/LegalPage.tsx');
+
+  assert.doesNotMatch(legalPage, /href="\/landing"/);
+  assert.doesNotMatch(legalPage, /href="\/landing#planos"/);
+  assert.match(legalPage, /href="\/"/);
+  assert.match(legalPage, /href="\/#planos"/);
+});
+
 test('inactive landing sections are safe if reintroduced later', () => {
   const ecosystem = source('src/landing/sections/Ecosystem.tsx');
   const capabilities = source('src/landing/sections/Capabilities.tsx');
@@ -64,3 +95,4 @@ test('inactive landing sections are safe if reintroduced later', () => {
   assert.match(capabilities, /ESTOQUE E FINANCEIRO — PRO E PREMIUM/);
   assert.match(capabilities, /APP DO ENTREGADOR — PREMIUM/);
 });
+
