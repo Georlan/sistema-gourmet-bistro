@@ -46,8 +46,16 @@ function isOperationalUtilityRoute(): boolean {
     || pathname.startsWith("/entregador");
 }
 
+function isLocalOperationalTestRoute(): boolean {
+  const hostname = window.location.hostname.trim().toLowerCase();
+  if (hostname !== "127.0.0.1" && hostname !== "localhost") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("view")?.toLowerCase() === "operacional";
+}
+
 function isCanonicalOperationalEntryRoute(): boolean {
-  if (!isOperationalAppHost()) return false;
+  const localOperationalTestRoute = isLocalOperationalTestRoute();
+  if (!isOperationalAppHost() && !localOperationalTestRoute) return false;
 
   const params = new URLSearchParams(window.location.search);
   const viewParam = params.get("view")?.toLowerCase() || "";
@@ -55,6 +63,8 @@ function isCanonicalOperationalEntryRoute(): boolean {
   // app.komafood.com.br é autoridade canônica da equipe. Links operacionais
   // antigos (/garcom, /caixa, ?view=garcom, ?view=caixa etc.) também entram
   // pelo login unificado; somente superfícies públicas/utilitárias escapam.
+  // O view=operacional em loopback existe exclusivamente para exercitar este
+  // mesmo shell canônico no Playwright, sem alterar o roteamento público.
   if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
 
   return viewParam !== "cardapio"
@@ -144,10 +154,13 @@ const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
-// parecerem o domínio puro. Antes de montar o shell, convertemos toda entrada
-// operacional canônica para exatamente https://app.komafood.com.br/.
+// parecerem o domínio puro. Em produção, antes de montar o shell, convertemos
+// toda entrada operacional canônica para exatamente https://app.komafood.com.br/.
+// Em loopback preservamos ?view=operacional para que reload continue no mesmo
+// shell durante os testes de concorrência entre abas.
 if (
   isUnifiedOperationalRoute
+  && isOperationalAppHost()
   && (window.location.pathname !== "/" || window.location.search || window.location.hash)
 ) {
   window.history.replaceState(window.history.state, "", "/");
