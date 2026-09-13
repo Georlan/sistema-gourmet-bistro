@@ -1,8 +1,8 @@
-# KÔMA Legal 2.0 — base de conformidade e auditoria
+# KÔMA Legal 2.x — base de conformidade e auditoria
 
 Data de referência: 13/09/2026.
 
-Documento interno. A fonte pública da Legal 2.0 é composta por `src/legal/legalContentV2.ts` (snapshot integral dos oito documentos) e `src/legal/legalContentRecurring.ts` (fachada vigente, que mantém a lista de meios recorrentes sincronizada ao produto). O commit de proveniência inicial é `22df9ec64ce2391ee78630598ea0852a85aab4c1`; o blob da fachada jurídica é `d7f1d9279bba4049e50c23b305f45d374cb24767` e o snapshot integral v2 é `df18bdef93332c07ca049e59bf7a2d739194df36`.
+Documento interno. A fonte pública da Legal 2.x é composta por `src/legal/legalContentV2.ts` (snapshot integral inicial dos oito documentos) e `src/legal/legalContentRecurring.ts` (fachada vigente, que mantém regras materiais posteriores sincronizadas ao produto). A Legal 2.1 introduz a política restritiva de itens 18+ e preserva os snapshots anteriores para proveniência histórica.
 
 Este documento registra premissas jurídicas e fatos técnicos usados na revisão. Ele não substitui revisão profissional sobre o enquadramento concreto do prestador, tributação, transferências internacionais ou relações específicas com clientes.
 
@@ -10,7 +10,7 @@ Este documento registra premissas jurídicas e fatos técnicos usados na revisã
 
 A versão 1.3 corrigia a política de trial e cobrança recorrente, mas ainda herdava quase todo o conteúdo da versão 1.2. O produto passou a incluir uma contratação muito mais estruturada, clickwrap com evidências, autorização recorrente, liberação administrativa, pagamentos online com split, Pix Automático, Saldo Mercado Pago, cardápio próprio, SmartPOS condicionado a homologação, sessões operacionais segregadas e fluxos de dados mais amplos.
 
-A Legal 2.0 reescreve integralmente os oito documentos públicos. A v1.2 permanece apenas como snapshot histórico e não deve ser usada para montar novos contratos.
+A Legal 2.0 reescreveu integralmente os oito documentos públicos. A v1.2 permanece apenas como snapshot histórico e não deve ser usada para montar novos contratos. A Legal 2.1 é uma revisão material pequena sobre a fachada vigente para fixar a política de produtos sujeitos a restrição etária.
 
 ## 2. Documentos públicos cobertos
 
@@ -34,6 +34,9 @@ A Legal 2.0 reescreve integralmente os oito documentos públicos. A v1.2 permane
 - Métodos recorrentes modelados: cartão de crédito, Pix Automático e Saldo Mercado Pago (`account_money`), sempre sujeitos às capacidades publicadas pelo backend e à homologação do provedor.
 - Pix avulso antecipado não é método válido para novas assinaturas SaaS.
 - O cardápio online está incluído nos planos e não depende de WhatsApp para concluir a compra.
+- Produtos sujeitos a restrição etária, incluindo bebidas alcoólicas, não fazem parte da oferta pretendida do cardápio online.
+- Enquanto o recurso de classificação automática ainda não existir, o restaurante deve manter itens 18+ fora do cardápio online.
+- Quando a tag `18+` ou classificação equivalente for implementada, ela deve atuar como gate de publicação/sincronização: o item permanece no catálogo interno/PDV, mas não é transferido nem disponibilizado no cardápio online.
 - A taxa KÔMA incide somente sobre pagamentos online elegíveis processados pelo fluxo integrado.
 - Mercado Pago pode executar split; tarifas do provedor são independentes da taxa KÔMA.
 - Comandas, conferências, históricos SmartPOS, pedidos e impressões operacionais são documentos não fiscais.
@@ -73,7 +76,7 @@ O KÔMA define finalidade própria onde necessário, incluindo contratação, co
 
 ### Dados sensíveis
 
-Observações de pedido podem conter alergia, intolerância ou outra informação de saúde. A Legal 2.0 trata esse conteúdo explicitamente como dado sensível e exige minimização e finalidade relacionada à preparação segura.
+Observações de pedido podem conter alergia, intolerância ou outra informação de saúde. A Legal 2.x trata esse conteúdo explicitamente como dado sensível e exige minimização e finalidade relacionada à preparação segura.
 
 ## 6. Fornecedores e transferências
 
@@ -94,7 +97,7 @@ Nem todo fornecedor atua como suboperador em todos os fluxos. O Mercado Pago, po
 
 ### P0 — identificação jurídica e fiscal do prestador
 
-O backend exige `KOMA_LEGAL_PROVIDER_NAME`, `KOMA_LEGAL_PROVIDER_TAX_ID`, `KOMA_LEGAL_PROVIDER_ADDRESS` e localização antes da contratação definitiva. A Legal 2.0 não publica documento fiscal pessoal no Git, mas o fluxo contratual deve apresentar a identificação completa exigível ao contratante.
+O backend exige `KOMA_LEGAL_PROVIDER_NAME`, `KOMA_LEGAL_PROVIDER_TAX_ID`, `KOMA_LEGAL_PROVIDER_ADDRESS` e localização antes da contratação definitiva. A Legal 2.x não publica documento fiscal pessoal no Git, mas o fluxo contratual deve apresentar a identificação completa exigível ao contratante.
 
 A formalização futura do KÔMA em pessoa jurídica e o enquadramento tributário devem ser tratados com contador e advogado. Mudança de pessoa física para pessoa jurídica exige atualização da identificação pública e avaliação sobre cessão ou migração contratual.
 
@@ -102,9 +105,13 @@ A formalização futura do KÔMA em pessoa jurídica e o enquadramento tributár
 
 Não declarar conformidade apenas porque o fornecedor possui DPA estrangeiro. Para fluxos sujeitos à LGPD, confirmar e documentar mecanismo válido conforme a Resolução CD/ANPD nº 19/2024 e suas alterações vigentes.
 
-### P0 — itens 18+
+### P0 — gate técnico para itens 18+
 
-Não liberar conclusão online de item cuja venda exija verificação robusta de idade enquanto o produto não possuir mecanismo compatível com a legislação aplicável. Autodeclaração isolada não deve ser tratada como suficiente quando a norma exigir verificação mais confiável.
+A decisão de produto é mais restritiva que um simples fluxo de verificação de idade: bebidas alcoólicas e demais itens marcados como `18+` não devem ser publicados nem sincronizados para o cardápio online.
+
+A implementação futura deve criar uma classificação explícita no produto e aplicar o bloqueio no backend/fonte de verdade da publicação, não apenas esconder o item no frontend. O mesmo gate deve proteger APIs públicas, sincronizações, cache e qualquer fluxo que materialize o catálogo online.
+
+Até esse gate técnico existir, o restaurante deve manter itens sujeitos a restrição etária fora do cardápio online. A Legal 2.1 registra essa obrigação sem afirmar que a automação já existe.
 
 ### P1 — registros de acesso
 
@@ -120,12 +127,12 @@ Google Fonts permanece como chamada remota. Sentry permanece condicional no back
 
 ## 8. Evidência contratual
 
-A contratação possui arquitetura para registrar versão jurídica, hashes dos documentos, snapshots de Termos, Condições, DPA e Privacidade, plano, ciclo, preço, taxa, identidade, IP e User-Agent. A Legal 2.0 mantém esse modelo e fixa proveniência no commit e blob da fonte vigente.
+A contratação possui arquitetura para registrar versão jurídica, hashes dos documentos, snapshots de Termos, Condições, DPA e Privacidade, plano, ciclo, preço, taxa, identidade, IP e User-Agent. A Legal 2.1 mantém esse modelo e fixa proveniência no commit e blob da fonte vigente.
 
-Contratos anteriores devem continuar vinculados às versões e snapshots aceitos na data correspondente. Não migrar retroativamente contratação concluída para 2.0 sem novo aceite quando a mudança for material.
+Contratos anteriores devem continuar vinculados às versões e snapshots aceitos na data correspondente. Não migrar retroativamente contratação concluída para versão nova sem novo aceite quando a mudança for material.
 
 ## 9. Regra de manutenção
 
 Mudanças futuras em billing, planos, pagamentos online, armazenamento, suboperadores, documentos fiscais, idade mínima, papéis LGPD ou retenção devem disparar revisão do documento jurídico afetado.
 
-A fonte integral de cada grande versão deve permanecer preservada e auditável. Ajustes posteriores dentro da mesma versão devem ser pequenos, explícitos e protegidos por testes, evitando voltar ao modelo de herdar integralmente uma versão jurídica antiga.
+A fonte integral de cada grande versão deve permanecer preservada e auditável. Ajustes posteriores dentro da mesma família de versão devem ser pequenos, explícitos e protegidos por testes, evitando voltar ao modelo de herdar integralmente uma versão jurídica antiga.
