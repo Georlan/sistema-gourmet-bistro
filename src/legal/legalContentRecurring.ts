@@ -6,7 +6,7 @@ import {
   type LegalDocument,
   type LegalDocumentSlug,
   type LegalSection,
-} from './legalContent';
+} from './legalContentLegacy';
 
 export type { LegalDocument, LegalDocumentSlug, LegalSection };
 export { LEGAL_PROVIDER_LOCATION, LEGAL_PROVIDER_NAME, LEGAL_SUPPORT_SCHEDULE };
