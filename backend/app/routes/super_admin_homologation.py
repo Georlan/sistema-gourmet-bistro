@@ -71,6 +71,10 @@ def get_homologation_readiness(
     whatsapp_enabled = bool(settings.KOMA_WHATSAPP_AUTOMATION_ENABLED)
     owner_whatsapp_ready = bool(os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip())
 
+    access_token_var = "KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN" if is_homologation else "KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN"
+    public_key_var = "KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY" if is_homologation else "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY"
+    webhook_secret_var = "KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET" if is_homologation else "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET"
+
     checks = [
         _check(
             "isolated-environment",
@@ -83,77 +87,81 @@ def get_homologation_readiness(
             "mercado-pago-test-access-token",
             "Access token TEST do Mercado Pago",
             test_credentials_ready,
-            "Credencial de teste configurada" if test_credentials_ready else "Ausente ou incompatível com o ambiente",
+            "Credencial de teste configurada (TEST-)" if test_credentials_ready else (
+                f"Falta {access_token_var} (obrigatório iniciar com TEST-)" if is_homologation else f"Falta {access_token_var}"
+            ),
             scope="payment",
         ),
         _check(
             "mercado-pago-test-public-key",
             "Public key TEST do Mercado Pago",
             bool(public_key),
-            "Configurada" if public_key else "Ausente",
+            "Configurada" if public_key else f"Falta {public_key_var}",
             scope="payment",
         ),
         _check(
             "mercado-pago-webhook-secret",
             "Secret do webhook Mercado Pago",
             bool(webhook_secret),
-            "Configurado" if webhook_secret else "Ausente",
+            "Configurado" if webhook_secret else f"Falta {webhook_secret_var}",
             scope="payment",
         ),
         _check(
             "checkout-enabled",
             "Checkout SaaS habilitado",
             checkout_enabled,
-            "KOMA_SAAS_CHECKOUT_ENABLED=true" if checkout_enabled else "Defina KOMA_SAAS_CHECKOUT_ENABLED=true após inserir as credenciais TEST",
+            "KOMA_SAAS_CHECKOUT_ENABLED=true" if checkout_enabled else "Bloqueado: defina KOMA_SAAS_CHECKOUT_ENABLED=true após inserir as credenciais TEST",
             scope="payment",
         ),
         _check(
             "manual-release",
             "Liberação manual pelo SuperAdmin",
             bool(settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED),
-            "Pagamento fica em awaiting_release" if settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED else "Defina KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true",
+            "Pronta: pagamento fica em awaiting_release" if settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED else "Bloqueado: defina KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true",
             scope="payment",
         ),
         _check(
             "public-app-url",
             "Links apontam para homologação",
             _public_app_matches_environment(public_app_url, is_homologation),
-            public_app_url or "KOMA_PUBLIC_APP_URL ausente",
+            f"Aponta para {public_app_url}" if _public_app_matches_environment(public_app_url, is_homologation) else (
+                f"Configure KOMA_PUBLIC_APP_URL para o frontend de homologação (atual: {public_app_url})" if public_app_url else "Configure KOMA_PUBLIC_APP_URL para o frontend de homologação"
+            ),
             scope="payment",
         ),
         _check(
             "outbox-worker",
             "Worker de notificações",
             outbox_worker_enabled,
-            "Ativo" if outbox_worker_enabled else "Defina ENABLE_OUTBOX_WORKER=true",
+            "Pronto: worker ativo" if outbox_worker_enabled else "Bloqueado: defina ENABLE_OUTBOX_WORKER=true",
             scope="delivery",
         ),
         _check(
             "email-provider",
             "E-mail transacional",
             email_ready,
-            "Resend e remetente configurados" if email_ready else "Configure RESEND_API_KEY e EMAIL_FROM",
+            "Pronto: Resend e remetente configurados" if email_ready else "Falta RESEND_API_KEY e/ou EMAIL_FROM",
             scope="delivery",
         ),
         _check(
             "owner-email",
             "E-mail do operador KÔMA",
             owner_email_ready,
-            "Configurado" if owner_email_ready else "Configure KOMA_OWNER_EMAIL",
+            "Pronto: e-mail configurado" if owner_email_ready else "Falta KOMA_OWNER_EMAIL",
             scope="delivery",
         ),
         _check(
             "whatsapp-automation",
             "Automação WhatsApp",
             whatsapp_enabled,
-            "Ativa" if whatsapp_enabled else "Defina KOMA_WHATSAPP_AUTOMATION_ENABLED=true",
+            "Pronto: automação ativa" if whatsapp_enabled else "Pendente: defina KOMA_WHATSAPP_AUTOMATION_ENABLED=true",
             scope="delivery",
         ),
         _check(
             "owner-whatsapp",
             "WhatsApp do operador KÔMA",
             owner_whatsapp_ready,
-            "Configurado" if owner_whatsapp_ready else "Configure KOMA_OWNER_WHATSAPP_PHONE",
+            "Pronto: telefone configurado" if owner_whatsapp_ready else "Falta KOMA_OWNER_WHATSAPP_PHONE",
             scope="delivery",
         ),
     ]

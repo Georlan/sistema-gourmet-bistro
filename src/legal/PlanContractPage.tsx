@@ -205,7 +205,13 @@ export default function PlanContractPage() {
   const [requestId, setRequestId] = useState(newRequestId);
   const [signupToken, setSignupToken] = useState('');
   const [signupNotice, setSignupNotice] = useState('');
-  const [capabilities, setCapabilities] = useState({ credit_card: false, pix: false, publicKey: '' });
+  const [capabilities, setCapabilities] = useState<{
+    credit_card: boolean;
+    pix: boolean;
+    publicKey: string;
+    environment?: string;
+    isTestMode?: boolean;
+  }>({ credit_card: false, pix: false, publicKey: '' });
   const [receipt, setReceipt] = useState<ContractReceipt | null>(null);
   const [activationResult, setActivationResult] = useState<ActivationResult | null>(null);
   const [pixData, setPixData] = useState<PixData | null>(null);
@@ -879,7 +885,13 @@ export default function PlanContractPage() {
                     </div>
                   )}
 
-                  {!capabilities.credit_card && !capabilities.pix && <p role="status">Sua inscrição está salva. Os pagamentos estão temporariamente indisponíveis; você pode retomar neste dispositivo mais tarde.</p>}
+                  {!capabilities.credit_card && !capabilities.pix && (
+                    <p role="status">
+                      {capabilities.isTestMode || capabilities.environment === 'homologation'
+                        ? 'Ambiente de homologação: o checkout está temporariamente pausado porque as credenciais TEST do gateway de pagamento ainda não foram configuradas (KOMA_SAAS_CHECKOUT_ENABLED=false). Seus dados estão salvos e a contratação poderá ser concluída assim que as credenciais TEST forem habilitadas.'
+                        : 'Sua inscrição está salva. Os pagamentos estão temporariamente indisponíveis; você pode retomar neste dispositivo mais tarde.'}
+                    </p>
+                  )}
                 </section>
 
                 <section className="koma-sub-legal-acceptance">
