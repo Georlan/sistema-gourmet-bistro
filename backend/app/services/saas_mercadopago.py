@@ -24,6 +24,13 @@ SAAS_MERCADO_PAGO_REQUIRED_WEBHOOK_EVENTS = (
 )
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class SaasMercadoPagoError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None):
         super().__init__(message)
@@ -55,13 +62,18 @@ class SaasMercadoPagoService:
             )
 
     def checkout_capabilities(self):
-        enabled = self.mock_allowed or os.getenv("KOMA_SAAS_CHECKOUT_ENABLED", "false").lower() == "true"
-        ready = enabled and (self.mock_allowed or (not self.is_mock and bool(settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET)))
+        enabled = self.mock_allowed or _env_flag("KOMA_SAAS_CHECKOUT_ENABLED")
+        ready = enabled and (
+            self.mock_allowed
+            or (not self.is_mock and bool(settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET))
+        )
         is_homolog = self.environment in {"staging", "homologation", "homolog", "development", "test"}
+        pix_automatic_enabled = self.mock_allowed or _env_flag("KOMA_SAAS_PIX_AUTOMATIC_ENABLED")
+        account_money_enabled = self.mock_allowed or _env_flag("KOMA_SAAS_ACCOUNT_MONEY_ENABLED")
         return {
             "pix": False,
-            "pix_automatic": bool(ready),
-            "account_money": bool(ready),
+            "pix_automatic": bool(ready and pix_automatic_enabled),
+            "account_money": bool(ready and account_money_enabled),
             "credit_card": bool(ready and (self.mock_allowed or settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY)),
             "publicKey": settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY if ready else "",
             "environment": "homologation" if is_homolog else "production",
