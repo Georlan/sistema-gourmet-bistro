@@ -23,6 +23,18 @@ type DeliveryFailure = {
   last_error?: string;
 };
 
+type CatalogAssistanceItem = {
+  id: string;
+  restaurant_id: string;
+  restaurant_name: string;
+  filename: string;
+  content_type: string;
+  file_size: number;
+  status: 'pending' | 'processing' | string;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 const labels: Record<string, string> = {
   started: 'Cadastro iniciado',
   payment_pending: 'Autorização pendente',
@@ -31,13 +43,21 @@ const labels: Record<string, string> = {
   activated: 'Acesso liberado',
 };
 
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
 export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string }) {
   const [items, setItems] = useState<Signup[]>([]);
   const [deliveryFailures, setDeliveryFailures] = useState<DeliveryFailure[]>([]);
+  const [catalogRequests, setCatalogRequests] = useState<CatalogAssistanceItem[]>([]);
   const [error, setError] = useState('');
   const [successNotice, setSuccessNotice] = useState('');
   const [releasingProtocol, setReleasingProtocol] = useState<string | null>(null);
   const [reissuingProtocol, setReissuingProtocol] = useState<string | null>(null);
+  const [catalogBusyId, setCatalogBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
@@ -55,6 +75,12 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
         setDeliveryFailures(
           deliveries.items.filter((item: DeliveryFailure) => item.status === 'failed' || item.last_error),
         );
+      }
+
+      const catalogResponse = await superAdminFetch('/api/super-admin/catalog-assistance', { signal });
+      if (catalogResponse.ok) {
+        const catalogPayload = await catalogResponse.json();
+        setCatalogRequests(catalogPayload.items || []);
       }
     } catch (err) {
       if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Falha ao carregar inscrições.');
@@ -149,8 +175,154 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
     }
   };
 
+  const markCatalogProcessing = async (item: CatalogAssistanceItem) => {
+    if (item.status === 'processing') return;
+    const response = await superAdminFetch(
+      `/api/super-admin/catalog-assistance/${encodeURIComponent(item.restaurant_id)}/${encodeURIComponent(item.id)}/status`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'processing',
+          reason: 'Arquivo-fonte baixado pelo SuperAdmin para preparação assistida do cardápio.',
+        }),
+      },
+    );
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || 'Não foi possível marcar o cardápio como em preparação.');
+    }
+  };
+
+  const downloadCatalogSource = async (item: CatalogAssistanceItem) => {
+    setCatalogBusyId(item.id);
+    setError('');
+    try {
+      const response = await superAdminFetch(
+        `/api/super-admin/catalog-assistance/${encodeURIComponent(item.restaurant_id)}/${encodeURIComponent(item.id)}/file`,
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || 'Não foi possível baixar o arquivo do cardápio.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = item.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      await markCatalogProcessing(item);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao baixar o cardápio.');
+    } finally {
+      setCatalogBusyId(null);
+    }
+  };
+
+  const publishCatalogJson = async (item: CatalogAssistanceItem, file?: File) => {
+    if (!file) return;
+    setCatalogBusyId(item.id);
+    setError('');
+    setSuccessNotice('');
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      if (!Array.isArray(parsed) && (!parsed || typeof parsed !== 'object')) {
+        throw new Error('O JSON revisado deve ser uma lista de produtos ou um objeto com categories/products.');
+      }
+      const response = await superAdminFetch(
+        `/api/super-admin/catalog-assistance/${encodeURIComponent(item.restaurant_id)}/${encodeURIComponent(item.id)}/publish`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            catalog: parsed,
+            reason: 'Cardápio estruturado com apoio de IA e revisado pelo operador antes da publicação.',
+            confirm: true,
+          }),
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Não foi possível publicar o cardápio revisado.');
+      setSuccessNotice(
+        `Cardápio assistido publicado em ${item.restaurant_name}: ${data.products_imported} produto(s) importado(s).`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao publicar o cardápio revisado.');
+    } finally {
+      setCatalogBusyId(null);
+    }
+  };
+
   return <>
     <SuperAdminHomologationReadiness />
+
+    <section className="mb-5 rounded-xl border border-zinc-800 bg-koma-surface p-5 text-koma-foreground">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Cardápios para implantação</h2>
+          <p className="my-2 max-w-3xl text-sm text-koma-muted">
+            O restaurante envia PDF ou foto. Baixe a fonte, use a IA para estruturar o cardápio, revise nomes e preços e publique aqui o JSON interno. O cliente não precisa lidar com JSON.
+          </p>
+        </div>
+        <span className="rounded-full border border-zinc-700 px-3 py-1 text-xs font-semibold">
+          {catalogRequests.length} pendente(s)
+        </span>
+      </div>
+
+      {catalogRequests.length === 0
+        ? <p className="mt-4 text-sm text-koma-muted">Nenhum cardápio aguardando implantação assistida.</p>
+        : <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {catalogRequests.map(item => (
+              <article key={item.id} className="rounded-xl border border-zinc-800 bg-koma-page p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-bold">{item.restaurant_name}</h3>
+                    <p className="mt-1 break-all text-xs text-koma-muted">{item.filename}</p>
+                    <p className="mt-1 text-xs text-koma-subtle">
+                      {formatFileSize(item.file_size)} · {item.status === 'processing' ? 'em preparação' : 'aguardando'}
+                      {item.created_at ? ` · ${new Date(item.created_at).toLocaleString('pt-BR')}` : ''}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${item.status === 'processing' ? 'bg-amber-500/10 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
+                    {item.status === 'processing' ? 'Em preparação' : 'Novo'}
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={catalogBusyId === item.id}
+                    onClick={() => void downloadCatalogSource(item)}
+                    className="rounded border border-zinc-700 px-3 py-2 text-xs font-semibold disabled:opacity-50"
+                  >
+                    {catalogBusyId === item.id ? 'Processando…' : 'Baixar fonte'}
+                  </button>
+                  <label className="cursor-pointer rounded bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
+                    Publicar JSON revisado
+                    <input
+                      className="sr-only"
+                      type="file"
+                      accept=".json,application/json"
+                      disabled={catalogBusyId === item.id}
+                      onChange={event => {
+                        const file = event.target.files?.[0];
+                        void publishCatalogJson(item, file);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-koma-subtle">
+                  Antes de publicar, confira manualmente preços, nomes, categorias e itens obrigatórios. A publicação grava direto no tenant selecionado e fica auditada.
+                </p>
+              </article>
+            ))}
+          </div>}
+    </section>
 
     <section className="rounded-xl border border-zinc-800 bg-koma-surface p-5 text-koma-foreground">
       <div className="flex flex-wrap items-start justify-between gap-3">

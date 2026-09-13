@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import math
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.orm import Session
 
+from ..catalog_assistance import (
+    MAX_CATALOG_SOURCE_SIZE,
+    catalog_assistance_requests,
+    detect_catalog_source_type,
+    safe_catalog_filename,
+    utc_now,
+)
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, Produto, RestaurantPaymentAccount, Restaurante, Usuario
 from ..security import get_current_user
@@ -89,17 +98,118 @@ def _required_progress(steps: dict[str, bool]) -> dict[str, int]:
     }
 
 
+def _require_onboarding_role(current_user: Usuario) -> None:
+    role = str(current_user.cargo or current_user.role or "").strip().lower()
+    if role not in {"admin", "gerente"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Somente administradores e gerentes podem configurar o onboarding do restaurante.",
+        )
+
+
+def _catalog_assistance_payload(db: Session, tenant_id: int) -> dict[str, Any] | None:
+    row = db.execute(
+        select(
+            catalog_assistance_requests.c.id,
+            catalog_assistance_requests.c.original_filename,
+            catalog_assistance_requests.c.content_type,
+            catalog_assistance_requests.c.file_size,
+            catalog_assistance_requests.c.status,
+            catalog_assistance_requests.c.created_at,
+            catalog_assistance_requests.c.updated_at,
+        )
+        .where(catalog_assistance_requests.c.restaurante_id == tenant_id)
+        .order_by(catalog_assistance_requests.c.created_at.desc())
+        .limit(1)
+    ).mappings().first()
+    if row is None:
+        return None
+    return {
+        "id": str(row["id"]),
+        "filename": str(row["original_filename"]),
+        "contentType": str(row["content_type"]),
+        "fileSize": int(row["file_size"]),
+        "status": str(row["status"]),
+        "createdAt": _as_utc(row["created_at"]).isoformat() if row["created_at"] else None,
+        "updatedAt": _as_utc(row["updated_at"]).isoformat() if row["updated_at"] else None,
+    }
+
+
+@router.post("/catalog-assistance", status_code=status.HTTP_201_CREATED)
+async def submit_catalog_assistance(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Recebe PDF/foto do cardápio para implantação assistida pela equipe KÔMA."""
+    _require_onboarding_role(current_user)
+    tenant_id = require_tenant_id()
+    restaurant = (
+        db.query(Restaurante)
+        .filter(Restaurante.id == tenant_id)
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+    content = await file.read(MAX_CATALOG_SOURCE_SIZE + 1)
+    if not content:
+        raise HTTPException(status_code=422, detail="O arquivo do cardápio está vazio.")
+    if len(content) > MAX_CATALOG_SOURCE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="O arquivo deve ter no máximo 10 MB.",
+        )
+    try:
+        content_type = detect_catalog_source_type(file.content_type, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    now = utc_now()
+    request_id = str(uuid.uuid4())
+    filename = safe_catalog_filename(file.filename, content_type)
+    digest = hashlib.sha256(content).hexdigest()
+
+    db.execute(
+        update(catalog_assistance_requests)
+        .where(
+            catalog_assistance_requests.c.restaurante_id == tenant_id,
+            catalog_assistance_requests.c.status.in_(("pending", "processing")),
+        )
+        .values(status="superseded", updated_at=now)
+    )
+    db.execute(
+        insert(catalog_assistance_requests).values(
+            id=request_id,
+            restaurante_id=tenant_id,
+            original_filename=filename,
+            content_type=content_type,
+            file_size=len(content),
+            file_sha256=digest,
+            file_content=content,
+            status="pending",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    return {
+        "id": request_id,
+        "filename": filename,
+        "contentType": content_type,
+        "fileSize": len(content),
+        "status": "pending",
+        "message": "Cardápio recebido. A equipe KÔMA vai preparar a estrutura para revisão e publicação.",
+    }
+
+
 @router.get("/status")
 def get_onboarding_status(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    role = str(current_user.cargo or current_user.role or "").strip().lower()
-    if role not in {"admin", "gerente"}:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Somente administradores e gerentes podem consultar o onboarding do restaurante.",
-        )
+    _require_onboarding_role(current_user)
 
     tenant_id = require_tenant_id()
     restaurant = (
@@ -173,6 +283,7 @@ def get_onboarding_status(
             "products": product_count,
             "orders": order_count,
         },
+        "catalogAssistance": _catalog_assistance_payload(db, tenant_id),
         "steps": steps,
         "progress": _required_progress(steps),
     }
