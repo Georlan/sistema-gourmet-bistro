@@ -390,7 +390,10 @@ class SaasMercadoPagoService:
             with self._client() as client:
                 response = client.get("/preapproval/search", params={"payer_email": payer_email})
                 if response.status_code >= 400:
-                    raise SaasMercadoPagoError("Não foi possível recuperar a autorização.")
+                    raise SaasMercadoPagoError(
+                        "Não foi possível recuperar a autorização.",
+                        status_code=response.status_code,
+                    )
                 matches = [row for row in response.json().get("results", []) if str(row.get("external_reference")) == protocol]
                 if len(matches) > 1:
                     raise SaasMercadoPagoError("Mais de uma autorização encontrada; revisão necessária.")
@@ -412,7 +415,10 @@ class SaasMercadoPagoService:
             with self._client() as client:
                 response = client.get(f"/authorized_payments/{invoice_id}")
                 if response.status_code >= 400:
-                    raise SaasMercadoPagoError("Não foi possível consultar a cobrança.")
+                    raise SaasMercadoPagoError(
+                        "Não foi possível consultar a cobrança.",
+                        status_code=response.status_code,
+                    )
                 return response.json()
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Falha ao consultar a cobrança.") from exc
