@@ -310,3 +310,35 @@ def test_gateway_payer_email_resolution(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     service_prod = SaasMercadoPagoService("APP_USR-prod-token")
     assert service_prod._resolve_gateway_payer_email("real@restaurant.com") == "real@restaurant.com"
+
+
+def test_get_authorized_payment_propagates_status_code(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "homologation")
+    service = SaasMercadoPagoService("APP_USR-test-token")
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, **kwargs):
+            class FakeResponse:
+                status_code = 404
+                text = "Not Found"
+
+                def json(self):
+                    return {"message": "Not Found"}
+
+            return FakeResponse()
+
+    monkeypatch.setattr(service, "_client", lambda: FakeClient())
+    with pytest.raises(SaasMercadoPagoError) as exc_info:
+        service.get_authorized_payment("123456")
+    assert exc_info.value.status_code == 404
+
+    with pytest.raises(SaasMercadoPagoError) as exc_info_search:
+        service.find_preapproval("PROTO", "test@test.com")
+    assert exc_info_search.value.status_code == 404
+
