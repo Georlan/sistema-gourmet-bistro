@@ -10,21 +10,14 @@ class _FakeResponse:
     headers = {"content-type": "application/json"}
     text = ""
 
-    def __init__(self, payment_id: str):
-        self.payment_id = payment_id
+    def __init__(self, subscription_id: str):
+        self.subscription_id = subscription_id
 
     def json(self):
         return {
-            "id": self.payment_id,
+            "id": self.subscription_id,
             "status": "pending",
-            "point_of_interaction": {
-                "transaction_data": {
-                    "qr_code": "pix-copy-paste",
-                    "qr_code_base64": "",
-                    "ticket_url": f"https://example.invalid/{self.payment_id}",
-                }
-            },
-            "date_of_expiration": "2026-09-13T12:00:00Z",
+            "init_point": f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id={self.subscription_id}",
         }
 
 
@@ -40,32 +33,34 @@ class _FakeClient:
 
     def post(self, path: str, *, json: dict, headers: dict | None = None):
         self.calls.append({"path": path, "json": json, "headers": headers or {}})
-        return _FakeResponse(f"payment-{len(self.calls)}")
+        return _FakeResponse(f"subscription-{len(self.calls)}")
 
 
-def _create_pix(service: SaasMercadoPagoService, protocol: str):
-    return service.create_annual_pix(
+def _create_pix_automatic(service: SaasMercadoPagoService, protocol: str):
+    return service.create_pix_automatic_preapproval(
         protocol=protocol,
         plan="pro",
+        billing_cycle="annual",
         amount=Decimal("2257.20"),
         payer_email="reliability@example.com",
-        payer_name="Cliente Reliability",
-        payer_tax_id="52998224725",
     )
 
 
-def test_annual_pix_retries_send_same_provider_idempotency_key(monkeypatch):
+def test_pix_automatic_retries_send_same_provider_idempotency_key(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
     service = SaasMercadoPagoService("APP_USR-test-real-shaped-token")
     calls: list[dict] = []
     monkeypatch.setattr(service, "_client", lambda: _FakeClient(calls))
 
     protocol = "KOMA-CTR-20260912-A1B2C3D4E5F6"
-    _create_pix(service, protocol)
-    _create_pix(service, protocol)
-    _create_pix(service, "KOMA-CTR-20260912-ABCDEF123456")
+    _create_pix_automatic(service, protocol)
+    _create_pix_automatic(service, protocol)
+    _create_pix_automatic(service, "KOMA-CTR-20260912-ABCDEF123456")
 
     assert len(calls) == 3
-    assert all(call["path"] == "/v1/payments" for call in calls)
+    assert all(call["path"] == "/preapproval" for call in calls)
+    assert all(call["json"]["status"] == "pending" for call in calls)
+    assert all(call["json"]["auto_recurring"]["free_trial"]["frequency"] == 7 for call in calls)
 
     first_key = calls[0]["headers"].get("X-Idempotency-Key")
     retry_key = calls[1]["headers"].get("X-Idempotency-Key")
