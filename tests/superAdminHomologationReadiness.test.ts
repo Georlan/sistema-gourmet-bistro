@@ -60,4 +60,16 @@ test('Homologation cockpit protects canonical SaaS webhook, required events, and
   assert.match(saasMp, /\/api\/integrations\/saas-billing\/mercado-pago\/webhook/);
 });
 
+test('Homologation cockpit exposes the live recurring checkout policy instead of generic Pix wording', () => {
+  assert.match(readiness, /publicApiFetch/);
+  assert.match(readiness, /\/api\/contracts\/payment-methods/);
+  assert.match(readiness, /Política ativa do checkout/);
+  assert.match(readiness, /Cartão e Pix Automático seguem a mesma regra recorrente/);
+  assert.match(readiness, /R\$ 0 de mensalidade fixa hoje/);
+  assert.match(readiness, /primeira cobrança automática no D\+7/);
+  assert.match(readiness, /Pix avulso:/);
+  assert.match(readiness, /upfrontPaymentAllowed/);
+  assert.match(readiness, /repita com Pix Automático/);
+  assert.doesNotMatch(readiness, /repita com Pix →/);
+});
 
