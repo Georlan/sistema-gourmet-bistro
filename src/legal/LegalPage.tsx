@@ -43,6 +43,22 @@ function LegalFooter() {
   );
 }
 
+function PixAutomaticReturn() {
+  useEffect(() => {
+    window.location.replace('/contratar/pro?retorno=pix-automatico');
+  }, []);
+  return (
+    <div className="koma-legal-shell">
+      <LegalHeader />
+      <main className="koma-legal-main koma-legal-not-found">
+        <span>PIX AUTOMÁTICO</span>
+        <h1>CONFIRMANDO SUA AUTORIZAÇÃO.</h1>
+        <p>Você será levado de volta à contratação. Nenhuma mensalidade fixa é cobrada antes do fim dos 7 dias grátis.</p>
+      </main>
+    </div>
+  );
+}
+
 function LegalCenter() {
   useEffect(() => {
     setLegalDocumentMeta(
@@ -210,6 +226,7 @@ function LegalDocumentPage({ slug }: { slug: string }) {
 
 export default function LegalPage() {
   const pathname = window.location.pathname.replace(/\/+$/, '');
+  if (pathname === '/legal/contrato/confirmacao') return <PixAutomaticReturn />;
   const slug = pathname === '/legal' ? undefined : pathname.split('/')[2];
   return slug ? <LegalDocumentPage slug={slug} /> : <LegalCenter />;
 }
