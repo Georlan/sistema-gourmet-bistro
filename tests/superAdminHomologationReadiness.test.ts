@@ -10,13 +10,17 @@ const signups = readFileSync(
   new URL('../src/super-admin/SuperAdminSignupsTab.tsx', import.meta.url),
   'utf8',
 );
+const saasMp = readFileSync(
+  new URL('../backend/app/services/saas_mercadopago.py', import.meta.url),
+  'utf8',
+);
 
 test('SuperAdmin exposes an actionable SaaS homologation cockpit', () => {
   assert.match(readiness, /\/api\/super-admin\/homologation\/readiness/);
   assert.match(readiness, /Prontidão da homologação SaaS/);
   assert.match(readiness, /Abrir checkout Pro anual/);
   assert.match(readiness, /\/contratar\/pro\?cobranca=anual/);
-  assert.match(readiness, /Webhook Mercado Pago/);
+  assert.match(readiness, /Webhook SaaS/);
   assert.match(readiness, /Copiar webhook/);
   assert.match(readiness, /Roteiro manual/);
   assert.match(readiness, /Ações necessárias \(bloqueadores\)/);
@@ -39,4 +43,21 @@ test('PlanContractPage explains why checkout is paused when test gateway is unco
   assert.match(contractPage, /KOMA_SAAS_CHECKOUT_ENABLED=false/);
   assert.match(contractPage, /credenciais TEST do gateway/);
 });
+
+test('Homologation cockpit protects canonical SaaS webhook, required events, and KOMA_PUBLIC_API_URL', () => {
+  assert.match(readiness, /Backend de homologação/);
+  assert.match(readiness, /KOMA_PUBLIC_API_URL/);
+  assert.match(readiness, /Webhook SaaS/);
+  assert.match(readiness, /Eventos necessários/);
+  assert.match(readiness, /subscription_authorized_payment/);
+  assert.match(
+    readiness,
+    /Não use o webhook de pagamentos dos restaurantes\. Este endpoint é exclusivo da cobrança da assinatura KÔMA\./,
+  );
+  assert.match(readiness, /Copiar webhook/);
+  assert.match(readiness, /Copiar configuração/);
+  assert.match(readiness, /Webhook:\s*\\n\${data\.webhookUrl}/);
+  assert.match(saasMp, /\/api\/integrations\/saas-billing\/mercado-pago\/webhook/);
+});
+
 

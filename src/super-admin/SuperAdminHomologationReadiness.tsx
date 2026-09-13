@@ -16,7 +16,10 @@ type HomologationReadiness = {
   readyForEndToEnd: boolean;
   paymentBlockers: string[];
   deliveryBlockers: string[];
+  publicApiUrl?: string;
   webhookUrl: string;
+  webhookPath?: string;
+  requiredWebhookEvents?: string[];
   publicAppUrl: string;
   checks: ReadinessCheck[];
 };
@@ -128,6 +131,19 @@ export function SuperAdminHomologationReadiness() {
     }
   };
 
+  const copyConfig = async () => {
+    if (!data?.webhookUrl) return;
+    const configText = `Webhook:\n${data.webhookUrl}\n\nEventos:\npagamentos\nassinaturas\nsubscription_authorized_payment`;
+    try {
+      await navigator.clipboard.writeText(configText);
+      setCopyNotice('Configuração copiada.');
+      window.setTimeout(() => setCopyNotice(''), 2500);
+    } catch {
+      setCopyNotice('Copie a configuração manualmente.');
+      window.setTimeout(() => setCopyNotice(''), 4000);
+    }
+  };
+
   const paymentChecks = data?.checks.filter(check => check.scope === 'payment') ?? [];
   const deliveryChecks = data?.checks.filter(check => check.scope === 'delivery') ?? [];
 
@@ -201,21 +217,60 @@ export function SuperAdminHomologationReadiness() {
             <ReadinessGroup title="2. Convites e avisos" checks={deliveryChecks} />
           </div>
 
-          <div className="mt-3 rounded-xl border border-zinc-800 p-3 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-zinc-200">Webhook Mercado Pago</p>
-                <code className="block break-all font-mono text-xs text-koma-muted">{data.webhookUrl}</code>
+          <div className="mt-3 space-y-3 rounded-xl border border-zinc-800 bg-koma-page/50 p-4 text-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Backend de homologação</p>
+                  <p className="mt-0.5 font-mono text-xs text-zinc-200">
+                    <span className="text-koma-muted">KOMA_PUBLIC_API_URL: </span>
+                    {data.publicApiUrl ? (
+                      <span className="font-semibold text-emerald-400">{data.publicApiUrl}</span>
+                    ) : (
+                      <span className="font-semibold text-amber-400">Não configurada (defina KOMA_PUBLIC_API_URL)</span>
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Webhook SaaS</p>
+                  <code className="mt-0.5 block break-all font-mono text-xs font-semibold text-emerald-300">
+                    {data.webhookUrl}
+                  </code>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">Eventos necessários no Mercado Pago</p>
+                  <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-zinc-300">
+                    <li>pagamentos (<code className="font-mono text-zinc-400">payment</code>)</li>
+                    <li>assinaturas (<code className="font-mono text-zinc-400">subscription_preapproval</code>)</li>
+                    <li>faturas autorizadas / <code className="font-mono text-amber-300">subscription_authorized_payment</code></li>
+                  </ul>
+                </div>
+
+                <p className="rounded-lg border border-amber-800/40 bg-amber-950/20 p-2.5 text-xs text-amber-200">
+                  ⚠️ <strong>Atenção:</strong> Não use o webhook de pagamentos dos restaurantes. Este endpoint é exclusivo da cobrança da assinatura KÔMA.
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => void copyWebhook()}
-                className="flex min-h-[38px] w-full items-center justify-center rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 transition-colors hover:bg-zinc-800 sm:w-auto"
-              >
-                Copiar webhook
-              </button>
+
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => void copyWebhook()}
+                  className="flex min-h-[38px] items-center justify-center rounded-lg bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-700"
+                >
+                  Copiar webhook
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyConfig()}
+                  className="flex min-h-[38px] items-center justify-center rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+                >
+                  Copiar configuração
+                </button>
+              </div>
             </div>
-            {copyNotice && <p role="status" className="mt-1 text-xs text-emerald-400">{copyNotice}</p>}
+            {copyNotice && <p role="status" className="mt-1 text-xs font-medium text-emerald-400">{copyNotice}</p>}
           </div>
 
           <div className="mt-3 rounded-xl border border-zinc-800 p-3 text-sm">

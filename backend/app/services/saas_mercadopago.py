@@ -14,6 +14,15 @@ from .online_payments.signature import verify_mercado_pago_signature
 
 logger = logging.getLogger("koma.saas_mercadopago")
 
+SAAS_MERCADO_PAGO_WEBHOOK_PREFIX = "/api/integrations/saas-billing/mercado-pago"
+SAAS_MERCADO_PAGO_WEBHOOK_SUBPATH = "/webhook"
+SAAS_MERCADO_PAGO_WEBHOOK_PATH = "/api/integrations/saas-billing/mercado-pago/webhook"
+SAAS_MERCADO_PAGO_REQUIRED_WEBHOOK_EVENTS = (
+    "payment",
+    "subscription_preapproval",
+    "subscription_authorized_payment",
+)
+
 
 class SaasMercadoPagoError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None):

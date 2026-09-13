@@ -5,6 +5,10 @@ import os
 from fastapi import APIRouter, Depends, Request
 
 from ..config import settings
+from ..services.saas_mercadopago import (
+    SAAS_MERCADO_PAGO_REQUIRED_WEBHOOK_EVENTS,
+    SAAS_MERCADO_PAGO_WEBHOOK_PATH,
+)
 from .super_admin import get_current_admin
 
 
@@ -34,6 +38,41 @@ def _check(
     }
 
 
+def _is_production_api_url(url: str) -> bool:
+    if not url:
+        return False
+    normalized = url.strip().lower()
+    if "komafood.com.br" in normalized and not any(
+        marker in normalized for marker in ("homolog", "staging", "dev", "test")
+    ):
+        return True
+    if any(marker in normalized for marker in ("api.komafood.com.br", "app.komafood.com.br", "central.komafood.com.br")):
+        return True
+    if ("//prod." in normalized or "//production." in normalized or "api-production.koma" in normalized) and not any(
+        marker in normalized for marker in ("homolog", "staging", "dev", "test")
+    ):
+        return True
+    return False
+
+
+def _public_api_matches_environment(api_url: str, is_homologation: bool) -> tuple[bool, str]:
+    if not api_url:
+        return False, "Bloqueado: defina KOMA_PUBLIC_API_URL explicitamente para o backend de homologação"
+    normalized = api_url.strip().lower()
+    if not (normalized.startswith("http://") or normalized.startswith("https://")):
+        return False, f"Bloqueado: KOMA_PUBLIC_API_URL deve iniciar com http:// ou https:// ({api_url})"
+    if _is_production_api_url(normalized):
+        return False, f"Bloqueado: KOMA_PUBLIC_API_URL aponta para produção ({api_url})"
+    if is_homologation:
+        valid_homologation = any(
+            marker in normalized
+            for marker in ("homolog", "staging", "localhost", "127.0.0.1", "railway.app", "test", "dev")
+        )
+        if not valid_homologation:
+            return False, f"Bloqueado: KOMA_PUBLIC_API_URL não corresponde ao backend de homologação ({api_url})"
+    return True, f"Configurada: {api_url}"
+
+
 def _public_app_matches_environment(public_app_url: str, is_homologation: bool) -> bool:
     if not public_app_url:
         return False
@@ -59,7 +98,12 @@ def get_homologation_readiness(
     configured_api_url = settings.KOMA_PUBLIC_API_URL.strip().rstrip("/")
     request_api_url = str(request.base_url).rstrip("/")
     public_api_url = configured_api_url or request_api_url
-    webhook_url = f"{public_api_url}/api/integrations/saas-billing/mercado-pago/webhook"
+    webhook_url = f"{public_api_url}{SAAS_MERCADO_PAGO_WEBHOOK_PATH}"
+
+    api_url_ready, api_url_detail = _public_api_matches_environment(configured_api_url, is_homologation)
+    if api_url_ready and not webhook_url.endswith(SAAS_MERCADO_PAGO_WEBHOOK_PATH):
+        api_url_ready = False
+        api_url_detail = f"Bloqueado: webhook não termina no endpoint SaaS canônico ({SAAS_MERCADO_PAGO_WEBHOOK_PATH})"
 
     checkout_enabled = _env_flag("KOMA_SAAS_CHECKOUT_ENABLED")
     outbox_worker_enabled = _env_flag("ENABLE_OUTBOX_WORKER", default=True) and environment != "test"
@@ -130,6 +174,13 @@ def get_homologation_readiness(
             scope="payment",
         ),
         _check(
+            "public-api-url",
+            "Backend de homologação (KOMA_PUBLIC_API_URL)",
+            api_url_ready,
+            api_url_detail,
+            scope="payment",
+        ),
+        _check(
             "outbox-worker",
             "Worker de notificações",
             outbox_worker_enabled,
@@ -177,7 +228,10 @@ def get_homologation_readiness(
         "readyForEndToEnd": ready_for_end_to_end,
         "paymentBlockers": [item["id"] for item in payment_checks if not item["ready"]],
         "deliveryBlockers": [item["id"] for item in delivery_checks if not item["ready"]],
+        "publicApiUrl": configured_api_url,
         "webhookUrl": webhook_url,
+        "webhookPath": SAAS_MERCADO_PAGO_WEBHOOK_PATH,
+        "requiredWebhookEvents": list(SAAS_MERCADO_PAGO_REQUIRED_WEBHOOK_EVENTS),
         "publicAppUrl": public_app_url,
         "checks": checks,
     }
