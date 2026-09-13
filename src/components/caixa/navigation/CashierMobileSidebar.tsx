@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { SlidersHorizontal, X } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
+import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
@@ -13,6 +14,14 @@ import type { useCashierNavigation } from './useCashierNavigation';
 
 type BoundaryProps = CashierSidebarProps &
   Pick<ReturnType<typeof useCashierNavigation>, 'isMobileSidebarOpen' | 'setIsMobileSidebarOpen'>;
+
+function readSetupMode(): boolean {
+  try {
+    return sessionStorage.getItem(ONBOARDING_SETUP_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 /** Mobile shell; Navigation Tree v2 owns the actual information architecture. */
 export function CashierMobileSidebar({
@@ -31,6 +40,8 @@ export function CashierMobileSidebar({
   theme,
   activeWaiterNome,
 }: BoundaryProps) {
+  const setupMode = readSetupMode();
+
   return (
     <>
       {isMobileSidebarOpen && (
@@ -52,7 +63,7 @@ export function CashierMobileSidebar({
                   <span className="cashier-sidebar__logo-wrap"><KomaLogo size="md" /></span>
                   <span className="cashier-sidebar__brand-copy">
                     <strong>Kôma</strong>
-                    <small>Se você está com fome, Kôma</small>
+                    <small>{setupMode ? 'Configuração inicial' : 'Se você está com fome, Kôma'}</small>
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -79,44 +90,52 @@ export function CashierMobileSidebar({
                 </div>
               </div>
 
-              <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
-                <div className="cashier-shift-card__status">
-                  <span className="cashier-shift-card__dot" />
-                  <span className="cashier-shift-card__copy">
-                    <small>Turno atual</small>
-                    <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
-                  </span>
+              {!setupMode && (
+                <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
+                  <div className="cashier-shift-card__status">
+                    <span className="cashier-shift-card__dot" />
+                    <span className="cashier-shift-card__copy">
+                      <small>Turno atual</small>
+                      <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
+                    </span>
+                  </div>
+                  {turno?.status !== 'aberto' && (
+                    <button
+                      onClick={() => {
+                        setShowAbrirModal(true);
+                        setIsMobileSidebarOpen(false);
+                      }}
+                      className="cashier-shift-card__action is-open"
+                    >
+                      Abrir caixa
+                    </button>
+                  )}
                 </div>
-                {turno?.status !== 'aberto' && (
-                  <button
-                    onClick={() => {
-                      setShowAbrirModal(true);
-                      setIsMobileSidebarOpen(false);
-                    }}
-                    className="cashier-shift-card__action is-open"
-                  >
-                    Abrir caixa
-                  </button>
-                )}
-              </div>
+              )}
             </SidebarHeader>
 
             <SidebarContent className="cashier-sidebar__content p-2">
               <div className="mb-2">
                 <CashierOnboardingShortcut mobile />
               </div>
-              <CashierSidebarNavigation
-                groups={CASHIER_SIDEBAR_GROUPS}
-                closeMobile
-                hasOnlineMenu={hasOnlineMenu}
-                isSidebarTabActive={isSidebarTabActive}
-                sidebarOrderCount={sidebarOrderCount}
-                handleSidebarNavigation={handleSidebarNavigation}
-              />
+              {setupMode ? (
+                <div className="rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-xs leading-relaxed text-koma-muted">
+                  Você está na implantação inicial. Conclua dados, horários e cardápio antes de liberar a operação.
+                </div>
+              ) : (
+                <CashierSidebarNavigation
+                  groups={CASHIER_SIDEBAR_GROUPS}
+                  closeMobile
+                  hasOnlineMenu={hasOnlineMenu}
+                  isSidebarTabActive={isSidebarTabActive}
+                  sidebarOrderCount={sidebarOrderCount}
+                  handleSidebarNavigation={handleSidebarNavigation}
+                />
+              )}
             </SidebarContent>
 
             <SidebarFooter className="cashier-sidebar__footer p-3 flex flex-col gap-2">
-              {hasOnlineMenu && <OnlineOrderEmergencyControl mobile />}
+              {!setupMode && hasOnlineMenu && <OnlineOrderEmergencyControl mobile />}
               <CashierSidebarFooter
                 mobile
                 changeFontSize={changeFontSize}

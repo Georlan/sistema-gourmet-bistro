@@ -1,0 +1,17 @@
+[data-koma-setup-mode="true"] #btn-caixa-conversas-drawer,
+[data-koma-setup-mode="true"] #btn-modo-pdv-fullscreen {
+  display: none !important;
+}
+
+[data-koma-setup-mode="true"] .cashier-topbar h2 {
+  display: none;
+}
+
+[data-koma-setup-mode="true"] .cashier-topbar > div:first-child::after {
+  content: "Implantação inicial";
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: -0.01em;
+  color: var(--koma-foreground);
+  white-space: nowrap;
+}

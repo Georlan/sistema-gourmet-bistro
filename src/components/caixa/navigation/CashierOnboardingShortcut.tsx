@@ -1,8 +1,14 @@
 import { Sparkles } from 'lucide-react';
 import React from 'react';
+import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 
 export function CashierOnboardingShortcut({ mobile = false }: { mobile?: boolean }) {
   const openOnboarding = () => {
+    try {
+      sessionStorage.removeItem(ONBOARDING_SETUP_MODE_KEY);
+    } catch {
+      // Navigation remains available even in restricted browser contexts.
+    }
     window.location.href = '/ativar?resume=1';
   };
 

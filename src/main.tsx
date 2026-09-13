@@ -74,6 +74,12 @@ function isCanonicalOperationalEntryRoute(): boolean {
     && viewParam !== "entregador";
 }
 
+function isHostedManagementEntryRoute(): boolean {
+  if (isOperationalAppHost() || isLocalOperationalTestRoute()) return false;
+  if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  return resolveKomaHost().surface === "caixa";
+}
+
 function redirectLegacyOperationalStaffHost(): boolean {
   const hostname = window.location.hostname.trim().toLowerCase();
   if (!hostname.endsWith(".komafood.com.br") || isOperationalAppHost(hostname)) return false;
@@ -152,6 +158,7 @@ const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
+const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Em produção, antes de montar o shell, convertemos
@@ -177,7 +184,9 @@ const RootApp = React.lazy(
         ? () => import("./legal/PlanContractPage")
         : isUnifiedOperationalRoute
           ? () => import("./components/auth/UnifiedOperationalEntry")
-          : () => import("./App"),
+          : isOnboardingAwareManagementRoute
+            ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
+            : () => import("./App"),
 );
 
 const RouteLoading = () => (
@@ -195,5 +204,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       </React.Suspense>
     </TenantSuspensionBoundary>
     </AppRecoveryBoundary>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
