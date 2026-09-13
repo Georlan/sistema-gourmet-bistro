@@ -38,11 +38,43 @@ test('landing SEO uses the public root and qualifies advanced features', () => {
   assert.match(landing, /KDS e impressão automática nos planos compatíveis/);
 });
 
-test('final conversion copy supports manual or automatic release', () => {
+test('plan cards expose limitations and a canonical feature comparison without duplicating commercial truth', () => {
+  const plans = source('src/landing/sections/Plans.tsx');
+  const catalog = source('src/config/subscriptionPlans.ts');
+
+  assert.match(plans, /PLAN_COMPARISON_MATRIX/);
+  assert.match(plans, /NÃO INCLUI NESTE PLANO/);
+  assert.match(plans, /COMPARE TODOS OS RECURSOS/);
+  assert.match(plans, /7 DIAS PARA TESTAR/);
+  assert.match(plans, /A mensalidade fixa fica isenta durante o período de teste/);
+  assert.match(plans, /taxa KÔMA continua aplicável somente quando houver pedido online pago/);
+  assert.match(catalog, /Sem KDS e impressão automática/);
+  assert.match(catalog, /Sem app do entregador e fidelidade/);
+});
+
+test('plan comparison stays collapsed by default and remains horizontally usable on small screens', () => {
+  const plans = source('src/landing/sections/Plans.tsx');
+  const css = source('src/landing/plan-comparison.css');
+
+  assert.match(plans, /<details className="koma-plan-comparison">/);
+  assert.doesNotMatch(plans, /<details className="koma-plan-comparison" open/);
+  assert.match(css, /\.koma-plan-comparison-scroll\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(css, /\.koma-plan-comparison table\s*\{[^}]*min-width:\s*760px/);
+});
+
+test('implementation qualifies printing and peripherals by plan instead of implying universal availability', () => {
+  const implementation = source('src/landing/sections/Implementation.tsx');
+
+  assert.match(implementation, /Impressão é configurada quando fizer parte do plano contratado/);
+  assert.match(implementation, /quando forem aplicáveis ao plano e à operação/);
+});
+
+test('final conversion copy makes team release explicit', () => {
   const finalCta = source('src/landing/sections/FinalCTA.tsx');
 
-  assert.match(finalCta, /Após a confirmação, liberamos o acesso e enviamos o convite/);
+  assert.match(finalCta, /a equipe KÔMA conclui a liberação e envia o convite/);
   assert.doesNotMatch(finalCta, /Conclua a ativação do restaurante/);
+  assert.doesNotMatch(finalCta, /liberamos o acesso e enviamos o convite/);
 });
 
 test('post-contract flow uses the public tenant domain and does not promise automatic Pix release', () => {
@@ -95,4 +127,3 @@ test('inactive landing sections are safe if reintroduced later', () => {
   assert.match(capabilities, /ESTOQUE E FINANCEIRO — PRO E PREMIUM/);
   assert.match(capabilities, /APP DO ENTREGADOR — PREMIUM/);
 });
-

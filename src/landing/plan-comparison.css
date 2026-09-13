@@ -1,0 +1,248 @@
+.koma-plan-trial-note {
+  width: min(100%, 1480px);
+  margin: 1.25rem auto 2rem;
+  padding: 1rem 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid rgba(11, 214, 173, 0.28);
+  background: rgba(11, 214, 173, 0.06);
+}
+
+.koma-plan-trial-note strong {
+  flex: 0 0 auto;
+  color: var(--koma-green-dark);
+  font-family: var(--koma-accent);
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.koma-plan-trial-note span {
+  color: #4c5550;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.koma-plan-limitations {
+  margin: 0.35rem 0 1rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(10, 10, 10, 0.09);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.09);
+}
+
+.koma-plan-card--featured .koma-plan-limitations {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.koma-plan-limitations > strong {
+  display: block;
+  margin-bottom: 0.6rem;
+  color: #6a716d;
+  font-family: var(--koma-accent);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.koma-plan-card--featured .koma-plan-limitations > strong {
+  color: #9daaa4;
+}
+
+.koma-plan-limitations ul {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+}
+
+.koma-plan-limitations li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.48rem;
+  color: #686f6b;
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.koma-plan-card--featured .koma-plan-limitations li {
+  color: #aebbb5;
+}
+
+.koma-plan-limitations svg {
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+  opacity: 0.7;
+}
+
+.koma-plan-comparison {
+  width: min(100%, 1480px);
+  margin: 2rem auto 0;
+  border: 1px solid var(--koma-line-light);
+  background: #fff;
+}
+
+.koma-plan-comparison > summary {
+  min-height: 78px;
+  padding: 1.05rem 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.koma-plan-comparison > summary::-webkit-details-marker {
+  display: none;
+}
+
+.koma-plan-comparison > summary span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.koma-plan-comparison > summary strong {
+  color: #111713;
+  font-family: var(--koma-accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+}
+
+.koma-plan-comparison > summary small {
+  color: #6a716d;
+  font-size: 0.82rem;
+}
+
+.koma-plan-comparison > summary > b {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--koma-line-light);
+  border-radius: 50%;
+  color: var(--koma-green-dark);
+  font-size: 1.3rem;
+  font-weight: 500;
+  transition: transform 160ms ease;
+}
+
+.koma-plan-comparison[open] > summary > b {
+  transform: rotate(45deg);
+}
+
+.koma-plan-comparison-scroll {
+  overflow-x: auto;
+  border-top: 1px solid var(--koma-line-light);
+}
+
+.koma-plan-comparison table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: #182019;
+  font-size: 0.82rem;
+}
+
+.koma-plan-comparison th,
+.koma-plan-comparison td {
+  padding: 0.85rem 1rem;
+  border-right: 1px solid rgba(10, 10, 10, 0.07);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.07);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.koma-plan-comparison th:last-child,
+.koma-plan-comparison td:last-child {
+  border-right: 0;
+}
+
+.koma-plan-comparison thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f5f7f5;
+  color: #111713;
+  font-family: var(--koma-accent);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.koma-plan-comparison thead th:first-child {
+  width: 44%;
+}
+
+.koma-comparison-category th {
+  padding-top: 1rem;
+  padding-bottom: 0.55rem;
+  background: #eef3ef;
+  color: #445047;
+  font-family: var(--koma-accent);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.koma-comparison-yes,
+.koma-comparison-no {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.koma-comparison-yes {
+  color: #087a62;
+  font-weight: 750;
+}
+
+.koma-comparison-no {
+  color: #808782;
+}
+
+.koma-comparison-text {
+  color: #273029;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .koma-plan-trial-note {
+    margin: 1rem auto 1.4rem;
+    padding: 0.9rem;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .koma-plan-trial-note span {
+    font-size: 0.8rem;
+  }
+
+  .koma-plan-comparison {
+    margin-top: 1.25rem;
+  }
+
+  .koma-plan-comparison > summary {
+    min-height: 72px;
+    padding: 0.9rem;
+  }
+
+  .koma-plan-comparison > summary small {
+    max-width: 30ch;
+    font-size: 0.76rem;
+  }
+
+  .koma-plan-comparison table {
+    min-width: 700px;
+  }
+
+  .koma-plan-comparison th,
+  .koma-plan-comparison td {
+    padding: 0.75rem 0.8rem;
+  }
+}

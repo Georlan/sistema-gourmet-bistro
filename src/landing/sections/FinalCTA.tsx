@@ -9,7 +9,7 @@ import { useLeadCapture } from '../components/LeadCaptureProvider';
 const NEXT_STEPS = [
   'Escolha o plano e o período de cobrança.',
   'Leia os documentos e informe os dados do responsável.',
-  'Após a confirmação, liberamos o acesso e enviamos o convite para o primeiro login.',
+  'Após a confirmação, a equipe KÔMA conclui a liberação e envia o convite para o primeiro login.',
 ] as const;
 
 export function FinalCTA() {

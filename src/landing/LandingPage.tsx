@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import './landing.css';
 import './mobile-refinement.css';
+import './plan-comparison.css';
 import { Header } from './sections/Header';
 import { Hero } from './sections/Hero';
 import { ValueStrip } from './sections/ValueStrip';

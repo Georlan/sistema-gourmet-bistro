@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Minus } from 'lucide-react';
 import {
   ANNUAL_DISCOUNT_RATE,
+  PLAN_COMPARISON_MATRIX,
   SUBSCRIPTION_PLANS,
   formatCurrency,
   formatPercentage,
   getSubscriptionPricing,
+  type FeatureComparisonRow,
   type SubscriptionPlanId,
 } from '../../config/subscriptionPlans';
 
@@ -34,6 +36,17 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
     note: 'App do entregador, pontos, cashback e cupons já fazem parte do plano. Não existem módulos pagos à parte.',
   },
 };
+
+const COMPARISON_CATEGORIES = PLAN_COMPARISON_MATRIX.reduce<string[]>((categories, row) => {
+  if (!categories.includes(row.category)) categories.push(row.category);
+  return categories;
+}, []);
+
+function comparisonValue(value: FeatureComparisonRow['pocket']) {
+  if (value === true) return <span className="koma-comparison-yes"><Check size={16} aria-hidden="true" /> Incluído</span>;
+  if (value === false) return <span className="koma-comparison-no"><Minus size={16} aria-hidden="true" /> Não</span>;
+  return <span className="koma-comparison-text">{value}</span>;
+}
 
 export function Plans() {
   const [isYearly, setIsYearly] = useState(false);
@@ -76,6 +89,11 @@ export function Plans() {
             ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. É apenas uma referência de preço; as condições de pagamento são apresentadas na contratação.`
             : 'Pague mês a mês, sem taxa de implantação.'}
         </p>
+      </div>
+
+      <div className="koma-plan-trial-note" role="note" aria-label="Condição do período de teste">
+        <strong>7 DIAS PARA TESTAR</strong>
+        <span>A mensalidade fixa fica isenta durante o período de teste. A taxa KÔMA continua aplicável somente quando houver pedido online pago pelo sistema.</span>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -123,6 +141,18 @@ export function Plans() {
                   <li key={feature}><Check size={16} aria-hidden="true" />{feature}</li>
                 ))}
               </ul>
+
+              {plan.limitations.length > 0 && (
+                <div className="koma-plan-limitations">
+                  <strong>NÃO INCLUI NESTE PLANO</strong>
+                  <ul>
+                    {plan.limitations.map((limitation) => (
+                      <li key={limitation}><Minus size={15} aria-hidden="true" />{limitation.replace(/^Sem /, '')}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <p className="koma-plan-extra">{presentation.note}</p>
 
               <div className="koma-plan-addons" aria-label={`Taxa de pagamentos online do ${plan.name}`}>
@@ -150,6 +180,46 @@ export function Plans() {
           );
         })}
       </div>
+
+      <details className="koma-plan-comparison">
+        <summary>
+          <span>
+            <strong>COMPARE TODOS OS RECURSOS</strong>
+            <small>Veja exatamente o que muda entre Pocket, Pro e Premium.</small>
+          </span>
+          <b aria-hidden="true">+</b>
+        </summary>
+        <div className="koma-plan-comparison-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Recurso</th>
+                <th scope="col">Pocket</th>
+                <th scope="col">Pro</th>
+                <th scope="col">Premium</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARISON_CATEGORIES.map((category) => (
+                <React.Fragment key={category}>
+                  <tr className="koma-comparison-category">
+                    <th colSpan={4} scope="rowgroup">{category}</th>
+                  </tr>
+                  {PLAN_COMPARISON_MATRIX.filter((row) => row.category === category).map((row) => (
+                    <tr key={`${row.category}-${row.feature}`}>
+                      <th scope="row">{row.feature}</th>
+                      <td>{comparisonValue(row.pocket)}</td>
+                      <td>{comparisonValue(row.pro)}</td>
+                      <td>{comparisonValue(row.premium)}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
       <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A taxa KÔMA incide somente sobre pedidos online pagos pelo sistema; custos do provedor de pagamento são separados e seguem as condições do provedor. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. As formas e condições de pagamento são apresentadas na etapa de contratação. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
     </section>
   );
