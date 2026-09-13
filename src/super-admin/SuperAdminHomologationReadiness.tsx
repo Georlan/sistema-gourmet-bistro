@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { superAdminFetch } from './superAdminApi';
+import { publicApiFetch, superAdminFetch } from './superAdminApi';
 
 type ReadinessScope = 'payment' | 'delivery';
 type ReadinessCheck = {
@@ -22,6 +22,16 @@ type HomologationReadiness = {
   requiredWebhookEvents?: string[];
   publicAppUrl: string;
   checks: ReadinessCheck[];
+};
+
+type BillingCapabilities = {
+  pix?: boolean;
+  pix_automatic: boolean;
+  credit_card: boolean;
+  environment: string;
+  isTestMode: boolean;
+  trialDays: number;
+  upfrontPaymentAllowed: boolean;
 };
 
 function ReadinessGroup({ title, checks }: { title: string; checks: ReadinessCheck[] }) {
@@ -93,8 +103,23 @@ function ReadinessGroup({ title, checks }: { title: string; checks: ReadinessChe
   );
 }
 
+function CapabilityBadge({ label, ready }: { label: string; ready: boolean }) {
+  return (
+    <span
+      className={`rounded-full border px-2.5 py-1 text-xs font-bold ${
+        ready
+          ? 'border-emerald-800/60 bg-emerald-950/70 text-emerald-300'
+          : 'border-amber-800/60 bg-amber-950/50 text-amber-300'
+      }`}
+    >
+      {label}: {ready ? 'disponível' : 'bloqueado'}
+    </span>
+  );
+}
+
 export function SuperAdminHomologationReadiness() {
   const [data, setData] = useState<HomologationReadiness | null>(null);
+  const [capabilities, setCapabilities] = useState<BillingCapabilities | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [copyNotice, setCopyNotice] = useState('');
@@ -106,6 +131,13 @@ export function SuperAdminHomologationReadiness() {
       if (!response.ok) throw new Error('Não foi possível verificar a prontidão da homologação.');
       setData(await response.json());
       setError('');
+
+      try {
+        const capabilitiesResponse = await publicApiFetch('/api/contracts/payment-methods', { signal });
+        setCapabilities(await capabilitiesResponse.json());
+      } catch {
+        if (!signal?.aborted) setCapabilities(null);
+      }
     } catch (err) {
       if (!signal?.aborted) setError(err instanceof Error ? err.message : 'Falha ao verificar a homologação.');
     } finally {
@@ -156,7 +188,7 @@ export function SuperAdminHomologationReadiness() {
         <div className="max-w-xl">
           <h3 className="text-lg font-bold text-zinc-100">Homologação SaaS</h3>
           <p className="text-sm text-koma-muted">
-            Use este painel como fonte de verdade antes de simular cartão, Pix, liberação e primeiro acesso.
+            Use este painel como fonte de verdade antes de simular cartão, Pix Automático, liberação e primeiro acesso.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -211,6 +243,41 @@ export function SuperAdminHomologationReadiness() {
               <strong>Aviso operacional:</strong> O checkout está pausado porque o gateway TEST ainda não está disponível (<code className="font-mono text-amber-100">KOMA_SAAS_CHECKOUT_ENABLED=false</code>). O botão acima permite inspecionar o fluxo contratual até a etapa de pagamento, onde a trava é comunicada honestamente ao usuário.
             </div>
           )}
+
+          <div className="mb-3 rounded-xl border border-zinc-800 bg-koma-page/60 p-3 sm:p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-zinc-100">Política ativa do checkout</p>
+                <p className="mt-1 text-xs text-koma-muted">
+                  Cartão e Pix Automático seguem a mesma regra recorrente: R$ 0 de mensalidade fixa hoje, 7 dias grátis e primeira cobrança automática no D+7.
+                </p>
+              </div>
+              {capabilities && (
+                <span className="rounded-full bg-zinc-900 px-2.5 py-1 text-xs font-medium text-zinc-300">
+                  {capabilities.isTestMode ? 'Gateway TEST' : 'Gateway produção'}
+                </span>
+              )}
+            </div>
+
+            {capabilities ? (
+              <div className="mt-3 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <CapabilityBadge label="Cartão" ready={capabilities.credit_card} />
+                  <CapabilityBadge label="Pix Automático" ready={capabilities.pix_automatic} />
+                  <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-bold text-zinc-400">
+                    Pix avulso: {capabilities.pix === false ? 'desativado' : 'não deve ser usado'}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  Trial informado pela API: <strong className="text-zinc-200">{capabilities.trialDays} dias</strong> · cobrança antecipada: <strong className="text-zinc-200">{capabilities.upfrontPaymentAllowed ? 'permitida' : 'proibida'}</strong>.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-amber-300">
+                Não foi possível ler /api/contracts/payment-methods. A prontidão acima continua válida, mas a política pública do checkout precisa ser conferida antes do teste.
+              </p>
+            )}
+          </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
             <ReadinessGroup title="1. Cobrança e liberação" checks={paymentChecks} />
@@ -276,7 +343,7 @@ export function SuperAdminHomologationReadiness() {
           <div className="mt-3 rounded-xl border border-zinc-800 p-3 text-sm">
             <p className="font-bold text-zinc-200">Roteiro manual</p>
             <p className="mt-1 text-koma-muted">
-              1. Deixe pagamentos prontos → 2. cartão sandbox → 3. confirme Aguardando liberação → 4. libere aqui no SuperAdmin → 5. ative o primeiro acesso → 6. repita com Pix → 7. valide e-mail e WhatsApp.
+              1. Deixe pagamentos prontos → 2. autorize cartão sandbox → 3. confirme R$ 0 hoje e Aguardando liberação → 4. libere aqui no SuperAdmin → 5. ative o primeiro acesso → 6. repita com Pix Automático → 7. valide subscription_authorized_payment e a primeira cobrança no D+7 → 8. valide e-mail e WhatsApp.
             </p>
           </div>
         </>
