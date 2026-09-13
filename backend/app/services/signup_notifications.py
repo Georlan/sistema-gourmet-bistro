@@ -95,13 +95,21 @@ def enqueue_acceptance(
 
 
 def enqueue_activation(
-    db, *, protocol, restaurant_name, representative_name, email, phone, token
+    db,
+    *,
+    protocol,
+    restaurant_name,
+    representative_name,
+    email,
+    phone,
+    token,
+    kind="activation",
 ):
     link = f"{settings.KOMA_PUBLIC_APP_URL}/ativar#token={token}"
     enqueue(
         db,
         protocol=protocol,
-        kind="activation",
+        kind=kind,
         email=email,
         phone=phone,
         subject="Seu KÔMA foi liberado — crie sua senha",
