@@ -17,6 +17,8 @@ import {
 import { API_BASE_URL } from '../../config/api';
 import { getSubscriptionPlan, type SubscriptionPlanId } from '../../config/subscriptionPlans';
 
+export const ONBOARDING_SETUP_MODE_KEY = 'koma_onboarding_setup_mode';
+
 type Props = {
   accessToken: string;
   user: Record<string, unknown>;
@@ -122,7 +124,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       setState('error');
       setErrorMessage(
         error instanceof DOMException && error.name === 'AbortError'
-          ? 'O checklist demorou para responder. Você pode tentar novamente ou seguir para o Caixa.'
+          ? 'O checklist demorou para responder. Tente novamente para continuar a implantação.'
           : error instanceof Error
             ? error.message
             : 'Não foi possível carregar o checklist inicial.',
@@ -136,13 +138,14 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     void loadSnapshot();
   }, [loadSnapshot]);
 
-  const openCashierAt = (tab: string, subTab: string) => {
+  const openCashierAt = (tab: string, subTab: string, setupMode = true) => {
     try {
       sessionStorage.setItem('koma_active_tab', tab);
       sessionStorage.setItem('koma_active_subtab', subTab);
+      if (setupMode) sessionStorage.setItem(ONBOARDING_SETUP_MODE_KEY, '1');
+      else sessionStorage.removeItem(ONBOARDING_SETUP_MODE_KEY);
     } catch {
       // Storage can be unavailable in private/restricted browser contexts.
-      // Navigation to the cashier must remain available regardless.
     }
     window.location.href = '/?view=caixa';
   };
@@ -181,7 +184,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'payments',
       title: 'Conecte o Mercado Pago',
-      description: 'Necessário apenas para receber Pix online pelo cardápio. Dinheiro e operação local continuam disponíveis sem isso.',
+      description: 'Necessário apenas para receber Pix online pelo cardápio. Pode ser feito agora ou depois da implantação essencial.',
       done: snapshot.steps.mercadoPago,
       optional: true,
       actionLabel: snapshot.steps.mercadoPago ? 'Revisar conexão' : 'Conectar Mercado Pago',
@@ -192,7 +195,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'first-order',
       title: 'Faça um primeiro pedido de teste',
-      description: 'Passe pelo fluxo de balcão para conferir produto, preparo, pagamento e operação antes de abrir para clientes.',
+      description: 'Depois da implantação essencial, passe pelo fluxo de balcão para conferir produto, preparo, pagamento e operação.',
       done: snapshot.steps.firstOrder,
       optional: true,
       actionLabel: snapshot.steps.firstOrder ? 'Ir para pedidos' : 'Criar pedido de teste',
@@ -207,7 +210,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       <main className="flex min-h-screen items-center justify-center bg-koma-page px-6 text-koma-foreground">
         <div className="text-center">
           <RefreshCw size={22} className="mx-auto animate-spin text-emerald-400" />
-          <p className="mt-3 text-xs font-bold uppercase tracking-[0.16em] text-koma-muted">Preparando seu primeiro acesso…</p>
+          <p className="mt-3 text-xs font-bold uppercase tracking-[0.16em] text-koma-muted">Preparando sua implantação…</p>
         </div>
       </main>
     );
@@ -217,22 +220,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-koma-page px-6 text-koma-foreground">
         <section className="w-full max-w-lg rounded-3xl border border-koma-border bg-koma-card p-7 text-center shadow-2xl">
-          <h1 className="text-xl font-black">Sua conta foi ativada</h1>
+          <h1 className="text-xl font-black">Sua conta está ativa</h1>
           <p className="mt-2 text-sm text-koma-muted">{errorMessage || 'O checklist não pôde ser carregado agora.'}</p>
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <button type="button" onClick={() => void loadSnapshot()} className="rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
-              Tentar novamente
-            </button>
-            <button type="button" onClick={() => openCashierAt('operacao', 'pedidos')} className="rounded-xl bg-emerald-500 px-4 py-3 text-xs font-black text-zinc-950 hover:bg-emerald-400">
-              Ir para o Caixa
-            </button>
-          </div>
+          <button type="button" onClick={() => void loadSnapshot()} className="mt-6 rounded-xl border border-koma-border px-4 py-3 text-xs font-black text-koma-foreground hover:border-emerald-500/40">
+            Tentar novamente
+          </button>
         </section>
       </main>
     );
   }
 
   const restaurantName = snapshot.restaurant.name || String(user?.nome || 'Seu restaurante');
+  const requiredComplete = snapshot.progress.total > 0 && snapshot.progress.completed >= snapshot.progress.total;
 
   return (
     <main className="min-h-screen bg-koma-page px-4 py-6 text-koma-foreground sm:px-6 lg:px-8">
@@ -246,7 +245,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 </div>
                 <h1 className="mt-4 text-2xl font-black sm:text-3xl">Bem-vindo ao KÔMA, {restaurantName}</h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-koma-muted">
-                  Seu restaurante já pode entrar no sistema. Este checklist só organiza a implantação — nenhuma etapa abaixo bloqueia o uso do Caixa.
+                  Antes de liberar a operação, conclua os 3 passos essenciais abaixo. Seu progresso fica salvo e esta tela continuará sendo seu ponto de partida até a implantação terminar.
                 </p>
               </div>
               <div className="grid min-w-[250px] grid-cols-2 gap-2">
@@ -268,7 +267,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <div className="flex items-center gap-2 text-sm font-black">
                   <Sparkles size={16} className="text-emerald-400" /> Implantação inicial
                 </div>
-                <p className="mt-1 text-xs text-koma-muted">{snapshot.progress.completed} de {snapshot.progress.total} passos detectados como concluídos</p>
+                <p className="mt-1 text-xs text-koma-muted">{snapshot.progress.completed} de {snapshot.progress.total} passos essenciais concluídos</p>
               </div>
               <button type="button" onClick={() => void loadSnapshot()} className="inline-flex items-center gap-2 self-start rounded-xl border border-koma-border px-3 py-2 text-[10px] font-black text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-400">
                 <RefreshCw size={12} /> Atualizar progresso
@@ -288,6 +287,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             <div className="mt-5 space-y-3">
               {steps.map((step) => {
                 const Icon = step.icon;
+                const blockedUntilCore = step.id === 'first-order' && !requiredComplete;
                 return (
                   <article key={step.id} className="flex flex-col gap-4 rounded-2xl border border-koma-border bg-koma-page p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 gap-3">
@@ -297,15 +297,20 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="text-sm font-black">{step.title}</h2>
-                          {step.optional && <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional agora</span>}
+                          {step.optional && <span className="rounded-full border border-koma-border px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-koma-subtle">Opcional</span>}
                         </div>
                         <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">{step.description}</p>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 pl-[52px] sm:pl-0">
                       {step.done ? <CheckCircle2 size={18} className="text-emerald-400" /> : <Circle size={18} className="text-koma-subtle" />}
-                      <button type="button" onClick={() => openCashierAt(step.tab, step.subTab)} className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400">
-                        {step.actionLabel} <ArrowRight size={12} />
+                      <button
+                        type="button"
+                        disabled={blockedUntilCore}
+                        onClick={() => openCashierAt(step.tab, step.subTab, step.id !== 'first-order')}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 py-2 text-[10px] font-black transition hover:border-emerald-500/35 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {blockedUntilCore ? 'Disponível depois' : step.actionLabel} <ArrowRight size={12} />
                       </button>
                     </div>
                   </article>
@@ -315,12 +320,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
 
             <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-raised/40 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-black">Quer começar a operar agora?</p>
-                <p className="mt-1 text-[10px] text-koma-muted">Você pode voltar às configurações pelo menu do sistema a qualquer momento.</p>
+                <p className="text-xs font-black">{requiredComplete ? 'Implantação essencial concluída' : 'Finalize os 3 passos essenciais'}</p>
+                <p className="mt-1 text-[10px] text-koma-muted">
+                  {requiredComplete
+                    ? 'A operação do restaurante já pode ser liberada. Você poderá revisar estas configurações depois.'
+                    : 'Dados do restaurante, horários e ao menos um produto publicado são necessários antes de entrar na operação.'}
+                </p>
               </div>
-              <button type="button" onClick={() => openCashierAt('operacao', 'pedidos')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 transition hover:bg-emerald-400">
-                Ir para o Caixa <ArrowRight size={14} />
-              </button>
+              {requiredComplete && (
+                <button type="button" onClick={() => openCashierAt('operacao', 'pedidos', false)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 transition hover:bg-emerald-400">
+                  Entrar no KÔMA <ArrowRight size={14} />
+                </button>
+              )}
             </div>
           </div>
         </section>
