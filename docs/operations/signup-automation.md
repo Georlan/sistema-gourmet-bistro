@@ -1,38 +1,92 @@
 # Inscrição automatizada de restaurantes
 
+## Regra comercial canônica
+
+Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → 7 dias grátis → primeira cobrança automática → convite e primeiro acesso.
+
+A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
+
+- **R$ 0 de mensalidade fixa hoje**;
+- o cliente apenas autoriza a recorrência antes da liberação;
+- os **7 dias grátis começam na liberação do restaurante**;
+- a primeira cobrança automática ocorre somente após o fim do trial;
+- mensal renova mensalmente e anual renova a cada 12 meses;
+- o anual conserva o desconto de 10% sobre a mensalidade fixa, mas não é cobrado antecipadamente no dia da adesão;
+- não existem “dias bônus” em substituição ao trial;
+- Pix avulso/QR Code antecipado não é um método válido para novas assinaturas SaaS.
+
+Métodos recorrentes atualmente modelados no backend: `credit_card` e `pix_automatic`. Métodos futuros só podem ser publicados quando cumprirem a mesma regra de autorização recorrente + trial + cobrança posterior.
+
 ## Comportamento entregue
 
-Plano e ciclo → dados mínimos salvos → contratação e pagamento → ativação → convite e primeiro acesso.
+- Nome do restaurante, responsável, e-mail e WhatsApp são persistidos antes de pedir documento ou forma de pagamento. O SuperAdmin acompanha esses registros em **Inscrições**. Após 24 horas sem atividade registrada, a inscrição recebe indicação de possível desistência; isso não cancela contratos nem autorizações.
+- A retomada usa token aleatório enviado em `X-Signup-Token`. Só o hash fica no banco e só o token fica no navegador. Dados de contato ficam criptografados. O rascunho expira em 30 dias.
+- O contrato aceito é imutável e é recuperado sem novo aceite. Valores da cobrança vêm do comprovante assinado, mesmo se o catálogo mudar depois.
+- **Cartão mensal/anual:** cria autorização recorrente com trial de 7 dias. Autorização não comprova pagamento; as faturas posteriores são reconciliadas separadamente.
+- **Pix Automático mensal/anual:** cria uma assinatura pendente no Mercado Pago e recebe `init_point` para o cliente autorizar a recorrência no ambiente do provedor. O KÔMA só aceita a autorização como pronta depois que o provedor confirma o preapproval e o método corresponde a Pix. Nenhuma cobrança Pix avulsa é gerada pelo checkout SaaS.
+- `payment_method_type=pix` é recusado para novas contratações. Registros históricos podem continuar existindo para reconciliação/migração, mas nunca liberam uma nova assinatura.
+- Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, uma autorização recorrente pronta entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
+- Na liberação, o backend sincroniza no provedor a data da primeira cobrança com o fim do trial. Se essa sincronização falhar, o tenant não é liberado.
+- Toda assinatura recém-provisionada nasce `trialing`, independentemente de cartão ou Pix Automático. Não existe caminho especial `active` para Pix anual antecipado.
+- A ativação é idempotente. Repetir webhook ou retomar uma ativação interrompida não cria outro restaurante.
+- Retentativas com resultado incerto procuram a autorização anterior antes de permitir nova recorrência.
+- Confirmação e convite entram em fila persistente. O worker tenta e-mail/WhatsApp, conserva falhas para diagnóstico e permite reagendamento no SuperAdmin.
+- No primeiro acesso, o restaurante pode importar o JSON do catálogo e revisar os dados antes da publicação nos canais existentes.
 
-- Nome do restaurante, responsável, e-mail e WhatsApp são persistidos antes de pedir documento ou cartão. O superadmin acompanha esses registros em **Inscrições**. Após 24 horas sem atividade registrada, a inscrição recebe indicação de possível desistência; isso não cancela contratos nem pagamentos.
-- A retomada usa um token aleatório de 256 bits, enviado em `X-Signup-Token`. Só o hash fica no banco e só o token fica no navegador. Dados de contato ficam criptografados. O rascunho expira em 30 dias e é removido pelo worker; evidências de contratos aceitos mantêm sua retenção independente.
-- O contrato aceito é imutável e é recuperado sem novo aceite. Valores da cobrança vêm do comprovante assinado, inclusive se os preços do catálogo mudarem depois.
-- Cartão mensal/anual: autorização para primeira cobrança após 7 dias, com cobrança mensal ou uma cobrança anual a cada 12 meses. Autorização do mandato não comprova pagamento; faturas são verificadas no Mercado Pago. O administrador pode cancelar a renovação no primeiro acesso ou em Conta & assinatura → documentos do contrato. Cancelar não solicita reembolso e preserva o período vigente.
-- Pix anual: pagamento único, confirmação pelo provedor, 12 meses de acesso mais 7 dias de bônus. Uma cobrança pendente é reutilizada; nova chave só é gerada depois de o provedor confirmar cancelamento/rejeição da anterior.
-- A ativação é automática e idempotente. Repetir um webhook ou retomar uma ativação interrompida não deve criar outro restaurante. Retentativas de cartão com resultado incerto procuram a autorização anterior antes de permitir qualquer nova assinatura.
-- Confirmação e convite entram em uma fila persistente na mesma transação do contrato/provisionamento automático. O worker tenta e-mail/WhatsApp, conserva falhas para diagnóstico e permite reagendamento no superadmin. Envios têm validade de 72 horas; convites expirados devem ser renovados em Acessos. E-mail usa chave de idempotência; WhatsApp tem semântica de pelo menos uma entrega e pode repetir se houver queda após o provedor aceitar a mensagem.
-- No primeiro acesso, o restaurante importa JSON no formato existente do catálogo, revisa os preços e escolhe adicionar/atualizar por ID ou substituir. Produtos ausentes só são inativados no modo substituir. Importações vazias, preços inválidos e IDs duplicados são recusados. Categorias e campos opcionais do JSON são preservados; complementos/escolhas obrigatórias exigem configuração no catálogo. O evento existente atualiza caixa, garçom e cardápio digital.
+## Mercado Pago
 
-## Habilitação em produção
-
-Aplicar as migrações Alembic antes de subir o backend. Foram adicionadas tabelas globais pré-tenant sem leitura direta pelo papel `koma_app`, com funções restritas em `koma_internal`. O smoke PostgreSQL testa o papel real.
-
-Configurar as credenciais **SaaS do KÔMA**, separadas do recebimento dos pedidos dos restaurantes:
+Credenciais SaaS do KÔMA são separadas do recebimento dos pedidos dos restaurantes:
 
 - `KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN`
 - `KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY`
 - `KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET`
-- Webhook: `/api/integrations/saas-billing/mercado-pago/webhook`, incluindo eventos de pagamentos, assinaturas e faturas autorizadas (`subscription_authorized_payment`).
-- `KOMA_SAAS_CHECKOUT_ENABLED=true` somente após homologação. A disponibilidade efetiva é consultada em `/api/contracts/payment-methods`; nenhuma credencial privada sai nessa resposta.
-- Para entrega: `RESEND_API_KEY`, `EMAIL_FROM`; WhatsApp usa a integração já existente, `KOMA_WHATSAPP_AUTOMATION_ENABLED` e, para avisos ao operador, `KOMA_OWNER_WHATSAPP_PHONE`.
-- O worker usa o ciclo de vida já existente e depende de `ENABLE_OUTBOX_WORKER=true` em produção. Sem ele, mensagens continuam persistidas, mas não são despachadas e a limpeza dos rascunhos expirados não roda.
+- homologação usa exclusivamente as variantes `KOMA_SAAS_MERCADO_PAGO_TEST_*` já tratadas pelo config do ambiente;
+- `KOMA_SAAS_CHECKOUT_ENABLED=true` somente depois da homologação do gateway.
 
-A homologação deve exercitar cartão autorizado, primeira fatura paga/recusada, cancelamento no trial, Pix aprovado, repetição de webhook, retomada e entrega do convite. Não há homologação de transação real ou deploy em produção nesta entrega.
+Webhook canônico:
 
-NuPay, Pix Automático, carteira Mercado Pago e anual parcelado não são anunciados como disponíveis. Dependem de integração/homologação e, no parcelamento, da confirmação das condições de juros e liquidação da conta. Esta entrega prioriza cartão e Pix para reduzir custo de operação. Importação de PDF/foto com IA também permanece fora desta etapa.
+`/api/integrations/saas-billing/mercado-pago/webhook`
 
-## Evidências locais
+Eventos mínimos do fluxo:
 
-A regressão completa encontrou 1.207 aprovados, 7 ignorados e 15 falhas. As mesmas 15 falhas foram reproduzidas em checkout separado do commit original `f3d0ef9`, nas áreas de SmartPOS, impressão e contratos estáticos de interface. Elas não foram alteradas nesta tarefa. As suítes específicas da inscrição, pagamento, catálogo e segurança, os testes de frontend e as migrações são executados separadamente sobre a implementação final; consultar também os resultados do CI da PR.
+- pagamentos;
+- assinatura/preapproval;
+- faturas autorizadas (`subscription_authorized_payment`).
 
-Validação final desta entrega: 95 testes específicos de backend e smoke crítico aprovados; 25 testes de contrato/retomada repetidos após fixar a proveniência jurídica; 517 testes unitários de frontend após incorporar a main, TypeScript e build aprovados; 32 cenários de navegador em oito larguras aprovados. Migrações de ida e volta e teste de runtime PostgreSQL 17 aprovados. Esses números são evidências locais, não homologação do Mercado Pago.
+Não confundir esse endpoint com o webhook de pagamentos dos restaurantes.
+
+## Pix Automático
+
+O fluxo implementado usa a API de Assinaturas (`/preapproval`) em estado `pending` para obter um `init_point`. O cliente é redirecionado ao checkout hospedado do Mercado Pago para escolher/concluir o meio recorrente. A autorização só vira `ready` se o preapproval retornar autorizado e o método confirmado for Pix.
+
+Essa parte exige homologação real com credenciais TEST antes de habilitar o checkout. Se o sandbox do provedor exigir um formato diferente para Pix Automático, a integração deve ser ajustada antes de qualquer liberação; nunca substituir o fluxo por Pix avulso antecipado.
+
+## Cancelamento
+
+Cartão e Pix Automático são recorrentes e podem cancelar as cobranças futuras. Cancelamento durante o trial impede a primeira cobrança, preservando o acesso até o fim do período vigente. Cancelamento após pagamento preserva o acesso até o fim do período já contratado, sujeito às regras jurídicas aplicáveis.
+
+## Notificações
+
+- E-mail: `RESEND_API_KEY`, `EMAIL_FROM`.
+- Aviso ao operador: `KOMA_OWNER_EMAIL` e, se usado, `KOMA_OWNER_WHATSAPP_PHONE`.
+- WhatsApp: integração existente + `KOMA_WHATSAPP_AUTOMATION_ENABLED=true`.
+- Worker: `ENABLE_OUTBOX_WORKER=true`.
+
+## Homologação obrigatória antes de habilitar checkout
+
+Executar no ambiente isolado:
+
+1. cartão autorizado → `awaiting_release` → liberação → assinatura `trialing` → R$ 0 hoje;
+2. cancelamento do cartão durante o trial → nenhuma primeira cobrança;
+3. primeira fatura de cartão aprovada/recusada após o trial e replay idempotente;
+4. Pix Automático → redirecionamento para `init_point` → autorização Pix confirmada → `awaiting_release` → liberação → `trialing` → R$ 0 hoje;
+5. cancelar Pix Automático durante o trial;
+6. confirmar que `payment_method_type=pix` é recusado e nunca provisiona tenant;
+7. repetir webhooks/preapprovals e validar idempotência;
+8. validar convite, primeiro acesso, e-mail e WhatsApp.
+
+## Fora do checkout até homologação própria
+
+NuPay, carteira Mercado Pago, débito e anual parcelado não devem ser anunciados como disponíveis enquanto não suportarem explicitamente a regra canônica: autorização recorrente, R$ 0 hoje, 7 dias grátis e cobrança automática posterior.
+
+Importação de PDF/foto com IA continua separada deste fluxo de billing.
