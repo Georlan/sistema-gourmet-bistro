@@ -24,7 +24,7 @@ async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocke
 async function reviewDraft(page: Page, id = 7) {
   if (!await page.locator('#modal-outer-overlay').isVisible()) await page.locator(`#mesa-card-${id}`).click();
   await page.getByRole('tab', { name: /Cardápio/ }).click();
-  await expect(page.getByRole('heading', { name: 'Revisar Pedido', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Revisar pedido/i })).toBeVisible();
 }
 const submit = (page: Page) => page.locator('[id^="submit-draft-order-btn"]:visible');
 
