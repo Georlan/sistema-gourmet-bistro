@@ -75,7 +75,9 @@ export function CatalogAssistanceUpload({
     }
   };
 
-  const activeAssistance = assistance && !['cancelled', 'superseded'].includes(assistance.status);
+  const activeAssistance = assistance && !['cancelled', 'superseded'].includes(assistance.status)
+    ? assistance
+    : null;
 
   return (
     <section className="mt-6 rounded-2xl border border-koma-border bg-koma-raised/20 p-4">
@@ -94,10 +96,10 @@ export function CatalogAssistanceUpload({
       {activeAssistance && (
         <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3">
           <div className="flex items-center gap-2 text-xs font-black text-emerald-400">
-            <CheckCircle2 size={15} /> {assistanceLabel(assistance.status)}
+            <CheckCircle2 size={15} /> {assistanceLabel(activeAssistance.status)}
           </div>
-          <p className="mt-1 break-all text-xs text-koma-muted">{assistance.filename}</p>
-          {assistance.status !== 'completed' && (
+          <p className="mt-1 break-all text-xs text-koma-muted">{activeAssistance.filename}</p>
+          {activeAssistance.status !== 'completed' && (
             <p className="mt-2 text-[11px] leading-relaxed text-koma-subtle">
               Se precisar corrigir o arquivo, envie outro abaixo. O envio anterior será substituído na fila de implantação.
             </p>
@@ -105,7 +107,7 @@ export function CatalogAssistanceUpload({
         </div>
       )}
 
-      {assistance?.status !== 'completed' && (
+      {activeAssistance?.status !== 'completed' && (
         <div className="mt-4 rounded-xl border border-koma-border bg-koma-page p-3">
           <input
             id={inputId}
