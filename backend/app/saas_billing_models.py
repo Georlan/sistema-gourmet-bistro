@@ -22,7 +22,7 @@ class SaaSBillingSetup(ContractEvidenceBase):
     """
     Setup ou intenção de cobrança SaaS antes da ativação do restaurante.
     Nasce na fase pública de contratação e armazena o status da configuração
-    financeira (ex.: cartão tokenizado no gateway ou Pix anual emitido/pago).
+    financeira (ex.: cartão tokenizado no gateway ou autorização de Pix Automático).
     NUNCA armazena PAN completo ou CVV.
     """
 
@@ -73,7 +73,7 @@ class SaaSBillingSetup(ContractEvidenceBase):
             name="ck_saas_billing_setups_provider",
         ),
         CheckConstraint(
-            "payment_method_type IN ('credit_card', 'pix')",
+            "payment_method_type IN ('credit_card', 'pix', 'pix_automatic')",
             name="ck_saas_billing_setups_payment_method",
         ),
         CheckConstraint(
@@ -148,7 +148,7 @@ class SaaSSubscription(Base):
             name="ck_saas_subscriptions_billing_cycle",
         ),
         CheckConstraint(
-            "payment_method_type IS NULL OR payment_method_type IN ('credit_card', 'pix')",
+            "payment_method_type IS NULL OR payment_method_type IN ('credit_card', 'pix', 'pix_automatic')",
             name="ck_saas_subscriptions_payment_method",
         ),
         Index(

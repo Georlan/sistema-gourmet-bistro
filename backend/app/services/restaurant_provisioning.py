@@ -21,8 +21,9 @@ from ..routes.super_admin_onboarding import (
     restaurant_trials,
 )
 from ..saas_billing_models import SaaSSubscription
-from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant, annual_access_end
+from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant
 from ..subscription import VALID_SUBSCRIPTION_PLANS
+from .saas_billing_policy import is_recurring_trial_payment_method
 
 logger = logging.getLogger("koma.services.restaurant_provisioning")
 
@@ -141,6 +142,19 @@ def provision_restaurant_for_contract(
             detail="O e-mail do representante não é compatível com o cadastro de administrador.",
         )
 
+    if (
+        billing_setup is not None
+        and billing_setup.status == "ready"
+        and not is_recurring_trial_payment_method(billing_setup.payment_method_type)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A contratação não pode ser liberada com pagamento antecipado. "
+                "Escolha um método recorrente com 7 dias grátis antes da primeira cobrança."
+            ),
+        )
+
     tenant_id = _reserve_restaurant_id(db)
     slug = activation_slug(restaurant_name, protocol)
 
@@ -167,13 +181,13 @@ def provision_restaurant_for_contract(
         trial_ends_at = now + datetime.timedelta(days=DEFAULT_TRIAL_DAYS)
         invitation_token = str(uuid.uuid4())
 
-        # O gateway precisa aceitar a nova data antes de ativarmos o acesso local.
-        # Assim, uma falha externa nunca deixa o restaurante ativo enquanto a
-        # cobrança permanece agendada para uma data anterior.
+        # Todo método recorrente precisa aceitar no gateway a mesma data da primeira
+        # cobrança antes de liberarmos o acesso local. Nenhuma forma de pagamento
+        # SaaS pode cobrar mensalidade fixa antes do fim dos 7 dias grátis.
         if (
             billing_setup is not None
             and billing_setup.status == "ready"
-            and billing_setup.payment_method_type == "credit_card"
+            and is_recurring_trial_payment_method(billing_setup.payment_method_type)
             and billing_setup.provider_subscription_id
         ):
             from .saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
@@ -247,25 +261,18 @@ def provision_restaurant_for_contract(
             link_billing_setup_to_tenant(db, protocol, tenant_id)
 
         if billing_setup is not None and billing_setup.status == "ready":
-            is_pix_annual = (
-                billing_setup.payment_method_type == "pix"
-                and str(acceptance.get("billing_cycle")).lower() in ("annual", "anual")
-            )
-            sub_status = "active" if is_pix_annual else "trialing"
-            period_end = annual_access_end(now) if is_pix_annual else trial_ends_at
-
             canonical_sub = SaaSSubscription(
                 restaurante_id=tenant_id,
                 provider=billing_setup.provider,
                 provider_customer_id=billing_setup.provider_customer_id,
                 provider_subscription_id=billing_setup.provider_subscription_id,
                 payment_method_type=billing_setup.payment_method_type,
-                status=sub_status,
+                status="trialing",
                 billing_cycle=acceptance.get("billing_cycle") or "monthly",
                 trial_started_at=now,
                 trial_ends_at=trial_ends_at,
                 current_period_start=now,
-                current_period_end=period_end,
+                current_period_end=trial_ends_at,
                 created_at=now,
                 updated_at=now,
             )

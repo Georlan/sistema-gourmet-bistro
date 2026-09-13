@@ -8,7 +8,6 @@ export type SubscriptionPaymentOptionStatus =
 
 export type SubscriptionPaymentOptionId =
   | 'credit_card'
-  | 'pix_annual'
   | 'pix_automatic'
   | 'nupay'
   | 'mercado_pago'
@@ -28,6 +27,8 @@ export type SubscriptionPaymentOption = {
   selectable: boolean;
 };
 
+export const SUBSCRIPTION_TRIAL_DAYS = 7;
+
 export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] = [
   {
     id: 'credit_card',
@@ -35,34 +36,22 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     status: 'validating',
     statusLabel: 'Em validação',
     billingCycles: ['mensal', 'anual'],
-    checkoutSummary: 'Fluxo implementado via Mercado Pago; falta homologação das credenciais SaaS em produção.',
-    landingSummary: 'Cartão de crédito em homologação para mensal e anual.',
+    checkoutSummary: 'Autorize hoje, use 7 dias grátis e só então comece a cobrança automática.',
+    landingSummary: '7 dias grátis antes da primeira cobrança automática no cartão.',
     previewTitle: 'Cartão de crédito · em validação',
-    previewDescription: 'O fluxo de tokenização e assinatura já existe no código, mas só será liberado como Disponível depois de configurar as credenciais SaaS do Mercado Pago e concluir um teste real de ponta a ponta.',
+    previewDescription: 'O cartão é autorizado sem cobrança da mensalidade fixa no momento da contratação. A primeira cobrança automática acontece somente após os 7 dias grátis e segue no ciclo escolhido até o cancelamento.',
     selectable: false,
   },
   {
     id: 'pix_automatic',
-    label: 'Pix Automático',
-    status: 'coming_soon',
-    statusLabel: 'Em breve',
-    billingCycles: ['mensal'],
-    checkoutSummary: 'Autorização única para cobranças mensais recorrentes.',
-    landingSummary: 'Recorrência mensal com autorização única no banco.',
-    previewTitle: 'Pix Automático · em breve',
-    previewDescription: 'O cliente autorizará a recorrência uma vez no banco e as mensalidades futuras serão cobradas conforme o ciclo. Não usaremos comprovante de Pix agendado como confirmação de pagamento.',
-    selectable: false,
-  },
-  {
-    id: 'pix_annual',
-    label: 'Pix',
+    label: 'Pix Automático · em validação',
     status: 'validating',
     statusLabel: 'Em validação',
-    billingCycles: ['anual'],
-    checkoutSummary: 'Pague pelo Pix de qualquer banco; recebimento na conta Mercado Pago do KÔMA.',
-    landingSummary: 'Pix de qualquer banco com confirmação antes da ativação.',
-    previewTitle: 'Pix · em validação',
-    previewDescription: 'O cliente poderá pagar com Pix por qualquer banco ou carteira compatível. O QR Code será gerado pelo Mercado Pago e o restaurante só será ativado depois da confirmação real do pagamento.',
+    billingCycles: ['mensal', 'anual'],
+    checkoutSummary: 'Autorize uma vez no banco, use 7 dias grátis e só então comece a cobrança automática por Pix.',
+    landingSummary: 'Pix Automático com autorização única e primeira cobrança depois dos 7 dias grátis.',
+    previewTitle: 'Pix Automático · em validação',
+    previewDescription: 'O cliente autoriza a recorrência uma única vez no banco. Não existe Pix à vista antecipado nem dias de bônus: a mensalidade fixa fica em R$ 0 durante os primeiros 7 dias e a primeira cobrança automática ocorre somente depois do trial.',
     selectable: false,
   },
   {
@@ -71,10 +60,10 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     status: 'coming_soon',
     statusLabel: 'Em breve',
     billingCycles: ['mensal', 'anual'],
-    checkoutSummary: 'Autorização pelo app do Nubank, sem digitar cartão no KÔMA.',
-    landingSummary: 'Autorização pelo app do Nubank quando a integração estiver homologada.',
+    checkoutSummary: 'Quando homologado, seguirá a mesma regra: autorize hoje, 7 dias grátis e cobrança automática depois.',
+    landingSummary: 'Autorização pelo app do Nubank com 7 dias grátis antes da primeira cobrança automática.',
     previewTitle: 'NuPay · em breve',
-    previewDescription: 'NuPay exige integração própria com a infraestrutura NuPay/Nubank. Não vamos assumir que o valor liquida na conta Mercado Pago; a conciliação e o destino do recebimento serão definidos pela contratação real do NuPay for Business.',
+    previewDescription: 'NuPay exige integração própria com a infraestrutura NuPay/Nubank. Só será disponibilizado se suportar autorização recorrente e a regra canônica do KÔMA: R$ 0 de mensalidade fixa hoje, 7 dias grátis e cobrança automática depois.',
     selectable: false,
   },
   {
@@ -83,10 +72,10 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     status: 'coming_soon',
     statusLabel: 'Em breve',
     billingCycles: ['mensal', 'anual'],
-    checkoutSummary: 'Carteira, saldo ou crédito conforme disponibilidade do provedor.',
-    landingSummary: 'Carteira, saldo ou crédito conforme disponibilidade do provedor.',
+    checkoutSummary: 'Quando homologado, seguirá 7 dias grátis antes da primeira cobrança automática.',
+    landingSummary: 'Carteira/saldo somente se o provedor permitir autorização recorrente com trial.',
     previewTitle: 'Mercado Pago · em breve',
-    previewDescription: 'Vamos avaliar saldo, carteira e crédito oferecido pelo próprio Mercado Pago. O KÔMA não vai subsidiar juros ou financiamento para oferecer esta opção.',
+    previewDescription: 'Carteira, saldo ou crédito do Mercado Pago só entram no checkout se puderem cumprir o mesmo contrato recorrente do KÔMA: autorização hoje, 7 dias grátis e primeira cobrança automática depois.',
     selectable: false,
   },
   {
@@ -95,10 +84,10 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     status: 'study',
     statusLabel: 'Em estudo',
     billingCycles: ['anual'],
-    checkoutSummary: 'Até 12x somente quando os juros do parcelamento ficarem com o comprador/provedor.',
-    landingSummary: 'Parcelamento anual em estudo sem subsídio de juros pelo KÔMA.',
+    checkoutSummary: 'Só entra se puder respeitar os 7 dias grátis e iniciar a cobrança automática depois do trial.',
+    landingSummary: 'Parcelamento anual em estudo sem cobrança antes do término do trial.',
     previewTitle: 'Anual parcelado no cartão · em estudo',
-    previewDescription: 'A meta é permitir até 12x e receber o total da venda anual conforme as regras do Mercado Pago, sem o KÔMA bancar os juros do parcelamento. Taxas normais do gateway e prazo de recebimento continuam sendo custos operacionais separados.',
+    previewDescription: 'A opção só será oferecida se o provedor suportar autorização recorrente sem cobrar a mensalidade fixa durante os 7 dias grátis. O KÔMA não exibirá pagamento antecipado disfarçado de trial nem dias de bônus.',
     selectable: false,
   },
 ] as const;

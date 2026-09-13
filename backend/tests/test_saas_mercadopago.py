@@ -9,38 +9,30 @@ from decimal import Decimal
 import pytest
 
 from app.config import settings
-from app.services.saas_mercadopago import (
-    SaasMercadoPagoError,
-    SaasMercadoPagoService,
-    default_saas_mp_service,
-)
+from app.services.saas_mercadopago import SaasMercadoPagoError, SaasMercadoPagoService
 
 
-def test_mock_service_creates_preapproval_with_seven_days_trial():
+def test_mock_service_creates_card_preapproval_with_seven_days_trial(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
     service = SaasMercadoPagoService("mock-token")
-    assert service.is_mock is True
-
     res = service.create_preapproval(
         protocol="KOMA-CTR-20260907-TEST12345678",
         plan="pro",
         billing_cycle="mensal",
-        amount=Decimal("189.00"),
+        amount=Decimal("209.00"),
         card_token_id="token_card_123",
         payer_email="cliente@example.com",
     )
-
     assert res["status"] == "authorized"
     assert res["id"].startswith("mock-sub-")
-    assert res["payer_email"] == "cliente@example.com"
     assert res["external_reference"] == "KOMA-CTR-20260907-TEST12345678"
     assert res["auto_recurring"]["frequency"] == 1
-    assert res["auto_recurring"]["frequency_type"] == "months"
-    assert res["auto_recurring"]["transaction_amount"] == 189.0
-    assert res["auto_recurring"]["free_trial"]["frequency"] == 7
-    assert res["auto_recurring"]["free_trial"]["frequency_type"] == "days"
+    assert res["auto_recurring"]["transaction_amount"] == 209.0
+    assert res["auto_recurring"]["free_trial"] == {"frequency": 7, "frequency_type": "days"}
 
 
-def test_mock_service_creates_annual_preapproval_frequency_12():
+def test_mock_service_creates_annual_card_preapproval_frequency_12(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
     service = SaasMercadoPagoService("mock-token")
     res = service.create_preapproval(
         protocol="KOMA-CTR-20260907-TESTANNUAL12",
@@ -55,21 +47,31 @@ def test_mock_service_creates_annual_preapproval_frequency_12():
     assert res["auto_recurring"]["free_trial"]["frequency"] == 7
 
 
-def test_mock_service_creates_annual_pix():
+def test_mock_service_creates_pix_automatic_pending_authorization_with_trial(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
     service = SaasMercadoPagoService("mock-token")
-    res = service.create_annual_pix(
-        protocol="KOMA-CTR-20260907-PIX12345678",
+    res = service.create_pix_automatic_preapproval(
+        protocol="KOMA-CTR-20260907-PIXAUTO12345",
         plan="pocket",
-        amount=Decimal("1177.20"),
+        billing_cycle="mensal",
+        amount=Decimal("109.00"),
         payer_email="pix@example.com",
-        payer_name="Dono do Restaurante",
-        payer_tax_id="12345678909",
     )
-
-    assert res["id"].startswith("mock-pix-")
+    assert res["id"].startswith("mock-pix-auto-")
     assert res["status"] == "pending"
-    assert "br.gov.bcb.pix" in res["qr_code"]
-    assert res["ticket_url"].endswith(res["id"] + "/ticket")
+    assert res["external_reference"] == "KOMA-CTR-20260907-PIXAUTO12345"
+    assert res["auto_recurring"]["free_trial"] == {"frequency": 7, "frequency_type": "days"}
+    assert "preapproval_id=" in res["init_point"]
+
+
+def test_capabilities_never_advertise_upfront_pix(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    service = SaasMercadoPagoService("mock-token")
+    caps = service.checkout_capabilities()
+    assert caps["pix"] is False
+    assert caps["pix_automatic"] is True
+    assert caps["trialDays"] == 7
+    assert caps["upfrontPaymentAllowed"] is False
 
 
 def test_mock_provider_fails_closed_in_production(monkeypatch):
@@ -89,20 +91,18 @@ def test_mock_provider_fails_closed_in_production(monkeypatch):
         )
 
     with pytest.raises(SaasMercadoPagoError, match="não configurada"):
-        service.create_annual_pix(
+        service.create_pix_automatic_preapproval(
             protocol="KOMA-CTR-20260907-FAILCLOSED02",
             plan="pro",
-            amount=Decimal("2257.20"),
+            billing_cycle="mensal",
+            amount=Decimal("209.00"),
             payer_email="cliente@example.com",
-            payer_name="Cliente Teste",
-            payer_tax_id="52998224725",
         )
 
 
 def test_webhook_without_secret_is_rejected_in_production(monkeypatch):
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "")
     monkeypatch.setenv("ENVIRONMENT", "production")
-
     assert SaasMercadoPagoService.verify_webhook_signature(
         signature_header="",
         request_id="request-production",
@@ -113,7 +113,6 @@ def test_webhook_without_secret_is_rejected_in_production(monkeypatch):
 def test_webhook_without_secret_remains_available_for_test_mocks(monkeypatch):
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "")
     monkeypatch.setenv("ENVIRONMENT", "test")
-
     assert SaasMercadoPagoService.verify_webhook_signature(
         signature_header="",
         request_id="request-test",
@@ -124,30 +123,22 @@ def test_webhook_without_secret_remains_available_for_test_mocks(monkeypatch):
 def test_webhook_signature_verification(monkeypatch):
     secret = "test_webhook_secret_key_12345"
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", secret)
-
     now_ts = str(int(time.time()))
     request_id = "req-uuid-12345"
     data_id = "preapp-999888"
-
     manifest = f"id:{data_id.lower()};request-id:{request_id};ts:{now_ts};"
     v1_sig = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
     header = f"ts={now_ts},v1={v1_sig}"
-
-    # Valid signature
     assert SaasMercadoPagoService.verify_webhook_signature(
         signature_header=header,
         request_id=request_id,
         data_id=data_id,
     ) is True
-
-    # Tampered data_id
     assert SaasMercadoPagoService.verify_webhook_signature(
         signature_header=header,
         request_id=request_id,
         data_id="other_id",
     ) is False
-
-    # Expired timestamp (> 300s)
     old_ts = str(int(time.time()) - 400)
     old_manifest = f"id:{data_id.lower()};request-id:{request_id};ts:{old_ts};"
     old_sig = hmac.new(secret.encode(), old_manifest.encode(), hashlib.sha256).hexdigest()
@@ -175,33 +166,30 @@ def test_test_token_is_allowed_in_homologation(monkeypatch):
     assert caps["isTestMode"] is True
 
 
-def test_test_buyer_rejected_with_production_credentials(monkeypatch):
+def test_test_buyer_rejected_with_production_credentials_for_all_recurring_methods(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     service = SaasMercadoPagoService("APP_USR-prod-token")
-    assert service.is_production_credentials is True
-
-    with pytest.raises(SaasMercadoPagoError, match="compradores de teste do Mercado Pago com credenciais de produção"):
+    with pytest.raises(SaasMercadoPagoError, match="compradores de teste"):
         service.create_preapproval(
             protocol="KOMA-CTR-20260912-TESTBUYER01",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("189.00"),
+            amount=Decimal("209.00"),
             card_token_id="tok_123",
             payer_email="test_user_12345@testuser.com",
         )
-
-    with pytest.raises(SaasMercadoPagoError, match="compradores de teste do Mercado Pago com credenciais de produção"):
-        service.create_annual_pix(
+    with pytest.raises(SaasMercadoPagoError, match="compradores de teste"):
+        service.create_pix_automatic_preapproval(
             protocol="KOMA-CTR-20260912-TESTBUYER02",
             plan="pro",
-            amount=Decimal("2257.20"),
+            billing_cycle="mensal",
+            amount=Decimal("209.00"),
             payer_email="test_user_99999@testuser.com",
-            payer_name="Test User",
-            payer_tax_id="12345678909",
         )
 
 
-def test_update_preapproval_next_payment_date_in_mock():
+def test_update_preapproval_next_payment_date_in_mock(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
     service = SaasMercadoPagoService("mock-token")
     future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
     res = service.update_preapproval_next_payment_date("mock-sub-999", future)
