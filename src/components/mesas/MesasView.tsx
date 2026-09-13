@@ -110,17 +110,25 @@ export function MesasView({
 
   return (
     <div className="w-full text-koma-foreground font-sans select-none space-y-3 sm:space-y-4">
-      <section className="waiter-salon-stage rounded-[20px] sm:rounded-[24px] border border-koma-border bg-koma-panel px-4 py-4 sm:px-6 sm:py-5">
-        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
-          <div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-black tracking-[-0.045em] leading-none text-koma-foreground">
-              Salão
-            </h2>
+      <section className="waiter-salon-stage relative overflow-hidden rounded-[20px] sm:rounded-[24px] border border-koma-border bg-koma-panel px-4 py-4 sm:px-6 sm:py-5">
+        <div className="waiter-salon-stage__plane" aria-hidden="true" />
+        <span className="waiter-salon-stage__word" aria-hidden="true">SALÃO</span>
+
+        <div className="relative z-10 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+          <div className="min-w-0 max-w-2xl">
+            <div className="flex items-end gap-3">
+              <h2 className="font-serif text-2xl sm:text-3xl font-black tracking-[-0.045em] leading-none text-koma-foreground">
+                Salão
+              </h2>
+              <span className="mb-1 hidden h-1 w-10 -rotate-2 bg-koma-accent sm:inline-block" aria-hidden="true" />
+            </div>
             <p className="mt-1.5 max-w-2xl text-[11px] sm:text-xs text-koma-subtle leading-relaxed">
               Mesa livre abre um novo pedido. Mesa ocupada abre o consumo; itens prontos aparecem no filtro abaixo.
             </p>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-koma-muted sm:pb-0.5">
+
+          <span className="inline-flex w-fit items-center gap-2 rounded-full border border-koma-border bg-koma-card px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-koma-accent" aria-hidden="true" />
             {counts.todos} {counts.todos === 1 ? 'mesa' : 'mesas'}
           </span>
         </div>
