@@ -11,7 +11,7 @@ const STEPS = [
   {
     num: '02',
     title: 'CONFIGURAMOS COM VOCÊ',
-    text: 'Cardápio, equipe, impressão e equipamentos são conferidos antes da estreia.',
+    text: 'Cardápio, equipe e equipamentos são conferidos com você. Impressão é configurada quando fizer parte do plano contratado.',
   },
   {
     num: '03',
@@ -55,7 +55,7 @@ export function Implementation() {
           <Monitor aria-hidden="true" />
         </div>
         <strong>USE CELULAR, TABLET OU COMPUTADOR.</strong>
-        <p>O Kôma funciona pelo navegador. Impressoras e periféricos são conferidos antes da contratação.</p>
+        <p>O Kôma funciona pelo navegador. Impressoras e periféricos são conferidos quando forem aplicáveis ao plano e à operação.</p>
       </div>
     </section>
   );
