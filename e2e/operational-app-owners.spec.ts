@@ -10,6 +10,7 @@ async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocke
   await page.addInitScript(({ withDrafts }) => {
     if (sessionStorage.getItem('app-owner-fixture')) return;
     sessionStorage.setItem('app-owner-fixture', '1');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
     localStorage.setItem('koma_waiter_token', 'app-owner-fixture-token');
     localStorage.setItem('koma_waiter_id', 'waiter-app-owner');
     localStorage.setItem('koma_waiter_name', 'Operador de teste');
