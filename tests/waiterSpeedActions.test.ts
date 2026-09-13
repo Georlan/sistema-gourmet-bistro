@@ -24,9 +24,13 @@ test('toque na mesa usa a navegação canônica: livre abre Pedido e ocupada abr
   assert.match(modal, /orders\.length === 0 \? 'lancamento' : 'consumo'/);
 });
 
-test('salão evita resumo duplicado e orienta a próxima ação em uma única faixa compacta', () => {
+test('salão mantém orientação compacta e recupera o padrão visual KÔMA', () => {
   const view = readFileSync(new URL('../src/components/mesas/MesasView.tsx', import.meta.url), 'utf8');
 
+  assert.match(view, /waiter-salon-stage relative overflow-hidden/);
+  assert.match(view, /waiter-salon-stage__plane/);
+  assert.match(view, /waiter-salon-stage__word/);
+  assert.match(view, />SALÃO<\/span>/);
   assert.match(view, /Mesa livre abre um novo pedido/);
   assert.match(view, /\{counts\.todos\} \{counts\.todos === 1 \? 'mesa' : 'mesas'\}/);
   assert.doesNotMatch(view, /Grid2X2|CheckCircle2|Utensils/);
@@ -83,6 +87,7 @@ test('grade do salão padroniza largura e altura de todos os cards sem cortar co
   assert.match(card, /absolute inset-0 z-10 h-full w-full/);
   assert.match(card, /fillHeight/);
   assert.match(shared, /fillHeight\?: boolean/);
+  assert.match(shared, /fillHeight = false/);
   assert.match(shared, /fillHeight \? 'h-full' : ''/);
   assert.doesNotMatch(view, /grid w-full auto-rows-\[184px\] grid-cols-2/);
   assert.doesNotMatch(card, /h-\[176px\]/);
