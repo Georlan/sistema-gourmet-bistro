@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import type { CashierTab } from '../cashierContracts';
+import './cashierSetupMode.css';
 import {
   getCashierNavigationAction,
   getCashierNavigationTarget,
@@ -41,6 +42,12 @@ export function useCashierNavigation({ hasOnlineMenu, showToast }: BoundaryProps
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
+
+  useEffect(() => {
+    if (setupMode) document.documentElement.setAttribute('data-koma-setup-mode', 'true');
+    else document.documentElement.removeAttribute('data-koma-setup-mode');
+    return () => document.documentElement.removeAttribute('data-koma-setup-mode');
+  }, [setupMode]);
 
   useEffect(() => {
     if (!isMobileSidebarOpen) return;
