@@ -502,6 +502,9 @@ async def mercado_pago_saas_webhook(
                 try:
                     mandate = default_saas_mp_service.get_preapproval(sub_id)
                 except SaasMercadoPagoError as exc:
+                    if exc.status_code in {400, 404}:
+                        logger.info("Preapproval %s not found on Mercado Pago (simulation or unknown ID).", sub_id)
+                        return {"status": "received", "ignored": True, "reason": "preapproval_not_found"}
                     raise HTTPException(502, "Não foi possível recuperar a autorização.") from exc
                 reference = str(mandate.get("external_reference") or "").strip().upper()
                 if _PROTOCOL_RE.fullmatch(reference):

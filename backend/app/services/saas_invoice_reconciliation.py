@@ -11,6 +11,8 @@ def reconcile_invoice(db, invoice_id):
     try:
         invoice = default_saas_mp_service.get_authorized_payment(invoice_id)
     except SaasMercadoPagoError as exc:
+        if exc.status_code in {400, 404}:
+            return {"status": "received", "reconciled": False, "reason": "invoice_not_found"}
         raise HTTPException(502, "Não foi possível confirmar a cobrança.") from exc
     billing = get_billing_setup_by_provider_sub(db, "mercado_pago", str(invoice.get("preapproval_id") or ""))
     if not billing or not billing.restaurante_id or billing.payment_method_type != "credit_card":
@@ -22,6 +24,8 @@ def reconcile_invoice(db, invoice_id):
         verified = default_saas_mp_service.get_payment(str(payment["id"]))
         mandate = default_saas_mp_service.get_preapproval(billing.provider_subscription_id)
     except SaasMercadoPagoError as exc:
+        if exc.status_code in {400, 404}:
+            return {"status": "received", "reconciled": False, "reason": "payment_or_mandate_not_found"}
         raise HTTPException(502, "Não foi possível confirmar o pagamento da cobrança.") from exc
     if str(mandate.get("external_reference") or "") != billing.protocol:
         return {"status": "received", "reconciled": False}
