@@ -6,6 +6,7 @@ import { SidebarContent, SidebarFooter, SidebarHeader } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
+import { CashierOnboardingShortcut } from './CashierOnboardingShortcut';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
 import type { useCashierNavigation } from './useCashierNavigation';
@@ -101,6 +102,9 @@ export function CashierMobileSidebar({
             </SidebarHeader>
 
             <SidebarContent className="cashier-sidebar__content p-2">
+              <div className="mb-2">
+                <CashierOnboardingShortcut mobile />
+              </div>
               <CashierSidebarNavigation
                 groups={CASHIER_SIDEBAR_GROUPS}
                 closeMobile

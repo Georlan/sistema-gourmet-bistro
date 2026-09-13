@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Lock, Mail, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
-import { saveOperatorSession } from '../utils/authSession';
+import { getOperatorSession, saveOperatorSession } from '../utils/authSession';
 import { authFetch, authRequestErrorMessage } from '../utils/authRequest';
 import { FirstAccessOnboarding } from './onboarding/FirstAccessOnboarding';
 
@@ -31,8 +31,21 @@ function bootstrapInvitationToken(tokenProp?: string | null): string {
   return token;
 }
 
+function existingManagementSession(): ActivatedSession | null {
+  const session = getOperatorSession('caixa');
+  if (!session?.token) return null;
+  const role = String(session.user?.role || session.user?.cargo || '').trim().toLowerCase();
+  if (role !== 'admin' && role !== 'gerente') return null;
+  return {
+    accessToken: session.token,
+    user: session.user as Record<string, unknown>,
+  };
+}
+
 export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   const [tokenConvite] = useState(() => bootstrapInvitationToken(token));
+  const [resumeRequested] = useState(() => new URLSearchParams(window.location.search).get('resume') === '1');
+  const [resumableSession] = useState<ActivatedSession | null>(() => existingManagementSession());
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -41,6 +54,48 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
   const [activatedSession, setActivatedSession] = useState<ActivatedSession | null>(null);
+
+  const openInitialSetup = () => {
+    window.location.href = '/ativar?resume=1';
+  };
+
+  const returnToCashierLogin = () => {
+    window.location.href = '/?view=caixa';
+  };
+
+  if (resumeRequested) {
+    if (resumableSession) {
+      return (
+        <FirstAccessOnboarding
+          accessToken={resumableSession.accessToken}
+          user={resumableSession.user}
+        />
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-koma-page text-koma-foreground flex items-center justify-center p-4 font-sans">
+        <div className="w-full max-w-md bg-koma-card border border-koma-border rounded-3xl p-8 shadow-2xl text-center space-y-5">
+          <div className="inline-flex items-center justify-center p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-300">
+            <AlertCircle size={30} />
+          </div>
+          <div>
+            <h1 className="text-xl font-black">Entre novamente para continuar</h1>
+            <p className="mt-2 text-sm text-koma-muted">
+              A implantação inicial continua salva, mas sua sessão de administrador não está disponível nesta aba.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={returnToCashierLogin}
+            className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-xs font-black uppercase tracking-wider text-zinc-950 hover:bg-emerald-400"
+          >
+            Ir para o login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,9 +201,20 @@ export function CaixaAtivarPage({ token }: CaixaAtivarPageProps) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {errorMsg && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2 text-rose-400 text-xs font-semibold animate-scale-in">
-                <AlertCircle size={16} className="shrink-0" />
-                <span>{errorMsg}</span>
+              <div className="space-y-2">
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl flex items-center gap-2 text-rose-400 text-xs font-semibold animate-scale-in">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                {resumableSession && (
+                  <button
+                    type="button"
+                    onClick={openInitialSetup}
+                    className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 text-xs font-black text-emerald-300 hover:bg-emerald-500/10"
+                  >
+                    Voltar para a implantação inicial
+                  </button>
+                )}
               </div>
             )}
 

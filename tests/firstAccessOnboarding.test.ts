@@ -7,11 +7,30 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const activation = source('../src/components/CaixaAtivarPage.tsx');
 const onboarding = source('../src/components/onboarding/FirstAccessOnboarding.tsx');
 const routeComposition = source('../backend/app/routes/__init__.py');
+const desktopSidebar = source('../src/components/caixa/navigation/CashierDesktopSidebar.tsx');
+const mobileSidebar = source('../src/components/caixa/navigation/CashierMobileSidebar.tsx');
+const onboardingShortcut = source('../src/components/caixa/navigation/CashierOnboardingShortcut.tsx');
 
 test('new admin activation enters guided onboarding instead of raw cashier', () => {
   assert.match(activation, /userRole === 'admin'/);
   assert.match(activation, /<FirstAccessOnboarding/);
   assert.match(activation, /saveOperatorSession\(accessToken, sessionUser\)/);
+});
+
+test('activated management users can resume initial setup from the operational app', () => {
+  assert.match(activation, /getOperatorSession\('caixa'\)/);
+  assert.match(activation, /resumeRequested/);
+  assert.match(activation, /Voltar para a implantação inicial/);
+  assert.match(onboardingShortcut, /\/ativar\?resume=1/);
+  assert.match(onboardingShortcut, /Implantação inicial/);
+  assert.match(desktopSidebar, /<CashierOnboardingShortcut/);
+  assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
+});
+
+test('resume route fails safely when the browser no longer has an admin session', () => {
+  assert.match(activation, /Entre novamente para continuar/);
+  assert.match(activation, /A implantação inicial continua salva/);
+  assert.match(activation, /window\.location\.href = '\/\?view=caixa'/);
 });
 
 test('onboarding is advisory and can always be skipped to cashier', () => {
