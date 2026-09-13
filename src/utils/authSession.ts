@@ -132,27 +132,20 @@ function persistedSessionPortal(rawSession: string | null): OperationalPortal | 
   return parsed ? identityPortal(parsed.user || {}) : null;
 }
 
-function persistCanonicalSession(
-  portal: OperationalPortal,
-  session: OperatorSession,
-  mirrorLegacy = false,
-): void {
-  const raw = JSON.stringify({
+function persistCanonicalSession(portal: OperationalPortal, session: OperatorSession): void {
+  localStorage.setItem(SESSION_KEY_BY_PORTAL[portal], JSON.stringify({
     ...session,
     user: minimalOperatorIdentity(session.user),
-  });
-  localStorage.setItem(SESSION_KEY_BY_PORTAL[portal], raw);
-  if (mirrorLegacy) localStorage.setItem(LEGACY_SESSION_KEY, raw);
+  }));
 }
 
 function persistScopedAliases(token: string, user: OperatorIdentitySnapshot): void {
   const portal = identityPortal(user);
   if (!portal) return;
 
-  // Os aliases continuam existindo porque partes do App legado ainda os leem
-  // diretamente. O ponto importante é que cada portal limpa apenas o próprio
-  // namespace: entrar como Caixa não pode mais apagar uma sessão de Garçom que
-  // está ativa em outra aba (e vice-versa).
+  // Os aliases ainda existem porque o App legado os lê diretamente. Cada portal
+  // limpa apenas o próprio namespace: entrar como Caixa não apaga o Garçom ativo
+  // em outra aba, e vice-versa.
   clearKeys(localStorage, portalAliasKeys(portal));
 
   if (portal === 'garcom') {
@@ -176,8 +169,8 @@ function legacyAliasSession(portal: OperationalPortal): OperatorSession | null {
   if (!token) return null;
 
   if (portal === 'garcom') {
-    // Um alias antigo de Garçom isolado continua sem poder escolher sozinho a
-    // entrada canônica. Só o aceitamos quando a própria aba já estava no Garçom.
+    // Alias antigo isolado de Garçom não escolhe sozinho uma aba nova. Ele só é
+    // aceito quando a própria aba já está vinculada ao portal do Garçom.
     if (getTabPortal() !== 'garcom') return null;
     return {
       token,
@@ -235,7 +228,7 @@ function readPortalSession(portal: OperationalPortal): OperatorSession | null {
 
   // Migração de builds antigos: algumas sessões de Garçom foram gravadas nos
   // aliases do Caixa. Reparamos apenas quando o token é exatamente o mesmo;
-  // um token diferente no outro portal é uma sessão concorrente legítima.
+  // token diferente no outro portal significa sessão concorrente legítima.
   if (!scopedAliasToken(portal)) {
     const otherPortal: OperationalPortal = portal === 'caixa' ? 'garcom' : 'caixa';
     if (scopedAliasToken(otherPortal) === session.token) {
@@ -261,15 +254,15 @@ function candidatePortal(): OperationalPortal | null {
   if (localStorage.getItem(SESSION_KEY_BY_PORTAL.caixa)) return 'caixa';
   if (localStorage.getItem(SESSION_KEY_BY_PORTAL.garcom)) return 'garcom';
 
-  // Compatibilidade com a sessão antiga do Caixa.
+  // Compatibilidade com a sessão antiga do Caixa para chamadas internas que ainda
+  // chegam aqui fora da entrada unificada.
   if (localStorage.getItem('koma_caixa_token')) return 'caixa';
   return null;
 }
 
-// A sessão acompanha o vencimento real do JWT emitido pelo backend. As sessões
-// canônicas agora são separadas por portal, enquanto sessionStorage guarda qual
-// portal pertence à aba atual. Isso permite Caixa e Garçom simultâneos no mesmo
-// navegador sem que um login destrua o outro.
+// A sessão persistida continua acompanhando o vencimento real do JWT, mas qual
+// portal está aberto é decisão da ABA, guardada em sessionStorage. Assim uma aba
+// pode ser Garçom e outra Caixa no mesmo navegador sem compartilharem navegação.
 export function saveOperatorSession(token: string, user: any): void {
   const minimalUser = minimalOperatorIdentity(user);
   const portal = identityPortal(minimalUser);
@@ -281,7 +274,10 @@ export function saveOperatorSession(token: string, user: any): void {
     expiresAt: readJwtExpiryMs(token) ?? (Date.now() + FALLBACK_SESSION_MS),
   };
 
-  persistCanonicalSession(portal, session, true);
+  persistCanonicalSession(portal, session);
+  // A chave única antiga é somente uma ponte de migração. Novos logins não a
+  // recriam, porque ela faria uma aba nova escolher automaticamente outro login.
+  localStorage.removeItem(LEGACY_SESSION_KEY);
   localStorage.removeItem('token');
   persistScopedAliases(token, minimalUser);
   setTabPortal(portal);
@@ -295,17 +291,29 @@ export function getOperatorSession(portal?: OperationalPortal): OperatorSession 
 }
 
 export function getPersistedOperationalPortal(): OperationalPortal | null {
-  if (getTabStorage()?.getItem(LOGGED_OUT_TAB_KEY)) return null;
+  const tabStorage = getTabStorage();
+  if (tabStorage?.getItem(LOGGED_OUT_TAB_KEY)) return null;
 
-  const candidates = [getTabPortal(), candidatePortal()]
-    .filter((value, index, values): value is OperationalPortal => Boolean(value) && values.indexOf(value) === index);
+  // Regra nova: uma aba já vinculada restaura o próprio portal em reload.
+  const tabPortal = getTabPortal();
+  if (tabPortal) {
+    const session = getOperatorSession(tabPortal);
+    if (session?.token && scopedAliasToken(tabPortal) === session.token) return tabPortal;
+    return null;
+  }
 
-  for (const portal of candidates) {
-    const session = getOperatorSession(portal);
-    if (session?.token && scopedAliasToken(portal) === session.token) {
-      setTabPortal(portal);
-      return portal;
-    }
+  // Migração one-shot da chave canônica antiga. Depois de migrar a aba atual,
+  // removemos a chave compartilhada para que uma NOVA aba abra no login e possa
+  // autenticar outro perfil sem precisar derrubar a sessão existente.
+  const legacyRaw = localStorage.getItem(LEGACY_SESSION_KEY);
+  const legacyPortal = persistedSessionPortal(legacyRaw);
+  if (!legacyPortal) return null;
+
+  const session = getOperatorSession(legacyPortal);
+  if (session?.token && scopedAliasToken(legacyPortal) === session.token) {
+    setTabPortal(legacyPortal);
+    localStorage.removeItem(LEGACY_SESSION_KEY);
+    return legacyPortal;
   }
 
   return null;
@@ -318,8 +326,7 @@ export function getOperationalAccessToken(portal: OperationalPortal): string {
   const session = getOperatorSession(portal);
   if (session?.token) return session.token === aliasToken ? session.token : '';
 
-  // Compatibilidade temporária com sessões legadas do Caixa que ainda só
-  // possuem o alias. Garçom legado isolado continua sem auto-seleção.
+  // Compatibilidade temporária com sessão antiga de Caixa somente por alias.
   return portal === 'caixa' ? aliasToken : '';
 }
 
