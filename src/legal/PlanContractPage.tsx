@@ -19,14 +19,8 @@ import {
   Store,
   User,
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 import { API_BASE_URL } from '../config/api';
-import {
-  getSubscriptionPaymentOption,
-  getSubscriptionPaymentOptions,
-  type SubscriptionPaymentOptionId,
-} from '../config/subscriptionPaymentOptions';
 import {
   SUBSCRIPTION_PLANS,
   formatCurrency,
@@ -100,8 +94,7 @@ type ContractReceipt = {
   provisioning: { status: string; message: string };
 };
 
-type BillingMethod = 'credit_card' | 'pix';
-type PaymentPreview = SubscriptionPaymentOptionId;
+type BillingMethod = 'credit_card' | 'pix_automatic';
 
 type ActivationResult = {
   restaurantId?: string;
@@ -113,12 +106,15 @@ type ActivationResult = {
   activationToken?: string;
 };
 
-type PixData = {
-  paymentId: string;
-  qrCode: string | null;
-  qrCodeBase64: string | null;
-  ticketUrl: string | null;
-  expiresAt: string | null;
+type BillingCapabilities = {
+  credit_card: boolean;
+  pix_automatic: boolean;
+  pix?: boolean;
+  publicKey: string;
+  environment?: string;
+  isTestMode?: boolean;
+  trialDays?: number;
+  upfrontPaymentAllowed?: boolean;
 };
 
 const EMPTY_FORM: ContractForm = {
@@ -179,42 +175,33 @@ function contractErrorMessage(detail: unknown): string {
   return 'Não foi possível registrar a contratação.';
 }
 
-function PaymentOptionIcon({ optionId }: { optionId: SubscriptionPaymentOptionId }) {
-  if (optionId === 'pix_annual' || optionId === 'pix_automatic') return <QrCode size={18} />;
-  if (optionId === 'boleto') return <FileText size={18} />;
-  return <CreditCard size={18} />;
-}
-
 export default function PlanContractPage() {
   const initialPlanId = useMemo(resolvePlanId, []);
   const initialBillingCycle = useMemo<'mensal' | 'anual'>(
     () => (new URLSearchParams(window.location.search).get('cobranca') === 'anual' ? 'anual' : 'mensal'),
     [],
   );
+  const returnedFromPixAutomatic = useMemo(
+    () => new URLSearchParams(window.location.search).get('retorno') === 'pix-automatico',
+    [],
+  );
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(initialPlanId);
   const [billingCycle, setBillingCycle] = useState<'mensal' | 'anual'>(initialBillingCycle);
-  // Lead with the no-charge trial on both cycles. Pix remains available as the
-  // upfront annual alternative, but should not be the default choice because
-  // its full annual amount is due immediately.
   const [billingMethod, setBillingMethod] = useState<BillingMethod>('credit_card');
-  const [paymentPreview, setPaymentPreview] = useState<PaymentPreview | null>(null);
   const [form, setForm] = useState<ContractForm>(EMPTY_FORM);
   const [accepted, setAccepted] = useState(false);
   const [requestId, setRequestId] = useState(newRequestId);
   const [signupToken, setSignupToken] = useState('');
   const [signupNotice, setSignupNotice] = useState('');
-  const [capabilities, setCapabilities] = useState<{
-    credit_card: boolean;
-    pix: boolean;
-    publicKey: string;
-    environment?: string;
-    isTestMode?: boolean;
-  }>({ credit_card: false, pix: false, publicKey: '' });
+  const [capabilities, setCapabilities] = useState<BillingCapabilities>({
+    credit_card: false,
+    pix_automatic: false,
+    publicKey: '',
+  });
   const [receipt, setReceipt] = useState<ContractReceipt | null>(null);
   const [activationResult, setActivationResult] = useState<ActivationResult | null>(null);
-  const [pixData, setPixData] = useState<PixData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -231,8 +218,6 @@ export default function PlanContractPage() {
     [selectedPlanId],
   );
   const pricing = useMemo(() => getSubscriptionPricing(plan.price), [plan.price]);
-  const paymentOptions = useMemo(() => getSubscriptionPaymentOptions(billingCycle), [billingCycle]);
-  const creditCardOption = useMemo(() => getSubscriptionPaymentOption('credit_card'), []);
   const now = useMemo(() => new Date(), []);
   const reminderDate = useMemo(() => addDays(now, 5), [now]);
   const renewalDate = useMemo(() => addDays(now, 7), [now]);
@@ -252,34 +237,43 @@ export default function PlanContractPage() {
     form.email.includes('@') &&
     form.phone.replace(/\D/g, '').length >= 8;
 
-  const paymentFieldsValid =
-    billingMethod === 'pix'
-      ? billingCycle === 'anual'
-      : cardNumber.replace(/\D/g, '').length >= 13 &&
-        cardHolder.trim().length >= 2 &&
-        /^\d{2}\/\d{2,4}$/.test(cardExp.trim()) &&
-        /^\d{3,4}$/.test(cardCvv.trim());
+  const cardFieldsValid =
+    cardNumber.replace(/\D/g, '').length >= 13 &&
+    cardHolder.trim().length >= 2 &&
+    /^\d{2}\/\d{2,4}$/.test(cardExp.trim()) &&
+    /^\d{3,4}$/.test(cardCvv.trim());
 
+  const paymentFieldsValid = billingMethod === 'pix_automatic' || cardFieldsValid;
+  const methodAvailable = billingMethod === 'credit_card' ? capabilities.credit_card : capabilities.pix_automatic;
   const canContinue =
-    capabilities[billingMethod] && ((baseFieldsValid && representativeValid && accepted) || Boolean(receipt)) && paymentFieldsValid && !isSubmitting && !activationResult && !pixData;
+    methodAvailable &&
+    ((baseFieldsValid && representativeValid && accepted) || Boolean(receipt)) &&
+    paymentFieldsValid &&
+    !isSubmitting &&
+    !activationResult;
 
-  const amountDueToday = billingMethod === 'pix' && billingCycle === 'anual' ? pricing.annualTotal : 0;
+  const amountDueToday = 0;
   const nextChargeAmount = billingCycle === 'anual' ? pricing.annualTotal : pricing.monthly;
-
-  const paymentPreviewDetails = useMemo(() => {
-    if (!paymentPreview) return null;
-    const option = getSubscriptionPaymentOption(paymentPreview);
-    return {
-      title: option.previewTitle,
-      text: option.previewDescription,
-    };
-  }, [paymentPreview]);
+  const billingMethodLabel = billingMethod === 'pix_automatic' ? 'Pix Automático' : 'cartão de crédito';
 
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${API_BASE_URL}/api/contracts/payment-methods`, { signal: controller.signal })
-      .then(async response => { if (response.ok) setCapabilities(await response.json()); })
-      .catch(() => { /* Registration remains usable when billing is unavailable. */ });
+      .then(async response => {
+        if (!response.ok) return;
+        const payload = await response.json();
+        setCapabilities({
+          credit_card: Boolean(payload.credit_card),
+          pix_automatic: Boolean(payload.pix_automatic),
+          pix: Boolean(payload.pix),
+          publicKey: String(payload.publicKey || ''),
+          environment: payload.environment,
+          isTestMode: Boolean(payload.isTestMode),
+          trialDays: Number(payload.trialDays || 7),
+          upfrontPaymentAllowed: Boolean(payload.upfrontPaymentAllowed),
+        });
+      })
+      .catch(() => { /* Cadastro segue disponível mesmo sem billing. */ });
     return () => controller.abort();
   }, []);
 
@@ -288,16 +282,71 @@ export default function PlanContractPage() {
   }, [plan.name]);
 
   useEffect(() => {
-    if (billingCycle === 'mensal' && billingMethod === 'pix') setBillingMethod('credit_card');
-    setPaymentPreview(null);
-  }, [billingCycle, billingMethod]);
-
-  useEffect(() => {
     if (contractLocked) return;
     const params = new URLSearchParams(window.location.search);
     params.set('cobranca', billingCycle);
+    params.delete('retorno');
     window.history.replaceState(null, '', `/contratar/${selectedPlanId}?${params.toString()}`);
   }, [billingCycle, selectedPlanId, contractLocked]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let token = '';
+    try { token = localStorage.getItem('koma_signup_resume') || ''; } catch { /* Storage opcional. */ }
+    if (token) {
+      fetch(`${API_BASE_URL}/api/signups/current`, {
+        headers: { 'X-Signup-Token': token },
+        signal: controller.signal,
+      })
+        .then(async response => {
+          if (!response.ok) {
+            if (response.status === 404) {
+              try { localStorage.removeItem('koma_signup_resume'); } catch { /* Storage opcional. */ }
+            }
+            return;
+          }
+          const saved = await response.json();
+          setSignupToken(token);
+          setRequestId(saved.id);
+          setSelectedPlanId(saved.data.plan);
+          setBillingCycle(saved.data.billing_cycle);
+          setForm(previous => ({
+            ...previous,
+            restaurantName: saved.data.restaurant_name,
+            responsibleName: saved.data.responsible_name,
+            contractingPartyName: saved.data.responsible_name,
+            email: saved.data.email,
+            phone: saved.data.phone,
+          }));
+          if (saved.receipt) {
+            setReceipt(saved.receipt);
+            setAccepted(true);
+            setSelectedPlanId(saved.receipt.commercial.plan);
+            setBillingCycle(saved.receipt.commercial.billingCycle);
+            setForm(previous => ({
+              ...previous,
+              contractingPartyName: saved.receipt.contractingParty.name,
+              restaurantName: saved.receipt.contractingParty.restaurantName,
+              taxId: saved.receipt.contractingParty.taxId,
+              email: saved.receipt.contractingParty.email,
+              phone: saved.receipt.contractingParty.phone,
+              responsibleName: saved.receipt.representative.name,
+              representativeTaxId: saved.receipt.representative.taxId,
+              representativeRole: saved.receipt.representative.role,
+            }));
+          }
+          if (saved.activation) setActivationResult(saved.activation);
+          setStep(3);
+          setSignupNotice(
+            returnedFromPixAutomatic
+              ? 'Autorização retornada pelo Mercado Pago. Estamos confirmando o Pix Automático e nenhuma mensalidade fixa será cobrada antes do fim dos 7 dias grátis.'
+              : 'Sua inscrição foi recuperada. Continue de onde parou.',
+          );
+        })
+        .catch(() => { /* Novo cadastro continua possível. */ });
+    }
+    return () => controller.abort();
+  }, [returnedFromPixAutomatic]);
 
   useEffect(() => {
     if (!receipt || activationResult) return;
@@ -308,26 +357,29 @@ export default function PlanContractPage() {
         if (!response.ok) return;
         const payload = await response.json();
         if (payload.billingStatus === 'ready' && !payload.isActivated) {
-          setPixData(null);
           setActivationResult({
             status: 'awaiting_release',
-            message: 'Pagamento confirmado. A equipe KÔMA foi avisada e fará a liberação do restaurante.',
+            message: 'Autorização recorrente confirmada. A equipe KÔMA foi avisada e fará a liberação do restaurante.',
           });
           return;
         }
         if (payload.isActivated && payload.restaurantId) {
           if (signupToken) {
-            const resumed = await fetch(`${API_BASE_URL}/api/signups/current`, { headers: { 'X-Signup-Token': signupToken } });
+            const resumed = await fetch(`${API_BASE_URL}/api/signups/current`, {
+              headers: { 'X-Signup-Token': signupToken },
+            });
             const saved = resumed.ok ? await resumed.json() : null;
             setActivationResult(saved?.activation || { restaurantId: String(payload.restaurantId), slug: payload.slug });
-          } else setActivationResult({ restaurantId: String(payload.restaurantId), slug: payload.slug });
+          } else {
+            setActivationResult({ restaurantId: String(payload.restaurantId), slug: payload.slug });
+          }
         }
       } catch {
-        // A confirmação também pode ser verificada manualmente; mantemos o polling silencioso.
+        // Polling silencioso; o estado também é recuperável ao recarregar.
       }
     }, 5000);
     return () => window.clearInterval(poll);
-  }, [receipt, pixData, activationResult, signupToken]);
+  }, [receipt, activationResult, signupToken]);
 
   const updateField = (field: keyof ContractForm, value: string) => {
     if (contractLocked) return;
@@ -345,65 +397,58 @@ export default function PlanContractPage() {
     }
   };
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let token = '';
-    try { token = localStorage.getItem('koma_signup_resume') || ''; } catch { /* Storage optional. */ }
-    if (token) {
-      fetch(`${API_BASE_URL}/api/signups/current`, { headers: { 'X-Signup-Token': token }, signal: controller.signal })
-        .then(async response => {
-          if (!response.ok) { if (response.status === 404) { try { localStorage.removeItem('koma_signup_resume'); } catch { /* Optional storage. */ } } return; }
-          const saved = await response.json();
-          setSignupToken(token);
-          setRequestId(saved.id);
-          setSelectedPlanId(saved.data.plan);
-          setBillingCycle(saved.data.billing_cycle);
-          setForm(previous => ({ ...previous, restaurantName: saved.data.restaurant_name, responsibleName: saved.data.responsible_name, contractingPartyName: saved.data.responsible_name, email: saved.data.email, phone: saved.data.phone }));
-          if (saved.receipt) {
-            setReceipt(saved.receipt); setAccepted(true);
-            setSelectedPlanId(saved.receipt.commercial.plan);
-            setBillingCycle(saved.receipt.commercial.billingCycle);
-            setForm(previous => ({ ...previous, contractingPartyName: saved.receipt.contractingParty.name,
-              restaurantName: saved.receipt.contractingParty.restaurantName, taxId: saved.receipt.contractingParty.taxId,
-              email: saved.receipt.contractingParty.email, phone: saved.receipt.contractingParty.phone,
-              responsibleName: saved.receipt.representative.name, representativeTaxId: saved.receipt.representative.taxId, representativeRole: saved.receipt.representative.role }));
-          }
-          if (saved.activation) setActivationResult(saved.activation);
-          setStep(3);
-          setSignupNotice('Sua inscrição foi recuperada. Continue de onde parou.');
-        }).catch(() => { /* A new registration remains possible. */ });
-    }
-    return () => controller.abort();
-  }, []);
-
   const saveSignup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSubmitting(true);
     setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/api/signups${signupToken ? '/current' : ''}`, {
-        method: signupToken ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...(signupToken ? { 'X-Signup-Token': signupToken } : {}) },
-        body: JSON.stringify({ restaurant_name: form.restaurantName, responsible_name: form.responsibleName,
-          email: form.email, phone: form.phone, plan: selectedPlanId, billing_cycle: billingCycle }),
+        method: signupToken ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(signupToken ? { 'X-Signup-Token': signupToken } : {}),
+        },
+        body: JSON.stringify({
+          restaurant_name: form.restaurantName,
+          responsible_name: form.responsibleName,
+          email: form.email,
+          phone: form.phone,
+          plan: selectedPlanId,
+          billing_cycle: billingCycle,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(contractErrorMessage(data.detail));
-      setSignupToken(data.token); setRequestId(data.id);
-      try { localStorage.setItem('koma_signup_resume', data.token); } catch { /* Current tab still works. */ }
+      setSignupToken(data.token);
+      setRequestId(data.id);
+      try { localStorage.setItem('koma_signup_resume', data.token); } catch { /* Storage opcional. */ }
       setSignupNotice(data.message);
-      setForm(previous => ({ ...previous, contractingPartyName: previous.contractingPartyName || previous.responsibleName }));
+      setForm(previous => ({
+        ...previous,
+        contractingPartyName: previous.contractingPartyName || previous.responsibleName,
+      }));
       setStep(3);
-    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Não foi possível salvar a inscrição.'); }
-    finally { setIsSubmitting(false); }
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Não foi possível salvar a inscrição.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const createAcceptance = async (): Promise<ContractReceipt> => {
     if (receipt) return receipt;
     if (signupToken) {
       const updated = await fetch(`${API_BASE_URL}/api/signups/current`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Signup-Token': signupToken },
-        body: JSON.stringify({ restaurant_name: form.restaurantName, responsible_name: representativeName,
-          email: form.email, phone: form.phone, plan: selectedPlanId, billing_cycle: billingCycle }),
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Signup-Token': signupToken },
+        body: JSON.stringify({
+          restaurant_name: form.restaurantName,
+          responsible_name: representativeName,
+          email: form.email,
+          phone: form.phone,
+          plan: selectedPlanId,
+          billing_cycle: billingCycle,
+        }),
       });
       if (!updated.ok) throw new Error('Não foi possível atualizar sua inscrição. Recarregue para recuperar o cadastro.');
     }
@@ -443,7 +488,6 @@ export default function PlanContractPage() {
     if (!mpPublicKey || (!mpPublicKey.startsWith('TEST-') && !mpPublicKey.startsWith('APP_USR-'))) {
       throw new Error('Pagamento por cartão está temporariamente indisponível: a chave pública do Mercado Pago não está configurada.');
     }
-
     const cleanCardNumber = cardNumber.replace(/\D/g, '');
     const [expMonth, expYear] = cardExp.split('/').map((value) => value.trim());
     const cleanDoc = (cardDoc || representativeTaxId || form.taxId).replace(/\D/g, '');
@@ -469,8 +513,7 @@ export default function PlanContractPage() {
     );
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.id) {
-      const message = payload?.cause?.[0]?.description || payload?.message || 'Não foi possível autorizar o cartão.';
-      throw new Error(message);
+      throw new Error(payload?.cause?.[0]?.description || payload?.message || 'Não foi possível autorizar o cartão.');
     }
     return String(payload.id);
   };
@@ -478,53 +521,38 @@ export default function PlanContractPage() {
   const handleCheckout = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canContinue) return;
-
     setIsSubmitting(true);
     setError(null);
     try {
       const activeReceipt = await createAcceptance();
-
-      if (billingMethod === 'credit_card') {
-        const cardTokenId = await tokenizeCard();
-        const response = await fetch(`${API_BASE_URL}/api/contracts/${activeReceipt.protocol}/billing/setup`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            payment_method_type: 'credit_card',
-            card_token_id: cardTokenId,
-            payer_email: form.email.trim(),
-          }),
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.detail || 'Falha ao autorizar o pagamento do plano.');
-        setActivationResult({
-          restaurantId: payload.restaurantId ? String(payload.restaurantId) : undefined,
-          status: payload.status,
-          message: payload.message,
-          slug: payload.slug || undefined,
-          trialDays: payload.trialDays || 7,
-          trialEndsAt: payload.trialEndsAt || undefined,
-          activationToken: payload.activationToken || undefined,
-        });
-        return;
-      }
+      const body: Record<string, string> = {
+        payment_method_type: billingMethod,
+        payer_email: form.email.trim(),
+      };
+      if (billingMethod === 'credit_card') body.card_token_id = await tokenizeCard();
 
       const response = await fetch(`${API_BASE_URL}/api/contracts/${activeReceipt.protocol}/billing/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          payment_method_type: 'pix',
-          payer_email: form.email.trim(),
-        }),
+        body: JSON.stringify(body),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.detail || 'Falha ao gerar o Pix anual.');
-      setPixData({
-        paymentId: String(payload.paymentId),
-        qrCode: payload.qrCode || null,
-        qrCodeBase64: payload.qrCodeBase64 || null,
-        ticketUrl: payload.ticketUrl || null,
-        expiresAt: payload.expiresAt || null,
+      if (!response.ok) throw new Error(contractErrorMessage(payload?.detail));
+
+      if (payload?.status === 'authorization_required' && payload?.authorizationUrl) {
+        setSignupNotice('Abrindo a autorização segura do Pix Automático. O valor da mensalidade fixa hoje é R$ 0.');
+        window.location.assign(String(payload.authorizationUrl));
+        return;
+      }
+
+      setActivationResult({
+        restaurantId: payload.restaurantId ? String(payload.restaurantId) : undefined,
+        status: payload.status,
+        message: payload.message,
+        slug: payload.slug || undefined,
+        trialDays: payload.trialDays || 7,
+        trialEndsAt: payload.trialEndsAt || undefined,
+        activationToken: payload.activationToken || undefined,
       });
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : 'Não foi possível processar a contratação.');
@@ -542,19 +570,16 @@ export default function PlanContractPage() {
           </a>
           <span className="koma-sub-secure"><ShieldCheck size={15} /> Ativação segura</span>
         </header>
-
         <main className="koma-sub-success-page">
           <section className="koma-sub-success-card">
             <span className="koma-sub-success-icon"><CheckCircle2 size={32} /></span>
-            <span className="koma-sub-eyebrow">{activationResult.status === 'awaiting_release' ? 'PAGAMENTO CONFIRMADO' : 'CONTRATAÇÃO CONCLUÍDA'}</span>
+            <span className="koma-sub-eyebrow">{activationResult.status === 'awaiting_release' ? 'AUTORIZAÇÃO CONFIRMADA' : 'CONTRATAÇÃO CONCLUÍDA'}</span>
             <h1>{activationResult.status === 'awaiting_release' ? 'Recebemos sua contratação.' : 'Seu KÔMA está pronto.'}</h1>
-            <p>{activationResult.status === 'awaiting_release'
-              ? (activationResult.message || 'A equipe KÔMA foi avisada e está revisando a liberação do restaurante. Você receberá o convite para criar sua senha assim que o acesso for aprovado.')
-              : <>O restaurante foi provisionado com sucesso. {billingMethod === 'credit_card'
-                ? `Seu período de ${activationResult.trialDays || 7} dias sem mensalidade fixa já começou.`
-                : 'O pagamento Pix foi confirmado e a ativação foi concluída.'}</>}
+            <p>
+              {activationResult.status === 'awaiting_release'
+                ? (activationResult.message || 'A equipe KÔMA foi avisada. Após a liberação, começam seus 7 dias grátis e você recebe o convite para criar sua senha.')
+                : `Seu período de ${activationResult.trialDays || 7} dias sem mensalidade fixa começou. A primeira cobrança automática ocorrerá somente depois do trial.`}
             </p>
-
             {activationResult.trialEndsAt && (
               <div className="koma-sub-success-detail">
                 <span>Período sem mensalidade fixa até</span>
@@ -567,17 +592,13 @@ export default function PlanContractPage() {
                 <strong>https://{activationResult.slug}.komafood.com.br</strong>
               </div>
             )}
-
             {activationResult.status === 'awaiting_release' ? (
               <div className="koma-sub-success-detail koma-sub-activation-pending">
                 <span>Próximo passo</span>
                 <strong>Aguarde o convite por e-mail ou WhatsApp para criar sua senha.</strong>
               </div>
             ) : activationResult.activationToken ? (
-              <a
-                href={`/ativar#token=${encodeURIComponent(activationResult.activationToken)}`}
-                className="koma-sub-primary-action"
-              >
+              <a href={`/ativar#token=${encodeURIComponent(activationResult.activationToken)}`} className="koma-sub-primary-action">
                 Concluir primeiro acesso <ArrowRight size={18} />
               </a>
             ) : (
@@ -590,92 +611,22 @@ export default function PlanContractPage() {
               <FileText size={16} /> {showReceipt ? 'Ocultar comprovante' : 'Ver comprovante de contratação'}
             </button>
           </section>
-
           {showReceipt && (
             <section className="koma-sub-receipt" aria-label="Comprovante de contratação">
               <div className="koma-sub-receipt-head">
-                <div>
-                  <span className="koma-sub-eyebrow">COMPROVANTE ELETRÔNICO</span>
-                  <h2>Comprovante de Contratação e Licenciamento Eletrônico</h2>
-                </div>
+                <div><span className="koma-sub-eyebrow">COMPROVANTE ELETRÔNICO</span><h2>Comprovante de Contratação e Licenciamento Eletrônico</h2></div>
                 <span>Legal v{receipt.documents.version}</span>
               </div>
               <div className="koma-sub-receipt-grid">
-                <div>
-                  <strong>Contratante</strong>
-                  <p>{receipt.contractingParty.name}<br />{receipt.contractingParty.taxIdKind.toUpperCase()} {receipt.contractingParty.taxId}<br />{receipt.contractingParty.restaurantName}</p>
-                </div>
-                <div>
-                  <strong>Condições congeladas</strong>
-                  <p>Plano {receipt.commercial.plan.toUpperCase()} · {receipt.commercial.billingCycle}<br />Mensalidade-base R$ {receipt.commercial.fixedMonthlyPrice}<br />Taxa online {(Number(receipt.commercial.marketplaceRate) * 100).toFixed(2).replace('.', ',')}%</p>
-                </div>
-                <div>
-                  <strong>Protocolo e evidência</strong>
-                  <p>{receipt.protocol}<br />Aceito em {formatReceiptDate(receipt.acceptedAtBrasilia)}<br />IP técnico: {receipt.evidence.sourceIp}</p>
-                </div>
-                <div>
-                  <strong>Documentos</strong>
-                  <p>Termos: {receipt.documents.terms.hash}<br />Condições: {receipt.documents.commercial.hash}</p>
-                </div>
+                <div><strong>Contratante</strong><p>{receipt.contractingParty.name}<br />{receipt.contractingParty.taxIdKind.toUpperCase()} {receipt.contractingParty.taxId}<br />{receipt.contractingParty.restaurantName}</p></div>
+                <div><strong>Condições congeladas</strong><p>Plano {receipt.commercial.plan.toUpperCase()} · {receipt.commercial.billingCycle}<br />Mensalidade-base R$ {receipt.commercial.fixedMonthlyPrice}<br />Taxa online {(Number(receipt.commercial.marketplaceRate) * 100).toFixed(2).replace('.', ',')}%</p></div>
+                <div><strong>Protocolo e evidência</strong><p>{receipt.protocol}<br />Aceito em {formatReceiptDate(receipt.acceptedAtBrasilia)}<br />IP técnico: {receipt.evidence.sourceIp}</p></div>
+                <div><strong>Documentos</strong><p>Termos: {receipt.documents.terms.hash}<br />Condições: {receipt.documents.commercial.hash}</p></div>
               </div>
               <div className="koma-sub-receipt-actions">
                 <button type="button" onClick={() => void copyValue(receipt.protocol)}><Copy size={16} /> {copied ? 'Copiado' : 'Copiar protocolo'}</button>
                 <button type="button" onClick={() => window.print()}><Printer size={16} /> Imprimir / salvar em PDF</button>
               </div>
-            </section>
-          )}
-        </main>
-      </div>
-    );
-  }
-
-  if (pixData && receipt) {
-    return (
-      <div className="koma-sub-wrapper">
-        <header className="koma-sub-header">
-          <a href="/" className="koma-sub-brand" aria-label="Voltar para o KÔMA">
-            <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="KÔMA" />
-          </a>
-          <span className="koma-sub-secure"><ShieldCheck size={15} /> Pagamento seguro</span>
-        </header>
-
-        <main className="koma-sub-pix-page">
-          <section className="koma-sub-pix-card">
-            <span className="koma-sub-eyebrow">PIX ANUAL · AGUARDANDO CONFIRMAÇÃO</span>
-            <h1>Finalize o pagamento para seguir com a liberação.</h1>
-            <p>
-              O Pix é uma cobrança anual antecipada de <strong>{formatCurrency(pricing.annualTotal)}</strong>. Após a confirmação, a contratação segue para liberação do restaurante.
-            </p>
-            {pixData.qrCode && (
-              <div className="koma-sub-qr">
-                <QRCodeSVG value={pixData.qrCode} size={220} />
-              </div>
-            )}
-            {pixData.qrCode && (
-              <button type="button" className="koma-sub-primary-action" onClick={() => void copyValue(pixData.qrCode || '')}>
-                <Copy size={17} /> {copied ? 'Código Pix copiado' : 'Copiar código Pix'}
-              </button>
-            )}
-            {pixData.ticketUrl && (
-              <a href={pixData.ticketUrl} target="_blank" rel="noreferrer" className="koma-sub-text-link">Abrir página do pagamento</a>
-            )}
-            <button type="button" className="koma-sub-text-action" onClick={() => setPixData(null)}>Atualizar Pix</button>
-            <div className="koma-sub-pix-status"><Info size={17} /> Estamos verificando a confirmação automaticamente.</div>
-            <button type="button" className="koma-sub-text-action" onClick={() => setShowReceipt((current) => !current)}>
-              <FileText size={16} /> {showReceipt ? 'Ocultar comprovante' : 'Ver comprovante da contratação'}
-            </button>
-          </section>
-
-          {showReceipt && (
-            <section className="koma-sub-receipt">
-              <div className="koma-sub-receipt-head">
-                <div>
-                  <span className="koma-sub-eyebrow">CONTRATO REGISTRADO</span>
-                  <h2>{receipt.protocol}</h2>
-                </div>
-                <span>{formatReceiptDate(receipt.acceptedAtBrasilia)}</span>
-              </div>
-              <p className="koma-sub-receipt-note">O comprovante foi registrado antes da geração do Pix e permanece vinculado a esta tentativa de pagamento.</p>
             </section>
           )}
         </main>
@@ -703,59 +654,35 @@ export default function PlanContractPage() {
               <div className="koma-sub-heading">
                 <span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span>
                 <h1>Escolha o KÔMA certo para sua operação.</h1>
-                <p>Compare preço, taxa online e recursos. Você pode trocar de plano aqui sem voltar para a landing page.</p>
+                <p>Todos os meios de pagamento começam da mesma forma: 7 dias grátis e cobrança automática somente depois do trial.</p>
               </div>
-
               <div className="koma-sub-plan-grid" role="radiogroup" aria-label="Escolha um plano KÔMA">
                 {SUBSCRIPTION_PLANS.map((candidate) => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);
                   const selected = candidate.id === selectedPlanId;
                   const displayedPrice = billingCycle === 'anual' ? candidatePricing.annualMonthlyEquivalent : candidatePricing.monthly;
                   return (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      className={`koma-sub-plan-card ${selected ? 'is-selected' : ''}`}
-                      onClick={() => setSelectedPlanId(candidate.id)}
-                    >
-                      <div className="koma-sub-plan-top">
-                        <span>{candidate.name.replace('Kôma ', '')}</span>
-                        {candidate.recommended && <em>Recomendado</em>}
-                      </div>
+                    <button key={candidate.id} type="button" role="radio" aria-checked={selected} className={`koma-sub-plan-card ${selected ? 'is-selected' : ''}`} onClick={() => setSelectedPlanId(candidate.id)}>
+                      <div className="koma-sub-plan-top"><span>{candidate.name.replace('Kôma ', '')}</span>{candidate.recommended && <em>Recomendado</em>}</div>
                       <strong>{formatCurrency(displayedPrice)}<small>/mês{billingCycle === 'anual' ? ' equiv.' : ''}</small></strong>
                       <p>{candidate.tagline}</p>
                       <span className="koma-sub-fee">{formatPercentage(candidate.splitFeeRate)} por pedido online pago</span>
-                      <ul>
-                        {candidate.features.slice(0, 3).map((feature) => (
-                          <li key={feature}><Check size={14} /> {feature}</li>
-                        ))}
-                      </ul>
+                      <ul>{candidate.features.slice(0, 3).map((feature) => <li key={feature}><Check size={14} /> {feature}</li>)}</ul>
                     </button>
                   );
                 })}
               </div>
-
               <div className="koma-sub-billing-selector" role="radiogroup" aria-label="Ciclo de cobrança">
                 <button type="button" role="radio" aria-checked={billingCycle === 'mensal'} className={billingCycle === 'mensal' ? 'is-selected' : ''} onClick={() => setBillingCycle('mensal')}>
-                  <span>Mensal</span>
-                  <strong>{formatCurrency(pricing.monthly)}/mês</strong>
-                  <small>Flexível, renovação mensal.</small>
+                  <span>Mensal</span><strong>{formatCurrency(pricing.monthly)}/mês</strong><small>Primeira cobrança automática após 7 dias.</small>
                 </button>
-                  <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => { setBillingCycle('anual'); setBillingMethod('credit_card'); }}>
-                  <span>Anual <em>Economize 10%</em></span>
-                  <strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong>
-                  <small>{formatCurrency(pricing.annualTotal)} no ano · economia de {formatCurrency(pricing.annualSavings)}. Valor mensal equivalente não representa 12 parcelas.</small>
+                <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}>
+                  <span>Anual <em>Economize 10%</em></span><strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong><small>{formatCurrency(pricing.annualTotal)} por ano, cobrado automaticamente somente após os 7 dias grátis e renovado anualmente.</small>
                 </button>
               </div>
-
               <div className="koma-sub-trial-note">
                 <Gift size={19} />
-                <div>
-                  <strong>7 dias sem mensalidade fixa no cartão.</strong>
-                  <p>A taxa KÔMA sobre pedidos online continua aplicável durante o período de teste.</p>
-                </div>
+                <div><strong>7 dias grátis em qualquer forma de pagamento.</strong><p>R$ 0 de mensalidade fixa hoje. A taxa KÔMA sobre pedidos online pagos continua aplicável durante o trial.</p></div>
               </div>
             </>
           ) : step === 2 ? (
@@ -774,122 +701,63 @@ export default function PlanContractPage() {
           ) : (
             <>
               {signupNotice && <div role="status" className="koma-sub-locked-note">{signupNotice}</div>}
-              <button type="button" className="koma-sub-back" onClick={() => setStep(1)} disabled={contractLocked}>
-                <ArrowLeft size={16} /> {contractLocked ? 'Plano congelado nesta contratação' : 'Voltar para plano e cobrança'}
-              </button>
-
-              <div className="koma-sub-heading">
-                <span className="koma-sub-eyebrow">03 · CONTRATAÇÃO E PAGAMENTO</span>
-                <h1>Ative seu restaurante.</h1>
-                <p>Confira os dados do contrato e escolha como pagar.</p>
-              </div>
-
+              <button type="button" className="koma-sub-back" onClick={() => setStep(1)} disabled={contractLocked}><ArrowLeft size={16} /> {contractLocked ? 'Plano congelado nesta contratação' : 'Voltar para plano e cobrança'}</button>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO E PAGAMENTO</span><h1>Ative seu restaurante.</h1><p>Autorize o meio recorrente agora; a mensalidade fixa só começa depois dos 7 dias grátis.</p></div>
               {error && <div className="koma-sub-error" role="alert"><Info size={18} /> {error}</div>}
-              {contractLocked && (
-                <div className="koma-sub-locked-note"><Lock size={17} /> O aceite jurídico já foi registrado. Você pode corrigir ou trocar apenas a forma de pagamento nesta tentativa.</div>
-              )}
+              {contractLocked && <div className="koma-sub-locked-note"><Lock size={17} /> O aceite jurídico já foi registrado. Você pode corrigir ou trocar apenas a forma de pagamento nesta tentativa.</div>}
 
               <form id="koma-checkout-form" className="koma-sub-form" onSubmit={handleCheckout}>
                 <section className="koma-sub-section-card">
-                  <div className="koma-sub-section-title">
-                    <span><Building2 size={18} /></span>
-                    <div><h2>Contratante e restaurante</h2><p>Dados necessários para formalizar a contratação.</p></div>
-                  </div>
-
+                  <div className="koma-sub-section-title"><span><Building2 size={18} /></span><div><h2>Contratante e restaurante</h2><p>Dados necessários para formalizar a contratação.</p></div></div>
                   <div className="koma-sub-form-grid">
-                    <label className="koma-sub-field koma-sub-field-full">
-                      <span>Nome completo / Razão social</span>
-                      <div><User size={16} /><input value={form.contractingPartyName} onChange={(event) => updateField('contractingPartyName', event.target.value)} placeholder="Pessoa ou empresa contratante" disabled={contractLocked} required /></div>
-                    </label>
-                    <label className="koma-sub-field">
-                      <span>CPF / CNPJ</span>
-                      <div><FileText size={16} /><input value={form.taxId} onChange={(event) => updateField('taxId', event.target.value)} placeholder="Documento do contratante" inputMode="numeric" disabled={contractLocked} required /></div>
-                      {form.taxId.trim() && !contractingTaxKind && <small className="is-error">Informe um CPF ou CNPJ válido.</small>}
-                    </label>
-                    <label className="koma-sub-field">
-                      <span>Nome do restaurante</span>
-                      <div><Store size={16} /><input value={form.restaurantName} onChange={(event) => updateField('restaurantName', event.target.value)} placeholder="Nome do estabelecimento" disabled={contractLocked} required /></div>
-                    </label>
-                    <label className="koma-sub-field">
-                      <span>E-mail</span>
-                      <div><Mail size={16} /><input type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} placeholder="voce@restaurante.com" disabled={contractLocked} required /></div>
-                    </label>
-                    <label className="koma-sub-field">
-                      <span>Telefone / WhatsApp</span>
-                      <div><Phone size={16} /><input type="tel" value={form.phone} onChange={(event) => updateField('phone', event.target.value)} placeholder="(00) 00000-0000" disabled={contractLocked} required /></div>
-                    </label>
+                    <label className="koma-sub-field koma-sub-field-full"><span>Nome completo / Razão social</span><div><User size={16} /><input value={form.contractingPartyName} onChange={(event) => updateField('contractingPartyName', event.target.value)} placeholder="Pessoa ou empresa contratante" disabled={contractLocked} required /></div></label>
+                    <label className="koma-sub-field"><span>CPF / CNPJ</span><div><FileText size={16} /><input value={form.taxId} onChange={(event) => updateField('taxId', event.target.value)} placeholder="Documento do contratante" inputMode="numeric" disabled={contractLocked} required /></div>{form.taxId.trim() && !contractingTaxKind && <small className="is-error">Informe um CPF ou CNPJ válido.</small>}</label>
+                    <label className="koma-sub-field"><span>Nome do restaurante</span><div><Store size={16} /><input value={form.restaurantName} onChange={(event) => updateField('restaurantName', event.target.value)} placeholder="Nome do estabelecimento" disabled={contractLocked} required /></div></label>
+                    <label className="koma-sub-field"><span>E-mail</span><div><Mail size={16} /><input type="email" value={form.email} onChange={(event) => updateField('email', event.target.value)} placeholder="voce@restaurante.com" disabled={contractLocked} required /></div></label>
+                    <label className="koma-sub-field"><span>Telefone / WhatsApp</span><div><Phone size={16} /><input type="tel" value={form.phone} onChange={(event) => updateField('phone', event.target.value)} placeholder="(00) 00000-0000" disabled={contractLocked} required /></div></label>
                   </div>
-
                   {isCompany && (
                     <div className="koma-sub-representative">
-                      <div className="koma-sub-section-title compact">
-                        <span><User size={17} /></span>
-                        <div><h3>Responsável pelo aceite</h3><p>Como o contratante é um CNPJ, precisamos identificar a pessoa física que possui poderes para contratar.</p></div>
-                      </div>
+                      <div className="koma-sub-section-title compact"><span><User size={17} /></span><div><h3>Responsável pelo aceite</h3><p>Como o contratante é um CNPJ, precisamos identificar a pessoa física que possui poderes para contratar.</p></div></div>
                       <div className="koma-sub-form-grid">
-                        <label className="koma-sub-field koma-sub-field-full">
-                          <span>Nome completo do responsável</span>
-                          <div><User size={16} /><input value={form.responsibleName} onChange={(event) => updateField('responsibleName', event.target.value)} placeholder="Nome do representante" disabled={contractLocked} required /></div>
-                        </label>
-                        <label className="koma-sub-field">
-                          <span>CPF do responsável</span>
-                          <div><FileText size={16} /><input value={form.representativeTaxId} onChange={(event) => updateField('representativeTaxId', event.target.value)} placeholder="CPF do representante" inputMode="numeric" disabled={contractLocked} required /></div>
-                          {form.representativeTaxId.trim() && !isValidCpf(form.representativeTaxId) && <small className="is-error">Informe um CPF válido.</small>}
-                        </label>
-                        <label className="koma-sub-field">
-                          <span>Cargo / função</span>
-                          <div><Building2 size={16} /><input value={form.representativeRole} onChange={(event) => updateField('representativeRole', event.target.value)} placeholder="Ex.: proprietário, sócio, administrador" disabled={contractLocked} required /></div>
-                        </label>
+                        <label className="koma-sub-field koma-sub-field-full"><span>Nome completo do responsável</span><div><User size={16} /><input value={form.responsibleName} onChange={(event) => updateField('responsibleName', event.target.value)} placeholder="Nome do representante" disabled={contractLocked} required /></div></label>
+                        <label className="koma-sub-field"><span>CPF do responsável</span><div><FileText size={16} /><input value={form.representativeTaxId} onChange={(event) => updateField('representativeTaxId', event.target.value)} placeholder="CPF do representante" inputMode="numeric" disabled={contractLocked} required /></div>{form.representativeTaxId.trim() && !isValidCpf(form.representativeTaxId) && <small className="is-error">Informe um CPF válido.</small>}</label>
+                        <label className="koma-sub-field"><span>Cargo / função</span><div><Building2 size={16} /><input value={form.representativeRole} onChange={(event) => updateField('representativeRole', event.target.value)} placeholder="Ex.: proprietário, sócio, administrador" disabled={contractLocked} required /></div></label>
                       </div>
                     </div>
                   )}
                 </section>
 
                 <section className="koma-sub-section-card">
-                  <div className="koma-sub-section-title">
-                    <span><CreditCard size={18} /></span>
-                    <div><h2>Forma de pagamento</h2><p>Cartão com autorização de cobrança recorrente ou Pix anual com confirmação automática.</p></div>
-                  </div>
-
+                  <div className="koma-sub-section-title"><span><CreditCard size={18} /></span><div><h2>Forma de pagamento</h2><p>Escolha apenas como autorizar a recorrência. Todas as opções têm R$ 0 de mensalidade fixa hoje e 7 dias grátis antes da primeira cobrança.</p></div></div>
                   <div className="koma-sub-methods" role="radiogroup" aria-label="Forma de pagamento disponível">
-                    <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => { setBillingMethod('credit_card'); setPaymentPreview(null); }}>
-                      <span className="koma-sub-method-radio" />
-                      <CreditCard size={19} />
-                      <div><strong>Cartão de crédito{!capabilities.credit_card ? ' · indisponível no momento' : ''}</strong><small>{billingCycle === 'anual' ? `R$ 0 hoje · ${formatCurrency(pricing.annualTotal)} após 7 dias` : `R$ 0 hoje · ${formatCurrency(pricing.monthly)} após 7 dias`}</small></div>
+                    <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => setBillingMethod('credit_card')}>
+                      <span className="koma-sub-method-radio" /><CreditCard size={19} /><div><strong>Cartão de crédito{!capabilities.credit_card ? ' · indisponível no momento' : ''}</strong><small>R$ 0 hoje · {formatCurrency(nextChargeAmount)} após 7 dias · renovação automática {billingCycle === 'anual' ? 'anual' : 'mensal'}</small></div>
                     </button>
-                    {billingCycle === 'anual' && <button type="button" role="radio" aria-checked={billingMethod === 'pix'} className={billingMethod === 'pix' ? 'is-selected' : ''} onClick={() => { setBillingMethod('pix'); setPaymentPreview(null); }}><QrCode size={19} /><div><strong>Pix · pagamento único{!capabilities.pix ? ' · indisponível no momento' : ''}</strong><small>{formatCurrency(pricing.annualTotal)} hoje · 12 meses + 7 dias de bônus</small></div></button>}
+                    <button type="button" role="radio" aria-checked={billingMethod === 'pix_automatic'} className={billingMethod === 'pix_automatic' ? 'is-selected' : ''} onClick={() => setBillingMethod('pix_automatic')}>
+                      <span className="koma-sub-method-radio" /><QrCode size={19} /><div><strong>Pix Automático{!capabilities.pix_automatic ? ' · indisponível no momento' : ''}</strong><small>Autorize uma vez · R$ 0 hoje · {formatCurrency(nextChargeAmount)} após 7 dias · cobrança automática</small></div>
+                    </button>
                   </div>
 
                   {billingMethod === 'credit_card' && (
                     <div className="koma-sub-card-fields">
-                      <label className="koma-sub-field koma-sub-field-full">
-                        <span>Número do cartão</span>
-                        <div><CreditCard size={16} /><input value={cardNumber} onChange={(event) => setCardNumber(event.target.value)} inputMode="numeric" placeholder="0000 0000 0000 0000" required /></div>
-                      </label>
-                      <label className="koma-sub-field koma-sub-field-full">
-                        <span>Nome impresso no cartão</span>
-                        <div><User size={16} /><input value={cardHolder} onChange={(event) => setCardHolder(event.target.value)} placeholder="Como consta no cartão" required /></div>
-                      </label>
-                      <label className="koma-sub-field">
-                        <span>Validade</span>
-                        <div><Info size={16} /><input value={cardExp} onChange={(event) => setCardExp(event.target.value)} placeholder="MM/AA" maxLength={7} required /></div>
-                      </label>
-                      <label className="koma-sub-field">
-                        <span>CVV</span>
-                        <div><Lock size={16} /><input type="password" value={cardCvv} onChange={(event) => setCardCvv(event.target.value)} inputMode="numeric" placeholder="123" maxLength={4} required /></div>
-                      </label>
-                      <label className="koma-sub-field koma-sub-field-full">
-                        <span>CPF/CNPJ do titular do cartão <small>(opcional se for o mesmo responsável)</small></span>
-                        <div><FileText size={16} /><input value={cardDoc} onChange={(event) => setCardDoc(event.target.value)} inputMode="numeric" placeholder="Documento do titular" /></div>
-                      </label>
+                      <label className="koma-sub-field koma-sub-field-full"><span>Número do cartão</span><div><CreditCard size={16} /><input value={cardNumber} onChange={(event) => setCardNumber(event.target.value)} inputMode="numeric" placeholder="0000 0000 0000 0000" required /></div></label>
+                      <label className="koma-sub-field koma-sub-field-full"><span>Nome impresso no cartão</span><div><User size={16} /><input value={cardHolder} onChange={(event) => setCardHolder(event.target.value)} placeholder="Como consta no cartão" required /></div></label>
+                      <label className="koma-sub-field"><span>Validade</span><div><Info size={16} /><input value={cardExp} onChange={(event) => setCardExp(event.target.value)} placeholder="MM/AA" maxLength={7} required /></div></label>
+                      <label className="koma-sub-field"><span>CVV</span><div><Lock size={16} /><input type="password" value={cardCvv} onChange={(event) => setCardCvv(event.target.value)} inputMode="numeric" placeholder="123" maxLength={4} required /></div></label>
+                      <label className="koma-sub-field koma-sub-field-full"><span>CPF/CNPJ do titular do cartão <small>(opcional se for o mesmo responsável)</small></span><div><FileText size={16} /><input value={cardDoc} onChange={(event) => setCardDoc(event.target.value)} inputMode="numeric" placeholder="Documento do titular" /></div></label>
                     </div>
                   )}
 
-                  {!capabilities.credit_card && !capabilities.pix && (
+                  {billingMethod === 'pix_automatic' && capabilities.pix_automatic && (
+                    <div className="koma-sub-locked-note"><QrCode size={17} /> Ao continuar, você será levado ao ambiente seguro do Mercado Pago para autorizar o Pix Automático. Nenhum Pix avulso será gerado e nenhuma mensalidade fixa será cobrada hoje.</div>
+                  )}
+
+                  {!capabilities.credit_card && !capabilities.pix_automatic && (
                     <p role="status">
                       {capabilities.isTestMode || capabilities.environment === 'homologation'
-                        ? 'Ambiente de homologação: o checkout está temporariamente pausado porque as credenciais TEST do gateway de pagamento ainda não foram configuradas (KOMA_SAAS_CHECKOUT_ENABLED=false). Seus dados estão salvos e a contratação poderá ser concluída assim que as credenciais TEST forem habilitadas.'
-                        : 'Sua inscrição está salva. Os pagamentos estão temporariamente indisponíveis; você pode retomar neste dispositivo mais tarde.'}
+                        ? 'Ambiente de homologação: o checkout recorrente está temporariamente pausado enquanto as credenciais TEST do gateway são concluídas (KOMA_SAAS_CHECKOUT_ENABLED=false). Seu cadastro fica salvo.'
+                        : 'Sua inscrição está salva. Os meios recorrentes estão temporariamente indisponíveis; você pode retomar neste dispositivo mais tarde.'}
                     </p>
                   )}
                 </section>
@@ -897,7 +765,7 @@ export default function PlanContractPage() {
                 <section className="koma-sub-legal-acceptance">
                   <input id="legal-acceptance" type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={contractLocked} required />
                   <label htmlFor="legal-acceptance">
-                    Declaro que as informações estão corretas, que <strong>possuo poderes</strong> para contratar em nome do estabelecimento e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>, as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a>, o <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a> e a <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>, versão {LEGAL_VERSION}. {billingMethod === 'credit_card' && <strong>Autorizo a primeira cobrança de {formatCurrency(nextChargeAmount)} após 7 dias e as renovações {billingCycle === 'anual' ? 'anuais' : 'mensais'} desse valor enquanto não cancelar.</strong>}
+                    Declaro que as informações estão corretas, que <strong>possuo poderes</strong> para contratar em nome do estabelecimento e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>, as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a>, o <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a> e a <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>, versão {LEGAL_VERSION}. <strong>Autorizo a recorrência por {billingMethodLabel}: R$ 0 de mensalidade fixa hoje, primeira cobrança automática de {formatCurrency(nextChargeAmount)} somente após 7 dias e renovações {billingCycle === 'anual' ? 'anuais' : 'mensais'} até o cancelamento.</strong>
                   </label>
                 </section>
               </form>
@@ -913,7 +781,7 @@ export default function PlanContractPage() {
               <span className="koma-sub-summary-price">{billingCycle === 'anual' ? `${formatCurrency(pricing.annualMonthlyEquivalent)}/mês equiv.` : `${formatCurrency(pricing.monthly)}/mês`}</span>
             </div>
             <dl className="koma-sub-summary-list">
-              {billingCycle === 'anual' && <div><dt>Total anual</dt><dd>{formatCurrency(pricing.annualTotal)}</dd></div>}
+              {billingCycle === 'anual' && <div><dt>Total anual após o trial</dt><dd>{formatCurrency(pricing.annualTotal)}</dd></div>}
               {billingCycle === 'anual' && <div><dt>Economia anual</dt><dd>{formatCurrency(pricing.annualSavings)}</dd></div>}
               <div><dt>Taxa KÔMA online</dt><dd>{formatPercentage(plan.splitFeeRate)}</dd></div>
               <div><dt>Implantação</dt><dd>R$ 0</dd></div>
@@ -923,33 +791,20 @@ export default function PlanContractPage() {
 
           <section className="koma-sub-summary-card">
             <div className="koma-sub-timeline">
-              <div>
-                <span className="is-active"><Gift size={16} /></span>
-                <div><strong>Hoje</strong><p>{billingMethod === 'pix' && billingCycle === 'anual' ? `Pagamento Pix de ${formatCurrency(amountDueToday)}` : 'R$ 0 de mensalidade fixa no cartão'}</p></div>
-              </div>
-              <div>
-                <span><Info size={16} /></span>
-                <div><strong>{formatDisplayDate(reminderDate)}</strong><p>{billingMethod === 'pix' ? 'Pix confirmado: contratação segue para liberação.' : 'Você pode cancelar antes da primeira cobrança.'}</p></div>
-              </div>
-              <div>
-                <span><CreditCard size={16} /></span>
-                <div><strong>{billingMethod === 'pix' ? 'Após a liberação' : formatDisplayDate(renewalDate)}</strong><p>{billingMethod === 'pix' ? 'Você recebe o convite para o primeiro acesso.' : `Primeira cobrança: ${formatCurrency(nextChargeAmount)}.`}</p></div>
-              </div>
+              <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Autorize {billingMethodLabel}. Mensalidade fixa: R$ 0.</p></div></div>
+              <div><span><Info size={16} /></span><div><strong>{formatDisplayDate(reminderDate)}</strong><p>Você continua no período grátis e pode cancelar antes da primeira cobrança.</p></div></div>
+              <div><span>{billingMethod === 'pix_automatic' ? <QrCode size={16} /> : <CreditCard size={16} />}</span><div><strong>{formatDisplayDate(renewalDate)}</strong><p>Primeira cobrança automática: {formatCurrency(nextChargeAmount)}.</p></div></div>
             </div>
-
             <div className="koma-sub-due-row"><span>A pagar hoje</span><strong>{formatCurrency(amountDueToday)}</strong></div>
-            {billingMethod === 'credit_card' && <p className="koma-sub-summary-note">7 dias sem mensalidade fixa. A taxa por pedidos online pagos continua aplicável.</p>}
-            {billingMethod === 'pix' && <p className="koma-sub-summary-note">Pagamento único com 12 meses de acesso e 7 dias adicionais de bônus.</p>}
+            <p className="koma-sub-summary-note">7 dias grátis em todas as formas de pagamento. Não existem dias bônus nem pagamento antecipado da mensalidade fixa.</p>
 
             {step === 1 ? (
-              <button type="button" className="koma-sub-primary-action" onClick={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
-                Continuar <ArrowRight size={18} />
-              </button>
+              <button type="button" className="koma-sub-primary-action" onClick={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
               <button type="submit" form="koma-signup-form" className="koma-sub-primary-action" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar e continuar'} <ArrowRight size={18} /></button>
             ) : (
               <button type="submit" form="koma-checkout-form" className="koma-sub-primary-action" disabled={!canContinue} aria-label="Aceitar e registrar contratação">
-                {isSubmitting ? 'Processando…' : billingMethod === 'pix' ? 'Gerar Pix anual' : 'Ativar 7 dias grátis'} <ArrowRight size={18} />
+                {isSubmitting ? 'Processando…' : billingMethod === 'pix_automatic' ? 'Autorizar Pix Automático' : 'Ativar 7 dias grátis'} <ArrowRight size={18} />
               </button>
             )}
             <p className="koma-sub-fineprint">O aceite registra protocolo, hashes dos documentos, condições comerciais e evidências técnicas da contratação.</p>
