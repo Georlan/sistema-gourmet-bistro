@@ -1,5 +1,5 @@
 import { SubscriptionControl } from '../assinatura/SubscriptionControl';
-import { CatalogImport } from './CatalogImport';
+import { CatalogAssistanceUpload, type CatalogAssistanceSnapshot } from './CatalogAssistanceUpload';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -42,6 +42,7 @@ type OnboardingStatus = {
     products: number;
     orders: number;
   };
+  catalogAssistance: CatalogAssistanceSnapshot;
   steps: {
     profile: boolean;
     hours: boolean;
@@ -170,9 +171,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'catalog',
       title: 'Monte o primeiro cardápio',
-      description: 'Crie categorias e produtos. Você pode começar pequeno e completar o restante depois.',
+      description: 'Envie PDF/foto para implantação assistida ou crie categorias e produtos manualmente. O passo conclui quando houver produtos publicados.',
       done: snapshot.steps.catalog,
-      actionLabel: snapshot.steps.catalog ? 'Abrir cardápio' : 'Criar cardápio',
+      actionLabel: snapshot.steps.catalog ? 'Abrir cardápio' : 'Criar manualmente',
       tab: 'cardapio',
       subTab: 'produtos',
       icon: UtensilsCrossed,
@@ -275,7 +276,11 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             </div>
 
             <SubscriptionControl accessToken={accessToken} />
-            <CatalogImport accessToken={accessToken} onImported={() => void loadSnapshot()} />
+            <CatalogAssistanceUpload
+              accessToken={accessToken}
+              assistance={snapshot.catalogAssistance}
+              onSubmitted={() => void loadSnapshot()}
+            />
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-koma-raised">
               <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${snapshot.progress.percent}%` }} />
             </div>
