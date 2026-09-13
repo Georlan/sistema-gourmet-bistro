@@ -233,6 +233,17 @@ function readPortalSession(portal: OperationalPortal): OperatorSession | null {
     expiresAt,
   };
 
+  // Migração de builds antigos: algumas sessões de Garçom foram gravadas nos
+  // aliases do Caixa. Reparamos apenas quando o token é exatamente o mesmo;
+  // um token diferente no outro portal é uma sessão concorrente legítima.
+  if (!scopedAliasToken(portal)) {
+    const otherPortal: OperationalPortal = portal === 'caixa' ? 'garcom' : 'caixa';
+    if (scopedAliasToken(otherPortal) === session.token) {
+      clearKeys(localStorage, portalAliasKeys(otherPortal));
+      persistScopedAliases(session.token, session.user);
+    }
+  }
+
   persistCanonicalSession(portal, session);
   return session;
 }
