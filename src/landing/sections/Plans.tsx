@@ -183,14 +183,22 @@ export function Plans() {
 
       <details className="koma-plan-comparison">
         <summary>
-          <span>
+          <span className="koma-plan-comparison-copy">
             <strong>COMPARE TODOS OS RECURSOS</strong>
             <small>Veja exatamente o que muda entre Pocket, Pro e Premium.</small>
           </span>
-          <b aria-hidden="true">+</b>
+          <span className="koma-plan-comparison-toggle" aria-hidden="true">+</span>
         </summary>
-        <div className="koma-plan-comparison-scroll">
+        <p className="koma-plan-comparison-swipe" aria-hidden="true">
+          DESLIZE A TABELA PARA COMPARAR <span>→</span>
+        </p>
+        <div
+          className="koma-plan-comparison-scroll"
+          tabIndex={0}
+          aria-label="Tabela comparativa dos planos. Em telas pequenas, use rolagem horizontal para ver todas as colunas."
+        >
           <table>
+            <caption>Comparação dos recursos incluídos nos planos KÔMA Pocket, Pro e Premium.</caption>
             <thead>
               <tr>
                 <th scope="col">Recurso</th>
@@ -199,23 +207,21 @@ export function Plans() {
                 <th scope="col">Premium</th>
               </tr>
             </thead>
-            <tbody>
-              {COMPARISON_CATEGORIES.map((category) => (
-                <React.Fragment key={category}>
-                  <tr className="koma-comparison-category">
-                    <th colSpan={4} scope="rowgroup">{category}</th>
+            {COMPARISON_CATEGORIES.map((category) => (
+              <tbody key={category}>
+                <tr className="koma-comparison-category">
+                  <th colSpan={4} scope="rowgroup">{category}</th>
+                </tr>
+                {PLAN_COMPARISON_MATRIX.filter((row) => row.category === category).map((row) => (
+                  <tr key={`${row.category}-${row.feature}`}>
+                    <th scope="row">{row.feature}</th>
+                    <td>{comparisonValue(row.pocket)}</td>
+                    <td>{comparisonValue(row.pro)}</td>
+                    <td>{comparisonValue(row.premium)}</td>
                   </tr>
-                  {PLAN_COMPARISON_MATRIX.filter((row) => row.category === category).map((row) => (
-                    <tr key={`${row.category}-${row.feature}`}>
-                      <th scope="row">{row.feature}</th>
-                      <td>{comparisonValue(row.pocket)}</td>
-                      <td>{comparisonValue(row.pro)}</td>
-                      <td>{comparisonValue(row.premium)}</td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-            </tbody>
+                ))}
+              </tbody>
+            ))}
           </table>
         </div>
       </details>
