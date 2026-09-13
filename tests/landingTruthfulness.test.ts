@@ -52,14 +52,34 @@ test('plan cards expose limitations and a canonical feature comparison without d
   assert.match(catalog, /Sem app do entregador e fidelidade/);
 });
 
-test('plan comparison stays collapsed by default and remains horizontally usable on small screens', () => {
+test('plan comparison stays collapsed and exposes a keyboard-friendly horizontal viewport', () => {
   const plans = source('src/landing/sections/Plans.tsx');
   const css = source('src/landing/plan-comparison.css');
 
   assert.match(plans, /<details className="koma-plan-comparison">/);
   assert.doesNotMatch(plans, /<details className="koma-plan-comparison" open/);
+  assert.match(plans, /DESLIZE A TABELA PARA COMPARAR/);
+  assert.match(plans, /className="koma-plan-comparison-scroll"[\s\S]*?tabIndex=\{0\}/);
+  assert.match(plans, /Tabela comparativa dos planos\. Em telas pequenas, use rolagem horizontal/);
+  assert.match(plans, /<caption>Comparação dos recursos incluídos nos planos KÔMA Pocket, Pro e Premium\.<\/caption>/);
   assert.match(css, /\.koma-plan-comparison-scroll\s*\{[^}]*overflow-x:\s*auto/);
-  assert.match(css, /\.koma-plan-comparison table\s*\{[^}]*min-width:\s*760px/);
+  assert.match(css, /\.koma-plan-comparison-scroll\s*\{[^}]*overscroll-behavior-inline:\s*contain/);
+});
+
+test('plan comparison keeps the feature name visible while scrolling plan columns on mobile', () => {
+  const css = source('src/landing/plan-comparison.css');
+
+  assert.match(css, /tbody tr:not\(\.koma-comparison-category\) > th:first-child\s*\{[^}]*position:\s*sticky[^}]*left:\s*0/);
+  assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.koma-plan-comparison table\s*\{[^}]*min-width:\s*650px[^}]*table-layout:\s*fixed/);
+  assert.match(css, /width:\s*190px;[\s\S]*?min-width:\s*190px;[\s\S]*?max-width:\s*190px;/);
+});
+
+test('plan comparison gives every category its own semantic row group', () => {
+  const plans = source('src/landing/sections/Plans.tsx');
+
+  assert.match(plans, /COMPARISON_CATEGORIES\.map\(\(category\) => \(\s*<tbody key=\{category\}>/);
+  assert.match(plans, /<th colSpan=\{4\} scope="rowgroup">\{category\}<\/th>/);
+  assert.doesNotMatch(plans, /<tbody>\s*\{COMPARISON_CATEGORIES\.map/);
 });
 
 test('implementation qualifies printing and peripherals by plan instead of implying universal availability', () => {
