@@ -64,12 +64,35 @@ def test_mock_service_creates_pix_automatic_pending_authorization_with_trial(mon
     assert "preapproval_id=" in res["init_point"]
 
 
+def test_mock_service_creates_account_money_pending_authorization_with_trial(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    service = SaasMercadoPagoService("mock-token")
+    res = service.create_account_money_preapproval(
+        protocol="KOMA-CTR-20260907-ACCMONEY123",
+        plan="pocket",
+        billing_cycle="mensal",
+        amount=Decimal("109.00"),
+        payer_email="saldo@example.com",
+    )
+    assert res["id"].startswith("mock-acc-money-")
+    assert res["status"] == "pending"
+    assert res["external_reference"] == "KOMA-CTR-20260907-ACCMONEY123"
+    assert res["auto_recurring"]["free_trial"] == {"frequency": 7, "frequency_type": "days"}
+    assert "preapproval_id=" in res["init_point"]
+
+    retrieved = service.get_preapproval(res["id"])
+    assert retrieved["id"] == res["id"]
+    assert retrieved["payment_method_id"] == "account_money"
+    assert retrieved["status"] == "authorized"
+
+
 def test_capabilities_never_advertise_upfront_pix(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "test")
     service = SaasMercadoPagoService("mock-token")
     caps = service.checkout_capabilities()
     assert caps["pix"] is False
     assert caps["pix_automatic"] is True
+    assert caps["account_money"] is True
     assert caps["trialDays"] == 7
     assert caps["upfrontPaymentAllowed"] is False
 
@@ -93,6 +116,15 @@ def test_mock_provider_fails_closed_in_production(monkeypatch):
     with pytest.raises(SaasMercadoPagoError, match="não configurada"):
         service.create_pix_automatic_preapproval(
             protocol="KOMA-CTR-20260907-FAILCLOSED02",
+            plan="pro",
+            billing_cycle="mensal",
+            amount=Decimal("209.00"),
+            payer_email="cliente@example.com",
+        )
+
+    with pytest.raises(SaasMercadoPagoError, match="não configurada"):
+        service.create_account_money_preapproval(
+            protocol="KOMA-CTR-20260907-FAILCLOSED03",
             plan="pro",
             billing_cycle="mensal",
             amount=Decimal("209.00"),
@@ -185,6 +217,14 @@ def test_test_buyer_rejected_with_production_credentials_for_all_recurring_metho
             billing_cycle="mensal",
             amount=Decimal("209.00"),
             payer_email="test_user_99999@testuser.com",
+        )
+    with pytest.raises(SaasMercadoPagoError, match="compradores de teste"):
+        service.create_account_money_preapproval(
+            protocol="KOMA-CTR-20260912-TESTBUYER03",
+            plan="pro",
+            billing_cycle="mensal",
+            amount=Decimal("209.00"),
+            payer_email="test_user_88888@testuser.com",
         )
 
 

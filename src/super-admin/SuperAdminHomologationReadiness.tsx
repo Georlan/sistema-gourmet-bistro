@@ -27,6 +27,7 @@ type HomologationReadiness = {
 type BillingCapabilities = {
   pix?: boolean;
   pix_automatic: boolean;
+  account_money?: boolean;
   credit_card: boolean;
   environment: string;
   isTestMode: boolean;
@@ -249,7 +250,7 @@ export function SuperAdminHomologationReadiness() {
               <div>
                 <p className="text-sm font-bold text-zinc-100">Política ativa do checkout</p>
                 <p className="mt-1 text-xs text-koma-muted">
-                  Cartão e Pix Automático seguem a mesma regra recorrente: R$ 0 de mensalidade fixa hoje, 7 dias grátis e primeira cobrança automática no D+7.
+                  Cartão, Pix Automático e Saldo Mercado Pago seguem a mesma regra recorrente: R$ 0 de mensalidade fixa hoje, 7 dias grátis e primeira cobrança automática no D+7.
                 </p>
               </div>
               {capabilities && (
@@ -264,6 +265,7 @@ export function SuperAdminHomologationReadiness() {
                 <div className="flex flex-wrap gap-2">
                   <CapabilityBadge label="Cartão" ready={capabilities.credit_card} />
                   <CapabilityBadge label="Pix Automático" ready={capabilities.pix_automatic} />
+                  <CapabilityBadge label="Saldo Mercado Pago" ready={Boolean(capabilities.account_money)} />
                   <span className="rounded-full border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs font-bold text-zinc-400">
                     Pix avulso: {capabilities.pix === false ? 'desativado' : 'não deve ser usado'}
                   </span>
@@ -343,7 +345,7 @@ export function SuperAdminHomologationReadiness() {
           <div className="mt-3 rounded-xl border border-zinc-800 p-3 text-sm">
             <p className="font-bold text-zinc-200">Roteiro manual</p>
             <p className="mt-1 text-koma-muted">
-              1. Deixe pagamentos prontos → 2. autorize cartão sandbox → 3. confirme R$ 0 hoje e Aguardando liberação → 4. libere aqui no SuperAdmin → 5. ative o primeiro acesso → 6. repita com Pix Automático → 7. valide subscription_authorized_payment e a primeira cobrança no D+7 → 8. valide e-mail e WhatsApp.
+              1. Deixe pagamentos prontos → 2. autorize cartão sandbox → 3. confirme R$ 0 hoje e Aguardando liberação → 4. libere aqui no SuperAdmin → 5. ative o primeiro acesso → 6. repita com Pix Automático e Saldo Mercado Pago → 7. valide subscription_authorized_payment e a primeira cobrança no D+7 → 8. valide e-mail e WhatsApp.
             </p>
           </div>
         </>

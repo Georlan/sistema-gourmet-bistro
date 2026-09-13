@@ -13,9 +13,10 @@ from app.services.saas_billing_policy import (
 
 def test_every_new_saas_payment_method_is_recurring_and_has_seven_day_trial():
     assert SAAS_TRIAL_DAYS == 7
-    assert RECURRING_TRIAL_PAYMENT_METHODS == {"credit_card", "pix_automatic"}
+    assert RECURRING_TRIAL_PAYMENT_METHODS == {"credit_card", "pix_automatic", "account_money"}
     assert is_recurring_trial_payment_method("credit_card") is True
     assert is_recurring_trial_payment_method("pix_automatic") is True
+    assert is_recurring_trial_payment_method("account_money") is True
     assert is_recurring_trial_payment_method("pix") is False
 
 
@@ -33,6 +34,15 @@ def test_pix_automatic_does_not_require_card_token():
         payer_email="buyer@example.test",
     )
     assert request.payment_method_type == "pix_automatic"
+    assert request.card_token_id is None
+
+
+def test_account_money_does_not_require_card_token():
+    request = SaasBillingSetupRequest(
+        payment_method_type="account_money",
+        payer_email="buyer@example.test",
+    )
+    assert request.payment_method_type == "account_money"
     assert request.card_token_id is None
 
 

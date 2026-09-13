@@ -64,12 +64,13 @@ test('Homologation cockpit exposes the live recurring checkout policy instead of
   assert.match(readiness, /publicApiFetch/);
   assert.match(readiness, /\/api\/contracts\/payment-methods/);
   assert.match(readiness, /Política ativa do checkout/);
-  assert.match(readiness, /Cartão e Pix Automático seguem a mesma regra recorrente/);
+  assert.match(readiness, /Cartão, Pix Automático e Saldo Mercado Pago seguem a mesma regra recorrente/);
+  assert.match(readiness, /Saldo Mercado Pago/);
   assert.match(readiness, /R\$ 0 de mensalidade fixa hoje/);
   assert.match(readiness, /primeira cobrança automática no D\+7/);
   assert.match(readiness, /Pix avulso:/);
   assert.match(readiness, /upfrontPaymentAllowed/);
-  assert.match(readiness, /repita com Pix Automático/);
+  assert.match(readiness, /repita com Pix Automático e Saldo Mercado Pago/);
   assert.doesNotMatch(readiness, /repita com Pix →/);
 });
 

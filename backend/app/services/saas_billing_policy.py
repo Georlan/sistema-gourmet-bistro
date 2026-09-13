@@ -6,7 +6,7 @@ SAAS_TRIAL_DAYS = 7
 # todo método oferecido ao cliente precisa apenas autorizar a recorrência hoje,
 # manter R$ 0 de mensalidade fixa durante o trial e cobrar automaticamente
 # somente após o término dos 7 dias grátis.
-RECURRING_TRIAL_PAYMENT_METHODS = frozenset({"credit_card", "pix_automatic"})
+RECURRING_TRIAL_PAYMENT_METHODS = frozenset({"credit_card", "pix_automatic", "account_money"})
 
 # Compatibilidade histórica apenas para detectar e rejeitar tentativas antigas.
 # O Pix avulso/anual não é mais um método válido para novas contratações SaaS.

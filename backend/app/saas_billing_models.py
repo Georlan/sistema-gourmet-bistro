@@ -73,7 +73,7 @@ class SaaSBillingSetup(ContractEvidenceBase):
             name="ck_saas_billing_setups_provider",
         ),
         CheckConstraint(
-            "payment_method_type IN ('credit_card', 'pix', 'pix_automatic')",
+            "payment_method_type IN ('credit_card', 'pix', 'pix_automatic', 'account_money')",
             name="ck_saas_billing_setups_payment_method",
         ),
         CheckConstraint(
@@ -148,7 +148,7 @@ class SaaSSubscription(Base):
             name="ck_saas_subscriptions_billing_cycle",
         ),
         CheckConstraint(
-            "payment_method_type IS NULL OR payment_method_type IN ('credit_card', 'pix', 'pix_automatic')",
+            "payment_method_type IS NULL OR payment_method_type IN ('credit_card', 'pix', 'pix_automatic', 'account_money')",
             name="ck_saas_subscriptions_payment_method",
         ),
         Index(

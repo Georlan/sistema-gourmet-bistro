@@ -45,9 +45,10 @@ test('catálogo remove Pix antecipado e promove Pix Automático recorrente', () 
 });
 
 test('checkout só oferece meios recorrentes com R$ 0 hoje e 7 dias grátis', () => {
-  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic'/);
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic' \| 'account_money'/);
   assert.match(planContract, /payment_method_type: billingMethod/);
   assert.match(planContract, /Pix Automático/);
+  assert.match(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /R\$ 0 de mensalidade fixa hoje/);
   assert.match(planContract, /primeira cobrança automática/);
   assert.doesNotMatch(planContract, /payment_method_type: 'pix'/);
