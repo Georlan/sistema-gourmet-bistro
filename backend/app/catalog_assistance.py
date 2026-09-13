@@ -82,18 +82,33 @@ def safe_catalog_filename(filename: str | None, content_type: str) -> str:
     raw = re.sub(r"[\x00-\x1f\x7f]+", "", raw).strip()
     if not raw:
         raw = "cardapio"
-    fallback_extension = {
+
+    canonical_extension = {
         "application/pdf": ".pdf",
         "image/png": ".png",
         "image/jpeg": ".jpg",
     }.get(content_type, "")
-    if "." not in raw and fallback_extension:
-        raw += fallback_extension
+    path = PurePath(raw)
+    stem = path.stem or "cardapio"
+    extension = path.suffix.lower()
+    accepted_extensions = {
+        "application/pdf": {".pdf"},
+        "image/png": {".png"},
+        "image/jpeg": {".jpg", ".jpeg"},
+    }.get(content_type, set())
+    if extension not in accepted_extensions:
+        raw = f"{stem}{canonical_extension}"
     return raw[:255]
 
 
 def detect_catalog_source_type(declared_type: str | None, content: bytes) -> str:
     normalized = (declared_type or "").split(";", 1)[0].strip().lower()
+    aliases = {
+        "image/jpg": "image/jpeg",
+        "application/x-pdf": "application/pdf",
+    }
+    normalized = aliases.get(normalized, normalized)
+
     detected: str | None = None
     if content.startswith(b"%PDF-"):
         detected = "application/pdf"
