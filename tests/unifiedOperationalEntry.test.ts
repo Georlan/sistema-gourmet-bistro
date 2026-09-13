@@ -7,7 +7,9 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 test('main routes every canonical staff URL through the unified operational entry', () => {
   const main = source('../src/main.tsx');
   assert.match(main, /function isCanonicalOperationalEntryRoute\(\)/);
-  assert.match(main, /if \(!isOperationalAppHost\(\)\) return false/);
+  assert.match(main, /function isLocalOperationalTestRoute\(\)/);
+  assert.match(main, /params\.get\("view"\)\?\.toLowerCase\(\) === "operacional"/);
+  assert.match(main, /if \(!isOperationalAppHost\(\) && !localOperationalTestRoute\) return false/);
   assert.match(main, /isPublicMenuRoute\(\) \|\| isPublicCommercialRoute\(\)/);
   assert.match(main, /pathname\.startsWith\("\/smartpos"\)/);
   assert.match(main, /const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute\(\)/);
@@ -19,7 +21,7 @@ test('main routes every canonical staff URL through the unified operational entr
 
 test('canonical app entry strips hidden legacy path and query before mounting', () => {
   const main = source('../src/main.tsx');
-  assert.match(main, /isUnifiedOperationalRoute[\s\S]*window\.location\.pathname !== "\/"/);
+  assert.match(main, /isUnifiedOperationalRoute[\s\S]*isOperationalAppHost\(\)[\s\S]*window\.location\.pathname !== "\/"/);
   assert.match(main, /window\.location\.search/);
   assert.match(main, /window\.location\.hash/);
   assert.match(main, /window\.history\.replaceState\(window\.history\.state, "", "\/"\)/);
