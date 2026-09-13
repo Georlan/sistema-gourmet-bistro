@@ -53,11 +53,14 @@ class SaasMercadoPagoService:
         ready = enabled and (self.mock_allowed or (not self.is_mock and bool(settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET)))
         is_homolog = self.environment in {"staging", "homologation", "homolog", "development", "test"}
         return {
-            "pix": bool(ready),
+            "pix": False,
+            "pix_automatic": bool(ready),
             "credit_card": bool(ready and (self.mock_allowed or settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY)),
             "publicKey": settings.KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY if ready else "",
             "environment": "homologation" if is_homolog else "production",
             "isTestMode": bool(self.is_test_credentials or self.is_mock),
+            "trialDays": 7,
+            "upfrontPaymentAllowed": False,
         }
 
     def _ensure_provider_ready(self) -> None:
@@ -73,13 +76,8 @@ class SaasMercadoPagoService:
             )
 
     def _ensure_no_environment_mismatch(self, payer_email: str) -> None:
-        """
-        Garante que nunca haja mistura entre comprador de teste e recebedor real.
-        Compradores de teste do Mercado Pago usam domínio @testuser.com ou prefixo test_user_.
-        """
         email_clean = (payer_email or "").strip().lower()
         is_test_payer = email_clean.startswith("test_user_") or email_clean.endswith("@testuser.com")
-
         if self.is_production_credentials and is_test_payer:
             raise SaasMercadoPagoError(
                 "Não é permitido utilizar compradores de teste do Mercado Pago com credenciais de produção.",
@@ -97,15 +95,39 @@ class SaasMercadoPagoService:
         )
 
     @staticmethod
-    def _annual_pix_idempotency_key(protocol: str) -> str:
-        """Stable provider key for the single annual Pix setup of a contract."""
+    def _recurring_idempotency_key(protocol: str, method: str) -> str:
         normalized_protocol = protocol.strip().upper()
-        return str(
-            uuid.uuid5(
-                uuid.NAMESPACE_URL,
-                f"https://komafood.com.br/saas-billing/annual-pix/{normalized_protocol}",
-            )
-        )
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"https://komafood.com.br/saas-billing/{method}/{normalized_protocol}"))
+
+    @staticmethod
+    def _recurring_payload(
+        *,
+        protocol: str,
+        plan: str,
+        billing_cycle: str,
+        amount: Decimal,
+        payer_email: str,
+        trial_days: int,
+        back_url: str,
+        status: str,
+    ) -> dict[str, Any]:
+        cycle_normalized = billing_cycle.strip().lower()
+        is_annual = cycle_normalized in ("anual", "annual")
+        frequency = 12 if is_annual else 1
+        return {
+            "reason": f"KÔMA - Plano {plan.capitalize()} ({'Anual' if is_annual else 'Mensal'})",
+            "external_reference": protocol,
+            "payer_email": payer_email,
+            "auto_recurring": {
+                "frequency": frequency,
+                "frequency_type": "months",
+                "transaction_amount": float(amount),
+                "currency_id": "BRL",
+                "free_trial": {"frequency": trial_days, "frequency_type": "days"},
+            },
+            "back_url": back_url,
+            "status": status,
+        }
 
     def create_preapproval(
         self,
@@ -119,79 +141,119 @@ class SaasMercadoPagoService:
         back_url: str | None = None,
         trial_days: int = 7,
     ) -> dict[str, Any]:
-        """
-        Cria uma assinatura recorrente (preapproval) no Mercado Pago com período de trial gratuito.
-        O trial inicia imediatamente na autorização do gateway (Arquitetura B).
-        """
+        """Cria assinatura recorrente de cartão com 7 dias grátis antes da primeira cobrança."""
         self._ensure_provider_ready()
         self._ensure_no_environment_mismatch(payer_email)
-        cycle_normalized = billing_cycle.strip().lower()
-        is_annual = cycle_normalized in ("anual", "annual")
-        frequency = 12 if is_annual else 1
-        reason = f"KÔMA - Plano {plan.capitalize()} ({'Anual' if is_annual else 'Mensal'})"
         resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        payload = self._recurring_payload(
+            protocol=protocol,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            amount=amount,
+            payer_email=payer_email,
+            trial_days=trial_days,
+            back_url=resolved_back_url,
+            status="authorized",
+        )
+        payload["card_token_id"] = card_token_id
 
         if self.is_mock:
             mock_sub_id = f"mock-sub-{uuid.uuid4().hex[:12]}"
-            mock_payer_id = f"payer-{uuid.uuid4().hex[:8]}"
-            logger.info(
-                "[MOCK] Mercado Pago preapproval created for protocol %s (plan=%s, cycle=%s, amount=%s)",
-                protocol, plan, billing_cycle, amount
-            )
             return {
                 "id": mock_sub_id,
                 "status": "authorized",
-                "payer_id": mock_payer_id,
-                "payer_email": payer_email,
-                "external_reference": protocol,
-                "reason": reason,
+                "payer_id": f"payer-{uuid.uuid4().hex[:8]}",
+                "payment_method_id": "visa",
+                **payload,
                 "date_created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "auto_recurring": {
-                    "frequency": frequency,
-                    "frequency_type": "months",
-                    "transaction_amount": float(amount),
-                    "currency_id": "BRL",
-                    "free_trial": {
-                        "frequency": trial_days,
-                        "frequency_type": "days",
-                    },
-                },
             }
-
-        payload = {
-            "reason": reason,
-            "external_reference": protocol,
-            "payer_email": payer_email,
-            "card_token_id": card_token_id,
-            "auto_recurring": {
-                "frequency": frequency,
-                "frequency_type": "months",
-                "transaction_amount": float(amount),
-                "currency_id": "BRL",
-                "free_trial": {
-                    "frequency": trial_days,
-                    "frequency_type": "days",
-                },
-            },
-            "back_url": resolved_back_url,
-            "status": "authorized",
-        }
 
         try:
             with self._client() as client:
-                resp = client.post("/preapproval", json=payload, headers={"X-Idempotency-Key": str(uuid.uuid5(uuid.NAMESPACE_URL, f"koma:subscription:{protocol}"))})
+                resp = client.post(
+                    "/preapproval",
+                    json=payload,
+                    headers={"X-Idempotency-Key": self._recurring_idempotency_key(protocol, "credit-card")},
+                )
                 if resp.status_code >= 400:
                     data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     detail = data.get("message") or data.get("error") or resp.text
-                    logger.error("Mercado Pago preapproval creation failed (%s): %s", resp.status_code, detail)
                     raise SaasMercadoPagoError(
                         f"Falha na autorização do cartão junto ao gateway: {detail}",
                         status_code=resp.status_code,
                     )
                 return resp.json()
         except httpx.RequestError as exc:
-            logger.error("Network error connecting to Mercado Pago preapproval API: %s", exc)
             raise SaasMercadoPagoError("Erro de comunicação com o gateway de pagamento.") from exc
+
+    def create_pix_automatic_preapproval(
+        self,
+        *,
+        protocol: str,
+        plan: str,
+        billing_cycle: str,
+        amount: Decimal,
+        payer_email: str,
+        back_url: str | None = None,
+        trial_days: int = 7,
+    ) -> dict[str, Any]:
+        """
+        Cria assinatura pendente no checkout hospedado do Mercado Pago.
+
+        O cliente conclui a autorização recorrente no `init_point`. O KÔMA só
+        considera o setup pronto depois que o preapproval retornar `authorized`
+        e `payment_method_id=pix`, preservando R$ 0 hoje e a primeira cobrança
+        somente depois dos 7 dias grátis.
+        """
+        self._ensure_provider_ready()
+        self._ensure_no_environment_mismatch(payer_email)
+        resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        payload = self._recurring_payload(
+            protocol=protocol,
+            plan=plan,
+            billing_cycle=billing_cycle,
+            amount=amount,
+            payer_email=payer_email,
+            trial_days=trial_days,
+            back_url=resolved_back_url,
+            status="pending",
+        )
+
+        if self.is_mock:
+            mock_sub_id = f"mock-pix-auto-{uuid.uuid4().hex[:12]}"
+            return {
+                "id": mock_sub_id,
+                "status": "pending",
+                "external_reference": protocol,
+                "payer_email": payer_email,
+                "auto_recurring": payload["auto_recurring"],
+                "init_point": f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id={mock_sub_id}",
+                "date_created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+
+        try:
+            with self._client() as client:
+                resp = client.post(
+                    "/preapproval",
+                    json=payload,
+                    headers={"X-Idempotency-Key": self._recurring_idempotency_key(protocol, "pix-automatic")},
+                )
+                if resp.status_code >= 400:
+                    data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                    detail = data.get("message") or data.get("error") or resp.text
+                    raise SaasMercadoPagoError(
+                        f"Falha ao iniciar a autorização do Pix Automático: {detail}",
+                        status_code=resp.status_code,
+                    )
+                result = resp.json()
+                if not result.get("id") or not result.get("init_point"):
+                    raise SaasMercadoPagoError(
+                        "O gateway não retornou o link de autorização do Pix Automático.",
+                        status_code=502,
+                    )
+                return result
+        except httpx.RequestError as exc:
+            raise SaasMercadoPagoError("Erro de comunicação ao iniciar o Pix Automático.") from exc
 
     def find_preapproval(self, protocol: str, payer_email: str) -> dict[str, Any] | None:
         self._ensure_provider_ready()
@@ -219,15 +281,14 @@ class SaasMercadoPagoService:
             raise SaasMercadoPagoError("Falha ao consultar a cobrança.") from exc
 
     def get_preapproval(self, preapproval_id: str) -> dict[str, Any]:
-        """Consulta dados e status de um preapproval no Mercado Pago."""
         self._ensure_provider_ready()
         if self.is_mock:
             return {
                 "id": preapproval_id,
                 "status": "authorized",
+                "payment_method_id": "pix" if preapproval_id.startswith("mock-pix-auto-") else "visa",
                 "date_created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
-
         try:
             with self._client() as client:
                 resp = client.get(f"/preapproval/{preapproval_id}")
@@ -241,11 +302,9 @@ class SaasMercadoPagoService:
             raise SaasMercadoPagoError("Erro de comunicação ao consultar assinatura.") from exc
 
     def cancel_preapproval(self, preapproval_id: str) -> dict[str, Any]:
-        """Cancela uma assinatura preapproval no Mercado Pago."""
         self._ensure_provider_ready()
         if self.is_mock:
             return {"id": preapproval_id, "status": "cancelled"}
-
         try:
             with self._client() as client:
                 resp = client.put(f"/preapproval/{preapproval_id}", json={"status": "cancelled"})
@@ -263,132 +322,31 @@ class SaasMercadoPagoService:
         preapproval_id: str,
         next_payment_date: datetime.datetime,
     ) -> dict[str, Any]:
-        """
-        Reprograma a data da primeira cobrança recorrente (término dos 7 dias grátis)
-        no Mercado Pago quando a contratação é liberada manualmente pelo SuperAdmin.
-        """
         self._ensure_provider_ready()
         clean_id = preapproval_id.strip()
         if not clean_id:
             raise SaasMercadoPagoError("ID de preapproval inválido para sincronização.", status_code=400)
-
         iso_date = next_payment_date.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         if self.is_mock:
-            logger.info(
-                "[MOCK] Preapproval %s next_payment_date sincronizado para %s",
-                clean_id,
-                iso_date,
-            )
             return {"id": clean_id, "next_payment_date": iso_date, "status": "authorized"}
-
-        payload = {"next_payment_date": iso_date}
         try:
             with self._client() as client:
-                resp = client.put(f"/preapproval/{clean_id}", json=payload)
+                resp = client.put(f"/preapproval/{clean_id}", json={"next_payment_date": iso_date})
                 if resp.status_code >= 400:
                     data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                     detail = data.get("message") or data.get("error") or resp.text
-                    logger.error(
-                        "Falha ao sincronizar next_payment_date para preapproval %s (%s): %s",
-                        clean_id,
-                        resp.status_code,
-                        detail,
-                    )
                     raise SaasMercadoPagoError(
                         f"Falha ao sincronizar início de cobrança com o gateway: {detail}",
                         status_code=resp.status_code,
                     )
                 return resp.json()
         except httpx.RequestError as exc:
-            logger.error("Erro de rede ao sincronizar next_payment_date do preapproval %s: %s", clean_id, exc)
             raise SaasMercadoPagoError("Erro de comunicação ao sincronizar início de cobrança com o gateway.") from exc
 
-    def create_annual_pix(
-        self,
-        *,
-        protocol: str,
-        plan: str,
-        amount: Decimal,
-        payer_email: str,
-        payer_name: str,
-        payer_tax_id: str,
-        attempt_reference: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Cria um pagamento Pix antecipado para contratação do plano anual.
-        Retorna id do pagamento, QR code e payload copia-e-cola.
-        """
-        self._ensure_provider_ready()
-        self._ensure_no_environment_mismatch(payer_email)
-        if self.is_mock:
-            mock_payment_id = f"mock-pix-{uuid.uuid4().hex[:10]}"
-            qr_emv = f"00020126580014br.gov.bcb.pix0136{uuid.uuid4()}5204000053039865802BR5913KOMA PLATAFORMA6009FORTALEZA62070503***6304ABCD"
-            return {
-                "id": mock_payment_id,
-                "status": "pending",
-                "qr_code": qr_emv,
-                "qr_code_base64": "",
-                "ticket_url": f"https://www.mercadopago.com.br/payments/{mock_payment_id}/ticket",
-                "expires_at": (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)).isoformat(),
-            }
-
-        first_name = payer_name.split()[0] if payer_name else "Cliente"
-        last_name = " ".join(payer_name.split()[1:]) if len(payer_name.split()) > 1 else "Koma"
-        doc_type = "CNPJ" if len(payer_tax_id) > 11 else "CPF"
-
-        payload = {
-            "transaction_amount": float(amount),
-            "description": f"KÔMA - Plano {plan.capitalize()} Anual ({protocol})",
-            "payment_method_id": "pix",
-            "external_reference": protocol,
-            "payer": {
-                "email": payer_email,
-                "first_name": first_name,
-                "last_name": last_name,
-                "identification": {
-                    "type": doc_type,
-                    "number": payer_tax_id,
-                },
-            },
-        }
-        idempotency_key = self._annual_pix_idempotency_key(f"{protocol}:{attempt_reference}" if attempt_reference else protocol)
-
-        try:
-            with self._client() as client:
-                resp = client.post(
-                    "/v1/payments",
-                    json=payload,
-                    headers={"X-Idempotency-Key": idempotency_key},
-                )
-                if resp.status_code >= 400:
-                    data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-                    detail = data.get("message") or data.get("error") or resp.text
-                    logger.error("Mercado Pago Pix creation failed (%s): %s", resp.status_code, detail)
-                    raise SaasMercadoPagoError(
-                        f"Falha na geração do Pix junto ao gateway: {detail}",
-                        status_code=resp.status_code,
-                    )
-                res_data = resp.json()
-                point_of_interaction = res_data.get("point_of_interaction") or {}
-                tx_data = point_of_interaction.get("transaction_data") or {}
-                return {
-                    "id": str(res_data.get("id")),
-                    "status": str(res_data.get("status") or "pending"),
-                    "qr_code": tx_data.get("qr_code"),
-                    "qr_code_base64": tx_data.get("qr_code_base64"),
-                    "ticket_url": tx_data.get("ticket_url"),
-                    "expires_at": res_data.get("date_of_expiration"),
-                }
-        except httpx.RequestError as exc:
-            logger.error("Network error connecting to Mercado Pago payments API: %s", exc)
-            raise SaasMercadoPagoError("Erro de comunicação ao gerar pagamento Pix.") from exc
-
     def get_payment(self, payment_id: str) -> dict[str, Any]:
-        """Consulta o pagamento no gateway antes de qualquer ativação baseada em webhook."""
+        """Consulta pagamentos legados somente para reconciliação; novas assinaturas não criam Pix avulso."""
         self._ensure_provider_ready()
         if self.is_mock:
-            # Em testes o estado aprovado precisa ser declarado explicitamente via monkeypatch.
-            # O fallback seguro é pending para impedir ativação acidental por um evento sintético.
             return {
                 "id": payment_id,
                 "status": "pending",
@@ -396,7 +354,6 @@ class SaasMercadoPagoService:
                 "external_reference": None,
                 "transaction_amount": None,
             }
-
         try:
             with self._client() as client:
                 resp = client.get(f"/v1/payments/{payment_id}")
@@ -418,7 +375,6 @@ class SaasMercadoPagoService:
     ) -> bool:
         secret = settings.KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET
         if not secret:
-            # Mocks sem segredo são permitidos somente fora de produção.
             environment = os.getenv("ENVIRONMENT", "production").strip().lower()
             return environment in {"test", "development"}
         return verify_mercado_pago_signature(
