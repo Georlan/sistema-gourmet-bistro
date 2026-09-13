@@ -1,10 +1,8 @@
 import {
   LEGAL_DOCUMENTS as LEGAL_V2_DOCUMENTS,
-  LEGAL_EFFECTIVE_DATE as LEGAL_V2_EFFECTIVE_DATE,
   LEGAL_PROVIDER_LOCATION,
   LEGAL_PROVIDER_NAME,
   LEGAL_SUPPORT_SCHEDULE,
-  LEGAL_VERSION as LEGAL_V2_VERSION,
   type LegalDocument,
   type LegalDocumentSlug,
   type LegalSection,
@@ -13,8 +11,26 @@ import {
 export type { LegalDocument, LegalDocumentSlug, LegalSection };
 export { LEGAL_PROVIDER_LOCATION, LEGAL_PROVIDER_NAME, LEGAL_SUPPORT_SCHEDULE };
 
-export const LEGAL_VERSION = LEGAL_V2_VERSION;
-export const LEGAL_EFFECTIVE_DATE = LEGAL_V2_EFFECTIVE_DATE;
+export const LEGAL_VERSION = '2.1';
+export const LEGAL_EFFECTIVE_DATE = '13/09/2026';
+
+const AGE_RESTRICTED_TERMS: LegalSection = {
+  title: '7. Produtos sujeitos a restrição etária',
+  paragraphs: [
+    'O KÔMA adota política restritiva para produtos sujeitos a restrição etária: o cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas ou de outros itens que devam ser classificados como 18+ ou equivalente.',
+    'Enquanto o recurso de classificação automática ainda não estiver disponível, o estabelecimento deve manter esses itens fora do cardápio online. Quando a identificação por tag 18+ ou classificação equivalente estiver habilitada, a marcação deverá funcionar como gate de publicação e sincronização, impedindo que o item seja transferido, publicado ou disponibilizado para compra no cardápio online.',
+    'O item restrito poderá permanecer no catálogo interno, PDV ou operação presencial quando sua comercialização for legal e o estabelecimento cumprir as verificações e demais obrigações aplicáveis. O restaurante continua responsável por classificar corretamente os produtos e o KÔMA poderá ocultar, bloquear ou rejeitar a publicação online de item identificado como restrito.',
+  ],
+};
+
+const CARDAPIO_AGE_RESTRICTED_TERMS: LegalSection = {
+  title: '8. Produtos 18+',
+  paragraphs: [
+    'O cardápio online KÔMA não é destinado à oferta de bebidas alcoólicas ou de outros produtos classificados como 18+ ou sujeitos a restrição etária equivalente.',
+    'Enquanto a classificação automática ainda não estiver disponível, o restaurante deve manter esses produtos fora do cardápio online. Quando a tag 18+ ou mecanismo equivalente estiver habilitado, itens assim classificados deverão ser excluídos da publicação e da sincronização com o cardápio online, permanecendo apenas nos canais internos ou presenciais em que a venda seja legal.',
+    'Se um item sujeito a restrição aparecer online por erro de cadastro ou classificação, o restaurante e o KÔMA poderão ocultá-lo, bloquear sua compra ou rejeitar sua publicação. Essa limitação não impede o estabelecimento de comercializar presencialmente o produto quando permitido por lei e observadas as verificações exigidas.',
+  ],
+};
 
 const SAAS_PAYMENT_METHODS: LegalSection = {
   title: '10. Contratação do SaaS, recorrência e liberação',
@@ -57,8 +73,12 @@ export const LEGAL_DOCUMENTS: LegalDocument[] = LEGAL_V2_DOCUMENTS.map((document
     })),
   };
 
-  if (document.slug === 'termos') current = replaceSection(current, SAAS_PAYMENT_METHODS);
+  if (document.slug === 'termos') {
+    current = replaceSection(current, AGE_RESTRICTED_TERMS);
+    current = replaceSection(current, SAAS_PAYMENT_METHODS);
+  }
   if (document.slug === 'planos') current = replaceSection(current, COMMERCIAL_PAYMENT_METHODS);
+  if (document.slug === 'cardapio-termos') current = replaceSection(current, CARDAPIO_AGE_RESTRICTED_TERMS);
   return current;
 });
 

@@ -21,7 +21,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal publica os oito documentos da Legal 2.0 sem herdar a v1.2', () => {
+test('central legal preserva snapshot 2.0 e publica fachada vigente 2.1', () => {
   for (const slug of [
     'termos',
     'planos',
@@ -36,7 +36,8 @@ test('central legal publica os oito documentos da Legal 2.0 sem herdar a v1.2', 
   }
 
   assert.match(legalV2, /LEGAL_VERSION = '2\.0'/);
-  assert.match(legalV2, /13\/09\/2026/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.1'/);
+  assert.match(legalContent, /13\/09\/2026/);
   assert.match(legalContent, /from '\.\/legalContentV2'/);
   assert.doesNotMatch(legalContent, /legalContentLegacy/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/, 'snapshot histórico deve permanecer preservado');
@@ -44,7 +45,7 @@ test('central legal publica os oito documentos da Legal 2.0 sem herdar a v1.2', 
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.0 acompanha billing recorrente atual e não promete função fiscal inexistente', () => {
+test('Legal 2.1 acompanha billing recorrente atual e não promete função fiscal inexistente', () => {
   assert.match(legalContent, /cartão de crédito, Pix Automático e Saldo Mercado Pago \(account_money\)/);
   assert.match(legalContent, /Pix avulso antecipado não integra o checkout/);
   assert.match(legalV2, /7 dias de teste sem cobrança do componente fixo/);
@@ -52,6 +53,16 @@ test('Legal 2.0 acompanha billing recorrente atual e não promete função fisca
   assert.match(legalV2, /não substituem NFC-e, NF-e, NFS-e, CF-e/);
   assert.match(legalV2, /simulador, bridge de desenvolvimento ou código experimental não significa homologação/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
+});
+
+test('Legal 2.1 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
+  assert.match(legalContent, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
+  assert.match(legalContent, /tag 18\+ ou classificação equivalente/);
+  assert.match(legalContent, /gate de publicação e sincronização/);
+  assert.match(legalContent, /impedindo que o item seja transferido, publicado ou disponibilizado para compra no cardápio online/);
+  assert.match(legalContent, /permanecer no catálogo interno, PDV ou operação presencial/);
+  assert.match(legalContent, /itens assim classificados deverão ser excluídos da publicação e da sincronização com o cardápio online/);
+  assert.doesNotMatch(legalContent, /autodeclaração.*suficiente/i);
 });
 
 test('contratação registra clickwrap com identidade, evidência e comprovante', () => {
@@ -87,7 +98,7 @@ test('checkout reconhece os três métodos recorrentes modelados', () => {
   assert.match(planContract, /Pix Automático/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.0 sem documento fiscal pessoal', () => {
+test('proveniência jurídica fixa commit e blob da Legal 2.1 sem documento fiscal pessoal', () => {
   assert.match(legalEvidence, /legalContentRecurring/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
@@ -122,7 +133,7 @@ test('condições comerciais preservam catálogo oficial, anual e política reco
   assert.doesNotMatch(legalV2, /12 meses \+ 7 dias de bônus/);
 });
 
-test('pacote jurídico cobre LGPD, transferências, incidentes, dados sensíveis e restrição etária', () => {
+test('pacote jurídico cobre LGPD, transferências, incidentes e dados sensíveis', () => {
   assert.match(legalV2, /Railway/);
   assert.match(legalV2, /Supabase/);
   assert.match(legalV2, /Cloudflare/);
@@ -133,5 +144,4 @@ test('pacote jurídico cobre LGPD, transferências, incidentes, dados sensíveis
   assert.match(legalV2, /em até 24 horas da confirmação/);
   assert.match(legalV2, /até 5 dias úteis/);
   assert.match(legalV2, /alergia, intolerância ou outra condição de saúde/);
-  assert.match(legalV2, /verificação de idade além de simples autodeclaração/);
 });
