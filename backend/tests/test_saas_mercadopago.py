@@ -97,6 +97,41 @@ def test_capabilities_never_advertise_upfront_pix(monkeypatch):
     assert caps["upfrontPaymentAllowed"] is False
 
 
+def test_real_gateway_defaults_to_card_only_until_optional_methods_are_homologated(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KOMA_SAAS_CHECKOUT_ENABLED", "true")
+    monkeypatch.delenv("KOMA_SAAS_PIX_AUTOMATIC_ENABLED", raising=False)
+    monkeypatch.delenv("KOMA_SAAS_ACCOUNT_MONEY_ENABLED", raising=False)
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", "APP_USR-public-key")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "webhook-secret")
+
+    service = SaasMercadoPagoService("APP_USR-production-token")
+    caps = service.checkout_capabilities()
+
+    assert caps["credit_card"] is True
+    assert caps["pix_automatic"] is False
+    assert caps["account_money"] is False
+    assert caps["pix"] is False
+    assert caps["environment"] == "production"
+    assert caps["isTestMode"] is False
+
+
+def test_optional_recurring_methods_require_explicit_feature_flags(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("KOMA_SAAS_CHECKOUT_ENABLED", "true")
+    monkeypatch.setenv("KOMA_SAAS_PIX_AUTOMATIC_ENABLED", "true")
+    monkeypatch.setenv("KOMA_SAAS_ACCOUNT_MONEY_ENABLED", "true")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", "APP_USR-public-key")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "webhook-secret")
+
+    service = SaasMercadoPagoService("APP_USR-production-token")
+    caps = service.checkout_capabilities()
+
+    assert caps["credit_card"] is True
+    assert caps["pix_automatic"] is True
+    assert caps["account_money"] is True
+
+
 def test_mock_provider_fails_closed_in_production(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     service = SaasMercadoPagoService("mock-token")
@@ -275,4 +310,3 @@ def test_gateway_payer_email_resolution(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     service_prod = SaasMercadoPagoService("APP_USR-prod-token")
     assert service_prod._resolve_gateway_payer_email("real@restaurant.com") == "real@restaurant.com"
-
