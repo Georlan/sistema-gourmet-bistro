@@ -246,3 +246,16 @@ def test_update_preapproval_next_payment_date_in_mock(monkeypatch):
     res = service.update_preapproval_next_payment_date("mock-sub-999", future)
     assert res["id"] == "mock-sub-999"
     assert "next_payment_date" in res
+
+
+def test_gateway_payer_email_resolution(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "homologation")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_PAYER_EMAIL", "test_user_qa@testuser.com")
+    service = SaasMercadoPagoService("APP_USR-test-token")
+    assert service._resolve_gateway_payer_email("real@restaurant.com") == "test_user_qa@testuser.com"
+    assert service._resolve_gateway_payer_email("test_user_existing@testuser.com") == "test_user_existing@testuser.com"
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    service_prod = SaasMercadoPagoService("APP_USR-prod-token")
+    assert service_prod._resolve_gateway_payer_email("real@restaurant.com") == "real@restaurant.com"
+

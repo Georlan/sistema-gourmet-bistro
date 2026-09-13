@@ -91,6 +91,19 @@ class SaasMercadoPagoService:
                 status_code=422,
             )
 
+    def _resolve_gateway_payer_email(self, payer_email: str) -> str:
+        clean = (payer_email or "").strip()
+        clean_lower = clean.lower()
+        is_test_payer = clean_lower.startswith("test_user_") or clean_lower.endswith("@testuser.com")
+        if self.is_test_credentials and not is_test_payer:
+            test_payer = os.getenv(
+                "KOMA_SAAS_MERCADO_PAGO_TEST_PAYER_EMAIL",
+                "test_user_5734251429071523815@testuser.com",
+            ).strip()
+            if test_payer:
+                return test_payer
+        return clean
+
     def _client(self) -> httpx.Client:
         return httpx.Client(
             base_url=self.API_URL,
@@ -152,12 +165,13 @@ class SaasMercadoPagoService:
         self._ensure_provider_ready()
         self._ensure_no_environment_mismatch(payer_email)
         resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        gateway_payer_email = self._resolve_gateway_payer_email(payer_email)
         payload = self._recurring_payload(
             protocol=protocol,
             plan=plan,
             billing_cycle=billing_cycle,
             amount=amount,
-            payer_email=payer_email,
+            payer_email=gateway_payer_email,
             trial_days=trial_days,
             back_url=resolved_back_url,
             status="authorized",
@@ -215,12 +229,13 @@ class SaasMercadoPagoService:
         self._ensure_provider_ready()
         self._ensure_no_environment_mismatch(payer_email)
         resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        gateway_payer_email = self._resolve_gateway_payer_email(payer_email)
         payload = self._recurring_payload(
             protocol=protocol,
             plan=plan,
             billing_cycle=billing_cycle,
             amount=amount,
-            payer_email=payer_email,
+            payer_email=gateway_payer_email,
             trial_days=trial_days,
             back_url=resolved_back_url,
             status="pending",
@@ -284,12 +299,13 @@ class SaasMercadoPagoService:
         self._ensure_provider_ready()
         self._ensure_no_environment_mismatch(payer_email)
         resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        gateway_payer_email = self._resolve_gateway_payer_email(payer_email)
         payload = self._recurring_payload(
             protocol=protocol,
             plan=plan,
             billing_cycle=billing_cycle,
             amount=amount,
-            payer_email=payer_email,
+            payer_email=gateway_payer_email,
             trial_days=trial_days,
             back_url=resolved_back_url,
             status="pending",
