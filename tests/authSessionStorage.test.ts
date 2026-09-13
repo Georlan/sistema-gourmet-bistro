@@ -33,9 +33,11 @@ function fakeJwt(expSeconds: number): string {
 }
 
 (globalThis as any).localStorage = createMockStorage();
+(globalThis as any).sessionStorage = createMockStorage();
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 test('saveOperatorSession persiste somente identidade operacional mínima', () => {
@@ -64,6 +66,7 @@ test('saveOperatorSession persiste somente identidade operacional mínima', () =
   assert.equal(localStorage.getItem('token'), null);
   assert.equal(localStorage.getItem('koma_caixa_token'), 'test-access-token');
   assert.equal(localStorage.getItem('koma_waiter_token'), null);
+  assert.equal(sessionStorage.getItem('koma_active_operational_portal'), 'caixa');
   assert.equal(getPersistedOperationalPortal(), 'caixa');
 });
 
@@ -80,7 +83,50 @@ test('sessão canônica de garçom usa apenas aliases de garçom', () => {
   assert.equal(localStorage.getItem('koma_waiter_name'), 'Garçom QA');
   assert.equal(localStorage.getItem('koma_user_role'), 'garcom');
   assert.equal(localStorage.getItem('koma_caixa_token'), null);
+  assert.equal(sessionStorage.getItem('koma_active_operational_portal'), 'garcom');
   assert.equal(getPersistedOperationalPortal(), 'garcom');
+});
+
+test('caixa e garçom coexistem em abas diferentes e logout de uma não derruba a outra', () => {
+  saveOperatorSession('waiter-tab-token', {
+    id: 'waiter-tab',
+    nome: 'Garçom Aba',
+    role: 'garcom',
+    restaurante_id: 3,
+  });
+
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'waiter-tab-token');
+  assert.equal(localStorage.getItem('koma_operator_session_garcom') != null, true);
+
+  // Simula outra aba do mesmo navegador: localStorage é compartilhado,
+  // sessionStorage é independente.
+  sessionStorage.clear();
+  saveOperatorSession('cashier-tab-token', {
+    id: 'cashier-tab',
+    nome: 'Caixa Aba',
+    role: 'caixa',
+    restaurante_id: 3,
+  });
+
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'waiter-tab-token');
+  assert.equal(localStorage.getItem('koma_caixa_token'), 'cashier-tab-token');
+  assert.equal(localStorage.getItem('koma_operator_session_garcom') != null, true);
+  assert.equal(localStorage.getItem('koma_operator_session_caixa') != null, true);
+  assert.equal(getPersistedOperationalPortal(), 'caixa');
+
+  clearOperatorSession();
+
+  assert.equal(localStorage.getItem('koma_caixa_token'), null);
+  assert.equal(localStorage.getItem('koma_operator_session_caixa'), null);
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'waiter-tab-token');
+  assert.ok(localStorage.getItem('koma_operator_session_garcom'));
+  assert.equal(getPersistedOperationalPortal(), null);
+
+  // Volta para a aba original do Garçom.
+  sessionStorage.clear();
+  sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+  assert.equal(getPersistedOperationalPortal(), 'garcom');
+  assert.equal(getOperatorAccessToken(), 'waiter-tab-token');
 });
 
 test('reload restaura garçom enquanto o JWT ainda estiver válido, mesmo após a antiga janela local', () => {
@@ -107,7 +153,7 @@ test('reload restaura garçom enquanto o JWT ainda estiver válido, mesmo após 
   assert.ok(session);
   assert.equal(session?.expiresAt, expSeconds * 1000);
   assert.equal(getPersistedOperationalPortal(), 'garcom');
-  assert.equal(JSON.parse(localStorage.getItem('koma_operator_session') || '{}').expiresAt, expSeconds * 1000);
+  assert.equal(JSON.parse(localStorage.getItem('koma_operator_session_garcom') || '{}').expiresAt, expSeconds * 1000);
 });
 
 test('logout de garçom não ressuscita alias a partir da sessão canônica', () => {
@@ -126,7 +172,7 @@ test('logout de garçom não ressuscita alias a partir da sessão canônica', ()
   assert.equal(getOperatorAccessToken(), '');
   assert.equal(getPersistedOperationalPortal(), null);
   assert.equal(localStorage.getItem('koma_waiter_token'), null);
-  assert.ok(localStorage.getItem('koma_operator_session'));
+  assert.ok(localStorage.getItem('koma_operator_session_garcom'));
 });
 
 test('token legado isolado de garçom não escolhe sozinho a entrada canônica', () => {
@@ -152,16 +198,17 @@ test('getOperatorSession sanitiza sessão legada com PII no primeiro acesso', ()
       endereco: 'Endereço antigo',
     },
   }));
+  localStorage.setItem('koma_caixa_token', 'legacy-access-token');
 
   const session = getOperatorSession();
   assert.equal(session?.user.id, 'legacy-user');
   assert.equal(session?.user.role, 'gerente');
 
-  const migrated = localStorage.getItem('koma_operator_session') || '';
+  const migrated = localStorage.getItem('koma_operator_session_caixa') || '';
   assert.doesNotMatch(migrated, /legacy@example\.test|85111111111|Endereço antigo/);
 });
 
-test('sessão expirada é removida junto de todos os aliases operacionais', () => {
+test('sessão expirada remove somente aliases do portal expirado', () => {
   localStorage.setItem('koma_operator_session', JSON.stringify({
     token: 'expired-token',
     expiresAt: Date.now() - 1,
@@ -169,19 +216,21 @@ test('sessão expirada é removida junto de todos os aliases operacionais', () =
   }));
   localStorage.setItem('koma_caixa_token', 'expired-token');
   localStorage.setItem('koma_caixa_id', 'expired-user');
-  localStorage.setItem('koma_waiter_token', 'stale-waiter-token');
-  localStorage.setItem('koma_waiter_id', 'stale-waiter');
+  localStorage.setItem('koma_waiter_token', 'live-waiter-token');
+  localStorage.setItem('koma_waiter_id', 'live-waiter');
 
   assert.equal(getOperatorSession(), null);
   assert.equal(localStorage.getItem('koma_operator_session'), null);
   assert.equal(localStorage.getItem('koma_caixa_token'), null);
   assert.equal(localStorage.getItem('koma_caixa_id'), null);
-  assert.equal(localStorage.getItem('koma_waiter_token'), null);
-  assert.equal(localStorage.getItem('koma_waiter_id'), null);
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'live-waiter-token');
+  assert.equal(localStorage.getItem('koma_waiter_id'), 'live-waiter');
 });
 
-test('clearOperatorSession remove credenciais de caixa e garçom sem tocar preferências', () => {
+test('clearOperatorSession sem contexto limpa credenciais globais sem tocar preferências', () => {
   localStorage.setItem('koma_operator_session', '{"token":"x"}');
+  localStorage.setItem('koma_operator_session_caixa', '{"token":"x"}');
+  localStorage.setItem('koma_operator_session_garcom', '{"token":"waiter-x"}');
   localStorage.setItem('koma_caixa_token', 'x');
   localStorage.setItem('koma_caixa_id', 'cashier-1');
   localStorage.setItem('koma_waiter_token', 'waiter-x');
@@ -194,6 +243,8 @@ test('clearOperatorSession remove credenciais de caixa e garçom sem tocar prefe
 
   for (const key of [
     'koma_operator_session',
+    'koma_operator_session_caixa',
+    'koma_operator_session_garcom',
     'koma_caixa_token',
     'koma_caixa_id',
     'koma_waiter_token',
