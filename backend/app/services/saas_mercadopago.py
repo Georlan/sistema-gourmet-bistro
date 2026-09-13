@@ -94,6 +94,27 @@ class SaasMercadoPagoService:
                 status_code=503,
             )
 
+    def _validate_merchant_identity(self, payload: dict[str, Any]) -> None:
+        if self.is_mock:
+            return
+        expected_collector = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "").strip()
+        expected_application = os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
+        if not expected_collector and not expected_application:
+            return
+
+        collector_id = str(payload.get("collector_id") or "").strip()
+        application_id = str(payload.get("application_id") or "").strip()
+        if expected_collector and collector_id != expected_collector:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago retornou uma conta recebedora diferente da conta KÔMA configurada.",
+                status_code=409,
+            )
+        if expected_application and application_id != expected_application:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago retornou uma aplicação diferente da aplicação KomaBilling configurada.",
+                status_code=409,
+            )
+
     def _ensure_no_environment_mismatch(self, payer_email: str) -> None:
         email_clean = (payer_email or "").strip().lower()
         is_test_payer = email_clean.startswith("test_user_") or email_clean.endswith("@testuser.com")
@@ -215,7 +236,9 @@ class SaasMercadoPagoService:
                         f"Falha na autorização do cartão junto ao gateway: {detail}",
                         status_code=resp.status_code,
                     )
-                return resp.json()
+                result = resp.json()
+                self._validate_merchant_identity(result)
+                return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação com o gateway de pagamento.") from exc
 
@@ -285,6 +308,7 @@ class SaasMercadoPagoService:
                         "O gateway não retornou o link de autorização do Pix Automático.",
                         status_code=502,
                     )
+                self._validate_merchant_identity(result)
                 return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao iniciar o Pix Automático.") from exc
@@ -355,6 +379,7 @@ class SaasMercadoPagoService:
                         "O gateway não retornou o link de autorização do Saldo Mercado Pago.",
                         status_code=502,
                     )
+                self._validate_merchant_identity(result)
                 return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao iniciar o Saldo Mercado Pago.") from exc
@@ -369,7 +394,15 @@ class SaasMercadoPagoService:
                 matches = [row for row in response.json().get("results", []) if str(row.get("external_reference")) == protocol]
                 if len(matches) > 1:
                     raise SaasMercadoPagoError("Mais de uma autorização encontrada; revisão necessária.")
-                return matches[0] if matches else None
+                if not matches:
+                    return None
+                match = matches[0]
+                if os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID") or os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID"):
+                    preapproval_id = str(match.get("id") or "").strip()
+                    if not preapproval_id:
+                        raise SaasMercadoPagoError("Autorização recuperada sem identificador do provedor.")
+                    return self.get_preapproval(preapproval_id)
+                return match
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Não foi possível recuperar a autorização.") from exc
 
@@ -407,7 +440,9 @@ class SaasMercadoPagoService:
                         f"Consulta de assinatura falhou ({resp.status_code}).",
                         status_code=resp.status_code,
                     )
-                return resp.json()
+                result = resp.json()
+                self._validate_merchant_identity(result)
+                return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao consultar assinatura.") from exc
 
@@ -423,7 +458,9 @@ class SaasMercadoPagoService:
                         f"Cancelamento de assinatura falhou ({resp.status_code}).",
                         status_code=resp.status_code,
                     )
-                return resp.json()
+                result = resp.json()
+                self._validate_merchant_identity(result)
+                return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao cancelar assinatura.") from exc
 
@@ -449,7 +486,9 @@ class SaasMercadoPagoService:
                         f"Falha ao sincronizar início de cobrança com o gateway: {detail}",
                         status_code=resp.status_code,
                     )
-                return resp.json()
+                result = resp.json()
+                self._validate_merchant_identity(result)
+                return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao sincronizar início de cobrança com o gateway.") from exc
 
