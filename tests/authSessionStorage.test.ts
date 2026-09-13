@@ -53,7 +53,7 @@ test('saveOperatorSession persiste somente identidade operacional mínima', () =
     password_hash: 'nunca-aqui',
   });
 
-  const raw = localStorage.getItem('koma_operator_session') || '';
+  const raw = localStorage.getItem('koma_operator_session_caixa') || '';
   const parsed = JSON.parse(raw);
   assert.deepEqual(parsed.user, {
     id: 'user-1',
@@ -63,6 +63,7 @@ test('saveOperatorSession persiste somente identidade operacional mínima', () =
     restaurante_id: 1,
   });
   assert.doesNotMatch(raw, /nao-deve-persistir|85999999999|Rua privada|nunca-aqui/);
+  assert.equal(localStorage.getItem('koma_operator_session'), null);
   assert.equal(localStorage.getItem('token'), null);
   assert.equal(localStorage.getItem('koma_caixa_token'), 'test-access-token');
   assert.equal(localStorage.getItem('koma_waiter_token'), null);
@@ -85,6 +86,22 @@ test('sessão canônica de garçom usa apenas aliases de garçom', () => {
   assert.equal(localStorage.getItem('koma_caixa_token'), null);
   assert.equal(sessionStorage.getItem('koma_active_operational_portal'), 'garcom');
   assert.equal(getPersistedOperationalPortal(), 'garcom');
+});
+
+test('nova aba abre no login sem derrubar a sessão que já existe em outra aba', () => {
+  saveOperatorSession('waiter-existing-token', {
+    id: 'waiter-existing',
+    nome: 'Garçom Existente',
+    role: 'garcom',
+    restaurante_id: 3,
+  });
+
+  // Uma aba nova compartilha localStorage, mas nasce sem vínculo operacional.
+  sessionStorage.clear();
+
+  assert.equal(getPersistedOperationalPortal(), null);
+  assert.equal(localStorage.getItem('koma_waiter_token'), 'waiter-existing-token');
+  assert.ok(localStorage.getItem('koma_operator_session_garcom'));
 });
 
 test('caixa e garçom coexistem em abas diferentes e logout de uma não derruba a outra', () => {
@@ -154,6 +171,7 @@ test('reload restaura garçom enquanto o JWT ainda estiver válido, mesmo após 
   assert.equal(session?.expiresAt, expSeconds * 1000);
   assert.equal(getPersistedOperationalPortal(), 'garcom');
   assert.equal(JSON.parse(localStorage.getItem('koma_operator_session_garcom') || '{}').expiresAt, expSeconds * 1000);
+  assert.equal(localStorage.getItem('koma_operator_session'), null);
 });
 
 test('logout de garçom não ressuscita alias a partir da sessão canônica', () => {
