@@ -20,7 +20,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal publica o pacote recorrente v1.3', () => {
+test('central legal publica pacote canônico Legal 2.0 sem herdar a v1.2', () => {
   for (const slug of [
     'termos',
     'planos',
@@ -31,15 +31,27 @@ test('central legal publica o pacote recorrente v1.3', () => {
     'cardapio-termos',
     'cardapio-privacidade',
   ]) {
-    assert.match(legacyLegalContent, new RegExp(`slug: '${slug}'`));
+    assert.match(legalContent, new RegExp(`slug: '${slug}'`));
   }
-  assert.match(legalContent, /LEGAL_VERSION = '1\.3'/);
+
+  assert.match(legalContent, /LEGAL_VERSION = '2\.0'/);
   assert.match(legalContent, /13\/09\/2026/);
-  assert.match(legalContent, /Pix Automático/);
-  assert.match(legalContent, /Não existe pagamento antecipado da mensalidade fixa/);
+  assert.doesNotMatch(legalContent, /LEGACY_LEGAL_DOCUMENTS/);
+  assert.doesNotMatch(legalContent, /from '\.\/legalContentLegacy'/);
+  assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/, 'snapshot histórico deve continuar preservado');
   assert.match(legalPage, /legalContentRecurring/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
   assert.match(legalPage, /Fornecedores/);
+});
+
+test('Legal 2.0 descreve cobrança recorrente, PDV não fiscal e limites do SmartPOS', () => {
+  assert.match(legalContent, /Pix Automático/);
+  assert.match(legalContent, /Pix avulso antecipado não integra o checkout/);
+  assert.match(legalContent, /7 dias de teste sem cobrança do componente fixo/);
+  assert.match(legalContent, /documentos não fiscais/);
+  assert.match(legalContent, /não substituem NFC-e, NF-e, NFS-e, CF-e/);
+  assert.match(legalContent, /simulador, bridge de desenvolvimento ou código experimental não significa homologação/);
+  assert.match(legalContent, /O WhatsApp não é requisito/);
 });
 
 test('contratação registra clickwrap com identidade, evidência e comprovante', () => {
@@ -69,7 +81,7 @@ test('contratação registra clickwrap com identidade, evidência e comprovante'
   assert.doesNotMatch(planContract, /defaultChecked/i, 'aceite não pode nascer pré-marcado');
 });
 
-test('proveniência jurídica fixa commit e blob da Legal v1.3 sem dados pessoais sensíveis', () => {
+test('proveniência jurídica fixa commit e blob da Legal 2.0 sem documento fiscal pessoal', () => {
   assert.match(legalEvidence, /legalContentRecurring/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
@@ -93,25 +105,28 @@ test('landing não privilegia Pocket e envia cada plano para sua própria contra
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
 
-test('conteúdo comercial preserva preços oficiais e muda somente a mecânica de cobrança/trial', () => {
-  assert.match(legacyLegalContent, /Pocket: R\$ 109 por mês \+ 1,49%/);
-  assert.match(legacyLegalContent, /Pro: R\$ 209 por mês \+ 0,69%/);
-  assert.match(legacyLegalContent, /Premium: R\$ 309 por mês \+ 0,29%/);
-  assert.match(legacyLegalContent, /Pocket R\$ 1\.177,20/);
-  assert.match(legacyLegalContent, /Pro R\$ 2\.257,20/);
-  assert.match(legacyLegalContent, /Premium R\$ 3\.337,20/);
-  assert.match(legalContent, /7 dias grátis/);
-  assert.match(legalContent, /total anual somente é cobrado automaticamente após os 7 dias grátis/);
-  assert.match(legalContent, /O KÔMA não oferece Pix avulso antecipado/);
+test('condições comerciais preservam catálogo oficial e política recorrente atual', () => {
+  assert.match(legalContent, /Pocket: R\$ 109 por mês \+ 1,49%/);
+  assert.match(legalContent, /Pro: R\$ 209 por mês \+ 0,69%/);
+  assert.match(legalContent, /Premium: R\$ 309 por mês \+ 0,29%/);
+  assert.match(legalContent, /Pocket R\$ 1\.177,20/);
+  assert.match(legalContent, /Pro R\$ 2\.257,20/);
+  assert.match(legalContent, /Premium R\$ 3\.337,20/);
+  assert.match(legalContent, /desconto de 10%/);
+  assert.match(legalContent, /cartão de crédito e Pix Automático/);
   assert.doesNotMatch(legalContent, /12 meses \+ 7 dias de bônus/);
 });
 
-test('base jurídica preserva LGPD, transferências, incidentes e restrição etária', () => {
-  assert.match(legacyLegalContent, /Railway.*San Francisco/s);
-  assert.match(legacyLegalContent, /Supabase.*Oregon/s);
-  assert.match(legacyLegalContent, /24 horas após a confirmação/);
-  assert.match(legacyLegalContent, /em até 5 dias úteis/);
-  assert.match(legacyLegalContent, /Google Fonts/);
-  assert.match(legacyLegalContent, /bebida alcoólica/);
-  assert.match(legacyLegalContent, /não podem depender apenas de autodeclaração/);
+test('pacote jurídico cobre LGPD, transferências, incidentes, sensíveis e restrição etária', () => {
+  assert.match(legalContent, /Railway/);
+  assert.match(legalContent, /Supabase/);
+  assert.match(legalContent, /Cloudflare/);
+  assert.match(legalContent, /Resend/);
+  assert.match(legalContent, /Google Fonts/);
+  assert.match(legalContent, /Sentry, quando habilitado/);
+  assert.match(legalContent, /Resolução CD\/ANPD nº 19\/2024/);
+  assert.match(legalContent, /em até 24 horas da confirmação/);
+  assert.match(legalContent, /até 5 dias úteis/);
+  assert.match(legalContent, /alergia, intolerância ou outra condição de saúde/);
+  assert.match(legalContent, /verificação de idade além de simples autodeclaração/);
 });
