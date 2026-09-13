@@ -71,7 +71,7 @@ export interface KanbanOrderDetailsProps {
   readonly actions: {
     readonly close: () => void;
     readonly advanceDigitalOrder: () => void;
-    readonly reprintProduction: () => void;
+    readonly reprintProduction: (launchId?: string) => void;
     readonly printFullTable: () => void;
     readonly printTableValues: () => void;
     readonly transferTable: () => void;
@@ -136,6 +136,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
     : 0;
   const selectedCanAdvanceDigital = selectedIsDigital
     && projectCashierDeliveryState(selectedKanbanOrder?.deliveryStatus).inProduction;
+  const isWholeTableDetail = Boolean(selectedKanbanOrder.tableContext);
 
   return (
     <div
@@ -197,6 +198,31 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
         {/* Itens e info extras */}
         <div className="space-y-3">
           {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
+          {selectedKanbanOrder.tableContext && selectedKanbanOrder.tableContext.launches.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-koma-border bg-koma-panel/60 p-3">
+              <div className="orders-detail-modal__section-title">
+                <span>Pedidos desta mesa</span>
+                <strong>{selectedKanbanOrder.tableContext.launches.length} no atendimento</strong>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {selectedKanbanOrder.tableContext.launches.map((launch) => {
+                  const label = launch.displayNumber || launch.id;
+                  return (
+                    <button
+                      key={launch.id}
+                      type="button"
+                      onClick={() => actions.reprintProduction(launch.id)}
+                      className="orders-detail-modal__reprint min-h-10"
+                      aria-label={`Reimprimir pedido ${label}`}
+                    >
+                      <Printer size={13} aria-hidden="true" />
+                      <span>Reimprimir #{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {tableMovement && <div className="space-y-1 text-xs text-koma-secondary">
             {tableMovement.mergedMesaIds.length > 0 && <p>Consumo unido de: {tableMovement.mergedMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
             {tableMovement.transferredFromMesaIds.length > 0 && <p>Consumo transferido de: {tableMovement.transferredFromMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
@@ -264,14 +290,16 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                 <span>{selectedKanbanOrder.modalidade === 'delivery' ? 'Marcar saída para entrega' : 'Marcar pronto para retirada'}</span>
               </button>
             )}
-            <button
-              type="button"
-              onClick={actions.reprintProduction}
-              className="orders-detail-modal__reprint"
-            >
-              <Printer size={13} />
-              <span>Reimprimir produção</span>
-            </button>
+            {!isWholeTableDetail && (
+              <button
+                type="button"
+                onClick={() => actions.reprintProduction()}
+                className="orders-detail-modal__reprint"
+              >
+                <Printer size={13} />
+                <span>Reimprimir produção</span>
+              </button>
+            )}
             {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
               <div className={"space-y-2 w-full"}>
                 <div className={"flex gap-2 w-full"}>
