@@ -32,14 +32,14 @@ test.describe('checkout público de adesão KÔMA', () => {
     await page.reload();
     await expect(page.getByText('Sua inscrição foi recuperada. Continue de onde parou.')).toBeVisible();
     await expect(page.getByLabel('E-mail', { exact: true })).toHaveValue(data.email);
-    await page.getByRole('radio', { name: /Pix · pagamento único/ }).click();
+    await page.getByRole('radio', { name: /Pix Automático/ }).click();
     await expect(page.getByText('Número do cartão', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('Pagamento único com 12 meses de acesso e 7 dias adicionais de bônus.')).toBeVisible();
+    await expect(page.getByText(/Nenhum Pix avulso será gerado e nenhuma mensalidade fixa será cobrada hoje/)).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
   test('mensal permite salvar a inscrição mesmo com pagamentos indisponíveis', async ({ page }) => {
-    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: false, pix: false, publicKey: '' } }));
+    await page.route('**/api/contracts/payment-methods', route => route.fulfill({ json: { credit_card: false, pix: false, pix_automatic: false, publicKey: '' } }));
     await page.route('**/api/signups', route => route.fulfill({ status: 201, json: { id: '12345678-1234-1234-1234-123456789012', token: 'private-resume-token-test', message: 'Inscrição recebida.' } }));
     await page.goto('/contratar/pocket?cobranca=mensal');
     await expect(page.getByText('7 dias sem mensalidade fixa no cartão.', { exact: true })).toBeVisible();

@@ -359,7 +359,7 @@ export default function PlanContractPage() {
         if (payload.billingStatus === 'ready' && !payload.isActivated) {
           setActivationResult({
             status: 'awaiting_release',
-            message: 'Autorização recorrente confirmada. A equipe KÔMA foi avisada e fará a liberação do restaurante.',
+            message: 'Autorização recorrente confirmada. A contratação segue para liberação pela equipe KÔMA.',
           });
           return;
         }
