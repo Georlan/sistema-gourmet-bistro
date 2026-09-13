@@ -171,7 +171,7 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
 
       {deliveryFailures.length > 0 && <details className="my-3 text-amber-400">
         <summary>{deliveryFailures.length} envios com falha ou aguardando nova tentativa</summary>
-        <p className="my-2 text-sm">Revise as configurações de e-mail/WhatsApp antes de tentar novamente.</p>
+        <p className="my-2 text-sm">Confira o painel de Homologação SaaS acima e revise as configurações de e-mail/WhatsApp antes de tentar novamente.</p>
         {deliveryFailures.map(item => <div key={item.id} className="my-2 flex flex-wrap items-center gap-3 text-xs">
           <span>{item.id} · {item.attempts} tentativas · {item.last_error}</span>
           <button className="rounded border px-2 py-1" onClick={() => void retryDelivery(item.id)}>Tentar novamente</button>
