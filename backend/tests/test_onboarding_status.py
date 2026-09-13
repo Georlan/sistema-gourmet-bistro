@@ -6,7 +6,11 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.routes.onboarding import _profile_is_configured, _trial_status_payload
+from app.routes.onboarding import (
+    _profile_is_configured,
+    _required_progress,
+    _trial_status_payload,
+)
 
 
 def test_onboarding_status_route_is_registered_once():
@@ -67,3 +71,35 @@ def test_profile_progress_requires_real_profile_content():
 
     assert _profile_is_configured(empty) is False
     assert _profile_is_configured(configured) is True
+
+
+def test_required_progress_excludes_optional_mercado_pago_and_first_order():
+    steps = {
+        "profile": True,
+        "hours": True,
+        "catalog": True,
+        "mercadoPago": False,
+        "firstOrder": False,
+    }
+
+    assert _required_progress(steps) == {
+        "completed": 3,
+        "total": 3,
+        "percent": 100,
+    }
+
+
+def test_required_progress_does_not_let_optional_steps_mask_missing_setup():
+    steps = {
+        "profile": False,
+        "hours": True,
+        "catalog": False,
+        "mercadoPago": True,
+        "firstOrder": True,
+    }
+
+    assert _required_progress(steps) == {
+        "completed": 1,
+        "total": 3,
+        "percent": 33,
+    }
