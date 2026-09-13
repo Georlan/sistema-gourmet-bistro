@@ -42,11 +42,24 @@ def test_homologation_accepts_only_explicit_test_credentials(monkeypatch):
     )
 
 
-def test_homologation_rejects_a_production_token_in_test_slot(monkeypatch):
-    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN", "APP_USR-wrong")
+def test_homologation_accepts_app_usr_in_test_slot(monkeypatch):
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN", "APP_USR-test-token")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY", "APP_USR-test-public")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET", "test-secret")
 
-    with pytest.raises(RuntimeError, match="prefixo TEST-"):
-        resolve_saas_mercado_pago_credentials("homologation")
+    assert resolve_saas_mercado_pago_credentials("homologation") == (
+        "APP_USR-test-token",
+        "APP_USR-test-public",
+        "test-secret",
+    )
+
+
+def test_production_ignores_test_variables(monkeypatch):
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN", "TEST-token")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY", "TEST-public")
+    monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET", "test-secret")
+
+    assert resolve_saas_mercado_pago_credentials("production") == ("", "", "")
 
 
 def test_production_rejects_test_credentials(monkeypatch):

@@ -156,3 +156,21 @@ def test_readiness_blocks_when_public_api_url_does_not_match_homologation(monkey
     assert "public-api-url" in result["paymentBlockers"]
     assert "não corresponde ao backend de homologação" in details["public-api-url"].lower()
 
+
+def test_readiness_accepts_app_usr_test_token_in_homologation(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "homologation")
+    monkeypatch.setenv("KOMA_SAAS_CHECKOUT_ENABLED", "true")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN", "APP_USR-test-token")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", "APP_USR-test-public")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "secret")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
+    monkeypatch.setattr(settings, "KOMA_PUBLIC_APP_URL", "https://frontend-homologacao.example.test")
+    monkeypatch.setattr(settings, "KOMA_PUBLIC_API_URL", "https://api-homologacao.example.test")
+
+    result = get_homologation_readiness(_request(), admin={"user": "qa"})
+    details = {item["id"]: str(item["detail"]) for item in result["checks"]}
+
+    assert "mercado-pago-test-access-token" not in result["paymentBlockers"]
+    assert details["mercado-pago-test-access-token"] == "Credencial TEST isolada configurada"
+
+
