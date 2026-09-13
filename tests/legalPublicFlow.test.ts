@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const main = readFileSync('src/main.tsx', 'utf8');
-const legacyLegalContent = readFileSync('src/legal/legalContent.ts', 'utf8');
+const legacyLegalContent = readFileSync('src/legal/legalContentLegacy.ts', 'utf8');
 const legalContent = readFileSync('src/legal/legalContentRecurring.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
