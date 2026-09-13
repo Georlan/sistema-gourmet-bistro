@@ -74,6 +74,10 @@ async def lifespan(app: FastAPI):
     validate_postgres_runtime_role()
     if should_create_schema_on_startup():
         Base.metadata.create_all(bind=engine)
+        from .signup_models import SignupBase
+        SignupBase.metadata.create_all(bind=engine)
+        from .contract_models import ContractEvidenceBase
+        ContractEvidenceBase.metadata.create_all(bind=engine)
     else:
         print(
             "[DATABASE] create_all desativado; Alembic é a fonte do esquema.",

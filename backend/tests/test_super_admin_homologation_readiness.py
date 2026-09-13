@@ -72,3 +72,24 @@ def test_readiness_turns_missing_manual_release_and_checkout_into_payment_blocke
     assert "checkout-enabled" in result["paymentBlockers"]
     assert "manual-release" in result["paymentBlockers"]
     assert result["webhookUrl"].endswith("/api/integrations/saas-billing/mercado-pago/webhook")
+
+
+def test_readiness_explicitly_names_missing_environment_variables(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "homologation")
+    monkeypatch.setenv("KOMA_SAAS_CHECKOUT_ENABLED", "false")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN", "")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", "")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_WEBHOOK_SECRET", "")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
+    monkeypatch.setattr(settings, "KOMA_PUBLIC_APP_URL", "")
+    monkeypatch.setattr(settings, "KOMA_PUBLIC_API_URL", "")
+
+    result = get_homologation_readiness(_request(), admin={"user": "qa"})
+    details = {item["id"]: str(item["detail"]) for item in result["checks"]}
+
+    assert "KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN" in details["mercado-pago-test-access-token"]
+    assert "KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY" in details["mercado-pago-test-public-key"]
+    assert "KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET" in details["mercado-pago-webhook-secret"]
+    assert "KOMA_SAAS_CHECKOUT_ENABLED=true" in details["checkout-enabled"]
+    assert "KOMA_PUBLIC_APP_URL" in details["public-app-url"]
+
