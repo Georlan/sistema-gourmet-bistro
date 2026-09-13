@@ -217,9 +217,8 @@ def upsert_billing_setup(
 
 def is_billing_ready(db: Session, protocol: str) -> bool:
     """
-    Verifica se a contratação possui método de pagamento configurado e pronto.
-    Para cartão: tokenização e validação confirmada no gateway.
-    Para Pix anual: pagamento confirmado via webhook do gateway.
+    Verifica se a contratação possui autorização recorrente pronta no gateway.
+    Nenhum método de assinatura do KÔMA pode depender de pagamento antecipado para liberar o trial.
     """
     setup = get_billing_setup(db, protocol)
     if setup is None:
@@ -312,12 +311,6 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
         reason="enforcement_disabled_transitional",
         billing_status="pending",
     )
-
-
-def annual_access_end(start):
-    import calendar
-    year = start.year + 1
-    return start.replace(year=year, day=min(start.day, calendar.monthrange(year, start.month)[1])) + datetime.timedelta(days=7)
 
 
 def contract_billing_terms(db, protocol):
