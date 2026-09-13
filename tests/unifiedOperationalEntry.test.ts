@@ -44,24 +44,28 @@ test('canonical app shell bypasses stale browser/service-worker caches', () => {
   assert.match(headers, /\/assets\/\*[\s\S]*Cache-Control: public, max-age=31536000, immutable/);
 });
 
-test('canonical app restores a valid persisted staff session after reload', () => {
+test('canonical app restores a valid persisted staff session only in the tab that owns its portal', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+  const authSession = source('../src/utils/authSession.ts');
+
   assert.match(entry, /getPersistedOperationalPortal/);
   assert.match(entry, /useState<OperationalPortal \| null>\([\s\S]*\(\) => getPersistedOperationalPortal\(\)/);
-  assert.match(entry, /sessão operacional válida deve sobreviver[\s\S]*reload/);
+  assert.match(authSession, /sessionStorage/);
+  assert.match(authSession, /koma_active_operational_portal/);
+  assert.match(authSession, /if \(tabPortal\) \{/);
 });
 
-test('logout from resolved portal clears canonical auth and returns to team login', () => {
+test('logout from resolved portal clears only that portal and returns its tab to team login', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
   const login = source('../src/components/auth/OperationalLogin.tsx');
 
-  assert.match(entry, /if \(!localStorage\.getItem\(tokenKey\)\) \{[\s\S]*clearOperatorSession\(\);[\s\S]*setActivePortal\(null\)/);
+  assert.match(entry, /if \(!localStorage\.getItem\(tokenKey\)\) \{[\s\S]*clearOperatorSession\(activePortal\);[\s\S]*setActivePortal\(null\)/);
   assert.match(entry, /250\)/);
   assert.match(login, /portal !== 'unified' && isOperationalAppHost\(\)/);
   assert.match(login, /Retornando ao acesso da equipe/);
 });
 
-test('unified login lets backend identity choose restaurant and role choose portal', () => {
+test('unified login lets backend identity choose restaurant and role choose portal without clearing the other portal', () => {
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
 
   assert.match(entry, /username:\s*username\.trim\(\)\.toLowerCase\(\)/);
@@ -70,7 +74,7 @@ test('unified login lets backend identity choose restaurant and role choose port
   assert.match(entry, /const restauranteId = Number\(data\?\.usuario\?\.restaurante_id\)/);
   assert.match(entry, /role === 'garcom'/);
   assert.match(entry, /MANAGEMENT_ROLES\.has\(role\)/);
-  assert.match(entry, /clearOperatorSession\(\)/);
+  assert.doesNotMatch(entry, /clearOperatorSession\(\);/);
   assert.match(entry, /saveOperatorSession\(data\.access_token, \{ \.\.\.data\.usuario, role \}\)/);
   assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
 });
