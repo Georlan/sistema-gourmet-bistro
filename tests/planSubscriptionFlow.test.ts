@@ -93,3 +93,18 @@ test('primeiro acesso após contratação utiliza fragment #token= e possui fall
   assert.doesNotMatch(planContract, /\/ativar\?token=/);
   assert.match(planContract, /Seu acesso está sendo preparado\. Utilize o convite enviado ao responsável\./);
 });
+
+test('permite trocar de plano antes da autorização financeira sem perder dados', () => {
+  assert.doesNotMatch(planContract, /koma-sub-back[^>]*disabled=\{contractLocked\}/);
+  assert.doesNotMatch(planContract, /Plano congelado nesta contratação/);
+  assert.match(planContract, /Trocar plano ou ciclo/);
+  assert.match(planContract, /handleSwitchPlanOrCycle/);
+  assert.match(planContract, /\/billing\/status/);
+  assert.match(planContract, /Esta contratação já possui uma autorização financeira em andamento\. Conclua ou cancele essa autorização antes de alterar o plano\./);
+  assert.match(planContract, /Seus dados foram preservados\. Escolha outro plano ou ciclo\. Um novo aceite será registrado somente quando você continuar\./);
+  assert.match(planContract, /localStorage\.removeItem\('koma_signup_resume'\)/);
+  assert.match(planContract, /setSignupToken\(''\)/);
+  assert.match(planContract, /setRequestId\(newRequestId\(\)\)/);
+  assert.match(planContract, /setReceipt\(null\)/);
+});
+

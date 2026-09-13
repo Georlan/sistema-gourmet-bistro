@@ -75,4 +75,231 @@ test.describe('checkout público de adesão KÔMA', () => {
 
     await expectNoHorizontalOverflow(page);
   });
+
+  test('permite trocar plano e ciclo após contrato gerado quando não há autorização financeira', async ({ page }) => {
+    const initialData = {
+      restaurant_name: 'Bistrô das Flores',
+      responsible_name: 'Carlos Lima',
+      email: 'carlos@bistro.com',
+      phone: '11988887777',
+      plan: 'pro',
+      billing_cycle: 'anual',
+    };
+    const receipt = {
+      protocol: 'KOMA-CTR-20260913-9876543210AB',
+      acceptedAtUtc: '2026-09-13T12:00:00Z',
+      acceptedAtBrasilia: '2026-09-13T09:00:00-03:00',
+      provider: { name: 'KÔMA', taxId: '00.000.000/0001-00', address: 'Rua Central, 100', location: 'São Paulo/SP' },
+      contractingParty: {
+        name: 'Carlos Lima ME',
+        taxId: '12345678000195',
+        taxIdKind: 'cnpj',
+        restaurantName: 'Bistrô das Flores',
+        email: 'carlos@bistro.com',
+        phone: '11988887777',
+      },
+      representative: { name: 'Carlos Lima', taxId: '12345678901', role: 'Administrador', powersDeclared: true },
+      commercial: {
+        plan: 'pro',
+        billingCycle: 'anual',
+        fixedMonthlyPrice: '299,00',
+        billingAmount: '3229,20',
+        annualMonthlyEquivalent: '269,10',
+        marketplaceRate: '0.045',
+        trialDays: 7,
+        trialWaivesFixedFeeOnly: true,
+      },
+      documents: {
+        version: '2.0',
+        terms: { slug: 'termos', hash: 'h1' },
+        commercial: { slug: 'planos', hash: 'h2' },
+        dpa: { slug: 'dpa', hash: 'h3' },
+        privacy: { slug: 'privacidade', hash: 'h4' },
+        sourceCommit: 'test-commit',
+        sourceBlobSha: 'test-sha',
+      },
+      evidence: {
+        requestId: 'old-signup-id',
+        sourceIp: '127.0.0.1',
+        ipSource: 'header',
+        sourceIpHash: 'ip-hash',
+        userAgent: 'test-agent',
+        userAgentHash: 'ua-hash',
+      },
+      provisioning: { status: 'ready', message: 'Aguardando pagamento' },
+    };
+
+    let postSignupCalled = false;
+    let postSignupPayload: any = null;
+
+    await page.route('**/api/contracts/payment-methods', route =>
+      route.fulfill({ json: { credit_card: true, pix: false, pix_automatic: true, account_money: true, publicKey: 'TEST-public' } }),
+    );
+    await page.route('**/api/contracts/KOMA-CTR-20260913-9876543210AB/billing/status', route =>
+      route.fulfill({
+        json: {
+          protocol: 'KOMA-CTR-20260913-9876543210AB',
+          billingStatus: 'pending',
+          provider: null,
+          paymentMethodType: null,
+          isActivated: false,
+          restaurantId: null,
+          slug: null,
+        },
+      }),
+    );
+    await page.route('**/api/signups', async route => {
+      postSignupCalled = true;
+      postSignupPayload = route.request().postDataJSON();
+      await route.fulfill({
+        status: 201,
+        json: { id: 'new-signup-id-uuid', token: 'new-resume-token', message: 'Nova inscrição recebida.' },
+      });
+    });
+
+    await page.addInitScript(() => {
+      localStorage.setItem('koma_signup_resume', 'old-token');
+    });
+
+    await page.route('**/api/signups/current', route =>
+      route.fulfill({
+        json: {
+          id: 'old-signup-id',
+          data: initialData,
+          receipt,
+        },
+      }),
+    );
+
+    await page.goto('/contratar/pro?cobranca=anual');
+    await expect(page.getByText('Sua inscrição foi recuperada. Continue de onde parou.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Trocar plano ou ciclo' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Trocar plano ou ciclo' }).click();
+
+    await expect(page.getByText(/Seus dados foram preservados\. Escolha outro plano ou ciclo\./)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Escolha o KÔMA certo para sua operação.' })).toBeVisible();
+
+    await page.getByRole('radio', { name: /^Pocket\b/ }).click();
+    await page.getByRole('radio', { name: /^Mensal\b/ }).click();
+
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+
+    await expect(page.getByRole('heading', { name: 'Vamos começar.' })).toBeVisible();
+    await expect(page.getByLabel('Nome do restaurante', { exact: true })).toHaveValue('Bistrô das Flores');
+    await expect(page.getByLabel('Seu nome', { exact: true })).toHaveValue('Carlos Lima');
+    await expect(page.getByLabel('E-mail', { exact: true })).toHaveValue('carlos@bistro.com');
+    await expect(page.getByLabel('WhatsApp', { exact: true })).toHaveValue('11988887777');
+
+    await page.getByRole('button', { name: 'Salvar e continuar' }).click();
+
+    expect(postSignupCalled).toBe(true);
+    expect(postSignupPayload.plan).toBe('pocket');
+    expect(postSignupPayload.billing_cycle).toBe('mensal');
+
+    await expect(page.getByRole('heading', { name: 'Ative seu restaurante.' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Voltar para plano e cobrança' })).toBeVisible();
+    await expect(page.getByLabel('Nome completo / Razão social', { exact: true })).toHaveValue('Carlos Lima ME');
+    await expect(page.getByLabel('CPF / CNPJ', { exact: true })).toHaveValue('12345678000195');
+    await expect(page.getByLabel('Declaro que as informações estão corretas', { exact: false })).not.toBeChecked();
+
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('bloqueia troca de plano quando já existe autorização financeira em andamento', async ({ page }) => {
+    const initialData = {
+      restaurant_name: 'Bistrô Bloqueado',
+      responsible_name: 'Marcos Souza',
+      email: 'marcos@bistro.com',
+      phone: '11977776666',
+      plan: 'premium',
+      billing_cycle: 'mensal',
+    };
+    const receipt = {
+      protocol: 'KOMA-CTR-20260913-LOCKED123456',
+      acceptedAtUtc: '2026-09-13T12:00:00Z',
+      acceptedAtBrasilia: '2026-09-13T09:00:00-03:00',
+      provider: { name: 'KÔMA', taxId: '00.000.000/0001-00', address: 'Rua Central, 100', location: 'São Paulo/SP' },
+      contractingParty: {
+        name: 'Marcos Souza',
+        taxId: '12345678909',
+        taxIdKind: 'cpf',
+        restaurantName: 'Bistrô Bloqueado',
+        email: 'marcos@bistro.com',
+        phone: '11977776666',
+      },
+      representative: { name: 'Marcos Souza', taxId: '12345678909', role: 'Titular', powersDeclared: true },
+      commercial: {
+        plan: 'premium',
+        billingCycle: 'mensal',
+        fixedMonthlyPrice: '499,00',
+        billingAmount: '499,00',
+        annualMonthlyEquivalent: null,
+        marketplaceRate: '0.035',
+        trialDays: 7,
+        trialWaivesFixedFeeOnly: true,
+      },
+      documents: {
+        version: '2.0',
+        terms: { slug: 'termos', hash: 'h1' },
+        commercial: { slug: 'planos', hash: 'h2' },
+        dpa: { slug: 'dpa', hash: 'h3' },
+        privacy: { slug: 'privacidade', hash: 'h4' },
+        sourceCommit: 'test-commit',
+        sourceBlobSha: 'test-sha',
+      },
+      evidence: {
+        requestId: 'locked-signup-id',
+        sourceIp: '127.0.0.1',
+        ipSource: 'header',
+        sourceIpHash: 'ip-hash',
+        userAgent: 'test-agent',
+        userAgentHash: 'ua-hash',
+      },
+      provisioning: { status: 'ready', message: 'Autorização em andamento' },
+    };
+
+    await page.route('**/api/contracts/payment-methods', route =>
+      route.fulfill({ json: { credit_card: true, pix: false, pix_automatic: true, account_money: true, publicKey: 'TEST-public' } }),
+    );
+    await page.route('**/api/contracts/KOMA-CTR-20260913-LOCKED123456/billing/status', route =>
+      route.fulfill({
+        json: {
+          protocol: 'KOMA-CTR-20260913-LOCKED123456',
+          billingStatus: 'ready',
+          provider: 'mercado_pago',
+          paymentMethodType: 'pix_automatic',
+          isActivated: false,
+          restaurantId: null,
+          slug: null,
+        },
+      }),
+    );
+
+    await page.addInitScript(() => {
+      localStorage.setItem('koma_signup_resume', 'locked-token');
+    });
+
+    await page.route('**/api/signups/current', route =>
+      route.fulfill({
+        json: {
+          id: 'locked-signup-id',
+          data: initialData,
+          receipt,
+        },
+      }),
+    );
+
+    await page.goto('/contratar/premium?cobranca=mensal');
+    await expect(page.getByText('Sua inscrição foi recuperada. Continue de onde parou.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Trocar plano ou ciclo' }).click();
+
+    await expect(
+      page.getByText('Esta contratação já possui uma autorização financeira em andamento. Conclua ou cancele essa autorização antes de alterar o plano.'),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ative seu restaurante.' })).toBeVisible();
+
+    await expectNoHorizontalOverflow(page);
+  });
 });
