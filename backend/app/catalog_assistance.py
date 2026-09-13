@@ -17,7 +17,7 @@ from sqlalchemy import (
     Text,
 )
 
-from .database import Base
+from .database import Base, current_restaurante_id
 
 
 MAX_CATALOG_SOURCE_SIZE = 10 * 1024 * 1024
@@ -37,6 +37,7 @@ catalog_assistance_requests = Table(
         "restaurante_id",
         Integer,
         ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
         nullable=False,
     ),
     Column("original_filename", String(255), nullable=False),
