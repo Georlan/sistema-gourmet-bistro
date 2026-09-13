@@ -117,7 +117,7 @@ test('envio pendente bloqueia outro lançamento e preserva rascunhos de outras m
   await expect(submit(page)).toBeDisabled();
   expect(writes).toBe(1);
   release();
-  await expect(page.getByRole('heading', { name: /Mesa 7/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mesa 7', exact: true })).toBeVisible();
   await reviewDraft(page);
   await expect(submit(page)).toBeEnabled();
   await page.locator('#close-mesa-modal-btn').click();
