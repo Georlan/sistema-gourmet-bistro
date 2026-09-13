@@ -24,7 +24,7 @@ const HERO_STRIP_ITEMS = [
     num: '03',
     name: 'COZINHA RECEBE NA HORA',
     detail: 'Itens e observações chegam sem novo repasse.',
-    href: '#como-funciona',
+    href: '#salao',
   },
   {
     num: '04',
@@ -36,7 +36,7 @@ const HERO_STRIP_ITEMS = [
     num: '05',
     name: 'PEDIDO SEGUE PARA O PREPARO',
     detail: 'Fila na tela em todos os planos. KDS e impressão automática no Pro e Premium.',
-    href: '#como-funciona',
+    href: '#salao',
   },
 ];
 

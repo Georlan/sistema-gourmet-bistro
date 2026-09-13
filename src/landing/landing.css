@@ -2436,7 +2436,9 @@
    CONVERSION STRUCTURE — proof, three-pillar flow, risk and FAQ
    ============================================================ */
 .koma-hero-line--benefit {
-  font-size: clamp(3rem, 6.25vw, 7rem);
+  font-size: clamp(2.2rem, 3.2vw, 4.5rem);
+  white-space: nowrap;
+  max-width: none;
 }
 
 .koma-proof-section {

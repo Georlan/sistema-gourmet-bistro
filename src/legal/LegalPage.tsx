@@ -18,12 +18,12 @@ function setLegalDocumentMeta(title: string, description: string) {
 function LegalHeader() {
   return (
     <header className="koma-legal-header">
-      <a href="/landing" className="koma-legal-brand" aria-label="Voltar para a página inicial do KÔMA">
+      <a href="/" className="koma-legal-brand" aria-label="Voltar para a página inicial do KÔMA">
         <img src={KOMA_WORDMARK_ON_DARK_SRC} alt="KÔMA" />
       </a>
       <nav aria-label="Navegação legal">
         <a href="/legal">Legal e privacidade</a>
-        <a href="/landing#planos" className="koma-legal-header-cta">Ver planos</a>
+        <a href="/#planos" className="koma-legal-header-cta">Ver planos</a>
       </nav>
     </header>
   );
@@ -141,7 +141,7 @@ function LegalCenter() {
             <h2>ESCOLHA O PLANO QUE FAZ SENTIDO PARA SUA OPERAÇÃO.</h2>
             <p>Compare Pocket, Pro e Premium, leia os documentos e avance para a contratação online.</p>
           </div>
-          <a href="/landing#planos">Ver planos <ArrowRight size={18} aria-hidden="true" /></a>
+          <a href="/#planos">Ver planos <ArrowRight size={18} aria-hidden="true" /></a>
         </section>
       </main>
       <LegalFooter />
