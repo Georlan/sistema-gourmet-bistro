@@ -37,10 +37,16 @@ class SaasMercadoPagoService:
         configured_token = settings.KOMA_SAAS_MERCADO_PAGO_ACCESS_TOKEN if access_token is None else access_token
         self.access_token = configured_token.strip()
         self.environment = os.getenv("ENVIRONMENT", "production").strip().lower()
-        self.is_test_credentials = self.access_token.startswith("TEST-")
-        self.is_production_credentials = self.access_token.startswith("APP_USR-")
+        is_homolog = self.environment in {"staging", "homologation", "homolog", "development", "test"}
         self.is_mock = not self.access_token or self.access_token.startswith("mock") or self.access_token == "test"
         self.mock_allowed = self.environment in {"test", "development"}
+
+        if is_homolog:
+            self.is_test_credentials = not self.is_mock
+            self.is_production_credentials = False
+        else:
+            self.is_test_credentials = self.access_token.startswith("TEST-")
+            self.is_production_credentials = bool(self.access_token and not self.is_test_credentials and not self.is_mock)
 
         if self.environment == "production" and self.is_test_credentials:
             raise SaasMercadoPagoError(

@@ -198,6 +198,17 @@ def test_test_token_is_allowed_in_homologation(monkeypatch):
     assert caps["isTestMode"] is True
 
 
+def test_app_usr_token_is_treated_as_test_in_homologation(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "homologation")
+    service = SaasMercadoPagoService("APP_USR-6809700222692248-test-token")
+    assert service.is_test_credentials is True
+    assert service.is_production_credentials is False
+    assert service.environment == "homologation"
+    caps = service.checkout_capabilities()
+    assert caps["environment"] == "homologation"
+    assert caps["isTestMode"] is True
+
+
 def test_test_buyer_rejected_with_production_credentials_for_all_recurring_methods(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
     service = SaasMercadoPagoService("APP_USR-prod-token")

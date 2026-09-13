@@ -107,9 +107,7 @@ def get_homologation_readiness(
 
     checkout_enabled = _env_flag("KOMA_SAAS_CHECKOUT_ENABLED")
     outbox_worker_enabled = _env_flag("ENABLE_OUTBOX_WORKER", default=True) and environment != "test"
-    test_credentials_ready = bool(access_token) and (
-        access_token.startswith("TEST-") if is_homologation else not access_token.startswith("TEST-")
-    )
+    test_credentials_ready = bool(access_token) if is_homologation else bool(access_token and not access_token.startswith("TEST-"))
     email_ready = bool(settings.RESEND_API_KEY.strip() and settings.EMAIL_FROM.strip())
     owner_email_ready = bool(settings.KOMA_OWNER_EMAIL.strip())
     whatsapp_enabled = bool(settings.KOMA_WHATSAPP_AUTOMATION_ENABLED)
@@ -131,8 +129,8 @@ def get_homologation_readiness(
             "mercado-pago-test-access-token",
             "Access token TEST do Mercado Pago",
             test_credentials_ready,
-            "Credencial de teste configurada (TEST-)" if test_credentials_ready else (
-                f"Falta {access_token_var} (obrigatório iniciar com TEST-)" if is_homologation else f"Falta {access_token_var}"
+            "Credencial TEST isolada configurada" if test_credentials_ready else (
+                f"Falta {access_token_var}"
             ),
             scope="payment",
         ),

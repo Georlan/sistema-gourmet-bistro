@@ -28,15 +28,6 @@ def resolve_saas_mercado_pago_credentials(environment: str) -> tuple[str, str, s
         access_token = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN", "").strip()
         public_key = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY", "").strip()
         webhook_secret = os.getenv("KOMA_SAAS_MERCADO_PAGO_TEST_WEBHOOK_SECRET", "").strip()
-
-        if access_token and not access_token.startswith("TEST-"):
-            raise RuntimeError(
-                "A homologação exige KOMA_SAAS_MERCADO_PAGO_TEST_ACCESS_TOKEN com prefixo TEST-."
-            )
-        if public_key and not public_key.startswith("TEST-"):
-            raise RuntimeError(
-                "A homologação exige KOMA_SAAS_MERCADO_PAGO_TEST_PUBLIC_KEY com prefixo TEST-."
-            )
         return access_token, public_key, webhook_secret
 
     access_token = (
