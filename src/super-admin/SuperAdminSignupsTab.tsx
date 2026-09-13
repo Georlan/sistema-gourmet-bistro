@@ -25,8 +25,8 @@ type DeliveryFailure = {
 
 const labels: Record<string, string> = {
   started: 'Cadastro iniciado',
-  payment_pending: 'Pagamento pendente',
-  payment_failed: 'Pagamento recusado',
+  payment_pending: 'Autorização pendente',
+  payment_failed: 'Autorização recusada',
   awaiting_release: 'Aguardando liberação',
   activated: 'Acesso liberado',
 };
@@ -37,6 +37,7 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
   const [error, setError] = useState('');
   const [successNotice, setSuccessNotice] = useState('');
   const [releasingProtocol, setReleasingProtocol] = useState<string | null>(null);
+  const [reissuingProtocol, setReissuingProtocol] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
@@ -122,6 +123,32 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
     }
   };
 
+  const reissueActivationInvite = async (protocol: string) => {
+    setReissuingProtocol(protocol);
+    setError('');
+    setSuccessNotice('');
+    try {
+      const response = await superAdminFetch(
+        `/api/super-admin/signups/${encodeURIComponent(protocol)}/activation-invite`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'Reemissão do convite inicial solicitada pelo SuperAdmin' }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Falha ao reemitir convite.');
+      setSuccessNotice(
+        `Novo convite de primeiro acesso agendado para a inscrição ${protocol}. O link anterior foi invalidado.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao reemitir convite.');
+    } finally {
+      setReissuingProtocol(null);
+    }
+  };
+
   return <>
     <SuperAdminHomologationReadiness />
 
@@ -144,7 +171,7 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
 
       {deliveryFailures.length > 0 && <details className="my-3 text-amber-400">
         <summary>{deliveryFailures.length} envios com falha ou aguardando nova tentativa</summary>
-        <p className="my-2 text-sm">Confira o painel de Homologação SaaS acima antes de tentar novamente.</p>
+        <p className="my-2 text-sm">Confira o painel de Homologação SaaS acima e revise as configurações de e-mail/WhatsApp antes de tentar novamente.</p>
         {deliveryFailures.map(item => <div key={item.id} className="my-2 flex flex-wrap items-center gap-3 text-xs">
           <span>{item.id} · {item.attempts} tentativas · {item.last_error}</span>
           <button className="rounded border px-2 py-1" onClick={() => void retryDelivery(item.id)}>Tentar novamente</button>
@@ -179,8 +206,15 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
                       onClick={() => void releaseSignup(item.protocol!)}
                       className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
                     >{releasingProtocol === item.protocol ? 'Liberando…' : 'Liberar acesso'}</button>
-                  : item.status === 'activated'
-                    ? <span className="text-xs font-semibold text-emerald-400">Liberado</span>
+                  : item.status === 'activated' && item.protocol
+                    ? <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold text-emerald-400">Liberado</span>
+                        <button
+                          disabled={reissuingProtocol === item.protocol}
+                          onClick={() => void reissueActivationInvite(item.protocol!)}
+                          className="rounded border border-zinc-700 px-2.5 py-1 text-xs font-semibold hover:border-emerald-700 disabled:opacity-50"
+                        >{reissuingProtocol === item.protocol ? 'Reemitindo…' : 'Reemitir convite inicial'}</button>
+                      </div>
                     : <span className="text-xs text-zinc-500">—</span>}
               </td>
             </tr>)}
