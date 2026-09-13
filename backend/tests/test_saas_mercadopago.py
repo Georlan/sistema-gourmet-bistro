@@ -181,6 +181,23 @@ def test_webhook_signature_verification(monkeypatch):
         data_id=data_id,
     ) is False
 
+    # Validação com espaços no header e data_id com maiúsculas
+    header_with_spaces = f"ts = {now_ts} , v1 = {v1_sig}"
+    assert SaasMercadoPagoService.verify_webhook_signature(
+        signature_header=header_with_spaces,
+        request_id=request_id,
+        data_id=data_id,
+    ) is True
+
+    upper_id = "PREAPP-ABC-123"
+    exact_manifest = f"id:{upper_id};request-id:{request_id};ts:{now_ts};"
+    exact_sig = hmac.new(secret.encode(), exact_manifest.encode(), hashlib.sha256).hexdigest()
+    assert SaasMercadoPagoService.verify_webhook_signature(
+        signature_header=f"ts={now_ts},v1={exact_sig}",
+        request_id=request_id,
+        data_id=upper_id,
+    ) is True
+
 
 def test_test_token_is_forbidden_in_production(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")

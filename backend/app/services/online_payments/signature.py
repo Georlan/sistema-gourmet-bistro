@@ -18,7 +18,7 @@ def verify_mercado_pago_signature(
     for part in (signature_header or "").split(","):
         key, separator, value = part.strip().partition("=")
         if separator:
-            values[key] = value
+            values[key.strip()] = value.strip()
     timestamp = values.get("ts", "")
     received = values.get("v1", "")
     if not timestamp.isdigit() or not received or not request_id or not data_id or not secret:
@@ -27,4 +27,11 @@ def verify_mercado_pago_signature(
         return False
     manifest = f"id:{data_id.lower()};request-id:{request_id};ts:{timestamp};"
     expected = hmac.new(secret.encode(), manifest.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(received, expected)
+    if hmac.compare_digest(received, expected):
+        return True
+    if data_id != data_id.lower():
+        manifest_exact = f"id:{data_id};request-id:{request_id};ts:{timestamp};"
+        expected_exact = hmac.new(secret.encode(), manifest_exact.encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(received, expected_exact):
+            return True
+    return False

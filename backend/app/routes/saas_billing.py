@@ -461,15 +461,29 @@ async def mercado_pago_saas_webhook(
     except Exception:
         payload = {}
 
-    if not isinstance(payload, dict) or not isinstance(payload.get("data", {}), dict):
-        raise HTTPException(400, "Notificação inválida.")
-    data = payload.get("data") or {}
-    data_id = str(data.get("id") or payload.get("id") or "").strip()
-    event_type = str(payload.get("type") or payload.get("action") or "").strip().lower()
+    query_data_id = (request.query_params.get("data.id") or request.query_params.get("id") or "").strip()
+    raw_data = payload.get("data") if isinstance(payload, dict) else None
+    data = raw_data if isinstance(raw_data, dict) else {}
+    body_data_id = str(data.get("id") or (payload.get("id") if isinstance(payload, dict) else "") or "").strip()
+    data_id = query_data_id or body_data_id
+
+    event_type = str(
+        request.query_params.get("type")
+        or request.query_params.get("topic")
+        or (payload.get("type") if isinstance(payload, dict) else "")
+        or (payload.get("action") if isinstance(payload, dict) else "")
+        or ""
+    ).strip().lower()
+
+    if not data_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Notificação inválida.")
+
+    sig_header = (x_signature or request.headers.get("x-signature") or "").strip()
+    req_id = (x_request_id or request.headers.get("x-request-id") or "").strip()
 
     if not default_saas_mp_service.verify_webhook_signature(
-        signature_header=x_signature or "",
-        request_id=x_request_id or "",
+        signature_header=sig_header,
+        request_id=req_id,
         data_id=data_id,
     ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Assinatura de webhook do Mercado Pago inválida.")

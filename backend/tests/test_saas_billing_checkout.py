@@ -290,6 +290,27 @@ def test_pix_automatic_webhook_only_activates_after_provider_confirms_pix_mandat
         assert sub.payment_method_type == "pix_automatic"
 
 
+def test_webhook_accepts_query_parameters_data_id(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pro", "mensal")
+    setup_response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "pix_automatic"},
+    )
+    subscription_id = setup_response.json()["subscriptionId"]
+
+    webhook = client.post(
+        f"/api/integrations/saas-billing/mercado-pago/webhook?data.id={subscription_id}&type=subscription_preapproval",
+        json={"action": "updated"},
+    )
+    assert webhook.status_code == 200, webhook.text
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None
+        assert setup.status == "ready"
+
+
 def test_card_setup_is_idempotent_after_activation(client_and_session):
     client, Session = client_and_session
     protocol = _accept(client, "pro", "mensal")
