@@ -44,9 +44,9 @@ function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
 }
 
 export default function UnifiedOperationalEntry() {
-  // A URL continua sendo única, mas uma sessão operacional válida deve sobreviver
-  // a reload/fechar-e-abrir. O perfil persistido só é restaurado quando a sessão
-  // canônica e o alias escopado ainda correspondem ao mesmo token.
+  // A URL continua sendo única, mas a aba guarda qual portal está operando.
+  // Caixa e Garçom podem coexistir em abas diferentes sem um login substituir
+  // a identidade operacional da outra aba.
   const [activePortal, setActivePortal] = useState<OperationalPortal | null>(
     () => getPersistedOperationalPortal(),
   );
@@ -73,10 +73,9 @@ export default function UnifiedOperationalEntry() {
     const tokenKey = activePortal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
     const timer = window.setInterval(() => {
       if (!localStorage.getItem(tokenKey)) {
-        // O App legado ainda limpa primeiro o alias escopado ao sair. Esse alias
-        // ausente é a fonte de verdade de logout: eliminamos também a sessão
-        // canônica e voltamos sempre para o único login da equipe.
-        clearOperatorSession();
+        // O App legado ainda remove primeiro o alias do portal atual ao sair.
+        // Finalizamos somente essa sessão, preservando o outro portal em outra aba.
+        clearOperatorSession(activePortal);
         setActivePortal(null);
       }
     }, 250);
@@ -164,7 +163,8 @@ export default function UnifiedOperationalEntry() {
         return;
       }
 
-      clearOperatorSession();
+      // Não limpamos a outra área operacional aqui. saveOperatorSession substitui
+      // apenas a sessão do portal autenticado e vincula esta aba a ele.
       saveOperatorSession(data.access_token, { ...data.usuario, role });
 
       setUsername('');

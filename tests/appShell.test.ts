@@ -94,17 +94,18 @@ test('login exibe erro e estado de autenticação sem manter estado próprio', (
   assert.match(html, /Modo Escuro/);
 });
 
-test('login encaminha submit e edição exatamente aos callbacks do App', () => {
+test('login encaminha submit e edição exatamente aos callbacks do App', async () => {
   const calls: unknown[] = [];
   const formEvent = { preventDefault: () => {} };
   const nodes = elements(OperationalLogin(loginProps({
+    portal: 'unified',
     onUsernameChange: value => calls.push(['username', value]),
     onPasswordChange: value => calls.push(['password', value]),
     onSubmit: event => calls.push(['submit', event]),
   })));
   nodes.find(node => node.props.id === 'login-username')!.props.onChange({ target: { value: 'new@koma.test' } });
   nodes.find(node => node.props.id === 'login-password')!.props.onChange({ target: { value: 'new-password' } });
-  nodes.find(node => node.type === 'form')!.props.onSubmit(formEvent);
+  await nodes.find(node => node.type === 'form')!.props.onSubmit(formEvent);
   assert.deepEqual(calls, [['username', 'new@koma.test'], ['password', 'new-password'], ['submit', formEvent]]);
 });
 

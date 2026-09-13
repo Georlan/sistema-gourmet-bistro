@@ -56,6 +56,25 @@ export function OperationalLogin({
       ? 'Painel de Gerenciamento & Caixa'
       : 'Portal do Garçom';
 
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+    // O App legado ainda possui um fluxo interno de login que persiste aliases
+    // diretamente. Depois que ele conclui com sucesso, vinculamos explicitamente
+    // esta aba ao portal autenticado. Isso mantém o mesmo isolamento por aba da
+    // entrada unificada e impede que um login em outra guia assuma esta navegação.
+    await onSubmit(event);
+
+    if (
+      portal === 'garcom'
+      && (localStorage.getItem('koma_waiter_token') || localStorage.getItem('authToken'))
+    ) {
+      sessionStorage.setItem('koma_active_operational_portal', 'garcom');
+      sessionStorage.removeItem('koma_operational_logged_out');
+    } else if (portal === 'caixa' && localStorage.getItem('koma_caixa_token')) {
+      sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+      sessionStorage.removeItem('koma_operational_logged_out');
+    }
+  };
+
   return (
       <div className="min-h-screen bg-koma-page relative flex items-center justify-center p-4">
         {/* Quick theme switcher button on login screen */}
@@ -94,7 +113,7 @@ export function OperationalLogin({
           </div>
 
           {/* Form */}
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs text-red-800 dark:bg-red-950/40 dark:border-red-900/50 dark:text-red-300 text-center animate-shake">
                 {error}

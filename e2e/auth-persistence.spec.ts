@@ -2,6 +2,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 
 const APP_ORIGIN = `http://127.0.0.1:${process.env.KOMA_E2E_PORT || 4173}`;
 const API_ORIGIN = 'http://127.0.0.1:8000';
+const CANONICAL_OPERATIONAL_PATH = '/?view=operacional';
 
 type LoginReply = (route: Route, body: Record<string, unknown>) => Promise<void>;
 
@@ -36,51 +37,140 @@ async function submitLogin(page: Page, email: string, password: string) {
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
-test('garçom persiste apenas no portal de garçom e sobrevive a reload', async ({ page }) => {
+async function removePortalAlias(page: Page, portal: 'garcom' | 'caixa') {
+  await page.evaluate((selectedPortal) => {
+    const keys = selectedPortal === 'garcom'
+      ? ['koma_waiter_token', 'koma_waiter_id', 'koma_waiter_name', 'koma_user_role']
+      : ['koma_caixa_token', 'koma_caixa_id', 'koma_caixa_name', 'koma_caixa_user_id', 'koma_caixa_user_name', 'koma_caixa_role'];
+    for (const key of keys) localStorage.removeItem(key);
+  }, portal);
+}
+
+test('garçom persiste na própria aba e nova aba continua livre para outro login', async ({ page, context }) => {
   const bodies: unknown[] = [];
-  await installOperationalApi(page, async (route, body) => {
+  const waiterReply: LoginReply = async (route, body) => {
     bodies.push(body);
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       access_token: 'waiter-persist-token',
       usuario: { id: 'waiter-persist', nome: 'Garçom Persistente', role: 'garcom', cargo: 'garcom', restaurante_id: 1 },
     }) });
-  });
+  };
+  await installOperationalApi(page, waiterReply);
 
-  await page.goto('/?view=garcom');
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
   await submitLogin(page, 'GARCOM@KOMA.TEST', 'senha-teste');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-persist-token');
   expect(bodies).toEqual([{ username: 'garcom@koma.test', password: 'senha-teste' }]);
   await page.reload();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
-  await page.goto('/?view=caixa');
-  await expect(page.getByLabel('E-MAIL')).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('koma_caixa_token'))).toBeNull();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBe('garcom');
+
+  const secondPage = await context.newPage();
+  await installOperationalApi(secondPage, waiterReply);
+  await secondPage.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(secondPage.getByLabel('E-MAIL')).toBeVisible();
+  expect(await secondPage.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-persist-token');
+  expect(await secondPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBeNull();
 });
 
-test('caixa normaliza role legado pelo cargo, persiste sessão e não vaza para garçom', async ({ page }) => {
-  await installOperationalApi(page, async (route) => {
+test('caixa normaliza role legado pelo cargo, persiste sessão e não vaza para nova aba', async ({ page, context }) => {
+  const cashierReply: LoginReply = async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       access_token: 'cashier-persist-token',
       usuario: { id: 'cashier-persist', nome: 'Caixa Persistente', role: null, cargo: 'caixa', restaurante_id: 2 },
     }) });
-  });
+  };
+  await installOperationalApi(page, cashierReply);
 
-  await page.goto('/?view=caixa');
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
   await submitLogin(page, 'caixa@koma.test', 'senha-teste');
   await expect.poll(() => page.evaluate(() => ({
     token: localStorage.getItem('koma_caixa_token'),
     role: localStorage.getItem('koma_caixa_role'),
-    operatorRole: JSON.parse(localStorage.getItem('koma_operator_session') || 'null')?.user?.role ?? null,
+    operatorRole: JSON.parse(localStorage.getItem('koma_operator_session_caixa') || 'null')?.user?.role ?? null,
+    tabPortal: sessionStorage.getItem('koma_active_operational_portal'),
   }))).toEqual({
     token: 'cashier-persist-token',
     role: 'caixa',
     operatorRole: 'caixa',
+    tabPortal: 'caixa',
   });
   await page.reload();
   await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
-  await page.goto('/?view=garcom');
+
+  const secondPage = await context.newPage();
+  await installOperationalApi(secondPage, cashierReply);
+  await secondPage.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(secondPage.getByLabel('E-MAIL')).toBeVisible();
+  expect(await secondPage.evaluate(() => localStorage.getItem('koma_caixa_token'))).toBe('cashier-persist-token');
+  expect(await secondPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBeNull();
+});
+
+test('garçom e caixa permanecem autenticados em abas paralelas com reload e logout escopados', async ({ page, context }) => {
+  const waiterReply: LoginReply = async (route, body) => {
+    expect(body.username).toBe('garcom@koma.test');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      access_token: 'waiter-concurrent-token',
+      usuario: { id: 'waiter-concurrent', nome: 'Garçom Concorrente', role: 'garcom', cargo: 'garcom', restaurante_id: 1 },
+    }) });
+  };
+  await installOperationalApi(page, waiterReply);
+
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await submitLogin(page, 'garcom@koma.test', 'senha-teste');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBe('garcom');
+
+  const cashierPage = await context.newPage();
+  const cashierReply: LoginReply = async (route, body) => {
+    expect(body.username).toBe('caixa@koma.test');
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      access_token: 'cashier-concurrent-token',
+      usuario: { id: 'cashier-concurrent', nome: 'Caixa Concorrente', role: 'caixa', cargo: 'caixa', restaurante_id: 1 },
+    }) });
+  };
+  await installOperationalApi(cashierPage, cashierReply);
+  await cashierPage.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(cashierPage.getByLabel('E-MAIL')).toBeVisible();
+  await submitLogin(cashierPage, 'caixa@koma.test', 'senha-teste');
+  await expect.poll(() => cashierPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBe('caixa');
+
+  expect(await page.evaluate(() => ({
+    waiter: localStorage.getItem('koma_waiter_token'),
+    cashier: localStorage.getItem('koma_caixa_token'),
+    portal: sessionStorage.getItem('koma_active_operational_portal'),
+  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: 'cashier-concurrent-token', portal: 'garcom' });
+  expect(await cashierPage.evaluate(() => ({
+    waiter: localStorage.getItem('koma_waiter_token'),
+    cashier: localStorage.getItem('koma_caixa_token'),
+    portal: sessionStorage.getItem('koma_active_operational_portal'),
+  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: 'cashier-concurrent-token', portal: 'caixa' });
+
+  await Promise.all([page.reload(), cashierPage.reload()]);
+  await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+  await expect(cashierPage.getByLabel('E-MAIL')).toHaveCount(0);
+
+  const thirdPage = await context.newPage();
+  await installOperationalApi(thirdPage, waiterReply);
+  await thirdPage.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(thirdPage.getByLabel('E-MAIL')).toBeVisible();
+  expect(await thirdPage.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBeNull();
+  expect(await thirdPage.evaluate(() => ({
+    waiter: localStorage.getItem('koma_waiter_token'),
+    cashier: localStorage.getItem('koma_caixa_token'),
+  }))).toEqual({ waiter: 'waiter-concurrent-token', cashier: 'cashier-concurrent-token' });
+
+  await removePortalAlias(page, 'garcom');
   await expect(page.getByLabel('E-MAIL')).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBeNull();
+  await expect(cashierPage.getByLabel('E-MAIL')).toHaveCount(0);
+  expect(await cashierPage.evaluate(() => localStorage.getItem('koma_caixa_token'))).toBe('cashier-concurrent-token');
+
+  await submitLogin(page, 'garcom@koma.test', 'senha-teste');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_active_operational_portal'))).toBe('garcom');
+
+  await removePortalAlias(cashierPage, 'caixa');
+  await expect(cashierPage.getByLabel('E-MAIL')).toBeVisible();
+  await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('koma_waiter_token'))).toBe('waiter-concurrent-token');
 });
 
 test('login duplicado pede estabelecimento e repete com restaurante_id explícito', async ({ page }) => {
@@ -144,7 +234,7 @@ test('SuperAdmin mantém token na sessão da aba após reload', async ({ page })
   await expect(page.locator('#superadmin-login')).toHaveCount(0);
 });
 
-test('Cardápio restaura sessão de cliente por restaurante em reloads', async ({ page }) => {
+test('Cardápio migra sessão legada para a aba e a restaura em reloads', async ({ page }) => {
   let profileReads = 0;
   await page.addInitScript(() => {
     localStorage.setItem('koma_customer_session:1', JSON.stringify({
@@ -180,5 +270,6 @@ test('Cardápio restaura sessão de cliente por restaurante em reloads', async (
   const beforeReload = profileReads;
   await page.reload();
   await expect.poll(() => profileReads).toBeGreaterThan(beforeReload);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('koma_customer_session:1') || 'null')?.token)).toBe('customer-persist-token');
+  expect(await page.evaluate(() => localStorage.getItem('koma_customer_session:1'))).toBeNull();
 });

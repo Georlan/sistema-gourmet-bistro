@@ -10,6 +10,7 @@ async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocke
   await page.addInitScript(({ withDrafts }) => {
     if (sessionStorage.getItem('app-owner-fixture')) return;
     sessionStorage.setItem('app-owner-fixture', '1');
+    sessionStorage.setItem('koma_active_operational_portal', 'garcom');
     localStorage.setItem('koma_waiter_token', 'app-owner-fixture-token');
     localStorage.setItem('koma_waiter_id', 'waiter-app-owner');
     localStorage.setItem('koma_waiter_name', 'Operador de teste');
@@ -23,7 +24,7 @@ async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocke
 async function reviewDraft(page: Page, id = 7) {
   if (!await page.locator('#modal-outer-overlay').isVisible()) await page.locator(`#mesa-card-${id}`).click();
   await page.getByRole('tab', { name: /Cardápio/ }).click();
-  await expect(page.getByRole('heading', { name: 'Revisar Pedido', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Revisar pedido/i })).toBeVisible();
 }
 const submit = (page: Page) => page.locator('[id^="submit-draft-order-btn"]:visible');
 
@@ -116,7 +117,7 @@ test('envio pendente bloqueia outro lançamento e preserva rascunhos de outras m
   await expect(submit(page)).toBeDisabled();
   expect(writes).toBe(1);
   release();
-  await expect(page.getByRole('heading', { name: /Mesa 7/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mesa 7', exact: true })).toBeVisible();
   await reviewDraft(page);
   await expect(submit(page)).toBeEnabled();
   await page.locator('#close-mesa-modal-btn').click();
