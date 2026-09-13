@@ -255,12 +255,43 @@ export function useCashierOrders({
   // ── Gaveta de Aceite (Floating Drawer) & Sistema de Áudio Unificado do Caixa ────
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Impressão rápida de pré-conta do card no Kanban
+  // No Kanban, o card representa um lote (10-A/10-B), mas clicar na Mesa abre o
+  // atendimento inteiro. A seleção é elevada aqui para que todas as ações de mesa
+  // compartilhem o mesmo snapshot, independentemente do lote que recebeu o clique.
+  useEffect(() => {
+    const selected = selectedKanbanOrder;
+    const mesaId = Number(selected?.mesaId || 0);
+    if (!selected || mesaId <= 0 || selected.contextoSalao || selected.projectionScope === 'table') return;
+
+    const tableOrders = (orders || []).filter((order) => {
+      const normalizedType = String(order.tipo || '').toLowerCase();
+      return (
+        Number(order.mesaId) === mesaId &&
+        !(order as any).fechada &&
+        !['delivery', 'entrega', 'retirada'].includes(normalizedType)
+      );
+    });
+    if (tableOrders.length === 0) return;
+
+    setSelectedKanbanOrder({
+      ...tableOrders[0],
+      projectionScope: 'table',
+      contextoSalao: true,
+      tableContext: describeTableOrders(tableOrders),
+      itens: tableOrders.flatMap((order) => order.itens || []),
+      comandaIds: tableOrders.map((order) => order.id),
+    });
+  }, [orders, selectedKanbanOrder]);
+
+  // O ícone do card respeita o escopo visual: lote 10-A reimprime só 10-A;
+  // cards já consolidados por mesa continuam imprimindo a mesa inteira.
   const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
       let url = '';
-      if (order.mesaId && Number(order.mesaId) > 0) {
+      if (order.mesaId && Number(order.mesaId) > 0 && order.projectionScope !== 'table') {
+        url = `${apiBaseUrl}/comandas/lancamentos/${encodeURIComponent(String(order.id))}/reimprimir`;
+      } else if (order.mesaId && Number(order.mesaId) > 0) {
         url = `${apiBaseUrl}/mesas/${order.mesaId}/imprimir-recibo?apenas_valores=false`;
       } else {
         url = `${apiBaseUrl}/comandas/${order.id}/imprimir-recibo`;
@@ -270,7 +301,12 @@ export function useCashierOrders({
         headers: authHeaders,
       });
       if (response.ok) {
-        showToast('Impressão via de conferência enviada para a fila!', 'success');
+        showToast(
+          order.projectionScope === 'launch'
+            ? `Pedido #${order.displayNumber || order.numeroPedido || ''} enviado para reimpressão.`
+            : 'Impressão via de conferência enviada para a fila!',
+          'success'
+        );
         window.dispatchEvent(new Event('koma_print_monitor_refresh'));
       } else {
         const errData = await response.json().catch(() => null);
@@ -708,10 +744,11 @@ export function useCashierOrders({
     if (updated) setSelectedKanbanOrder(null);
   };
 
-  const handleReprintSelectedKanbanProduction = async () => {
+  const handleReprintSelectedKanbanProduction = async (launchId?: string) => {
     try {
-      const printUrl = selectedKanbanOrder.lancamentoId
-        ? `${apiBaseUrl}/comandas/lancamentos/${selectedKanbanOrder.lancamentoId}/reimprimir`
+      const selectedLaunchId = launchId || selectedKanbanOrder.lancamentoId;
+      const printUrl = selectedLaunchId
+        ? `${apiBaseUrl}/comandas/lancamentos/${encodeURIComponent(String(selectedLaunchId))}/reimprimir`
         : `${apiBaseUrl}/comandas/${selectedKanbanOrder.comandaId || selectedKanbanOrder.id}/imprimir-recibo`;
       const res = await fetch(printUrl, {
         method: 'POST',
@@ -719,7 +756,12 @@ export function useCashierOrders({
       });
       if (res.ok) {
         window.dispatchEvent(new Event('koma_print_monitor_refresh'));
-        setSelectedKanbanOrder(null);
+        if (launchId) {
+          const label = selectedKanbanOrder.tableContext?.launches.find((launch: any) => launch.id === launchId)?.displayNumber;
+          showToast(`Pedido #${label || launchId} enviado para reimpressão.`, 'success');
+        } else {
+          setSelectedKanbanOrder(null);
+        }
       } else {
         showToast('Erro ao solicitar reimpressão.', 'error');
       }
