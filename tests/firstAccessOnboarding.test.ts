@@ -6,6 +6,12 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 
 const activation = source('../src/components/CaixaAtivarPage.tsx');
 const onboarding = source('../src/components/onboarding/FirstAccessOnboarding.tsx');
+const boundary = source('../src/components/onboarding/OnboardingOperationalBoundary.tsx');
+const hostedEntry = source('../src/components/onboarding/OnboardingAwareOperationalEntry.tsx');
+const gateHook = source('../src/components/onboarding/useOnboardingAccessGate.ts');
+const main = source('../src/main.tsx');
+const unifiedEntry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+const navigation = source('../src/components/caixa/navigation/useCashierNavigation.ts');
 const routeComposition = source('../backend/app/routes/__init__.py');
 const desktopSidebar = source('../src/components/caixa/navigation/CashierDesktopSidebar.tsx');
 const mobileSidebar = source('../src/components/caixa/navigation/CashierMobileSidebar.tsx');
@@ -22,9 +28,38 @@ test('activated management users can resume initial setup from the operational a
   assert.match(activation, /resumeRequested/);
   assert.match(activation, /Voltar para a implantação inicial/);
   assert.match(onboardingShortcut, /\/ativar\?resume=1/);
-  assert.match(onboardingShortcut, /Implantação inicial/);
+  assert.match(onboardingShortcut, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
   assert.match(desktopSidebar, /<CashierOnboardingShortcut/);
   assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
+});
+
+test('required onboarding persists and blocks normal operation until 3 of 3 is complete', () => {
+  assert.match(onboarding, /Antes de liberar a operação, conclua os 3 passos essenciais/);
+  assert.match(onboarding, /requiredComplete/);
+  assert.match(onboarding, /Entrar no KÔMA/);
+  assert.match(onboarding, /sessionStorage\.setItem\(ONBOARDING_SETUP_MODE_KEY, '1'\)/);
+  assert.match(onboarding, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
+  assert.match(boundary, /!gate\.requiredComplete/);
+  assert.match(boundary, /<FirstAccessOnboarding/);
+  assert.match(gateHook, /\/api\/onboarding\/status/);
+});
+
+test('setup mode exposes configuration without exposing the operational navigation', () => {
+  assert.match(navigation, /SETUP_ALLOWED_TABS/);
+  assert.match(navigation, /'cardapio'/);
+  assert.match(navigation, /'cardapio_digital'/);
+  assert.match(navigation, /Finalize a implantação inicial antes de acessar a operação/);
+  assert.match(desktopSidebar, /setupMode \?/);
+  assert.match(desktopSidebar, /Conclua dados do restaurante, horários e cardápio/);
+  assert.match(mobileSidebar, /Você está na implantação inicial/);
+  assert.match(mobileSidebar, /!setupMode &&/);
+});
+
+test('hosted management routes and canonical app both use the onboarding boundary', () => {
+  assert.match(main, /isHostedManagementEntryRoute/);
+  assert.match(main, /OnboardingAwareOperationalEntry/);
+  assert.match(hostedEntry, /OnboardingOperationalBoundary/);
+  assert.match(unifiedEntry, /OnboardingOperationalBoundary/);
 });
 
 test('resume route fails safely when the browser no longer has an admin session', () => {
@@ -33,26 +68,12 @@ test('resume route fails safely when the browser no longer has an admin session'
   assert.match(activation, /window\.location\.href = '\/\?view=caixa'/);
 });
 
-test('onboarding is advisory and can always be skipped to cashier', () => {
-  assert.match(onboarding, /nenhuma etapa abaixo bloqueia o uso do Caixa/);
-  assert.match(onboarding, /Ir para o Caixa/);
-  assert.match(onboarding, /sessionStorage\.setItem\('koma_active_tab'/);
-  assert.match(onboarding, /window\.location\.href = '\/\?view=caixa'/);
-});
-
-test('onboarding keeps cashier navigation available when session storage is blocked', () => {
-  assert.match(onboarding, /const openCashierAt = \(tab: string, subTab: string\) => \{\s*try \{/s);
-  assert.match(onboarding, /sessionStorage\.setItem\('koma_active_subtab', subTab\);\s*\} catch \{/s);
-  assert.match(onboarding, /catch \{[\s\S]*?window\.location\.href = '\/\?view=caixa';/);
-});
-
 test('onboarding status request cannot trap first access in infinite loading', () => {
   assert.match(onboarding, /const ONBOARDING_LOAD_TIMEOUT_MS = 10_000/);
   assert.match(onboarding, /const controller = new AbortController\(\)/);
   assert.match(onboarding, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_LOAD_TIMEOUT_MS\)/);
   assert.match(onboarding, /signal: controller\.signal/);
-  assert.match(onboarding, /error\.name === 'AbortError'/);
-  assert.match(onboarding, /Você pode tentar novamente ou seguir para o Caixa/);
+  assert.match(onboarding, /Tente novamente para continuar a implantação/);
   assert.match(onboarding, /clearTimeout\(timeoutId\)/);
 });
 
@@ -69,6 +90,7 @@ test('onboarding uses canonical server progress and exposes the five launch step
   }
   assert.match(onboarding, /daysRemaining/);
   assert.match(onboarding, /Atualizar progresso/);
+  assert.match(onboarding, /Disponível depois/);
 });
 
 test('onboarding route is composed once into the existing root router', () => {
