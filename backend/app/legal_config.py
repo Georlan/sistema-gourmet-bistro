@@ -7,9 +7,9 @@ from .contract_validation import is_valid_cpf, normalize_tax_id
 
 
 DEFAULT_PROVIDER_NAME = "Georlan Gomes e Silva Júnior"
-LEGAL_VERSION = "1.2"
-LEGAL_SOURCE_COMMIT = "55bb4b87dd4f15d4b36adeb8db9a91fda04deba8"
-LEGAL_SOURCE_BLOB_SHA = "5332d82a994f037082cdea5864522123e25f7012"
+LEGAL_VERSION = "1.3"
+LEGAL_SOURCE_COMMIT = "17093c158b032f1cddd3b8c96cbdf217bb7d061f"
+LEGAL_SOURCE_BLOB_SHA = "61011c493aaa42f3512ae9d9a6e50e91bfb3c6f6"
 
 
 @dataclass(frozen=True)
