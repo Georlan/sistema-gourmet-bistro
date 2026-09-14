@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
+import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   getSubscriptionPlan,
@@ -122,20 +122,22 @@ export function CaixaPanel({
     () => pagamentosPendentes.reduce((total, payment) => total + (Number(payment?.valor) || 0), 0),
     [pagamentosPendentes],
   );
+  const isTurnoResumoReady = Boolean(turnoResumo) && !isTurnoResumoLoading;
   const cashSalesPerHour =
     turnoResumo?.status === 'aberto' && turnoResumo.tempo_aberto_minutos > 0
       ? turnoResumo.total_vendas / (turnoResumo.tempo_aberto_minutos / 60)
       : 0;
-  const cashShiftHealth = turnoResumo?.turno_esquecido
-    ? 'Revisar agora'
-    : turnoResumo?.status === 'aberto'
-      ? 'Regular'
-      : 'Sem turno';
+  const cashShiftHealth = !isTurnoResumoReady
+    ? 'Sincronizando'
+    : turnoResumo?.turno_esquecido
+      ? 'Revisar agora'
+      : turnoResumo?.status === 'aberto'
+        ? 'Regular'
+        : 'Sem turno';
   const latestReceiptTime = formatClockTime(
     turnoResumo?.atividades_recentes?.find((activity) => activity.tipo === 'recebimento')?.criado_em,
   );
 
-  // Fullscreen / Modo PDV state
   const {
     isFullscreen,
     setIsFullscreen,
@@ -154,7 +156,6 @@ export function CaixaPanel({
   );
   const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
 
-  // Chat & Comunicação com Clientes (Fonte da verdade KÔMA)
   const {
     isChatDrawerOpen,
     setIsChatDrawerOpen,
@@ -168,6 +169,7 @@ export function CaixaPanel({
   };
   const {
     turno,
+    turnoLoadState,
     showAbrirModal,
     setShowAbrirModal,
     caixaMovimentacoes,
@@ -194,6 +196,18 @@ export function CaixaPanel({
     setErrorMsg,
     setIsLoading,
   });
+
+  const summaryShiftState = isTurnoResumoReady
+    ? turnoResumo?.status === 'aberto'
+      ? 'open'
+      : 'closed'
+    : null;
+  const cashShiftUiState: 'open' | 'closed' | 'loading' | 'error' =
+    turnoLoadState === 'loaded'
+      ? turno?.status === 'aberto'
+        ? 'open'
+        : 'closed'
+      : summaryShiftState ?? (turnoLoadState === 'error' ? 'error' : 'loading');
 
   const {
     activeTab,
@@ -237,6 +251,7 @@ export function CaixaPanel({
     getTableMovementContext,
     deliveryOrders,
     motoboys,
+    motoboysLoadState,
     selectedMotoboys,
     setSelectedMotoboys,
     novoMotoboyNome,
@@ -284,8 +299,6 @@ export function CaixaPanel({
     isDrawerOpen,
   });
 
-  // Capture the fallback opening time once per received snapshot, not on each
-  // presentation tick (an undated legacy card must not restart every 30s).
   const { nowTimestamp } = useCashierClock();
 
   const { tableOrdersInProduction, tableOrdersReady } = useMemo(
@@ -300,8 +313,6 @@ export function CaixaPanel({
   const { loyaltyUsers, refreshLoyaltyUsers } = customers;
 
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Table management states
 
   const {
     tableStatusFilter,
@@ -319,7 +330,7 @@ export function CaixaPanel({
     showToast,
     setCheckoutServiceTax: (value) => setCheckoutServiceTax(value),
   });
-  const { taxaServicoAtiva, serviceTaxRate, fetchConfiguracoes } = settings;
+  const { settingsLoadState, taxaServicoAtiva, serviceTaxRate, fetchConfiguracoes } = settings;
 
   const checkout = useCheckoutController({
     orders,
@@ -332,6 +343,7 @@ export function CaixaPanel({
     loyaltyUsers,
     taxaServicoAtiva,
     serviceTaxRate,
+    settingsLoadState,
     isLoading,
     setErrorMsg,
     getSmartPosCardState,
@@ -351,14 +363,8 @@ export function CaixaPanel({
     handleReceiveSalonTable,
   } = checkout;
 
-  // Toggle automatics
   const [autoAccept, setAutoAccept] = useState(false);
 
-  // Search terms
-
-  // PDV Local Cart state
-
-  // POS Drawer Custom Events (Sangria, Suprimento, Sync)
   useEffect(() => {
     const handleOpenSangria = () => {
       setActiveTab('financeiro');
@@ -392,9 +398,6 @@ export function CaixaPanel({
     };
   }, [onRefreshOrders, fetchProdutos]);
 
-  // Date filters for Meu Desempenho
-
-  // Drawer Overlay do Operador/Login
   const [isOperatorDrawerOpen, setIsOperatorDrawerOpen] = useState(false);
 
   const handleLogoutOperator = () => {
@@ -407,7 +410,6 @@ export function CaixaPanel({
     window.location.reload();
   };
 
-  // ── MÓDULO 3: SLA, Impressão Rápida e Expansão Compacta de Itens ──────────────
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
 
   const toggleCardExpansion = (cardId: string, e?: React.MouseEvent) => {
@@ -422,7 +424,6 @@ export function CaixaPanel({
     presentation: getCashierTableOrderPresentation(order, salonTables),
   });
 
-  // Fetch optimized statistics, stock, and reports
   useEffect(() => {
     if (activeTab === 'financeiro') {
       fetchTurnoResumo();
@@ -449,14 +450,6 @@ export function CaixaPanel({
   });
   const { setBalcaoMobileView, setPdvOrderType, setPdvTargetMesaId } = pdv;
 
-  // O navegador não detecta a impressora física. O teste passa pela mesma fila
-  // dos pedidos e confirma, sem confundir o conector local com a impressora.
-
-  // O mesmo snapshot ativo alimenta balcão, garçom e cardápio digital.
-  // Produtos desativados permanecem no administrativo para preservar histórico,
-  // mas nunca aparecem como vendáveis.
-
-  // Extract all active kitchen items from orders database
   const activeKitchenItems = orders.flatMap((order) =>
     order.itens
       .filter((item) => item.status === 'preparando' || item.status === 'pronto')
@@ -469,7 +462,6 @@ export function CaixaPanel({
         timestamp: (item as any).created_at || (item as any).timestamp || order.timestamp,
       })),
   );
-  // Lógica de filtragem multi-campo em tempo real para cards do Kanban
   const matchesSearchQuery = useCallback((card: any, query: string) => {
     if (!query || !query.trim()) return true;
     const q = query.toLowerCase().trim();
@@ -518,7 +510,6 @@ export function CaixaPanel({
     );
   }, []);
 
-  // Real-time filtered cards for Kanban columns
   const filteredCol1 = useMemo(() => {
     return tableOrdersInProduction.filter((order) => matchesSearchQuery(order, searchQuery));
   }, [tableOrdersInProduction, searchQuery, matchesSearchQuery]);
@@ -639,7 +630,6 @@ export function CaixaPanel({
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
-      {/* TOAST DE FEEDBACK NÃO-BLOQUEANTE */}
       {toastData && (
         <div
           className={clsx(
@@ -654,14 +644,13 @@ export function CaixaPanel({
           {toastData.msg}
         </div>
       )}
-      {/* SHADCN SIDEBAR INTEGRATION FOR KÔMA */}
       <SidebarProvider className="contents">
-        {/* MOBILE SIDEBAR */}
         <CashierMobileSidebar
           isMobileSidebarOpen={isMobileSidebarOpen}
           setIsMobileSidebarOpen={setIsMobileSidebarOpen}
           setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
           turno={turno}
+          turnoLoadState={turnoLoadState}
           setShowAbrirModal={setShowAbrirModal}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
@@ -674,10 +663,10 @@ export function CaixaPanel({
           activeWaiterNome={activeWaiterNome}
         />
 
-        {/* DESKTOP SIDEBAR - SHADCN COMPOSABLE ARCHITECTURE */}
         <CashierDesktopSidebar
           setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
           turno={turno}
+          turnoLoadState={turnoLoadState}
           setShowAbrirModal={setShowAbrirModal}
           hasOnlineMenu={hasOnlineMenu}
           isSidebarTabActive={isSidebarTabActive}
@@ -690,14 +679,8 @@ export function CaixaPanel({
           activeWaiterNome={activeWaiterNome}
         />
 
-        {/* CONTENT AREA */}
-        <main
-          className={"cashier-main min-w-0 min-h-0 flex-1 bg-koma-canvas flex flex-col w-full"}
-        >
-          {/* Top header bar */}
-          <header
-            className={"cashier-topbar h-14 border-b border-koma-border bg-koma-panel px-4 sm:px-6 flex items-center justify-between shrink-0"}
-          >
+        <main className={"cashier-main min-w-0 min-h-0 flex-1 bg-koma-canvas flex flex-col w-full"}>
+          <header className={"cashier-topbar h-14 border-b border-koma-border bg-koma-panel px-4 sm:px-6 flex items-center justify-between shrink-0"}>
             <div className={"flex items-center gap-2 truncate"}>
               <button
                 type="button"
@@ -711,35 +694,21 @@ export function CaixaPanel({
               >
                 <Menu size={16} />
               </button>
-              <SidebarTrigger
-                className="hidden lg:flex"
-                title="Recolher ou expandir menu"
-                aria-label="Recolher ou expandir menu"
-              />
-              <h2
-                className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}
-              >
+              <SidebarTrigger className="hidden lg:flex" title="Recolher ou expandir menu" aria-label="Recolher ou expandir menu" />
+              <h2 className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}>
                 {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
                 {activeTab === 'operacao' && 'Vendas'}
                 {activeTab === 'cardapio' && 'Cardápio'}
                 {activeTab === 'estoque' && 'Estoque'}
                 {activeTab === 'financeiro' && 'Caixa'}
                 {activeTab === 'clientes' && 'Clientes'}
-                {(activeTab === 'permissoes_cargos' ||
-                  (activeTab === 'configuracoes' && activeSubTab === 'equipe')) &&
-                  'Equipe'}
-                {(activeTab === 'impressao_salao' ||
-                  (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) &&
-                  'Configurações'}
-                {(activeTab === 'assinatura_pix' ||
-                  (activeTab === 'configuracoes' && activeSubTab === 'planos')) &&
-                  'Planos de Assinatura e Recebimento Pix'}
-                {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') &&
-                  'Configurações do cardápio online'}
+                {(activeTab === 'permissoes_cargos' || (activeTab === 'configuracoes' && activeSubTab === 'equipe')) && 'Equipe'}
+                {(activeTab === 'impressao_salao' || (activeTab === 'configuracoes' && activeSubTab === 'impressoras')) && 'Configurações'}
+                {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Planos de Assinatura e Recebimento Pix'}
+                {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Configurações do cardápio online'}
               </h2>
             </div>
 
-            {/* Botões do Topbar: Conversas e Modo PDV */}
             <div className={"flex items-center gap-2 shrink-0"}>
               <button
                 type="button"
@@ -773,233 +742,140 @@ export function CaixaPanel({
                     : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground',
                 )}
                 title={isFullscreen ? 'Sair do Modo PDV Tela Cheia' : 'Entrar no Modo PDV Tela Cheia'}
-                aria-label={
-                  isFullscreen ? 'Sair do modo PDV em tela cheia' : 'Entrar no modo PDV em tela cheia'
-                }
+                aria-label={isFullscreen ? 'Sair do modo PDV em tela cheia' : 'Entrar no modo PDV em tela cheia'}
                 id="btn-modo-pdv-fullscreen"
               >
                 {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                <span className={"hidden sm:inline"}>
-                  {isFullscreen ? 'Sair da Tela Cheia' : 'Modo PDV'}
-                </span>
+                <span className={"hidden sm:inline"}>{isFullscreen ? 'Sair da Tela Cheia' : 'Modo PDV'}</span>
               </button>
             </div>
           </header>
 
-          {/* Sub-tabs Navigation Bar */}
-          <div
-            className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}
-          >
-            {activeTab === 'operacao' &&
-              operationSubnavItems.map((sub) => (
-                <button
-                  key={sub.id}
-                  onClick={() => handleSidebarNavigation(sub.id)}
-                  className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
-                >
-                  {sub.label}
-                </button>
-              ))}
+          <div className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}>
+            {activeTab === 'operacao' && operationSubnavItems.map((sub) => (
+              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+                {sub.label}
+              </button>
+            ))}
 
-            {activeTab === 'cardapio_digital' &&
-              onlineMenuSubnavItems.map((sub) => (
-                <button
-                  key={sub.id}
-                  onClick={() => handleSidebarNavigation(sub.id)}
-                  className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
-                >
-                  {sub.label}
-                </button>
-              ))}
+            {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
+              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
+                {sub.label}
+              </button>
+            ))}
 
-            {activeTab === 'cardapio' &&
-              [
-                { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
-                { id: 'complementos', label: 'Complementos' },
-                { id: 'categorias', label: 'Preparo e impressão', count: apiCategorias.length },
-              ].map((sub) => (
-                <button
-                  key={sub.id}
-                  onClick={() => setActiveSubTab(sub.id)}
-                  className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}
-                >
-                  {sub.label}
-                  {sub.count !== undefined && (
-                    <span
-                      aria-hidden="true"
-                      className={clsx(
-                        'ml-1.5',
-                        'rounded-full',
-                        'px-1.5',
-                        'py-0.5',
-                        'font-mono',
-                        'text-[8px]',
-                        activeSubTab === sub.id
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-koma-raised text-koma-muted',
-                      )}
-                    >
-                      {sub.count}
-                    </span>
-                  )}
-                </button>
-              ))}
+            {activeTab === 'cardapio' && [
+              { id: 'produtos', label: 'Produtos', count: apiProdutos.length },
+              { id: 'complementos', label: 'Complementos' },
+              { id: 'categorias', label: 'Preparo e impressão', count: apiCategorias.length },
+            ].map((sub) => (
+              <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', activeSubTab === sub.id && 'is-active')}>
+                {sub.label}
+                {sub.count !== undefined && (
+                  <span aria-hidden="true" className={clsx('ml-1.5','rounded-full','px-1.5','py-0.5','font-mono','text-[8px]', activeSubTab === sub.id ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-koma-raised text-koma-muted')}>
+                    {sub.count}
+                  </span>
+                )}
+              </button>
+            ))}
 
-            {activeTab === 'estoque' &&
-              [
-                { id: 'insumos', label: 'Ingredientes' },
-                { id: 'historico', label: 'Histórico' },
-                { id: 'inventario', label: 'Inventário' },
-                { id: 'fornecedores', label: 'Fornecedores' },
-              ].map((sub) => {
-                const isSubActive =
-                  (sub.id === 'historico' &&
-                    ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(
-                      activeSubTab,
-                    )) ||
-                  (sub.id === 'inventario' && ['inventario', 'contagem'].includes(activeSubTab)) ||
-                  (sub.id === 'fornecedores' && ['fornecedores', 'distribuidores'].includes(activeSubTab)) ||
-                  activeSubTab === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    onClick={() => setActiveSubTab(sub.id)}
-                    className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
-                  >
-                    {sub.label}
-                  </button>
-                );
-              })}
+            {activeTab === 'estoque' && [
+              { id: 'insumos', label: 'Ingredientes' },
+              { id: 'historico', label: 'Histórico' },
+              { id: 'inventario', label: 'Inventário' },
+              { id: 'fornecedores', label: 'Fornecedores' },
+            ].map((sub) => {
+              const isSubActive =
+                (sub.id === 'historico' && ['historico', 'entradas', 'xml', 'notas_entrada', 'movimentacoes'].includes(activeSubTab)) ||
+                (sub.id === 'inventario' && ['inventario', 'contagem'].includes(activeSubTab)) ||
+                (sub.id === 'fornecedores' && ['fornecedores', 'distribuidores'].includes(activeSubTab)) ||
+                activeSubTab === sub.id;
+              return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
+            })}
 
-            {activeTab === 'financeiro' &&
-              [
-                { id: 'turno_atual', label: 'Turno Atual' },
-                { id: 'movimentacoes', label: 'Movimentações' },
-                { id: 'fechamento', label: 'Fechamento' },
-              ].map((sub) => {
-                const isSubActive =
-                  (sub.id === 'turno_atual' && ['turno_atual', 'fluxo'].includes(activeSubTab)) ||
-                  (sub.id === 'movimentacoes' &&
-                    ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(
-                      activeSubTab,
-                    )) ||
-                  (sub.id === 'fechamento' &&
-                    ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab)) ||
-                  activeSubTab === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    onClick={() => setActiveSubTab(sub.id)}
-                    className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
-                  >
-                    {sub.label}
-                  </button>
-                );
-              })}
+            {activeTab === 'financeiro' && [
+              { id: 'turno_atual', label: 'Turno Atual' },
+              { id: 'movimentacoes', label: 'Movimentações' },
+              { id: 'fechamento', label: 'Fechamento' },
+            ].map((sub) => {
+              const isSubActive =
+                (sub.id === 'turno_atual' && ['turno_atual', 'fluxo'].includes(activeSubTab)) ||
+                (sub.id === 'movimentacoes' && ['movimentacoes', 'ajustes', 'ajustes_caixa', 'suprimento', 'sangria'].includes(activeSubTab)) ||
+                (sub.id === 'fechamento' && ['fechamento', 'conferencia', 'conferencia_cega'].includes(activeSubTab)) ||
+                activeSubTab === sub.id;
+              return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
+            })}
 
-            {activeTab === 'clientes' &&
-              [
-                { id: 'clientes', label: 'Clientes' },
-                { id: 'fidelidade', label: 'Programa de Fidelidade' },
-                { id: 'cupons', label: 'Cupons & Promoções' },
-              ].map((sub) => {
-                const isSubActive =
-                  (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
-                  (sub.id === 'fidelidade' && ['fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
-                  (sub.id === 'cupons' &&
-                    ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) ||
-                  activeSubTab === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    onClick={() => setActiveSubTab(sub.id)}
-                    className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
-                  >
-                    {sub.label}
-                  </button>
-                );
-              })}
+            {activeTab === 'clientes' && [
+              { id: 'clientes', label: 'Clientes' },
+              { id: 'fidelidade', label: 'Programa de Fidelidade' },
+              { id: 'cupons', label: 'Cupons & Promoções' },
+            ].map((sub) => {
+              const isSubActive =
+                (sub.id === 'clientes' && ['clientes', 'crm', 'banco_clientes'].includes(activeSubTab)) ||
+                (sub.id === 'fidelidade' && ['fidelidade', 'programa_fidelidade'].includes(activeSubTab)) ||
+                (sub.id === 'cupons' && ['cupons', 'cupom', 'promocoes', 'descontos'].includes(activeSubTab)) || activeSubTab === sub.id;
+              return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
+            })}
 
-            {(activeTab === 'relatorios' || activeTab === 'dashboard') &&
-              [
-                { id: 'visao_geral', label: 'Visão Geral' },
-                { id: 'financeiro', label: 'Financeiro' },
-                { id: 'produtos', label: 'Produtos' },
-                { id: 'equipe', label: 'Equipe' },
-              ].map((sub) => {
-                const isSubActive =
-                  (sub.id === 'visao_geral' &&
-                    ['visao_geral', 'metas', 'vendas', 'indicadores'].includes(activeSubTab)) ||
-                  (sub.id === 'financeiro' &&
-                    ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
-                  (sub.id === 'produtos' &&
-                    ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
-                  (sub.id === 'equipe' && ['equipe', 'desempenho_equipe'].includes(activeSubTab)) ||
-                  activeSubTab === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    id={`relatorios-subtab-${sub.id}`}
-                    onClick={() => setActiveSubTab(sub.id)}
-                    className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
-                  >
-                    {sub.label}
-                  </button>
-                );
-              })}
+            {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
+              { id: 'visao_geral', label: 'Visão Geral' },
+              { id: 'financeiro', label: 'Financeiro' },
+              { id: 'produtos', label: 'Produtos' },
+              { id: 'equipe', label: 'Equipe' },
+            ].map((sub) => {
+              const isSubActive =
+                (sub.id === 'visao_geral' && ['visao_geral', 'metas', 'vendas', 'indicadores'].includes(activeSubTab)) ||
+                (sub.id === 'financeiro' && ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
+                (sub.id === 'produtos' && ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
+                (sub.id === 'equipe' && ['equipe', 'desempenho_equipe'].includes(activeSubTab)) || activeSubTab === sub.id;
+              return <button key={sub.id} id={`relatorios-subtab-${sub.id}`} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
+            })}
 
-            {activeTab === 'permissoes_cargos' &&
-              [
-                { id: 'pessoas', label: 'Pessoas' },
-                { id: 'cargos_permissoes', label: 'Funções e acessos' },
-              ].map((sub) => {
-                const isSubActive =
-                  (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) ||
-                  (sub.id === 'cargos_permissoes' &&
-                    ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab)) ||
-                  activeSubTab === sub.id;
-                return (
-                  <button
-                    key={sub.id}
-                    id={`equipe-subtab-${sub.id}`}
-                    onClick={() => setActiveSubTab(sub.id)}
-                    className={clsx('cashier-subnav__button', isSubActive && 'is-active')}
-                  >
-                    {sub.label}
-                  </button>
-                );
-              })}
+            {activeTab === 'permissoes_cargos' && [
+              { id: 'pessoas', label: 'Pessoas' },
+              { id: 'cargos_permissoes', label: 'Funções e acessos' },
+            ].map((sub) => {
+              const isSubActive =
+                (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) ||
+                (sub.id === 'cargos_permissoes' && ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab)) || activeSubTab === sub.id;
+              return <button key={sub.id} id={`equipe-subtab-${sub.id}`} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
+            })}
           </div>
 
-          {/* Dynamic Inner views */}
           <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
-            {/* CASHIER CLOSED WARNING BANNER */}
-            {turno?.status !== 'aberto' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
-              <div
-                className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}
-              >
-                <div
-                  className={"p-4 bg-koma-panel rounded-full border border-amber-500/20 text-amber-500"}
-                >
-                  <Lock size={32} />
+            {cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
+              <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
+                <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
+                  {cashShiftUiState === 'loading' ? <Loader2 size={32} className="animate-spin" /> : <Lock size={32} />}
                 </div>
                 <h3 className={"font-serif text-base font-bold text-koma-foreground"}>
-                  Turno de Caixa Fechado
+                  {cashShiftUiState === 'closed'
+                    ? 'Turno de Caixa Fechado'
+                    : cashShiftUiState === 'error'
+                      ? 'Não foi possível confirmar o turno'
+                      : 'Sincronizando turno de caixa'}
                 </h3>
                 <p className={"max-w-md text-[10px] text-koma-subtle leading-relaxed"}>
-                  Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as
-                  telas de vendas e comandas.
+                  {cashShiftUiState === 'closed'
+                    ? 'Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as telas de vendas e comandas.'
+                    : cashShiftUiState === 'error'
+                      ? 'O sistema não vai presumir que o caixa está aberto ou fechado enquanto o estado real estiver indisponível.'
+                      : 'Confirmando o turno atual. Nenhum estado operacional é presumido antes da resposta do servidor.'}
                 </p>
-                <button
-                  onClick={() => setShowAbrirModal(true)}
-                  className={"px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"}
-                >
-                  Abrir Caixa Agora
-                </button>
+                {cashShiftUiState === 'closed' && (
+                  <button onClick={() => setShowAbrirModal(true)} className={"px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"}>
+                    Abrir Caixa Agora
+                  </button>
+                )}
+                {cashShiftUiState === 'error' && (
+                  <button onClick={() => void fetchTurno()} className={"px-5 py-2.5 bg-koma-raised hover:bg-koma-card border border-koma-border text-koma-foreground font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"}>
+                    Tentar novamente
+                  </button>
+                )}
               </div>
             )}
 
-            {/* VIEW 1: MEUS PEDIDOS (Kanban) */}
             {activeSubTab === 'pedidos' && (
               <CaixaOrdersWorkspace
                 columns={{
@@ -1045,15 +921,8 @@ export function CaixaPanel({
               />
             )}
 
-            {/* VIEW 2: PDV (Pedidos Balcão) */}
-            <DeferredCashierSection
-              active={activeSubTab === 'balcao'}
-              label="Novo pedido"
-              load={loadCashierPdvView}
-              sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }}
-            />
+            <DeferredCashierSection active={activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />
 
-            {/* VIEW 3: MAPA DE MESAS (Salão) */}
             {activeSubTab === 'mesas' && (
               <CaixaSalonTab
                 cards={salonTableCards}
@@ -1063,51 +932,21 @@ export function CaixaPanel({
                 filter={tableStatusFilter}
                 onFilterChange={setTableStatusFilter}
                 fetchError={fetchError}
-                actions={{
-                  inspectTable: handleInspectSalonTable,
-                  openTableOrder: handleOpenSalonTableOrder,
-                }}
+                actions={{ inspectTable: handleInspectSalonTable, openTableOrder: handleOpenSalonTableOrder }}
               />
             )}
 
-            {/* VIEW 4: MEU DESEMPENHO (Analytics) */}
             <DeferredCashierSection
-              active={
-                activeTab === 'relatorios' || activeTab === 'dashboard' || activeSubTab === 'desempenho'
-              }
+              active={activeTab === 'relatorios' || activeTab === 'dashboard' || activeSubTab === 'desempenho'}
               label="Relatórios"
               load={loadCashierReports}
-              sectionProps={{
-                apiBaseUrl,
-                authHeaders,
-                activeTab,
-                activeSubTab,
-                setActiveSubTab,
-                showToast,
-                deliveryOrders,
-                activeKitchenItems,
-                apiCategorias,
-              }}
+              sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            {/* VIEW 5: COZINHA (KDS) */}
-            <CashierKitchen
-              activeSubTab={activeSubTab}
-              activeKitchenItems={activeKitchenItems}
-              handleUpdateItemStatus={handleUpdateItemStatus}
-            />
+            <CashierKitchen activeSubTab={activeSubTab} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
 
-            {/* VIEW: EQUIPE — PESSOAS */}
-            <DeferredCashierSection
-              active={activeTab === 'permissoes_cargos'}
-              label="Equipe"
-              load={loadCashierTeam}
-              sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast }}
-            />
+            <DeferredCashierSection active={activeTab === 'permissoes_cargos'} label="Equipe" load={loadCashierTeam} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast }} />
 
-            {/* VIEW: EQUIPE — CARGOS E PERMISSÕES (dados reais da API) */}
-
-            {/* VIEW 7: CONFIGURAÇÕES SALÃO (Impressão, App Garçom e Taxa) */}
             <DeferredCashierSection
               active={activeTab === 'impressao_salao' || activeSubTab === 'impressoras'}
               label="Configurações"
@@ -1131,7 +970,6 @@ export function CaixaPanel({
               }}
             />
 
-            {/* VIEW 9: PAGAMENTOS & PLANOS */}
             {activeSubTab === 'planos' && (
               <AssinaturaPixTab
                 currentPlanId={currentPlanId}
@@ -1142,85 +980,17 @@ export function CaixaPanel({
               />
             )}
 
-            {/* VIEW: FIDELIDADE */}
-            <DeferredCashierSection
-              active={activeTab === 'clientes'}
-              label="Clientes"
-              load={loadCashierCustomers}
-              sectionProps={{
-                apiBaseUrl,
-                authHeaders,
-                activeTab,
-                activeSubTab,
-                setActiveSubTab,
-                showToast,
-                loyaltyUsers,
-                refreshLoyaltyUsers,
-              }}
-            />
+            <DeferredCashierSection active={activeTab === 'clientes'} label="Clientes" load={loadCashierCustomers} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, loyaltyUsers, refreshLoyaltyUsers }} />
 
-            {/* VIEW: RELATÓRIOS — VISÃO GERAL */}
-
-            {/* VIEW: RELATÓRIOS — FINANCEIRO (DRE) */}
-
-            {/* VIEW: RELATÓRIOS — PRODUTOS */}
-
-            {/* VIEW: RELATÓRIOS — EQUIPE (reutiliza o mesmo componente de desempenho) */}
-
-            {/* CATÁLOGO CENTRAL: produtos e disponibilidade usam o mesmo snapshot. */}
             <DeferredCashierSection
               active={activeTab === 'cardapio'}
               label="Cardápio"
               load={loadCashierCatalog}
-              sectionProps={{
-                apiBaseUrl,
-                authHeaders,
-                activeTab,
-                activeSubTab,
-                setActiveSubTab,
-                showToast,
-                apiProdutos,
-                apiCategorias,
-                suggestedProductCode,
-                hasOnlineMenu,
-                fetchProdutos,
-                fetchCategorias,
-                catalogReady,
-                restauranteConfig,
-                onRefreshCategorias,
-              }}
+              sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, apiCategorias, suggestedProductCode, hasOnlineMenu, fetchProdutos, fetchCategorias, catalogReady, restauranteConfig, onRefreshCategorias }}
             />
 
-            {/* ABA CATEGORIAS */}
+            <DeferredCashierSection active={activeTab === 'estoque'} label="Estoque" load={loadCashierInventory} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, isLoading }} />
 
-            {/* ABA COMPLEMENTOS */}
-
-            {/* ABA CUPONS */}
-
-            {/* LIVE VIEW: ESTOQUE DE INSUMOS */}
-            <DeferredCashierSection
-              active={activeTab === 'estoque'}
-              label="Estoque"
-              load={loadCashierInventory}
-              sectionProps={{
-                apiBaseUrl,
-                authHeaders,
-                activeTab,
-                activeSubTab,
-                setActiveSubTab,
-                showToast,
-                apiProdutos,
-                isLoading,
-              }}
-            />
-
-            {/* LIVE VIEW: HISTÓRICO UNIFICADO DE ESTOQUE */}
-
-            {/* LIVE VIEW: CONTAGEM FÍSICA (INVENTÁRIO) */}
-
-            {/* LIVE VIEW: DISTRIBUIDORES */}
-
-            {/* MÓDULO CAIXA REORGANIZADO */}
             {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
               <div className={"orders-workspace space-y-4"}>
                 <OperationalBanner
@@ -1228,44 +998,46 @@ export function CaixaPanel({
                   eyebrow="CAIXA"
                   title="Turno atual"
                   accent={
-                    turnoResumo?.turno_esquecido
-                      ? 'precisa de revisão'
-                      : turnoResumo?.status === 'aberto'
-                        ? 'em ordem'
-                        : 'ainda fechado'
+                    !isTurnoResumoReady
+                      ? 'sincronizando'
+                      : turnoResumo?.turno_esquecido
+                        ? 'precisa de revisão'
+                        : turnoResumo?.status === 'aberto'
+                          ? 'em ordem'
+                          : 'fechado'
                   }
                   description={
-                    turnoResumo?.turno_esquecido
-                      ? 'Este turno está aberto há mais de 24 horas. Confira os valores e encerre quando possível.'
-                      : 'Veja o dinheiro, os recebimentos e o que precisa de atenção.'
+                    !isTurnoResumoReady
+                      ? 'Confirmando o turno e os valores atuais antes de exibir um estado operacional.'
+                      : turnoResumo?.turno_esquecido
+                        ? 'Este turno está aberto há mais de 24 horas. Confira os valores e encerre quando possível.'
+                        : 'Veja o dinheiro, os recebimentos e o que precisa de atenção.'
                   }
                   metrics={[
                     {
                       label: 'aberto há',
-                      value:
-                        turnoResumo?.status === 'aberto'
-                          ? formatDuration(turnoResumo.tempo_aberto_minutos)
-                          : '—',
+                      value: isTurnoResumoReady && turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—',
                     },
                     {
                       label: 'ritmo de vendas',
-                      value:
-                        turnoResumo?.status === 'aberto'
-                          ? `${formatCompactCurrency(cashSalesPerHour)}/h`
-                          : '—',
+                      value: isTurnoResumoReady && turnoResumo?.status === 'aberto' ? `${formatCompactCurrency(cashSalesPerHour)}/h` : '—',
                     },
                     {
                       label: 'situação do turno',
                       value: cashShiftHealth,
-                      valueClassName: turnoResumo?.turno_esquecido
-                        ? 'text-amber-600 dark:text-amber-300'
-                        : 'text-emerald-600 dark:text-emerald-300',
+                      valueClassName: !isTurnoResumoReady
+                        ? 'text-koma-muted'
+                        : turnoResumo?.turno_esquecido
+                          ? 'text-amber-600 dark:text-amber-300'
+                          : turnoResumo?.status === 'aberto'
+                            ? 'text-emerald-600 dark:text-emerald-300'
+                            : 'text-koma-muted',
                     },
                   ]}
                 />
                 <CaixaTurnoAtualTab
                   turnoResumo={turnoResumo}
-                  isLoading={isTurnoResumoLoading}
+                  isLoading={!isTurnoResumoReady || isTurnoResumoLoading}
                   pendingPaymentsCount={pagamentosPendentes.length}
                   pendingPaymentsTotal={pendingPaymentsTotal}
                   onNavigateToFechamento={() => setActiveSubTab('fechamento')}
@@ -1282,45 +1054,32 @@ export function CaixaPanel({
             )}
 
             {activeTab === 'financeiro' &&
-              (activeSubTab === 'movimentacoes' ||
-                activeSubTab === 'ajustes' ||
-                activeSubTab === 'suprimento' ||
-                activeSubTab === 'sangria') && (
-                <CaixaMovimentacoesTab
-                  movimentacoes={caixaMovimentacoes}
-                  turnoResumo={turnoResumo}
-                  isLoading={isCaixaMovimentacoesLoading}
-                />
+              (activeSubTab === 'movimentacoes' || activeSubTab === 'ajustes' || activeSubTab === 'suprimento' || activeSubTab === 'sangria') && (
+                <CaixaMovimentacoesTab movimentacoes={caixaMovimentacoes} turnoResumo={turnoResumo} isLoading={isCaixaMovimentacoesLoading} />
               )}
 
-            {activeTab === 'financeiro' &&
-              (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
-                <div className={"orders-workspace space-y-4"}>
-                  <OperationalBanner
-                    id="cash-closing-heading"
-                    eyebrow="CAIXA"
-                    title="Fechamento"
-                    accent="do seu jeito"
-                    description="Use a conferência rápida ou faça uma conferência totalmente cega."
-                    metrics={[
-                      {
-                        label: 'aberto há',
-                        value:
-                          turnoResumo?.status === 'aberto'
-                            ? formatDuration(turnoResumo.tempo_aberto_minutos)
-                            : '—',
-                      },
-                      {
-                        label: 'pagamentos pendentes',
-                        value: pagamentosPendentes.length,
-                        valueClassName:
-                          pagamentosPendentes.length > 0
-                            ? 'text-amber-600 dark:text-amber-300'
-                            : 'text-emerald-600 dark:text-emerald-300',
-                      },
-                      { label: 'valor pendente', value: formatCompactCurrency(pendingPaymentsTotal) },
-                    ]}
-                  />
+            {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
+              <div className={"orders-workspace space-y-4"}>
+                <OperationalBanner
+                  id="cash-closing-heading"
+                  eyebrow="CAIXA"
+                  title="Fechamento"
+                  accent={!isTurnoResumoReady ? 'sincronizando' : 'do seu jeito'}
+                  description={!isTurnoResumoReady ? 'Confirmando o turno antes de habilitar a conferência.' : 'Use a conferência rápida ou faça uma conferência totalmente cega.'}
+                  metrics={[
+                    {
+                      label: 'aberto há',
+                      value: isTurnoResumoReady && turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—',
+                    },
+                    {
+                      label: 'pagamentos pendentes',
+                      value: isTurnoResumoReady ? pagamentosPendentes.length : '—',
+                      valueClassName: isTurnoResumoReady && pagamentosPendentes.length > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-koma-muted',
+                    },
+                    { label: 'valor pendente', value: isTurnoResumoReady ? formatCompactCurrency(pendingPaymentsTotal) : '—' },
+                  ]}
+                />
+                {isTurnoResumoReady ? (
                   <CaixaFechamentoTab
                     isTurnoAberto={turnoResumo?.status === 'aberto'}
                     fechamentoResult={fechamentoResult}
@@ -1338,18 +1097,22 @@ export function CaixaPanel({
                       setActiveSubTab('pedidos');
                     }}
                   />
-                </div>
-              )}
+                ) : (
+                  <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center text-koma-muted">
+                    <Loader2 size={22} className="mx-auto mb-3 animate-spin" />
+                    <p className="text-xs font-bold">Sincronizando turno antes do fechamento...</p>
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* CRM CLIENTES — REAL DATA */}
-
-            {/* VIEW: FRETISTAS & LOGÍSTICA */}
             <CashierCouriers
               activeSubTab={activeSubTab}
               deliveryOrders={deliveryOrders}
               selectedMotoboys={selectedMotoboys}
               setSelectedMotoboys={setSelectedMotoboys}
               motoboys={motoboys}
+              motoboysLoadState={motoboysLoadState}
               handleDespacharKanban={handleDespacharKanban}
               handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
               handleFinalizarPedido={handleFinalizarPedido}
@@ -1360,24 +1123,15 @@ export function CaixaPanel({
               setNewMotoboyTelefone={setNewMotoboyTelefone}
             />
 
-            {/* CONFIGURAÇÃO CARDÁPIO DIGITAL WHITELABEL */}
             <DeferredCashierSection
               active={activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'}
               label="Cardápio online"
               load={loadCashierOnlineMenu}
-              sectionProps={{
-                apiBaseUrl,
-                authHeaders,
-                activeSubTab,
-                setActiveSubTab,
-                setActiveTab,
-                hasOnlineMenu,
-              }}
+              sectionProps={{ apiBaseUrl, authHeaders, activeSubTab, setActiveSubTab, setActiveTab, hasOnlineMenu }}
             />
           </div>
         </main>
 
-        {/* 1. MODAL: ABRIR CAIXA */}
         <CashierOpenShiftDialog
           showAbrirModal={showAbrirModal}
           setShowAbrirModal={setShowAbrirModal}
@@ -1387,19 +1141,8 @@ export function CaixaPanel({
           errorMsg={errorMsg}
         />
 
-        <CheckoutDialog
-          controller={checkout}
-          smartPos={smartPos}
-          errorMsg={errorMsg}
-          taxaServicoAtiva={taxaServicoAtiva}
-          serviceTaxRate={serviceTaxRate}
-        />
+        <CheckoutDialog controller={checkout} smartPos={smartPos} errorMsg={errorMsg} taxaServicoAtiva={taxaServicoAtiva} serviceTaxRate={serviceTaxRate} />
 
-        {/* 5. MODAL: ADICIONAR MESA */}
-
-        {/* 5.1 MODAL: EDITAR / EXCLUIR MESA */}
-
-        {/* 6. MODAL: INSPECIONAR E REIMPRIMIR PEDIDO DO KANBAN */}
         {selectedKanbanOrder && (
           <KanbanOrderDetails
             order={selectedKanbanOrder}
@@ -1416,12 +1159,7 @@ export function CaixaPanel({
               },
               canReceive: selectedSalonCard.tableOrders.length > 0,
             } : undefined}
-            transfer={{
-              targetId: tableTransferTargetId,
-              onTargetChange: setTableTransferTargetId,
-              isTransferring: isTransferringTable,
-              tables: salonTables,
-            }}
+            transfer={{ targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId, isTransferring: isTransferringTable, tables: salonTables }}
             actions={{
               close: () => setSelectedKanbanOrder(null),
               advanceDigitalOrder: handleAdvanceSelectedKanbanOrder,
@@ -1444,34 +1182,18 @@ export function CaixaPanel({
           handleCancelTableConsumption={handleCancelTableConsumption}
         />
 
-        {/* 7. MODAL: ADICIONAR / EDITAR PRODUTO */}
-
-        {/* MODAL CRIAR/EDITAR CATEGORIA */}
-
-        {/* MODAL DE ENTRADA MANUAL DE ESTOQUE */}
-
-        {/* MODAL DE MOVIMENTAÇÃO DE ESTOQUE (PERDA / AJUSTES) */}
-
-        {/* MODAL DE INVENTÁRIO FÍSICO / CONTAGEM */}
-
-        {/* MODAL DE SANGRIA */}
         {showSangriaModal && (
           <SangriaModal
-            saldoDisponivelDinheiro={turnoResumo?.saldo_esperado_dinheiro || 0}
+            saldoDisponivelDinheiro={isTurnoResumoReady ? (turnoResumo?.saldo_esperado_dinheiro || 0) : 0}
             onClose={() => setShowSangriaModal(false)}
             onSubmit={handleRegistrarSangria}
           />
         )}
 
-        {/* MODAL DE SUPRIMENTO */}
         {showSuprimentoModal && (
-          <SuprimentoModal
-            onClose={() => setShowSuprimentoModal(false)}
-            onSubmit={handleRegistrarSuprimento}
-          />
+          <SuprimentoModal onClose={() => setShowSuprimentoModal(false)} onSubmit={handleRegistrarSuprimento} />
         )}
 
-        {/* OPERATOR MENU DRAWER OVERLAY */}
         <CashierOperatorDrawer
           isOperatorDrawerOpen={isOperatorDrawerOpen}
           setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
@@ -1490,7 +1212,6 @@ export function CaixaPanel({
           playOrderAlert={playOrderAlert}
         />
 
-        {/* GAVETA DE CONVERSAS DOS PEDIDOS COM CLIENTES */}
         <CashierConversationsDrawer
           key={authHeaders.Authorization}
           authorization={authHeaders.Authorization || ""}
@@ -1499,9 +1220,7 @@ export function CaixaPanel({
           onInspectOrder={(pedidoId) => {
             handleSidebarNavigation('vendas_pedidos');
             const target = deliveryOrders.find((o) => o.id === pedidoId);
-            if (target) {
-              openDeliveryOrderDetails(target);
-            }
+            if (target) openDeliveryOrderDetails(target);
           }}
           onUnreadCountChange={setChatUnreadCount}
         />
