@@ -51,8 +51,8 @@ export function OperationalBanner({
         <dl className="operational-header__metrics" aria-label={`Resumo: ${title} ${accent}`.trim()}>
           {metrics.map(metric => (
             <div key={metric.label} className="operational-header__metric">
-              <dd className={clsx(metric.valueClassName)}>{metric.value}</dd>
               <dt>{metric.label}</dt>
+              <dd className={clsx(metric.valueClassName)}>{metric.value}</dd>
             </div>
           ))}
         </dl>
