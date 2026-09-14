@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from ..database import SessionLocal, tenant_session_scope
 from ..services.incident_service import (
     IncidentItem,
@@ -24,6 +24,14 @@ class IncidentActionRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=1000)
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("reason deve ter ao menos 3 caracteres úteis")
+        return normalized
 
 
 class IncidentSummaryResponse(BaseModel):
