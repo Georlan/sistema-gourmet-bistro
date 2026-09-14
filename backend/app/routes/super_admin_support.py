@@ -3,7 +3,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db, tenant_session_scope
@@ -22,6 +22,14 @@ class SupportSessionStartRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 5:
+            raise ValueError("O motivo precisa ter pelo menos 5 caracteres úteis.")
+        return normalized
+
 
 class SupportSessionEndRequest(BaseModel):
     reason: str = Field(
@@ -31,6 +39,14 @@ class SupportSessionEndRequest(BaseModel):
     )
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 3:
+            raise ValueError("O motivo precisa ter pelo menos 3 caracteres úteis.")
+        return normalized
 
 
 def _parse_tenant_id(tenant_id: str) -> int:
@@ -60,7 +76,7 @@ def start_support_session(
     """
     target_tenant_id = _parse_tenant_id(tenant_id)
     operator = str(admin.get("user") or "superadmin")
-    clean_reason = payload.reason.strip()
+    clean_reason = payload.reason
 
     with SessionLocal() as db:
         with tenant_session_scope(db, target_tenant_id):
@@ -174,7 +190,7 @@ def end_support_session(
     """Encerra as sessões de suporte ativas de um restaurante pelo Super Admin."""
     target_tenant_id = _parse_tenant_id(tenant_id)
     operator = str(admin.get("user") or "superadmin")
-    clean_reason = payload.reason.strip()
+    clean_reason = payload.reason
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     with SessionLocal() as db:
@@ -294,7 +310,7 @@ def end_current_support_session(
     session_id = str(getattr(current_user, "support_session_id", ""))
     target_tenant_id = int(current_user.restaurante_id)
     operator = str(getattr(current_user, "support_operator", current_user.id))
-    clean_reason = payload.reason.strip()
+    clean_reason = payload.reason
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     session_rec = (
