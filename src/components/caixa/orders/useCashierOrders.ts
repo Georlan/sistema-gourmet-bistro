@@ -5,6 +5,7 @@ import type { Order } from '../../../types';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
+import { projectDeliveryOrdersFromSharedSnapshot } from './deliveryOrderProjection';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -236,7 +237,9 @@ export function useCashierOrders({
     return { mergedMesaIds, transferredFromMesaIds };
   };
 
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>(
+    () => projectDeliveryOrdersFromSharedSnapshot(orders)
+  );
   const deliveryOrdersRequestRef = useRef(0);
   const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
   const deliveryMutationSequenceRef = useRef(0);
@@ -433,11 +436,10 @@ export function useCashierOrders({
   };
 
   useEffect(() => {
-    fetchDeliveryOrders();
-    fetchMotoboys();
-
+    // O App já entregou o snapshot inicial. useCashierRealtime é o único dono da
+    // reconciliação dedicada inicial; aqui mantemos apenas a invalidação explícita.
     const handleDeliveryUpdate = () => {
-      fetchDeliveryOrders();
+      void fetchDeliveryOrders();
     };
 
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);

@@ -69,11 +69,14 @@ export function useOperationalOrders({
     garcomId: comanda.garcom_id,
     garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
     timestamp: parseBackendDateTime(comanda.criado_em),
+    created_at: comanda.criado_em,
     tipo: comanda.tipo,
     valorPago: comanda.valor_pago || 0,
     identificador: comanda.identificador || null,
     statusComanda: comanda.status_comanda || null,
     deliveryStatus: comanda.delivery_status || null,
+    deliveryTax: Number(comanda.delivery_taxa) || 0,
+    deliveryAddress: comanda.delivery_endereco || null,
     mesaOrigemId: comanda.mesa_origem_id || null,
     mesaTransferidaDe: comanda.mesa_transferida_de || null,
     itens: (comanda.itens || [])
@@ -99,6 +102,7 @@ export function useOperationalOrders({
           observacao: item.observacao || '',
           clienteNome: item.cliente_nome || 'Consumo Geral',
           status: effectiveStatus,
+          pago: Boolean(item.pago),
           lancamentoId: item.lancamento_id,
         };
       }),
