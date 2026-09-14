@@ -86,6 +86,21 @@ test('tickets remain oldest-first and use operational context labels', () => {
   assert.equal(getKdsTicketLabel(projection.tickets[0]), '#041-A');
 });
 
+test('KDS distinguishes pickup, delivery and local counter tickets', () => {
+  assert.equal(
+    getKdsDestinationLabel({ mesaId: 0, tipo: 'Retirada' }),
+    'Retirada',
+  );
+  assert.equal(
+    getKdsDestinationLabel({ mesaId: 0, tipo: 'Entrega' }),
+    'Delivery',
+  );
+  assert.equal(
+    getKdsDestinationLabel({ mesaId: 0, tipo: undefined }),
+    'Balcão',
+  );
+});
+
 test('KDS search finds tickets by mesa, item, customer and observation without changing state', () => {
   const projection = projectKdsTickets([
     kitchenItem('burger', 'preparando', {

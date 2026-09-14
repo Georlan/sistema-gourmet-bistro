@@ -131,8 +131,10 @@ export function getKdsTicketLabel(ticket: Pick<KdsTicket, 'displayNumber' | 'num
 
 export function getKdsDestinationLabel(ticket: Pick<KdsTicket, 'mesaId' | 'tipo'>) {
   if (ticket.mesaId > 0) return `Mesa ${ticket.mesaId}`;
-  if (ticket.tipo === 'Entrega') return 'Entrega';
-  if (ticket.tipo === 'Retirada') return 'Retirada';
+
+  const normalizedType = normalizeSearchText(ticket.tipo);
+  if (normalizedType === 'entrega' || normalizedType === 'delivery') return 'Delivery';
+  if (normalizedType === 'retirada') return 'Retirada';
   return 'Balcão';
 }
 
