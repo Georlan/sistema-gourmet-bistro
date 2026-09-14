@@ -8,6 +8,7 @@ from app.database import SessionLocal, tenant_session_scope
 from app.main import app
 from app.models import SuperAdminAuditLog, Usuario
 from app.routes import super_admin
+from app.routes.super_admin_access import _access_state
 from app.security import create_access_token, get_password_hash, get_user_token_version
 
 
@@ -395,3 +396,110 @@ def test_superadmin_nao_ativa_convite_pendente_sem_fluxo_de_credencial():
         assert "credencial" in response.json()["detail"].lower()
     finally:
         _cleanup_tenant(tenant_id)
+
+
+def test_access_state_direct_unit():
+    class DummyUser:
+        def __init__(
+            self,
+            id: str,
+            status: str | None,
+            role: str | None = None,
+            cargo: str | None = None,
+        ):
+            self.id = id
+            self.status = status
+            self.role = role
+            self.cargo = cargo
+
+    users = [
+        # 1. admin ativo
+        DummyUser(id="1", status="ativo", cargo="admin"),
+        # 2. usuário ativo não-admin
+        DummyUser(id="2", status="ativo", cargo="garcom"),
+        # 3. inativo (mesmo com cargo admin, não pode contar em activeAdmins)
+        DummyUser(id="3", status="inativo", cargo="admin"),
+        # 4. pendente explícito
+        DummyUser(id="4", status="pendente_ativacao", cargo="gerente"),
+        # 4b. pendente com status None (fallback de _normalize_status)
+        DummyUser(id="5", status=None, cargo="caixa"),
+        # 5. status desconhecido (entra apenas em totalUsers)
+        DummyUser(id="6", status="suspenso", cargo="admin"),
+        # 6. fallback de role/cargo:
+        # 6a. role=None, cargo="superadmin" -> ativo e admin
+        DummyUser(id="7", status="ativo", role=None, cargo="superadmin"),
+        # 6b. role="admin", cargo=None -> ativo e admin
+        DummyUser(id="8", status="ativo", role="admin", cargo=None),
+        # 6c. role=None, cargo=None -> fallback para "garcom" (ativo não-admin)
+        DummyUser(id="9", status="ativo", role=None, cargo=None),
+    ]
+
+    state = _access_state(users)
+
+    assert state == {
+        "totalUsers": 9,
+        "activeUsers": 5,     # ids 1, 2, 7, 8, 9
+        "inactiveUsers": 1,   # id 3
+        "pendingUsers": 2,    # ids 4, 5
+        "activeAdmins": 3,    # ids 1, 7, 8
+    }
+
+
+def test_access_state_single_pass_efficiency_and_call_counts(monkeypatch):
+    import app.routes.super_admin_access as access_mod
+
+    status_calls = []
+    role_calls = []
+
+    orig_status = access_mod._normalize_status
+    orig_role = access_mod._normalize_role
+
+    def tracking_status(user):
+        status_calls.append(user.id)
+        return orig_status(user)
+
+    def tracking_role(user):
+        role_calls.append(user.id)
+        return orig_role(user)
+
+    monkeypatch.setattr(access_mod, "_normalize_status", tracking_status)
+    monkeypatch.setattr(access_mod, "_normalize_role", tracking_role)
+
+    class DummyUser:
+        def __init__(
+            self,
+            id: str,
+            status: str | None,
+            role: str | None = None,
+            cargo: str | None = None,
+        ):
+            self.id = id
+            self.status = status
+            self.role = role
+            self.cargo = cargo
+
+    users = [
+        DummyUser(id="u1", status="ativo", cargo="admin"),
+        DummyUser(id="u2", status="inativo", cargo="admin"),
+        DummyUser(id="u3", status="pendente_ativacao", cargo="admin"),
+        DummyUser(id="u4", status="desconhecido", cargo="admin"),
+        DummyUser(id="u5", status="ativo", cargo="garcom"),
+    ]
+
+    state = access_mod._access_state(users)
+
+    # 1. _normalize_status chamado exatamente uma vez por usuário
+    assert status_calls == ["u1", "u2", "u3", "u4", "u5"]
+
+    # 2. _normalize_role avaliado SOMENTE para usuários ativos ("u1" e "u5")
+    assert role_calls == ["u1", "u5"]
+
+    # 3. Chaves e valores exatos
+    assert state == {
+        "totalUsers": 5,
+        "activeUsers": 2,
+        "inactiveUsers": 1,
+        "pendingUsers": 1,
+        "activeAdmins": 1,
+    }
+

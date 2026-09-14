@@ -72,22 +72,28 @@ def _user_snapshot(user: Usuario) -> dict[str, Any]:
 
 
 def _access_state(users: list[Usuario]) -> dict[str, int]:
-    active_users = [user for user in users if _normalize_status(user) == "ativo"]
-    inactive_users = [user for user in users if _normalize_status(user) == "inativo"]
-    pending_users = [
-        user for user in users if _normalize_status(user) == "pendente_ativacao"
-    ]
-    active_admins = [
-        user
-        for user in active_users
-        if _normalize_role(user) in ADMIN_ROLES
-    ]
+    active_users = 0
+    inactive_users = 0
+    pending_users = 0
+    active_admins = 0
+
+    for user in users:
+        status_val = _normalize_status(user)
+        if status_val == "ativo":
+            active_users += 1
+            if _normalize_role(user) in ADMIN_ROLES:
+                active_admins += 1
+        elif status_val == "inativo":
+            inactive_users += 1
+        elif status_val == "pendente_ativacao":
+            pending_users += 1
+
     return {
         "totalUsers": len(users),
-        "activeUsers": len(active_users),
-        "inactiveUsers": len(inactive_users),
-        "pendingUsers": len(pending_users),
-        "activeAdmins": len(active_admins),
+        "activeUsers": active_users,
+        "inactiveUsers": inactive_users,
+        "pendingUsers": pending_users,
+        "activeAdmins": active_admins,
     }
 
 
