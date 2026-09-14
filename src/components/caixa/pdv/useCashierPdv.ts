@@ -135,7 +135,7 @@ export function useCashierPdv({
       } catch (error) {
         if ((error as Error).name !== 'AbortError') setPdvCustomerLookup('idle');
       }
-    }, 350);
+    }, 180);
 
     return () => {
       window.clearTimeout(timeout);
@@ -266,18 +266,28 @@ export function useCashierPdv({
     setActiveSubTab('pedidos');
     showToast('Enviando pedido para a cozinha...', 'info');
 
+    let optimisticTempId: string | null = null;
+    const clearOptimisticOrder = () => {
+      if (!optimisticTempId) return;
+      window.dispatchEvent(new CustomEvent('koma_optimistic_order_remove', {
+        detail: { orderId: optimisticTempId },
+      }));
+    };
+
     if (onOptimisticAddOrder) {
-      const tempId = `temp-${Date.now()}`;
+      const now = Date.now();
+      const tempId = `temp-${now}`;
+      optimisticTempId = tempId;
       const tempItems = cartItems.flatMap((item, idx) =>
         Array.from({ length: item.quantity }, (_, qtyIdx) => ({
-          id: `temp-item-${idx}-${qtyIdx}-${Date.now()}`,
+          id: `temp-item-${idx}-${qtyIdx}-${now}`,
           produtoId: item.product.id,
           nome: item.product.nome,
           preco: pdvCartItemUnitPrice(item),
           observacao: item.obs || '',
           clienteNome: customerName || 'Consumo Geral',
-          status: 'preparando',
-          lancamentoId: `temp-l-${Date.now()}`,
+          status: 'preparando' as const,
+          lancamentoId: `temp-l-${now}`,
         })),
       );
 
@@ -286,12 +296,18 @@ export function useCashierPdv({
         mesaId: orderType === 'mesa' ? mesaId || 0 : 0,
         garcomId: 'c-01',
         garcomNome: activeWaiterNome || 'Caixa 1',
-        timestamp: new Date(),
-        tipo: orderType === 'mesa' ? 'Consumo no Local' : orderType === 'entrega' ? 'Entrega' : 'Retirada',
+        timestamp: now,
+        created_at: new Date(now).toISOString(),
+        tipo: orderType === 'mesa' ? 'Consumo no Local' as const : orderType === 'entrega' ? 'Entrega' as const : 'Retirada' as const,
         valorPago: 0,
-        identificador: customerName || null,
+        identificador: customerName || undefined,
+        clienteId: customerId,
+        clientePhone: orderType === 'mesa' ? null : customerPhone,
         statusComanda: null,
-        deliveryStatus: orderType === 'mesa' ? null : 'producao',
+        deliveryStatus: orderType === 'mesa' ? null : 'producao' as const,
+        deliveryAddress: orderType === 'entrega' ? deliveryAddress : null,
+        deliveryTax: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0,
+        origemOperacional: 'caixa' as const,
         mesaOrigemId: null,
         mesaTransferidaDe: null,
         itens: tempItems,
@@ -346,13 +362,26 @@ export function useCashierPdv({
       });
 
       if (res.ok) {
+        const confirmedComanda = await res.json().catch(() => null);
         pdvPendingOperationRef.current = null;
+
+        if (optimisticTempId && confirmedComanda?.id) {
+          window.dispatchEvent(new CustomEvent('koma_optimistic_order_reconcile', {
+            detail: { tempId: optimisticTempId, comanda: confirmedComanda },
+          }));
+        }
+
         showToast('Pedido confirmado e enviado à cozinha.', 'success');
-        onRefreshOrders();
-        fetchDeliveryOrders();
-        window.dispatchEvent(new Event('koma_orders_updated'));
+        void Promise.allSettled([
+          Promise.resolve(onRefreshOrders()),
+          fetchDeliveryOrders(),
+        ]).then(() => {
+          if (!confirmedComanda?.id) clearOptimisticOrder();
+          window.dispatchEvent(new Event('koma_orders_updated'));
+        });
       } else {
         const err = await res.json();
+        clearOptimisticOrder();
         showToast(`Erro ao registrar venda: ${err.detail || 'Falha no servidor'}`, 'error');
         setPdvCart((prev) => (prev.length > 0 ? prev : cartItems));
         setPdvCustomerName(customerName);
@@ -363,6 +392,7 @@ export function useCashierPdv({
       }
     } catch (err) {
       console.error(err);
+      clearOptimisticOrder();
       showToast('A rede falhou. O carrinho foi restaurado para você tentar novamente.', 'error');
       setPdvCart((prev) => (prev.length > 0 ? prev : cartItems));
       setPdvCustomerName(customerName);

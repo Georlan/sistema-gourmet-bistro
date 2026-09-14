@@ -241,6 +241,35 @@ export function useCashierOrders({
   const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
   const deliveryMutationSequenceRef = useRef(0);
 
+  // The shared operational snapshot receives Caixa's optimistic order immediately.
+  // Project only missing rows so richer server data already loaded by /delivery/ativos
+  // remains authoritative. When a temp row is reconciled/rolled back upstream, remove it here too.
+  useEffect(() => {
+    const projected = projectDeliveryOrdersFromSharedSnapshot(orders);
+    const sharedIds = new Set(projected.map((order) => String(order.id)));
+
+    setDeliveryOrders((current) => {
+      let changed = false;
+      const currentIds = new Set(current.map((order) => String(order.id)));
+      const next = current.filter((order) => {
+        const id = String(order.id);
+        const keep = !id.startsWith('temp-') || sharedIds.has(id);
+        if (!keep) changed = true;
+        return keep;
+      });
+
+      for (let index = projected.length - 1; index >= 0; index -= 1) {
+        const order = projected[index];
+        const id = String(order.id);
+        if (currentIds.has(id)) continue;
+        next.unshift(order);
+        changed = true;
+      }
+
+      return changed ? next : current;
+    });
+  }, [orders]);
+
   const [motoboys, setMotoboys] = useState<any[]>([]);
   const [motoboysLoadState, setMotoboysLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const motoboysRequestRef = useRef(0);

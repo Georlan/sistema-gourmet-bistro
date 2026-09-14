@@ -1,0 +1,76 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import type { Order } from '../src/types';
+import { projectDeliveryOrdersFromSharedSnapshot } from '../src/components/caixa/orders/deliveryOrderProjection';
+
+const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+
+test('optimistic Caixa delivery keeps the operational information needed by the Kanban', () => {
+  const now = Date.now();
+  const optimistic: Order = {
+    id: `temp-${now}`,
+    mesaId: 0,
+    garcomId: 'c-01',
+    garcomNome: 'Caixa 1',
+    timestamp: now,
+    created_at: new Date(now).toISOString(),
+    tipo: 'Entrega',
+    valorPago: 0,
+    identificador: 'Cliente Teste',
+    clienteId: 'customer-1',
+    clientePhone: '88999999999',
+    statusComanda: null,
+    deliveryStatus: 'producao',
+    deliveryAddress: 'Rua Teste, 123',
+    deliveryTax: 5,
+    origemOperacional: 'caixa',
+    mesaOrigemId: null,
+    mesaTransferidaDe: null,
+    itens: [
+      {
+        id: 'temp-item-1',
+        produtoId: 'p-1',
+        nome: 'Hambúrguer',
+        preco: 20,
+        observacao: 'sem cebola',
+        clienteNome: 'Cliente Teste',
+        status: 'preparando',
+      },
+    ],
+  };
+
+  const [projected] = projectDeliveryOrdersFromSharedSnapshot([optimistic]);
+  assert.ok(projected);
+  assert.equal(projected.id, optimistic.id);
+  assert.equal(projected.cliente, 'Cliente Teste');
+  assert.equal(projected.telefone, '88999999999');
+  assert.equal(projected.endereco, 'Rua Teste, 123');
+  assert.equal(projected.total, 25);
+  assert.equal(projected.origemOperacional, 'caixa');
+  assert.equal(projected.modalidade, 'delivery');
+  assert.equal(projected.status, 'producao');
+});
+
+test('PDV reconciles or rolls back the temporary order instead of leaving duplicate cards', () => {
+  const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
+  const operational = source('src/components/app/data/useOperationalOrders.ts');
+  const cashierOrders = source('src/components/caixa/orders/useCashierOrders.ts');
+
+  assert.match(pdv, /koma_optimistic_order_reconcile/);
+  assert.match(pdv, /koma_optimistic_order_remove/);
+  assert.match(operational, /koma_optimistic_order_reconcile/);
+  assert.match(operational, /String\(order\.id\) !== tempId/);
+  assert.match(cashierOrders, /projectDeliveryOrdersFromSharedSnapshot\(orders\)/);
+  assert.match(cashierOrders, /id\.startsWith\('temp-'\)/);
+});
+
+test('customer lookup keeps validation and cancellation while removing artificial wait', () => {
+  const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
+
+  assert.match(pdv, /normalizedPhone\.length < 10 \|\| normalizedPhone\.length > 11/);
+  assert.match(pdv, /new AbortController\(\)/);
+  assert.match(pdv, /controller\.abort\(\)/);
+  assert.match(pdv, /\}, 180\);/);
+  assert.doesNotMatch(pdv, /\}, 350\);/);
+});
