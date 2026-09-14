@@ -30,7 +30,7 @@ from ...domain.orders.events import (
     OrderRejected,
 )
 from ...services.outbox import enqueue_outbox_event_in_session
-from ...domain.orders.errors import OrderValidationError
+from ...domain.orders.errors import IdempotencyConflictError, OrderValidationError
 from ...domain.orders.pricing import OrderPricingService, OrderQuote, to_money_decimal
 from ...domain.orders.state_machine import OrderStateMachine
 from ...domain.orders.types import (
@@ -225,6 +225,43 @@ class OrderApplicationService:
         return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")
 
     @classmethod
+    def _validate_service_idempotent_replay(
+        cls,
+        comanda: Comanda,
+        cmd: CreateOrderCommand,
+    ) -> None:
+        """Valida que o replay idempotente corresponde à mesma intenção do pedido."""
+        if comanda.idempotency_fingerprint is not None:
+            if (
+                cmd.idempotency_fingerprint is None
+                or comanda.idempotency_fingerprint_version != cmd.idempotency_fingerprint_version
+                or comanda.idempotency_fingerprint != cmd.idempotency_fingerprint
+            ):
+                raise IdempotencyConflictError("A chave idempotente já foi usada com outro conteúdo de pedido.")
+            return
+
+        expected_tipo = (
+            "Delivery"
+            if cmd.fulfillment == FulfillmentType.DELIVERY
+            else ("Retirada" if cmd.fulfillment == FulfillmentType.PICKUP else "Consumo no Local")
+        )
+        if comanda.tipo and comanda.tipo != expected_tipo:
+            raise IdempotencyConflictError("A chave idempotente já foi usada com outro conteúdo de pedido.")
+
+        cmd_items_sig = sorted(
+            f"{item.product_id}:{item.notes or ''}"
+            for item in cmd.items
+            for _ in range(int(item.quantity))
+        )
+        stored_items_sig = sorted(
+            f"{item.produto_id}:{item.observacao or ''}"
+            for item in comanda.itens
+            if item.status != "cancelado"
+        )
+        if stored_items_sig and cmd_items_sig != stored_items_sig:
+            raise IdempotencyConflictError("A chave idempotente já foi usada com outro conteúdo de pedido.")
+
+    @classmethod
     def create_order(
         cls,
         db: Session,
@@ -253,6 +290,7 @@ class OrderApplicationService:
                     .first()
                 )
                 if comanda:
+                    cls._validate_service_idempotent_replay(comanda, cmd)
                     return cls._to_order_dto(db=db, comanda=comanda, lancamento=existing_lancamento)
 
             # Fallback de idempotência por comanda
@@ -265,6 +303,7 @@ class OrderApplicationService:
                 .first()
             )
             if existing_comanda is not None:
+                cls._validate_service_idempotent_replay(existing_comanda, cmd)
                 lanc = (
                     db.query(Lancamento)
                     .filter(Lancamento.comanda_id == existing_comanda.id)
@@ -500,11 +539,16 @@ class OrderApplicationService:
                     delivery_forma_pagamento=cmd.payment_method,
                     delivery_troco_para=parsed_troco,
                     idempotency_key=cmd.idempotency_key,
+                    idempotency_fingerprint=cmd.idempotency_fingerprint,
+                    idempotency_fingerprint_version=cmd.idempotency_fingerprint_version,
                 )
                 db.add(comanda)
                 db.flush()
             else:
                 # Comanda existente (ex: mesa ou segundo pedido)
+                if cmd.idempotency_fingerprint and not comanda.idempotency_fingerprint:
+                    comanda.idempotency_fingerprint = cmd.idempotency_fingerprint
+                    comanda.idempotency_fingerprint_version = cmd.idempotency_fingerprint_version
                 if coupon_discount_applied > Decimal("0.00") and cupom_db_id:
                     comanda.cupom_id = cupom_db_id
                     comanda.valor_desconto_cupom = float(coupon_discount_applied)
@@ -635,7 +679,26 @@ class OrderApplicationService:
                         .first()
                     )
                     if comanda:
+                        cls._validate_service_idempotent_replay(comanda, cmd)
                         return cls._to_order_dto(db=db, comanda=comanda, lancamento=winner)
+
+                winner_comanda = (
+                    db.query(Comanda)
+                    .filter(
+                        Comanda.restaurante_id == cmd.restaurant_id,
+                        Comanda.idempotency_key == cmd.idempotency_key,
+                    )
+                    .first()
+                )
+                if winner_comanda:
+                    cls._validate_service_idempotent_replay(winner_comanda, cmd)
+                    lanc = (
+                        db.query(Lancamento)
+                        .filter(Lancamento.comanda_id == winner_comanda.id)
+                        .order_by(Lancamento.timestamp.asc())
+                        .first()
+                    )
+                    return cls._to_order_dto(db=db, comanda=winner_comanda, lancamento=lanc)
             raise
 
         return cls._to_order_dto(

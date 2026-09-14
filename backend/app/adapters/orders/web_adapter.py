@@ -23,10 +23,12 @@ from ...application.orders.commands import (
     DeliveryInput,
     OrderItemInput,
 )
+from ...application.orders.idempotency import compute_fingerprint_for_public_payload
 from ...application.orders.service import OrderApplicationService
 from ...database import current_restaurante_id
 from ...domain.orders.errors import (
     EmptyOrderItemsError,
+    IdempotencyConflictError,
     InvalidFulfillmentDetailsError,
     InvalidItemQuantityError,
     InvalidOrderTransitionError,
@@ -167,8 +169,23 @@ def _ensure_idempotent_replay_matches(
     payload: CardapioPedidoCreate,
     *,
     tipo_comanda: str,
+    fingerprint: Optional[str] = None,
+    fingerprint_version: Optional[int] = None,
 ) -> None:
     """Não permite que a mesma chave idempotente represente pedidos diferentes."""
+    if comanda.idempotency_fingerprint is not None:
+        if (
+            fingerprint is None
+            or comanda.idempotency_fingerprint_version != fingerprint_version
+            or comanda.idempotency_fingerprint != fingerprint
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada com outro conteúdo de pedido.",
+            )
+        return
+
+    # Fallback legado: comanda no banco não possui fingerprint persistido
     if comanda.tipo != tipo_comanda or _stored_items_signature(comanda) != _payload_items_signature(payload):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -322,12 +339,19 @@ class CardapioWebAdapter:
                     scheduled_for=scheduled_for,
                 )
 
+            fingerprint_intent = compute_fingerprint_for_public_payload(
+                payload,
+                scheduled_for=normalized_schedule or scheduled_for,
+            )
+
             existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
             if existing_comanda:
                 _ensure_idempotent_replay_matches(
                     existing_comanda,
                     payload,
                     tipo_comanda=tipo_comanda,
+                    fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
+                    fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 )
                 logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
                 existing_intent = db.query(OnlinePaymentIntent).filter(
@@ -461,6 +485,8 @@ class CardapioWebAdapter:
                 payment_method=payload.forma_pagamento_detalhe,
                 change_for=str(payload.troco_para) if payload.troco_para is not None else None,
                 idempotency_key=idempotency_key or None,
+                idempotency_fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
+                idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 operator_user_id=garcom.id,
                 defer_operational_publish=online_payment or is_scheduled,
             )
@@ -550,6 +576,12 @@ class CardapioWebAdapter:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(err),
             )
+        except IdempotencyConflictError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(err),
+            )
         except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
             db.rollback()
             raise HTTPException(
@@ -591,6 +623,8 @@ class CardapioWebAdapter:
                     concurrent_order,
                     payload,
                     tipo_comanda=tipo_comanda,
+                    fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
+                    fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 )
                 logger.info(
                     "Corrida idempotente resolvida para pedido público: %s",

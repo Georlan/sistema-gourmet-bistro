@@ -127,3 +127,13 @@ class MinimumOrderAmountNotMetError(OrderValidationError):
         super().__init__(
             f"O valor mínimo para entrega é de R$ {minimum_amount:.2f} (subtotal atual: R$ {subtotal:.2f})."
         )
+
+
+class IdempotencyConflictError(OrderValidationError):
+    """A chave idempotente já foi usada com outro conteúdo de pedido."""
+
+    def __init__(
+        self,
+        message: str = "A chave idempotente já foi usada com outro conteúdo de pedido.",
+    ) -> None:
+        super().__init__(message)
