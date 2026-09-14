@@ -1,16 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
-import { readCheckLaunchIdentities } from '../../../domain/orderIdentity';
 import { Order, Product } from '../../../types';
-import { parseBackendTimestamp } from '../../../utils/dateTime';
-
-const parseBackendDateTime = (dateStr: any): number => {
-  return parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
-};
 import type { OperationalRequestContext, OperationalErrorSink } from '../operationalContracts';
+import { mapBackendComandaToOperationalOrder } from './operationalOrderMapping';
+
 type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
   liveProdutos: Product[];
   scopeKey: string;
+};
+
+type OptimisticItemStatus = {
+  status: 'preparando' | 'pronto' | 'entregue';
+  ts: number;
 };
 
 /** Owns the shared order snapshot, response mapping, targeted refresh and optimistic overlays. */
@@ -26,9 +27,7 @@ export function useOperationalOrders({
   // Protocol IDs are data, never property names on a prototype-bearing object.
   const targetedOrderRequestRef = useRef(new Map<string, number>());
 
-  const optimisticItemStatusRef = useRef<
-    Map<string, { status: 'preparando' | 'pronto' | 'entregue'; ts: number }>
-  >(new Map());
+  const optimisticItemStatusRef = useRef<Map<string, OptimisticItemStatus>>(new Map());
 
   const [loadedScopeKey, setLoadedScopeKey] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -49,64 +48,21 @@ export function useOperationalOrders({
     setLoadedScopeKey('');
   }, [scopeKey]);
 
-  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => ({
-    launchIdentities: readCheckLaunchIdentities(comanda),
-    id: comanda.id,
-    numeroPedido: Number.isFinite(Number(comanda.numero_pedido)) ? Number(comanda.numero_pedido) : undefined,
-    origemOperacional: (() => {
-      const origins = (Array.isArray(comanda.lancamentos) ? comanda.lancamentos : []).map((launch: any) =>
-        String(launch?.origem || '').toLowerCase(),
-      );
-      if (origins.includes('smartpos')) return 'smartpos';
-      if (origins.includes('cardapio')) return 'cardapio';
-      if (origins.includes('caixa')) return 'caixa';
-      if (origins.includes('garcom')) return 'garcom';
-      return 'desconhecida';
-    })(),
-    clienteId: comanda.cliente_id || comanda.cliente?.id || null,
-    clientePhone: comanda.cliente?.telefone || comanda.delivery_telefone || comanda.telefone || null,
-    mesaId: comanda.mesa_id || 0,
-    garcomId: comanda.garcom_id,
-    garcomNome: comanda.criada_por?.nome || comanda.garcom?.nome || 'Garçom',
-    timestamp: parseBackendDateTime(comanda.criado_em),
-    created_at: comanda.criado_em,
-    tipo: comanda.tipo,
-    valorPago: comanda.valor_pago || 0,
-    identificador: comanda.identificador || null,
-    statusComanda: comanda.status_comanda || null,
-    deliveryStatus: comanda.delivery_status || null,
-    deliveryTax: Number(comanda.delivery_taxa) || 0,
-    deliveryAddress: comanda.delivery_endereco || null,
-    mesaOrigemId: comanda.mesa_origem_id || null,
-    mesaTransferidaDe: comanda.mesa_transferida_de || null,
-    itens: (comanda.itens || [])
-      .filter((item: any) => item.status !== 'cancelado')
-      .map((item: any) => {
+  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => {
+    const mapped = mapBackendComandaToOperationalOrder({ comanda, liveProdutos });
+    return {
+      ...mapped,
+      itens: mapped.itens.map((item) => {
         const opt = optimisticItemStatusRef.current.get(String(item.id));
-        let effectiveStatus = item.status;
-        if (opt && now - opt.ts < 8000) {
-          if (opt.status === item.status) {
-            optimisticItemStatusRef.current.delete(String(item.id));
-          } else {
-            effectiveStatus = opt.status;
-          }
+        if (!opt || now - opt.ts >= 8000) return item;
+        if (opt.status === item.status) {
+          optimisticItemStatusRef.current.delete(String(item.id));
+          return item;
         }
-        return {
-          id: item.id,
-          produtoId: item.produto_id,
-          nome:
-            item.produto?.nome ||
-            liveProdutos.find((p) => p.id === item.produto_id)?.nome ||
-            `Item #${item.produto_id}`,
-          preco: item.preco_unit,
-          observacao: item.observacao || '',
-          clienteNome: item.cliente_nome || 'Consumo Geral',
-          status: effectiveStatus,
-          pago: Boolean(item.pago),
-          lancamentoId: item.lancamento_id,
-        };
+        return { ...item, status: opt.status };
       }),
-  });
+    };
+  };
 
   const fetchOrdersFromAPI = async () => {
     if (!scopeKey) return;
@@ -192,8 +148,8 @@ export function useOperationalOrders({
 
       const mappedOrder = mapBackendComandaToOrder(await response.json());
       if (
-        requestScopeKey !== scopeKeyRef.current
-        || targetedOrderRequestRef.current.get(normalizedId) !== requestVersion
+        requestScopeKey !== scopeKeyRef.current ||
+        targetedOrderRequestRef.current.get(normalizedId) !== requestVersion
       ) return;
 
       setOrders((prevOrders) => {
