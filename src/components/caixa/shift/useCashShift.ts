@@ -38,11 +38,16 @@ export function useCashShift({
   const fetchTurno = async () => {
     const requestId = ++turnoRequestIdRef.current;
     try {
-      setTurnoLoadState('loading');
+      // Depois da primeira leitura, uma reconciliação de foco/realtime não deve
+      // apagar um estado já conhecido. Mantemos o último snapshot válido até a
+      // nova resposta chegar; "loading" é reservado ao bootstrap inicial.
+      setTurnoLoadState((current) => (current === 'loaded' ? current : 'loading'));
       setIsLoading(true);
       const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, { headers: authHeaders });
       if (!res.ok) {
-        if (requestId === turnoRequestIdRef.current) setTurnoLoadState('error');
+        if (requestId === turnoRequestIdRef.current) {
+          setTurnoLoadState((current) => (current === 'loaded' ? current : 'error'));
+        }
         return;
       }
       const data = await res.json();
@@ -52,7 +57,7 @@ export function useCashShift({
     } catch (err) {
       if (requestId === turnoRequestIdRef.current) {
         console.error('Error fetching shift status', err);
-        setTurnoLoadState('error');
+        setTurnoLoadState((current) => (current === 'loaded' ? current : 'error'));
       }
     } finally {
       if (requestId === turnoRequestIdRef.current) setIsLoading(false);
