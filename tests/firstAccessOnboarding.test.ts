@@ -12,6 +12,7 @@ const gateHook = source('../src/components/onboarding/useOnboardingAccessGate.ts
 const main = source('../src/main.tsx');
 const unifiedEntry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
 const navigation = source('../src/components/caixa/navigation/useCashierNavigation.ts');
+const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
 const routeComposition = source('../backend/app/routes/__init__.py');
 const desktopSidebar = source('../src/components/caixa/navigation/CashierDesktopSidebar.tsx');
 const mobileSidebar = source('../src/components/caixa/navigation/CashierMobileSidebar.tsx');
@@ -44,15 +45,27 @@ test('required onboarding persists and blocks normal operation until 3 of 3 is c
   assert.match(gateHook, /\/api\/onboarding\/status/);
 });
 
-test('setup mode exposes configuration without exposing the operational navigation', () => {
-  assert.match(navigation, /SETUP_ALLOWED_TABS/);
+test('setup mode exposes canonical configuration without exposing normal operation', () => {
+  assert.match(navigation, /SETUP_DIRECT_TABS/);
   assert.match(navigation, /'cardapio'/);
   assert.match(navigation, /'cardapio_digital'/);
+  assert.match(navigation, /tab === 'impressao_salao' && subTab === 'integracoes'/);
   assert.match(navigation, /Finalize a implantação inicial antes de acessar a operação/);
   assert.match(desktopSidebar, /setupMode \?/);
   assert.match(desktopSidebar, /Conclua dados do restaurante, horários e cardápio/);
   assert.match(mobileSidebar, /Você está na implantação inicial/);
   assert.match(mobileSidebar, /!setupMode &&/);
+});
+
+test('initial setup reuses the same cashier online-menu screens and Mercado Pago integration owner', () => {
+  assert.match(onboarding, /subTab: 'cardapio_perfil'/);
+  assert.match(onboarding, /subTab: 'cardapio_pedidos'/);
+  assert.match(onboarding, /subTab: 'cardapio_pagamentos'/);
+  assert.match(onlineMenu, /cardapio_perfil: 'perfil'/);
+  assert.match(onlineMenu, /cardapio_pedidos: 'pedidos'/);
+  assert.match(onlineMenu, /cardapio_pagamentos: 'pagamentos'/);
+  assert.match(onlineMenu, /setActiveTab\('impressao_salao'\)/);
+  assert.match(onlineMenu, /setActiveSubTab\('integracoes'\)/);
 });
 
 test('hosted management routes and canonical app both use the onboarding boundary', () => {
