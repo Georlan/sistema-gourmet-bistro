@@ -23,7 +23,7 @@ from app.models import (
 )
 from app.services.clientes import registrar_fidelidade_compra_quitada
 from app.services.customer_relationship import load_customer_relationship_metrics
-from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_setup
+from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_client, char_setup
 
 
 def _web_order(db: Session, *, phone: str, name: str, address: str):
