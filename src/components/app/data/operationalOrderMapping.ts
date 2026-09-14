@@ -2,11 +2,6 @@ import { readCheckLaunchIdentities } from '../../../domain/orderIdentity';
 import type { Order, Product } from '../../../types';
 import { parseBackendTimestamp } from '../../../utils/dateTime';
 
-export type OptimisticItemStatus = {
-  status: 'preparando' | 'pronto' | 'entregue';
-  ts: number;
-};
-
 const parseBackendDateTime = (dateStr: any): number =>
   parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
 
@@ -24,17 +19,14 @@ const readOperationalOrigin = (comanda: any): NonNullable<Order['origemOperacion
 /**
  * Normaliza a comanda compartilhada preservando, também nos itens, o contexto
  * operacional que Caixa e KDS precisam reconhecer da mesma forma.
+ * O overlay otimista continua pertencendo ao hook operacional, que é o dono do cache.
  */
 export function mapBackendComandaToOperationalOrder({
   comanda,
   liveProdutos,
-  optimisticItemStatus,
-  now = Date.now(),
 }: {
   comanda: any;
   liveProdutos: readonly Product[];
-  optimisticItemStatus?: Map<string, OptimisticItemStatus>;
-  now?: number;
 }): Order {
   const launchIdentities = readCheckLaunchIdentities(comanda);
   const numeroPedido = Number.isFinite(Number(comanda.numero_pedido))
@@ -68,15 +60,6 @@ export function mapBackendComandaToOperationalOrder({
     itens: (comanda.itens || [])
       .filter((item: any) => item.status !== 'cancelado')
       .map((item: any) => {
-        const opt = optimisticItemStatus?.get(String(item.id));
-        let effectiveStatus = item.status;
-        if (opt && now - opt.ts < 8000) {
-          if (opt.status === item.status) {
-            optimisticItemStatus?.delete(String(item.id));
-          } else {
-            effectiveStatus = opt.status;
-          }
-        }
         const launchId = item.lancamento_id ? String(item.lancamento_id) : undefined;
         return {
           id: item.id,
@@ -88,7 +71,7 @@ export function mapBackendComandaToOperationalOrder({
           preco: item.preco_unit,
           observacao: item.observacao || '',
           clienteNome: item.cliente_nome || 'Consumo Geral',
-          status: effectiveStatus,
+          status: item.status,
           pago: Boolean(item.pago),
           lancamentoId: launchId,
           comandaId: comanda.id,
