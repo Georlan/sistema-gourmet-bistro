@@ -92,7 +92,7 @@ test('workspace de entregadores exclui retirada e respeita etapas de despacho', 
     baseOrder({ id: 'delivery-preparing', deliveryStatus: 'producao' }),
     baseOrder({ id: 'delivery-ready', deliveryStatus: 'pronto' }),
     baseOrder({ id: 'delivery-route', deliveryStatus: 'transito' }),
-    baseOrder({ id: 'delivery-analysis', deliveryStatus: 'analise' }),
+    baseOrder({ id: 'delivery-pending', deliveryStatus: 'pendente' }),
     baseOrder({ id: 'pickup-ready', tipo: 'Retirada', deliveryStatus: 'pronto' }),
   ]);
 
@@ -100,7 +100,7 @@ test('workspace de entregadores exclui retirada e respeita etapas de despacho', 
 
   assert.deepEqual(buckets.preparing.map((order) => order.id), [
     'delivery-preparing',
-    'delivery-analysis',
+    'delivery-pending',
   ]);
   assert.deepEqual(buckets.ready.map((order) => order.id), ['delivery-ready']);
   assert.deepEqual(buckets.inTransit.map((order) => order.id), ['delivery-route']);
