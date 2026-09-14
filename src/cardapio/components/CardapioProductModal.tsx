@@ -6,7 +6,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  Check,
   ChevronLeft,
   ChevronRight,
   Minus,
@@ -15,6 +14,14 @@ import {
   ShoppingBag,
   X,
 } from "lucide-react";
+import {
+  canIncrementSelectionQuantity,
+  changeSelectionQuantity,
+  modifierOptionQuantity,
+  selectionTypeCount,
+  selectionWithinRules,
+  type ModifierQuantityRules,
+} from "../../domain/modifierQuantity";
 import {
   Product,
   ProductModifier,
@@ -34,10 +41,18 @@ interface CardapioProductModalProps {
   ) => void;
 }
 
+type QuantityModifier = ProductModifier & { minSelection?: number };
+
 const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 }).format(value);
+
+const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => ({
+  optionIds: modifier.options.map((option) => option.id),
+  minSelection: modifier.minSelection ?? (modifier.required ? 1 : 0),
+  maxSelection: Math.max(1, Number(modifier.maxSelection || 1)),
+});
 
 export default function CardapioProductModal({
   product,
@@ -58,8 +73,13 @@ export default function CardapioProductModal({
     [product],
   );
 
-  const allModifiers = useMemo(() => {
-    if (product.modifiers && product.modifiers.length > 0) return product.modifiers;
+  const allModifiers = useMemo<QuantityModifier[]>(() => {
+    if (product.modifiers && product.modifiers.length > 0) {
+      return product.modifiers.map((modifier) => ({
+        ...modifier,
+        minSelection: modifier.required ? 1 : 0,
+      }));
+    }
     if (product.modifierGroups && product.modifierGroups.length > 0) {
       return product.modifierGroups.map((g) => ({
         id: g.id,
@@ -67,11 +87,13 @@ export default function CardapioProductModal({
         required: g.type === "obrigatorio" || g.minSelection > 0,
         maxSelection: g.maxSelection,
         minSelection: g.minSelection,
-        options: g.options.map((o) => ({
-          id: o.id,
-          name: o.name,
-          extraPrice: o.extraPrice,
-        })),
+        options: g.options
+          .filter((option) => option.active !== false)
+          .map((o) => ({
+            id: o.id,
+            name: o.name,
+            extraPrice: o.extraPrice,
+          })),
       }));
     }
     return [];
@@ -126,40 +148,46 @@ export default function CardapioProductModal({
     }
   };
 
-  const handleOptionSelect = (modifier: any, option: ProductOption) => {
+  const handleOptionQuantity = (
+    modifier: QuantityModifier,
+    option: ProductOption,
+    delta: -1 | 1,
+  ) => {
     setFeedback("");
     const currentSelections = selectedOptions[modifier.id] || [];
+    const currentIds = currentSelections.map((selected) => selected.id);
+    const rules = rulesForModifier(modifier);
 
-    if (modifier.maxSelection === 1) {
-      setSelectedOptions((current) => ({ ...current, [modifier.id]: [option] }));
-      return;
+    if (delta > 0 && !canIncrementSelectionQuantity(rules, currentIds, option.id)) {
+      const max = Math.max(1, Number(modifier.maxSelection || 1));
+      if (max === 1) {
+        // Em grupos exclusivos, o + de outra opção substitui a seleção atual.
+      } else {
+        setFeedback(`Você pode escolher até ${max} tipos diferentes em ${modifier.title}. A quantidade de cada adicional continua livre.`);
+        return;
+      }
     }
 
-    const exists = currentSelections.some((selected) => selected.id === option.id);
-    if (exists) {
-      setSelectedOptions((current) => ({
-        ...current,
-        [modifier.id]: currentSelections.filter((selected) => selected.id !== option.id),
-      }));
-      return;
-    }
-
-    if (currentSelections.length >= modifier.maxSelection) {
-      setFeedback(`Você pode escolher até ${modifier.maxSelection} opção${modifier.maxSelection === 1 ? "" : "ões"} em ${modifier.title}.`);
-      return;
-    }
+    const nextIds = changeSelectionQuantity(rules, currentIds, option.id, delta);
+    const optionsById = new Map(modifier.options.map((candidate) => [candidate.id, candidate] as const));
+    const nextSelections = nextIds.flatMap((id) => {
+      const selected = optionsById.get(id);
+      return selected ? [selected] : [];
+    });
 
     setSelectedOptions((current) => ({
       ...current,
-      [modifier.id]: [...currentSelections, option],
+      [modifier.id]: nextSelections,
     }));
   };
 
   const handleAdd = () => {
     const unsatisfied = allModifiers.filter((modifier) => {
       const selections = selectedOptions[modifier.id] || [];
-      const minReq = (modifier as any).minSelection || (modifier.required ? 1 : 0);
-      return selections.length < minReq;
+      return !selectionWithinRules(
+        rulesForModifier(modifier),
+        selections.map((selection) => selection.id),
+      );
     });
 
     if (unsatisfied.length > 0) {
@@ -180,7 +208,6 @@ export default function CardapioProductModal({
       id="product-details-modal"
     >
       <div className="relative flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-[30px] border border-koma-border bg-koma-panel shadow-2xl sm:max-w-lg sm:rounded-[30px] animate-slide-up">
-        {/* Mobile bottom sheet drag handle */}
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-white/40 sm:hidden" />
 
         <div className="relative h-52 w-full shrink-0 overflow-hidden bg-koma-card sm:h-60">
@@ -273,45 +300,79 @@ export default function CardapioProductModal({
             <div className="mt-6 space-y-5 border-t border-koma-border pt-5">
               {allModifiers.map((modifier) => {
                 const selections = selectedOptions[modifier.id] || [];
+                const selectedIds = selections.map((selection) => selection.id);
+                const rules = rulesForModifier(modifier);
+                const selectedTypes = selectionTypeCount(rules, selectedIds);
+                const max = Math.max(1, Number(modifier.maxSelection || 1));
+
                 return (
                   <section key={modifier.id}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
                         <p className="mt-0.5 text-xs text-koma-muted">
-                          {modifier.maxSelection === 1 ? "Escolha uma opção" : `Escolha até ${modifier.maxSelection} opções`}
+                          {max === 1 ? "Escolha uma opção" : `Até ${max} tipos · quantidade livre por adicional`}
                         </p>
                       </div>
-                      <span className={modifier.required
-                        ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400"
-                        : "rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-[10px] font-black uppercase text-koma-muted"}
-                      >
-                        {modifier.required ? "Obrigatório" : "Opcional"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {max > 1 && (
+                          <span className="text-[10px] font-black text-emerald-400">{selectedTypes}/{max} tipos</span>
+                        )}
+                        <span className={modifier.required
+                          ? "rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-400"
+                          : "rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-[10px] font-black uppercase text-koma-muted"}
+                        >
+                          {modifier.required ? "Obrigatório" : "Opcional"}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="mt-3 space-y-2">
                       {modifier.options.map((option) => {
-                        const selected = selections.some((item) => item.id === option.id);
+                        const optionQuantity = modifierOptionQuantity(selectedIds, option.id);
+                        const selected = optionQuantity > 0;
+                        const canIncrement = canIncrementSelectionQuantity(rules, selectedIds, option.id)
+                          || (max === 1 && optionQuantity === 0);
+
                         return (
-                          <button
+                          <div
                             key={option.id}
-                            type="button"
-                            onClick={() => handleOptionSelect(modifier, option)}
-                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 text-left transition ${
+                            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3.5 transition ${
                               selected
                                 ? "border-emerald-500/50 bg-emerald-500/10 shadow-sm"
-                                : "border-koma-border bg-koma-card hover:border-emerald-500/30"
+                                : "border-koma-border bg-koma-card"
                             }`}
                           >
-                            <span className="min-w-0 text-sm font-bold text-koma-foreground">{option.name}</span>
-                            <span className="flex shrink-0 items-center gap-2.5">
-                              {option.extraPrice > 0 && <span className="text-xs font-bold text-emerald-400">+ {formatPrice(option.extraPrice)}</span>}
-                              <span className={`grid h-5 w-5 place-items-center rounded-full border transition ${selected ? "border-emerald-500 bg-emerald-500 text-white" : "border-koma-border text-transparent"}`}>
-                                <Check className="h-3.5 w-3.5" />
-                              </span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-bold text-koma-foreground">{option.name}</span>
+                              {option.extraPrice > 0 && (
+                                <span className="mt-0.5 block text-xs font-bold text-emerald-400">+ {formatPrice(option.extraPrice)} cada</span>
+                              )}
                             </span>
-                          </button>
+                            <span className="flex shrink-0 items-center rounded-xl border border-koma-border bg-koma-raised p-1">
+                              <button
+                                type="button"
+                                onClick={() => handleOptionQuantity(modifier, option, -1)}
+                                disabled={optionQuantity <= 0}
+                                className="grid h-8 w-8 place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
+                                aria-label={`Remover uma unidade de ${option.name}`}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </button>
+                              <span className="w-8 text-center font-mono text-sm font-black text-koma-foreground" aria-label={`${optionQuantity} unidade(s) de ${option.name}`}>
+                                {optionQuantity}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleOptionQuantity(modifier, option, 1)}
+                                disabled={!canIncrement}
+                                className="grid h-8 w-8 place-items-center rounded-lg text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-30"
+                                aria-label={`Adicionar uma unidade de ${option.name}`}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </button>
+                            </span>
+                          </div>
                         );
                       })}
                     </div>
