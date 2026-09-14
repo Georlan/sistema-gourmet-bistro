@@ -79,6 +79,16 @@ def _effective_tracking_status(comanda: Comanda) -> str:
     return raw_status
 
 
+def _iso_or_none(value: Any) -> str | None:
+    """Serializa timestamps vindos tanto do ORM/PostgreSQL quanto de SQL textual/SQLite."""
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    raw = str(value).strip()
+    return raw or None
+
+
 def _active_ordering_block(
     db: Session,
     *,
@@ -194,7 +204,7 @@ def consultar_pedido_por_token(
             if it.status != "cancelado"
         ]
 
-        closed_at_iso = closed_at.isoformat() if closed_at else None
+        closed_at_iso = _iso_or_none(closed_at)
         effective_status = _effective_tracking_status(comanda)
         state_contract = build_order_state_contract(
             effective_status,
