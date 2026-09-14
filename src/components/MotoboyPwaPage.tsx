@@ -3,6 +3,7 @@ import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, Shoppi
 import clsx from 'clsx';
 import { API_BASE_URL } from '../config/api';
 import { formatWhatsAppPhone } from '../config/whatsappUtils';
+import { KomaLoading } from './app/KomaLoading';
 
 interface EntregaItem {
   id: string;
@@ -163,12 +164,7 @@ export function MotoboyPwaPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-koma-page text-koma-foreground flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4" />
-        <p className="text-koma-subtle text-sm font-medium">Carregando painel do entregador...</p>
-      </div>
-    );
+    return <KomaLoading label="Carregando painel do entregador..." />;
   }
 
   if (errorMsg) {

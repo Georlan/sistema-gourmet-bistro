@@ -51,6 +51,22 @@ test('envia os IDs das opções de todos os grupos, inclusive opções gratuitas
   assert.equal(payload.cliente_nome, 'Ana (Mesa 7)');
 });
 
+test('preserva IDs repetidos para quantidade do mesmo adicional', () => {
+  const item = cartItem({
+    selectedOptions: {
+      extras: [
+        { id: 'option-egg', name: 'Ovo', extraPrice: 2 },
+        { id: 'option-egg', name: 'Ovo', extraPrice: 2 },
+        { id: 'option-bacon', name: 'Bacon', extraPrice: 5 },
+      ],
+    },
+  });
+  const [payload] = buildCardapioOrderItems([item], 'Ana');
+
+  assert.deepEqual(payload.modificador_ids, ['option-egg', 'option-egg', 'option-bacon']);
+  assert.equal(payload.observacao, 'Opções: 2x Ovo, Bacon');
+});
+
 test('duas unidades enviam o adicional uma vez; a multiplicação pertence ao servidor', () => {
   const item = cartItem({
     quantity: 2,

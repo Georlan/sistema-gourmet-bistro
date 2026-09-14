@@ -38,6 +38,7 @@ import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
+import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import { resolveKomaHost } from "../domain/komaHost";
 import { smartSearchMatch } from "../domain";
@@ -649,11 +650,10 @@ export default function CardapioPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-koma-page p-6 text-koma-foreground">
-        <div className="h-11 w-11 animate-spin rounded-full border-4 border-emerald-500/20 border-t-emerald-500" />
-        <h2 className="mt-4 text-sm font-black">Carregando cardápio</h2>
-        <p className="mt-1 text-xs text-koma-muted">Produtos e informações do restaurante em um único carregamento.</p>
-      </div>
+      <KomaLoading
+        label="Carregando cardápio"
+        detail="Produtos e informações do restaurante em um único carregamento."
+      />
     );
   }
 
@@ -757,12 +757,12 @@ export default function CardapioPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-start gap-3">
-                <div className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-xl", rejected ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400")}>
+                <div className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-xl", rejected ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400")}> 
                   {rejected ? <XCircle className="h-5 w-5" /> : terminal ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={clsx("text-[9px] font-black uppercase tracking-[0.14em]", rejected ? "text-rose-400" : "text-emerald-400")}>
+                    <span className={clsx("text-[9px] font-black uppercase tracking-[0.14em]", rejected ? "text-rose-400" : "text-emerald-400")}> 
                       Pedido #{activeOrder.numero_pedido}
                     </span>
                     {storedOrders.length > 1 && (
@@ -808,7 +808,7 @@ export default function CardapioPage() {
             </div>
 
             {!rejected && (
-              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}>
+              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}> 
                 {trackingSteps.map((label, index) => {
                   const step = index + 1;
                   const passed = currentStep >= step;

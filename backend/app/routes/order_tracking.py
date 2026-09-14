@@ -11,18 +11,22 @@ Segurança P0:
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db, tenant_session_scope
 from ..models import Comanda, Item, Restaurante
+from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..order_chat_models import OrderConversation, OrderMessage
+from ..services.clientes import normalizar_telefone_cliente
+from ..services.customer_auth import hash_public_rate_key
 from ..services.order_chat_archive_service import reopen_completed_conversation_if_needed
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
@@ -73,6 +77,79 @@ def _effective_tracking_status(comanda: Comanda) -> str:
     if comanda.fechada:
         return "finalizado"
     return raw_status
+
+
+def _iso_or_none(value: Any) -> str | None:
+    """Serializa timestamps vindos tanto do ORM/PostgreSQL quanto de SQL textual/SQLite."""
+    if value is None:
+        return None
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    raw = str(value).strip()
+    return raw or None
+
+
+def _active_ordering_block(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda: Comanda,
+) -> dict[str, Any] | None:
+    """Retorna o bloqueio ativo somente no contexto do token seguro do pedido.
+
+    A rota nunca aceita telefone como chave pública. A identidade é derivada da
+    própria comanda já resolvida pelo capability token e usa exatamente o mesmo
+    fingerprint tenant-local adotado pela barreira autoritativa de criação.
+    """
+    identity_filters = []
+    cliente_id = getattr(comanda, "cliente_id", None)
+    if cliente_id:
+        identity_filters.append(OnlineOrderCustomerBlock.cliente_id == cliente_id)
+
+    raw_phone = getattr(comanda, "delivery_telefone", None)
+    if raw_phone:
+        try:
+            normalized_phone = normalizar_telefone_cliente(raw_phone)
+            phone_hash = hash_public_rate_key(
+                restaurante_id,
+                "online_order_customer_block",
+                normalized_phone,
+            )
+            identity_filters.append(OnlineOrderCustomerBlock.phone_hash == phone_hash)
+        except ValueError:
+            pass
+
+    if not identity_filters:
+        return None
+
+    blocks = (
+        db.query(OnlineOrderCustomerBlock)
+        .filter(
+            OnlineOrderCustomerBlock.restaurante_id == restaurante_id,
+            OnlineOrderCustomerBlock.active.is_(True),
+            or_(*identity_filters),
+        )
+        .order_by(OnlineOrderCustomerBlock.created_at.desc())
+        .all()
+    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for block in blocks:
+        expires_at = block.expires_at
+        if expires_at is not None and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if expires_at is not None and expires_at <= now:
+            continue
+
+        created_at = block.created_at
+        if created_at is not None and created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+        return {
+            "active": True,
+            "reason": block.reason,
+            "created_at": created_at.isoformat() if created_at else None,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        }
+    return None
 
 
 @router.get("/{token}", summary="Consulta segura dos dados de acompanhamento do pedido")
@@ -127,7 +204,7 @@ def consultar_pedido_por_token(
             if it.status != "cancelado"
         ]
 
-        closed_at_iso = closed_at.isoformat() if closed_at else None
+        closed_at_iso = _iso_or_none(closed_at)
         effective_status = _effective_tracking_status(comanda)
         state_contract = build_order_state_contract(
             effective_status,
@@ -152,6 +229,11 @@ def consultar_pedido_por_token(
             "criado_em": comanda.criado_em.isoformat() if comanda.criado_em else None,
             "closed_at": closed_at_iso,
             "itens": itens_payload,
+            "ordering_block": _active_ordering_block(
+                db,
+                restaurante_id=restaurante_id,
+                comanda=comanda,
+            ),
             "restaurante": {
                 "id": restaurante.id if restaurante else restaurante_id,
                 "nome": restaurante.nome if restaurante else "Restaurante",

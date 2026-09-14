@@ -4,6 +4,10 @@ import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Se
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { getProductPresets } from '../../../domain/catalogPresentation';
+import {
+  changeModifierQuantitySelection,
+  modifierGroupSelectionValid,
+} from '../../../domain/modifierQuantity';
 import type { Product } from '../../../types';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import ModifierPicker from '../../shared/ModifierPicker';
@@ -23,15 +27,35 @@ const modifierGroupsFor = (product: Product | null) =>
   product ? ((product as ProductWithModifiers).grupos_modificadores || []) : [];
 
 const modifierSelectionsFor = (groups: CatalogModifierGroup[], selectedIds: string[]): PdvModifierSelection[] => {
-  const selected = new Set(selectedIds);
-  return groups
-    .flatMap((group) => group.opcoes)
-    .filter((option) => option.ativo !== false && selected.has(option.id))
-    .map((option) => ({
+  const optionsById = new Map(
+    groups
+      .flatMap((group) => group.opcoes)
+      .filter((option) => option.ativo !== false)
+      .map((option) => [option.id, option] as const),
+  );
+
+  return selectedIds.flatMap((id) => {
+    const option = optionsById.get(id);
+    if (!option) return [];
+    return [{
       id: option.id,
       nome: option.nome,
       preco: Number(option.preco_adicional || 0),
-    }));
+    }];
+  });
+};
+
+const summarizeModifierSelections = (modifiers: PdvModifierSelection[]) => {
+  const summary = new Map<string, { modifier: PdvModifierSelection; quantity: number }>();
+  modifiers.forEach((modifier) => {
+    const current = summary.get(modifier.id);
+    if (current) {
+      current.quantity += 1;
+      return;
+    }
+    summary.set(modifier.id, { modifier, quantity: 1 });
+  });
+  return Array.from(summary.values());
 };
 
 interface Props {
@@ -103,11 +127,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   );
   const configModifierTotal = configModifiers.reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
   const configUnitTotal = Number(configProduct?.preco || 0) + configModifierTotal;
-  const configValid = configGroups.every((group) => {
-    const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
-    const count = configModifierIds.filter((id) => optionIds.has(id)).length;
-    return count >= Number(group.min_selecoes || 0) && count <= Number(group.max_selecoes || 1);
-  });
+  const configValid = configGroups.every((group) => modifierGroupSelectionValid(group, configModifierIds));
 
   const closeConfig = () => {
     setConfigProduct(null);
@@ -125,16 +145,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     setPdvProductDetailId(null);
   };
 
-  const toggleConfigModifier = (group: CatalogModifierGroup, optionId: string) => {
-    setConfigModifierIds((current) => {
-      const groupOptionIds = new Set(group.opcoes.map((option) => option.id));
-      if (current.includes(optionId)) return current.filter((id) => id !== optionId);
-      const max = Math.max(1, Number(group.max_selecoes || 1));
-      const selectedInGroup = current.filter((id) => groupOptionIds.has(id));
-      if (max === 1) return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
-      if (selectedInGroup.length >= max) return current;
-      return [...current, optionId];
-    });
+  const changeConfigModifierQuantity = (
+    group: CatalogModifierGroup,
+    optionId: string,
+    delta: -1 | 1,
+  ) => {
+    setConfigModifierIds((current) => changeModifierQuantitySelection(group, current, optionId, delta));
   };
 
   const saveConfiguredItem = () => {
@@ -561,9 +577,9 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
                       {(item.modifiers || []).length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                          {(item.modifiers || []).map((modifier) => (
+                          {summarizeModifierSelections(item.modifiers || []).map(({ modifier, quantity }) => (
                             <span key={modifier.id} className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-400">
-                              + {modifier.nome}
+                              + {quantity > 1 ? `${quantity}x ` : ''}{modifier.nome}
                             </span>
                           ))}
                         </div>
@@ -959,7 +975,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   key={`${configProduct.id}-${configCartIndex ?? 'new'}`}
                   groups={configGroups}
                   selectedIds={configModifierIds}
-                  onToggle={toggleConfigModifier}
+                  onQuantityChange={changeConfigModifierQuantity}
                   compact
                 />
               </div>
