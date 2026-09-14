@@ -22,14 +22,20 @@ def current_subscription(user=Depends(administrator), db=Depends(get_db)):
     sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == user.restaurante_id).one_or_none()
     if sub is None:
         return {'subscription': None}
+    normalized_status = str(sub.status or '').strip().lower()
+    trial_starts_after_setup = (
+        sub.trial_started_at is None
+        and normalized_status in {'onboarding', 'suspended'}
+    )
     return {
         'subscription': {
-            'status': sub.status,
+            'status': 'onboarding' if trial_starts_after_setup else sub.status,
             'billingCycle': sub.billing_cycle,
             'paymentMethodType': sub.payment_method_type,
             'paidUntil': sub.current_period_end,
             'trialEndsAt': sub.trial_ends_at,
-            'canCancel': is_recurring_trial_payment_method(sub.payment_method_type) and sub.status != 'canceled',
+            'trialStartsAfterSetup': trial_starts_after_setup,
+            'canCancel': is_recurring_trial_payment_method(sub.payment_method_type) and normalized_status != 'canceled',
         }
     }
 
@@ -71,5 +77,9 @@ def cancel_subscription(user=Depends(administrator), db=Depends(get_db)):
     return {
         'status': 'canceled',
         'paidUntil': sub.current_period_end,
-        'message': 'Cobranças automáticas canceladas. O acesso permanece até o fim do período vigente, inclusive do trial quando aplicável.',
+        'message': (
+            'Cobranças automáticas canceladas. Como o período grátis ainda não havia começado, nenhuma parte dos 7 dias foi consumida.'
+            if sub.trial_started_at is None
+            else 'Cobranças automáticas canceladas. O acesso permanece até o fim do período vigente, inclusive do trial quando aplicável.'
+        ),
     }
