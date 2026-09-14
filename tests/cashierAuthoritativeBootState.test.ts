@@ -57,6 +57,6 @@ test('remote empty states are not presented as authoritative defaults before loa
   assert.match(settingsView, /Aguardando os valores reais do restaurante/);
 
   assert.match(orders, /motoboysLoadState/);
-  assert.match(couriers, /Sincronizando fretistas/);
+  assert.match(couriers, /Sincronizando entregadores/);
   assert.match(shift, /isCaixaMovimentacoesLoading[^\n]*useState\(true\)/);
 });
