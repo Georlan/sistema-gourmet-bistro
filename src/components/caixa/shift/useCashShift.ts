@@ -25,34 +25,22 @@ export function useCashShift({
   const [turnoLoadState, setTurnoLoadState] = useState<CashShiftLoadState>('loading');
   const turnoRequestIdRef = useRef(0);
 
-  // Modals state
   const [showAbrirModal, setShowAbrirModal] = useState(false);
-
-  // Caixa Reorganization States
   const [caixaMovimentacoes, setCaixaMovimentacoes] = useState<CaixaMovimentacao[]>([]);
-
-  const [isCaixaMovimentacoesLoading, setIsCaixaMovimentacoesLoading] = useState(false);
-
+  // A lista vazia só é autoritativa depois da primeira leitura concluir.
+  const [isCaixaMovimentacoesLoading, setIsCaixaMovimentacoesLoading] = useState(true);
   const caixaMovimentacoesRequestRef = useRef(0);
-
   const [fechamentoResult, setFechamentoResult] = useState<FechamentoCaixaResult | null>(null);
-
   const [showSangriaModal, setShowSangriaModal] = useState<boolean>(false);
-
   const [showSuprimentoModal, setShowSuprimentoModal] = useState<boolean>(false);
-
-  // Form states
   const [saldoInicial, setSaldoInicial] = useState<number | ''>(100);
 
-  // Fetch current shift status
   const fetchTurno = async () => {
     const requestId = ++turnoRequestIdRef.current;
     try {
       setTurnoLoadState('loading');
       setIsLoading(true);
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, {
-        headers: authHeaders,
-      });
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, { headers: authHeaders });
       if (!res.ok) {
         if (requestId === turnoRequestIdRef.current) setTurnoLoadState('error');
         return;
@@ -67,42 +55,29 @@ export function useCashShift({
         setTurnoLoadState('error');
       }
     } finally {
-      if (requestId === turnoRequestIdRef.current) {
-        setIsLoading(false);
-      }
+      if (requestId === turnoRequestIdRef.current) setIsLoading(false);
     }
   };
 
-  // Caixa API Handlers
   const fetchTurnoResumo = onRefreshTurnoResumo;
 
   const fetchCaixaMovimentacoes = useCallback(async () => {
     const requestId = ++caixaMovimentacoesRequestRef.current;
     setIsCaixaMovimentacoesLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, {
-        headers: authHeaders,
-      });
+      const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, { headers: authHeaders });
       if (!res.ok) throw new Error(`Falha ao consultar movimentações (${res.status})`);
       const data: CaixaMovimentacao[] = await res.json();
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        setCaixaMovimentacoes(data);
-      }
+      if (requestId === caixaMovimentacoesRequestRef.current) setCaixaMovimentacoes(data);
     } catch (error) {
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        console.error('Erro ao buscar movimentações de caixa:', error);
-      }
+      if (requestId === caixaMovimentacoesRequestRef.current) console.error('Erro ao buscar movimentações de caixa:', error);
     } finally {
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        setIsCaixaMovimentacoesLoading(false);
-      }
+      if (requestId === caixaMovimentacoesRequestRef.current) setIsCaixaMovimentacoesLoading(false);
     }
   }, [apiBaseUrl, authHeaders]);
 
   useEffect(() => {
-    const handleCashUpdated = () => {
-      void fetchCaixaMovimentacoes();
-    };
+    const handleCashUpdated = () => void fetchCaixaMovimentacoes();
     window.addEventListener('koma_cash_updated', handleCashUpdated);
     return () => window.removeEventListener('koma_cash_updated', handleCashUpdated);
   }, [fetchCaixaMovimentacoes]);
@@ -158,7 +133,6 @@ export function useCashShift({
     await fetchTurnoResumo();
   };
 
-  // Handle open cashier
   const handleAbrirCaixa = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
