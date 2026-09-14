@@ -149,10 +149,10 @@ _CANONICAL_DELIVERY_STATUS_TO_LEGACY = {
 }
 
 
-def _normalize_legacy_key(value: str | None) -> str | None:
+def _normalize_legacy_key(value: str | None) -> str:
     """Normaliza chaves textuais legadas antes dos lookups canônicos."""
     if not value:
-        return None
+        return ""
     return str(value).strip().casefold()
 
 
