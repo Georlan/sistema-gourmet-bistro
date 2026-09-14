@@ -20,6 +20,7 @@ from ..services.billing_service import (
     get_billing_setup_by_provider_sub,
     upsert_billing_setup,
 )
+from ..services.onboarding_trial import pause_provider_during_onboarding
 from ..services.restaurant_provisioning import (
     provision_restaurant_for_contract,
     resolve_activation_acceptance,
@@ -123,6 +124,26 @@ def _validate_recurring_mandate(
             )
 
 
+def _pause_authorized_mandate_until_setup(preapproval_id: str) -> None:
+    """Protege os 7 dias imediatamente após a autorização, antes até da liberação manual."""
+    try:
+        provider_result = pause_provider_during_onboarding(preapproval_id)
+    except SaasMercadoPagoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "A autorização foi confirmada, mas ainda não foi possível pausar a recorrência para proteger os 7 dias grátis. "
+                "A inscrição ficou salva e nenhum restaurante foi liberado; tente novamente."
+            ),
+        ) from exc
+
+    if str(provider_result.get("status") or "").strip().lower() != "paused":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="O gateway ainda não confirmou a pausa da recorrência. A inscrição permanece salva e sem liberação.",
+        )
+
+
 @router.get("/payment-methods")
 def available_payment_methods():
     return default_saas_mp_service.checkout_capabilities()
@@ -188,7 +209,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             return {
                 "success": True,
                 "status": "awaiting_release",
-                "message": "Autorização recorrente confirmada. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
+                "message": "Autorização recorrente confirmada e pausada para proteger o período grátis. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
             }
         provision_res = provision_restaurant_for_contract(db, acceptance=acceptance, billing_setup=existing, actor="saas_checkout")
         trial_ends_at = provision_res.get("trial_ends_at")
@@ -222,12 +243,24 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 terms=terms,
                 payment_method_type=existing.payment_method_type,
             )
+            recovered_id = str(recovered["id"])
+            upsert_billing_setup(
+                db,
+                protocol=normalized_protocol,
+                status="pending",
+                payment_method_type=existing.payment_method_type,
+                provider_subscription_id=recovered_id,
+                provider_customer_id=str(recovered.get("payer_id") or "") or None,
+                billing_cycle=canonical_cycle,
+            )
+            db.commit()
+            _pause_authorized_mandate_until_setup(recovered_id)
             upsert_billing_setup(
                 db,
                 protocol=normalized_protocol,
                 status="ready",
                 payment_method_type=existing.payment_method_type,
-                provider_subscription_id=str(recovered["id"]),
+                provider_subscription_id=recovered_id,
                 provider_customer_id=str(recovered.get("payer_id") or "") or None,
                 billing_cycle=canonical_cycle,
             )
@@ -298,6 +331,20 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             raise HTTPException(402, "O provedor ainda não autorizou a assinatura. Nenhuma cobrança antecipada foi feita.")
 
         _validate_recurring_mandate(mp_res, protocol=normalized_protocol, terms=terms, payment_method_type="credit_card")
+        provider_subscription_id = str(mp_res["id"])
+        upsert_billing_setup(
+            db,
+            protocol=normalized_protocol,
+            contract_acceptance_id=str(acceptance.get("acceptance_id")),
+            provider="mercado_pago",
+            payment_method_type="credit_card",
+            status="pending",
+            provider_customer_id=str(mp_res.get("payer_id") or "") or None,
+            provider_subscription_id=provider_subscription_id,
+            billing_cycle=canonical_cycle,
+        )
+        db.commit()
+        _pause_authorized_mandate_until_setup(provider_subscription_id)
         upsert_billing_setup(
             db,
             protocol=normalized_protocol,
@@ -306,7 +353,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             payment_method_type="credit_card",
             status="ready",
             provider_customer_id=str(mp_res.get("payer_id") or "") or None,
-            provider_subscription_id=str(mp_res["id"]),
+            provider_subscription_id=provider_subscription_id,
             billing_cycle=canonical_cycle,
         )
         db.commit()
