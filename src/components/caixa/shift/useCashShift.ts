@@ -8,6 +8,8 @@ type Props = Pick<CaixaPanelProps, 'apiBaseUrl' | 'authHeaders' | 'onRefreshTurn
   setIsLoading: (value: boolean) => void;
 };
 
+export type CashShiftLoadState = 'loading' | 'loaded' | 'error';
+
 /** Owns shift state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashShift({
   apiBaseUrl,
@@ -17,8 +19,10 @@ export function useCashShift({
   setErrorMsg,
   setIsLoading,
 }: Props) {
-  // Turno & Sync state
+  // Turno & Sync state. null means "no open shift" only after turnoLoadState=loaded;
+  // before that it means "unknown", never "closed".
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
+  const [turnoLoadState, setTurnoLoadState] = useState<CashShiftLoadState>('loading');
   const turnoRequestIdRef = useRef(0);
 
   // Modals state
@@ -44,18 +48,23 @@ export function useCashShift({
   const fetchTurno = async () => {
     const requestId = ++turnoRequestIdRef.current;
     try {
+      setTurnoLoadState('loading');
       setIsLoading(true);
       const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, {
         headers: authHeaders,
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (requestId !== turnoRequestIdRef.current) return;
-        setTurno(data);
+      if (!res.ok) {
+        if (requestId === turnoRequestIdRef.current) setTurnoLoadState('error');
+        return;
       }
+      const data = await res.json();
+      if (requestId !== turnoRequestIdRef.current) return;
+      setTurno(data);
+      setTurnoLoadState('loaded');
     } catch (err) {
       if (requestId === turnoRequestIdRef.current) {
         console.error('Error fetching shift status', err);
+        setTurnoLoadState('error');
       }
     } finally {
       if (requestId === turnoRequestIdRef.current) {
@@ -161,7 +170,7 @@ export function useCashShift({
       });
       if (res.ok) {
         setShowAbrirModal(false);
-        fetchTurno();
+        void fetchTurno();
       } else {
         const data = await res.json();
         setErrorMsg(data.detail || 'Erro ao abrir caixa');
@@ -173,6 +182,7 @@ export function useCashShift({
 
   return {
     turno,
+    turnoLoadState,
     showAbrirModal,
     setShowAbrirModal,
     caixaMovimentacoes,
