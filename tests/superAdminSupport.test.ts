@@ -39,6 +39,13 @@ test('modal de suporte exige motivo obrigatório e não manipula senhas de clien
   assert.doesNotMatch(supportModal, /senha_hash|password|client_secret/i);
 });
 
+test('modal de suporte bloqueia submissões concorrentes antes do re-render', () => {
+  assert.match(supportModal, /const isSubmittingRef = useRef\(false\)/);
+  assert.match(supportModal, /if \(isSubmittingRef\.current\) return/);
+  assert.match(supportModal, /isSubmittingRef\.current = true/);
+  assert.match(supportModal, /isSubmittingRef\.current = false/);
+});
+
 test('banner de suporte informa contexto operacional, tempo restante e encerramento', () => {
   assert.match(banner, /Modo Suporte Ativo/);
   assert.match(banner, /Restaurante:/);
