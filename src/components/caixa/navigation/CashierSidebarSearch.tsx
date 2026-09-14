@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { Search } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import type { CashierNavigationGroup } from './cashierNavigation';
 
@@ -31,6 +31,7 @@ export function CashierSidebarSearch({
   closeMobile = false,
 }: Props) {
   const [query, setQuery] = useState('');
+  const resultsId = useId();
 
   const entries = useMemo<SearchEntry[]>(() => {
     return groups.flatMap((group) =>
@@ -86,14 +87,14 @@ export function CashierSidebarSearch({
           }}
           placeholder="Pesquisar funções..."
           aria-label="Pesquisar funções do KÔMA"
-          aria-controls={normalizedQuery ? 'cashier-navigation-search-results' : undefined}
+          aria-controls={normalizedQuery ? resultsId : undefined}
           className="h-9 w-full rounded-xl border border-koma-border bg-koma-raised/40 pl-9 pr-3 text-[11px] font-semibold text-koma-foreground outline-none transition placeholder:text-koma-muted focus:border-emerald-500/50 focus:bg-koma-raised focus:ring-2 focus:ring-emerald-500/10"
         />
       </div>
 
       {normalizedQuery && (
         <div
-          id="cashier-navigation-search-results"
+          id={resultsId}
           role="listbox"
           aria-label="Resultados da pesquisa de funções"
           className="mt-1.5 overflow-hidden rounded-xl border border-koma-border bg-koma-panel shadow-xl"
