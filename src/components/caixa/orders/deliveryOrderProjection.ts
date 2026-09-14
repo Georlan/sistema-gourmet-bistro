@@ -23,6 +23,45 @@ function readActiveDigitalStatus(order: Order): DeliveryOrderView['status'] | nu
   return readActiveDeliveryStatus(order.deliveryStatus);
 }
 
+export type CourierDeliveryBuckets = {
+  preparing: DeliveryOrderView[];
+  ready: DeliveryOrderView[];
+  inTransit: DeliveryOrderView[];
+};
+
+/**
+ * A tela de Entregas é deliberadamente exclusiva de delivery. O Kanban geral
+ * pode continuar projetando delivery + retirada, mas retirada nunca entra no
+ * workspace de despacho de motoboys.
+ *
+ * A separação também respeita a state machine do backend: delivery só pode ser
+ * despachado depois de `pronto`; `transito` significa que o pedido já saiu com
+ * um entregador e pode então ser concluído.
+ */
+export function bucketCourierDeliveryOrders(
+  orders: readonly DeliveryOrderView[],
+): CourierDeliveryBuckets {
+  const buckets: CourierDeliveryBuckets = {
+    preparing: [],
+    ready: [],
+    inTransit: [],
+  };
+
+  orders.forEach((order) => {
+    if (order.modalidade !== 'delivery') return;
+
+    if (order.status === 'analise' || order.status === 'pendente' || order.status === 'producao') {
+      buckets.preparing.push(order);
+    } else if (order.status === 'pronto') {
+      buckets.ready.push(order);
+    } else if (order.status === 'transito') {
+      buckets.inTransit.push(order);
+    }
+  });
+
+  return buckets;
+}
+
 /**
  * Reaproveita o snapshot operacional já carregado pelo App para que o Caixa não
  * precise começar com a coluna online vazia enquanto uma segunda leitura chega.
