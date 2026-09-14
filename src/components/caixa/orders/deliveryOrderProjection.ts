@@ -12,21 +12,28 @@ const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
 
 const DIGITAL_TYPES = new Set(['delivery', 'entrega', 'retirada']);
 
-function isActiveDigitalOrder(order: Order): boolean {
+function readActiveDigitalStatus(order: Order): DeliveryOrderView['status'] | null {
   const type = String(order.tipo || '').trim().toLowerCase();
-  const status = String(order.deliveryStatus || '').trim().toLowerCase();
-  return DIGITAL_TYPES.has(type) && status !== 'finalizado' && status !== 'recusado';
+  if (!DIGITAL_TYPES.has(type)) return null;
+
+  const status = String(order.deliveryStatus || '').trim().toLowerCase() as DeliveryOrderView['status'];
+  return ACTIVE_DELIVERY_STATUSES.has(status) ? status : null;
 }
 
 /**
  * Reaproveita o snapshot operacional já carregado pelo App para que o Caixa não
  * precise começar com a coluna online vazia enquanto uma segunda leitura chega.
- * A leitura dedicada de delivery continua reconciliando o estado em background.
+ * O frontend nunca inventa uma etapa: somente estados ativos presentes no
+ * snapshot autoritativo entram nessa projeção. A leitura dedicada de delivery
+ * continua reconciliando o estado em background.
  */
 export function projectDeliveryOrdersFromSharedSnapshot(
   orders: readonly Order[],
 ): DeliveryOrderView[] {
-  return orders.filter(isActiveDigitalOrder).map((order) => {
+  return orders.flatMap((order) => {
+    const status = readActiveDigitalStatus(order);
+    if (!status) return [];
+
     const activeItems = (order.itens || []).filter((item) => item.status !== 'cancelado');
     const itemCounts: Record<string, number> = {};
     activeItems.forEach((item) => {
@@ -57,11 +64,9 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       (origemOperacional === 'smartpos' ||
         (identifier.trim().toLowerCase() === 'balcão' && !String(order.clientePhone || '').trim()));
 
-    const requestedStatus = String(order.deliveryStatus || 'pendente') as DeliveryOrderView['status'];
-    const status = ACTIVE_DELIVERY_STATUSES.has(requestedStatus) ? requestedStatus : 'pendente';
     const parsedTime = formatBackendTime(order.created_at ?? order.timestamp);
 
-    return {
+    return [{
       id: order.id,
       cliente: order.identificador || 'Cliente Sem Nome',
       telefone: order.clientePhone || '',
@@ -79,6 +84,6 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       criadoEm: parsedTime === '—' ? '12:00' : parsedTime,
       created_at: order.created_at,
       numeroPedido: order.numeroPedido,
-    };
+    }];
   });
 }
