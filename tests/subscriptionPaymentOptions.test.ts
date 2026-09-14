@@ -7,7 +7,7 @@ import {
   getSubscriptionPaymentOptions,
 } from '../src/config/subscriptionPaymentOptions';
 
-test('mensal expõe cartão e Pix Automático sob a mesma política de trial', () => {
+test('mensal mantém cartão disponível e demais meios sob validação segura', () => {
   const options = getSubscriptionPaymentOptions('mensal');
   assert.deepEqual(options.map((option) => option.id), [
     'credit_card',
@@ -15,14 +15,15 @@ test('mensal expõe cartão e Pix Automático sob a mesma política de trial', (
     'nupay',
     'mercado_pago',
   ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), []);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), ['credit_card']);
   assert.equal(SUBSCRIPTION_TRIAL_DAYS, 7);
-  assert.equal(getSubscriptionPaymentOption('credit_card').status, 'validating');
+  assert.equal(getSubscriptionPaymentOption('credit_card').status, 'available');
+  assert.equal(getSubscriptionPaymentOption('credit_card').selectable, true);
   assert.equal(getSubscriptionPaymentOption('pix_automatic').status, 'validating');
   assert.match(getSubscriptionPaymentOption('pix_automatic').checkoutSummary, /7 dias grátis/);
 });
 
-test('anual não oferece Pix antecipado e preserva os 7 dias para depois do setup', () => {
+test('anual oferece cartão recorrente e preserva os 7 dias para depois do setup', () => {
   const options = getSubscriptionPaymentOptions('anual');
   assert.deepEqual(options.map((option) => option.id), [
     'credit_card',
@@ -31,7 +32,7 @@ test('anual não oferece Pix antecipado e preserva os 7 dias para depois do setu
     'mercado_pago',
     'annual_installments',
   ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), []);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), ['credit_card']);
   assert.equal(getSubscriptionPaymentOption('annual_installments').status, 'study');
   assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /7 dias grátis completos/);
   assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /depois do setup essencial/);

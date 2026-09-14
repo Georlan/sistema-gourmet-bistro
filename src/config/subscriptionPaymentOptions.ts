@@ -32,15 +32,15 @@ export const SUBSCRIPTION_TRIAL_DAYS = 7;
 export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] = [
   {
     id: 'credit_card',
-    label: 'Cartão de crédito · em validação',
-    status: 'validating',
-    statusLabel: 'Em validação',
+    label: 'Cartão de crédito',
+    status: 'available',
+    statusLabel: 'Disponível',
     billingCycles: ['mensal', 'anual'],
     checkoutSummary: 'Autorize hoje sem cobrança. Seus 7 dias grátis começam só depois da implantação essencial.',
     landingSummary: '7 dias grátis completos depois de configurar o essencial, antes da primeira cobrança automática no cartão.',
-    previewTitle: 'Cartão de crédito · em validação',
+    previewTitle: 'Cartão de crédito',
     previewDescription: 'O cartão é autorizado sem cobrança da mensalidade fixa no momento da contratação. Enquanto o restaurante configura dados, horários e cardápio, o trial fica preservado. Ao concluir os 3 passos essenciais, começam os 7 dias grátis e a primeira cobrança automática fica para D+7.',
-    selectable: false,
+    selectable: true,
   },
   {
     id: 'pix_automatic',

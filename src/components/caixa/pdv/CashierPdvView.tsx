@@ -4,6 +4,10 @@ import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Se
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { getProductPresets } from '../../../domain/catalogPresentation';
+import {
+  changeModifierQuantitySelection,
+  modifierGroupSelectionValid,
+} from '../../../domain/modifierQuantity';
 import type { Product } from '../../../types';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import ModifierPicker from '../../shared/ModifierPicker';
@@ -123,11 +127,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   );
   const configModifierTotal = configModifiers.reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
   const configUnitTotal = Number(configProduct?.preco || 0) + configModifierTotal;
-  const configValid = configGroups.every((group) => {
-    const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
-    const count = configModifierIds.filter((id) => optionIds.has(id)).length;
-    return count >= Number(group.min_selecoes || 0) && count <= Number(group.max_selecoes || 1);
-  });
+  const configValid = configGroups.every((group) => modifierGroupSelectionValid(group, configModifierIds));
 
   const closeConfig = () => {
     setConfigProduct(null);
@@ -150,25 +150,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     optionId: string,
     delta: -1 | 1,
   ) => {
-    setConfigModifierIds((current) => {
-      const groupOptionIds = new Set(
-        group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id),
-      );
-      const max = Math.max(1, Number(group.max_selecoes || 1));
-
-      if (delta > 0) {
-        const selectedInGroup = current.filter((id) => groupOptionIds.has(id)).length;
-        if (max === 1) {
-          return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
-        }
-        if (selectedInGroup >= max) return current;
-        return [...current, optionId];
-      }
-
-      const removeIndex = current.lastIndexOf(optionId);
-      if (removeIndex < 0) return current;
-      return current.filter((_, index) => index !== removeIndex);
-    });
+    setConfigModifierIds((current) => changeModifierQuantitySelection(group, current, optionId, delta));
   };
 
   const saveConfiguredItem = () => {
