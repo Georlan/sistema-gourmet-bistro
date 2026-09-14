@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { projectCashierDeliveryState } from '../../../domain/cashierOrderProjection';
+import { isCashierTableOrder, projectCashierDeliveryState } from '../../../domain/cashierOrderProjection';
 import { deriveFinancialState } from '../../../domain/operationalState';
 import type { Order } from '../../../types';
 import type { DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
@@ -170,7 +170,9 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     };
   }, []);
 
-  // Monitor universal de pedidos e mesas (Garçom / Caixa / Salão)
+  // Monitor universal de pedidos presenciais. Pedidos digitais têm um monitor
+  // dedicado abaixo; misturar os dois faria o mesmo pedido tocar como "novo pedido"
+  // e depois novamente como "delivery pendente".
   const isInitialOrdersMountRef = useRef(true);
 
   const prevOrdersSignatureRef = useRef({
@@ -180,7 +182,11 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
 
   useEffect(() => {
     const active = orders.filter(
-      (o) => !String(o.id || '').startsWith('temp-') && o.status !== 'fechada' && o.status !== 'cancelado'
+      (o) =>
+        !String(o.id || '').startsWith('temp-') &&
+        o.status !== 'fechada' &&
+        o.status !== 'cancelado' &&
+        isCashierTableOrder(o)
     );
     const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
     const billRequestedCount = active.filter(
@@ -208,7 +214,8 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     prevOrdersSignatureRef.current = { itemsCount, billRequestedCount };
   }, [orders, playOrderAlert]);
 
-  // Monitor de pedidos delivery / online pendentes
+  // Monitor de pedidos delivery / online pendentes. O primeiro snapshot apenas
+  // estabelece a linha de base; recarregar a página nunca deve tocar pedidos antigos.
   const prevDeliveryPendingCountRef = useRef<number | null>(null);
 
   useEffect(() => {
