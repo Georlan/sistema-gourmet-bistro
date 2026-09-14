@@ -229,7 +229,7 @@ def release_signup(
     if not billing_setup or billing_setup.status != "ready":
         raise HTTPException(
             status_code=409,
-            detail="A contratação só pode ser liberada após o pagamento ou autorização do cartão estar confirmado (status ready).",
+            detail="A contratação só pode ser liberada após a autorização recorrente estar confirmada (status ready).",
         )
 
     reason = payload.reason if payload and payload.reason else "Liberação manual de inscrição confirmada pelo SuperAdmin"
@@ -243,15 +243,20 @@ def release_signup(
         reason=reason,
     )
 
+    trial_ends_at = provision_res.get("trial_ends_at")
     return {
         "success": True,
         "status": "activated",
         "restaurant_id": str(provision_res["restaurant_id"]),
         "slug": provision_res["slug"],
         "admin_email": provision_res["admin_email"],
-        "trial_ends_at": provision_res["trial_ends_at"].isoformat(),
+        "trial_status": provision_res.get("trial_status", "onboarding"),
+        "trial_ends_at": trial_ends_at.isoformat() if trial_ends_at else None,
         "invitation_token": provision_res.get("invitation_token"),
         "protocol": normalized,
         "idempotent": False,
-        "message": "Inscrição liberada com sucesso! Restaurante provisionado e envio do convite agendado.",
+        "message": (
+            "Inscrição liberada com sucesso. O restaurante já pode concluir a implantação; "
+            "os 7 dias grátis permanecem preservados até os 3 passos essenciais ficarem prontos."
+        ),
     }
