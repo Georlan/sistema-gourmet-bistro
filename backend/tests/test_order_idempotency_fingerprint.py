@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 
@@ -775,9 +776,18 @@ def test_18_concorrencia_mesma_chave_mesmo_payload_um_vencedor_outro_reusa():
     payload = _base_payload(key=key, phone="81999990018")
     headers = {"X-Idempotency-Key": key}
 
+    barrier = threading.Barrier(2)
+
+    def _send():
+        try:
+            barrier.wait(timeout=5)
+        except Exception:
+            pass
+        return client.post("/cardapio/pedidos", json=payload, headers=headers)
+
     with ThreadPoolExecutor(max_workers=2) as executor:
-        f1 = executor.submit(client.post, "/cardapio/pedidos", json=payload, headers=headers)
-        f2 = executor.submit(client.post, "/cardapio/pedidos", json=payload, headers=headers)
+        f1 = executor.submit(_send)
+        f2 = executor.submit(_send)
         r1 = f1.result()
         r2 = f2.result()
 
@@ -801,9 +811,18 @@ def test_19_concorrencia_mesma_chave_payloads_conflitantes_um_vencedor_outro_409
 
     headers = {"X-Idempotency-Key": key}
 
+    barrier = threading.Barrier(2)
+
+    def _send(p):
+        try:
+            barrier.wait(timeout=5)
+        except Exception:
+            pass
+        return client.post("/cardapio/pedidos", json=p, headers=headers)
+
     with ThreadPoolExecutor(max_workers=2) as executor:
-        f1 = executor.submit(client.post, "/cardapio/pedidos", json=p1, headers=headers)
-        f2 = executor.submit(client.post, "/cardapio/pedidos", json=p2, headers=headers)
+        f1 = executor.submit(_send, p1)
+        f2 = executor.submit(_send, p2)
         r1 = f1.result()
         r2 = f2.result()
 
