@@ -153,7 +153,6 @@ def start_support_session(
                 "support_mode": True,
                 "support_session_id": session_id,
                 "operator": operator,
-                "reason": clean_reason,
                 "jti": token_jti,
             },
         )
