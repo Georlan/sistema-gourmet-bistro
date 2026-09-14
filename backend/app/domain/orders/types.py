@@ -149,13 +149,18 @@ _CANONICAL_DELIVERY_STATUS_TO_LEGACY = {
 }
 
 
+def _normalize_legacy_key(value: str | None) -> str:
+    """Normaliza chaves textuais legadas antes dos lookups canônicos."""
+    if not value:
+        return ""
+    return str(value).strip().casefold()
+
+
 def normalize_to_fulfillment(value: str | FulfillmentType | None) -> FulfillmentType:
     """Traduz string legada de modalidade para FulfillmentType canônico."""
     if isinstance(value, FulfillmentType):
         return value
-    if not value:
-        return FulfillmentType.DINE_IN
-    normalized = str(value).strip().casefold()
+    normalized = _normalize_legacy_key(value)
     return _LEGACY_FULFILLMENT_TO_CANONICAL.get(normalized, FulfillmentType.DINE_IN)
 
 
@@ -168,9 +173,7 @@ def normalize_to_order_status(value: str | OrderStatus | None) -> OrderStatus:
     """Traduz string legada de status para OrderStatus canônico."""
     if isinstance(value, OrderStatus):
         return value
-    if not value:
-        return OrderStatus.PENDING
-    normalized = str(value).strip().casefold()
+    normalized = _normalize_legacy_key(value)
     return _LEGACY_STATUS_TO_CANONICAL.get(normalized, OrderStatus.PENDING)
 
 
@@ -183,9 +186,7 @@ def normalize_to_delivery_status(value: str | DeliveryStatus | None) -> Delivery
     """Traduz string legada de entrega para DeliveryStatus canônico."""
     if isinstance(value, DeliveryStatus):
         return value
-    if not value:
-        return DeliveryStatus.WAITING
-    normalized = str(value).strip().casefold()
+    normalized = _normalize_legacy_key(value)
     return _LEGACY_DELIVERY_STATUS_TO_CANONICAL.get(normalized, DeliveryStatus.WAITING)
 
 
