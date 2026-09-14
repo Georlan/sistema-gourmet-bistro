@@ -2,14 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import { Order, Product } from '../../../types';
 import type { OperationalRequestContext, OperationalErrorSink } from '../operationalContracts';
-import {
-  mapBackendComandaToOperationalOrder,
-  type OptimisticItemStatus,
-} from './operationalOrderMapping';
+import { mapBackendComandaToOperationalOrder } from './operationalOrderMapping';
 
 type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
   liveProdutos: Product[];
   scopeKey: string;
+};
+
+type OptimisticItemStatus = {
+  status: 'preparando' | 'pronto' | 'entregue';
+  ts: number;
 };
 
 /** Owns the shared order snapshot, response mapping, targeted refresh and optimistic overlays. */
@@ -46,13 +48,21 @@ export function useOperationalOrders({
     setLoadedScopeKey('');
   }, [scopeKey]);
 
-  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order =>
-    mapBackendComandaToOperationalOrder({
-      comanda,
-      liveProdutos,
-      optimisticItemStatus: optimisticItemStatusRef.current,
-      now,
-    });
+  const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => {
+    const mapped = mapBackendComandaToOperationalOrder({ comanda, liveProdutos });
+    return {
+      ...mapped,
+      itens: mapped.itens.map((item) => {
+        const opt = optimisticItemStatusRef.current.get(String(item.id));
+        if (!opt || now - opt.ts >= 8000) return item;
+        if (opt.status === item.status) {
+          optimisticItemStatusRef.current.delete(String(item.id));
+          return item;
+        }
+        return { ...item, status: opt.status };
+      }),
+    };
+  };
 
   const fetchOrdersFromAPI = async () => {
     if (!scopeKey) return;
