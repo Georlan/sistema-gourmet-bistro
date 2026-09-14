@@ -30,6 +30,7 @@ export function CashierMobileSidebar({
   setIsMobileSidebarOpen,
   setIsOperatorDrawerOpen,
   turno,
+  turnoLoadState,
   setShowAbrirModal,
   hasOnlineMenu,
   isSidebarTabActive,
@@ -42,6 +43,16 @@ export function CashierMobileSidebar({
   activeWaiterNome,
 }: BoundaryProps) {
   const setupMode = readSetupMode();
+  const shiftKnown = turnoLoadState === 'loaded';
+  const shiftOpen = shiftKnown && turno?.status === 'aberto';
+  const shiftClosed = shiftKnown && !turno;
+  const shiftLabel = shiftOpen
+    ? 'Caixa Aberto'
+    : shiftClosed
+      ? 'Caixa Fechado'
+      : turnoLoadState === 'error'
+        ? 'Estado indisponível'
+        : 'Sincronizando caixa';
 
   return (
     <>
@@ -92,15 +103,15 @@ export function CashierMobileSidebar({
               </div>
 
               {!setupMode && (
-                <div className={clsx('cashier-shift-card', turno?.status === 'aberto' ? 'is-open' : 'is-closed')}>
+                <div className={clsx('cashier-shift-card', shiftOpen ? 'is-open' : shiftClosed ? 'is-closed' : 'is-loading')}>
                   <div className="cashier-shift-card__status">
                     <span className="cashier-shift-card__dot" />
                     <span className="cashier-shift-card__copy">
                       <small>Turno atual</small>
-                      <strong>{turno?.status === 'aberto' ? 'Caixa Aberto' : 'Caixa Fechado'}</strong>
+                      <strong>{shiftLabel}</strong>
                     </span>
                   </div>
-                  {turno?.status !== 'aberto' && (
+                  {shiftClosed && (
                     <button
                       onClick={() => {
                         setShowAbrirModal(true);
