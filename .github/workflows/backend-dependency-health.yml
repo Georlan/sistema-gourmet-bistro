@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'backend/requirements*.txt'
+      - '.github/workflows/backend-dependency-health.yml'
   workflow_dispatch:
 
 permissions:
