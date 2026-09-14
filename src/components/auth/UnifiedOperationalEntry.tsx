@@ -15,6 +15,7 @@ import {
   saveOperatorSession,
   type OperationalPortal,
 } from '../../utils/authSession';
+import { KomaLoading } from '../app/KomaLoading';
 import { OnboardingOperationalBoundary } from '../onboarding/OnboardingOperationalBoundary';
 import { OperationalLogin, type LoginRestaurantOption } from './OperationalLogin';
 
@@ -30,15 +31,7 @@ function resolvePortalForRole(role: AppRole): OperationalPortal | null {
 
 function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
   return (
-    <React.Suspense
-      fallback={(
-        <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
-            Preparando operação…
-          </p>
-        </main>
-      )}
-    >
+    <React.Suspense fallback={<KomaLoading label="Preparando operação…" />}>
       <OperationalApp initialPortal={portal} />
     </React.Suspense>
   );
