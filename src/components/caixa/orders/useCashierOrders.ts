@@ -5,7 +5,7 @@ import type { Order } from '../../../types';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
-import { projectDeliveryOrdersFromSharedSnapshot } from './deliveryOrderProjection';
+import { projectDeliveryOrdersFromSharedSnapshot, readActiveDeliveryStatus } from './deliveryOrderProjection';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -46,11 +46,8 @@ export function useCashierOrders({
   } | null>(null);
 
   const [cancelTableReason, setCancelTableReason] = useState('');
-
   const [isCancellingTable, setIsCancellingTable] = useState(false);
-
   const [tableTransferTargetId, setTableTransferTargetId] = useState('');
-
   const [isTransferringTable, setIsTransferringTable] = useState(false);
 
   const openCancelTableConfirmation = (mesaId: number) => {
@@ -245,22 +242,14 @@ export function useCashierOrders({
   const deliveryMutationSequenceRef = useRef(0);
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
+  const [motoboysLoadState, setMotoboysLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const motoboysRequestRef = useRef(0);
 
-  const [selectedMotoboys, setSelectedMotoboys] = useState<{
-    [orderId: string]: string;
-  }>({});
-
+  const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
   const [novoMotoboyNome, setNewMotoboyNome] = useState('');
-
   const [novoMotoboyTelefone, setNewMotoboyTelefone] = useState('');
-
-  // ── Gaveta de Aceite (Floating Drawer) & Sistema de Áudio Unificado do Caixa ────
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // No Kanban, o card representa um lote (10-A/10-B), mas clicar na Mesa abre o
-  // atendimento inteiro. A seleção é elevada aqui para que todas as ações de mesa
-  // compartilhem o mesmo snapshot, independentemente do lote que recebeu o clique.
   useEffect(() => {
     const selected = selectedKanbanOrder;
     const mesaId = Number(selected?.mesaId || 0);
@@ -286,8 +275,6 @@ export function useCashierOrders({
     });
   }, [orders, selectedKanbanOrder]);
 
-  // O ícone do card respeita o escopo visual: lote 10-A reimprime só 10-A;
-  // cards já consolidados por mesa continuam imprimindo a mesa inteira.
   const handleQuickPrintOrder = async (order: any, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     try {
@@ -299,10 +286,7 @@ export function useCashierOrders({
       } else {
         url = `${apiBaseUrl}/comandas/${order.id}/imprimir-recibo`;
       }
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: authHeaders,
-      });
+      const response = await fetch(url, { method: 'POST', headers: authHeaders });
       if (response.ok) {
         showToast(
           order.projectionScope === 'launch'
@@ -321,24 +305,20 @@ export function useCashierOrders({
     }
   };
 
-  const mapComandaToDeliveryView = (c: any): DeliveryOrderView => {
+  const mapComandaToDeliveryView = (c: any): DeliveryOrderView | null => {
+    const status = readActiveDeliveryStatus(c?.delivery_status);
+    if (!status) return null;
+
     const itemCounts: { [name: string]: number } = {};
     const itensArr = Array.isArray(c?.itens) ? c.itens : Array.isArray(c?.items) ? c.items : [];
     const activeItems = itensArr.filter((it: any) => it.status !== 'cancelado');
     activeItems.forEach((it: any) => {
-      if (it.status !== 'cancelado') {
-        const name = it.produto?.nome || it.nome || 'Item';
-        itemCounts[name] = (itemCounts[name] || 0) + 1;
-      }
+      const name = it.produto?.nome || it.nome || 'Item';
+      itemCounts[name] = (itemCounts[name] || 0) + 1;
     });
-    const itensStr =
-      Object.entries(itemCounts)
-        .map(([name, qty]) => `${qty}x ${name}`)
-        .join(' + ') || 'Nenhum item';
-
+    const itensStr = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
     const total = subtotal + (c.delivery_taxa || 0);
-
     const parsedTime = formatBackendTime(c.criado_em);
     const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
 
@@ -356,23 +336,16 @@ export function useCashierOrders({
             : 'desconhecida';
 
     let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
-    if (c.identificador && c.identificador.toLowerCase().includes('ifood')) {
-      canal = 'ifood';
-    } else if (c.identificador && c.identificador.toLowerCase().includes('whats')) {
-      canal = 'whats';
-    }
+    if (c.identificador && c.identificador.toLowerCase().includes('ifood')) canal = 'ifood';
+    else if (c.identificador && c.identificador.toLowerCase().includes('whats')) canal = 'whats';
 
     const rawAddress = String(c.delivery_endereco || '').trim();
     const rawType = String(c.tipo || '').toLowerCase();
-    const modalidade =
-      rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress) ? 'retirada' : 'delivery';
+    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress) ? 'retirada' : 'delivery';
     const isQuickSale =
       modalidade === 'retirada' &&
       (origemOperacional === 'smartpos' ||
-        (String(c.identificador || '')
-          .trim()
-          .toLowerCase() === 'balcão' &&
-          !String(c.delivery_telefone || '').trim()));
+        (String(c.identificador || '').trim().toLowerCase() === 'balcão' && !String(c.delivery_telefone || '').trim()));
 
     return {
       id: c.id,
@@ -380,16 +353,16 @@ export function useCashierOrders({
       telefone: c.delivery_telefone || '',
       itens: itensStr,
       detailItems: activeItems,
-      total: total,
-      canal: canal,
+      total,
+      canal,
       origemOperacional,
       isQuickSale,
       quantidadeItens: activeItems.length,
       modalidade,
       pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
-      status: c.delivery_status || 'pendente',
+      status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
-      criadoEm: criadoEm,
+      criadoEm,
       created_at: c.criado_em,
       numeroPedido: c.numero_pedido,
     };
@@ -398,54 +371,53 @@ export function useCashierOrders({
   const fetchDeliveryOrders = async () => {
     const requestId = ++deliveryOrdersRequestRef.current;
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, {
-        headers: authHeaders,
-      });
+      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         if (requestId !== deliveryOrdersRequestRef.current) return;
-        const mapped = data.map(mapComandaToDeliveryView).map((order: DeliveryOrderView) => {
-          const pending = pendingDeliveryMutationRef.current[String(order.id)];
-          return pending?.status ? { ...order, status: pending.status } : order;
-        });
+        const mapped = data
+          .map(mapComandaToDeliveryView)
+          .filter((order: DeliveryOrderView | null): order is DeliveryOrderView => order !== null)
+          .map((order: DeliveryOrderView) => {
+            const pending = pendingDeliveryMutationRef.current[String(order.id)];
+            return pending?.status ? { ...order, status: pending.status } : order;
+          });
         setDeliveryOrders(mapped);
       }
     } catch (err) {
-      if (requestId === deliveryOrdersRequestRef.current) {
-        console.error('Error fetching delivery orders', err);
-      }
+      if (requestId === deliveryOrdersRequestRef.current) console.error('Error fetching delivery orders', err);
     }
   };
 
   const fetchMotoboys = async () => {
     const requestId = ++motoboysRequestRef.current;
+    setMotoboysLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/lista`, {
-        headers: authHeaders,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (requestId !== motoboysRequestRef.current) return;
-        setMotoboys(data);
+      const res = await fetch(`${apiBaseUrl}/comandas/motoboys/lista`, { headers: authHeaders });
+      if (!res.ok) {
+        if (requestId === motoboysRequestRef.current) {
+          setMotoboysLoadState((current) => current === 'loaded' ? current : 'error');
+        }
+        return;
       }
+      const data = await res.json();
+      if (requestId !== motoboysRequestRef.current) return;
+      setMotoboys(data);
+      setMotoboysLoadState('loaded');
     } catch (err) {
       if (requestId === motoboysRequestRef.current) {
         console.error('Error fetching motoboys', err);
+        setMotoboysLoadState((current) => current === 'loaded' ? current : 'error');
       }
     }
   };
 
   useEffect(() => {
-    // O App já entregou o snapshot inicial. useCashierRealtime é o único dono da
-    // reconciliação dedicada inicial; aqui mantemos apenas a invalidação explícita.
     const handleDeliveryUpdate = () => {
       void fetchDeliveryOrders();
     };
-
     window.addEventListener('koma_orders_updated', handleDeliveryUpdate);
-    return () => {
-      window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
-    };
+    return () => window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
   }, [apiBaseUrl]);
 
   const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
@@ -501,13 +473,10 @@ export function useCashierOrders({
 
     const previousIndex = deliveryOrders.findIndex((order) => String(order.id) === orderKey);
     const previousOrder = previousIndex >= 0 ? deliveryOrders[previousIndex] : undefined;
-    const optimisticStatus = ['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(statusNovo)
-      ? statusNovo as DeliveryOrderView['status']
-      : undefined;
+    const optimisticStatus = readActiveDeliveryStatus(statusNovo) || undefined;
     const requestId = ++deliveryMutationSequenceRef.current;
 
     pendingDeliveryMutationRef.current[orderKey] = { status: optimisticStatus, requestId };
-    // Qualquer leitura iniciada antes da mutação deixa de poder sobrescrever a projeção otimista.
     deliveryOrdersRequestRef.current += 1;
 
     if (optimisticStatus) {
@@ -519,7 +488,6 @@ export function useCashierOrders({
     const finishCurrentMutation = () => {
       if (pendingDeliveryMutationRef.current[orderKey]?.requestId !== requestId) return false;
       delete pendingDeliveryMutationRef.current[orderKey];
-      // Também invalida GETs disparados durante a mutação antes de liberar o overlay.
       deliveryOrdersRequestRef.current += 1;
       return true;
     };
@@ -552,7 +520,9 @@ export function useCashierOrders({
         if (updatedComanda) {
           const projected = mapComandaToDeliveryView(updatedComanda);
           setDeliveryOrders((current) =>
-            current.map((order) => (String(order.id) === orderKey ? projected : order))
+            projected
+              ? current.map((order) => (String(order.id) === orderKey ? projected : order))
+              : current.filter((order) => String(order.id) !== orderKey)
           );
         }
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
@@ -586,8 +556,8 @@ export function useCashierOrders({
       if (res.ok) {
         showToast('Pedido despachado; motoboy e cliente avisados automaticamente!');
         setSelectedKanbanOrder(null);
-        fetchDeliveryOrders();
-        onRefreshOrders();
+        void fetchDeliveryOrders();
+        void onRefreshOrders();
       } else {
         const err = await res.json();
         showToast(`Erro ao despachar: ${err.detail}`, 'error');
@@ -613,11 +583,8 @@ export function useCashierOrders({
         method: 'POST',
         headers: authHeaders,
       });
-      if (res.ok) {
-        showToast(`Acesso do entregador '${mb.nome}' revogado com sucesso!`, 'success');
-      } else {
-        showToast('Não foi possível revogar o acesso.', 'error');
-      }
+      if (res.ok) showToast(`Acesso do entregador '${mb.nome}' revogado com sucesso!`, 'success');
+      else showToast('Não foi possível revogar o acesso.', 'error');
     } catch (err) {
       console.error(err);
       showToast('Erro ao tentar revogar o acesso.', 'error');
@@ -626,10 +593,7 @@ export function useCashierOrders({
 
   const handleFecharDelivery = async (orderId: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, {
-        method: 'PUT',
-        headers: authHeaders,
-      });
+      const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, { method: 'PUT', headers: authHeaders });
       if (res.ok) {
         showToast('Comanda de delivery encerrada com sucesso!');
         setSelectedKanbanOrder(null);
@@ -649,9 +613,7 @@ export function useCashierOrders({
   const handleRecusarPedido = async (orderId: string) => {
     await handleUpdateDeliveryStatus(orderId, 'recusado');
   };
-  const handleFinalizarPedido = async (orderId: string) => {
-    return handleFecharDelivery(orderId);
-  };
+  const handleFinalizarPedido = async (orderId: string) => handleFecharDelivery(orderId);
 
   const handleAddMotoboy = async (e: React.FormEvent, newMotoboyNome: string, newMotoboyTelefone: string) => {
     e.preventDefault();
@@ -660,32 +622,22 @@ export function useCashierOrders({
       const res = await fetch(`${apiBaseUrl}/comandas/motoboys`, {
         method: 'POST',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: newMotoboyNome,
-          telefone: newMotoboyTelefone,
-          ativo: true,
-        }),
+        body: JSON.stringify({ nome: newMotoboyNome, telefone: newMotoboyTelefone, ativo: true }),
       });
       if (res.ok) {
         showToast('Fretista cadastrado com sucesso!');
         await fetchMotoboys();
         setNewMotoboyNome('');
         setNewMotoboyTelefone('');
-      } else {
-        showToast('Erro ao cadastrar fretista.', 'error');
-      }
+      } else showToast('Erro ao cadastrar fretista.', 'error');
     } catch (err) {
       console.error(err);
       showToast('Erro de conexão ao cadastrar fretista.', 'error');
     }
   };
 
-  // KDS Kitchen actions (status updates)
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
-    // 1. Atualização Otimista Instantânea (0ms no front-end)
-    if (onOptimisticUpdateItemStatus) {
-      onOptimisticUpdateItemStatus(itemId, newStatus);
-    }
+    if (onOptimisticUpdateItemStatus) onOptimisticUpdateItemStatus(itemId, newStatus);
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}`, {
         method: 'PUT',
@@ -703,29 +655,19 @@ export function useCashierOrders({
 
   const handleAcceptPendingDeliveryOrder = async (order: DeliveryOrderView) => {
     await handleUpdateDeliveryStatus(order.id, 'producao');
-    // Close drawer if no more pending
     if (deliveryOrders.filter((o) => o.status === 'pendente').length <= 1) setIsDrawerOpen(false);
   };
 
-  const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => {
-    openCancelOrderConfirmation(order, 'reject');
-  };
+  const handleRejectPendingDeliveryOrder = (order: DeliveryOrderView) => openCancelOrderConfirmation(order, 'reject');
 
   const handleMarkTableItemsReady = async (order: CashierTableCard['order']) => {
     if (isLoading) return;
     const ids = deriveProductionState(order.itens).preparingItems.map((item) => item.id);
-    if (onOptimisticUpdateItemStatus && ids.length > 0) {
-      onOptimisticUpdateItemStatus(ids, 'pronto');
-    }
+    if (onOptimisticUpdateItemStatus && ids.length > 0) onOptimisticUpdateItemStatus(ids, 'pronto');
     setIsLoading(true);
     try {
       await Promise.all(
-        ids.map((id) =>
-          fetch(`${apiBaseUrl}/comandas/itens/${id}/status?status=pronto`, {
-            method: 'PUT',
-            headers: authHeaders,
-          })
-        )
+        ids.map((id) => fetch(`${apiBaseUrl}/comandas/itens/${id}/status?status=pronto`, { method: 'PUT', headers: authHeaders }))
       );
     } catch (err) {
       console.error(err);
@@ -736,8 +678,7 @@ export function useCashierOrders({
   };
 
   const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
-    const isDeliveryOrder = order.modalidade === 'delivery';
-    await handleUpdateDeliveryStatus(order.id, isDeliveryOrder ? 'transito' : 'pronto');
+    await handleUpdateDeliveryStatus(order.id, order.modalidade === 'delivery' ? 'transito' : 'pronto');
   };
 
   const handleAdvanceSelectedKanbanOrder = async () => {
@@ -752,21 +693,14 @@ export function useCashierOrders({
       const printUrl = selectedLaunchId
         ? `${apiBaseUrl}/comandas/lancamentos/${encodeURIComponent(String(selectedLaunchId))}/reimprimir`
         : `${apiBaseUrl}/comandas/${selectedKanbanOrder.comandaId || selectedKanbanOrder.id}/imprimir-recibo`;
-      const res = await fetch(printUrl, {
-        method: 'POST',
-        headers: authHeaders,
-      });
+      const res = await fetch(printUrl, { method: 'POST', headers: authHeaders });
       if (res.ok) {
         window.dispatchEvent(new Event('koma_print_monitor_refresh'));
         if (launchId) {
           const label = selectedKanbanOrder.tableContext?.launches.find((launch: any) => launch.id === launchId)?.displayNumber;
           showToast(`Pedido #${label || launchId} enviado para reimpressão.`, 'success');
-        } else {
-          setSelectedKanbanOrder(null);
-        }
-      } else {
-        showToast('Erro ao solicitar reimpressão.', 'error');
-      }
+        } else setSelectedKanbanOrder(null);
+      } else showToast('Erro ao solicitar reimpressão.', 'error');
     } catch (err) {
       console.error(err);
       showToast('Erro ao solicitar reimpressão.', 'error');
@@ -775,8 +709,7 @@ export function useCashierOrders({
 
   const handlePrintSelectedKanbanTable = async () => {
     try {
-      const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`;
-      const response = await fetch(url, {
+      const response = await fetch(`${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=false`, {
         method: 'POST',
         headers: authHeaders,
       });
@@ -795,8 +728,7 @@ export function useCashierOrders({
 
   const handlePrintSelectedKanbanValues = async () => {
     try {
-      const url = `${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`;
-      const response = await fetch(url, {
+      const response = await fetch(`${apiBaseUrl}/mesas/${selectedKanbanOrder.mesaId}/imprimir-recibo?apenas_valores=true`, {
         method: 'POST',
         headers: authHeaders,
       });
@@ -825,12 +757,10 @@ export function useCashierOrders({
     });
 
   const handleTransferSelectedKanbanTable = () => handleTransferTableFromSalon(selectedKanbanOrder);
-
   const handleCancelSelectedKanbanConsumption = () =>
     selectedKanbanOrder.contextoSalao
       ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
       : openCancelOrderConfirmation(selectedKanbanOrder);
-
   const handleCancelSelectedKanbanOrder = () => openCancelOrderConfirmation(selectedKanbanOrder);
 
   const saveItemObservation = async (itemId: string, observation: string) => {
@@ -865,6 +795,7 @@ export function useCashierOrders({
     getTableMovementContext,
     deliveryOrders,
     motoboys,
+    motoboysLoadState,
     selectedMotoboys,
     setSelectedMotoboys,
     novoMotoboyNome,

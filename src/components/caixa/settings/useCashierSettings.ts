@@ -9,7 +9,12 @@ type Props = {
   setCheckoutServiceTax: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
+export type CashierSettingsLoadState = 'loading' | 'loaded' | 'error';
+
 export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setCheckoutServiceTax }: Props) {
+  // Estes valores só são placeholders internos até settingsLoadState=loaded.
+  // Nenhuma decisão operacional deve usar defaults locais como se viessem do servidor.
+  const [settingsLoadState, setSettingsLoadState] = useState<CashierSettingsLoadState>('loading');
   const [waiterPermissions, setWaiterPermissions] = useState(DEFAULT_WAITER_PERMISSIONS);
   const [taxaServicoAtiva, setTaxaServicoAtiva] = useState(true);
 
@@ -25,6 +30,10 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
     impressao_nome_posicao?: 'cabecalho' | 'rodape' | 'oculto';
     impressao_mensagem_rodape?: string;
   } & Partial<WaiterPermissions>) => {
+    if (settingsLoadState !== 'loaded') {
+      showToast('Aguarde a sincronização das configurações do caixa antes de alterar esta opção.', 'info');
+      return false;
+    }
     const isPrintPersonalizationUpdate = [
       'impressao_nome_restaurante',
       'impressao_nome_posicao',
@@ -33,7 +42,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
     ].some((key) => key in updates);
     if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('saving');
     setWaiterPermissions(current => patchWaiterPermissions(current, updates));
-    // 1. Atualização Otimista Instantânea (0ms) de todos os toggles
+    // Atualização otimista somente depois que existe uma base autoritativa carregada.
     if (updates.taxa_servico_ativa !== undefined) {
       setCheckoutServiceTax(updates.taxa_servico_ativa);
       setTaxaServicoAtiva(updates.taxa_servico_ativa);
@@ -83,21 +92,26 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
   const isTestingPrinterRef = useRef(false);
 
   const fetchConfiguracoes = async () => {
+    setSettingsLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setWaiterPermissions(readWaiterPermissions(data));
-        setCheckoutServiceTax(data.taxa_servico_ativa);
-        setTaxaServicoAtiva(data.taxa_servico_ativa);
-        setServiceTaxRate(data.taxa_servico_padrao);
-        setUnificarViasDelivery(data.unificar_vias_delivery);
-        setPrintHeader(data.impressao_nome_restaurante || 'Kôma Gourmet Bistrô');
-        setPrintNamePosition(data.impressao_nome_posicao || 'cabecalho');
-        setPrintFooter(data.impressao_mensagem_rodape || '');
+      if (!res.ok) {
+        setSettingsLoadState((current) => current === 'loaded' ? current : 'error');
+        return;
       }
+      const data = await res.json();
+      setWaiterPermissions(readWaiterPermissions(data));
+      setCheckoutServiceTax(Boolean(data.taxa_servico_ativa));
+      setTaxaServicoAtiva(Boolean(data.taxa_servico_ativa));
+      setServiceTaxRate(Number(data.taxa_servico_padrao) || 0);
+      setUnificarViasDelivery(Boolean(data.unificar_vias_delivery));
+      setPrintHeader(data.impressao_nome_restaurante || 'Kôma Gourmet Bistrô');
+      setPrintNamePosition(data.impressao_nome_posicao || 'cabecalho');
+      setPrintFooter(data.impressao_mensagem_rodape || '');
+      setSettingsLoadState('loaded');
     } catch (e) {
       console.error('Error fetching configurations', e);
+      setSettingsLoadState((current) => current === 'loaded' ? current : 'error');
     }
   };
 
@@ -129,6 +143,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
   };
 
   return {
+    settingsLoadState,
     waiterPermissions,
     taxaServicoAtiva,
     setTaxaServicoAtiva,

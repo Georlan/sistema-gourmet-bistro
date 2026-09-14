@@ -1,4 +1,4 @@
-import { Lock, Monitor, Percent, Printer, Smartphone, Sparkles, Users } from 'lucide-react';
+import { Loader2, Lock, Monitor, Percent, Printer, RefreshCw, Smartphone, Sparkles, Users } from 'lucide-react';
 import React, { useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
@@ -108,6 +108,7 @@ export default function CashierSettings({
   settings,
 }: Props) {
   const {
+    settingsLoadState,
     taxaServicoAtiva,
     setTaxaServicoAtiva,
     serviceTaxRate,
@@ -124,6 +125,7 @@ export default function CashierSettings({
     printSettingsSaveState,
     setPrintSettingsSaveState,
     isTestingPrinter,
+    fetchConfiguracoes,
     handleTestPrinter,
   } = settings;
   const [settingsTab, setSettingsTab] = useState<CashierSettingsTab>(readInitialCashierSettingsTab);
@@ -169,6 +171,8 @@ export default function CashierSettings({
     onCreateMesa,
     showToast,
   });
+
+  const remoteSettingsUnavailable = !isTechnicalIntegrations && operationalSettingsTab && settingsLoadState !== 'loaded';
 
   return (
     <>
@@ -264,7 +268,34 @@ export default function CashierSettings({
 
           {settingsTab === 'aparencia' && <CashierAppearanceSettings />}
 
-          {operationalSettingsTab && (
+          {remoteSettingsUnavailable && (
+            <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center text-koma-muted">
+              {settingsLoadState === 'loading' ? (
+                <Loader2 size={22} className="mx-auto mb-3 animate-spin" />
+              ) : (
+                <RefreshCw size={22} className="mx-auto mb-3" />
+              )}
+              <p className="text-xs font-bold text-koma-foreground">
+                {settingsLoadState === 'loading' ? 'Sincronizando configurações...' : 'Configurações indisponíveis'}
+              </p>
+              <p className="mx-auto mt-1 max-w-lg text-[10px] leading-relaxed">
+                {settingsLoadState === 'loading'
+                  ? 'Aguardando os valores reais do restaurante antes de exibir ou permitir alterações.'
+                  : 'Os valores locais não serão usados como se fossem configurações do servidor.'}
+              </p>
+              {settingsLoadState === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => void fetchConfiguracoes()}
+                  className="mt-4 rounded-xl border border-koma-border bg-koma-raised px-4 py-2 text-[10px] font-bold text-koma-foreground hover:bg-koma-card"
+                >
+                  Tentar novamente
+                </button>
+              )}
+            </div>
+          )}
+
+          {operationalSettingsTab && settingsLoadState === 'loaded' && (
             <>
               <CashierPrintingSettings
                 printingSettingsTab={operationalSettingsTab}

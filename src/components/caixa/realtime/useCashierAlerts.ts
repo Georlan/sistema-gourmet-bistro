@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { projectCashierDeliveryState } from '../../../domain/cashierOrderProjection';
+import { isCashierTableOrder } from '../../../domain/cashierOrderProjection';
 import { deriveFinancialState } from '../../../domain/operationalState';
 import type { Order } from '../../../types';
 import type { DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
@@ -13,7 +13,6 @@ type Props = {
 /** Owns alerts state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props) {
   const audioCtxRef = useRef<AudioContext | null>(null);
-
   const audioUnlockedRef = useRef(false);
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
@@ -24,12 +23,9 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     const next = !soundEnabled;
     setSoundEnabled(next);
     localStorage.setItem('@koma:sound_enabled', String(next));
-    if (next) {
-      playOrderAlert('test');
-    }
+    if (next) playOrderAlert('test');
   };
 
-  // Motor de Síntese Sonora Web Audio API — Independente, sem arquivo de áudio externo
   const playOrderAlert = useCallback(
     (type: 'new_order' | 'bill_requested' | 'delivery_pending' | 'test' = 'new_order') => {
       if (type !== 'test' && (!soundEnabled || !audioUnlockedRef.current)) return;
@@ -39,24 +35,17 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
         }
         const ctx = audioCtxRef.current;
         if (ctx.state === 'suspended') {
-          // Fora de uma interação do usuário o navegador bloqueia resume().
-          // O desbloqueio é feito pelo listener abaixo; não poluímos o console
-          // nem criamos alertas parciais enquanto o áudio ainda está suspenso.
           if (type !== 'test') return;
-          void ctx
-            .resume()
-            .then(() => {
-              audioUnlockedRef.current = true;
-            })
-            .catch(() => undefined);
+          void ctx.resume().then(() => {
+            audioUnlockedRef.current = true;
+          }).catch(() => undefined);
         } else if (ctx.state === 'running') {
           audioUnlockedRef.current = true;
         }
         const t = ctx.currentTime;
 
         if (type === 'new_order') {
-          // Um único bipe curto confirma um novo pedido. Outros eventos mantêm
-          // assinaturas sonoras próprias, evitando a sensação de evento duplicado.
+          // Um único bipe curto confirma um novo pedido.
           const notes = [{ freq: 783.99, start: 0, dur: 0.18, vol: 0.34 }];
           notes.forEach(({ freq, start, dur, vol }) => {
             const osc = ctx.createOscillator();
@@ -72,7 +61,6 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
             osc.stop(t + start + dur + 0.05);
           });
         } else if (type === 'bill_requested') {
-          // Alerta de mesa pedindo conta / pré-conta (Ding-Dong: C6 -> G5)
           const notes = [
             { freq: 1046.5, start: 0, dur: 0.14, vol: 0.35 },
             { freq: 783.99, start: 0.14, dur: 0.28, vol: 0.4 },
@@ -91,7 +79,6 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
             osc.stop(t + start + dur + 0.05);
           });
         } else if (type === 'delivery_pending') {
-          // Alerta de pedido online / WhatsApp / Retirada: 880 -> 1174 -> 880
           const notes = [
             { freq: 880.0, start: 0, dur: 0.1, vol: 0.3 },
             { freq: 1174.66, start: 0.12, dur: 0.14, vol: 0.38 },
@@ -111,7 +98,6 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
             osc.stop(t + start + dur + 0.05);
           });
         } else if (type === 'test') {
-          // Teste de som: 3 notas ascendentes (C5 -> E5 -> G5)
           const notes = [
             { freq: 523.25, start: 0, dur: 0.1, vol: 0.25 },
             { freq: 659.25, start: 0.1, dur: 0.1, vol: 0.3 },
@@ -131,14 +117,13 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
             osc.stop(t + start + dur + 0.05);
           });
         }
-      } catch (e) {
+      } catch {
         /* audio context unavailable */
       }
     },
     [soundEnabled]
   );
 
-  // Desbloqueia o contexto de áudio somente dentro de uma interação real.
   useEffect(() => {
     const unlock = () => {
       try {
@@ -150,14 +135,11 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
           audioUnlockedRef.current = true;
           return;
         }
-        void ctx
-          .resume()
-          .then(() => {
-            audioUnlockedRef.current = ctx.state === 'running';
-          })
-          .catch(() => {
-            audioUnlockedRef.current = false;
-          });
+        void ctx.resume().then(() => {
+          audioUnlockedRef.current = ctx.state === 'running';
+        }).catch(() => {
+          audioUnlockedRef.current = false;
+        });
       } catch {
         audioUnlockedRef.current = false;
       }
@@ -170,17 +152,18 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     };
   }, []);
 
-  // Monitor universal de pedidos e mesas (Garçom / Caixa / Salão)
+  // Pedidos presenciais e digitais têm donos de alerta separados. Assim um
+  // pedido online nunca toca como pedido de mesa e depois toca de novo como digital.
   const isInitialOrdersMountRef = useRef(true);
-
-  const prevOrdersSignatureRef = useRef({
-    itemsCount: 0,
-    billRequestedCount: 0,
-  });
+  const prevOrdersSignatureRef = useRef({ itemsCount: 0, billRequestedCount: 0 });
 
   useEffect(() => {
     const active = orders.filter(
-      (o) => !String(o.id || '').startsWith('temp-') && o.status !== 'fechada' && o.status !== 'cancelado'
+      (o) =>
+        !String(o.id || '').startsWith('temp-') &&
+        o.status !== 'fechada' &&
+        o.status !== 'cancelado' &&
+        isCashierTableOrder(o)
     );
     const itemsCount = active.reduce((sum, o) => sum + (o.itens ? o.itens.length : 0), 0);
     const billRequestedCount = active.filter(
@@ -200,27 +183,31 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
     if (billRequestedCount > prev.billRequestedCount) {
       playOrderAlert('bill_requested');
     } else if (itemsCount > prev.itemsCount) {
-      // Uma comanda vazia é apenas sessão de mesa, não um pedido novo.
-      // O som nasce somente quando os itens que também geram o card chegam.
       playOrderAlert('new_order');
     }
 
     prevOrdersSignatureRef.current = { itemsCount, billRequestedCount };
   }, [orders, playOrderAlert]);
 
-  // Monitor de pedidos delivery / online pendentes
-  const prevDeliveryPendingCountRef = useRef<number | null>(null);
+  // Identidade, não contagem, define se o pedido digital é novo. A primeira
+  // fotografia apenas estabelece a linha de base; mudanças de status, refresh,
+  // WebSocket e reconciliações do mesmo id não geram outro som.
+  const knownDigitalOrderIdsRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
-    const pendingCount = deliveryOrders.filter((o) => projectCashierDeliveryState(o.status).awaitingAcceptance).length;
-    if (prevDeliveryPendingCountRef.current === null) {
-      prevDeliveryPendingCountRef.current = pendingCount;
+    const currentIds = new Set(deliveryOrders.map((order) => String(order.id)));
+    if (knownDigitalOrderIdsRef.current === null) {
+      knownDigitalOrderIdsRef.current = currentIds;
       return;
     }
-    if (pendingCount > prevDeliveryPendingCountRef.current && !isDrawerOpen) {
+
+    const known = knownDigitalOrderIdsRef.current;
+    const hasNewOrder = Array.from(currentIds).some((id) => !known.has(id));
+    currentIds.forEach((id) => known.add(id));
+
+    if (hasNewOrder && !isDrawerOpen) {
       playOrderAlert('delivery_pending');
     }
-    prevDeliveryPendingCountRef.current = pendingCount;
   }, [deliveryOrders, isDrawerOpen, playOrderAlert]);
 
   return { soundEnabled, toggleSound, playOrderAlert };

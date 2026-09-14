@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { AlertTriangle, Loader2, PauseCircle, PlayCircle, X } from 'lucide-react';
+import { AlertTriangle, Loader2, PauseCircle, PlayCircle, RefreshCw, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../../../config/api';
@@ -38,6 +38,7 @@ const getAuthHeaders = (): Record<string, string> => {
 export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boolean }) {
   const [statusData, setStatusData] = useState<OperationalStatus | null>(null);
   const [authorized, setAuthorized] = useState(true);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reason, setReason] = useState<string>(PAUSE_REASONS[0]);
@@ -61,6 +62,10 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
       setStatusData(payload);
     } catch {
       // Controle de emergência não deve derrubar o Caixa se a leitura falhar.
+    } finally {
+      // Só existe estado semântico depois que a primeira tentativa terminou.
+      // Em caso de falha mostramos indisponível, nunca "0 pedidos" ou "despausado".
+      setStatusLoading(false);
     }
   }, []);
 
@@ -79,15 +84,13 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
     };
   }, [loadStatus]);
 
-  const active = statusData?.counts?.active ?? 0;
-  const capacity = statusData?.max_active_orders ?? null;
-  const highDemand = statusData?.level === 'high' || statusData?.level === 'full';
   const resolvedReason = useMemo(
     () => (reason === 'Outro motivo operacional' ? customReason.trim() : reason),
     [reason, customReason],
   );
 
   const mutate = async (action: 'pause' | 'resume') => {
+    if (!statusData) return;
     setLoading(true);
     setError('');
     try {
@@ -114,23 +117,61 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
 
   if (!authorized) return null;
 
+  if (!statusData) {
+    return (
+      <button
+        type="button"
+        disabled={statusLoading}
+        onClick={() => {
+          if (!statusLoading) {
+            setStatusLoading(true);
+            void loadStatus();
+          }
+        }}
+        className={clsx(
+          'w-full rounded-xl border border-koma-border bg-koma-raised/45 px-3 py-2.5 text-left text-koma-muted transition',
+          mobile ? '' : 'group-data-[collapsible=icon]:px-2',
+        )}
+        title={statusLoading ? 'Sincronizando cardápio online' : 'Tentar consultar cardápio online novamente'}
+        aria-label={statusLoading ? 'Sincronizando cardápio online' : 'Estado do cardápio online indisponível. Tentar novamente'}
+        id="online-orders-emergency-trigger"
+      >
+        <div className="flex items-center gap-2.5">
+          {statusLoading ? <Loader2 size={17} className="animate-spin" /> : <RefreshCw size={17} />}
+          <div className="min-w-0 flex-1">
+            <strong className="block truncate text-[11px] font-black">
+              {statusLoading ? 'Sincronizando cardápio online' : 'Estado do cardápio indisponível'}
+            </strong>
+            <small className="block truncate text-[9px] opacity-75">
+              {statusLoading ? 'Consultando pedidos ativos' : 'Clique para tentar novamente'}
+            </small>
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  const active = statusData.counts.active;
+  const capacity = statusData.max_active_orders;
+  const highDemand = statusData.level === 'high' || statusData.level === 'full';
+
   const dialog = dialogOpen && typeof document !== 'undefined'
     ? createPortal(
         <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="presentation">
           <section
             role="dialog"
             aria-modal="true"
-            aria-label={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+            aria-label={statusData.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
             className="w-full max-w-md rounded-3xl border border-zinc-700 bg-zinc-950 p-5 text-zinc-100 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <span className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">Cardápio online</span>
                 <h2 className="mt-1 text-lg font-black">
-                  {statusData?.paused ? 'Reabrir o cardápio online?' : 'Pausar apenas o cardápio online?'}
+                  {statusData.paused ? 'Reabrir o cardápio online?' : 'Pausar apenas o cardápio online?'}
                 </h2>
                 <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">
-                  {statusData?.paused
+                  {statusData.paused
                     ? 'O cardápio online voltará a aceitar novas compras conforme horários e demais regras. Caixa e operação do restaurante não são alterados.'
                     : 'O restaurante continua operando normalmente. Caixa, pedidos já recebidos, acompanhamento e chat continuam ativos. Só novas compras pelo cardápio online serão bloqueadas.'}
                 </p>
@@ -141,13 +182,13 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
             </div>
 
             <div className="mt-4 grid grid-cols-4 gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3 text-center">
-              <div><small className="block text-[9px] text-zinc-500">Aguardando</small><strong className="text-sm">{(statusData?.counts?.analise ?? 0) + (statusData?.counts?.pendente ?? 0)}</strong></div>
-              <div><small className="block text-[9px] text-zinc-500">Produção</small><strong className="text-sm">{statusData?.counts?.producao ?? 0}</strong></div>
-              <div><small className="block text-[9px] text-zinc-500">Prontos</small><strong className="text-sm">{statusData?.counts?.pronto ?? 0}</strong></div>
+              <div><small className="block text-[9px] text-zinc-500">Aguardando</small><strong className="text-sm">{statusData.counts.analise + statusData.counts.pendente}</strong></div>
+              <div><small className="block text-[9px] text-zinc-500">Produção</small><strong className="text-sm">{statusData.counts.producao}</strong></div>
+              <div><small className="block text-[9px] text-zinc-500">Prontos</small><strong className="text-sm">{statusData.counts.pronto}</strong></div>
               <div><small className="block text-[9px] text-zinc-500">Ativos</small><strong className="text-sm text-emerald-400">{active}{capacity ? `/${capacity}` : ''}</strong></div>
             </div>
 
-            {!statusData?.paused && (
+            {!statusData.paused && (
               <div className="mt-4 space-y-4">
                 <label className="block">
                   <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">Motivo</span>
@@ -177,12 +218,12 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
               <button type="button" onClick={() => setDialogOpen(false)} disabled={loading} className="h-11 flex-1 rounded-xl border border-zinc-700 text-xs font-bold text-zinc-300 hover:bg-zinc-900 disabled:opacity-50">Cancelar</button>
               <button
                 type="button"
-                onClick={() => void mutate(statusData?.paused ? 'resume' : 'pause')}
-                disabled={loading || (!statusData?.paused && resolvedReason.length < 3)}
-                className={clsx('flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-xl text-xs font-black text-white disabled:opacity-50', statusData?.paused ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-rose-600 hover:bg-rose-500')}
+                onClick={() => void mutate(statusData.paused ? 'resume' : 'pause')}
+                disabled={loading || (!statusData.paused && resolvedReason.length < 3)}
+                className={clsx('flex h-11 flex-[1.4] items-center justify-center gap-2 rounded-xl text-xs font-black text-white disabled:opacity-50', statusData.paused ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-rose-600 hover:bg-rose-500')}
               >
                 {loading && <Loader2 size={15} className="animate-spin" />}
-                {statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+                {statusData.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
               </button>
             </div>
           </section>
@@ -201,28 +242,28 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
         }}
         className={clsx(
           'w-full rounded-xl border px-3 py-2.5 text-left transition active:scale-[0.99]',
-          statusData?.paused
+          statusData.paused
             ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15'
             : highDemand
               ? 'border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15'
               : 'border-rose-500/30 bg-rose-500/[0.07] text-rose-200 hover:bg-rose-500/12',
           mobile ? '' : 'group-data-[collapsible=icon]:px-2',
         )}
-        title={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
-        aria-label={statusData?.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+        title={statusData.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
+        aria-label={statusData.paused ? 'Reabrir cardápio online' : 'Pausar cardápio online'}
         id="online-orders-emergency-trigger"
       >
         <div className="flex items-center gap-2.5">
-          {statusData?.paused ? <PlayCircle size={17} /> : <PauseCircle size={17} />}
+          {statusData.paused ? <PlayCircle size={17} /> : <PauseCircle size={17} />}
           <div className="min-w-0 flex-1">
             <strong className="block truncate text-[11px] font-black">
-              {statusData?.paused ? 'Cardápio online pausado' : highDemand ? 'Alta demanda' : 'Pausar cardápio online'}
+              {statusData.paused ? 'Cardápio online pausado' : highDemand ? 'Alta demanda' : 'Pausar cardápio online'}
             </strong>
             <small className="block truncate text-[9px] opacity-75">
               {capacity ? `${active}/${capacity} pedidos ativos` : `${active} pedidos ativos`}
             </small>
           </div>
-          {highDemand && !statusData?.paused && <AlertTriangle size={15} className="shrink-0" />}
+          {highDemand && !statusData.paused && <AlertTriangle size={15} className="shrink-0" />}
         </div>
       </button>
       {dialog}

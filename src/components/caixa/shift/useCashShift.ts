@@ -8,6 +8,8 @@ type Props = Pick<CaixaPanelProps, 'apiBaseUrl' | 'authHeaders' | 'onRefreshTurn
   setIsLoading: (value: boolean) => void;
 };
 
+export type CashShiftLoadState = 'loading' | 'loaded' | 'error';
+
 /** Owns shift state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashShift({
   apiBaseUrl,
@@ -17,83 +19,70 @@ export function useCashShift({
   setErrorMsg,
   setIsLoading,
 }: Props) {
-  // Turno & Sync state
+  // Turno & Sync state. null means "no open shift" only after turnoLoadState=loaded;
+  // before that it means "unknown", never "closed".
   const [turno, setTurno] = useState<CaixaTurno | null>(null);
+  const [turnoLoadState, setTurnoLoadState] = useState<CashShiftLoadState>('loading');
   const turnoRequestIdRef = useRef(0);
 
-  // Modals state
   const [showAbrirModal, setShowAbrirModal] = useState(false);
-
-  // Caixa Reorganization States
   const [caixaMovimentacoes, setCaixaMovimentacoes] = useState<CaixaMovimentacao[]>([]);
-
-  const [isCaixaMovimentacoesLoading, setIsCaixaMovimentacoesLoading] = useState(false);
-
+  // A lista vazia só é autoritativa depois da primeira leitura concluir.
+  const [isCaixaMovimentacoesLoading, setIsCaixaMovimentacoesLoading] = useState(true);
   const caixaMovimentacoesRequestRef = useRef(0);
-
   const [fechamentoResult, setFechamentoResult] = useState<FechamentoCaixaResult | null>(null);
-
   const [showSangriaModal, setShowSangriaModal] = useState<boolean>(false);
-
   const [showSuprimentoModal, setShowSuprimentoModal] = useState<boolean>(false);
-
-  // Form states
   const [saldoInicial, setSaldoInicial] = useState<number | ''>(100);
 
-  // Fetch current shift status
   const fetchTurno = async () => {
     const requestId = ++turnoRequestIdRef.current;
     try {
+      // Depois da primeira leitura, uma reconciliação de foco/realtime não deve
+      // apagar um estado já conhecido. Mantemos o último snapshot válido até a
+      // nova resposta chegar; "loading" é reservado ao bootstrap inicial.
+      setTurnoLoadState((current) => (current === 'loaded' ? current : 'loading'));
       setIsLoading(true);
-      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, {
-        headers: authHeaders,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (requestId !== turnoRequestIdRef.current) return;
-        setTurno(data);
+      const res = await fetch(`${apiBaseUrl}/caixa/turno/atual`, { headers: authHeaders });
+      if (!res.ok) {
+        if (requestId === turnoRequestIdRef.current) {
+          setTurnoLoadState((current) => (current === 'loaded' ? current : 'error'));
+        }
+        return;
       }
+      const data = await res.json();
+      if (requestId !== turnoRequestIdRef.current) return;
+      setTurno(data);
+      setTurnoLoadState('loaded');
     } catch (err) {
       if (requestId === turnoRequestIdRef.current) {
         console.error('Error fetching shift status', err);
+        setTurnoLoadState((current) => (current === 'loaded' ? current : 'error'));
       }
     } finally {
-      if (requestId === turnoRequestIdRef.current) {
-        setIsLoading(false);
-      }
+      if (requestId === turnoRequestIdRef.current) setIsLoading(false);
     }
   };
 
-  // Caixa API Handlers
   const fetchTurnoResumo = onRefreshTurnoResumo;
 
   const fetchCaixaMovimentacoes = useCallback(async () => {
     const requestId = ++caixaMovimentacoesRequestRef.current;
     setIsCaixaMovimentacoesLoading(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, {
-        headers: authHeaders,
-      });
+      const res = await fetch(`${apiBaseUrl}/caixa/movimentacoes`, { headers: authHeaders });
       if (!res.ok) throw new Error(`Falha ao consultar movimentações (${res.status})`);
       const data: CaixaMovimentacao[] = await res.json();
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        setCaixaMovimentacoes(data);
-      }
+      if (requestId === caixaMovimentacoesRequestRef.current) setCaixaMovimentacoes(data);
     } catch (error) {
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        console.error('Erro ao buscar movimentações de caixa:', error);
-      }
+      if (requestId === caixaMovimentacoesRequestRef.current) console.error('Erro ao buscar movimentações de caixa:', error);
     } finally {
-      if (requestId === caixaMovimentacoesRequestRef.current) {
-        setIsCaixaMovimentacoesLoading(false);
-      }
+      if (requestId === caixaMovimentacoesRequestRef.current) setIsCaixaMovimentacoesLoading(false);
     }
   }, [apiBaseUrl, authHeaders]);
 
   useEffect(() => {
-    const handleCashUpdated = () => {
-      void fetchCaixaMovimentacoes();
-    };
+    const handleCashUpdated = () => void fetchCaixaMovimentacoes();
     window.addEventListener('koma_cash_updated', handleCashUpdated);
     return () => window.removeEventListener('koma_cash_updated', handleCashUpdated);
   }, [fetchCaixaMovimentacoes]);
@@ -149,7 +138,6 @@ export function useCashShift({
     await fetchTurnoResumo();
   };
 
-  // Handle open cashier
   const handleAbrirCaixa = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -161,7 +149,7 @@ export function useCashShift({
       });
       if (res.ok) {
         setShowAbrirModal(false);
-        fetchTurno();
+        void fetchTurno();
       } else {
         const data = await res.json();
         setErrorMsg(data.detail || 'Erro ao abrir caixa');
@@ -173,6 +161,7 @@ export function useCashShift({
 
   return {
     turno,
+    turnoLoadState,
     showAbrirModal,
     setShowAbrirModal,
     caixaMovimentacoes,

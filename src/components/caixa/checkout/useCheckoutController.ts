@@ -24,6 +24,7 @@ type Props = Pick<
   loyaltyUsers: LoyaltyCustomer[];
   taxaServicoAtiva: boolean;
   serviceTaxRate: number;
+  settingsLoadState: 'loading' | 'loaded' | 'error';
   isLoading: boolean;
   setErrorMsg: (value: string) => void;
   getSmartPosCardState: (order: Order) => SmartPosCardState | null;
@@ -56,6 +57,7 @@ export function useCheckoutController({
   loyaltyUsers,
   taxaServicoAtiva,
   serviceTaxRate,
+  settingsLoadState,
   isLoading,
   setErrorMsg,
   getSmartPosCardState,
@@ -69,6 +71,17 @@ export function useCheckoutController({
   const isProcessingPaymentRef = React.useRef(false);
   // Synchronous guard against double-click
   const [idempotencyKey, setIdempotencyKey] = useState('');
+
+  const ensureCashSettingsReady = () => {
+    if (settingsLoadState === 'loaded') return true;
+    showToast(
+      settingsLoadState === 'error'
+        ? 'Não foi possível confirmar as configurações do caixa. Tente sincronizar novamente antes de receber uma mesa.'
+        : 'Sincronizando as configurações do caixa. Aguarde antes de receber uma mesa.',
+      settingsLoadState === 'error' ? 'error' : 'info',
+    );
+    return false;
+  };
 
   const buildTableCheckoutOrder = (tableComandas: Order[]): Order | null => {
     if (tableComandas.length === 0) return null;
@@ -104,7 +117,6 @@ export function useCheckoutController({
   const identifiedCustomer = useMemo(() => {
     if (!selectedOrder) return null;
 
-    // 1. Direct phone on selectedOrder
     const directPhone = (
       selectedOrder.clientePhone ||
       (selectedOrder as any).delivery_telefone ||
@@ -113,7 +125,6 @@ export function useCheckoutController({
       ''
     ).trim();
 
-    // 2. Direct client ID
     const directClientId = selectedOrder.clienteId || (selectedOrder as any).cliente_id;
     if (directClientId) {
       const user = loyaltyUsers.find((u) => String(u.id) === String(directClientId));
@@ -149,7 +160,6 @@ export function useCheckoutController({
       };
     }
 
-    // 3. Match by item.clienteNome or selectedOrder.identificador in loyaltyUsers
     const nameToMatch = (selectedOrder.identificador || '').trim().toLowerCase();
     if (nameToMatch && nameToMatch !== 'consumo geral') {
       const user = loyaltyUsers.find(
@@ -167,7 +177,6 @@ export function useCheckoutController({
       }
     }
 
-    // 4. Check items for client name that matches a registered customer with phone
     for (const item of selectedOrder.itens || []) {
       const itName = (item.clienteNome || '').trim().toLowerCase();
       if (itName && itName !== 'consumo geral') {
@@ -189,9 +198,6 @@ export function useCheckoutController({
     return null;
   }, [selectedOrder, loyaltyUsers]);
 
-  // Counted values for closing cashier
-
-  // Checkout payment states
   const [checkoutServiceTax, setCheckoutServiceTax] = useState(true);
 
   const [splitPeople, setSplitPeople] = useState('1');
@@ -215,16 +221,11 @@ export function useCheckoutController({
     }
   };
 
-  // A chave é criada somente no início da operação. Assim, ausência de CSPRNG
-  // vira erro controlado dentro do fluxo financeiro em vez de exceção de render/effect.
   useEffect(() => {
     setIdempotencyKey('');
     setPaymentMetodo('');
   }, [selectedOrder]);
 
-  // Auto-initialize paymentValor when checkout modal opens. Em mesas, o operador
-  // precisa escolher explicitamente os itens prontos; pedidos digitais podem exibir
-  // o saldo total, mas a forma de pagamento nunca é presumida.
   useEffect(() => {
     if (showCheckoutModal && selectedOrder) {
       if (!paymentValor || Number(paymentValor || 0) <= 0) {
@@ -243,10 +244,10 @@ export function useCheckoutController({
     }
   }, [showCheckoutModal, selectedOrder, selectedItemIds]);
 
-  // Handle payment processing
   const handleProcessPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrder || isProcessingPaymentRef.current) return; // Sync ref guard
+    if (!selectedOrder || isProcessingPaymentRef.current) return;
+    if (isTableCheckoutOrder(selectedOrder) && !ensureCashSettingsReady()) return;
     setErrorMsg('');
     if (!paymentMetodo) {
       setErrorMsg('Escolha a forma de pagamento antes de receber.');
@@ -291,9 +292,6 @@ export function useCheckoutController({
       const effectiveClienteNome = identifiedCustomer?.nome || selectedOrder.identificador || null;
 
       if (isMesaPayment) {
-        // A mesa é uma única conta monetária. O backend distribui esta baixa,
-        // de forma atômica, entre todas as comandas abertas da mesa. A seleção
-        // é opcional e serve para registrar quais itens foram quitados.
         const res = await operationalFetch(`${apiBaseUrl}/caixa/mesas/${selectedOrder.mesaId}/pagar`, {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -313,7 +311,6 @@ export function useCheckoutController({
           throw new Error(errData.detail || 'Erro ao registrar pagamento da mesa');
         }
       } else if (selectedItemIds.length > 0) {
-        // Opção 1: Itens selecionados. Agrupa os IDs de itens pela comanda de origem
         const itemsByComanda: Record<string, { itemIds: string[]; subtotal: number }> = {};
         selectedItemIds.forEach((itemId) => {
           const itemObj = selectedOrder.itens.find((i) => i.id === itemId);
@@ -327,7 +324,6 @@ export function useCheckoutController({
           }
         });
 
-        // Efetua o pagamento em cada comanda correspondente
         const comandaEntries = Object.entries(itemsByComanda);
         let idx = 0;
         const totalSubtotal = Object.values(itemsByComanda).reduce((sum, d) => sum + d.subtotal, 0);
@@ -335,7 +331,6 @@ export function useCheckoutController({
 
         for (const [cid, data] of comandaEntries) {
           const isLast = idx === comandaEntries.length - 1;
-          // Distribui o valor proporcionalmente baseado no subtotal
           const ratio = data.subtotal / totalSubtotal;
           const valToPay = isLast
             ? originalVal -
@@ -364,13 +359,11 @@ export function useCheckoutController({
           idx++;
         }
       } else {
-        // Opção 2: Valor geral. Liquida as comandas sequencialmente
         let remainingVal = Number(paymentValor || 0);
 
         for (const cid of comandaIds) {
           if (remainingVal <= 0.01) break;
 
-          // Busca itens pendentes desta comanda no card unificado
           const comUnpaidItems = selectedOrder.itens.filter(
             (i) => i.comandaId === cid && !i.pago && i.status !== ('cancelado' as any)
           );
@@ -380,7 +373,6 @@ export function useCheckoutController({
           const comTaxa = taxaServicoAtiva && checkoutServiceTax ? comSubtotal * (serviceTaxRate / 100) : 0;
           const comTotal = comSubtotal + comTaxa;
 
-          // Valor a pagar para esta comanda
           const valToPay = Math.min(remainingVal, comTotal);
 
           const res = await operationalFetch(`${apiBaseUrl}/caixa/comandas/${cid}/pagar`, {
@@ -446,10 +438,7 @@ export function useCheckoutController({
     return false;
   };
 
-  // Checkout calculations helper
   const getCheckoutTotals = (order: Order, includeServiceTax = checkoutServiceTax) => {
-    // Em mesa, Item.pago é apenas histórico visual: o saldo é financeiro e
-    // corresponde ao consumo ativo menos Pagamento(s) aprovados.
     const chargeableItems = isTableCheckoutOrder(order)
       ? order.itens.filter((i) => (i.status as string) !== 'cancelado')
       : order.itens.filter((i) => !i.pago && (i.status as string) !== 'cancelado');
@@ -476,15 +465,13 @@ export function useCheckoutController({
     const taxa = taxaServicoAtiva && includeServiceTax ? subtotal * (serviceTaxRate / 100) : 0;
     const selectedTotal = subtotal + taxa;
 
-    // Na mesa, uma baixa anterior sem vínculo com itens pode deixar o saldo
-    // menor que a seleção. Nesse caso, o máximo devido continua sendo o saldo.
     return isTableCheckoutOrder(order)
       ? Math.min(selectedTotal, getCheckoutBalance(order, includeServiceTax))
       : selectedTotal;
   };
 
   const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
-    if (isLoading) return;
+    if (isLoading || !ensureCashSettingsReady()) return;
 
     const tableComandas = orders.filter((o) => Number(o.mesaId) === Number(order.mesaId) && isTableCheckoutOrder(o));
     const checkoutOrder = buildTableCheckoutOrder(tableComandas);
@@ -543,6 +530,7 @@ export function useCheckoutController({
   };
 
   const handleReceiveSalonTable = (tableOrders: Order[]) => {
+    if (!ensureCashSettingsReady()) return;
     const checkoutOrder = buildTableCheckoutOrder(tableOrders);
     if (!checkoutOrder) return;
     setSelectedOrder(checkoutOrder);
@@ -600,7 +588,6 @@ export function useCheckoutController({
     }
   };
 
-  // Complete actions stay with the state/effects owner; extracted views only request them.
   const handleConfirmPendingCashPayment = async (pag: PendingCashPayment) => {
     if (onRemovePendingPaymentOptimistic) onRemovePendingPaymentOptimistic(pag.id);
     try {
