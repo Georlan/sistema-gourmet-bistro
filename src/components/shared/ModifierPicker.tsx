@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Minus, Plus, Search } from 'lucide-react';
 
 import type { CatalogModifierGroup } from '../../catalog/catalog';
 
 type Props = {
   groups: CatalogModifierGroup[];
   selectedIds: string[];
-  onToggle: (group: CatalogModifierGroup, optionId: string) => void;
+  onToggle?: (group: CatalogModifierGroup, optionId: string) => void;
+  onQuantityChange?: (group: CatalogModifierGroup, optionId: string, delta: -1 | 1) => void;
   compact?: boolean;
 };
 
@@ -17,7 +18,13 @@ const normalize = (value: string) =>
     .toLocaleLowerCase('pt-BR')
     .trim();
 
-export default function ModifierPicker({ groups, selectedIds, onToggle, compact = false }: Props) {
+export default function ModifierPicker({
+  groups,
+  selectedIds,
+  onToggle,
+  onQuantityChange,
+  compact = false,
+}: Props) {
   const [showAll, setShowAll] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -114,12 +121,54 @@ export default function ModifierPicker({ groups, selectedIds, onToggle, compact 
 
               <div className="space-y-1.5">
                 {activeOptions.map((option) => {
-                  const selected = selectedIds.includes(option.id);
+                  const optionQuantity = selectedIds.filter((id) => id === option.id).length;
+                  const selected = optionQuantity > 0;
+                  const canIncrement = selectedCount < max;
+
+                  if (onQuantityChange) {
+                    return (
+                      <div
+                        key={option.id}
+                        className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-card'}`}
+                      >
+                        <div className="min-w-0">
+                          <span className="block truncate text-xs font-medium text-koma-foreground">{option.nome}</span>
+                          <span className="font-mono text-[10px] font-bold text-emerald-400">
+                            {Number(option.preco_adicional || 0) > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2)} cada` : 'Grátis'}
+                          </span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1 rounded-lg border border-koma-border bg-koma-raised p-0.5">
+                          <button
+                            type="button"
+                            onClick={() => onQuantityChange(group, option.id, -1)}
+                            disabled={optionQuantity <= 0}
+                            className="grid h-7 w-7 place-items-center rounded-md text-koma-muted transition hover:bg-koma-card hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-30"
+                            aria-label={`Remover uma unidade de ${option.nome}`}
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="w-6 text-center font-mono text-xs font-bold text-koma-foreground" aria-label={`${optionQuantity} unidade(s) de ${option.nome}`}>
+                            {optionQuantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onQuantityChange(group, option.id, 1)}
+                            disabled={!canIncrement}
+                            className="grid h-7 w-7 place-items-center rounded-md text-koma-muted transition hover:bg-koma-card hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-30"
+                            aria-label={`Adicionar uma unidade de ${option.nome}`}
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <button
                       key={option.id}
                       type="button"
-                      onClick={() => onToggle(group, option.id)}
+                      onClick={() => onToggle?.(group, option.id)}
                       className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${selected ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-koma-border bg-koma-card hover:border-emerald-500/25'}`}
                     >
                       <span className="flex min-w-0 items-center gap-2">
