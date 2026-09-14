@@ -6,6 +6,9 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const component = source('../src/components/shared/OperationalBanner.tsx');
 const css = source('../src/components/shared/operationalHeader.css');
 
+const indexCss = source('../src/index.css');
+const lowHeightCss = source('../src/components/caixa/navigation/cashierLowHeight.css');
+
 test('cabeçalhos operacionais não renderizam mais o hero decorativo antigo', () => {
   assert.match(component, /operational-header/);
   assert.doesNotMatch(component, /orders-eyebrow/);
@@ -27,3 +30,14 @@ test('informações úteis continuam disponíveis em uma linha compacta', () => 
   assert.ok(Number.isFinite(minHeight));
   assert.ok(minHeight <= 2.5, 'cabeçalho operacional deve permanecer compacto');
 });
+
+test('cabeçalho operacional compacto não é suprimido no mobile nem perde ênfase em monitores baixos', () => {
+  assert.match(css, /\.orders-hero\.operational-header\s*\{[^}]*display:\s*flex\s*!important;/);
+  assert.match(indexCss, /\.orders-hero:not\(\.operational-header\)\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(lowHeightCss, /\.orders-workspace\s+\.orders-hero:not\(\.operational-header\)\s+h1\s+em\s*\{\s*display:\s*none;/);
+});
+
+test('coluna do kanban declara container-type para manter cards legíveis em qualquer largura', () => {
+  assert.match(indexCss, /\.orders-column\s*\{[^}]*container-type:\s*inline-size;/);
+});
+

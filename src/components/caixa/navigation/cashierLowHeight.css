@@ -29,26 +29,26 @@
   /* OperationalBanner becomes a compact status strip instead of a hero.
    * The explicit two-column override wins over the width-container rule that
    * normally stacks copy and metrics below ~68rem of content width. */
-  .orders-hero:not(.orders-hero--without-metrics) {
+  .orders-hero:not(.operational-header):not(.orders-hero--without-metrics) {
     grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr) !important;
     align-items: center;
   }
 
-  .orders-hero {
+  .orders-hero:not(.operational-header) {
     min-height: 2.7rem !important;
     padding: 0.35rem 0.65rem !important;
     border-radius: 0.72rem;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
   }
 
-  .orders-hero::before {
+  .orders-hero:not(.operational-header)::before {
     inset: 0 0 0 68%;
     opacity: 0.62;
   }
 
   .orders-eyebrow,
   .orders-hero__copy > p:last-child,
-  .orders-workspace .orders-hero h1 em {
+  .orders-workspace .orders-hero:not(.operational-header) h1 em {
     display: none;
   }
 
