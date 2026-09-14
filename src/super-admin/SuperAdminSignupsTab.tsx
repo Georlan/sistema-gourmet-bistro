@@ -139,7 +139,7 @@ export function SuperAdminSignupsTab({ globalSearch }: { globalSearch: string })
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Falha ao liberar inscrição.');
       setSuccessNotice(
-        `Inscrição ${protocol} liberada com sucesso! Restaurante #${data.restaurant_id} ativado com 7 dias grátis.`,
+        `Inscrição ${protocol} liberada. Restaurante #${data.restaurant_id} entrou em implantação; os 7 dias grátis ainda não começaram.`,
       );
       await load();
     } catch (err) {
