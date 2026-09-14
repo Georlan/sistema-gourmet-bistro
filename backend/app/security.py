@@ -229,7 +229,6 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
     if bool(payload.get("support_mode")):
         support_session_id = payload.get("support_session_id")
         token_jti = payload.get("jti")
-        operator = payload.get("operator") or user_id
         if not support_session_id or not token_jti:
             raise credentials_exception
 
@@ -272,7 +271,7 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
             db.rollback()
 
         return SupportOperatorUser(
-            operator=str(operator),
+            operator=str(session_rec.operator),
             restaurante_id=int(restaurante_id),
             session_id=str(session_rec.id),
             reason=str(session_rec.reason or ""),

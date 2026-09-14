@@ -152,7 +152,6 @@ def start_support_session(
             extra_claims={
                 "support_mode": True,
                 "support_session_id": session_id,
-                "operator": operator,
                 "jti": token_jti,
             },
         )
