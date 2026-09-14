@@ -7,7 +7,7 @@ export type OptimisticItemStatus = {
   ts: number;
 };
 
-const parseBackendDateTime = (dateStr: unknown): number =>
+const parseBackendDateTime = (dateStr: any): number =>
   parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
 
 const readOperationalOrigin = (comanda: any): NonNullable<Order['origemOperacional']> => {
