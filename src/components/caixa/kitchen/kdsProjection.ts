@@ -48,6 +48,13 @@ const timestampValue = (value: unknown): number => {
 const ticketKeyFor = (item: KdsKitchenItem) =>
   item.lancamentoId ? `launch:${item.lancamentoId}` : `order:${item.orderId}`;
 
+const normalizeSearchText = (value: unknown): string =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
 /**
  * KDS is a projection of the same item states used by Caixa.
  * It never owns a second order state machine: when Caixa changes item statuses,
@@ -127,4 +134,24 @@ export function getKdsDestinationLabel(ticket: Pick<KdsTicket, 'mesaId' | 'tipo'
   if (ticket.tipo === 'Entrega') return 'Entrega';
   if (ticket.tipo === 'Retirada') return 'Retirada';
   return 'Balcão';
+}
+
+/** Search stays presentation-only and never changes operational membership/status. */
+export function matchesKdsTicketQuery(ticket: KdsTicket, query: string): boolean {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  const searchable = [
+    getKdsDestinationLabel(ticket),
+    getKdsTicketLabel(ticket),
+    ticket.identificador,
+    ticket.garcomNome,
+    ticket.origemOperacional,
+    ...ticket.items.flatMap((item) => [item.nome, item.observacao, item.clienteNome, item.cliente_nome]),
+  ]
+    .map(normalizeSearchText)
+    .filter(Boolean)
+    .join(' ');
+
+  return searchable.includes(normalizedQuery);
 }
