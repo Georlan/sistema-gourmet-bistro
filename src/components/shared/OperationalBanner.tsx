@@ -1,6 +1,5 @@
 import React from 'react';
 import clsx from 'clsx';
-import './operationalHeader.css';
 
 export interface OperationalBannerMetric {
   label: string;
