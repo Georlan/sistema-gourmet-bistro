@@ -3,6 +3,7 @@ import "./components/auth/passwordRecoveryToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import { CustomerSupportWidget } from "./components/app/CustomerSupportWidget";
 import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
@@ -159,6 +160,9 @@ const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
+const hasCustomerSupportSurface =
+  !pathname.startsWith("/super-admin")
+  && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute);
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Em produção, antes de montar o shell, convertemos
@@ -202,6 +206,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.Suspense fallback={<RouteLoading />}>
         <RootApp />
       </React.Suspense>
+      {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
     </TenantSuspensionBoundary>
     </AppRecoveryBoundary>
   </React.StrictMode>,
