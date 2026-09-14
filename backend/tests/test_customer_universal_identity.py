@@ -165,12 +165,14 @@ def test_online_pix_approval_credits_loyalty_once(char_setup):
     customer_id = "customer-online-loyalty"
     command_id = "command-online-loyalty"
     payment_id = "payment-online-loyalty"
+    created_config = False
+    old_config = None
     try:
         config = db.query(ConfigFidelizacao).filter(
             ConfigFidelizacao.restaurante_id == CHAR_RESTAURANT_ID,
         ).first()
-        old_config = None
         if config is None:
+            created_config = True
             config = ConfigFidelizacao(restaurante_id=CHAR_RESTAURANT_ID)
             db.add(config)
         else:
@@ -207,7 +209,6 @@ def test_online_pix_approval_credits_loyalty_once(char_setup):
         db.add_all([customer, command])
         db.flush()
 
-        shift = char_setup
         # O fixture abre um turno; usar o turno persistido evita acoplar ao ID.
         from app.models import CaixaTurno
 
@@ -257,19 +258,21 @@ def test_online_pix_approval_credits_loyalty_once(char_setup):
             HistoricoFidelidade.comanda_id == command_id,
             HistoricoFidelidade.tipo_movimentacao == "ACUMULO",
         ).count() == 1
-
-        if old_config is not None:
-            config = db.query(ConfigFidelizacao).filter(
-                ConfigFidelizacao.restaurante_id == CHAR_RESTAURANT_ID,
-            ).one()
+    finally:
+        db.rollback()
+        config = db.query(ConfigFidelizacao).filter(
+            ConfigFidelizacao.restaurante_id == CHAR_RESTAURANT_ID,
+        ).first()
+        if created_config and config is not None:
+            db.delete(config)
+        elif config is not None and old_config is not None:
             (
                 config.ativo,
                 config.tipo_recompensa,
                 config.taxa_conversao,
                 config.valor_ponto_em_dinheiro,
             ) = old_config
-            db.commit()
-    finally:
+        db.commit()
         db.close()
 
 
