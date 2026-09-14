@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const settings = readFileSync('src/components/caixa/settings/CashierSettings.tsx', 'utf8');
+const settingsController = readFileSync('src/components/caixa/settings/useCashierSettings.ts', 'utf8');
 const appearance = readFileSync('src/components/caixa/settings/CashierAppearanceSettings.tsx', 'utf8');
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
 const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiterSettings.tsx', 'utf8');
@@ -77,6 +78,13 @@ test('cashier printing settings separates state and diagnostics, coupon, and del
 
   // Contrato do controller preservado
   assert.match(printing, /ReturnType<typeof useCashierSettings>/);
+});
+
+test('printer test uses a synchronous ref lock to prevent duplicate POSTs before React rerenders', () => {
+  assert.match(settingsController, /const isTestingPrinterRef = useRef\(false\)/);
+  assert.match(settingsController, /if \(isTestingPrinterRef\.current\) return;/);
+  assert.match(settingsController, /isTestingPrinterRef\.current = true;[\s\S]*setIsTestingPrinter\(true\)/);
+  assert.match(settingsController, /finally \{[\s\S]*isTestingPrinterRef\.current = false;[\s\S]*setIsTestingPrinter\(false\)/);
 });
 
 test('waiter settings separate actionable permissions from future capabilities and use operational labels', () => {
