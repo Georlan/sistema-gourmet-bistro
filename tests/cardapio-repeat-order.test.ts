@@ -50,6 +50,8 @@ const products: Product[] = [
         type: 'opcional',
         options: [
           { id: 'azeitona', name: 'Azeitona', extraPrice: 4, active: true },
+          { id: 'bacon', name: 'Bacon', extraPrice: 6, active: true },
+          { id: 'cebola', name: 'Cebola', extraPrice: 2, active: true },
         ],
       },
     ],
@@ -85,6 +87,30 @@ test('repeat order uses current product and modifier prices, preserving quantity
   ]);
 });
 
+test('repeat order preserves repeated quantities without consuming extra group types', () => {
+  const result = rebuildOrderFromCurrentCatalog(order({
+    itens: [{
+      produto_id: 'pizza-1',
+      nome: 'Pizza antiga',
+      quantidade: 1,
+      preco_unitario: 40,
+      modificadores: [
+        { grupo_id: 'borda', opcao_id: 'catupiry', opcao_nome: 'Catupiry', preco_aplicado: 3 },
+        { grupo_id: 'extras', opcao_id: 'azeitona', opcao_nome: 'Azeitona', preco_aplicado: 1 },
+        { grupo_id: 'extras', opcao_id: 'azeitona', opcao_nome: 'Azeitona', preco_aplicado: 1 },
+        { grupo_id: 'extras', opcao_id: 'bacon', opcao_nome: 'Bacon', preco_aplicado: 2 },
+      ],
+    }],
+  }), products);
+
+  assert.deepEqual(result.issues, []);
+  assert.deepEqual(result.items[0].selectedOptions.extras, [
+    { id: 'azeitona', name: 'Azeitona', extraPrice: 4 },
+    { id: 'azeitona', name: 'Azeitona', extraPrice: 4 },
+    { id: 'bacon', name: 'Bacon', extraPrice: 6 },
+  ]);
+});
+
 test('repeat order drops removed optional add-ons but keeps the product with a warning', () => {
   const result = rebuildOrderFromCurrentCatalog(order({
     itens: [{
@@ -94,7 +120,7 @@ test('repeat order drops removed optional add-ons but keeps the product with a w
       preco_unitario: 40,
       modificadores: [
         { grupo_id: 'borda', opcao_id: 'catupiry', opcao_nome: 'Catupiry', preco_aplicado: 3 },
-        { grupo_id: 'extras', opcao_id: 'bacon-removido', opcao_nome: 'Bacon', preco_aplicado: 5 },
+        { grupo_id: 'extras', opcao_id: 'bacon-removido', opcao_nome: 'Bacon antigo', preco_aplicado: 5 },
       ],
     }],
   }), products);
@@ -102,7 +128,7 @@ test('repeat order drops removed optional add-ons but keeps the product with a w
   assert.equal(result.items.length, 1);
   assert.equal(result.skippedItems, 0);
   assert.equal(result.issues.length, 1);
-  assert.match(result.issues[0], /Bacon/);
+  assert.match(result.issues[0], /Bacon antigo/);
 });
 
 test('repeat order skips products that are gone or now require a missing choice', () => {

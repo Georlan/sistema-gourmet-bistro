@@ -1,3 +1,4 @@
+import type { ProductOption } from './CardapioTypes';
 import type { CartItem } from './components/CardapioCartDrawer';
 
 export interface CardapioOrderItemPayload {
@@ -8,6 +9,21 @@ export interface CardapioOrderItemPayload {
   cliente_nome: string;
 }
 
+const summarizeOptionNames = (options: readonly ProductOption[]) => {
+  const summary = new Map<string, { name: string; quantity: number }>();
+  options.forEach((option) => {
+    const current = summary.get(option.id);
+    if (current) {
+      current.quantity += 1;
+      return;
+    }
+    summary.set(option.id, { name: option.name, quantity: 1 });
+  });
+  return Array.from(summary.values()).map(({ name, quantity }) => (
+    quantity > 1 ? `${quantity}x ${name}` : name
+  ));
+};
+
 /** Preserve selected option identities; the server owns prices and tenant validation. */
 export function buildCardapioOrderItems(
   cart: readonly CartItem[],
@@ -15,12 +31,12 @@ export function buildCardapioOrderItems(
 ): CardapioOrderItemPayload[] {
   return cart.map((item) => {
     const selectedOptions = Object.values(item.selectedOptions).flat();
-    const optionNames = selectedOptions.map((option) => option.name).filter(Boolean);
+    const optionNames = summarizeOptionNames(selectedOptions).filter(Boolean);
 
     return {
       produto_id: item.product.id,
       quantidade: item.quantity,
-      // These IDs belong to options, not groups. Quantity is applied by the server.
+      // IDs repetidos representam quantidade do mesmo adicional; o servidor é a fonte de verdade do preço.
       modificador_ids: selectedOptions.map((option) => option.id),
       observacao: [
         item.notes.trim(),
