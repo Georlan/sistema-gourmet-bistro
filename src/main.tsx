@@ -195,7 +195,13 @@ const RootApp = React.lazy(
             : () => import("./App"),
 );
 
-const RouteLoading = () => <KomaLoading label="Preparando Kôma…" />;
+const RouteLoading = () => pathname === "/recuperar-senha"
+  ? (
+    <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando recuperação…</p>
+    </main>
+  )
+  : <KomaLoading label="Preparando Kôma…" />;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
