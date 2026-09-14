@@ -2,6 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Minus, Plus, Search } from 'lucide-react';
 
 import type { CatalogModifierGroup } from '../../catalog/catalog';
+import {
+  canIncrementModifierQuantity,
+  modifierGroupSelectionValid,
+  modifierOptionQuantity,
+  modifierTypeCount,
+} from '../../domain/modifierQuantity';
 
 type Props = {
   groups: CatalogModifierGroup[];
@@ -88,12 +94,12 @@ export default function ModifierPicker({
           });
           if (activeOptions.length === 0) return null;
 
-          const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
-          const selectedCount = selectedIds.filter((id) => optionIds.has(id)).length;
+          const selectedCount = modifierTypeCount(group, selectedIds);
           const min = Number(group.min_selecoes || 0);
           const max = Math.max(1, Number(group.max_selecoes || 1));
-          const valid = selectedCount >= min && selectedCount <= max;
+          const valid = modifierGroupSelectionValid(group, selectedIds);
           const recommended = group.recomendado !== false || min > 0 || group.tipo === 'obrigatorio';
+          const quantityMode = Boolean(onQuantityChange);
 
           return (
             <div
@@ -111,19 +117,27 @@ export default function ModifierPicker({
                     )}
                   </div>
                   <span className="block text-[9px] text-koma-muted">
-                    {min > 0 ? `Escolha de ${min} a ${max}` : `Escolha até ${max}`}
+                    {quantityMode
+                      ? max === 1
+                        ? 'Escolha uma opção'
+                        : min > 0
+                          ? `Escolha de ${min} a ${max} tipos · quantidade livre por adicional`
+                          : `Até ${max} tipos · quantidade livre por adicional`
+                      : min > 0
+                        ? `Escolha de ${min} a ${max}`
+                        : `Escolha até ${max}`}
                   </span>
                 </div>
                 <span className={`text-[9px] font-bold ${valid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {selectedCount}/{max}
+                  {quantityMode && max > 1 ? `${selectedCount}/${max} tipos` : `${selectedCount}/${max}`}
                 </span>
               </div>
 
               <div className="space-y-1.5">
                 {activeOptions.map((option) => {
-                  const optionQuantity = selectedIds.filter((id) => id === option.id).length;
+                  const optionQuantity = modifierOptionQuantity(selectedIds, option.id);
                   const selected = optionQuantity > 0;
-                  const canIncrement = selectedCount < max;
+                  const canIncrement = canIncrementModifierQuantity(group, selectedIds, option.id);
 
                   if (onQuantityChange) {
                     return (
