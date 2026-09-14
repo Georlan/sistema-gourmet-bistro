@@ -59,6 +59,13 @@ test('ignora salão e pedidos digitais já encerrados no snapshot inicial', () =
   );
 });
 
+test('não inventa pendente quando o snapshot não trouxe um estado digital autoritativo', () => {
+  const missingStatus = baseOrder({ id: 'delivery-no-status', deliveryStatus: null });
+  const unknownStatus = baseOrder({ id: 'delivery-unknown', deliveryStatus: 'legacy' as Order['deliveryStatus'] });
+
+  assert.deepEqual(projectDeliveryOrdersFromSharedSnapshot([missingStatus, unknownStatus]), []);
+});
+
 test('preserva retirada e venda rápida do snapshot compartilhado', () => {
   const [projected] = projectDeliveryOrdersFromSharedSnapshot([
     baseOrder({
