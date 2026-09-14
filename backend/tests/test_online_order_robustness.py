@@ -137,6 +137,39 @@ def test_reenvio_com_mesma_chave_retorna_mesmo_pedido_e_total():
         db.close()
 
 
+def test_reuso_da_mesma_chave_com_itens_diferentes_retorna_conflito():
+    key = "pedido-idempotencia-conflito-0001"
+    headers = {"X-Idempotency-Key": key}
+
+    first = client.post(
+        "/cardapio/pedidos",
+        json=_payload(key=key, quantidade=1),
+        headers=headers,
+    )
+    conflicting = client.post(
+        "/cardapio/pedidos",
+        json=_payload(key=key, quantidade=2),
+        headers=headers,
+    )
+
+    assert first.status_code == 201, first.text
+    assert conflicting.status_code == 409, conflicting.text
+    assert conflicting.json()["detail"] == (
+        "A chave idempotente já foi usada com outro conteúdo de pedido."
+    )
+
+    db = SessionLocal()
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        assert db.query(Comanda).filter(
+            Comanda.restaurante_id == RESTAURANTE_ID,
+            Comanda.idempotency_key == key,
+        ).count() == 1
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+
 def test_chave_do_header_e_body_nao_podem_divergir():
     response = client.post(
         "/cardapio/pedidos",
