@@ -32,6 +32,7 @@ from app.financial_refund_models import PagamentoEstornoAlocacao, PagamentoEstor
 from app.models import (
     CaixaTurno,
     Categoria,
+    Cliente,
     Comanda,
     IntegrationOutbox,
     Item,
@@ -86,6 +87,7 @@ def _cleanup(db, restaurante_id: int) -> None:
         Item,
         Lancamento,
         Comanda,
+        Cliente,
         Produto,
         Categoria,
         CaixaTurno,
