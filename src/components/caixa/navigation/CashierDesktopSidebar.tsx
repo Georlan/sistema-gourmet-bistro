@@ -16,6 +16,7 @@ import { CASHIER_SIDEBAR_GROUPS } from './cashierNavigation';
 import { CashierOnboardingShortcut } from './CashierOnboardingShortcut';
 import { CashierSidebarFooter } from './CashierSidebarFooter';
 import { CashierSidebarNavigation } from './CashierSidebarNavigation';
+import { CashierSidebarSearch } from './CashierSidebarSearch';
 
 type BoundaryProps = CashierSidebarProps;
 
@@ -97,7 +98,15 @@ export function CashierDesktopSidebar({
 
       <SidebarContent className="cashier-sidebar__content p-2">
         <div className="mb-2">
-          <CashierOnboardingShortcut />
+          {setupMode ? (
+            <CashierOnboardingShortcut />
+          ) : (
+            <CashierSidebarSearch
+              groups={CASHIER_SIDEBAR_GROUPS}
+              hasOnlineMenu={hasOnlineMenu}
+              handleSidebarNavigation={handleSidebarNavigation}
+            />
+          )}
         </div>
         {setupMode ? (
           <div className="rounded-xl border border-koma-border bg-koma-raised/40 p-3 text-[10px] leading-relaxed text-koma-muted group-data-[collapsible=icon]:hidden">

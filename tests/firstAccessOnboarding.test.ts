@@ -17,6 +17,8 @@ const routeComposition = source('../backend/app/routes/__init__.py');
 const desktopSidebar = source('../src/components/caixa/navigation/CashierDesktopSidebar.tsx');
 const mobileSidebar = source('../src/components/caixa/navigation/CashierMobileSidebar.tsx');
 const onboardingShortcut = source('../src/components/caixa/navigation/CashierOnboardingShortcut.tsx');
+const sidebarSearch = source('../src/components/caixa/navigation/CashierSidebarSearch.tsx');
+const cashierSettings = source('../src/components/caixa/settings/CashierSettings.tsx');
 
 test('new admin activation enters guided onboarding instead of raw cashier', () => {
   assert.match(activation, /userRole === 'admin'/);
@@ -24,14 +26,20 @@ test('new admin activation enters guided onboarding instead of raw cashier', () 
   assert.match(activation, /saveOperatorSession\(accessToken, sessionUser\)/);
 });
 
-test('activated management users can resume initial setup from the operational app', () => {
+test('configured restaurants prioritize function search and can resume setup from settings', () => {
   assert.match(activation, /getOperatorSession\('caixa'\)/);
   assert.match(activation, /resumeRequested/);
   assert.match(activation, /Voltar para a implantação inicial/);
   assert.match(onboardingShortcut, /\/ativar\?resume=1/);
   assert.match(onboardingShortcut, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
-  assert.match(desktopSidebar, /<CashierOnboardingShortcut/);
-  assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
+  assert.match(desktopSidebar, /<CashierSidebarSearch/);
+  assert.match(mobileSidebar, /<CashierSidebarSearch/);
+  assert.match(sidebarSearch, /Pesquisar funções\.\.\./);
+  assert.match(sidebarSearch, /handleSidebarNavigation/);
+  assert.match(cashierSettings, /Configuração do restaurante/);
+  assert.match(cashierSettings, /Implantação inicial/);
+  assert.match(cashierSettings, /\/ativar\?resume=1/);
+  assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
 });
 
 test('required onboarding persists and blocks normal operation until 3 of 3 is complete', () => {
@@ -52,7 +60,9 @@ test('setup mode exposes canonical configuration without exposing normal operati
   assert.match(navigation, /tab === 'impressao_salao' && subTab === 'integracoes'/);
   assert.match(navigation, /Finalize a implantação inicial antes de acessar a operação/);
   assert.match(desktopSidebar, /setupMode \?/);
+  assert.match(desktopSidebar, /<CashierOnboardingShortcut/);
   assert.match(desktopSidebar, /Conclua dados do restaurante, horários e cardápio/);
+  assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
   assert.match(mobileSidebar, /Você está na implantação inicial/);
   assert.match(mobileSidebar, /!setupMode &&/);
 });

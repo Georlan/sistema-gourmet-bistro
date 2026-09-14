@@ -1,7 +1,8 @@
-import { Lock, Monitor, Percent, Printer, Smartphone, Users } from 'lucide-react';
+import { Lock, Monitor, Percent, Printer, Smartphone, Sparkles, Users } from 'lucide-react';
 import React, { useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
+import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { CashierAppearanceSettings } from './CashierAppearanceSettings';
 import { CashierIntegrationsSettings } from './CashierIntegrationsSettings';
@@ -78,6 +79,15 @@ function persistCashierSettingsTab(tab: CashierSettingsTab) {
   } catch {
     // Preferência local é melhoria de ergonomia; falha de storage não deve bloquear o Caixa.
   }
+}
+
+function openInitialSetup() {
+  try {
+    sessionStorage.removeItem(ONBOARDING_SETUP_MODE_KEY);
+  } catch {
+    // O acesso continua disponível mesmo quando o storage do navegador estiver restrito.
+  }
+  window.location.href = '/ativar?resume=1';
 }
 
 export default function CashierSettings({
@@ -222,6 +232,33 @@ export default function CashierSettings({
                   </div>
                 </section>
               ))}
+
+              <section aria-labelledby="cashier-settings-group-implantacao">
+                <div className="mb-2 px-1">
+                  <h3 id="cashier-settings-group-implantacao" className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-koma-secondary">
+                    Configuração do restaurante
+                  </h3>
+                  <p className="mt-0.5 text-[9px] leading-relaxed text-koma-muted">
+                    Acesso eventual para revisar a configuração usada na ativação inicial.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openInitialSetup}
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-koma-border bg-koma-page px-3 py-3 text-left text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 sm:max-w-md"
+                  aria-label="Reabrir implantação inicial"
+                >
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-koma-border bg-koma-raised">
+                    <Sparkles size={13} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-bold">Implantação inicial</span>
+                    <span className="mt-1 block text-[9px] font-medium leading-snug text-koma-muted">
+                      Revisar dados básicos, horários e primeiro cardápio.
+                    </span>
+                  </span>
+                </button>
+              </section>
             </div>
           </div>
 
