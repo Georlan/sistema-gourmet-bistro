@@ -1,3 +1,8 @@
+import {
+  canIncrementSelectionQuantity,
+  selectionTypeCount,
+  type ModifierQuantityRules,
+} from "../domain/modifierQuantity";
 import type { Product, ProductOption } from "./CardapioTypes";
 import type { CartItem } from "./components/CardapioCartDrawer";
 import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHistory";
@@ -41,6 +46,12 @@ function currentGroups(product: Product): CurrentGroup[] {
   }));
 }
 
+const rulesForGroup = (group: CurrentGroup): ModifierQuantityRules => ({
+  optionIds: group.options.filter((option) => option.active !== false).map((option) => option.id),
+  minSelection: group.minSelection,
+  maxSelection: group.maxSelection,
+});
+
 export function rebuildOrderFromCurrentCatalog(
   order: CustomerHistoryOrder,
   products: Product[],
@@ -78,22 +89,35 @@ export function rebuildOrderFromCurrentCatalog(
       }
 
       const currentSelection = selectedOptions[group.id] || [];
-      if (currentSelection.length >= group.maxSelection) {
-        issues.push(`${product.name}: o limite atual de “${group.title}” foi reduzido.`);
+      const selectedIds = currentSelection.map((option) => option.id);
+      const rules = rulesForGroup(group);
+      const selectedTypes = selectionTypeCount(rules, selectedIds);
+      const optionAlreadySelected = selectedIds.includes(currentOption.id);
+
+      if (!canIncrementSelectionQuantity(rules, selectedIds, currentOption.id)) {
+        // Em grupos exclusivos, histórico duplicado da mesma opção não deve virar quantidade.
+        // Nos demais grupos, somente um novo tipo acima do limite é descartado.
+        if (!optionAlreadySelected || group.maxSelection === 1) {
+          issues.push(`${product.name}: o limite atual de “${group.title}” foi reduzido.`);
+        }
         continue;
       }
-      if (!currentSelection.some((option) => option.id === currentOption.id)) {
-        selectedOptions[group.id] = [...currentSelection, {
-          id: currentOption.id,
-          name: currentOption.name,
-          extraPrice: currentOption.extraPrice,
-        }];
-      }
+
+      selectedOptions[group.id] = [...currentSelection, {
+        id: currentOption.id,
+        name: currentOption.name,
+        extraPrice: currentOption.extraPrice,
+      }];
+
+      // Evita variável aparentemente sem uso em transpilers mais estritos e documenta a regra:
+      // quantidade repetida não altera o número de tipos selecionados.
+      void selectedTypes;
     }
 
-    const unsatisfied = groups.filter((group) => (
-      (selectedOptions[group.id] || []).length < group.minSelection
-    ));
+    const unsatisfied = groups.filter((group) => {
+      const selectedIds = (selectedOptions[group.id] || []).map((option) => option.id);
+      return selectionTypeCount(rulesForGroup(group), selectedIds) < group.minSelection;
+    });
     if (unsatisfied.length > 0) {
       skippedItems += Math.max(1, Number(historicalItem.quantidade) || 1);
       issues.push(
