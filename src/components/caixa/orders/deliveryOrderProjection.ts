@@ -123,6 +123,7 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       pago: activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
+      motoboyId: order.motoboyId ?? null,
       criadoEm: parsedTime === '—' ? '12:00' : parsedTime,
       created_at: order.created_at,
       numeroPedido: order.numeroPedido,
