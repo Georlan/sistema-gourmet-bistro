@@ -87,7 +87,7 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     checkoutSummary: 'Só entra se puder preservar o trial durante a implantação e iniciar os 7 dias grátis depois do setup essencial.',
     landingSummary: 'Parcelamento anual em estudo sem consumir trial durante a configuração inicial.',
     previewTitle: 'Anual parcelado no cartão · em estudo',
-    previewDescription: 'A opção só será oferecida se o provedor suportar autorização recorrente sem cobrar a mensalidade fixa durante a implantação. O KÔMA não exibirá pagamento antecipado disfarçado de trial nem dias de bônus.',
+    previewDescription: 'A opção só será oferecida se o provedor suportar autorização recorrente sem cobrar a mensalidade fixa durante a implantação e preservar os 7 dias grátis completos para depois do setup essencial. O KÔMA não exibirá pagamento antecipado disfarçado de trial nem dias de bônus.',
     selectable: false,
   },
 ] as const;
