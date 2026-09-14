@@ -23,6 +23,7 @@ jobs:
       frontend: ${{ steps.classify.outputs.frontend }}
       backend: ${{ steps.classify.outputs.backend }}
       security: ${{ steps.classify.outputs.security }}
+      e2e: ${{ steps.classify.outputs.e2e }}
     steps:
       - name: Checkout history for change classification
         uses: actions/checkout@v6
@@ -42,12 +43,14 @@ jobs:
           frontend=false
           backend=false
           security=false
+          e2e=false
 
           # Manual/nightly runs are the complete regression safety net.
           if [[ "$EVENT_NAME" != "pull_request" ]]; then
             frontend=true
             backend=true
             security=true
+            e2e=false
           else
             git diff --name-only "$BASE_SHA" "$HEAD_SHA" | tee /tmp/koma-changed-files.txt
 
@@ -71,6 +74,12 @@ jobs:
                   security=true
                   ;;
               esac
+
+              case "$file" in
+                e2e/*|playwright.config.*|.github/workflows/e2e-pr-gate.yml|.github/workflows/quality-gate.yml)
+                  e2e=true
+                  ;;
+              esac
             done < /tmp/koma-changed-files.txt
           fi
 
@@ -78,6 +87,7 @@ jobs:
             echo "frontend=$frontend"
             echo "backend=$backend"
             echo "security=$security"
+            echo "e2e=$e2e"
           } | tee -a "$GITHUB_OUTPUT"
 
   frontend:
@@ -129,6 +139,8 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install backend dependencies
         run: python -m pip install -r backend/requirements-dev.txt
+      - name: Verify installed dependency compatibility
+        run: python -m pip check
       - name: Reject tests outside canonical suite
         run: |
           if find backend -maxdepth 1 -type f -name 'test_*.py' -print -quit | grep -q .; then
@@ -170,6 +182,67 @@ jobs:
           printf 'Fast backend gate: %s test files\n' "${#unique[@]}"
           printf '  %s\n' "${unique[@]}"
           python -m pytest "${unique[@]}" -q -ra -x
+
+  browser-pr:
+    name: Browser regression for E2E changes
+    needs: plan
+    if: github.event_name == 'pull_request' && needs.plan.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run browser matrix
+        env:
+          KOMA_E2E_PORT: '4283'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          canonical_specs=(
+            e2e/operational-app-owners.spec.ts
+            e2e/salon-context.spec.ts
+            e2e/app-recovery.spec.ts
+            e2e/public-menu-order.spec.ts
+            e2e/order-tracking-chat.spec.ts
+            e2e/password-recovery.spec.ts
+          )
+
+          mapfile -t changed_specs < <(
+            git diff --diff-filter=ACMR --name-only "${BASE_SHA:-origin/${{ github.base_ref }}}...${HEAD_SHA:-HEAD}" -- 'e2e/*.spec.ts'
+          )
+
+          specs=("${canonical_specs[@]}")
+          for changed_spec in "${changed_specs[@]}"; do
+            if [[ -n "${changed_spec}" ]] && [[ -f "${changed_spec}" ]] && [[ ! " ${specs[*]} " =~ " ${changed_spec} " ]]; then
+              specs+=("${changed_spec}")
+            fi
+          done
+
+          printf 'Playwright specs: %s\n' "${specs[*]}"
+          npx playwright test "${specs[@]}" --project=mobile-360 --project=desktop-1366 --workers=2
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-pr-playwright-report-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
 
   browser-full:
     name: Browser full regression
@@ -357,7 +430,7 @@ jobs:
   verdict:
     name: Merge verdict
     if: always()
-    needs: [plan, frontend, backend-pr, browser-full, backend-full, security]
+    needs: [plan, frontend, backend-pr, browser-pr, browser-full, backend-full, security]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -368,6 +441,7 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           BACKEND_PR_RESULT: ${{ needs.backend-pr.result }}
+          BROWSER_PR_RESULT: ${{ needs.browser-pr.result }}
           BROWSER_RESULT: ${{ needs.browser-full.result }}
           BACKEND_FULL_RESULT: ${{ needs.backend-full.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
@@ -375,7 +449,7 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            results=("$PLAN_RESULT" "$FRONTEND_RESULT" "$BACKEND_PR_RESULT" "$SECURITY_RESULT")
+            results=("$PLAN_RESULT" "$FRONTEND_RESULT" "$BACKEND_PR_RESULT" "$BROWSER_PR_RESULT" "$SECURITY_RESULT")
           else
             results=("$PLAN_RESULT" "$FRONTEND_RESULT" "$BROWSER_RESULT" "$BACKEND_FULL_RESULT" "$SECURITY_RESULT")
           fi

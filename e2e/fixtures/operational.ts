@@ -110,6 +110,12 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
       perm_garcom_fechar: true,
       perm_garcom_editar: true,
     };
+    else if (path === '/api/online-orders/control') body = {
+      paused: false,
+      max_active_orders: 50,
+      level: 'normal',
+      counts: { active: 0, analise: 0, pendente: 0, producao: 0, pronto: 0 },
+    };
     else if (path === '/caixa/turno/atual') body = {
       id: 701,
       aberto_por_id: 'cashier-phase7',

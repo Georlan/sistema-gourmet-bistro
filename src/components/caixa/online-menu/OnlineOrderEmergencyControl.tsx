@@ -58,6 +58,7 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
       }
       if (!response.ok) return;
       const payload = (await response.json()) as OperationalStatus;
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !payload.counts) return;
       setAuthorized(true);
       setStatusData(payload);
     } catch {
@@ -105,7 +106,9 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Não foi possível atualizar o recebimento de pedidos.');
-      setStatusData(data as OperationalStatus);
+      if (data && typeof data === 'object' && !Array.isArray(data) && data.counts) {
+        setStatusData(data as OperationalStatus);
+      }
       setDialogOpen(false);
       window.dispatchEvent(new Event('koma_orders_updated'));
     } catch (err) {
@@ -117,7 +120,7 @@ export function OnlineOrderEmergencyControl({ mobile = false }: { mobile?: boole
 
   if (!authorized) return null;
 
-  if (!statusData) {
+  if (!statusData || !statusData.counts) {
     return (
       <button
         type="button"
