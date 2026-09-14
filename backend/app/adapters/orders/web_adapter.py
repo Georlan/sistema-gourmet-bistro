@@ -146,6 +146,36 @@ def _load_existing_idempotent_order(db: Session, rest_id: int, key: str) -> Coma
     )
 
 
+def _payload_items_signature(payload: CardapioPedidoCreate) -> list[str]:
+    return sorted(
+        f"{item.produto_id}:{item.observacao}"
+        for item in payload.itens
+        for _ in range(item.quantidade)
+    )
+
+
+def _stored_items_signature(comanda: Comanda) -> list[str]:
+    return sorted(
+        f"{item.produto_id}:{item.observacao}"
+        for item in comanda.itens
+        if item.status != "cancelado"
+    )
+
+
+def _ensure_idempotent_replay_matches(
+    comanda: Comanda,
+    payload: CardapioPedidoCreate,
+    *,
+    tipo_comanda: str,
+) -> None:
+    """Não permite que a mesma chave idempotente represente pedidos diferentes."""
+    if comanda.tipo != tipo_comanda or _stored_items_signature(comanda) != _payload_items_signature(payload):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A chave idempotente já foi usada com outro conteúdo de pedido.",
+        )
+
+
 def _enforce_public_order_rate_limits(
     db: Session,
     *,
@@ -294,6 +324,11 @@ class CardapioWebAdapter:
 
             existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
             if existing_comanda:
+                _ensure_idempotent_replay_matches(
+                    existing_comanda,
+                    payload,
+                    tipo_comanda=tipo_comanda,
+                )
                 logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
                 existing_intent = db.query(OnlinePaymentIntent).filter(
                     OnlinePaymentIntent.restaurante_id == rest_id,
@@ -364,13 +399,9 @@ class CardapioWebAdapter:
                     Comanda.criado_em >= cinco_minutos_atras,
                 ).order_by(Comanda.criado_em.desc()).all()
 
-            payload_items_sig = sorted([
-                f"{item.produto_id}:{item.observacao}"
-                for item in payload.itens
-                for _ in range(item.quantidade)
-            ])
+            payload_items_sig = _payload_items_signature(payload)
             for rec in recentes:
-                rec_items_sig = sorted([f"{item.produto_id}:{item.observacao}" for item in rec.itens])
+                rec_items_sig = _stored_items_signature(rec)
                 if payload_items_sig == rec_items_sig:
                     logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
                     return _existing_order_response(db, rec)
@@ -556,6 +587,11 @@ class CardapioWebAdapter:
             db.rollback()
             concurrent_order = _load_existing_idempotent_order(db, rest_id, idempotency_key)
             if concurrent_order is not None:
+                _ensure_idempotent_replay_matches(
+                    concurrent_order,
+                    payload,
+                    tipo_comanda=tipo_comanda,
+                )
                 logger.info(
                     "Corrida idempotente resolvida para pedido público: %s",
                     idempotency_key,
