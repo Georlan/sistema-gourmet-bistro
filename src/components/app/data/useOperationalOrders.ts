@@ -14,6 +14,15 @@ type OptimisticItemStatus = {
   ts: number;
 };
 
+type OptimisticOrderReconcileDetail = {
+  tempId?: string;
+  comanda?: unknown;
+};
+
+type OptimisticOrderRemoveDetail = {
+  orderId?: string;
+};
+
 /** Owns the shared order snapshot, response mapping, targeted refresh and optimistic overlays. */
 export function useOperationalOrders({
   liveProdutos,
@@ -47,6 +56,42 @@ export function useOperationalOrders({
     setOrders([]);
     setLoadedScopeKey('');
   }, [scopeKey]);
+
+  useEffect(() => {
+    const removeOptimisticOrder = (rawOrderId: unknown) => {
+      const orderId = String(rawOrderId || '').trim();
+      if (!orderId.startsWith('temp-')) return;
+      setOrders((current) => current.filter((order) => String(order.id) !== orderId));
+    };
+
+    const handleOptimisticRemove = (event: Event) => {
+      const detail = (event as CustomEvent<OptimisticOrderRemoveDetail>).detail;
+      removeOptimisticOrder(detail?.orderId);
+    };
+
+    const handleOptimisticReconcile = (event: Event) => {
+      const detail = (event as CustomEvent<OptimisticOrderReconcileDetail>).detail;
+      const tempId = String(detail?.tempId || '').trim();
+      const comanda = detail?.comanda as any;
+      if (!tempId.startsWith('temp-') || !comanda?.id) return;
+
+      const mappedOrder = mapBackendComandaToOperationalOrder({ comanda, liveProdutos });
+      setOrders((current) => [
+        mappedOrder,
+        ...current.filter(
+          (order) => String(order.id) !== tempId && String(order.id) !== String(mappedOrder.id),
+        ),
+      ]);
+      setFetchError(null);
+    };
+
+    window.addEventListener('koma_optimistic_order_remove', handleOptimisticRemove);
+    window.addEventListener('koma_optimistic_order_reconcile', handleOptimisticReconcile);
+    return () => {
+      window.removeEventListener('koma_optimistic_order_remove', handleOptimisticRemove);
+      window.removeEventListener('koma_optimistic_order_reconcile', handleOptimisticReconcile);
+    };
+  }, [liveProdutos, setFetchError]);
 
   const mapBackendComandaToOrder = (comanda: any, now = Date.now()): Order => {
     const mapped = mapBackendComandaToOperationalOrder({ comanda, liveProdutos });
