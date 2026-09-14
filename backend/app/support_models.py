@@ -72,6 +72,61 @@ class SupportSession(Base):
     )
 
 
+class CustomerSupportFeedback(Base):
+    """Mensagem enviada por um usuário autenticado do restaurante ao suporte KÔMA.
+
+    O registro é tenant-scoped e permanece salvo mesmo quando os canais de aviso
+    do operador KÔMA (e-mail/WhatsApp) estiverem temporariamente indisponíveis.
+    """
+
+    __tablename__ = "customer_support_feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('question', 'suggestion', 'complaint', 'problem')",
+            name="ck_customer_support_feedback_kind",
+        ),
+        CheckConstraint(
+            "status IN ('new', 'read', 'resolved')",
+            name="ck_customer_support_feedback_status",
+        ),
+        Index(
+            "ix_customer_support_feedback_tenant_status_created",
+            "restaurante_id",
+            "status",
+            "created_at",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    reporter_user_id = Column(String(64), nullable=False)
+    reporter_name = Column(String(255), nullable=True)
+    reporter_role = Column(String(64), nullable=True)
+    kind = Column(String(20), nullable=False)
+    message = Column(Text, nullable=False)
+    page_path = Column(String(300), nullable=True)
+    status = Column(String(20), default="new", nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        server_default=func.now(),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+
 class SupportOperatorUser:
     """Representa a identidade de um operador KÔMA atuando em Modo Suporte.
 
@@ -103,4 +158,3 @@ class SupportOperatorUser:
 
     def __repr__(self) -> str:
         return f"<SupportOperatorUser {self.id} tenant={self.restaurante_id}>"
-
