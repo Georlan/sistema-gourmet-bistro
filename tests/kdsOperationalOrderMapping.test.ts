@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { mapBackendComandaToOperationalOrder } from '../src/components/app/data/useOperationalOrders';
+import { mapBackendComandaToOperationalOrder } from '../src/components/app/data/operationalOrderMapping';
 
 const makeComanda = (overrides: Record<string, unknown> = {}) => ({
   id: 'order-91',
