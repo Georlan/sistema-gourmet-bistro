@@ -4,9 +4,13 @@ import test from 'node:test';
 import type { CatalogModifierGroup } from '../src/catalog/catalog';
 import {
   canIncrementModifierQuantity,
+  canIncrementSelectionQuantity,
   changeModifierQuantitySelection,
+  changeSelectionQuantity,
   modifierGroupSelectionValid,
   modifierTypeCount,
+  selectionTypeCount,
+  selectionWithinRules,
 } from '../src/domain/modifierQuantity';
 
 const group = (max: number): CatalogModifierGroup => ({
@@ -68,4 +72,28 @@ test('grupo de escolha única continua exclusivo', () => {
 
   selected = changeModifierQuantitySelection(single, selected, 'bacon', 1);
   assert.deepEqual(selected, ['bacon']);
+});
+
+test('contrato genérico usado pelo cardápio público replica a mesma semântica do PDV', () => {
+  const rules = {
+    optionIds: ['catupiry', 'bacon', 'cheddar', 'cebola'],
+    minSelection: 0,
+    maxSelection: 3,
+  };
+  let selected: string[] = [];
+
+  selected = changeSelectionQuantity(rules, selected, 'catupiry', 1);
+  selected = changeSelectionQuantity(rules, selected, 'catupiry', 1);
+  selected = changeSelectionQuantity(rules, selected, 'catupiry', 1);
+  selected = changeSelectionQuantity(rules, selected, 'bacon', 1);
+
+  assert.deepEqual(selected, ['catupiry', 'catupiry', 'catupiry', 'bacon']);
+  assert.equal(selectionTypeCount(rules, selected), 2);
+  assert.equal(selectionWithinRules(rules, selected), true);
+  assert.equal(canIncrementSelectionQuantity(rules, selected, 'cheddar'), true);
+
+  selected = changeSelectionQuantity(rules, selected, 'cheddar', 1);
+  assert.equal(selectionTypeCount(rules, selected), 3);
+  assert.equal(canIncrementSelectionQuantity(rules, selected, 'cebola'), false);
+  assert.equal(canIncrementSelectionQuantity(rules, selected, 'catupiry'), true);
 });
