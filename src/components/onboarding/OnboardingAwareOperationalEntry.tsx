@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getOperatorSession } from '../../utils/authSession';
+import { KomaLoading } from '../app/KomaLoading';
 import { OnboardingOperationalBoundary } from './OnboardingOperationalBoundary';
 
 const OperationalApp = React.lazy(() => import('../../App'));
@@ -16,15 +17,7 @@ export default function OnboardingAwareOperationalEntry() {
   }, []);
 
   const app = (
-    <React.Suspense
-      fallback={(
-        <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">
-            Preparando operação…
-          </p>
-        </main>
-      )}
-    >
+    <React.Suspense fallback={<KomaLoading label="Preparando operação…" />}>
       <OperationalApp initialPortal="caixa" />
     </React.Suspense>
   );

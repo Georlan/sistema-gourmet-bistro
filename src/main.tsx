@@ -5,6 +5,7 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import "./components/shared/operationalHeader.css";
 import { CustomerSupportWidget } from "./components/app/CustomerSupportWidget";
+import { KomaLoading } from "./components/app/KomaLoading";
 import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
@@ -194,11 +195,13 @@ const RootApp = React.lazy(
             : () => import("./App"),
 );
 
-const RouteLoading = () => (
-  <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
-    <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando Kôma…</p>
-  </main>
-);
+const RouteLoading = () => pathname === "/recuperar-senha"
+  ? (
+    <main className="flex min-h-dvh items-center justify-center bg-koma-page px-6 text-koma-foreground">
+      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Preparando recuperação…</p>
+    </main>
+  )
+  : <KomaLoading label="Preparando Kôma…" />;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
