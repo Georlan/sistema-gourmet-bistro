@@ -2,17 +2,29 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
+from sqlalchemy import event, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import Cliente, HistoricoFidelidade
+from ..models import (
+    Cliente,
+    Comanda,
+    ConfigFidelizacao,
+    HistoricoFidelidade,
+    Pagamento,
+)
 
 
 CENTAVOS = Decimal("0.01")
+logger = logging.getLogger("koma.clientes")
+_ONLINE_LOYALTY_PENDING_KEY = "koma_online_loyalty_pending"
 
 
 def normalizar_telefone_cliente(telefone: str) -> str:
@@ -124,6 +136,7 @@ def registrar_movimento_fidelidade(
     valor_delta: Decimal | float | int,
     tipo_recompensa: str,
     comanda_id: Optional[str] = None,
+    flush: bool = True,
 ) -> HistoricoFidelidade:
     """Registra o ledger e o saldo materializado na mesma transação.
 
@@ -175,8 +188,230 @@ def registrar_movimento_fidelidade(
         comanda_id=comanda_id,
     )
     db.add(registro)
-    db.flush([cliente, registro])
+    if flush:
+        db.flush([cliente, registro])
     return registro
+
+
+def registrar_fidelidade_compra_quitada(
+    db: Session,
+    *,
+    comanda: Comanda,
+    cliente: Optional[Cliente] = None,
+    valor_base: Decimal | float | int | None = None,
+    flush: bool = True,
+) -> bool:
+    """Credita fidelidade uma única vez para uma venda válida e identificada.
+
+    O crédito é tenant-scoped e idempotente por ``comanda_id``. Pedidos
+    recusados/cancelados e pagamentos sem cliente nunca geram benefício.
+    """
+    if (comanda.delivery_status or "").strip().lower() == "recusado":
+        return False
+    if (comanda.online_payment_status or "").strip().lower() in {
+        "rejected",
+        "cancelled",
+        "expired",
+    }:
+        return False
+
+    if cliente is None and comanda.cliente_id:
+        cliente = buscar_cliente_por_id(
+            db,
+            restaurante_id=comanda.restaurante_id,
+            cliente_id=comanda.cliente_id,
+            bloquear=True,
+        )
+    if cliente is None:
+        return False
+
+    ja_registrado = db.query(HistoricoFidelidade).filter(
+        HistoricoFidelidade.restaurante_id == comanda.restaurante_id,
+        HistoricoFidelidade.comanda_id == comanda.id,
+        HistoricoFidelidade.tipo_movimentacao == "ACUMULO",
+    ).first()
+    if ja_registrado is not None:
+        return False
+
+    # Também protege o caso em que o ledger foi adicionado à sessão mas ainda
+    # não passou pelo próximo flush (ex.: aprovação Pix dentro de after_flush).
+    for pending in db.new:
+        if (
+            isinstance(pending, HistoricoFidelidade)
+            and pending.restaurante_id == comanda.restaurante_id
+            and pending.comanda_id == comanda.id
+            and pending.tipo_movimentacao == "ACUMULO"
+        ):
+            return False
+
+    fidel_config = db.query(ConfigFidelizacao).filter(
+        ConfigFidelizacao.restaurante_id == comanda.restaurante_id,
+    ).first()
+    if not fidel_config or not fidel_config.ativo:
+        return False
+
+    total_pago = Decimal(str(
+        valor_base if valor_base is not None else (comanda.valor_pago or 0)
+    )).quantize(CENTAVOS, rounding=ROUND_HALF_UP)
+    if total_pago <= Decimal("0.00"):
+        return False
+
+    taxa = Decimal(str(fidel_config.taxa_conversao or 0))
+    recompensa = (fidel_config.tipo_recompensa or "").strip().upper()
+    if recompensa == "PONTOS":
+        delta_val = total_pago * taxa
+        if delta_val < Decimal("0.5"):
+            return False
+    elif recompensa == "CASHBACK":
+        delta_val = (total_pago * taxa / Decimal("100")).quantize(
+            CENTAVOS,
+            rounding=ROUND_HALF_UP,
+        )
+        if delta_val <= Decimal("0.00"):
+            return False
+    else:
+        return False
+
+    registrar_movimento_fidelidade(
+        db,
+        cliente=cliente,
+        tipo_movimentacao="ACUMULO",
+        valor_delta=delta_val,
+        tipo_recompensa=recompensa,
+        comanda_id=comanda.id,
+        flush=flush,
+    )
+    return True
+
+
+def _insert_guest_cliente_if_needed(connection, comanda: Comanda) -> Optional[str]:
+    """Materializa a identidade comercial de um pedido antes do INSERT.
+
+    Conhecer o telefone não concede acesso à conta do cliente. Para pedidos
+    públicos sem autenticação, uma ficha existente é apenas vinculada e nunca
+    tem nome/endereço sobrescritos. Se o telefone ainda não existir, nasce uma
+    ficha guest mínima. A operação usa upsert por tenant+telefone para suportar
+    duas primeiras compras concorrentes sem duplicar o cliente.
+    """
+    if comanda.cliente_id:
+        return str(comanda.cliente_id)
+
+    raw_phone = comanda.delivery_telefone
+    raw_name = comanda.identificador
+    if not raw_phone or not raw_name:
+        return None
+    try:
+        telefone = normalizar_telefone_cliente(raw_phone)
+        nome = normalizar_nome_cliente(raw_name)
+    except ValueError:
+        return None
+
+    clientes = Cliente.__table__
+    criteria = (
+        (clientes.c.restaurante_id == comanda.restaurante_id)
+        & (clientes.c.telefone == telefone)
+    )
+    existing = connection.execute(select(clientes.c.id).where(criteria)).scalar_one_or_none()
+    if existing is not None:
+        return str(existing)
+
+    cliente_id = str(uuid.uuid4())
+    values = {
+        "id": cliente_id,
+        "restaurante_id": comanda.restaurante_id,
+        "telefone": telefone,
+        "nome": nome,
+        "endereco": (comanda.delivery_endereco or "").strip() or None,
+        "saldo_pontos": 0,
+        "saldo_cashback": 0.0,
+    }
+
+    dialect = connection.dialect.name
+    if dialect == "postgresql":
+        statement = pg_insert(clientes).values(**values).on_conflict_do_nothing(
+            index_elements=["restaurante_id", "telefone"],
+        )
+        connection.execute(statement)
+    elif dialect == "sqlite":
+        statement = sqlite_insert(clientes).values(**values).on_conflict_do_nothing(
+            index_elements=["restaurante_id", "telefone"],
+        )
+        connection.execute(statement)
+    else:
+        try:
+            connection.execute(clientes.insert().values(**values))
+        except IntegrityError:
+            # Em dialetos sem UPSERT explícito, a constraint composta ainda é a
+            # última defesa. O SELECT seguinte recupera o vencedor da corrida.
+            logger.info(
+                "Concorrência ao criar cliente guest para tenant %s.",
+                comanda.restaurante_id,
+            )
+
+    resolved = connection.execute(select(clientes.c.id).where(criteria)).scalar_one_or_none()
+    return str(resolved) if resolved is not None else None
+
+
+@event.listens_for(Comanda, "before_insert")
+def _vincular_cliente_universal_antes_da_comanda(_mapper, connection, target: Comanda) -> None:
+    """Garante ``Comanda.cliente_id`` para qualquer canal que informe telefone."""
+    resolved = _insert_guest_cliente_if_needed(connection, target)
+    if resolved is not None:
+        target.cliente_id = resolved
+
+
+@event.listens_for(Session, "before_flush")
+def _rastrear_pagamentos_online_para_fidelidade(session, _flush_context, _instances) -> None:
+    pending = session.info.setdefault(_ONLINE_LOYALTY_PENDING_KEY, set())
+    for obj in session.new:
+        if not isinstance(obj, Pagamento):
+            continue
+        if obj.status != "aprovado" or not obj.cliente_id:
+            continue
+        idempotency_key = (obj.idempotency_key or "").strip()
+        if not idempotency_key.startswith("online:mercado_pago:"):
+            continue
+        pending.add((int(obj.restaurante_id), str(obj.id)))
+
+
+@event.listens_for(Session, "after_flush_postexec")
+def _creditar_fidelidade_pagamento_online(session, _flush_context) -> None:
+    pending = session.info.pop(_ONLINE_LOYALTY_PENDING_KEY, set())
+    if not pending:
+        return
+
+    for restaurante_id, pagamento_id in pending:
+        pagamento = session.query(Pagamento).filter(
+            Pagamento.restaurante_id == restaurante_id,
+            Pagamento.id == pagamento_id,
+            Pagamento.status == "aprovado",
+        ).first()
+        if pagamento is None or not pagamento.cliente_id:
+            continue
+
+        comanda = session.query(Comanda).filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id == pagamento.comanda_id,
+        ).with_for_update().first()
+        if comanda is None:
+            continue
+
+        cliente = buscar_cliente_por_id(
+            session,
+            restaurante_id=restaurante_id,
+            cliente_id=pagamento.cliente_id,
+            bloquear=True,
+        )
+        if cliente is None:
+            continue
+
+        registrar_fidelidade_compra_quitada(
+            session,
+            comanda=comanda,
+            cliente=cliente,
+            valor_base=pagamento.valor,
+            flush=False,
+        )
 
 
 def cliente_payload(cliente: Cliente) -> dict:
