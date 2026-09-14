@@ -258,6 +258,22 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
                 return TenantEntitlement(allowed=True, reason="trial_active", billing_status="trialing")
             return TenantEntitlement(allowed=False, reason="trial_expired", billing_status="past_due")
 
+        # Durante a implantação a autorização recorrente fica pausada no provedor.
+        # O acesso às telas de configuração precisa continuar liberado, enquanto o
+        # gate de onboarding impede Vendas/Caixa até o 3/3. Um webhook de pausa pode
+        # temporariamente refletir "suspended" localmente; sem datas de período isso
+        # ainda representa implantação, não inadimplência/suspensão administrativa.
+        if sub_status == "onboarding" or (
+            sub_status == "suspended"
+            and sub.trial_started_at is None
+            and sub.current_period_start is None
+        ):
+            return TenantEntitlement(
+                allowed=True,
+                reason="onboarding_setup",
+                billing_status="onboarding",
+            )
+
         if sub_status == "past_due":
             grace = sub.grace_until
             if grace is not None and grace.tzinfo is None:

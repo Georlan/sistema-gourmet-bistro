@@ -20,6 +20,7 @@ from ..services.billing_service import (
     get_billing_setup_by_provider_sub,
     upsert_billing_setup,
 )
+from ..services.onboarding_trial import pause_provider_during_onboarding
 from ..services.restaurant_provisioning import (
     provision_restaurant_for_contract,
     resolve_activation_acceptance,
@@ -123,6 +124,26 @@ def _validate_recurring_mandate(
             )
 
 
+def _pause_authorized_mandate_until_setup(preapproval_id: str) -> None:
+    """Protege os 7 dias imediatamente após a autorização, antes até da liberação manual."""
+    try:
+        provider_result = pause_provider_during_onboarding(preapproval_id)
+    except SaasMercadoPagoError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "A autorização foi confirmada, mas ainda não foi possível pausar a recorrência para proteger os 7 dias grátis. "
+                "A inscrição ficou salva e nenhum restaurante foi liberado; tente novamente."
+            ),
+        ) from exc
+
+    if str(provider_result.get("status") or "").strip().lower() != "paused":
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="O gateway ainda não confirmou a pausa da recorrência. A inscrição permanece salva e sem liberação.",
+        )
+
+
 @router.get("/payment-methods")
 def available_payment_methods():
     return default_saas_mp_service.checkout_capabilities()
@@ -143,8 +164,8 @@ def setup_contract_billing(
 def _setup_contract_billing(protocol, payload, background_tasks, db):
     """
     Configura exclusivamente meios recorrentes com a mesma regra comercial:
-    autorização hoje, R$ 0 de mensalidade fixa durante 7 dias e primeira cobrança
-    automática somente após o trial.
+    autorização hoje, R$ 0 de mensalidade fixa durante a implantação e início
+    dos 7 dias grátis somente quando os 3 passos essenciais estiverem prontos.
     """
     if not default_saas_mp_service.checkout_capabilities().get(payload.payment_method_type):
         raise HTTPException(503, "Inscrição salva. Este método recorrente está temporariamente indisponível; tente novamente mais tarde.")
@@ -188,16 +209,18 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             return {
                 "success": True,
                 "status": "awaiting_release",
-                "message": "Autorização recorrente confirmada. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
+                "message": "Autorização recorrente confirmada e pausada para proteger o período grátis. A equipe KÔMA foi avisada e fará a liberação do restaurante.",
             }
         provision_res = provision_restaurant_for_contract(db, acceptance=acceptance, billing_setup=existing, actor="saas_checkout")
+        trial_ends_at = provision_res.get("trial_ends_at")
         return {
             "success": True,
             "status": "ready",
             "restaurantId": str(provision_res["restaurant_id"]),
             "slug": provision_res["slug"],
             "trialDays": SAAS_TRIAL_DAYS,
-            "trialEndsAt": provision_res["trial_ends_at"].isoformat(),
+            "trialStartsAfterSetup": True,
+            "trialEndsAt": trial_ends_at.isoformat() if trial_ends_at else None,
             "activationToken": provision_res.get("invitation_token"),
         }
 
@@ -220,12 +243,24 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 terms=terms,
                 payment_method_type=existing.payment_method_type,
             )
+            recovered_id = str(recovered["id"])
+            upsert_billing_setup(
+                db,
+                protocol=normalized_protocol,
+                status="pending",
+                payment_method_type=existing.payment_method_type,
+                provider_subscription_id=recovered_id,
+                provider_customer_id=str(recovered.get("payer_id") or "") or None,
+                billing_cycle=canonical_cycle,
+            )
+            db.commit()
+            _pause_authorized_mandate_until_setup(recovered_id)
             upsert_billing_setup(
                 db,
                 protocol=normalized_protocol,
                 status="ready",
                 payment_method_type=existing.payment_method_type,
-                provider_subscription_id=str(recovered["id"]),
+                provider_subscription_id=recovered_id,
                 provider_customer_id=str(recovered.get("payer_id") or "") or None,
                 billing_cycle=canonical_cycle,
             )
@@ -243,7 +278,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 "authorizationUrl": authorization_url or None,
                 "amountDueToday": 0,
                 "trialDays": SAAS_TRIAL_DAYS,
-                "message": f"Autorize o {method_label}. Nenhuma mensalidade fixa será cobrada antes do fim dos 7 dias grátis.",
+                "message": f"Autorize o {method_label}. Os 7 dias grátis começam somente depois da implantação essencial.",
             }
 
         raise HTTPException(409, "A autorização anterior ainda está em confirmação. Aguarde antes de tentar novamente.")
@@ -296,6 +331,20 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             raise HTTPException(402, "O provedor ainda não autorizou a assinatura. Nenhuma cobrança antecipada foi feita.")
 
         _validate_recurring_mandate(mp_res, protocol=normalized_protocol, terms=terms, payment_method_type="credit_card")
+        provider_subscription_id = str(mp_res["id"])
+        upsert_billing_setup(
+            db,
+            protocol=normalized_protocol,
+            contract_acceptance_id=str(acceptance.get("acceptance_id")),
+            provider="mercado_pago",
+            payment_method_type="credit_card",
+            status="pending",
+            provider_customer_id=str(mp_res.get("payer_id") or "") or None,
+            provider_subscription_id=provider_subscription_id,
+            billing_cycle=canonical_cycle,
+        )
+        db.commit()
+        _pause_authorized_mandate_until_setup(provider_subscription_id)
         upsert_billing_setup(
             db,
             protocol=normalized_protocol,
@@ -304,7 +353,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             payment_method_type="credit_card",
             status="ready",
             provider_customer_id=str(mp_res.get("payer_id") or "") or None,
-            provider_subscription_id=str(mp_res["id"]),
+            provider_subscription_id=provider_subscription_id,
             billing_cycle=canonical_cycle,
         )
         db.commit()
@@ -361,7 +410,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             "authorizationUrl": authorization_url,
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
-            "message": "Autorize o Pix Automático no ambiente seguro do Mercado Pago. A primeira cobrança será somente após os 7 dias grátis.",
+            "message": "Autorize o Pix Automático no ambiente seguro do Mercado Pago. Os 7 dias grátis começam somente depois da implantação essencial.",
         }
 
     if payload.payment_method_type == "account_money":
@@ -415,7 +464,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             "authorizationUrl": authorization_url,
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
-            "message": "Autorize a assinatura com seu Saldo Mercado Pago no ambiente seguro. A primeira cobrança será somente após os 7 dias grátis.",
+            "message": "Autorize a assinatura com seu Saldo Mercado Pago no ambiente seguro. Os 7 dias grátis começam somente depois da implantação essencial.",
         }
 
     raise HTTPException(422, "Método recorrente não suportado.")
@@ -542,8 +591,8 @@ async def mercado_pago_saas_webhook(
                             raise HTTPException(502, "Não foi possível consultar a assinatura.") from exc
                         mp_status = str(mp_data.get("status") or "").lower()
                         if mp_status == "paused":
-                            saas_sub.status = "suspended"
-                        elif mp_status == "cancelled":
+                            saas_sub.status = "onboarding" if saas_sub.trial_started_at is None else "suspended"
+                        elif mp_status in {"cancelled", "canceled"}:
                             saas_sub.status = "canceled"
                         saas_sub.updated_at = datetime.datetime.now(datetime.timezone.utc)
                         db.commit()

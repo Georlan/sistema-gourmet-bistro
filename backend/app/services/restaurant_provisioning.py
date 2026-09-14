@@ -18,12 +18,13 @@ from ..routes.super_admin_onboarding import (
     _lock_onboarding_transaction,
     _reserve_restaurant_id,
     _slug_owner_id,
-    restaurant_trials,
 )
 from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant
 from ..subscription import VALID_SUBSCRIPTION_PLANS
+from .onboarding_trial import ONBOARDING_SUBSCRIPTION_STATUS, pause_provider_during_onboarding
 from .saas_billing_policy import is_recurring_trial_payment_method
+from .saas_mercadopago import SaasMercadoPagoError
 
 logger = logging.getLogger("koma.services.restaurant_provisioning")
 
@@ -110,11 +111,14 @@ def provision_restaurant_for_contract(
     acceptance: dict[str, Any],
     billing_setup: BillingSetupData | None = None,
     actor: str = "saas_checkout",
-    reason: str = "Ativação automática via checkout SaaS com trial de 7 dias",
+    reason: str = "Ativação da conta com trial preservado até a conclusão da implantação essencial",
 ) -> dict[str, Any]:
     """
     Provisiona atomicamente o restaurante, configurações, admin inicial e assinatura SaaS.
-    Compartilhado entre o checkout automatizado (Arquitetura B) e a ativação manual do Super Admin.
+
+    O tenant nasce em modo de implantação. A recorrência autorizada é pausada no
+    gateway e os sete dias grátis só começam quando perfil, horários e cardápio
+    estiverem prontos. Assim o restaurante não perde trial preenchendo cadastro.
     """
     protocol = str(acceptance["protocol"]).strip().upper()
     plan = str(acceptance.get("plan") or "").strip().lower()
@@ -168,8 +172,13 @@ def provision_restaurant_for_contract(
             with tenant_session_scope(db, existing_id):
                 restaurant = db.query(Restaurante).filter(Restaurante.id == existing_id).one()
                 subscription = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == existing_id).one_or_none()
-                return {"restaurant_id": existing_id, "slug": restaurant.slug, "invitation_token": None,
-                        "trial_ends_at": subscription.trial_ends_at if subscription else datetime.datetime.now(datetime.timezone.utc)}
+                return {
+                    "restaurant_id": existing_id,
+                    "slug": restaurant.slug,
+                    "invitation_token": None,
+                    "trial_ends_at": subscription.trial_ends_at if subscription else None,
+                    "trial_status": subscription.status if subscription else None,
+                }
 
         if _slug_owner_id(db, slug) is not None:
             raise HTTPException(
@@ -178,33 +187,32 @@ def provision_restaurant_for_contract(
             )
 
         now = datetime.datetime.now(datetime.timezone.utc)
-        trial_ends_at = now + datetime.timedelta(days=DEFAULT_TRIAL_DAYS)
         invitation_token = str(uuid.uuid4())
 
-        # Todo método recorrente precisa aceitar no gateway a mesma data da primeira
-        # cobrança antes de liberarmos o acesso local. Nenhuma forma de pagamento
-        # SaaS pode cobrar mensalidade fixa antes do fim dos 7 dias grátis.
+        # A autorização é feita na inscrição, mas fica pausada enquanto o cliente
+        # conclui os três passos essenciais. O D+7 será sincronizado somente no
+        # momento em que o onboarding for concluído.
         if (
             billing_setup is not None
             and billing_setup.status == "ready"
             and is_recurring_trial_payment_method(billing_setup.payment_method_type)
             and billing_setup.provider_subscription_id
         ):
-            from .saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
-
             try:
-                default_saas_mp_service.update_preapproval_next_payment_date(
-                    billing_setup.provider_subscription_id,
-                    trial_ends_at,
-                )
+                provider_result = pause_provider_during_onboarding(billing_setup.provider_subscription_id)
             except SaasMercadoPagoError as exc:
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=(
-                        "Não foi possível alinhar os 7 dias grátis com o gateway. "
-                        "O restaurante não foi liberado; tente novamente."
+                        "Não foi possível proteger o período grátis durante a implantação. "
+                        "O restaurante não foi liberado e nenhuma cobrança foi antecipada; tente novamente."
                     ),
                 ) from exc
+            if str(provider_result.get("status") or "").strip().lower() != "paused":
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="O gateway ainda não confirmou a pausa da recorrência durante a implantação.",
+                )
 
         restaurant = Restaurante(
             id=tenant_id,
@@ -216,17 +224,6 @@ def provision_restaurant_for_contract(
         )
         db.add(restaurant)
         db.flush()
-
-        db.execute(
-            restaurant_trials.insert().values(
-                restaurante_id=tenant_id,
-                trial_started_at=now,
-                trial_ends_at=trial_ends_at,
-                trial_status="active",
-                created_at=now,
-                updated_at=now,
-            )
-        )
 
         db.add(
             ConfiguracaoRestaurante(
@@ -267,12 +264,12 @@ def provision_restaurant_for_contract(
                 provider_customer_id=billing_setup.provider_customer_id,
                 provider_subscription_id=billing_setup.provider_subscription_id,
                 payment_method_type=billing_setup.payment_method_type,
-                status="trialing",
+                status=ONBOARDING_SUBSCRIPTION_STATUS,
                 billing_cycle=acceptance.get("billing_cycle") or "monthly",
-                trial_started_at=now,
-                trial_ends_at=trial_ends_at,
-                current_period_start=now,
-                current_period_end=trial_ends_at,
+                trial_started_at=None,
+                trial_ends_at=None,
+                current_period_start=None,
+                current_period_end=None,
                 created_at=now,
                 updated_at=now,
             )
@@ -295,9 +292,9 @@ def provision_restaurant_for_contract(
                     "billing_status": billing_setup.status if billing_setup else "pending",
                     "billing_provider": billing_setup.provider if billing_setup else None,
                     "payment_method_type": billing_setup.payment_method_type if billing_setup else None,
-                    "trial_status": "active",
+                    "trial_status": "pending_onboarding",
                     "trial_days": DEFAULT_TRIAL_DAYS,
-                    "trial_ends_at": trial_ends_at.isoformat(),
+                    "trial_ends_at": None,
                     "admin_user_id": initial_admin.id,
                     "admin_email": admin_email,
                     "admin_status": "pendente_ativacao",
@@ -307,7 +304,15 @@ def provision_restaurant_for_contract(
             )
         )
         from .signup_notifications import enqueue_activation
-        enqueue_activation(db, protocol=protocol, restaurant_name=restaurant_name, representative_name=admin_name, email=admin_email, phone=admin_phone, token=invitation_token)
+        enqueue_activation(
+            db,
+            protocol=protocol,
+            restaurant_name=restaurant_name,
+            representative_name=admin_name,
+            email=admin_email,
+            phone=admin_phone,
+            token=invitation_token,
+        )
         db.commit()
 
         return {
@@ -316,5 +321,6 @@ def provision_restaurant_for_contract(
             "invitation_token": invitation_token,
             "admin_user_id": initial_admin.id,
             "admin_email": admin_email,
-            "trial_ends_at": trial_ends_at,
+            "trial_ends_at": None,
+            "trial_status": ONBOARDING_SUBSCRIPTION_STATUS,
         }

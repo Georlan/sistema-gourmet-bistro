@@ -22,7 +22,7 @@ test('mensal expõe cartão e Pix Automático sob a mesma política de trial', (
   assert.match(getSubscriptionPaymentOption('pix_automatic').checkoutSummary, /7 dias grátis/);
 });
 
-test('anual não oferece Pix antecipado e mantém a cobrança recorrente depois do trial', () => {
+test('anual não oferece Pix antecipado e preserva os 7 dias para depois do setup', () => {
   const options = getSubscriptionPaymentOptions('anual');
   assert.deepEqual(options.map((option) => option.id), [
     'credit_card',
@@ -33,7 +33,8 @@ test('anual não oferece Pix antecipado e mantém a cobrança recorrente depois 
   ]);
   assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), []);
   assert.equal(getSubscriptionPaymentOption('annual_installments').status, 'study');
-  assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /7 dias grátis/);
+  assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /7 dias grátis completos/);
+  assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /depois do setup essencial/);
   assert.doesNotMatch(JSON.stringify(options), /pix_annual|12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 
@@ -46,11 +47,12 @@ test('somente opções explicitamente disponíveis podem ser selecionadas', () =
   }
 });
 
-test('métodos futuros só podem entrar se cumprirem autorização recorrente e trial', () => {
+test('métodos futuros só podem entrar se preservarem autorização, implantação e trial', () => {
   const nupay = getSubscriptionPaymentOption('nupay');
   const wallet = getSubscriptionPaymentOption('mercado_pago');
   const installments = getSubscriptionPaymentOption('annual_installments');
   assert.match(nupay.previewDescription, /R\$ 0 de mensalidade fixa hoje/);
-  assert.match(wallet.previewDescription, /autorização hoje, 7 dias grátis e primeira cobrança automática depois/);
+  assert.match(nupay.previewDescription, /implantação sem consumir trial/);
+  assert.match(wallet.previewDescription, /autorização sem cobrança, implantação sem consumir trial e 7 dias grátis completos/);
   assert.match(installments.previewDescription, /não exibirá pagamento antecipado disfarçado de trial/);
 });

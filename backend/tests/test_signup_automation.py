@@ -8,6 +8,7 @@ from app.routes import auth, saas_billing, signups
 from app.routes.super_admin import get_current_admin
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
 from app.services import signup_notifications
+from app.services.onboarding_trial import ensure_trial_started_after_onboarding
 from app.services.saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 from app.signup_models import RestaurantSignup, SignupNotification
 from test_saas_billing_checkout import client_and_session, _contract_payload
@@ -207,7 +208,7 @@ def test_card_network_timeout_recovers_without_creating_second_mandate(client_an
         assert db.query(SaaSSubscription).count() == 1
 
 
-def test_superadmin_release_starts_trial_only_after_recurring_authorization(signup_client, monkeypatch):
+def test_superadmin_release_preserves_trial_until_onboarding_is_complete(signup_client, monkeypatch):
     client, Session = signup_client
     monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
     monkeypatch.setattr(settings, "KOMA_OWNER_EMAIL", "owner@example.com")
@@ -223,15 +224,6 @@ def test_superadmin_release_starts_trial_only_after_recurring_authorization(sign
         assert db.query(Restaurante).count() == 0
 
     client.app.dependency_overrides[get_current_admin] = lambda: {"user": "super_operator"}
-    sync_calls = []
-    monkeypatch.setattr(
-        default_saas_mp_service,
-        "update_preapproval_next_payment_date",
-        lambda sub_id, date: sync_calls.append((sub_id, date)) or {
-            "id": sub_id,
-            "next_payment_date": date.isoformat(),
-        },
-    )
     release = client.post(
         f"/api/super-admin/signups/{protocol}/release",
         json={"reason": "Homologação de liberação recorrente"},
@@ -239,13 +231,56 @@ def test_superadmin_release_starts_trial_only_after_recurring_authorization(sign
     assert release.status_code == 200, release.text
     released = release.json()
     assert released["status"] == "activated"
-    assert sync_calls
+    assert released["trial_status"] == "onboarding"
+    assert released["trial_ends_at"] is None
+
     with Session() as db:
         sub = db.query(SaaSSubscription).one()
-        assert sub.status == "trialing"
+        tenant_id = sub.restaurante_id
+        assert sub.status == "onboarding"
         assert sub.payment_method_type == "credit_card"
+        assert sub.trial_started_at is None
+        assert sub.trial_ends_at is None
+        assert sub.current_period_start is None
+        assert sub.current_period_end is None
+
+    sync_calls = []
+    monkeypatch.setattr(
+        default_saas_mp_service,
+        "update_preapproval_next_payment_date",
+        lambda sub_id, date: sync_calls.append((sub_id, date)) or {
+            "id": sub_id,
+            "next_payment_date": date.isoformat(),
+            "status": "authorized",
+        },
+    )
+    with Session() as db:
+        started = ensure_trial_started_after_onboarding(
+            db,
+            restaurante_id=tenant_id,
+            actor="test:onboarding-complete",
+        )
+        assert started is not None
+        assert started["status"] == "trialing"
+        sub = db.query(SaaSSubscription).one()
+        assert sub.status == "trialing"
+        assert sub.trial_started_at is not None
         assert sub.trial_ends_at is not None
         assert (sub.trial_ends_at - sub.trial_started_at).days in (6, 7)
+        first_end = sub.trial_ends_at
+
+    assert len(sync_calls) == 1
+
+    # Idempotência: recarregar o onboarding não renova nem empurra o trial.
+    with Session() as db:
+        repeated = ensure_trial_started_after_onboarding(
+            db,
+            restaurante_id=tenant_id,
+            actor="test:repeat",
+        )
+        assert repeated is not None
+        assert repeated["trial_ends_at"] == first_end
+    assert len(sync_calls) == 1
 
 
 def test_expired_failed_delivery_erases_private_payload(signup_client, monkeypatch):

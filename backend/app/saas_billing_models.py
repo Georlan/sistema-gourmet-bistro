@@ -113,7 +113,7 @@ class SaaSSubscription(Base):
     provider_subscription_id = Column(String(100), nullable=True)
     payment_method_type = Column(String(32), nullable=True)
     billing_cycle = Column(String(16), nullable=False, default="monthly")
-    # Status: trialing | active | past_due | canceled | suspended
+    # onboarding | trialing | active | past_due | canceled | suspended
     status = Column(String(32), nullable=False, default="trialing", index=True)
 
     trial_started_at = Column(DateTime(timezone=True), nullable=True)
@@ -136,7 +136,7 @@ class SaaSSubscription(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('trialing', 'active', 'past_due', 'canceled', 'suspended')",
+            "status IN ('onboarding', 'trialing', 'active', 'past_due', 'canceled', 'suspended')",
             name="ck_saas_subscriptions_status",
         ),
         CheckConstraint(

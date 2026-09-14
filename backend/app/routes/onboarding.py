@@ -19,8 +19,10 @@ from ..catalog_assistance import (
 )
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, Produto, RestaurantPaymentAccount, Restaurante, Usuario
+from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
-from .super_admin_onboarding import restaurant_trials
+from ..services.onboarding_trial import ensure_trial_started_after_onboarding
+from .super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 
 
 router = APIRouter(prefix="/api/onboarding", tags=["Onboarding"])
@@ -42,8 +44,15 @@ def _structured_has_items(value: Any) -> bool:
     return bool(str(value).strip())
 
 
-def _trial_status_payload(row: dict[str, Any] | None) -> dict[str, Any]:
+def _trial_status_payload(row: dict[str, Any] | None, *, setup_pending: bool = False) -> dict[str, Any]:
     if not row:
+        if setup_pending:
+            return {
+                "status": "setup",
+                "startsAt": None,
+                "endsAt": None,
+                "daysRemaining": DEFAULT_TRIAL_DAYS,
+            }
         return {
             "status": "unavailable",
             "startsAt": None,
@@ -223,10 +232,6 @@ def get_onboarding_status(
             detail="Restaurante não encontrado.",
         )
 
-    trial_row = db.execute(
-        select(restaurant_trials).where(restaurant_trials.c.restaurante_id == tenant_id)
-    ).mappings().one_or_none()
-
     product_count = int(
         db.query(func.count(Produto.id))
         .filter(Produto.restaurante_id == tenant_id)
@@ -267,6 +272,34 @@ def get_onboarding_status(
         "mercadoPago": mercado_pago_connected,
         "firstOrder": first_order_detected,
     }
+    progress = _required_progress(steps)
+    required_complete = progress["total"] > 0 and progress["completed"] >= progress["total"]
+
+    subscription = (
+        db.query(SaaSSubscription)
+        .filter(SaaSSubscription.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    setup_pending = bool(
+        subscription
+        and subscription.trial_started_at is None
+        and str(subscription.status or "").strip().lower() in {"onboarding", "suspended"}
+    )
+
+    # O primeiro GET do checklist após o 3/3 faz a transição idempotente. Isso
+    # garante que abrir/recarregar a implantação seja suficiente para iniciar o
+    # trial, sem botão extra e sem consumir dias durante cadastro/configuração.
+    if required_complete and setup_pending:
+        ensure_trial_started_after_onboarding(
+            db,
+            restaurante_id=tenant_id,
+            actor=f"usuario:{current_user.id}",
+        )
+        setup_pending = False
+
+    trial_row = db.execute(
+        select(restaurant_trials).where(restaurant_trials.c.restaurante_id == tenant_id)
+    ).mappings().one_or_none()
 
     return {
         "restaurant": {
@@ -275,7 +308,7 @@ def get_onboarding_status(
             "slug": str(restaurant.slug or ""),
             "plan": str(restaurant.plano or ""),
         },
-        "trial": _trial_status_payload(dict(trial_row) if trial_row else None),
+        "trial": _trial_status_payload(dict(trial_row) if trial_row else None, setup_pending=setup_pending),
         "payments": {
             "mercadoPagoConnected": mercado_pago_connected,
         },
@@ -285,5 +318,5 @@ def get_onboarding_status(
         },
         "catalogAssistance": _catalog_assistance_payload(db, tenant_id),
         "steps": steps,
-        "progress": _required_progress(steps),
+        "progress": progress,
     }

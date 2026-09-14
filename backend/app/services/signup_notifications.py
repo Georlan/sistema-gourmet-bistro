@@ -65,9 +65,9 @@ def enqueue_acceptance(
 ):
     message = (
         f"Olá, {representative_name}! A inscrição do {restaurant_name} no KÔMA foi recebida. "
-        f"Protocolo: {protocol}. Agora autorize o meio de pagamento recorrente: a mensalidade "
-        "fica em R$ 0 hoje e a primeira cobrança automática ocorre somente depois dos 7 dias "
-        "grátis. Após a autorização, a contratação aguarda a liberação da equipe KÔMA."
+        f"Protocolo: {protocol}. Agora autorize o meio de pagamento recorrente. Nada será cobrado hoje. "
+        "Depois da liberação você configura o restaurante com calma; os 7 dias grátis só começam "
+        "quando os 3 passos essenciais da implantação estiverem concluídos."
     )
     enqueue(
         db,
@@ -114,10 +114,10 @@ def enqueue_activation(
         phone=phone,
         subject="Seu KÔMA foi liberado — crie sua senha",
         message=(
-            f"Olá, {representative_name}! O {restaurant_name} foi liberado e seus 7 dias grátis "
-            f"começaram. Crie sua senha para o primeiro acesso: {link} . O link é pessoal e "
-            "válido por 72 horas. Depois do login, siga o onboarding: confira os dados do "
-            "restaurante, configure horários, importe ou monte o cardápio e faça um pedido de teste."
+            f"Olá, {representative_name}! O {restaurant_name} foi liberado. Crie sua senha para o "
+            f"primeiro acesso: {link} . O link é pessoal e válido por 72 horas. Depois do login, "
+            "conclua dados do restaurante, horários e cardápio. Seus 7 dias grátis ainda não estão "
+            "correndo: eles começam automaticamente somente quando esses 3 passos essenciais estiverem prontos."
         ),
     )
 
@@ -128,7 +128,8 @@ def enqueue_release_required(db, *, protocol, restaurant_name, plan, billing_cyc
     message = (
         f"Autorização recorrente confirmada para {restaurant_name}. Protocolo: {protocol}. "
         f"Plano: {plan} ({billing_cycle}). Nenhuma mensalidade fixa foi cobrada hoje. "
-        "Revise a contratação e libere o acesso; o trial de 7 dias começa somente na liberação: "
+        "Revise e libere o acesso. A recorrência ficará pausada durante a implantação e os 7 dias "
+        "grátis só começarão depois que os 3 passos essenciais forem concluídos: "
         f"{settings.KOMA_PUBLIC_APP_URL}/super-admin"
     )
     enqueue(

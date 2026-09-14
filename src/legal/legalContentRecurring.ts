@@ -11,7 +11,7 @@ import {
 export type { LegalDocument, LegalDocumentSlug, LegalSection };
 export { LEGAL_PROVIDER_LOCATION, LEGAL_PROVIDER_NAME, LEGAL_SUPPORT_SCHEDULE };
 
-export const LEGAL_VERSION = '2.1';
+export const LEGAL_VERSION = '2.2';
 export const LEGAL_EFFECTIVE_DATE = '13/09/2026';
 
 const AGE_RESTRICTED_TERMS: LegalSection = {
@@ -37,7 +37,19 @@ const SAAS_PAYMENT_METHODS: LegalSection = {
   paragraphs: [
     'A contratação pode exigir autorização prévia de meio de pagamento recorrente suportado. A autorização, isoladamente, não representa cobrança da mensalidade, pagamento confirmado, aprovação definitiva do cadastro nem liberação automática do ambiente.',
     'Por segurança, homologação, prevenção a fraude ou procedimento operacional, o KÔMA pode exigir liberação administrativa antes do provisionamento do restaurante. Se uma sincronização indispensável com o provedor de pagamento falhar, a ativação pode permanecer pendente até a regularização.',
+    'Depois que a autorização recorrente é confirmada, o KÔMA pode mantê-la pausada durante a implantação inicial para evitar que o período gratuito seja consumido enquanto o restaurante ainda prepara as configurações essenciais. A recorrência só deve ser reativada quando o início do período gratuito e a data da primeira cobrança tiverem sido sincronizados com o provedor.',
     'Os métodos recorrentes atualmente modelados para novas contratações são cartão de crédito, Pix Automático e Saldo Mercado Pago (account_money), sujeitos à homologação, às capacidades publicadas pelo backend e à disponibilidade do provedor. Pix avulso antecipado não integra o checkout de novas assinaturas SaaS.',
+  ],
+};
+
+const FREE_TRIAL_TERMS: LegalSection = {
+  title: '11. Teste gratuito',
+  paragraphs: [
+    'Salvo oferta individual diferente, a nova contratação elegível recebe 7 dias completos de teste sem cobrança do componente fixo. O período não começa durante o preenchimento da inscrição, aceite, criação de senha ou implantação inicial.',
+    'Para a oferta padrão, o teste começa quando o restaurante conclui os três passos essenciais indicados pelo KÔMA: dados básicos do estabelecimento, horários de funcionamento e ao menos um produto efetivamente publicado no catálogo. A conclusão é apurada pelos dados reais salvos na plataforma, e não por simples marcação manual de checklist.',
+    'Antes de iniciar o teste, o KÔMA deve alinhar com o provedor a primeira cobrança automática para depois dos 7 dias e somente então reativar a recorrência. Se essa sincronização falhar, o período gratuito não deve ser considerado iniciado localmente até a regularização.',
+    'Durante o teste já iniciado, pagamentos online reais processados pelo sistema podem gerar a taxa percentual do plano e tarifas do respectivo provedor. A primeira cobrança automática do componente fixo somente deve ocorrer após o término do teste.',
+    'O contratante pode cancelar a recorrência antes da primeira cobrança. Se o cancelamento ocorrer ainda durante a implantação, nenhum dia do período gratuito terá sido consumido; se ocorrer durante o trial, ficam interrompidas as cobranças fixas futuras, sem apagar valores transacionais legitimamente gerados.',
   ],
 };
 
@@ -45,8 +57,8 @@ const COMMERCIAL_PAYMENT_METHODS: LegalSection = {
   title: '6. Autorização recorrente e métodos de pagamento',
   paragraphs: [
     'Toda nova contratação publicada no checkout deve utilizar meio recorrente homologado. Os métodos atualmente modelados são cartão de crédito, Pix Automático e Saldo Mercado Pago (account_money), sujeitos à disponibilidade, às capacidades publicadas pelo backend e à homologação do provedor.',
-    'A autorização não cobra o componente fixo no ato e não garante liberação imediata. Pix avulso ou QR Code antecipado não é método válido para novas assinaturas SaaS.',
-    'Métodos adicionais só podem ser anunciados quando suportarem a mesma regra canônica de autorização recorrente, trial e cobrança posterior.',
+    'A autorização não cobra o componente fixo no ato e não garante liberação imediata. A implantação inicial não consome os 7 dias grátis; o trial começa somente quando os passos essenciais da configuração forem concluídos. Pix avulso ou QR Code antecipado não é método válido para novas assinaturas SaaS.',
+    'Métodos adicionais só podem ser anunciados quando suportarem a mesma regra canônica de autorização recorrente, implantação sem consumo do trial, 7 dias grátis completos e cobrança posterior.',
   ],
 };
 
@@ -76,6 +88,7 @@ export const LEGAL_DOCUMENTS: LegalDocument[] = LEGAL_V2_DOCUMENTS.map((document
   if (document.slug === 'termos') {
     current = replaceSection(current, AGE_RESTRICTED_TERMS);
     current = replaceSection(current, SAAS_PAYMENT_METHODS);
+    current = replaceSection(current, FREE_TRIAL_TERMS);
   }
   if (document.slug === 'planos') current = replaceSection(current, COMMERCIAL_PAYMENT_METHODS);
   if (document.slug === 'cardapio-termos') current = replaceSection(current, CARDAPIO_AGE_RESTRICTED_TERMS);
