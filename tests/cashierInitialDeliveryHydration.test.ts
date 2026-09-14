@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { projectDeliveryOrdersFromSharedSnapshot } from '../src/components/caixa/orders/deliveryOrderProjection';
+import {
+  bucketCourierDeliveryOrders,
+  projectDeliveryOrdersFromSharedSnapshot,
+} from '../src/components/caixa/orders/deliveryOrderProjection';
 import type { Order } from '../src/types';
 
 const baseOrder = (overrides: Partial<Order> = {}): Order => ({
@@ -82,4 +85,27 @@ test('preserva retirada e venda rápida do snapshot compartilhado', () => {
   assert.equal(projected.modalidade, 'retirada');
   assert.equal(projected.endereco, '');
   assert.equal(projected.isQuickSale, true);
+});
+
+test('workspace de entregadores exclui retirada e respeita etapas de despacho', () => {
+  const projected = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({ id: 'delivery-preparing', deliveryStatus: 'producao' }),
+    baseOrder({ id: 'delivery-ready', deliveryStatus: 'pronto' }),
+    baseOrder({ id: 'delivery-route', deliveryStatus: 'transito' }),
+    baseOrder({ id: 'delivery-analysis', deliveryStatus: 'analise' }),
+    baseOrder({ id: 'pickup-ready', tipo: 'Retirada', deliveryStatus: 'pronto' }),
+  ]);
+
+  const buckets = bucketCourierDeliveryOrders(projected);
+
+  assert.deepEqual(buckets.preparing.map((order) => order.id), [
+    'delivery-preparing',
+    'delivery-analysis',
+  ]);
+  assert.deepEqual(buckets.ready.map((order) => order.id), ['delivery-ready']);
+  assert.deepEqual(buckets.inTransit.map((order) => order.id), ['delivery-route']);
+  assert.equal(
+    [...buckets.preparing, ...buckets.ready, ...buckets.inTransit].some((order) => order.id === 'pickup-ready'),
+    false,
+  );
 });
