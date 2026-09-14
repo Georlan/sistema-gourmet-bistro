@@ -1,0 +1,128 @@
+.orders-hero.operational-header {
+  position: relative;
+  isolation: auto;
+  display: flex;
+  width: 100%;
+  min-height: 2.35rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.1rem 0.15rem 0.35rem;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.orders-hero.operational-header::before {
+  display: none;
+}
+
+.orders-hero.operational-header.operational-header--plain {
+  min-height: 2rem;
+}
+
+.operational-header__identity {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.orders-hero.operational-header .operational-header__identity h1 {
+  overflow: hidden;
+  color: var(--koma-text-primary);
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-hero.operational-header .operational-header__identity h1 em {
+  color: var(--cashier-accent);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.operational-header__metrics {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.operational-header__metrics::-webkit-scrollbar {
+  display: none;
+}
+
+.operational-header__metric {
+  display: inline-flex;
+  min-height: 1.9rem;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.34rem 0.5rem;
+  color: var(--koma-text-muted);
+  border: 1px solid var(--koma-border-default);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--koma-surface-raised) 72%, transparent);
+  white-space: nowrap;
+}
+
+.operational-header__metric dd {
+  margin: 0;
+  color: var(--koma-text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.operational-header__metric dt {
+  color: var(--koma-text-muted);
+  font-size: 0.56rem;
+  font-weight: 650;
+  line-height: 1;
+}
+
+@media (max-width: 900px) {
+  .orders-hero.operational-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-bottom: 0.25rem;
+  }
+
+  .operational-header__metrics {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .orders-hero.operational-header {
+    min-height: 0;
+    gap: 0.3rem;
+    padding-inline: 0;
+  }
+
+  .orders-hero.operational-header .operational-header__identity h1 {
+    font-size: 0.8rem;
+  }
+
+  .operational-header__metric {
+    min-height: 1.75rem;
+    padding: 0.3rem 0.45rem;
+  }
+
+  .operational-header__metric dt {
+    font-size: 0.53rem;
+  }
+}
