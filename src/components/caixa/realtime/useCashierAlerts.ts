@@ -45,6 +45,7 @@ export function useCashierAlerts({ orders, deliveryOrders, isDrawerOpen }: Props
         const t = ctx.currentTime;
 
         if (type === 'new_order') {
+          // Um único bipe curto confirma um novo pedido.
           const notes = [{ freq: 783.99, start: 0, dur: 0.18, vol: 0.34 }];
           notes.forEach(({ freq, start, dur, vol }) => {
             const osc = ctx.createOscillator();
