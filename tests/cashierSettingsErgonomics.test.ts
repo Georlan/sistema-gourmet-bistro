@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const settings = readFileSync('src/components/caixa/settings/CashierSettings.tsx', 'utf8');
+const settingsNavigation = readFileSync('src/components/caixa/settings/cashierSettingsNavigation.ts', 'utf8');
 const settingsController = readFileSync('src/components/caixa/settings/useCashierSettings.ts', 'utf8');
 const appearance = readFileSync('src/components/caixa/settings/CashierAppearanceSettings.tsx', 'utf8');
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
@@ -10,10 +11,10 @@ const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiter
 const waiterPermissions = readFileSync('src/components/caixa/settings/waiterPermissions.ts', 'utf8');
 
 test('cashier settings expose task groups and remember the last operator section', () => {
-  assert.match(settings, /CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab'/);
+  assert.match(settingsNavigation, /CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab'/);
   assert.match(settings, /useState<CashierSettingsTab>\(readInitialCashierSettingsTab\)/);
-  assert.match(settings, /window\.localStorage\.getItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY\)/);
-  assert.match(settings, /window\.localStorage\.setItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY, tab\)/);
+  assert.match(settingsNavigation, /window\.localStorage\.getItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY\)/);
+  assert.match(settingsNavigation, /window\.localStorage\.setItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY, tab\)/);
   assert.match(settings, /Configurações do Caixa/);
   assert.match(settings, /aria-label="Configurações do caixa"/);
   assert.match(settings, /label: 'Neste dispositivo'/);
