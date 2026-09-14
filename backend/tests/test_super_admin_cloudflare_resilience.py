@@ -14,5 +14,5 @@ async def test_cloudflare_dns_list_normalizes_transport_errors(monkeypatch):
 
     service = CloudflareService(api_token="test-token", zone_id="test-zone")
 
-    with pytest.raises(RuntimeError, match="Cloudflare indisponível \\(TimeoutException\\)"):
+    with pytest.raises(RuntimeError, match="Cloudflare indisponível \(TimeoutException\)"):
         await service.list_dns_records()
