@@ -3,7 +3,7 @@ import uuid
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -31,6 +31,14 @@ class CreateKomaSupportFeedbackInput(BaseModel):
     kind: Literal["question", "suggestion", "complaint", "problem"]
     message: str = Field(..., min_length=5, max_length=2000)
     page_path: Optional[str] = Field(None, max_length=300)
+
+    @field_validator("message")
+    @classmethod
+    def normalize_message(cls, value: str) -> str:
+        normalized = value.strip()
+        if len(normalized) < 5:
+            raise ValueError("A mensagem precisa ter pelo menos 5 caracteres úteis.")
+        return normalized
 
 
 def _safe_feedback_page_path(value: Optional[str]) -> Optional[str]:
@@ -84,13 +92,15 @@ def create_koma_support_feedback(
     restaurante_id = require_tenant_id()
     feedback_id = str(uuid.uuid4())
     page_path = _safe_feedback_page_path(payload.page_path)
-    reporter_name = str(getattr(current_user, "nome", "") or "").strip() or None
-    reporter_role = str(
+    reporter_name_raw = str(getattr(current_user, "nome", "") or "").strip()
+    reporter_role_raw = str(
         getattr(current_user, "role", None)
         or getattr(current_user, "cargo", None)
         or ""
-    ).strip() or None
-    reporter_user_id = str(getattr(current_user, "id", "") or "unknown")
+    ).strip()
+    reporter_user_id = str(getattr(current_user, "id", "") or "unknown")[:64]
+    reporter_name = reporter_name_raw[:255] or None
+    reporter_role = reporter_role_raw[:64] or None
 
     feedback = CustomerSupportFeedback(
         id=feedback_id,
@@ -99,7 +109,7 @@ def create_koma_support_feedback(
         reporter_name=reporter_name,
         reporter_role=reporter_role,
         kind=payload.kind,
-        message=payload.message.strip(),
+        message=payload.message,
         page_path=page_path,
         status="new",
     )
