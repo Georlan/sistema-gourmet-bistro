@@ -69,6 +69,9 @@ export interface Order {
   identificador?: string;
   statusComanda?: 'aguardando_pagamento' | null; // Adicionado para compatibilidade com o fluxo do caixa
   deliveryStatus?: 'pendente' | 'producao' | 'pronto' | 'transito' | 'finalizado' | 'recusado' | null;
+  /** Dados de fulfillment preservados no snapshot compartilhado para hidratar o Caixa sem uma segunda leitura bloqueante. */
+  deliveryTax?: number;
+  deliveryAddress?: string | null;
   mesaOrigemId?: number | null;
   mesaTransferidaDe?: number | null;
   isGrouped?: boolean;
