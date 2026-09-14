@@ -55,6 +55,7 @@ export function mapBackendComandaToOperationalOrder({
     deliveryStatus: comanda.delivery_status || null,
     deliveryTax: Number(comanda.delivery_taxa) || 0,
     deliveryAddress: comanda.delivery_endereco || null,
+    motoboyId: comanda.motoboy_id ?? null,
     mesaOrigemId: comanda.mesa_origem_id || null,
     mesaTransferidaDe: comanda.mesa_transferida_de || null,
     itens: (comanda.itens || [])
