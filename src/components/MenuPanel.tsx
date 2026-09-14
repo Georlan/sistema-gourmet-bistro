@@ -6,6 +6,8 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   FileText,
   Minus,
@@ -222,7 +224,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
   const scrollPanelToTop = () => {
     requestAnimationFrame(() => {
-      document.getElementById('mesa-details-scroll-body')?.scrollTo({ top: 0, behavior: 'auto' });
+      document.getElementById('menu-panel-root')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
+  };
+
+  const scrollCategories = (direction: -1 | 1) => {
+    document.getElementById('menu-category-strip')?.scrollBy({
+      left: direction * 260,
+      behavior: 'smooth',
     });
   };
 
@@ -347,9 +356,9 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   };
 
   return (
-    <div className="relative sm:h-full" aria-busy={isSubmitting}>
+    <div id="menu-panel-root" className="relative" aria-busy={isSubmitting}>
       {view === 'cart' && (
-        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-24 sm:pb-5 flex flex-col sm:h-full max-w-2xl mx-auto">
+        <div className="bg-koma-panel sm:border sm:border-koma-border sm:rounded-2xl p-3 sm:p-5 pb-24 sm:pb-5 flex flex-col max-w-2xl mx-auto">
           <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -409,7 +418,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 )}
               </div>
 
-              <div className="space-y-2 sm:max-h-[42vh] sm:overflow-y-auto sm:pr-1">
+              <div className="space-y-2">
                 {draftItems.map((item, index) => {
                   const decorated = item as DraftWithModifiers;
                   const product = liveProdutos.find((candidate) => candidate.id === item.produtoId);
@@ -492,8 +501,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       )}
 
       {view === 'menu' && (
-        <div className="max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl overflow-hidden">
-          <div className="sticky top-0 z-30 bg-koma-panel px-3 sm:px-5 py-2.5 border-b border-koma-border space-y-2 shadow-sm">
+        <div className="relative max-w-4xl mx-auto bg-koma-panel sm:border sm:border-koma-border sm:rounded-3xl">
+          <div className="sticky top-0 z-30 bg-koma-panel px-3 sm:px-5 py-2.5 border-b border-koma-border space-y-2 shadow-sm sm:rounded-t-3xl">
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search size={15} className="absolute left-3 top-2.5 text-koma-subtle" />
@@ -511,14 +520,34 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               </div>
             </div>
 
-            <div className="flex gap-1.5 overflow-x-auto scrollbar-none no-scrollbar">
-              {categoriesList.map((category) => (
-                <button key={category.id} id={`cat-btn-${category.nome.toLowerCase().replace(/\s+/g, '-')}`} type="button" onClick={() => { setSelectedCategory(category.nome); setSearchQuery(''); setTimeout(() => document.getElementById(`category-sec-${category.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 40); }} className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap ${selectedCategory === category.nome ? 'bg-emerald-500 text-zinc-950' : 'bg-koma-card border border-koma-border text-koma-muted'}`}>{category.nome}</button>
-              ))}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => scrollCategories(-1)}
+                className="hidden size-8 shrink-0 place-items-center rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground sm:grid"
+                aria-label="Ver categorias anteriores"
+                title="Categorias anteriores"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <div id="menu-category-strip" className="flex min-w-0 flex-1 snap-x snap-proximity gap-1.5 overflow-x-auto scroll-px-2 overscroll-x-contain scrollbar-none no-scrollbar" aria-label="Categorias do cardápio">
+                {categoriesList.map((category) => (
+                  <button key={category.id} id={`cat-btn-${category.nome.toLowerCase().replace(/\s+/g, '-')}`} type="button" onClick={() => { setSelectedCategory(category.nome); setSearchQuery(''); setTimeout(() => document.getElementById(`category-sec-${category.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 40); }} className={`snap-start px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap ${selectedCategory === category.nome ? 'bg-emerald-500 text-zinc-950' : 'bg-koma-card border border-koma-border text-koma-muted'}`}>{category.nome}</button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => scrollCategories(1)}
+                className="hidden size-8 shrink-0 place-items-center rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground sm:grid"
+                aria-label="Ver próximas categorias"
+                title="Próximas categorias"
+              >
+                <ChevronRight size={14} />
+              </button>
             </div>
           </div>
 
-          <div className="p-3 sm:p-5 pb-28 sm:pb-8 space-y-6 sm:max-h-[58vh] sm:overflow-y-auto">
+          <div className="p-3 sm:p-5 pb-6 space-y-6">
             {unavailableSearchMatches.length > 0 && (
               <section id="unavailable-search-results" className="space-y-2.5">
                 <div className="flex items-center justify-between gap-3 border-b border-koma-border pb-1">
@@ -641,7 +670,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
           </div>
 
           {totalDraftQty > 0 && (
-            <div className="fixed inset-x-0 bottom-0 z-[70] border-t border-emerald-500/20 bg-koma-panel/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:sticky sm:z-40 sm:p-3 sm:pb-3">
+            <div className="sticky bottom-0 z-40 border-t border-emerald-500/20 bg-koma-panel/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl sm:p-3 sm:pb-3 sm:rounded-b-3xl">
               <button id="open-draft-cart-btn" type="button" disabled={isSubmitting} onClick={openCart} className="mx-auto flex min-h-11 w-full max-w-xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-extrabold text-zinc-950 disabled:opacity-50" aria-label={reviewCta}>
                 <ShoppingCart size={14} /> {reviewCta} <ArrowRight size={14} />
               </button>
@@ -652,7 +681,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {selectedProductToConfigure && (
         <div className="fixed inset-0 z-50 bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(event) => event.target === event.currentTarget && closeProductConfig()}>
-          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 space-y-4 shadow-2xl">
+          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 space-y-4 shadow-2xl overscroll-contain">
             <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
             {selectedProductToConfigure.descricao && <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">{selectedProductToConfigure.descricao}</p>}
 
