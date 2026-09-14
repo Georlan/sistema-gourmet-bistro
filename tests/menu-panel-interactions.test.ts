@@ -25,3 +25,27 @@ test('modal interno do salão usa o contrato canônico de quantidade de adiciona
   assert.doesNotMatch(panel, /onToggle=\{toggleModifier\}/);
   assert.match(panel, /quantity > 1 \? `\$\{quantity\}x ` : ''/);
 });
+
+test('cardápio da mesa usa um único scroll vertical e mantém navegação e revisão acessíveis', () => {
+  const panel = source('src/components/MenuPanel.tsx');
+
+  assert.match(panel, /id="menu-panel-root"/);
+  assert.match(panel, /scrollIntoView\(\{ block: 'start', behavior: 'auto' \}\)/);
+  assert.doesNotMatch(panel, /mesa-details-scroll-body/);
+  assert.doesNotMatch(panel, /sm:max-h-\[58vh\] sm:overflow-y-auto/);
+  assert.doesNotMatch(panel, /sm:max-h-\[42vh\] sm:overflow-y-auto/);
+  assert.match(panel, /className="sticky bottom-0 z-40 border-t border-emerald-500\/20/);
+  assert.doesNotMatch(panel, /fixed inset-x-0 bottom-0 z-\[70\]/);
+});
+
+test('categorias do cardápio têm navegação horizontal explícita no desktop', () => {
+  const panel = source('src/components/MenuPanel.tsx');
+
+  assert.match(panel, /id="menu-category-strip"/);
+  assert.match(panel, /scrollCategories\(-1\)/);
+  assert.match(panel, /scrollCategories\(1\)/);
+  assert.match(panel, /left: direction \* 260/);
+  assert.match(panel, /snap-x snap-proximity/);
+  assert.match(panel, /Ver categorias anteriores/);
+  assert.match(panel, /Ver próximas categorias/);
+});
