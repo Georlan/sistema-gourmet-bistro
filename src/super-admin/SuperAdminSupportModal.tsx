@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { AlertCircle, Clock, Headphones, ShieldAlert, X } from "lucide-react";
 import { superAdminFetch } from "./superAdminApi";
 import type { Tenant } from "./superAdminTypes";
@@ -29,16 +29,20 @@ export function SuperAdminSupportModal({
   const [reason, setReason] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isSubmittingRef.current) return;
+
     const cleanReason = reason.trim();
     if (cleanReason.length < 5) {
       setError("O motivo da intervenção é obrigatório (mínimo 5 caracteres).");
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     setError(null);
 
@@ -91,6 +95,7 @@ export function SuperAdminSupportModal({
       window.location.href = `/?view=caixa&support=1`;
     } catch (err: any) {
       setError(err?.message || "Erro inesperado ao criar sessão de suporte.");
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
