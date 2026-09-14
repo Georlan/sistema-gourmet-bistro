@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import httpx
 
@@ -14,20 +15,21 @@ _HOSTED_METHOD_IDS = {
     "pix_automatic": "pix",
     "account_money": "account_money",
 }
+_PROTOCOL_QUERY_KEY = "koma_protocol"
 
 
 class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
-    """Mercado Pago SaaS gateway with hosted subscription-plan checkout.
+    """Gateway alternativo para meios recorrentes do checkout hospedado.
 
-    Cartão continua no fluxo `/preapproval` já homologado. Pix e saldo usam um
-    plano exclusivo por protocolo e o `init_point` de `/preapproval_plan`, pois o
-    checkout hospedado de planos é o produto do Mercado Pago que documenta Pix e
-    dinheiro em conta como meios de assinatura.
+    O cartão permanece no `/preapproval` já homologado. Pix e Saldo Mercado
+    Pago usam o `init_point` de `/preapproval_plan`, que é o checkout hospedado
+    onde o provedor documenta `payment_methods_allowed`, teste grátis e os meios
+    de assinatura disponíveis no Brasil.
 
-    Enquanto o comprador não conclui o checkout, `provider_subscription_id`
-    recebe `plan:<id>`. Assim que o Mercado Pago cria a assinatura real, a rota
-    reconcilia o `subscription_preapproval` e substitui o identificador do plano
-    pelo ID real do preapproval.
+    Antes da autorização real, o identificador local é `plan:<id>`. A camada de
+    billing persiste esse marcador separadamente do ID da assinatura; quando o
+    Mercado Pago cria o preapproval real, o webhook reconcilia pelo
+    `preapproval_plan_id` e passa a armazenar o ID definitivo da assinatura.
     """
 
     @staticmethod
@@ -43,9 +45,27 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         return raw or None
 
     @staticmethod
+    def _back_url_for_protocol(base_url: str, protocol: str) -> str:
+        parts = urlsplit(base_url)
+        query = parse_qs(parts.query, keep_blank_values=True)
+        query[_PROTOCOL_QUERY_KEY] = [protocol.strip().upper()]
+        encoded = urlencode(query, doseq=True)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, encoded, parts.fragment))
+
+    @staticmethod
+    def _protocol_from_plan(plan: dict[str, Any]) -> str:
+        direct = str(plan.get("external_reference") or "").strip().upper()
+        if direct:
+            return direct
+        back_url = str(plan.get("back_url") or "").strip()
+        if not back_url:
+            return ""
+        values = parse_qs(urlsplit(back_url).query).get(_PROTOCOL_QUERY_KEY) or []
+        return str(values[0] if values else "").strip().upper()
+
+    @staticmethod
     def _plan_payload(
         *,
-        protocol: str,
         plan: str,
         billing_cycle: str,
         amount: Decimal,
@@ -57,7 +77,6 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         is_annual = cycle_normalized in {"anual", "annual"}
         return {
             "reason": f"KÔMA - Plano {plan.capitalize()} ({'Anual' if is_annual else 'Mensal'})",
-            "external_reference": protocol,
             "auto_recurring": {
                 "frequency": 12 if is_annual else 1,
                 "frequency_type": "months",
@@ -86,9 +105,9 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         self._ensure_provider_ready()
         self._ensure_no_environment_mismatch(payer_email)
         provider_payment_method = _HOSTED_METHOD_IDS[payment_method_type]
-        resolved_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        base_back_url = back_url or f"{settings.KOMA_PUBLIC_APP_URL}/legal/contrato/confirmacao"
+        resolved_back_url = self._back_url_for_protocol(base_back_url, protocol)
         payload = self._plan_payload(
-            protocol=protocol,
             plan=plan,
             billing_cycle=billing_cycle,
             amount=amount,
@@ -97,8 +116,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
             provider_payment_method=provider_payment_method,
         )
 
-        # Mocks continuam exercitando o fluxo antigo, que já possui regressões
-        # determinísticas e não depende do checkout hospedado externo.
+        # Os mocks continuam no fluxo determinístico já coberto pela suíte.
         if self.is_mock:
             if payment_method_type == "pix_automatic":
                 return super().create_pix_automatic_preapproval(
@@ -154,7 +172,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
                     "id": self._plan_storage_id(plan_id),
                     "provider_plan_id": plan_id,
                     "status": "pending",
-                    "external_reference": protocol,
+                    "external_reference": protocol.strip().upper(),
                     "auto_recurring": result.get("auto_recurring") or payload["auto_recurring"],
                     "payment_methods_allowed": result.get("payment_methods_allowed") or payload["payment_methods_allowed"],
                     "init_point": init_point,
@@ -251,11 +269,10 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
             )
         return active_rows[0] if active_rows else None
 
-    @staticmethod
-    def _enrich_mandate_from_plan(mandate: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
+    def _enrich_mandate_from_plan(self, mandate: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
         result = dict(mandate)
         if not result.get("external_reference"):
-            result["external_reference"] = plan.get("external_reference")
+            result["external_reference"] = self._protocol_from_plan(plan)
         plan_recurring = dict(plan.get("auto_recurring") or {})
         mandate_recurring = dict(result.get("auto_recurring") or {})
         merged_recurring = {**plan_recurring, **mandate_recurring}
@@ -277,7 +294,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         return {
             "id": self._plan_storage_id(plan_id),
             "status": "pending",
-            "external_reference": plan.get("external_reference"),
+            "external_reference": self._protocol_from_plan(plan),
             "auto_recurring": plan.get("auto_recurring") or {},
             "init_point": plan.get("init_point"),
             "preapproval_plan_id": plan_id,
@@ -288,21 +305,10 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         if plan_id:
             return self._resolve_plan_checkout(plan_id)
 
-        try:
-            mandate = super().get_preapproval(preapproval_id)
-        except SaasMercadoPagoError as exc:
-            # Compatibilidade defensiva: se algum registro tiver armazenado um
-            # plan ID sem prefixo durante uma tentativa parcial, ainda conseguimos
-            # recuperá-lo sem criar outro plano.
-            if exc.status_code != 404 or self.is_mock:
-                raise
-            try:
-                return self._resolve_plan_checkout(preapproval_id)
-            except SaasMercadoPagoError as plan_exc:
-                if plan_exc.status_code == 404:
-                    raise exc
-                raise
-
+        # IDs sem prefixo são SEMPRE tratados como IDs reais de assinatura.
+        # Isso evita confundir eventos `subscription_preapproval_plan` com
+        # `subscription_preapproval` no webhook existente.
+        mandate = super().get_preapproval(preapproval_id)
         plan_id_from_mandate = str(mandate.get("preapproval_plan_id") or "").strip()
         if not plan_id_from_mandate:
             return mandate
@@ -316,6 +322,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         if self.is_mock:
             return None
 
+        wanted_protocol = protocol.strip().upper()
         try:
             with self._client() as client:
                 response = client.get("/preapproval_plan/search", params={"limit": 100})
@@ -327,7 +334,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
                 matches = [
                     row
                     for row in (response.json().get("results", []) or [])
-                    if str(row.get("external_reference") or "").strip().upper() == protocol.strip().upper()
+                    if self._protocol_from_plan(row) == wanted_protocol
                     and str(row.get("status") or "active").strip().lower() == "active"
                 ]
         except httpx.RequestError as exc:
