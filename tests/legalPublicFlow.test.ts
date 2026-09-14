@@ -21,7 +21,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshot 2.0 e publica fachada vigente 2.1', () => {
+test('central legal preserva snapshot 2.0 e publica fachada vigente 2.2', () => {
   for (const slug of [
     'termos',
     'planos',
@@ -36,7 +36,7 @@ test('central legal preserva snapshot 2.0 e publica fachada vigente 2.1', () => 
   }
 
   assert.match(legalV2, /LEGAL_VERSION = '2\.0'/);
-  assert.match(legalContent, /LEGAL_VERSION = '2\.1'/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.2'/);
   assert.match(legalContent, /13\/09\/2026/);
   assert.match(legalContent, /from '\.\/legalContentV2'/);
   assert.doesNotMatch(legalContent, /legalContentLegacy/);
@@ -45,17 +45,20 @@ test('central legal preserva snapshot 2.0 e publica fachada vigente 2.1', () => 
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.1 acompanha billing recorrente atual e não promete função fiscal inexistente', () => {
+test('Legal 2.2 acompanha billing recorrente e preserva o trial durante a implantação', () => {
   assert.match(legalContent, /cartão de crédito, Pix Automático e Saldo Mercado Pago \(account_money\)/);
   assert.match(legalContent, /Pix avulso antecipado não integra o checkout/);
-  assert.match(legalV2, /7 dias de teste sem cobrança do componente fixo/);
+  assert.match(legalContent, /O período não começa durante o preenchimento da inscrição, aceite, criação de senha ou implantação inicial/);
+  assert.match(legalContent, /três passos essenciais indicados pelo KÔMA/);
+  assert.match(legalContent, /dados básicos do estabelecimento, horários de funcionamento e ao menos um produto efetivamente publicado/);
+  assert.match(legalContent, /primeira cobrança automática para depois dos 7 dias/);
   assert.match(legalV2, /documentos não fiscais/);
   assert.match(legalV2, /não substituem NFC-e, NF-e, NFS-e, CF-e/);
   assert.match(legalV2, /simulador, bridge de desenvolvimento ou código experimental não significa homologação/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 2.1 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
+test('Legal 2.2 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
   assert.match(legalContent, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
   assert.match(legalContent, /tag 18\+ ou classificação equivalente/);
   assert.match(legalContent, /gate de publicação e sincronização/);
@@ -98,7 +101,7 @@ test('checkout reconhece os três métodos recorrentes modelados', () => {
   assert.match(planContract, /Pix Automático/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.1 sem documento fiscal pessoal', () => {
+test('proveniência jurídica fixa commit e blob da Legal 2.2 sem documento fiscal pessoal', () => {
   assert.match(legalEvidence, /legalContentRecurring/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
