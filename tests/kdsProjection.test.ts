@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   getKdsDestinationLabel,
   getKdsTicketLabel,
+  matchesKdsTicketQuery,
   projectKdsTickets,
   type KdsKitchenItem,
 } from '../src/components/caixa/kitchen/kdsProjection';
@@ -83,4 +84,28 @@ test('tickets remain oldest-first and use operational context labels', () => {
   assert.equal(projection.tickets[0].orderId, 'order-older');
   assert.equal(getKdsDestinationLabel(projection.tickets[0]), 'Retirada');
   assert.equal(getKdsTicketLabel(projection.tickets[0]), '#041-A');
+});
+
+test('KDS search finds tickets by mesa, item, customer and observation without changing state', () => {
+  const projection = projectKdsTickets([
+    kitchenItem('burger', 'preparando', {
+      mesaId: 4,
+      nome: 'Duplo Burguer',
+      observacao: 'Sem cebola',
+      clienteNome: 'Geórgia',
+    }),
+    kitchenItem('drink', 'pronto', {
+      lancamentoId: 'launch-2',
+      mesaId: 9,
+      nome: 'Suco de Caju',
+    }),
+  ]);
+
+  const firstTicket = projection.tickets[0];
+  assert.equal(matchesKdsTicketQuery(firstTicket, 'mesa 4'), true);
+  assert.equal(matchesKdsTicketQuery(firstTicket, 'duplo'), true);
+  assert.equal(matchesKdsTicketQuery(firstTicket, 'georgia'), true);
+  assert.equal(matchesKdsTicketQuery(firstTicket, 'sem cebola'), true);
+  assert.equal(matchesKdsTicketQuery(firstTicket, 'suco'), false);
+  assert.equal(firstTicket.preparingCount, 1);
 });
