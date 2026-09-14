@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
   ChevronRight,
+  CircleHelp,
   ClipboardList,
   FileText,
   Grid2X2,
@@ -26,6 +27,7 @@ import { LoginButton } from '../auth/LoginButton';
 import type { AppSettings, CaixaTurnoResumo, DraftItem, Order } from '../../types';
 import type { KomaTheme } from '../../config/theme';
 import { deriveProductionState, getOrderItems } from '../../domain/operationalState';
+import { openCustomerSupport } from './customerSupportEvents';
 
 const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
 const LOCAL_STORAGE_FONT_SIZE_KEY = 'koma_font_size';
@@ -303,6 +305,27 @@ export function OperationalDrawer({
               </section>
             </div>
           )}
+
+          <section className="mt-5 space-y-2.5">
+            <h3 className={sectionTitle}><CircleHelp size={13} /> Ajuda</h3>
+            <button
+              id="drawer-open-customer-support"
+              type="button"
+              onClick={() => runAfterClose(openCustomerSupport)}
+              className="flex w-full items-center justify-between rounded-2xl border border-koma-border bg-koma-card p-3 text-left transition-all hover:border-emerald-500/30 hover:bg-koma-raised"
+            >
+              <span className="flex items-center gap-2.5">
+                <span className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-700 dark:text-emerald-400">
+                  <CircleHelp size={16} />
+                </span>
+                <span>
+                  <strong className="block text-xs text-koma-foreground">Ajuda e feedback</strong>
+                  <span className="mt-0.5 block text-[9px] text-koma-muted">Dúvidas, sugestões, problemas ou reclamações.</span>
+                </span>
+              </span>
+              <ChevronRight size={14} className="text-koma-muted" />
+            </button>
+          </section>
 
           <section className="mt-5 space-y-2.5">
             <div className="flex items-center justify-between gap-3"><h3 className={sectionTitle}><Type size={13} /> Preferências</h3><span className="text-[9px] text-koma-muted">neste aparelho</span></div>
