@@ -12,12 +12,15 @@ const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
 
 const DIGITAL_TYPES = new Set(['delivery', 'entrega', 'retirada']);
 
+export function readActiveDeliveryStatus(raw: unknown): DeliveryOrderView['status'] | null {
+  const status = String(raw || '').trim().toLowerCase() as DeliveryOrderView['status'];
+  return ACTIVE_DELIVERY_STATUSES.has(status) ? status : null;
+}
+
 function readActiveDigitalStatus(order: Order): DeliveryOrderView['status'] | null {
   const type = String(order.tipo || '').trim().toLowerCase();
   if (!DIGITAL_TYPES.has(type)) return null;
-
-  const status = String(order.deliveryStatus || '').trim().toLowerCase() as DeliveryOrderView['status'];
-  return ACTIVE_DELIVERY_STATUSES.has(status) ? status : null;
+  return readActiveDeliveryStatus(order.deliveryStatus);
 }
 
 /**
