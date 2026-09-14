@@ -85,7 +85,7 @@ jobs:
               esac
 
               case "$file" in
-                backend/app/application/orders/idempotency.py|backend/app/application/orders/service.py|backend/app/adapters/orders/web_adapter.py|backend/tests/test_order_idempotency_fingerprint.py|.github/workflows/quality-gate.yml)
+                backend/app/application/orders/idempotency.py|backend/app/application/orders/service.py|backend/app/adapters/orders/web_adapter.py|backend/app/models.py|backend/alembic/versions/*idempotency*|backend/tests/test_order_idempotency_fingerprint.py|.github/workflows/quality-gate.yml)
                   idempotency=true
                   ;;
               esac
