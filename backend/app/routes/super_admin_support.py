@@ -220,7 +220,8 @@ def end_support_session(
                 SuperAdminAuditLog(
                     restaurante_id=target_tenant_id,
                     actor=operator,
-                    action="SUPERADMIN_SUPPORT_SESSION_END",\n                    reason=clean_reason,
+                    action="SUPERADMIN_SUPPORT_SESSION_END",
+                    reason=clean_reason,
                     after_data={
                         "closed_sessions": closed_ids,
                         "ended_at": now_utc.isoformat(),
