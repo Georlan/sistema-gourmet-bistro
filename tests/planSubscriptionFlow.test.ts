@@ -32,7 +32,7 @@ test('landing não expõe roadmap de meios de pagamento', () => {
   assert.doesNotMatch(landingPlans, /FORMAS DE PAGAMENTO/);
 });
 
-test('catálogo remove Pix antecipado e promove Pix Automático recorrente', () => {
+test('catálogo remove Pix antecipado e preserva o trial até a implantação', () => {
   assert.match(paymentCatalog, /id: 'credit_card'/);
   assert.match(paymentCatalog, /id: 'pix_automatic'/);
   assert.match(paymentCatalog, /id: 'nupay'/);
@@ -41,7 +41,8 @@ test('catálogo remove Pix antecipado e promove Pix Automático recorrente', () 
   assert.doesNotMatch(paymentCatalog, /id: 'pix_annual'/);
   assert.doesNotMatch(paymentCatalog, /id: 'boleto'/);
   assert.match(paymentCatalog, /Pix Automático · em validação/);
-  assert.match(paymentCatalog, /primeira cobrança automática ocorre somente depois do trial/);
+  assert.match(paymentCatalog, /recorrência fica preservada durante a implantação/);
+  assert.match(paymentCatalog, /7 dias grátis começam somente depois dos 3 passos essenciais/);
 });
 
 test('checkout só oferece meios recorrentes com R$ 0 hoje e 7 dias grátis', () => {
@@ -56,10 +57,11 @@ test('checkout só oferece meios recorrentes com R$ 0 hoje e 7 dias grátis', ()
   assert.doesNotMatch(planContract, /pagamento único/);
 });
 
-test('roadmap exige a mesma política recorrente para métodos futuros', () => {
+test('roadmap exige autorização recorrente, implantação sem consumo e trial completo', () => {
   assert.match(paymentCatalog, /NuPay exige integração própria/);
-  assert.match(paymentCatalog, /7 dias grátis e cobrança automática depois/);
+  assert.match(paymentCatalog, /implantação sem consumir trial e 7 dias grátis completos/);
   assert.match(paymentCatalog, /Carteira, saldo ou crédito do Mercado Pago só entram no checkout/);
+  assert.match(paymentCatalog, /preservar os 7 dias grátis completos para depois do setup essencial/);
   assert.match(paymentCatalog, /O KÔMA não exibirá pagamento antecipado disfarçado de trial nem dias de bônus/);
 });
 
