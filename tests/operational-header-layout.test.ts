@@ -37,7 +37,15 @@ test('cabeçalho operacional compacto não é suprimido no mobile nem perde ênf
   assert.match(lowHeightCss, /\.orders-workspace\s+\.orders-hero:not\(\.operational-header\)\s+h1\s+em\s*\{\s*display:\s*none;/);
 });
 
+test('KPIs do cabeçalho se acomodam no mobile sem deixar o último indicador parcialmente cortado', () => {
+  const mobile = css.split('@media (max-width: 560px)', 2)[1] ?? '';
+  assert.match(mobile, /\.operational-header__metrics\s*\{[^}]*display:\s*grid;/);
+  assert.match(mobile, /grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(5\.25rem,\s*1fr\)\);/);
+  assert.match(mobile, /\.operational-header__metrics\s*\{[^}]*overflow:\s*visible;/);
+  assert.match(mobile, /\.operational-header__metric\s*\{[^}]*min-width:\s*0;/);
+  assert.match(mobile, /\.operational-header__metric\s+dt\s*\{[^}]*text-overflow:\s*ellipsis;/);
+});
+
 test('coluna do kanban declara container-type para manter cards legíveis em qualquer largura', () => {
   assert.match(indexCss, /\.orders-column\s*\{[^}]*container-type:\s*inline-size;/);
 });
-
