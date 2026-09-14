@@ -57,6 +57,7 @@ test('catálogo explicita configuração obrigatória antes de adicionar', () =>
 
   assert.match(source, /productRequiresConfiguration\(product\)/);
   assert.match(source, /Escolhas obrigatórias/);
-  assert.match(source, /Escolher opções/);
+  assert.match(source, /requiredConfig \? 'Configurar' : 'Adicionar'/);
+  assert.match(source, /aria-label=\{requiredConfig \? `Configurar \$\{product\.nome\}` : `Adicionar \$\{product\.nome\}`\}/);
   assert.match(source, /Complete as escolhas/);
 });
