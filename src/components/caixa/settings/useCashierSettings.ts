@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { DEFAULT_WAITER_PERMISSIONS, patchWaiterPermissions, readWaiterPermissions, type WaiterPermissions } from './waiterPermissions';
 import type { CashierNotice } from '../cashierContracts';
 
@@ -80,6 +80,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
   const [printSettingsSaveState, setPrintSettingsSaveState] = useState<'saved' | 'dirty' | 'saving' | 'error'>('saved');
 
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
+  const isTestingPrinterRef = useRef(false);
 
   const fetchConfiguracoes = async () => {
     try {
@@ -101,7 +102,8 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
   };
 
   const handleTestPrinter = async () => {
-    if (isTestingPrinter) return;
+    if (isTestingPrinterRef.current) return;
+    isTestingPrinterRef.current = true;
     setIsTestingPrinter(true);
     try {
       const res = await fetch(`${apiBaseUrl}/impressao/teste-extremo-cardapio`, {
@@ -121,6 +123,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
         'error',
       );
     } finally {
+      isTestingPrinterRef.current = false;
       setIsTestingPrinter(false);
     }
   };
