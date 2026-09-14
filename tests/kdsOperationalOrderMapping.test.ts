@@ -40,7 +40,6 @@ test('operational snapshot preserves the same human identity and channel on KDS 
   const order = mapBackendComandaToOperationalOrder({
     comanda: makeComanda(),
     liveProdutos: [],
-    now: Date.parse('2026-09-14T18:31:00Z'),
   });
 
   const item = order.itens[0] as typeof order.itens[number] & {
