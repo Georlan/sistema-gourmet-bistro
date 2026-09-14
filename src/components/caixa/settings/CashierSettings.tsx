@@ -1,5 +1,5 @@
 import { Loader2, Lock, Monitor, Percent, Printer, RefreshCw, Smartphone, Sparkles, Users } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
@@ -11,6 +11,13 @@ import { CashierServiceTaxSettings } from './CashierServiceTaxSettings';
 import { CashierTableDialogs } from './CashierTableDialogs';
 import { CashierTableSettings } from './CashierTableSettings';
 import { CashierWaiterSettings } from './CashierWaiterSettings';
+import {
+  CASHIER_SETTINGS_TAB_REQUEST_EVENT,
+  getRequestedCashierSettingsTab,
+  persistCashierSettingsTab,
+  readInitialCashierSettingsTab,
+  type CashierSettingsTab,
+} from './cashierSettingsNavigation';
 import type { useCashierSettings } from './useCashierSettings';
 import { useCashierTableSettings } from './useCashierTableSettings';
 
@@ -31,10 +38,6 @@ interface Props {
   setCheckoutServiceTax: React.Dispatch<React.SetStateAction<boolean>>;
   settings: ReturnType<typeof useCashierSettings>;
 }
-
-type CashierSettingsTab = 'aparencia' | 'impressao' | 'mesas' | 'garcom' | 'taxa';
-
-const CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab';
 
 const CASHIER_SETTINGS_GROUPS = [
   {
@@ -57,29 +60,6 @@ const CASHIER_SETTINGS_GROUPS = [
     ],
   },
 ] as const;
-
-function isCashierSettingsTab(value: string | null): value is CashierSettingsTab {
-  return value === 'aparencia' || value === 'impressao' || value === 'mesas' || value === 'garcom' || value === 'taxa';
-}
-
-function readInitialCashierSettingsTab(): CashierSettingsTab {
-  if (typeof window === 'undefined') return 'aparencia';
-  try {
-    const stored = window.localStorage.getItem(CASHIER_SETTINGS_TAB_STORAGE_KEY);
-    return isCashierSettingsTab(stored) ? stored : 'aparencia';
-  } catch {
-    return 'aparencia';
-  }
-}
-
-function persistCashierSettingsTab(tab: CashierSettingsTab) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(CASHIER_SETTINGS_TAB_STORAGE_KEY, tab);
-  } catch {
-    // Preferência local é melhoria de ergonomia; falha de storage não deve bloquear o Caixa.
-  }
-}
 
 function openInitialSetup() {
   try {
@@ -138,6 +118,16 @@ export default function CashierSettings({
     setSettingsTab(tab);
     persistCashierSettingsTab(tab);
   };
+
+  useEffect(() => {
+    const handleRequestedTab = (event: Event) => {
+      const requestedTab = getRequestedCashierSettingsTab(event);
+      if (requestedTab) selectSettingsTab(requestedTab);
+    };
+
+    window.addEventListener(CASHIER_SETTINGS_TAB_REQUEST_EVENT, handleRequestedTab);
+    return () => window.removeEventListener(CASHIER_SETTINGS_TAB_REQUEST_EVENT, handleRequestedTab);
+  }, []);
 
   const {
     handleDeleteMesa,
