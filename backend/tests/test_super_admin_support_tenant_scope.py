@@ -1,5 +1,7 @@
 from contextlib import contextmanager
 
+import jwt
+
 from app.routes import super_admin_support
 
 
@@ -31,9 +33,15 @@ def test_superadmin_support_control_plane_enters_target_tenant_scope(monkeypatch
         admin=admin,
     )
     assert started["restaurant_id"] == 1
+    token_claims = jwt.decode(
+        started["access_token"],
+        options={"verify_signature": False},
+    )
+    assert "reason" not in token_claims
 
     active = super_admin_support.get_active_support_session("1", admin=admin)
     assert active["active"] is True
+    assert active["session"]["reason"] == "Validação do escopo RLS do modo suporte."
 
     ended = super_admin_support.end_support_session(
         "1",
