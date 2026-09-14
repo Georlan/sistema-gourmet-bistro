@@ -1,13 +1,19 @@
 import datetime
 import uuid
 import pytest
+import jwt
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.database import SessionLocal, tenant_session_scope
 from app.main import app
 from app.models import Restaurante, SuperAdminAuditLog, Usuario
 from app.routes import super_admin
-from app.security import create_access_token, get_password_hash
+from app.security import (
+    _authenticated_user_from_token,
+    create_access_token,
+    get_password_hash,
+)
 from app.support_models import SupportSession
 
 client = TestClient(app)
@@ -282,3 +288,165 @@ def test_get_active_support_session():
     assert data["active"] is True
     assert data["session"]["operator"] == SUPERADMIN_USERNAME
     assert data["session"]["remaining_seconds"] > 0
+
+
+def test_support_token_minimal_claims_and_authoritative_session_operator():
+    """Valida que o JWT de suporte não contém reason nem operator,
+    mas a autenticação carrega o operador diretamente da SupportSession autoritativa.
+    Valida também que status encerrado/expirado e session_id/tenant/jti inválidos retornam 401.
+    """
+    headers = _superadmin_headers()
+    start_resp = client.post(
+        "/api/super-admin/support/1/start",
+        json={"reason": "Auditoria de claims mínimos do token de suporte.", "duration_minutes": 30},
+        headers=headers,
+    )
+    assert start_resp.status_code == 200
+    data = start_resp.json()
+    token = data["access_token"]
+    session_id = data["session_id"]
+    operator = data["operator"]
+
+    # 1. Decode sem validar assinatura
+    raw_claims = jwt.decode(token, options={"verify_signature": False})
+    assert "reason" not in raw_claims
+    assert "operator" not in raw_claims
+
+    # Claims mantidos estritamente necessários
+    assert raw_claims.get("support_mode") is True
+    assert raw_claims.get("support_session_id") == session_id
+    assert raw_claims.get("jti") is not None
+    assert raw_claims.get("sub") == f"support:{operator}"
+    assert raw_claims.get("restaurante_id") == 1
+    assert raw_claims.get("role") == "admin"
+    assert raw_claims.get("exp") is not None
+
+    # 2. Autenticar o token e confirmar que SupportOperatorUser recebe o operador da SupportSession
+    with SessionLocal() as db:
+        user = _authenticated_user_from_token(token, db)
+        assert user.is_support_mode is True
+        assert user.support_operator == operator
+        assert user.support_session_id == session_id
+        assert user.restaurante_id == 1
+        assert user.support_reason == "Auditoria de claims mínimos do token de suporte."
+
+    # 3. Sessão encerrada retorna 401
+    with SessionLocal() as db:
+        sess = db.query(SupportSession).filter(SupportSession.id == session_id).first()
+        sess.status = "ended"
+        db.commit()
+
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token, db)
+    assert exc_info.value.status_code == 401
+    assert "encerrada" in exc_info.value.detail.lower()
+
+    # Re-ativa temporariamente para testar expiração
+    with SessionLocal() as db:
+        sess = db.query(SupportSession).filter(SupportSession.id == session_id).first()
+        sess.status = "active"
+        sess.expires_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(seconds=10)
+        db.commit()
+
+    # 4. Sessão expirada retorna 401
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token, db)
+    assert exc_info.value.status_code == 401
+    assert "expirada" in exc_info.value.detail.lower()
+
+    # 5. Validação de session id + tenant + jti
+    # Cria token válido em nova sessão para os testes de mismatch
+    start_resp2 = client.post(
+        "/api/super-admin/support/1/start",
+        json={"reason": "Sessão 2 para testes de validação de jti e tenant.", "duration_minutes": 30},
+        headers=headers,
+    )
+    assert start_resp2.status_code == 200
+    token2 = start_resp2.json()["access_token"]
+    raw_claims2 = jwt.decode(token2, options={"verify_signature": False})
+    valid_jti = raw_claims2["jti"]
+    valid_session_id = raw_claims2["support_session_id"]
+
+    # a) session id mismatch
+    token_bad_session = create_access_token(
+        subject=f"support:{operator}",
+        restaurante_id=1,
+        role="admin",
+        extra_claims={
+            "support_mode": True,
+            "support_session_id": str(uuid.uuid4()),
+            "jti": valid_jti,
+        },
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token_bad_session, db)
+    assert exc_info.value.status_code == 401
+
+    # b) tenant mismatch
+    token_bad_tenant = create_access_token(
+        subject=f"support:{operator}",
+        restaurante_id=999,
+        role="admin",
+        extra_claims={
+            "support_mode": True,
+            "support_session_id": valid_session_id,
+            "jti": valid_jti,
+        },
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token_bad_tenant, db)
+    assert exc_info.value.status_code == 401
+
+    # c) jti mismatch
+    token_bad_jti = create_access_token(
+        subject=f"support:{operator}",
+        restaurante_id=1,
+        role="admin",
+        extra_claims={
+            "support_mode": True,
+            "support_session_id": valid_session_id,
+            "jti": str(uuid.uuid4()),
+        },
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token_bad_jti, db)
+    assert exc_info.value.status_code == 401
+
+    # d) missing support_session_id
+    token_no_session = create_access_token(
+        subject=f"support:{operator}",
+        restaurante_id=1,
+        role="admin",
+        extra_claims={
+            "support_mode": True,
+            "jti": valid_jti,
+        },
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token_no_session, db)
+    assert exc_info.value.status_code == 401
+
+    # e) missing jti
+    token_no_jti = create_access_token(
+        subject=f"support:{operator}",
+        restaurante_id=1,
+        role="admin",
+        extra_claims={
+            "support_mode": True,
+            "support_session_id": valid_session_id,
+        },
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        with SessionLocal() as db:
+            _authenticated_user_from_token(token_no_jti, db)
+    assert exc_info.value.status_code == 401
+
+    # Limpeza
+    client.post("/api/super-admin/support/1/end", json={}, headers=headers)
+
