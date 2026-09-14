@@ -94,6 +94,8 @@ class CreateOrderCommand:
     payment_method: Optional[str] = None
     change_for: Optional[str] = None
     idempotency_key: Optional[str] = None
+    idempotency_fingerprint: Optional[str] = None
+    idempotency_fingerprint_version: Optional[int] = None
     external_reference: Optional[ExternalOrderReference] = None
     operator_user_id: Optional[str | int] = None
     # Pedidos com pagamento online existem antes da autorização, mas ainda não

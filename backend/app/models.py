@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     JSON,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -389,6 +390,8 @@ class Comanda(Base):
     _identificador = Column("identificador", String, nullable=True)  # Client name encrypted
     numero_pedido = Column(Integer, nullable=False)  # Global sequential order number (shared when splitting)
     idempotency_key = Column(String(128), nullable=True, index=True)
+    idempotency_fingerprint = Column(String(64), nullable=True)
+    idempotency_fingerprint_version = Column(SmallInteger, nullable=True)
 
     @hybrid_property
     def identificador(self):
