@@ -1,7 +1,7 @@
 .orders-hero.operational-header {
   position: relative;
   isolation: auto;
-  display: flex;
+  display: flex !important;
   width: 100%;
   min-height: 2.35rem;
   align-items: center;

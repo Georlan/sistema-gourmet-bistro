@@ -1470,6 +1470,7 @@ body {
 }
 
 .orders-column {
+  container-type: inline-size;
   --orders-stage: var(--koma-stage-salon);
   min-width: 20.5rem;
   min-height: 0;
@@ -2314,7 +2315,7 @@ body {
     padding-inline: 0.75rem;
   }
 
-  .orders-hero {
+  .orders-hero:not(.operational-header) {
     display: none !important;
   }
 

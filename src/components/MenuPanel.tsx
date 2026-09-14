@@ -19,6 +19,10 @@ import {
 
 import type { CatalogCategory, CatalogModifierGroup } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
+import {
+  changeModifierQuantitySelection,
+  modifierGroupSelectionValid,
+} from '../domain/modifierQuantity';
 import type { AppSettings, DraftItem, Order, Product } from '../types';
 import ModifierPicker from './shared/ModifierPicker';
 
@@ -77,14 +81,35 @@ const modifierSelectionsFor = (
   groups: CatalogModifierGroup[],
   selectedIds: string[],
 ): ModifierSelection[] => {
-  const selected = new Set(selectedIds);
-  return groups.flatMap((group) => group.opcoes)
-    .filter((option) => option.ativo !== false && selected.has(option.id))
-    .map((option) => ({
+  const optionsById = new Map(
+    groups
+      .flatMap((group) => group.opcoes)
+      .filter((option) => option.ativo !== false)
+      .map((option) => [option.id, option] as const),
+  );
+
+  return selectedIds.flatMap((id) => {
+    const option = optionsById.get(id);
+    if (!option) return [];
+    return [{
       id: option.id,
       nome: option.nome,
       preco: Number(option.preco_adicional || 0),
-    }));
+    }];
+  });
+};
+
+const summarizeModifierSelections = (modifiers: ModifierSelection[]) => {
+  const summary = new Map<string, { modifier: ModifierSelection; quantity: number }>();
+  modifiers.forEach((modifier) => {
+    const current = summary.get(modifier.id);
+    if (current) {
+      current.quantity += 1;
+      return;
+    }
+    summary.set(modifier.id, { modifier, quantity: 1 });
+  });
+  return Array.from(summary.values());
 };
 
 const money = (value: number) => value.toLocaleString('pt-BR', {
@@ -192,11 +217,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   );
   const modifierTotal = selectedModifierOptions.reduce((sum, option) => sum + option.preco, 0);
   const configUnitTotal = Number(selectedProductToConfigure?.preco || 0) + modifierTotal;
-  const modifierSelectionValid = currentGroups.every((group) => {
-    const optionIds = new Set(group.opcoes.filter((option) => option.ativo !== false).map((option) => option.id));
-    const count = selectedModifierIds.filter((id) => optionIds.has(id)).length;
-    return count >= Number(group.min_selecoes || 0) && count <= Number(group.max_selecoes || 1);
-  });
+  const modifierSelectionValid = currentGroups.every((group) =>
+    modifierGroupSelectionValid(group, selectedModifierIds));
 
   const scrollPanelToTop = () => {
     requestAnimationFrame(() => {
@@ -234,17 +256,14 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     setSelectedModifierIds([...(draft?.modificadorIds || [])]);
   };
 
-  const toggleModifier = (group: CatalogModifierGroup, optionId: string) => {
+  const changeModifierQuantity = (
+    group: CatalogModifierGroup,
+    optionId: string,
+    delta: -1 | 1,
+  ) => {
     if (isSubmitting) return;
-    setSelectedModifierIds((current) => {
-      const groupOptionIds = new Set(group.opcoes.map((option) => option.id));
-      if (current.includes(optionId)) return current.filter((id) => id !== optionId);
-      const selectedInGroup = current.filter((id) => groupOptionIds.has(id));
-      const max = Math.max(1, Number(group.max_selecoes || 1));
-      if (max === 1) return [...current.filter((id) => !groupOptionIds.has(id)), optionId];
-      if (selectedInGroup.length >= max) return current;
-      return [...current, optionId];
-    });
+    setSelectedModifierIds((current) =>
+      changeModifierQuantitySelection(group, current, optionId, delta));
   };
 
   const handleConfirmAdd = () => {
@@ -274,8 +293,17 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     closeProductConfig();
   };
 
-  const handleQuickAdd = (product: Product, event?: React.MouseEvent) => {
-    event?.stopPropagation();
+  const findQuickDraftItem = (product: Product) => {
+    const matching = draftItems.filter((item) => item.produtoId === product.id);
+    if (matching.length === 0) return null;
+    const cleanItem = [...matching].reverse().find((item) => {
+      const decorated = item as DraftWithModifiers;
+      return !item.observacao && (decorated.modificadorIds || []).length === 0;
+    });
+    return cleanItem || matching[matching.length - 1];
+  };
+
+  const handleQuickAdd = (product: Product) => {
     if (isSubmitting) return;
     if (productRequiresConfiguration(product)) {
       handleOpenConfig(product);
@@ -297,16 +325,20 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     onAddToDraft(product, 1, '', defaultClient);
   };
 
-  const handleQuickSubtract = (product: Product, event?: React.MouseEvent) => {
-    event?.stopPropagation();
+  const handleQuickIncrement = (product: Product) => {
     if (isSubmitting) return;
-    const matching = draftItems.filter((item) => item.produtoId === product.id);
-    if (matching.length === 0) return;
-    const cleanItem = [...matching].reverse().find((item) => {
-      const decorated = item as DraftWithModifiers;
-      return !item.observacao && (decorated.modificadorIds || []).length === 0;
-    });
-    const item = cleanItem || matching[matching.length - 1];
+    const item = findQuickDraftItem(product);
+    if (!item) {
+      handleQuickAdd(product);
+      return;
+    }
+    onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) + 1 });
+  };
+
+  const handleQuickSubtract = (product: Product) => {
+    if (isSubmitting) return;
+    const item = findQuickDraftItem(product);
+    if (!item) return;
     if ((item.quantidade || 1) > 1) {
       onUpdateDraftItem(item.id, { quantidade: (item.quantidade || 1) - 1 });
     } else {
@@ -381,6 +413,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 {draftItems.map((item, index) => {
                   const decorated = item as DraftWithModifiers;
                   const product = liveProdutos.find((candidate) => candidate.id === item.produtoId);
+                  const modifierSummary = summarizeModifierSelections(decorated.modificadoresSelecionados || []);
                   return (
                     <div key={item.id} id={`draft-item-${item.id}`} className="p-3 bg-koma-card border border-koma-border rounded-xl space-y-2.5">
                       <div className="flex items-start justify-between gap-3">
@@ -389,10 +422,12 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                             <span className="w-5 h-5 rounded-full border border-koma-border text-[10px] font-mono flex items-center justify-center text-koma-subtle">{index + 1}</span>
                             <span className="text-xs font-bold text-koma-foreground">{item.nome}</span>
                           </div>
-                          {decorated.modificadoresSelecionados && decorated.modificadoresSelecionados.length > 0 && (
+                          {modifierSummary.length > 0 && (
                             <div className="mt-1 ml-7 flex flex-wrap gap-1">
-                              {decorated.modificadoresSelecionados.map((option) => (
-                                <span key={option.id} className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-[9px] text-emerald-400 border border-emerald-500/20">+ {option.nome}</span>
+                              {modifierSummary.map(({ modifier, quantity }) => (
+                                <span key={modifier.id} className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-[9px] text-emerald-400 border border-emerald-500/20">
+                                  + {quantity > 1 ? `${quantity}x ` : ''}{modifier.nome}
+                                </span>
                               ))}
                             </div>
                           )}
@@ -520,21 +555,78 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
                       const currentCount = draftItems.filter((item) => item.produtoId === product.id).reduce((sum, item) => sum + (item.quantidade || 1), 0);
                       return (
-                        <article key={product.id} id={`product-card-${product.id}`} onClick={() => handleOpenConfig(product)} className={`border rounded-2xl p-3 sm:p-4 flex flex-col justify-between cursor-pointer transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`} title={requiredConfig ? 'Este item exige escolhas antes de adicionar.' : 'Clique no card para personalizar ou use Adicionar para lançar rapidamente.'}>
-                          <div className="space-y-2">
-                            {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
-                              <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {money(Number(product.preco))}</span>
+                        <article
+                          key={product.id}
+                          id={`product-card-${product.id}`}
+                          className={`overflow-hidden rounded-2xl border transition ${currentCount > 0 ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-koma-card border-koma-border hover:border-emerald-500/30'}`}
+                        >
+                          <button
+                            id={`customize-product-btn-${product.id}`}
+                            type="button"
+                            disabled={isSubmitting}
+                            onClick={() => handleOpenConfig(product)}
+                            className="group flex w-full flex-1 flex-col p-3 text-left outline-none transition hover:bg-white/[0.02] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-60 sm:p-4"
+                            title="Clique para personalizar quantidade, adicionais e observações"
+                            aria-label={`Personalizar ${product.nome}`}
+                          >
+                            <div className="space-y-2">
+                              {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-amber-500/10 border-amber-500/25 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
+                                <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {money(Number(product.preco))}</span>
+                              </div>
+                              {settings.exibirDescricoes && product.descricao && <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>}
+                              <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-koma-muted transition group-hover:text-emerald-400">
+                                <Settings2 size={11} /> Personalizar item
+                              </span>
                             </div>
-                            {settings.exibirDescricoes && product.descricao && <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>}
-                          </div>
+                          </button>
 
-                          <div className="mt-3 pt-2 border-t border-koma-border/60 flex items-center gap-1.5">
-                            {currentCount > 0 && <div className="flex items-center gap-1 bg-koma-input rounded-xl border border-emerald-500/30 p-0.5"><button type="button" disabled={isSubmitting} onClick={(event) => handleQuickSubtract(product, event)} className="p-1.5 text-koma-muted hover:text-rose-400 disabled:opacity-40" aria-label={`Remover uma unidade de ${product.nome}`}><Minus size={13} /></button><span className="font-mono text-xs font-bold text-emerald-400 px-2">{currentCount}</span></div>}
-                            <button id={`add-product-btn-${product.id}`} type="button" disabled={isSubmitting} onClick={(event) => handleQuickAdd(product, event)} className="flex-1 min-h-10 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold inline-flex items-center justify-center gap-1 disabled:opacity-50" aria-label={requiredConfig ? `Escolher opções de ${product.nome}` : `Adicionar ${product.nome}`}>
-                              {requiredConfig ? <Settings2 size={14} /> : <Plus size={14} />} {requiredConfig ? 'Escolher opções' : 'Adicionar'}
-                            </button>
+                          <div className="border-t border-koma-border/60 p-2.5 sm:p-3">
+                            {currentCount > 0 ? (
+                              <div
+                                id={`product-quick-stepper-${product.id}`}
+                                className="grid min-h-10 grid-cols-[42px_1fr_42px] overflow-hidden rounded-xl border border-emerald-500/30 bg-koma-input"
+                                aria-label={`Quantidade de ${product.nome} no pedido`}
+                              >
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting}
+                                  onClick={() => handleQuickSubtract(product)}
+                                  className="grid min-h-10 place-items-center border-r border-koma-border text-koma-muted transition hover:bg-rose-500/10 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                  aria-label={`Diminuir ${product.nome}`}
+                                  title="Diminuir uma unidade"
+                                >
+                                  <Minus size={15} />
+                                </button>
+                                <div className="pointer-events-none flex min-w-0 items-center justify-center gap-2 px-2 text-center" aria-live="polite">
+                                  <span className="font-mono text-sm font-extrabold text-emerald-400">{currentCount}</span>
+                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-koma-muted">no pedido</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={isSubmitting}
+                                  onClick={() => handleQuickIncrement(product)}
+                                  className="grid min-h-10 place-items-center border-l border-koma-border text-koma-muted transition hover:bg-emerald-500/10 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                  aria-label={`Aumentar ${product.nome}`}
+                                  title="Adicionar mais uma unidade com a configuração atual"
+                                >
+                                  <Plus size={15} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                id={`add-product-btn-${product.id}`}
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() => requiredConfig ? handleOpenConfig(product) : handleQuickAdd(product)}
+                                className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-500 text-xs font-bold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label={requiredConfig ? `Configurar ${product.nome}` : `Adicionar ${product.nome}`}
+                              >
+                                {requiredConfig ? <Settings2 size={14} /> : <Plus size={14} />}
+                                {requiredConfig ? 'Configurar' : 'Adicionar'}
+                              </button>
+                            )}
                           </div>
                         </article>
                       );
@@ -569,7 +661,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
               <div className="text-right"><span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span><span className="font-mono text-lg font-bold text-emerald-400">R$ {money(configUnitTotal * configQty)}</span>{modifierTotal > 0 && <span className="block text-[9px] text-koma-subtle">+ R$ {money(modifierTotal)} por unidade</span>}</div>
             </div>
 
-            {currentGroups.length > 0 && <div className="space-y-3 border-t border-koma-border pt-4"><div><h5 className="text-xs font-bold text-koma-foreground">Complementos</h5><p className="text-[10px] text-koma-muted">Complete as escolhas obrigatórias antes de adicionar.</p></div><ModifierPicker key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`} groups={currentGroups} selectedIds={selectedModifierIds} onToggle={toggleModifier} /></div>}
+            {currentGroups.length > 0 && <div className="space-y-3 border-t border-koma-border pt-4"><div><h5 className="text-xs font-bold text-koma-foreground">Complementos</h5><p className="text-[10px] text-koma-muted">Ajuste quantidades; o limite do grupo conta tipos diferentes.</p></div><ModifierPicker key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`} groups={currentGroups} selectedIds={selectedModifierIds} onQuantityChange={changeModifierQuantity} /></div>}
 
             <div className="space-y-2 border-t border-koma-border pt-4">
               <label htmlFor="config-item-obs" className="text-[10px] uppercase font-bold text-koma-muted">Observação de preparo</label>
