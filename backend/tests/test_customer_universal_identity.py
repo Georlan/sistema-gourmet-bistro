@@ -119,6 +119,7 @@ def test_same_phone_in_other_tenant_never_leaks_identity(char_setup):
     other_restaurant_id = 7781
     try:
         db.add(Restaurante(id=other_restaurant_id, nome="Outro Tenant", plano="pocket"))
+        db.flush()
         db.add(Cliente(
             id="customer-other-tenant",
             restaurante_id=other_restaurant_id,
@@ -149,6 +150,7 @@ def test_same_phone_in_other_tenant_never_leaks_identity(char_setup):
         assert local_customer.id != "customer-other-tenant"
         assert local_customer.nome == "Cliente Tenant Correto"
     finally:
+        db.rollback()
         # O fixture de caracterização não remove tenants extras.
         db.query(Cliente).filter(Cliente.restaurante_id == other_restaurant_id).delete(
             synchronize_session=False,
