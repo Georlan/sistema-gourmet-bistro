@@ -60,8 +60,14 @@ class CloudflareService:
         if not self.api_token or not self.zone_id:
             raise RuntimeError("Cloudflare não configurado no servidor.")
         headers = {"Authorization": f"Bearer {self.api_token}"}
-        async with httpx.AsyncClient() as client:
-            response = await client.get(self.base_url, headers=headers, timeout=10.0)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.base_url, headers=headers, timeout=10.0)
+        except httpx.RequestError as exc:
+            logger.error("Falha na conexão com API da Cloudflare")
+            raise RuntimeError(
+                f"Cloudflare indisponível ({type(exc).__name__})."
+            ) from None
         if response.status_code != 200:
             raise RuntimeError(f"Cloudflare API respondeu HTTP {response.status_code}.")
         payload = response.json()
