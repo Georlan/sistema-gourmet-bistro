@@ -3,6 +3,7 @@ import "./components/auth/passwordRecoveryToken";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
+import "./components/shared/operationalHeader.css";
 import { CustomerSupportWidget } from "./components/app/CustomerSupportWidget";
 import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
