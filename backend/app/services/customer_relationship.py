@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional, Sequence
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ..models import Cliente, Comanda
@@ -67,7 +67,8 @@ def load_customer_relationship_metrics(
     Garantias:
     - Tenant-scoped: Comanda.restaurante_id == restaurante_id
     - Exclusivamente por Comanda.cliente_id (nunca por telefone, nome ou CPF)
-    - Apenas comandas fechadas (Comanda.fechada == True)
+    - Apenas compras fechadas válidas; recusadas/canceladas não contam
+    - Pedidos com barreira financeira online só contam quando aprovados
     - Consulta agregada única (sem N+1)
     - Tratamento de timestamp SQLite/Postgres naive como UTC
     """
@@ -91,6 +92,14 @@ def load_customer_relationship_metrics(
             Comanda.restaurante_id == restaurante_id,
             Comanda.fechada == True,
             Comanda.cliente_id.in_(normalized_ids),
+            or_(
+                Comanda.delivery_status.is_(None),
+                Comanda.delivery_status != "recusado",
+            ),
+            or_(
+                Comanda.online_payment_status.is_(None),
+                Comanda.online_payment_status == "approved",
+            ),
         )
         .group_by(Comanda.cliente_id)
         .all()
