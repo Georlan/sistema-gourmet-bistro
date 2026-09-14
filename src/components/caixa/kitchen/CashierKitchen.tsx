@@ -1,4 +1,4 @@
-import { ChefHat, Check, CircleDot, PackageCheck, UtensilsCrossed } from 'lucide-react';
+import { ChefHat, Check, CircleDot, PackageCheck, Search, UtensilsCrossed } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import type { useCashierOrders } from '../orders/useCashierOrders';
@@ -6,6 +6,7 @@ import { KitchenTimer as KDSTimer } from './KitchenTimer';
 import {
   getKdsDestinationLabel,
   getKdsTicketLabel,
+  matchesKdsTicketQuery,
   projectKdsTickets,
   type KdsKitchenItem,
   type KdsTicket,
@@ -37,27 +38,67 @@ const originLabel = (origin: KdsTicket['origemOperacional']) => {
  */
 export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus }: BoundaryProps) {
   const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(() => new Set());
+  const [searchQuery, setSearchQuery] = useState('');
   const projection = useMemo(() => projectKdsTickets(activeKitchenItems), [activeKitchenItems]);
+  const visiblePreparingTickets = useMemo(
+    () => projection.preparingTickets.filter((ticket) => matchesKdsTicketQuery(ticket, searchQuery)),
+    [projection.preparingTickets, searchQuery],
+  );
+  const visibleReadyTickets = useMemo(
+    () => projection.readyTickets.filter((ticket) => matchesKdsTicketQuery(ticket, searchQuery)),
+    [projection.readyTickets, searchQuery],
+  );
 
   if (activeSubTab !== 'kds') return null;
 
-  const advanceItem = async (item: KdsKitchenItem) => {
-    if (pendingItemIds.has(item.id)) return;
-    setPendingItemIds((current) => new Set(current).add(item.id));
+  const runTransition = async (
+    items: readonly KdsKitchenItem[],
+    newStatus: 'pronto' | 'entregue',
+  ) => {
+    const ids = items.map((item) => item.id).filter((id) => !pendingItemIds.has(id));
+    if (ids.length === 0) return;
+
+    setPendingItemIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+
     try {
-      await handleUpdateItemStatus(item.id, item.status === 'preparando' ? 'pronto' : 'entregue');
+      await Promise.all(ids.map((id) => handleUpdateItemStatus(id, newStatus)));
     } finally {
       setPendingItemIds((current) => {
         const next = new Set(current);
-        next.delete(item.id);
+        ids.forEach((id) => next.delete(id));
         return next;
       });
     }
   };
 
+  const advanceItem = async (item: KdsKitchenItem) => {
+    await runTransition([item], item.status === 'preparando' ? 'pronto' : 'entregue');
+  };
+
+  const advanceTicket = async (ticket: KdsTicket) => {
+    const preparingItems = ticket.items.filter((item) => item.status === 'preparando');
+    if (preparingItems.length > 0) {
+      await runTransition(preparingItems, 'pronto');
+      return;
+    }
+
+    await runTransition(
+      ticket.items.filter((item) => item.status === 'pronto'),
+      'entregue',
+    );
+  };
+
   const renderTicket = (ticket: KdsTicket) => {
     const ready = ticket.preparingCount === 0;
     const source = originLabel(ticket.origemOperacional);
+    const actionableItems = ready
+      ? ticket.items.filter((item) => item.status === 'pronto')
+      : ticket.items.filter((item) => item.status === 'preparando');
+    const ticketPending = actionableItems.some((item) => pendingItemIds.has(item.id));
 
     return (
       <article
@@ -96,9 +137,18 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
                 : `${ticket.readyCount}/${ticket.totalCount} prontos`}
             </span>
             {!ready && ticket.readyCount > 0 && (
-              <span className="font-bold text-emerald-500">Pedido parcialmente pronto</span>
+              <span className="font-bold text-emerald-500">Parcialmente pronto</span>
             )}
           </div>
+
+          {!ready && ticket.totalCount > 1 && (
+            <div className="h-1 overflow-hidden rounded-full bg-koma-panel" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all"
+                style={{ width: `${Math.round((ticket.readyCount / ticket.totalCount) * 100)}%` }}
+              />
+            </div>
+          )}
         </header>
 
         <div className="divide-y divide-koma-border/70">
@@ -145,11 +195,39 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
             );
           })}
         </div>
+
+        {actionableItems.length > 1 && (
+          <div className="border-t border-koma-border bg-koma-panel/35 p-3">
+            <button
+              type="button"
+              disabled={ticketPending}
+              onClick={() => void advanceTicket(ticket)}
+              className={`flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[9px] font-extrabold uppercase tracking-wide transition disabled:cursor-wait disabled:opacity-50 ${
+                ready
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                  : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+              }`}
+            >
+              <Check size={12} />
+              {ticketPending
+                ? 'Atualizando ticket…'
+                : ready
+                  ? `Marcar ${actionableItems.length} itens como entregues`
+                  : `Marcar ${actionableItems.length} restantes como prontos`}
+            </button>
+          </div>
+        )}
       </article>
     );
   };
 
-  const renderLane = (title: string, subtitle: string, tickets: KdsTicket[], readyLane = false) => (
+  const renderLane = (
+    title: string,
+    subtitle: string,
+    tickets: KdsTicket[],
+    totalTickets: number,
+    readyLane = false,
+  ) => (
     <section className="min-w-0 rounded-2xl border border-koma-border bg-koma-page/40 p-3.5">
       <div className="mb-3 flex items-center justify-between gap-3 px-1">
         <div>
@@ -166,13 +244,17 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
               : 'bg-amber-500/10 text-amber-400'
           }`}
         >
-          {tickets.length}
+          {searchQuery.trim() ? `${tickets.length}/${totalTickets}` : tickets.length}
         </span>
       </div>
 
       {tickets.length === 0 ? (
         <div className="rounded-xl border border-dashed border-koma-border px-4 py-10 text-center text-[10px] text-koma-muted">
-          {readyLane ? 'Nada aguardando saída.' : 'Nenhum ticket em preparo.'}
+          {searchQuery.trim()
+            ? 'Nenhum ticket desta etapa corresponde à busca.'
+            : readyLane
+              ? 'Nada aguardando saída.'
+              : 'Nenhum ticket em preparo.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{tickets.map(renderTicket)}</div>
@@ -190,7 +272,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
           <div>
             <h2 className="font-serif text-base font-bold text-koma-secondary">Produção da cozinha</h2>
             <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-              Tickets agrupados por lançamento. O KDS usa os mesmos estados dos itens do Caixa; qualquer avanço feito em um lado aparece no outro.
+              Mesma fila operacional do Caixa, organizada por tickets para a cozinha. Alterações feitas no Caixa aparecem aqui e vice-versa.
             </p>
           </div>
         </div>
@@ -209,6 +291,28 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
         </div>
       </div>
 
+      {projection.tickets.length > 0 && (
+        <label className="flex max-w-xl items-center gap-2 rounded-xl border border-koma-border bg-koma-page px-3 py-2.5 focus-within:border-emerald-500/50">
+          <Search size={14} className="shrink-0 text-koma-muted" aria-hidden="true" />
+          <span className="sr-only">Buscar tickets da cozinha</span>
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Buscar mesa, pedido, cliente, item ou observação"
+            className="min-w-0 flex-1 bg-transparent text-xs text-koma-foreground outline-none placeholder:text-koma-muted"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="shrink-0 rounded-md px-2 py-1 text-[9px] font-bold text-koma-muted hover:bg-koma-panel hover:text-koma-foreground"
+            >
+              Limpar
+            </button>
+          )}
+        </label>
+      )}
+
       {projection.tickets.length === 0 ? (
         <div className="py-24 text-center">
           <ChefHat size={34} className="mx-auto mb-3 text-koma-muted/40" />
@@ -220,12 +324,14 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
           {renderLane(
             'Em produção',
             'Tickets com pelo menos um item ainda em preparo.',
-            projection.preparingTickets,
+            visiblePreparingTickets,
+            projection.preparingTickets.length,
           )}
           {renderLane(
             'Prontos para sair',
             'Tickets cujos itens ativos já estão prontos.',
-            projection.readyTickets,
+            visibleReadyTickets,
+            projection.readyTickets.length,
             true,
           )}
         </div>
