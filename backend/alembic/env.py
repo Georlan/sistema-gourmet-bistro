@@ -20,6 +20,7 @@ from app import contract_models  # noqa: F401
 from app import order_chat_models  # noqa: F401
 from app import fiscal_models  # noqa: F401
 from app import fiscal_reference_models  # noqa: F401
+from app import fiscal_credential_models  # noqa: F401
 from app.migration_runtime import (
     prepare_migration_connection,
     release_migration_lock,

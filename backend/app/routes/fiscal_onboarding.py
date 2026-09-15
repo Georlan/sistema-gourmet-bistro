@@ -23,11 +23,13 @@ from ..fiscal.jurisdiction import FiscalJurisdictionError, resolve_fiscal_jurisd
 from ..fiscal_models import RestaurantFiscalProfile
 from ..models import Usuario
 from ..security import get_current_user
+from ..services.fiscal_credentials import FiscalCredentialError, store_fiscal_credentials
 from ..services.fiscal_onboarding import (
     evaluate_restaurant_fiscal_readiness,
     readiness_payload,
     sync_restaurant_fiscal_profile_status,
 )
+from ..services.fiscal_preflight import evaluate_fiscal_preflight, preflight_payload
 
 
 router = APIRouter(prefix="/api/onboarding/fiscal", tags=["Fiscal Onboarding"])
@@ -51,6 +53,13 @@ class FiscalProfileUpdate(BaseModel):
     environment: str = "homologacao"
 
 
+class FiscalCredentialsUpdate(BaseModel):
+    certificate_pfx_base64: str = Field(min_length=1, repr=False)
+    certificate_password: str = Field(default="", max_length=512, repr=False)
+    csc_id: str = Field(min_length=1, max_length=16)
+    csc: str = Field(min_length=1, max_length=512, repr=False)
+
+
 def _require_fiscal_admin(current_user: Usuario) -> None:
     role = str(current_user.cargo or current_user.role or "").strip().lower()
     if role not in {"admin", "gerente"}:
@@ -58,6 +67,15 @@ def _require_fiscal_admin(current_user: Usuario) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Somente administradores e gerentes podem configurar dados fiscais.",
         )
+
+
+def _profile_for_tenant(db: Session, tenant_id: int, *, lock: bool = False):
+    query = db.query(RestaurantFiscalProfile).filter(
+        RestaurantFiscalProfile.restaurante_id == tenant_id
+    )
+    if lock:
+        query = query.with_for_update()
+    return query.one_or_none()
 
 
 def _safe_profile_payload(profile: RestaurantFiscalProfile) -> dict[str, object]:
@@ -128,11 +146,7 @@ def get_fiscal_profile(
 ):
     _require_fiscal_admin(current_user)
     tenant_id = require_tenant_id()
-    profile = (
-        db.query(RestaurantFiscalProfile)
-        .filter(RestaurantFiscalProfile.restaurante_id == tenant_id)
-        .one_or_none()
-    )
+    profile = _profile_for_tenant(db, tenant_id)
     if profile is None:
         return {
             "status": "not_configured",
@@ -199,16 +213,13 @@ def update_fiscal_profile(
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
-    profile = (
-        db.query(RestaurantFiscalProfile)
-        .filter(RestaurantFiscalProfile.restaurante_id == tenant_id)
-        .with_for_update()
-        .one_or_none()
-    )
+    profile = _profile_for_tenant(db, tenant_id, lock=True)
     if profile is None:
         profile = RestaurantFiscalProfile(restaurante_id=tenant_id)
         db.add(profile)
 
+    # Qualquer alteração cadastral exige nova ativação explícita após o preflight.
+    profile.enabled = False
     profile.country_code = "BR"
     profile.uf = resolution.uf
     profile.document_model = "65"
@@ -244,6 +255,41 @@ def update_fiscal_profile(
     return response
 
 
+@router.put("/credentials")
+def update_fiscal_credentials(
+    payload: FiscalCredentialsUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Armazena A1/CSC cifrados; nenhum segredo é devolvido na resposta."""
+
+    _require_fiscal_admin(current_user)
+    tenant_id = require_tenant_id()
+    profile = _profile_for_tenant(db, tenant_id, lock=True)
+    if profile is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Configure primeiro o perfil fiscal do restaurante.",
+        )
+
+    try:
+        store_fiscal_credentials(
+            db,
+            profile=profile,
+            certificate_pfx_base64=payload.certificate_pfx_base64,
+            certificate_password=payload.certificate_password,
+            csc_id=payload.csc_id,
+            csc=payload.csc,
+        )
+    except FiscalCredentialError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    db.commit()
+    db.refresh(profile)
+    return _safe_profile_payload(profile)
+
+
 @router.get("/readiness")
 def get_fiscal_readiness(
     db: Session = Depends(get_db),
@@ -251,11 +297,7 @@ def get_fiscal_readiness(
 ):
     _require_fiscal_admin(current_user)
     tenant_id = require_tenant_id()
-    profile = (
-        db.query(RestaurantFiscalProfile)
-        .filter(RestaurantFiscalProfile.restaurante_id == tenant_id)
-        .one_or_none()
-    )
+    profile = _profile_for_tenant(db, tenant_id)
     if profile is None:
         return {
             "ready": False,
@@ -270,3 +312,105 @@ def get_fiscal_readiness(
             ],
         }
     return readiness_payload(evaluate_restaurant_fiscal_readiness(profile))
+
+
+@router.get("/preflight")
+def get_fiscal_preflight(
+    mode: str = Query(default="foundation"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Diagnóstico executável do gate fiscal antes de qualquer emissão/numeração."""
+
+    _require_fiscal_admin(current_user)
+    normalized_mode = str(mode or "").strip().lower()
+    if normalized_mode not in {"foundation", "activation", "issuance"}:
+        raise HTTPException(
+            status_code=422,
+            detail="mode deve ser 'foundation', 'activation' ou 'issuance'.",
+        )
+
+    tenant_id = require_tenant_id()
+    profile = _profile_for_tenant(db, tenant_id)
+    if profile is None:
+        return {
+            "ready": False,
+            "mode": normalized_mode,
+            "jurisdictionKey": None,
+            "profileReady": False,
+            "referencesReady": False,
+            "issues": [
+                {
+                    "code": "missing_profile",
+                    "message": "Perfil fiscal ainda não configurado.",
+                    "severity": "blocking",
+                    "sourceKey": None,
+                }
+            ],
+            "warnings": [],
+            "references": [],
+            "complianceBaseline": [],
+        }
+
+    return preflight_payload(
+        evaluate_fiscal_preflight(db, profile, mode=normalized_mode)
+    )
+
+
+@router.post("/enable")
+def enable_fiscal_issuance(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Ativa emissão apenas depois de um preflight de ativação totalmente verde."""
+
+    _require_fiscal_admin(current_user)
+    tenant_id = require_tenant_id()
+    profile = _profile_for_tenant(db, tenant_id, lock=True)
+    if profile is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Configure primeiro o perfil fiscal do restaurante.",
+        )
+
+    preflight = evaluate_fiscal_preflight(db, profile, mode="activation")
+    if not preflight.ready:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Fiscal Preflight bloqueou a ativação.",
+                "preflight": preflight_payload(preflight),
+            },
+        )
+
+    profile.enabled = True
+    profile.status = "ready"
+    db.commit()
+    db.refresh(profile)
+
+    issuance_preflight = evaluate_fiscal_preflight(db, profile, mode="issuance")
+    return {
+        "profile": _safe_profile_payload(profile),
+        "preflight": preflight_payload(issuance_preflight),
+    }
+
+
+@router.post("/disable")
+def disable_fiscal_issuance(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    _require_fiscal_admin(current_user)
+    tenant_id = require_tenant_id()
+    profile = _profile_for_tenant(db, tenant_id, lock=True)
+    if profile is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Perfil fiscal ainda não configurado.",
+        )
+
+    profile.enabled = False
+    db.commit()
+    db.refresh(profile)
+    return _safe_profile_payload(profile)
