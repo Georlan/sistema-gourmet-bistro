@@ -363,6 +363,16 @@ export function CaixaPanel({
     handleReceiveSalonTable,
   } = checkout;
 
+  const handleFinalizeCourierOrder = async (orderId: string): Promise<boolean> => {
+    const deliveryOrder = deliveryOrders.find((order) => order.id === orderId);
+    if (!deliveryOrder) {
+      showToast('Pedido não encontrado para finalizar.', 'error');
+      return false;
+    }
+    await handleFinalizeDigitalOrder(deliveryOrder);
+    return true;
+  };
+
   const [autoAccept, setAutoAccept] = useState(false);
 
   useEffect(() => {
@@ -1115,7 +1125,7 @@ export function CaixaPanel({
               motoboysLoadState={motoboysLoadState}
               handleDespacharKanban={handleDespacharKanban}
               handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
-              handleFinalizarPedido={handleFinalizarPedido}
+              handleFinalizarPedido={handleFinalizeCourierOrder}
               handleAddMotoboy={handleAddMotoboy}
               novoMotoboyNome={novoMotoboyNome}
               novoMotoboyTelefone={novoMotoboyTelefone}
