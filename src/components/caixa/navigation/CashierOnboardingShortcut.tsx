@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react';
+import { FileCheck2, Sparkles } from 'lucide-react';
 import React from 'react';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
 
@@ -12,16 +12,42 @@ export function CashierOnboardingShortcut({ mobile = false }: { mobile?: boolean
     window.location.href = '/ativar?resume=1';
   };
 
+  const openFiscal = () => {
+    try {
+      sessionStorage.setItem(ONBOARDING_SETUP_MODE_KEY, '1');
+      sessionStorage.setItem('koma_active_tab', 'impressao_salao');
+      sessionStorage.setItem('koma_active_subtab', 'integracoes');
+    } catch {
+      // The canonical URL still opens the cashier; navigation will fall back safely.
+    }
+    window.location.href = '/?view=caixa';
+  };
+
+  const labelClass = mobile ? '' : 'group-data-[collapsible=icon]:hidden';
+
   return (
-    <button
-      type="button"
-      onClick={openOnboarding}
-      className="flex w-full items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 text-left text-xs font-bold text-emerald-300 transition hover:border-emerald-500/40 hover:bg-emerald-500/10"
-      aria-label="Voltar para a implantação inicial"
-      title="Voltar para a implantação inicial"
-    >
-      <Sparkles size={15} className="shrink-0" />
-      <span className={mobile ? '' : 'group-data-[collapsible=icon]:hidden'}>Implantação inicial</span>
-    </button>
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={openOnboarding}
+        className="flex w-full items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2.5 text-left text-xs font-bold text-emerald-300 transition hover:border-emerald-500/40 hover:bg-emerald-500/10"
+        aria-label="Voltar para a implantação inicial"
+        title="Voltar para a implantação inicial"
+      >
+        <Sparkles size={15} className="shrink-0" />
+        <span className={labelClass}>Implantação inicial</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={openFiscal}
+        className="flex w-full items-center gap-2 rounded-xl border border-sky-500/20 bg-sky-500/[0.06] px-3 py-2.5 text-left text-xs font-bold text-sky-300 transition hover:border-sky-500/40 hover:bg-sky-500/10"
+        aria-label="Abrir configuração fiscal"
+        title="Abrir configuração fiscal"
+      >
+        <FileCheck2 size={15} className="shrink-0" />
+        <span className={labelClass}>Fiscal</span>
+      </button>
+    </div>
   );
 }
