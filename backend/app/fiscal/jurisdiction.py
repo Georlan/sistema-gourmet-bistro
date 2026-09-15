@@ -46,6 +46,7 @@ FISCAL_JURISDICTIONS: dict[str, FiscalJurisdictionPolicy] = {
         document_model="65",
         compliance_keys=(
             "moc-nfe-nfce",
+            "nt-2026-004",
             "rfb-cnpj-alfanumerico",
             "ibge-localidades",
             "ce-in-87-2025",
