@@ -2,6 +2,7 @@ import datetime
 
 import pytest
 
+from app.contract_validation import is_valid_cnpj as is_valid_contract_cnpj, tax_id_kind
 from app.fiscal.compliance import baseline_by_key
 from app.fiscal.ibge import IbgeMunicipality, parse_ibge_municipality
 from app.fiscal.identifiers import (
@@ -59,8 +60,13 @@ def _ready_profile() -> RestaurantFiscalProfile:
 
 def test_cnpj_validation_is_deterministic_and_does_not_use_ai():
     assert normalize_cnpj("11.222.333/0001-81") == "11222333000181"
+    assert normalize_cnpj("00.000.000/E08G-12") == "00000000E08G12"
+    assert is_valid_contract_cnpj("00.000.000/E08G-12") is True
+    assert tax_id_kind("00.000.000/E08G-12") == "cnpj"
     with pytest.raises(FiscalIdentifierError):
         normalize_cnpj("11.222.333/0001-82")
+    with pytest.raises(FiscalIdentifierError):
+        normalize_cnpj("00.000.000/E08G-13")
     with pytest.raises(FiscalIdentifierError):
         normalize_cnpj("00.000.000/0000-00")
 
@@ -111,6 +117,16 @@ def test_ready_ceara_profile_passes_without_tax_rate_guessing():
     assert result.issues == ()
 
 
+def test_alphanumeric_cnpj_profile_is_accepted_by_fiscal_readiness():
+    profile = _ready_profile()
+    profile.cnpj = "00000000E08G12"
+    result = evaluate_restaurant_fiscal_readiness(
+        profile,
+        now=datetime.datetime(2026, 9, 15, tzinfo=datetime.timezone.utc),
+    )
+    assert result.ready is True
+
+
 def test_address_without_official_ibge_verification_is_not_ready():
     profile = _ready_profile()
     profile.endereco_fiscal = {
@@ -146,10 +162,13 @@ def test_missing_certificate_keeps_profile_in_draft_not_enabled():
     assert profile.enabled is False
 
 
-def test_ibge_is_registered_as_official_compliance_source():
-    source = baseline_by_key("ibge-localidades")
-    assert source.jurisdiction == "BR"
-    assert source.official_host.endswith("ibge.gov.br")
+def test_official_identity_and_location_sources_are_registered():
+    ibge = baseline_by_key("ibge-localidades")
+    assert ibge.jurisdiction == "BR"
+    assert ibge.official_host.endswith("ibge.gov.br")
+    rfb = baseline_by_key("rfb-cnpj-alfanumerico")
+    assert rfb.jurisdiction == "BR"
+    assert rfb.official_host == "www.gov.br"
 
 
 def test_fiscal_onboarding_routes_are_registered_for_admin_flow():
