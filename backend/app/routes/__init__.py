@@ -53,12 +53,15 @@ _root_router.router.include_router(_order_tracking_router)
 _root_router.router.include_router(_caixa_chat_router)
 _root_router.router.include_router(_online_order_control_router)
 
-# O histórico autenticado pertence à conta do cliente e é composto como
-# sub-router do cardápio/clientes, sem alterar o tracking anônimo existente.
+# O histórico autenticado e o reconhecimento comercial mínimo pertencem ao
+# cardápio/clientes. O reconhecimento informa apenas se o telefone já possui
+# ficha no tenant e não expõe perfil, saldo ou sessão do cliente.
 from . import cardapio_clientes as _cardapio_clientes  # noqa: E402
 from .cardapio_customer_orders import router as _cardapio_customer_orders_router  # noqa: E402
+from .cardapio_customer_recognition import router as _cardapio_customer_recognition_router  # noqa: E402
 
 _cardapio_clientes.router.include_router(_cardapio_customer_orders_router)
+_cardapio_clientes.router.include_router(_cardapio_customer_recognition_router)
 
 # O Print Agent continua com um único owner HTTP no main. O sub-router adiciona
 # apenas o plano de transporte SSE; claim, fila e regras físicas permanecem no
