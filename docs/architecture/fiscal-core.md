@@ -58,6 +58,9 @@ SEFAZ
     reconciliação posteriores.
 12. O endereço fiscal resolve a jurisdição por dados oficiais; UF e município
     derivados não podem depender de texto livre nem de inferência probabilística.
+13. Uma mudança detectada em fonte oficial nunca altera cálculo em produção de
+    forma silenciosa: ela entra em `changed/staged`, é validada e só então pode
+    compor uma nova baseline ativa.
 
 ## Estados do documento fiscal
 
@@ -84,7 +87,9 @@ ou `contingency`, conforme consulta e regras oficiais vigentes.
 - `FiscalEvent`: trilha imutável de eventos e transições.
 - `FiscalSequence`: sequência por tenant + ambiente + modelo + série.
 
-Todas as tabelas são tenant-scoped e usam RLS no PostgreSQL.
+As entidades de operação são tenant-scoped e usam RLS no PostgreSQL. Referências
+oficiais nacionais compartilhadas, como NCM e versão da Calculadora RTC, são
+estado global da plataforma e não pertencem a um tenant específico.
 
 ## Baseline oficial verificada
 
@@ -95,7 +100,11 @@ Todas as tabelas são tenant-scoped e usam RLS no PostgreSQL.
 | `contingencia-offline-nfce` | Contingência Offline NFC-e | v2.0 | continuidade operacional |
 | `nt-2025-002` | Reforma Tributária do Consumo | v1.51, 04/08/2026 | campos/regras IBS/CBS conforme vigência |
 | `nt-2026-002` | Vendas presenciais/não presenciais | v1.10, 04/08/2026 | monitorar vigência/aplicabilidade antes de ativar regra |
+| `nt-2026-004` | CNPJ alfanumérico em NF-e/NFC-e | v1.01, 08/06/2026 | schemas e emissão compatíveis com CNPJ 2026 |
 | `rfb-cnpj-alfanumerico` | CNPJ Alfanumérico — Receita Federal | produção desde 31/07/2026 | validação de CNPJ numérico e alfanumérico |
+| `rfb-ncm-json` | Tabela NCM vigente — Classif/Receita | feed JSON oficial | sincronização e detecção automática de alteração da NCM |
+| `rfb-rtc-calculator-offline` | Calculadora oficial RTC | portal PRO V0042 / 1.3.0-af611293 em 15/09/2026 | motor oficial local de CBS/IBS/IS |
+| `rfb-cbs-apuracao-api` | APIs de Apuração CBS | documentação v1.0, 03/09/2026 | futura reconciliação de débitos/créditos/pagamentos |
 | `ibge-localidades` | API de Localidades / Registro de Referência de Municípios | API v1 | município, código IBGE e UF |
 | `ce-in-87-2025` | IN SEFAZ/CE 87/2025 | 09/07/2025 | vínculo tecnológico de pagamento, Grupo YA e ECONF |
 | `ce-credenciamento-nfce` | Portal de credenciamento NFC-e CE | portal vigente | credenciamento/certificado |
@@ -123,6 +132,69 @@ KÔMA
 Automação serve para remover digitação e inconsistências, não para inventar
 tributação. Sugestões futuras nunca podem ser promovidas silenciosamente para
 configuração fiscal ativa.
+
+## Reference Watcher oficial
+
+O KÔMA observa fontes oficiais que mudam com frequência sem depender de revisão
+manual mensal. O watcher executa fora do caminho crítico da venda.
+
+```text
+Receita / Portal oficial
+        |
+        v
+probe estruturado
+        |
+        +-- valida formato/quantidade
+        +-- calcula SHA-256 canônico
+        +-- lê versão oficial quando disponível
+        |
+        v
+FiscalOfficialReferenceState
+        |
+        +-- current
+        +-- changed  -> exige validação antes de nova baseline
+        +-- error    -> sinal operacional
+```
+
+O primeiro feed monitorado é a NCM JSON pública do Sistema Classif. O arquivo
+vigente é verificado estruturalmente e armazenamos somente metadados/hash no
+watcher; o histórico aplicável às vendas será mantido em snapshots próprios do
+Fiscal Core quando a ingestão F3 for ativada.
+
+A Calculadora RTC local também expõe sua versão de aplicativo e banco de dados.
+Quando o componente estiver implantado, `KOMA_RTC_CALCULATOR_WATCH_ENABLED=true`
+faz o watcher registrar a versão observada. Mudança de versão fica em `changed`,
+não altera silenciosamente documentos ou perfis fiscais já ativos.
+
+O Super Admin pode consultar `/api/super-admin/fiscal/compliance` para enxergar
+fonte, versão, hash, última checagem, erro e mudança pendente sem SQL.
+
+## Calculadora oficial RTC
+
+CBS, IBS e Imposto Seletivo não serão reimplementados no KÔMA como um conjunto
+de fórmulas próprias quando a regra estiver coberta pelo motor oficial. O adapter
+`RtcCalculatorClient` consome a Calculadora da Receita executada localmente no
+ambiente KÔMA.
+
+```text
+Tax Engine
+   |
+   +-- regras legadas necessárias (ICMS/PIS/COFINS etc.)
+   |
+   +-- RtcCalculatorClient
+           |
+           v
+      Calculadora oficial local
+           |
+           +-- cálculo CBS/IBS/IS
+           +-- memória de cálculo
+           +-- fundamentação normativa
+           +-- versão do app/banco
+```
+
+O ambiente piloto hospedado não é dependência de produção. A URL padrão do
+adapter é `http://127.0.0.1:8080/api/calculadora` e pode ser substituída por uma
+URL privada de serviço com `KOMA_RTC_CALCULATOR_BASE_URL`.
 
 ## Resolução de jurisdição
 
@@ -192,7 +264,13 @@ mesmo evento são replay seguro.
 - [x] distinção entre baseline e documento apenas monitorado
 - [x] fonte oficial do CNPJ alfanumérico registrada
 - [x] fonte oficial de municípios/UF registrada
-- [ ] rotina automatizada de detecção de atualização nas fontes oficiais
+- [x] feed oficial NCM registrado
+- [x] Calculadora RTC oficial registrada
+- [x] APIs de Apuração CBS registradas como `monitor`
+- [x] watcher persistente de hash/versão das fontes oficiais
+- [x] estado `changed` não promove regra automaticamente
+- [x] saúde das fontes disponível ao Super Admin
+- [ ] agendamento do watcher em infraestrutura de produção
 
 ### F1 — Domínio fiscal
 
@@ -225,13 +303,16 @@ mesmo evento são replay seguro.
 ### F3 — Produto e tributação
 
 - [x] estrutura versionada de `ProductFiscalProfile`
-- [ ] fonte oficial/versionada para NCM/CEST/CFOP/CST/CSOSN/PIS/COFINS
+- [x] fonte NCM oficial preparada para detecção automática de atualização
+- [x] adapter da Calculadora RTC preparado para Tax Engine
+- [ ] persistir snapshots históricos da NCM por vigência
+- [ ] fontes oficiais/versionadas para CEST/CFOP/CST/CSOSN/PIS/COFINS
 - [ ] aprovação do responsável fiscal/contador
 - [ ] vigência do perfil e bloqueio de produto sem classificação ativa
 
 ### F4+
 
-Ainda não implementado: Tax Engine, Fiscal Preflight completo, XML NFC-e,
-assinatura, comunicação SEFAZ, contingência executável, ECONF,
-cancelamento/inutilização, DANFE e observabilidade. Nenhum tenant deve receber
-`fiscal_nfce=true` antes dos gates correspondentes.
+Ainda não implementado: Tax Engine integrado à Calculadora RTC, Fiscal Preflight
+completo, XML NFC-e, assinatura, comunicação SEFAZ, contingência executável,
+ECONF, cancelamento/inutilização, DANFE e observabilidade de emissão. Nenhum
+tenant deve receber `fiscal_nfce=true` antes dos gates correspondentes.
