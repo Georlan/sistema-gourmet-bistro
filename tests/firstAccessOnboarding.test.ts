@@ -19,6 +19,7 @@ const mobileSidebar = source('../src/components/caixa/navigation/CashierMobileSi
 const onboardingShortcut = source('../src/components/caixa/navigation/CashierOnboardingShortcut.tsx');
 const sidebarSearch = source('../src/components/caixa/navigation/CashierSidebarSearch.tsx');
 const cashierSettings = source('../src/components/caixa/settings/CashierSettings.tsx');
+const integrationsSettings = source('../src/components/caixa/settings/CashierIntegrationsSettings.tsx');
 
 test('new admin activation enters guided onboarding instead of raw cashier', () => {
   assert.match(activation, /userRole === 'admin'/);
@@ -53,7 +54,7 @@ test('required onboarding persists and blocks normal operation until 3 of 3 is c
   assert.match(gateHook, /\/api\/onboarding\/status/);
 });
 
-test('setup mode exposes canonical configuration without exposing normal operation', () => {
+test('setup mode exposes canonical configuration and fiscal without exposing normal operation', () => {
   assert.match(navigation, /SETUP_DIRECT_TABS/);
   assert.match(navigation, /'cardapio'/);
   assert.match(navigation, /'cardapio_digital'/);
@@ -65,6 +66,12 @@ test('setup mode exposes canonical configuration without exposing normal operati
   assert.match(mobileSidebar, /<CashierOnboardingShortcut mobile/);
   assert.match(mobileSidebar, /Você está na implantação inicial/);
   assert.match(mobileSidebar, /!setupMode &&/);
+  assert.match(onboardingShortcut, /Abrir configuração fiscal/);
+  assert.match(onboardingShortcut, /setItem\('koma_active_tab', 'impressao_salao'\)/);
+  assert.match(onboardingShortcut, /setItem\('koma_active_subtab', 'integracoes'\)/);
+  assert.match(onboardingShortcut, /window\.location\.href = '\/\?view=caixa'/);
+  assert.match(integrationsSettings, /CashierFiscalSettings/);
+  assert.match(integrationsSettings, />\s*Fiscal\s*</);
 });
 
 test('initial setup reuses the same cashier online-menu screens and Mercado Pago integration owner', () => {
