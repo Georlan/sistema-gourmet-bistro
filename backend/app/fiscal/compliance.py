@@ -134,6 +134,50 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         ),
     ),
     FiscalComplianceSource(
+        key="rfb-ncm-json",
+        title="Tabela NCM vigente - Sistema Classif / Receita Federal",
+        version="feed JSON vigente",
+        jurisdiction="BR",
+        source_url=(
+            "https://portalunico.siscomex.gov.br/classif/api/publico/"
+            "nomenclatura/download/json"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Feed oficial sem CAPTCHA para sincronização automática. O download contém a "
+            "tabela vigente; histórico precisa ser preservado pelo KÔMA em snapshots próprios."
+        ),
+    ),
+    FiscalComplianceSource(
+        key="rfb-rtc-calculator-offline",
+        title="Calculadora oficial da Reforma Tributária do Consumo",
+        version="portal PRO V0042 / 1.3.0-af611293 em 15/09/2026",
+        jurisdiction="BR",
+        source_url=(
+            "https://consumo.tributos.gov.br/servico/calcular-tributos-consumo/calculadora"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Motor oficial de CBS/IBS/IS. Deve rodar localmente e ser consumido via API; "
+            "o próprio componente possui mecanismo de atualização de regras/tabelas."
+        ),
+    ),
+    FiscalComplianceSource(
+        key="rfb-cbs-apuracao-api",
+        title="APIs de Apuração da CBS - Receita Federal",
+        version="documentação v1.0 de 03/09/2026",
+        jurisdiction="BR",
+        source_url="https://docs.receitafederal.gov.br/apuracao-cbs/",
+        verified_on=VERIFIED_ON,
+        adoption_status="monitor",
+        notes=(
+            "Consultas incrementais de débitos/créditos previstas para outubro/2026 e "
+            "pagamentos/recolhimentos para novembro/2026. Não ativar antes da disponibilidade oficial."
+        ),
+    ),
+    FiscalComplianceSource(
         key="ibge-localidades",
         title="API de Localidades - Registro de Referência de Municípios",
         version="API v1",
