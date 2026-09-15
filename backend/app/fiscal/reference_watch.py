@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import html
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
@@ -14,6 +16,10 @@ from ..fiscal_reference_models import FiscalOfficialReferenceState
 
 
 NCM_JSON_URL = "https://portalunico.siscomex.gov.br/classif/api/publico/nomenclatura/download/json"
+NFE_TECHNICAL_REPORTS_URL = (
+    "https://www.nfe.fazenda.gov.br/pOrtaL/listaConteudo.aspx?"
+    "tipoConteudo=hXzemuyNHW4%3D"
+)
 RTC_LOCAL_BASE_URL = os.getenv(
     "KOMA_RTC_CALCULATOR_BASE_URL",
     "http://127.0.0.1:8080/api/calculadora",
@@ -109,6 +115,86 @@ def probe_official_ncm(
             http.close()
 
 
+def _html_to_plain_text(raw_html: str) -> str:
+    without_scripts = re.sub(
+        r"<(script|style)\b[^>]*>.*?</\1>",
+        " ",
+        raw_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    without_tags = re.sub(r"<[^>]+>", " ", without_scripts)
+    return re.sub(r"\s+", " ", html.unescape(without_tags)).strip()
+
+
+def _extract_technical_report_snippets(raw_html: str) -> tuple[str, ...]:
+    """Extrai somente entradas de Informe Técnico, ignorando estatísticas voláteis."""
+
+    text = _html_to_plain_text(raw_html)
+    starts = [
+        match.start()
+        for match in re.finditer(r"Informe\s+T[eé]cnico", text, flags=re.IGNORECASE)
+    ]
+    snippets: list[str] = []
+    seen: set[str] = set()
+    for index, start in enumerate(starts):
+        next_start = starts[index + 1] if index + 1 < len(starts) else len(text)
+        snippet = text[start : min(next_start, start + 500)].strip(" -|;")
+        snippet = re.sub(r"\s+", " ", snippet)
+        if snippet and snippet not in seen:
+            seen.add(snippet)
+            snippets.append(snippet)
+
+    if len(snippets) < 5:
+        raise FiscalReferenceWatchError(
+            "Portal NF-e retornou poucos Informes Técnicos; parser/fonte precisa ser revisado."
+        )
+    return tuple(snippets[:50])
+
+
+def probe_nfe_technical_reports(
+    *,
+    client: httpx.Client | None = None,
+    timeout_seconds: float = 30.0,
+) -> OfficialReferenceProbe:
+    """Detecta publicações técnicas futuras antes de alterarem as tabelas vigentes."""
+
+    owns_client = client is None
+    http = client or httpx.Client(timeout=timeout_seconds, follow_redirects=True)
+    try:
+        response = http.get(NFE_TECHNICAL_REPORTS_URL)
+        response.raise_for_status()
+        snippets = _extract_technical_report_snippets(response.text)
+        effective_dates = sorted(
+            set(
+                re.findall(
+                    r"(?:vigente\s+)?a\s+partir\s+de\s+(\d{2}/\d{2}/\d{4})",
+                    " ".join(snippets),
+                    flags=re.IGNORECASE,
+                )
+            )
+        )
+        payload = {"technical_reports": snippets}
+        return OfficialReferenceProbe(
+            source_key="nfe-informes-tecnicos",
+            source_url=NFE_TECHNICAL_REPORTS_URL,
+            source_version=None,
+            content_sha256=_canonical_json_hash(payload),
+            metadata={
+                "entry_count": len(snippets),
+                "recent_entries": list(snippets[:10]),
+                "future_effective_dates": effective_dates,
+                "kind": "nfe-technical-reports",
+            },
+        )
+    except httpx.HTTPError as exc:
+        raise FiscalReferenceWatchError(
+            f"Falha ao consultar Informes Técnicos do Portal NF-e: {exc}"
+        ) from exc
+    finally:
+        if owns_client:
+            http.close()
+
+
 def _normalize_rtc_version(payload: Any) -> tuple[str, dict[str, Any]]:
     if not isinstance(payload, dict):
         raise FiscalReferenceWatchError("Calculadora RTC retornou versão em formato inválido.")
@@ -183,8 +269,6 @@ def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialRef
     state = session.get(FiscalOfficialReferenceState, probe.source_key)
 
     if state is None:
-        # Primeira captura estabelece a baseline inicial observada. Isso é seguro
-        # porque ainda não existia versão anterior para ser silenciosamente trocada.
         state = FiscalOfficialReferenceState(
             source_key=probe.source_key,
             source_url=probe.source_url,
@@ -247,12 +331,6 @@ def record_probe_error(session: Session, source_key: str, source_url: str, error
 
 
 def promote_observed_reference(session: Session, source_key: str) -> None:
-    """Promove explicitamente o observado para baseline ativa após validação externa.
-
-    Não é chamado pelo watcher. O fluxo que vier a expor esta operação deve exigir
-    evidência de testes/vigência antes de invocá-la.
-    """
-
     state = session.get(FiscalOfficialReferenceState, source_key)
     if state is None:
         raise KeyError(source_key)
