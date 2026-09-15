@@ -23,6 +23,7 @@ from ..fiscal.jurisdiction import FiscalJurisdictionError, resolve_fiscal_jurisd
 from ..fiscal_models import RestaurantFiscalProfile
 from ..models import Usuario
 from ..security import get_current_user
+from ..services.fiscal_credentials import FiscalCredentialError, store_fiscal_credentials
 from ..services.fiscal_onboarding import (
     evaluate_restaurant_fiscal_readiness,
     readiness_payload,
@@ -50,6 +51,13 @@ class FiscalProfileUpdate(BaseModel):
     uf: str | None = None
     series: int = Field(default=1, ge=1)
     environment: str = "homologacao"
+
+
+class FiscalCredentialsUpdate(BaseModel):
+    certificate_pfx_base64: str = Field(min_length=1, repr=False)
+    certificate_password: str = Field(default="", max_length=512, repr=False)
+    csc_id: str = Field(min_length=1, max_length=16)
+    csc: str = Field(min_length=1, max_length=512, repr=False)
 
 
 def _require_fiscal_admin(current_user: Usuario) -> None:
@@ -243,6 +251,46 @@ def update_fiscal_profile(
     response = _safe_profile_payload(profile)
     response["readiness"] = readiness_payload(readiness)
     return response
+
+
+@router.put("/credentials")
+def update_fiscal_credentials(
+    payload: FiscalCredentialsUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Armazena A1/CSC cifrados; nenhum segredo é devolvido na resposta."""
+
+    _require_fiscal_admin(current_user)
+    tenant_id = require_tenant_id()
+    profile = (
+        db.query(RestaurantFiscalProfile)
+        .filter(RestaurantFiscalProfile.restaurante_id == tenant_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if profile is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Configure primeiro o perfil fiscal do restaurante.",
+        )
+
+    try:
+        store_fiscal_credentials(
+            db,
+            profile=profile,
+            certificate_pfx_base64=payload.certificate_pfx_base64,
+            certificate_password=payload.certificate_password,
+            csc_id=payload.csc_id,
+            csc=payload.csc,
+        )
+    except FiscalCredentialError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    db.commit()
+    db.refresh(profile)
+    return _safe_profile_payload(profile)
 
 
 @router.get("/readiness")
