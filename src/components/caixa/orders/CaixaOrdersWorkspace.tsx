@@ -523,7 +523,7 @@ export function CaixaOrdersWorkspace({
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
-                  const buttonText = isDeliveryOrder ? 'SAIU PARA ENTREGA' : 'PRONTO PARA RETIRADA';
+                  const buttonText = isDeliveryOrder ? 'PRONTO PARA SAIR' : 'PRONTO PARA RETIRADA';
                   return (
                     <div
                       key={order.id}
@@ -592,7 +592,7 @@ export function CaixaOrdersWorkspace({
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
                       >
                         <Check size={13} />
-                        <span>{buttonText === 'SAIU PARA ENTREGA' ? 'Saiu para entrega' : 'Pronto para retirada'}</span>
+                        <span>{buttonText === 'PRONTO PARA SAIR' ? 'Pronto para sair' : 'Pronto para retirada'}</span>
                       </button>
                     </div>
                   );
@@ -728,12 +728,13 @@ export function CaixaOrdersWorkspace({
                     </div>
                   );
                 })}
-                {/* 2. Delivery/Retirada em trânsito (aguardando retorno/pagamento) */}
+                {/* 2. Delivery/Retirada prontos ou em trânsito. */}
                 {filteredDeliveryFinalization.map((order) => {
                   const cardId = `transito-${order.id}`;
                   const sla = getOrderSlaData(order, nowTimestamp);
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
+                  const isReadyDelivery = isDeliveryOrder && order.status === 'pronto';
                   const badgeText = order.pago
                     ? 'PAGO'
                     : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
@@ -800,10 +801,16 @@ export function CaixaOrdersWorkspace({
                         </span>
                       )}
                       <button
-                        onClick={(e) => { e.stopPropagation(); actions.finalizeDigitalOrder(order); }}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isReadyDelivery) actions.inspectDigitalOrder(order);
+                          else actions.finalizeDigitalOrder(order);
+                        }}
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
                       >
-                        <Check size={13} /><span>{order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
+                        <Check size={13} />
+                        <span>{isReadyDelivery ? 'Saiu para entrega' : order.pago ? 'Finalizar pedido' : 'Receber e finalizar'}</span>
                       </button>
                     </div>
                   );

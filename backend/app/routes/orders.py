@@ -273,6 +273,86 @@ def atualizar_status_delivery(
     return comanda
 
 
+@router.put("/{comanda_id}/delivery/entregador", response_model=ComandaResponse)
+def atribuir_entregador_delivery(
+    comanda_id: str,
+    payload: dict,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+):
+    """Persiste a atribuição logística sem alterar a etapa do pedido.
+
+    Atribuir um entregador não equivale a despachar. O vínculo pode ser definido
+    durante preparo/pronto e é a mesma fonte de verdade lida pelo Kanban e pela
+    tela de Entregas. Em trânsito, a troca fica bloqueada para não reatribuir uma
+    corrida já iniciada silenciosamente.
+    """
+    rid = require_tenant_id()
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == rid,
+            Comanda.id == comanda_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    if not _is_delivery(comanda):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Somente pedidos de delivery aceitam atribuição de entregador.",
+        )
+
+    current_status = normalize_to_order_status(comanda.delivery_status)
+    if current_status in {OrderStatus.COMPLETED, OrderStatus.REJECTED, OrderStatus.CANCELLED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Pedido encerrado não pode ter o entregador alterado.",
+        )
+
+    raw_motoboy_id = payload.get("motoboy_id")
+    if raw_motoboy_id in {None, "", 0, "0"}:
+        motoboy_id = None
+    else:
+        try:
+            motoboy_id = int(raw_motoboy_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="motoboy_id inválido") from exc
+        if motoboy_id <= 0:
+            raise HTTPException(status_code=400, detail="motoboy_id inválido")
+
+    if current_status == OrderStatus.DISPATCHED and motoboy_id != comanda.motoboy_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Entrega em rota não pode trocar de entregador por esta ação.",
+        )
+
+    if motoboy_id is not None:
+        motoboy = db.query(Motoboy).filter(
+            Motoboy.restaurante_id == rid,
+            Motoboy.id == motoboy_id,
+            Motoboy.ativo.is_(True),
+        ).first()
+        if not motoboy:
+            raise HTTPException(status_code=404, detail="Entregador ativo não encontrado")
+
+    if comanda.motoboy_id == motoboy_id:
+        return comanda
+
+    comanda.motoboy_id = motoboy_id
+    db.commit()
+    db.refresh(comanda)
+    background_tasks.add_task(
+        manager.broadcast,
+        {"event": "tables_updated"},
+        rid,
+    )
+    return comanda
+
+
 @router.post("/{comanda_id}/delivery/despachar", response_model=ComandaResponse)
 def despachar_delivery(
     comanda_id: str,

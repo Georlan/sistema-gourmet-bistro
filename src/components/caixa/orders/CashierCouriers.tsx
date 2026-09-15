@@ -41,6 +41,10 @@ export function CashierCouriers({
     () => bucketCourierDeliveryOrders(deliveryOrders),
     [deliveryOrders],
   );
+  const courierName = (motoboyId?: number | null) => {
+    if (!motoboyId) return null;
+    return motoboys.find((motoboy) => Number(motoboy.id) === Number(motoboyId))?.nome || null;
+  };
 
   return (
     <>
@@ -95,6 +99,11 @@ export function CashierCouriers({
                           </div>
                           <span className={"text-koma-secondary font-bold block"}>{order.cliente} • {order.telefone}</span>
                           <span className={"text-koma-subtle text-[10px] block leading-relaxed break-words"}>{order.endereco || 'Endereço não informado'}</span>
+                          {order.motoboyId && (
+                            <span className={"text-[10px] text-emerald-600 dark:text-emerald-300 block"}>
+                              Entregador pré-atribuído: {courierName(order.motoboyId) || `#${order.motoboyId}`}
+                            </span>
+                          )}
                           <span className={"text-[9px] text-koma-muted block font-mono truncate"}>Itens: {order.itens}</span>
                         </div>
                         <div className={"flex sm:flex-col sm:items-end justify-between gap-2 shrink-0"}>
@@ -188,6 +197,9 @@ export function CashierCouriers({
                           </div>
                           <span className={"text-koma-secondary font-bold block"}>{order.cliente} • {order.telefone}</span>
                           <span className={"text-koma-subtle text-[10px] block leading-relaxed break-words"}>{order.endereco || 'Endereço não informado'}</span>
+                          <span className={"text-[10px] text-sky-400 block"}>
+                            Entregador: {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'não identificado')}
+                          </span>
                         </div>
                         <div className={"flex flex-col sm:items-end justify-between gap-2 shrink-0"}>
                           <span className={"font-mono font-bold text-emerald-400 text-[11px]"}>R$ {order.total.toFixed(2)}</span>
