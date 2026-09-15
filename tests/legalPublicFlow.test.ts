@@ -8,7 +8,7 @@ const legalV2 = readFileSync('src/legal/legalContentV2.ts', 'utf8');
 const legalContent = readFileSync('src/legal/legalContentRecurring.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
-const planContract = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
+const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
 const header = readFileSync('src/landing/sections/Header.tsx', 'utf8');
 const plans = readFileSync('src/landing/sections/Plans.tsx', 'utf8');
 const finalCta = readFileSync('src/landing/sections/FinalCTA.tsx', 'utf8');
@@ -17,11 +17,11 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /pathname\.startsWith\("\/legal"\)/);
   assert.match(main, /pathname\.startsWith\("\/contratar"\)/);
   assert.match(main, /import\("\.\/legal\/LegalPage"\)/);
-  assert.match(main, /import\("\.\/legal\/PlanContractPage"\)/);
+  assert.match(main, /import\("\.\/legal\/PlanContractPageV2"\)/);
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshot 2.0 e publica fachada vigente 2.2', () => {
+test('central legal preserva snapshot 2.0 e publica fachada vigente 2.3', () => {
   for (const slug of [
     'termos',
     'planos',
@@ -36,8 +36,8 @@ test('central legal preserva snapshot 2.0 e publica fachada vigente 2.2', () => 
   }
 
   assert.match(legalV2, /LEGAL_VERSION = '2\.0'/);
-  assert.match(legalContent, /LEGAL_VERSION = '2\.2'/);
-  assert.match(legalContent, /13\/09\/2026/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.3'/);
+  assert.match(legalContent, /15\/09\/2026/);
   assert.match(legalContent, /from '\.\/legalContentV2'/);
   assert.doesNotMatch(legalContent, /legalContentLegacy/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/, 'snapshot histórico deve permanecer preservado');
@@ -45,20 +45,20 @@ test('central legal preserva snapshot 2.0 e publica fachada vigente 2.2', () => 
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.2 acompanha billing recorrente e preserva o trial durante a implantação', () => {
-  assert.match(legalContent, /cartão de crédito, Pix Automático e Saldo Mercado Pago \(account_money\)/);
-  assert.match(legalContent, /Pix avulso antecipado não integra o checkout/);
-  assert.match(legalContent, /O período não começa durante o preenchimento da inscrição, aceite, criação de senha ou implantação inicial/);
+test('Legal 2.3 documenta cartão Pix universal e Saldo Mercado Pago', () => {
+  assert.match(legalContent, /cartão de crédito, Pix e Saldo Mercado Pago \(account_money\)/);
+  assert.match(legalContent, /O Pix é uma cobrança avulsa por QR Code e Pix Copia e Cola e não constitui débito automático/);
+  assert.match(legalContent, /sem exigir conta Mercado Pago do pagador/);
+  assert.match(legalContent, /primeiro QR de mensalidade somente pode ser criado quando o período gratuito terminar/);
   assert.match(legalContent, /três passos essenciais indicados pelo KÔMA/);
   assert.match(legalContent, /dados básicos do estabelecimento, horários de funcionamento e ao menos um produto efetivamente publicado/);
-  assert.match(legalContent, /primeira cobrança automática para depois dos 7 dias/);
   assert.match(legalV2, /documentos não fiscais/);
   assert.match(legalV2, /não substituem NFC-e, NF-e, NFS-e, CF-e/);
   assert.match(legalV2, /simulador, bridge de desenvolvimento ou código experimental não significa homologação/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 2.2 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
+test('Legal 2.3 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
   assert.match(legalContent, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
   assert.match(legalContent, /tag 18\+ ou classificação equivalente/);
   assert.match(legalContent, /gate de publicação e sincronização/);
@@ -94,14 +94,15 @@ test('contratação registra clickwrap com identidade, evidência e comprovante'
   assert.doesNotMatch(planContract, /defaultChecked/i, 'aceite não pode nascer pré-marcado');
 });
 
-test('checkout reconhece os três métodos recorrentes modelados', () => {
-  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic' \| 'account_money'/);
+test('checkout reconhece cartão Pix e Saldo Mercado Pago', () => {
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix' \| 'account_money'/);
   assert.match(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /account_money/);
-  assert.match(planContract, /Pix Automático/);
+  assert.match(planContract, /QR Code \+ Pix Copia e Cola/);
+  assert.doesNotMatch(planContract, /Pix Automático via Mercado Pago/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.2 sem documento fiscal pessoal', () => {
+test('proveniência jurídica fixa commit e blob da Legal 2.3 sem documento fiscal pessoal', () => {
   assert.match(legalEvidence, /legalContentRecurring/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
@@ -125,7 +126,7 @@ test('landing não privilegia Pocket e envia cada plano para sua própria contra
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
 
-test('condições comerciais preservam catálogo oficial, anual e política recorrente', () => {
+test('condições comerciais preservam catálogo oficial, anual e política vigente', () => {
   assert.match(legalV2, /Pocket: R\$ 109 por mês \+ 1,49%/);
   assert.match(legalV2, /Pro: R\$ 209 por mês \+ 0,69%/);
   assert.match(legalV2, /Premium: R\$ 309 por mês \+ 0,29%/);

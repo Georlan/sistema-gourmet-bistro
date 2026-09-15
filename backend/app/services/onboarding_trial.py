@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 from ..models import SuperAdminAuditLog
 from ..routes.super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 from ..saas_billing_models import SaaSSubscription
-from .saas_billing_policy import is_recurring_trial_payment_method
+from .saas_billing_policy import (
+    is_recurring_trial_payment_method,
+    is_trial_eligible_payment_method,
+)
 from .saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 
 
@@ -58,9 +61,9 @@ def pause_provider_during_onboarding(preapproval_id: str) -> dict[str, Any]:
     """
     Pausa a recorrência enquanto o restaurante conclui a implantação inicial.
 
-    A autorização do cartão continua vinculada ao contrato, mas nenhuma cobrança
-    deve consumir os sete dias grátis enquanto perfil, horários e cardápio ainda
-    estão sendo preparados.
+    A autorização do cartão/Saldo continua vinculada ao contrato, mas nenhuma
+    cobrança deve consumir os sete dias grátis enquanto perfil, horários e
+    cardápio ainda estão sendo preparados.
     """
     return _update_provider_status(preapproval_id, "paused")
 
@@ -77,12 +80,7 @@ def ensure_trial_started_after_onboarding(
     restaurante_id: int,
     actor: str,
 ) -> dict[str, Any] | None:
-    """
-    Inicia o trial uma única vez, somente depois da implantação essencial 3/3.
-
-    É idempotente: chamadas repetidas não movem o fim do trial para frente.
-    Assinaturas antigas que já estão em trial permanecem intactas.
-    """
+    """Inicia o trial após a implantação essencial sem antecipar Pix."""
     subscription = (
         db.query(SaaSSubscription)
         .filter(SaaSSubscription.restaurante_id == restaurante_id)
@@ -103,37 +101,38 @@ def ensure_trial_started_after_onboarding(
     if local_status not in _ONBOARDING_PROVIDER_PAUSED_STATUSES:
         return None
 
-    if not is_recurring_trial_payment_method(subscription.payment_method_type):
+    if not is_trial_eligible_payment_method(subscription.payment_method_type):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="A assinatura não possui um método recorrente elegível ao período grátis.",
-        )
-    if not subscription.provider_subscription_id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A autorização recorrente ainda não está vinculada ao provedor.",
+            detail="A assinatura não possui um meio de pagamento elegível ao período grátis.",
         )
 
     now = datetime.datetime.now(datetime.timezone.utc)
     trial_ends_at = now + datetime.timedelta(days=DEFAULT_TRIAL_DAYS)
 
-    try:
-        provider_result = _resume_provider_for_trial(subscription.provider_subscription_id, trial_ends_at)
-    except SaasMercadoPagoError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=(
-                "Sua configuração foi salva, mas ainda não foi possível iniciar os 7 dias grátis no gateway. "
-                "Tente novamente; nenhuma cobrança foi antecipada."
-            ),
-        ) from exc
+    if is_recurring_trial_payment_method(subscription.payment_method_type):
+        if not subscription.provider_subscription_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A autorização recorrente ainda não está vinculada ao provedor.",
+            )
+        try:
+            provider_result = _resume_provider_for_trial(subscription.provider_subscription_id, trial_ends_at)
+        except SaasMercadoPagoError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "Sua configuração foi salva, mas ainda não foi possível iniciar os 7 dias grátis no gateway. "
+                    "Tente novamente; nenhuma cobrança foi antecipada."
+                ),
+            ) from exc
 
-    provider_status = str(provider_result.get("status") or "authorized").strip().lower()
-    if provider_status not in {"authorized", "active"}:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="O gateway ainda não confirmou o início do período grátis.",
-        )
+        provider_status = str(provider_result.get("status") or "authorized").strip().lower()
+        if provider_status not in {"authorized", "active"}:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="O gateway ainda não confirmou o início do período grátis.",
+            )
 
     existing_trial = db.execute(
         select(restaurant_trials).where(restaurant_trials.c.restaurante_id == restaurante_id)
@@ -174,6 +173,8 @@ def ensure_trial_started_after_onboarding(
                 "trial_started_at": _as_utc(now).isoformat(),
                 "trial_ends_at": _as_utc(trial_ends_at).isoformat(),
                 "trial_days": DEFAULT_TRIAL_DAYS,
+                "payment_method_type": subscription.payment_method_type,
+                "provider_recurring": is_recurring_trial_payment_method(subscription.payment_method_type),
             },
         )
     )

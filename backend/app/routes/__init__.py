@@ -44,6 +44,11 @@ from .onboarding import router as _onboarding_router  # noqa: E402
 from .fiscal_onboarding import router as _fiscal_onboarding_router  # noqa: E402
 from .fiscal_reference_runtime import router as _fiscal_reference_runtime_router  # noqa: E402
 from .saas_billing import router as _saas_billing_router, webhook_router as _saas_webhook_router  # noqa: E402
+from .saas_pix import (  # noqa: E402
+    contract_router as _saas_pix_contract_router,
+    subscription_router as _saas_pix_subscription_router,
+    webhook_router as _saas_pix_webhook_router,
+)
 from .order_tracking import router as _order_tracking_router  # noqa: E402
 from .caixa_chat import router as _caixa_chat_router  # noqa: E402
 from .online_order_control import router as _online_order_control_router  # noqa: E402
@@ -55,6 +60,9 @@ _root_router.router.include_router(_fiscal_onboarding_router)
 _root_router.router.include_router(_fiscal_reference_runtime_router)
 _root_router.router.include_router(_saas_billing_router)
 _root_router.router.include_router(_saas_webhook_router)
+_root_router.router.include_router(_saas_pix_contract_router)
+_root_router.router.include_router(_saas_pix_subscription_router)
+_root_router.router.include_router(_saas_pix_webhook_router)
 _root_router.router.include_router(_order_tracking_router)
 _root_router.router.include_router(_caixa_chat_router)
 _root_router.router.include_router(_online_order_control_router)
