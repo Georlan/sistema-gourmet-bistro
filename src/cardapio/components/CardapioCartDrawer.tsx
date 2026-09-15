@@ -208,7 +208,10 @@ export default function CardapioCartDrawer({
     setCustomerRecognition("checking");
     const timer = window.setTimeout(() => {
       recognizePublicCustomer(restaurantId, guestPhone, controller.signal)
-        .then((found) => setCustomerRecognition(found ? "found" : "new"))
+        .then((found) => {
+          setCustomerRecognition(found ? "found" : "new");
+          if (found) setGuestName("");
+        })
         .catch((error: unknown) => {
           if ((error as Error | undefined)?.name === "AbortError") return;
           // Reconhecimento é uma conveniência: falha de rede não bloqueia checkout.
@@ -336,7 +339,8 @@ export default function CardapioCartDrawer({
     setCouponError("");
   };
 
-  const customerName = user?.name || guestName;
+  const recognizedExistingCustomer = !user && customerRecognition === "found";
+  const customerName = user?.name || (recognizedExistingCustomer ? "Cliente identificado" : guestName);
   const customerPhone = user?.phone || normalizeBrazilianPhone(guestPhone);
 
   const handleCheckout = () => {
@@ -368,7 +372,7 @@ export default function CardapioCartDrawer({
       return;
     }
 
-    if (customerName.trim().length < 2) {
+    if (!recognizedExistingCustomer && customerName.trim().length < 2) {
       reportValidationError("Informe seu nome para o restaurante identificar o pedido.", "input-guest-name");
       return;
     }
@@ -878,16 +882,18 @@ export default function CardapioCartDrawer({
                     {customerRecognition === "found" && (
                       <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.07] px-3 py-2.5" role="status">
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                        <p className="text-[10px] font-semibold leading-relaxed text-emerald-300">Cliente reconhecido neste restaurante. O pedido será vinculado à mesma ficha; sua conta e benefícios continuam protegidos pelo login.</p>
+                        <p className="text-[10px] font-semibold leading-relaxed text-emerald-300">Cliente identificado. Por segurança, não exibimos seus dados aqui; o pedido será vinculado à ficha já cadastrada.</p>
                       </div>
                     )}
                     {customerRecognition === "new" && (
                       <p className="text-[10px] font-semibold leading-relaxed text-koma-muted" role="status">Número novo — criaremos a ficha comercial ao enviar o pedido.</p>
                     )}
-                    <label className="block">
-                      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Seu nome</span>
-                      <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-name" /></span>
-                    </label>
+                    {customerRecognition !== "found" && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Seu nome</span>
+                        <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-xl border bg-koma-card pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-koma-border"}`} id="input-guest-name" /></span>
+                      </label>
+                    )}
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">Quer acumular pontos de fidelidade? <strong className="text-emerald-400">Entrar na conta.</strong></button>}
                   </div>
                 )}
