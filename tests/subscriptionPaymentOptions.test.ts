@@ -7,53 +7,30 @@ import {
   getSubscriptionPaymentOptions,
 } from '../src/config/subscriptionPaymentOptions';
 
-test('mensal mantém cartão disponível e demais meios sob validação segura', () => {
+test('checkout mensal expõe exatamente cartão Pix e Saldo Mercado Pago', () => {
   const options = getSubscriptionPaymentOptions('mensal');
-  assert.deepEqual(options.map((option) => option.id), [
-    'credit_card',
-    'pix_automatic',
-    'nupay',
-    'mercado_pago',
-  ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), ['credit_card']);
+  assert.deepEqual(options.map((option) => option.id), ['credit_card', 'pix', 'account_money']);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('mensal').map((option) => option.id), ['credit_card', 'pix', 'account_money']);
   assert.equal(SUBSCRIPTION_TRIAL_DAYS, 7);
-  assert.equal(getSubscriptionPaymentOption('credit_card').status, 'available');
-  assert.equal(getSubscriptionPaymentOption('credit_card').selectable, true);
-  assert.equal(getSubscriptionPaymentOption('pix_automatic').status, 'validating');
-  assert.match(getSubscriptionPaymentOption('pix_automatic').checkoutSummary, /7 dias grátis/);
+  assert.equal(getSubscriptionPaymentOption('credit_card').automaticRenewal, true);
+  assert.equal(getSubscriptionPaymentOption('pix').automaticRenewal, false);
+  assert.equal(getSubscriptionPaymentOption('account_money').automaticRenewal, true);
 });
 
-test('anual oferece cartão recorrente e preserva os 7 dias para depois do setup', () => {
+test('Pix é universal e não se apresenta como Pix Automático', () => {
+  const pix = getSubscriptionPaymentOption('pix');
+  assert.equal(pix.selectable, true);
+  assert.match(pix.checkoutSummary, /QR Code e Copia e Cola/);
+  assert.match(pix.checkoutSummary, /qualquer banco\/PSP Pix/);
+  assert.match(pix.previewDescription, /próprio KÔMA/);
+  assert.doesNotMatch(JSON.stringify(pix), /Pix Automático|preapproval/i);
+});
+
+test('anual mantém os mesmos três meios e preserva o trial', () => {
   const options = getSubscriptionPaymentOptions('anual');
-  assert.deepEqual(options.map((option) => option.id), [
-    'credit_card',
-    'pix_automatic',
-    'nupay',
-    'mercado_pago',
-    'annual_installments',
-  ]);
-  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), ['credit_card']);
-  assert.equal(getSubscriptionPaymentOption('annual_installments').status, 'study');
-  assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /7 dias grátis completos/);
-  assert.match(getSubscriptionPaymentOption('annual_installments').previewDescription, /depois do setup essencial/);
-  assert.doesNotMatch(JSON.stringify(options), /pix_annual|12 meses \+ 7 dias|dias adicionais de bônus/);
-});
-
-test('somente opções explicitamente disponíveis podem ser selecionadas', () => {
-  for (const cycle of ['mensal', 'anual'] as const) {
-    const options = getSubscriptionPaymentOptions(cycle);
-    for (const option of options) {
-      assert.equal(option.selectable, option.status === 'available');
-    }
-  }
-});
-
-test('métodos futuros só podem entrar se preservarem autorização, implantação e trial', () => {
-  const nupay = getSubscriptionPaymentOption('nupay');
-  const wallet = getSubscriptionPaymentOption('mercado_pago');
-  const installments = getSubscriptionPaymentOption('annual_installments');
-  assert.match(nupay.previewDescription, /R\$ 0 de mensalidade fixa hoje/);
-  assert.match(nupay.previewDescription, /implantação sem consumir trial/);
-  assert.match(wallet.previewDescription, /autorização sem cobrança, implantação sem consumir trial e 7 dias grátis completos/);
-  assert.match(installments.previewDescription, /não exibirá pagamento antecipado disfarçado de trial/);
+  assert.deepEqual(options.map((option) => option.id), ['credit_card', 'pix', 'account_money']);
+  assert.deepEqual(getAvailableSubscriptionPaymentOptions('anual').map((option) => option.id), ['credit_card', 'pix', 'account_money']);
+  assert.match(getSubscriptionPaymentOption('credit_card').checkoutSummary, /7 dias grátis/);
+  assert.match(getSubscriptionPaymentOption('account_money').checkoutSummary, /7 dias grátis/);
+  assert.match(getSubscriptionPaymentOption('pix').previewDescription, /7 dias grátis/);
 });

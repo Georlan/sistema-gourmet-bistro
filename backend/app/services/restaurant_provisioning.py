@@ -23,7 +23,10 @@ from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .onboarding_trial import ONBOARDING_SUBSCRIPTION_STATUS, pause_provider_during_onboarding
-from .saas_billing_policy import is_recurring_trial_payment_method
+from .saas_billing_policy import (
+    is_recurring_trial_payment_method,
+    is_trial_eligible_payment_method,
+)
 from .saas_mercadopago import SaasMercadoPagoError
 
 logger = logging.getLogger("koma.services.restaurant_provisioning")
@@ -116,9 +119,10 @@ def provision_restaurant_for_contract(
     """
     Provisiona atomicamente o restaurante, configurações, admin inicial e assinatura SaaS.
 
-    O tenant nasce em modo de implantação. A recorrência autorizada é pausada no
-    gateway e os sete dias grátis só começam quando perfil, horários e cardápio
-    estiverem prontos. Assim o restaurante não perde trial preenchendo cadastro.
+    O tenant nasce em modo de implantação. Meios recorrentes ficam pausados no
+    gateway; no Pix universal nenhuma cobrança é criada antes do vencimento. Os
+    sete dias grátis só começam quando perfil, horários e cardápio estiverem
+    prontos, sem consumir trial durante a implantação.
     """
     protocol = str(acceptance["protocol"]).strip().upper()
     plan = str(acceptance.get("plan") or "").strip().lower()
@@ -149,13 +153,13 @@ def provision_restaurant_for_contract(
     if (
         billing_setup is not None
         and billing_setup.status == "ready"
-        and not is_recurring_trial_payment_method(billing_setup.payment_method_type)
+        and not is_trial_eligible_payment_method(billing_setup.payment_method_type)
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "A contratação não pode ser liberada com pagamento antecipado. "
-                "Escolha um método recorrente com 7 dias grátis antes da primeira cobrança."
+                "A contratação não possui um meio de pagamento elegível ao trial. "
+                "Escolha cartão, Pix ou Saldo Mercado Pago."
             ),
         )
 
@@ -189,9 +193,9 @@ def provision_restaurant_for_contract(
         now = datetime.datetime.now(datetime.timezone.utc)
         invitation_token = str(uuid.uuid4())
 
-        # A autorização é feita na inscrição, mas fica pausada enquanto o cliente
-        # conclui os três passos essenciais. O D+7 será sincronizado somente no
-        # momento em que o onboarding for concluído.
+        # Meios recorrentes são autorizados na inscrição e pausados durante o
+        # onboarding. Pix universal não possui mandato: nenhum pagamento é criado
+        # aqui; o QR só nasce depois do trial, quando existir valor devido.
         if (
             billing_setup is not None
             and billing_setup.status == "ready"
