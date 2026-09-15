@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { ShoppingBag, PlusCircle, Zap, Printer, CheckCircle2, Move, GitMerge, Edit3, Trash2 } from 'lucide-react';
-import type { AppRole, Order, OrderItem, Table } from '../../types';
+import type { AppRole, Order, OrderItem, OrderItemModifier, Table } from '../../types';
 import type { getCustomerSubtotals } from '../../domain';
 import { deriveOrderOperationalState } from '../../domain/operationalState';
 import { formatBackendTime } from '../../utils/dateTime';
@@ -44,6 +44,19 @@ interface MesaConsumptionPanelProps {
   onDeliverItem?: (checkId: string, itemId: string) => void;
   onCancelItem: (itemId: string) => void;
 }
+
+const summarizeItemModifiers = (modifiers: readonly OrderItemModifier[]) => {
+  const summary = new Map<string, { modifier: OrderItemModifier; quantity: number }>();
+  modifiers.forEach((modifier) => {
+    const current = summary.get(modifier.id);
+    if (current) {
+      current.quantity += 1;
+      return;
+    }
+    summary.set(modifier.id, { modifier, quantity: 1 });
+  });
+  return Array.from(summary.values());
+};
 
 /** Consumption presentation; confirmations, dialogs and timers belong to the modal owner. */
 export function MesaConsumptionPanel({
@@ -342,6 +355,24 @@ export function MesaConsumptionPanel({
                             )}
                           </div>
 
+                          {(item.modificadores || []).length > 0 && (
+                            <div
+                              id={`placed-item-modifiers-${item.id}`}
+                              data-testid={`placed-item-modifiers-${item.id}`}
+                              className="flex flex-wrap gap-1"
+                              aria-label={`Adicionais de ${item.nome}`}
+                            >
+                              {summarizeItemModifiers(item.modificadores || []).map(({ modifier, quantity }) => (
+                                <span
+                                  key={modifier.id}
+                                  className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400"
+                                >
+                                  + {quantity > 1 ? `${quantity}x ` : ''}{modifier.nome}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           {item.observacao ? (
                             <p className="text-[11px] text-koma-subtle italic bg-koma-panel px-2 py-0.5 rounded border border-dashed border-koma-border inline-block">
                               Obs: "{item.observacao}"
@@ -365,7 +396,7 @@ export function MesaConsumptionPanel({
                               </span>
                               <button
                                 id={`deliver-item-btn-${item.id}`}
-                                onClick={() => onDeliverItem(order.id, item.id)}
+                                onClick={() => onDeliverItem?.(order.id, item.id)}
                                 className="px-2 py-0.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
                                 title="Marcar como entregue à mesa"
                               >
