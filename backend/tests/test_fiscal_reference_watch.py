@@ -1,14 +1,17 @@
 import datetime
 
 import httpx
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.fiscal.compliance import baseline_by_key
 from app.fiscal.jurisdiction import fiscal_policy_for
 from app.fiscal.reference_watch import (
+    FiscalReferenceWatchError,
     OfficialReferenceProbe,
     probe_local_rtc_calculator,
+    probe_nfe_technical_reports,
     probe_official_ncm,
     promote_observed_reference,
     record_probe,
@@ -41,6 +44,45 @@ def test_official_ncm_probe_requires_complete_structured_payload():
     assert probe.source_key == "rfb-ncm-json"
     assert probe.metadata["entry_count"] == 1200
     assert len(probe.content_sha256 or "") == 64
+
+
+def test_nfe_technical_reports_probe_detects_future_effective_change():
+    html = """
+    <html><body>
+      <div>Informe Técnico 2024.001 v.2.40 atualização NCM a partir de 01/10/2026.</div>
+      <div>Informe Técnico 2023.002 v.2.10 atualização CFOP publicada em 04/09/2026.</div>
+      <div>Informe Técnico 2025.001 v.1.20 tabela cClassTrib e CST.</div>
+      <div>Informe Técnico 2025.002 v.1.05 tabela de alíquotas CBS.</div>
+      <div>Informe Técnico 2024.004 v.1.10 meios de pagamento.</div>
+      <script>Informe Técnico conteúdo volátil que deve ser ignorado</script>
+    </body></html>
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "www.nfe.fazenda.gov.br"
+        return httpx.Response(200, text=html)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        probe = probe_nfe_technical_reports(client=client)
+
+    assert probe.source_key == "nfe-informes-tecnicos"
+    assert probe.metadata["entry_count"] == 5
+    assert probe.metadata["future_effective_dates"] == ["01/10/2026"]
+    recent = " ".join(probe.metadata["recent_entries"])
+    assert "NCM" in recent
+    assert "CFOP" in recent
+    assert len(probe.content_sha256 or "") == 64
+
+
+def test_nfe_technical_reports_probe_fails_closed_when_page_shape_is_incomplete():
+    html = "<html><body><div>Informe Técnico 2024.001 v.2.40</div></body></html>"
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=html)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(FiscalReferenceWatchError, match="poucos Informes Técnicos"):
+            probe_nfe_technical_reports(client=client)
 
 
 def test_reference_change_keeps_previous_active_baseline_until_explicit_promotion():
@@ -77,7 +119,6 @@ def test_reference_change_keeps_previous_active_baseline_until_explicit_promotio
     assert state.active_version == "v1"
     assert state.active_sha256 == "a" * 64
 
-    # Repetir a coleta continua comparando contra a baseline ativa e mantém o alerta.
     replay = record_probe(session, second)
     session.commit()
     assert replay.changed is True
@@ -163,6 +204,8 @@ def test_ceara_policy_is_bound_to_machine_readable_official_sources():
     assert baseline_by_key("rfb-ncm-json").official_host.endswith("gov.br")
     assert baseline_by_key("rfb-rtc-calculator-offline").official_host.endswith("gov.br")
     assert baseline_by_key("rfb-cbs-apuracao-api").adoption_status == "monitor"
+    assert baseline_by_key("nfe-informes-tecnicos").adoption_status == "monitor"
+    assert baseline_by_key("nfe-informes-tecnicos").official_host == "www.nfe.fazenda.gov.br"
 
 
 def test_super_admin_fiscal_compliance_route_is_registered():
