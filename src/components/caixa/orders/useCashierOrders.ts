@@ -21,6 +21,12 @@ type PendingDeliveryMutation = {
   requestId: number;
 };
 
+type PendingCourierAssignment = {
+  value: string;
+  previous: string;
+  requestId: number;
+};
+
 /** Owns orders state, effects and actions; composition supplies only cross-feature dependencies. */
 export function useCashierOrders({
   orders,
@@ -274,7 +280,31 @@ export function useCashierOrders({
   const [motoboysLoadState, setMotoboysLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const motoboysRequestRef = useRef(0);
 
-  const [selectedMotoboys, setSelectedMotoboys] = useState<{ [orderId: string]: string }>({});
+  const [selectedMotoboys, setSelectedMotoboysState] = useState<Record<string, string>>({});
+  const selectedMotoboysRef = useRef<Record<string, string>>({});
+  const pendingCourierAssignmentRef = useRef<Record<string, PendingCourierAssignment>>({});
+  const courierAssignmentSequenceRef = useRef(0);
+
+  const applySelectedMotoboysState = (next: Record<string, string>) => {
+    selectedMotoboysRef.current = next;
+    setSelectedMotoboysState(next);
+  };
+
+  const setSelectedMotoboys: React.Dispatch<React.SetStateAction<Record<string, string>>> = (update) => {
+    const previous = selectedMotoboysRef.current;
+    const next = typeof update === 'function' ? update(previous) : update;
+    applySelectedMotoboysState(next);
+
+    const changedOrderIds = new Set([...Object.keys(previous), ...Object.keys(next)]);
+    changedOrderIds.forEach((orderId) => {
+      const previousValue = previous[orderId] || '';
+      const nextValue = next[orderId] || '';
+      if (previousValue !== nextValue) {
+        void handleAssignDeliveryCourier(orderId, nextValue, previousValue);
+      }
+    });
+  };
+
   const [novoMotoboyNome, setNewMotoboyNome] = useState('');
   const [novoMotoboyTelefone, setNewMotoboyTelefone] = useState('');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -391,10 +421,30 @@ export function useCashierOrders({
       pago: activeItems.length > 0 && activeItems.every((it: any) => Boolean(it.pago)),
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
+      motoboyId: c.motoboy_id ?? null,
       criadoEm,
       created_at: c.criado_em,
       numeroPedido: c.numero_pedido,
     };
+  };
+
+  const syncSelectedMotoboysFromServer = (mapped: DeliveryOrderView[]) => {
+    const activeIds = new Set(mapped.map((order) => String(order.id)));
+    const next = { ...selectedMotoboysRef.current };
+
+    Object.keys(next).forEach((orderId) => {
+      if (!activeIds.has(orderId) && !pendingCourierAssignmentRef.current[orderId]) {
+        delete next[orderId];
+      }
+    });
+
+    mapped.forEach((order) => {
+      const orderId = String(order.id);
+      const pending = pendingCourierAssignmentRef.current[orderId];
+      next[orderId] = pending?.value ?? (order.motoboyId ? String(order.motoboyId) : '');
+    });
+
+    applySelectedMotoboysState(next);
   };
 
   const fetchDeliveryOrders = async () => {
@@ -408,10 +458,16 @@ export function useCashierOrders({
           .map(mapComandaToDeliveryView)
           .filter((order: DeliveryOrderView | null): order is DeliveryOrderView => order !== null)
           .map((order: DeliveryOrderView) => {
-            const pending = pendingDeliveryMutationRef.current[String(order.id)];
-            return pending?.status ? { ...order, status: pending.status } : order;
+            const pendingStatus = pendingDeliveryMutationRef.current[String(order.id)];
+            const pendingCourier = pendingCourierAssignmentRef.current[String(order.id)];
+            return {
+              ...order,
+              ...(pendingStatus?.status ? { status: pendingStatus.status } : {}),
+              ...(pendingCourier ? { motoboyId: pendingCourier.value ? Number(pendingCourier.value) : null } : {}),
+            };
           });
         setDeliveryOrders(mapped);
+        syncSelectedMotoboysFromServer(mapped);
       }
     } catch (err) {
       if (requestId === deliveryOrdersRequestRef.current) console.error('Error fetching delivery orders', err);
@@ -449,6 +505,103 @@ export function useCashierOrders({
     return () => window.removeEventListener('koma_orders_updated', handleDeliveryUpdate);
   }, [apiBaseUrl]);
 
+  async function handleAssignDeliveryCourier(orderId: string, nextMotoboyId: string, previousMotoboyId: string) {
+    const orderKey = String(orderId);
+    if (!orderKey || orderKey.startsWith('temp-')) return false;
+
+    const requestId = ++courierAssignmentSequenceRef.current;
+    pendingCourierAssignmentRef.current[orderKey] = {
+      value: nextMotoboyId,
+      previous: previousMotoboyId,
+      requestId,
+    };
+
+    const optimisticMotoboyId = nextMotoboyId ? Number(nextMotoboyId) : null;
+    setDeliveryOrders((current) => current.map((order) =>
+      String(order.id) === orderKey ? { ...order, motoboyId: optimisticMotoboyId } : order
+    ));
+    setSelectedKanbanOrder((current: any) => {
+      if (!current || String(current.id) !== orderKey || !current.courierAssignment) return current;
+      return {
+        ...current,
+        courierAssignment: { ...current.courierAssignment, value: optimisticMotoboyId },
+      };
+    });
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/comandas/${encodeURIComponent(orderKey)}/delivery/entregador`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motoboy_id: nextMotoboyId ? Number(nextMotoboyId) : null }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const pending = pendingCourierAssignmentRef.current[orderKey];
+      if (!pending || pending.requestId !== requestId) return response.ok;
+
+      if (!response.ok) {
+        delete pendingCourierAssignmentRef.current[orderKey];
+        const rollback = { ...selectedMotoboysRef.current };
+        rollback[orderKey] = previousMotoboyId;
+        applySelectedMotoboysState(rollback);
+        setDeliveryOrders((current) => current.map((order) =>
+          String(order.id) === orderKey
+            ? { ...order, motoboyId: previousMotoboyId ? Number(previousMotoboyId) : null }
+            : order
+        ));
+        setSelectedKanbanOrder((current: any) => {
+          if (!current || String(current.id) !== orderKey || !current.courierAssignment) return current;
+          return {
+            ...current,
+            courierAssignment: {
+              ...current.courierAssignment,
+              value: previousMotoboyId ? Number(previousMotoboyId) : null,
+            },
+          };
+        });
+        showToast(data?.detail || 'Não foi possível atribuir o entregador.', 'error');
+        void fetchDeliveryOrders();
+        return false;
+      }
+
+      delete pendingCourierAssignmentRef.current[orderKey];
+      const serverMotoboyId = data?.motoboy_id ? String(data.motoboy_id) : '';
+      const confirmedSelection = { ...selectedMotoboysRef.current, [orderKey]: serverMotoboyId };
+      applySelectedMotoboysState(confirmedSelection);
+      const projected = mapComandaToDeliveryView(data);
+      if (projected) {
+        setDeliveryOrders((current) => current.map((order) => String(order.id) === orderKey ? projected : order));
+      }
+      setSelectedKanbanOrder((current: any) => {
+        if (!current || String(current.id) !== orderKey || !current.courierAssignment) return current;
+        return {
+          ...current,
+          courierAssignment: {
+            ...current.courierAssignment,
+            value: data?.motoboy_id ?? null,
+          },
+        };
+      });
+      showToast(serverMotoboyId ? 'Entregador atribuído ao pedido.' : 'Entregador removido do pedido.', 'success');
+      void onRefreshOrders();
+      window.dispatchEvent(new Event('koma_orders_updated'));
+      return true;
+    } catch (error) {
+      const pending = pendingCourierAssignmentRef.current[orderKey];
+      if (!pending || pending.requestId !== requestId) return false;
+      delete pendingCourierAssignmentRef.current[orderKey];
+      const rollback = { ...selectedMotoboysRef.current, [orderKey]: previousMotoboyId };
+      applySelectedMotoboysState(rollback);
+      setDeliveryOrders((current) => current.map((order) =>
+        String(order.id) === orderKey
+          ? { ...order, motoboyId: previousMotoboyId ? Number(previousMotoboyId) : null }
+          : order
+      ));
+      showToast('Erro de conexão ao atribuir o entregador.', 'error');
+      void fetchDeliveryOrders();
+      return false;
+    }
+  }
+
   const openDeliveryOrderDetails = (order: DeliveryOrderView) => {
     const fullComanda = orders.find((o) => o.id === order.id);
     const itemsMapped = fullComanda
@@ -474,6 +627,28 @@ export function useCashierOrders({
           };
         });
 
+    const orderId = String(order.id);
+    const currentCourierId = selectedMotoboysRef.current[orderId]
+      || (order.motoboyId ? String(order.motoboyId) : '')
+      || (fullComanda?.motoboyId ? String(fullComanda.motoboyId) : '');
+    const courierOptions = motoboys
+      .filter((motoboy) => motoboy.ativo)
+      .map((motoboy) => ({ id: Number(motoboy.id), nome: String(motoboy.nome || `Entregador ${motoboy.id}`) }));
+
+    const changeCourierFromKanban = (motoboyId: string) => {
+      setSelectedMotoboys((current) => ({ ...current, [orderId]: motoboyId }));
+      setSelectedKanbanOrder((current: any) => {
+        if (!current || String(current.id) !== orderId || !current.courierAssignment) return current;
+        return {
+          ...current,
+          courierAssignment: {
+            ...current.courierAssignment,
+            value: motoboyId ? Number(motoboyId) : null,
+          },
+        };
+      });
+    };
+
     setSelectedKanbanOrder({
       id: order.id,
       comandaId: order.id,
@@ -493,6 +668,14 @@ export function useCashierOrders({
       criadoEm: order.criadoEm,
       created_at: order.created_at,
       lancamentoId: itemsMapped.find((item: any) => item.lancamentoId)?.lancamentoId,
+      courierAssignment: order.modalidade === 'delivery'
+        ? {
+            value: currentCourierId ? Number(currentCourierId) : null,
+            options: courierOptions,
+            loading: motoboysLoadState !== 'loaded',
+            onChange: changeCourierFromKanban,
+          }
+        : undefined,
     });
   };
 
@@ -573,7 +756,7 @@ export function useCashierOrders({
 
   const handleDespacharKanban = async (orderId: string, selectedMotoboyId: string) => {
     if (!selectedMotoboyId) {
-      showToast('Selecione um motoboy para despachar o pedido!', 'info');
+      showToast('Selecione um entregador para despachar o pedido!', 'info');
       return;
     }
     try {
@@ -583,7 +766,19 @@ export function useCashierOrders({
         body: JSON.stringify({ motoboy_id: Number(selectedMotoboyId) }),
       });
       if (res.ok) {
-        showToast('Pedido despachado; motoboy e cliente avisados automaticamente!');
+        const data = await res.json().catch(() => null);
+        if (data) {
+          const projected = mapComandaToDeliveryView(data);
+          if (projected) {
+            setDeliveryOrders((current) => current.map((order) => String(order.id) === String(orderId) ? projected : order));
+          }
+          const confirmedSelection = {
+            ...selectedMotoboysRef.current,
+            [String(orderId)]: data.motoboy_id ? String(data.motoboy_id) : selectedMotoboyId,
+          };
+          applySelectedMotoboysState(confirmedSelection);
+        }
+        showToast('Pedido despachado; entregador e cliente avisados automaticamente!');
         setSelectedKanbanOrder(null);
         void fetchDeliveryOrders();
         void onRefreshOrders();
@@ -599,12 +794,12 @@ export function useCashierOrders({
 
   const handleRevogarAcessoMotoboy = async (selectedMotoboyId: string) => {
     if (!selectedMotoboyId) {
-      showToast('Selecione um motoboy para revogar o acesso!', 'info');
+      showToast('Selecione um entregador para revogar o acesso!', 'info');
       return;
     }
     const mb = motoboys.find((m) => String(m.id) === String(selectedMotoboyId));
     if (!mb) {
-      showToast('Motoboy não encontrado.', 'error');
+      showToast('Entregador não encontrado.', 'error');
       return;
     }
     try {
@@ -654,14 +849,14 @@ export function useCashierOrders({
         body: JSON.stringify({ nome: newMotoboyNome, telefone: newMotoboyTelefone, ativo: true }),
       });
       if (res.ok) {
-        showToast('Fretista cadastrado com sucesso!');
+        showToast('Entregador cadastrado com sucesso!');
         await fetchMotoboys();
         setNewMotoboyNome('');
         setNewMotoboyTelefone('');
-      } else showToast('Erro ao cadastrar fretista.', 'error');
+      } else showToast('Erro ao cadastrar entregador.', 'error');
     } catch (err) {
       console.error(err);
-      showToast('Erro de conexão ao cadastrar fretista.', 'error');
+      showToast('Erro de conexão ao cadastrar entregador.', 'error');
     }
   };
 
@@ -707,12 +902,29 @@ export function useCashierOrders({
   };
 
   const handleAdvanceDigitalOrder = async (order: DeliveryOrderView) => {
-    await handleUpdateDeliveryStatus(order.id, order.modalidade === 'delivery' ? 'transito' : 'pronto');
+    if (order.status !== 'producao') return;
+    await handleUpdateDeliveryStatus(order.id, 'pronto');
   };
 
-  const handleAdvanceSelectedKanbanOrder = async () => {
+  const handleAdvanceSelectedKanbanOrder = async (selectedMotoboyId?: string) => {
     const isDelivery = selectedKanbanOrder.modalidade === 'delivery';
-    const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, isDelivery ? 'transito' : 'pronto');
+    const currentStatus = String(selectedKanbanOrder.deliveryStatus || '').toLowerCase();
+
+    if (isDelivery && currentStatus === 'pronto') {
+      const orderId = String(selectedKanbanOrder.id);
+      const courierId = selectedMotoboyId
+        || selectedMotoboysRef.current[orderId]
+        || (selectedKanbanOrder.courierAssignment?.value ? String(selectedKanbanOrder.courierAssignment.value) : '');
+      if (!courierId) {
+        showToast('Selecione um entregador antes de iniciar a rota.', 'info');
+        return;
+      }
+      await handleDespacharKanban(orderId, courierId);
+      return;
+    }
+
+    if (currentStatus !== 'producao') return;
+    const updated = await handleUpdateDeliveryStatus(selectedKanbanOrder.id, 'pronto');
     if (updated) setSelectedKanbanOrder(null);
   };
 
@@ -838,6 +1050,7 @@ export function useCashierOrders({
     fetchMotoboys,
     openDeliveryOrderDetails,
     handleUpdateDeliveryStatus,
+    handleAssignDeliveryCourier,
     handleDespacharKanban,
     handleRevogarAcessoMotoboy,
     handleFecharDelivery,

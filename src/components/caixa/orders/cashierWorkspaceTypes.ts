@@ -16,6 +16,7 @@ export interface DeliveryOrderView {
   pago: boolean;
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
+  motoboyId?: number | null;
   criadoEm: string;
   created_at?: string;
   numeroPedido?: number;
