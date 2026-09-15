@@ -21,6 +21,7 @@ from .super_admin_catalog_maintenance import router as _super_admin_catalog_main
 from .super_admin_homologation import router as _super_admin_homologation_router  # noqa: E402
 from .super_admin_signup_recovery import router as _super_admin_signup_recovery_router  # noqa: E402
 from .super_admin_catalog_assistance import router as _super_admin_catalog_assistance_router  # noqa: E402
+from .super_admin_fiscal_compliance import router as _super_admin_fiscal_compliance_router  # noqa: E402
 
 _super_admin.router.include_router(_super_admin_access_router)
 _super_admin.router.include_router(_super_admin_support_router)
@@ -31,6 +32,7 @@ _super_admin.router.include_router(_super_admin_catalog_maintenance_router)
 _super_admin.router.include_router(_super_admin_homologation_router)
 _super_admin.router.include_router(_super_admin_signup_recovery_router)
 _super_admin.router.include_router(_super_admin_catalog_assistance_router)
+_super_admin.router.include_router(_super_admin_fiscal_compliance_router)
 
 # `websocket.router` é um router raiz sem prefixo já incluído explicitamente pelo
 # main. Usamos esse ponto de composição para registrar rotas auxiliares sem
