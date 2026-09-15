@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { isValidCnpj, taxIdKind } from '../src/legal/taxId';
 
 const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
 const landingPlans = readFileSync('src/landing/sections/Plans.tsx', 'utf8');
@@ -64,6 +65,32 @@ test('CNPJ exige representante pessoa física e CPF usa o próprio titular', () 
   assert.match(planContract, /Responsável pelo aceite/);
   assert.match(planContract, /isValidCpf\(representativeTaxId\)/);
   assert.match(planContract, /Titular da contratação/);
+});
+
+test('campo de CPF / CNPJ da contratação aceita CNPJ alfanumérico e não restringe teclado a numérico', () => {
+  const v1 = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
+  assert.doesNotMatch(
+    v1,
+    /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/,
+    'campo de CPF / CNPJ em PlanContractPage não deve restringir o teclado com inputMode="numeric"',
+  );
+  assert.match(
+    v1,
+    /<input[^<]*?value=\{form\.taxId\}[^<]*?autoCapitalize="characters"/,
+    'campo de CPF / CNPJ deve permitir texto com autoCapitalize="characters"',
+  );
+  assert.match(
+    v1,
+    /<input[^<]*?value=\{form\.representativeTaxId\}[^<]*?inputMode="numeric"/,
+    'campo CPF do responsável continua restrito a teclado numérico',
+  );
+  assert.doesNotMatch(
+    planContract,
+    /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/,
+    'campo de CPF / CNPJ em PlanContractPageV2 não deve restringir o teclado com inputMode="numeric"',
+  );
+  assert.equal(taxIdKind('00.000.000/E08G-12'), 'cnpj');
+  assert.equal(isValidCnpj('00.000.000/E08G-12'), true);
 });
 
 test('checkout mantém comprovante técnico e primeiro acesso seguro', () => {
