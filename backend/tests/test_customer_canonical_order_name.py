@@ -12,7 +12,7 @@ from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import Cliente, Comanda
-from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_setup
+from tests.characterization.orders.fixtures import CHAR_RESTAURANT_ID, char_client, char_setup
 
 
 def test_public_order_uses_canonical_customer_name_in_operational_check(char_setup):
