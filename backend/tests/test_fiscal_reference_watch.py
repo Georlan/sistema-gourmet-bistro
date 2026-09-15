@@ -8,9 +8,9 @@ from app.fiscal.compliance import baseline_by_key
 from app.fiscal.jurisdiction import fiscal_policy_for
 from app.fiscal.reference_watch import (
     OfficialReferenceProbe,
-    acknowledge_reference_change,
     probe_local_rtc_calculator,
     probe_official_ncm,
+    promote_observed_reference,
     record_probe,
     stale_reference_keys,
 )
@@ -43,7 +43,7 @@ def test_official_ncm_probe_requires_complete_structured_payload():
     assert len(probe.content_sha256 or "") == 64
 
 
-def test_reference_change_is_detected_but_not_silently_accepted():
+def test_reference_change_keeps_previous_active_baseline_until_explicit_promotion():
     session = _session()
     first = OfficialReferenceProbe(
         source_key="rfb-ncm-json",
@@ -56,6 +56,7 @@ def test_reference_change_is_detected_but_not_silently_accepted():
     session.commit()
     assert result.status == "current"
     assert result.changed is False
+    assert result.active_version == "v1"
 
     second = OfficialReferenceProbe(
         source_key="rfb-ncm-json",
@@ -68,24 +69,29 @@ def test_reference_change_is_detected_but_not_silently_accepted():
     session.commit()
 
     state = session.get(FiscalOfficialReferenceState, "rfb-ncm-json")
+    assert state is not None
     assert result.changed is True
     assert result.status == "changed"
-    assert state is not None
-    assert state.status == "changed"
-    assert state.acknowledged_at is None
+    assert state.observed_version == "v2"
+    assert state.observed_sha256 == "b" * 64
+    assert state.active_version == "v1"
+    assert state.active_sha256 == "a" * 64
 
-    # Nova execução com o mesmo conteúdo não pode apagar silenciosamente o alerta.
+    # Repetir a coleta continua comparando contra a baseline ativa e mantém o alerta.
     replay = record_probe(session, second)
     session.commit()
-    assert replay.changed is False
+    assert replay.changed is True
     assert replay.status == "changed"
+    assert replay.active_version == "v1"
 
-    acknowledge_reference_change(session, "rfb-ncm-json")
+    promote_observed_reference(session, "rfb-ncm-json")
     session.commit()
     state = session.get(FiscalOfficialReferenceState, "rfb-ncm-json")
     assert state is not None
     assert state.status == "current"
-    assert state.acknowledged_at is not None
+    assert state.active_version == "v2"
+    assert state.active_sha256 == "b" * 64
+    assert state.promoted_at is not None
 
 
 def test_reference_staleness_is_deterministic():
