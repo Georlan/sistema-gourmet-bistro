@@ -3,10 +3,9 @@
 import logging
 from types import MethodType
 
-# Instala o gateway de planos hospedados antes que as rotas importem a instância
-# canônica do Mercado Pago. O cartão continua usando o comportamento da classe
-# base; somente Pix Automático e Saldo Mercado Pago ganham o caminho alternativo
-# via `/preapproval_plan`.
+# Instala o gateway hospedado apenas para os meios que realmente pertencem ao
+# produto de assinaturas do Mercado Pago. O Pix Automático do KÔMA possui uma
+# fronteira separada e só poderá ser anunciado quando for interoperável via Pix.
 from . import billing_service as _billing_service
 from . import saas_mercadopago as _saas_mercadopago
 from .saas_mercadopago_hosted_plans import (
@@ -19,6 +18,10 @@ from .saas_mercadopago_runtime_auth import (
     resolve_saas_access_token as _resolve_saas_access_token,
     runtime_auth_reason as _runtime_auth_reason,
     runtime_token_enabled as _runtime_token_enabled,
+)
+from .saas_pix_automatic import (
+    UNIVERSAL_PIX_AUTOMATIC_CAPABILITY as _universal_pix_capability,
+    universal_pix_automatic_service as _universal_pix_service,
 )
 
 _logger = logging.getLogger(__name__)
@@ -38,14 +41,29 @@ _original_upsert_billing_setup = _billing_service.upsert_billing_setup
 _original_get_billing_setup_by_provider_sub = _billing_service.get_billing_setup_by_provider_sub
 
 
+def _with_universal_pix_boundary(capabilities):
+    """Faz o checkout falhar fechado até existir Pix Automático interoperável.
+
+    A antiga flag KOMA_SAAS_PIX_AUTOMATIC_ENABLED não é mais suficiente para
+    liberar o método. Ela pertencia ao experimento de `/preapproval_plan`, que
+    abria uma página hospedada pelo Mercado Pago e não entregava a jornada
+    universal por QR/Copia e Cola esperada pelo produto.
+    """
+    result = dict(capabilities)
+    result["pix_automatic"] = False
+    result["pixAutomatic"] = _universal_pix_capability.as_dict()
+    return result
+
+
 def _runtime_auth_aware_checkout_capabilities():
     """Não anuncia checkout quando a credencial runtime não pode ser obtida.
 
-    Além de evitar a UX enganosa de mostrar Pix/Saldo como disponíveis com uma
-    credencial inválida, esta consulta pública aquece o token curto de forma
-    segura antes de o usuário enviar a contratação. Nenhum segredo é retornado.
+    Além de evitar a UX enganosa de mostrar cartão/saldo como disponíveis com
+    uma credencial inválida, esta consulta pública aquece o token curto de forma
+    segura antes de o usuário enviar a contratação. Pix Automático é tratado
+    separadamente pela fronteira interoperável e permanece fail-closed.
     """
-    capabilities = dict(_original_checkout_capabilities())
+    capabilities = _with_universal_pix_boundary(_original_checkout_capabilities())
     if not _runtime_token_enabled() or _hosted_saas_mp_service.environment != "production":
         return capabilities
 
@@ -55,7 +73,6 @@ def _runtime_auth_aware_checkout_capabilities():
         reason = _runtime_auth_reason(exc)
         _logger.warning("saas_mp_runtime_auth_unavailable reason=%s", reason)
         capabilities["credit_card"] = False
-        capabilities["pix_automatic"] = False
         capabilities["account_money"] = False
         capabilities["providerAuthReady"] = False
         capabilities["providerAuthReason"] = _public_runtime_auth_reason(exc)
@@ -67,6 +84,20 @@ def _runtime_auth_aware_checkout_capabilities():
 
 
 _hosted_saas_mp_service.checkout_capabilities = _runtime_auth_aware_checkout_capabilities
+
+
+# Defesa em profundidade: mesmo que uma rota futura ignore capabilities ou que
+# uma flag legada seja religada, `pix_automatic` nunca volta ao hosted checkout
+# de `/preapproval_plan`. O único ponto de entrada passa a ser o adapter
+# UniversalPixAutomaticService, hoje deliberadamente indisponível.
+def _create_universal_pix_automatic(_service, **kwargs):
+    return _universal_pix_service.create_authorization(**kwargs)
+
+
+_hosted_saas_mp_service.create_pix_automatic_preapproval = MethodType(
+    _create_universal_pix_automatic,
+    _hosted_saas_mp_service,
+)
 
 
 def _hosted_plan_aware_upsert_billing_setup(
@@ -87,7 +118,8 @@ def _hosted_plan_aware_upsert_billing_setup(
     As rotas existentes tratam `provider_subscription_id` como um preapproval
     consultável e pausável. Um `preapproval_plan` ainda não é uma assinatura;
     portanto `plan:<id>` fica em `provider_payment_method_reference` até o
-    checkout hospedado criar o preapproval real.
+    checkout hospedado criar o preapproval real. Isto permanece necessário para
+    Saldo Mercado Pago e para conciliar tentativas legadas já existentes.
     """
     if _is_hosted_plan_provider_id(provider_subscription_id):
         provider_payment_method_reference = str(provider_subscription_id).strip()
