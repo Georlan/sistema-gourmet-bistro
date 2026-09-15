@@ -284,36 +284,51 @@ def registrar_fidelidade_compra_quitada(
     return True
 
 
-def _insert_guest_cliente_if_needed(connection, comanda: Comanda) -> Optional[str]:
+def _insert_guest_cliente_if_needed(
+    connection,
+    comanda: Comanda,
+) -> tuple[Optional[str], Optional[str]]:
     """Materializa a identidade comercial de um pedido antes do INSERT.
 
-    Conhecer o telefone não concede acesso à conta do cliente. Para pedidos
-    públicos sem autenticação, uma ficha existente é apenas vinculada e nunca
-    tem nome/endereço sobrescritos. Se o telefone ainda não existir, nasce uma
-    ficha guest mínima. A operação usa upsert por tenant+telefone para suportar
-    duas primeiras compras concorrentes sem duplicar o cliente.
+    Retorna ``(cliente_id, nome_canônico)``. Conhecer o telefone não concede
+    acesso à conta do cliente. Para pedidos públicos sem autenticação, uma ficha
+    existente é apenas vinculada e nunca tem nome/endereço sobrescritos. Se o
+    telefone ainda não existir, nasce uma ficha guest mínima. A operação usa
+    upsert por tenant+telefone para suportar duas primeiras compras concorrentes
+    sem duplicar o cliente.
     """
     if comanda.cliente_id:
-        return str(comanda.cliente_id)
+        clientes = Cliente.__table__
+        existing = connection.execute(
+            select(clientes.c.id, clientes.c.nome).where(
+                (clientes.c.restaurante_id == comanda.restaurante_id)
+                & (clientes.c.id == comanda.cliente_id)
+            )
+        ).first()
+        if existing is not None:
+            return str(existing.id), str(existing.nome)
+        return str(comanda.cliente_id), None
 
     raw_phone = comanda.delivery_telefone
     raw_name = comanda.identificador
     if not raw_phone or not raw_name:
-        return None
+        return None, None
     try:
         telefone = normalizar_telefone_cliente(raw_phone)
         nome = normalizar_nome_cliente(raw_name)
     except ValueError:
-        return None
+        return None, None
 
     clientes = Cliente.__table__
     criteria = (
         (clientes.c.restaurante_id == comanda.restaurante_id)
         & (clientes.c.telefone == telefone)
     )
-    existing = connection.execute(select(clientes.c.id).where(criteria)).scalar_one_or_none()
+    existing = connection.execute(
+        select(clientes.c.id, clientes.c.nome).where(criteria)
+    ).first()
     if existing is not None:
-        return str(existing)
+        return str(existing.id), str(existing.nome)
 
     cliente_id = str(uuid.uuid4())
     values = {
@@ -348,16 +363,22 @@ def _insert_guest_cliente_if_needed(connection, comanda: Comanda) -> Optional[st
                 comanda.restaurante_id,
             )
 
-    resolved = connection.execute(select(clientes.c.id).where(criteria)).scalar_one_or_none()
-    return str(resolved) if resolved is not None else None
+    resolved = connection.execute(
+        select(clientes.c.id, clientes.c.nome).where(criteria)
+    ).first()
+    if resolved is None:
+        return None, None
+    return str(resolved.id), str(resolved.nome)
 
 
 @event.listens_for(Comanda, "before_insert")
 def _vincular_cliente_universal_antes_da_comanda(_mapper, connection, target: Comanda) -> None:
-    """Garante ``Comanda.cliente_id`` para qualquer canal que informe telefone."""
-    resolved = _insert_guest_cliente_if_needed(connection, target)
-    if resolved is not None:
-        target.cliente_id = resolved
+    """Garante identidade canônica para qualquer canal que informe telefone."""
+    resolved_id, canonical_name = _insert_guest_cliente_if_needed(connection, target)
+    if resolved_id is not None:
+        target.cliente_id = resolved_id
+    if canonical_name:
+        target.identificador = canonical_name
 
 
 @event.listens_for(Session, "before_flush")
