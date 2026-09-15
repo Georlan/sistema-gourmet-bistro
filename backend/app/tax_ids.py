@@ -16,6 +16,12 @@ def normalize_cpf(value: str | None) -> str:
 
 
 def normalize_cnpj(value: str | None) -> str:
+    """Remove apenas formatação e valida a estrutura do CNPJ.
+
+    A validade dos dígitos verificadores é responsabilidade de ``is_valid_cnpj``.
+    Essa separação mantém o helper útil para normalização após uma validação já
+    executada, sem confundir estrutura com situação fiscal/cadastral.
+    """
     raw = str(value or "").strip().upper()
     normalized = _TAX_ID_FORMATTING.sub("", raw)
     if not re.fullmatch(r"[A-Z0-9]{12}[0-9]{2}", normalized):
@@ -55,6 +61,8 @@ def is_valid_cnpj(value: str | None) -> bool:
     if _has_repeated(cnpj):
         return False
 
+    # Regra oficial do CNPJ alfanumérico: valor do caractere = ASCII - 48.
+    # Para CNPJs numéricos isso produz exatamente os valores 0..9 históricos.
     base_values = [ord(char) - 48 for char in cnpj[:12]]
 
     def calculate(base: list[int], weights: tuple[int, ...]) -> int:
@@ -71,15 +79,19 @@ def is_valid_cnpj(value: str | None) -> bool:
 
 
 def normalize_tax_id(value: str | None) -> str:
+    """Normaliza CPF/CNPJ sem promover documento inválido a um tipo válido.
+
+    Chamadores que precisam saber o tipo devem usar ``tax_id_kind`` antes de
+    persistir/autorizar operações sensíveis.
+    """
     raw = str(value or "").strip()
     cpf_candidate = normalize_cpf(raw)
     if len(cpf_candidate) == 11 and is_valid_cpf(cpf_candidate):
         return cpf_candidate
     try:
-        cnpj_candidate = normalize_cnpj(raw)
+        return normalize_cnpj(raw)
     except TaxIdError:
         return cpf_candidate
-    return cnpj_candidate
 
 
 def tax_id_kind(value: str | None) -> str | None:
