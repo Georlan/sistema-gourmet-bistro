@@ -129,6 +129,19 @@ promovida silenciosamente para tributação ativa.
 O material criptográfico real deverá permanecer em secret manager/armazenamento
 criptografado apropriado, com acesso exclusivo ao worker fiscal.
 
+## Persistência transacional F1
+
+A reserva de numeração usa o escopo `tenant + ambiente + modelo + série`. Em
+PostgreSQL, a alocação é feita por UPSERT atômico sobre `FiscalSequence`; não há
+leitura de `MAX(numero)`. A criação do `FiscalDocument` e do evento inicial ocorre
+na mesma transação da reserva. Se a transação falhar, o avanço da sequência é
+revertido junto.
+
+`idempotency_key` é único por tenant. Repetir a mesma criação retorna o documento
+já persistido, sem reservar outro número. Transições usam `event_key` único por
+documento; estado e `FiscalEvent` são confirmados no mesmo commit, e retries do
+mesmo evento são replay seguro.
+
 ## Próximos gates
 
 ### F0 — Compliance Registry
@@ -149,8 +162,8 @@ criptografado apropriado, com acesso exclusivo ao worker fiscal.
 - [x] `FiscalSequence`
 - [x] state machine inicial
 - [x] RLS previsto na migration
-- [ ] serviço transacional de reserva de número com concorrência PostgreSQL
-- [ ] persistência idempotente de transições/eventos
+- [x] serviço transacional de reserva de número com concorrência PostgreSQL
+- [x] persistência idempotente de transições/eventos
 
 ### F2/F3 — Onboarding e produto
 
