@@ -102,6 +102,22 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         ),
     ),
     FiscalComplianceSource(
+        key="nt-2026-004",
+        title="NT 2026.004 - adequação da NF-e/NFC-e ao CNPJ alfanumérico",
+        version="1.01 (08/06/2026)",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.nfe.fazenda.gov.br/pOrtaL/listaConteudo.aspx?"
+            "tipoConteudo=04BIflQt1aY="
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Schemas oficiais em uso contemplam CNPJ alfanumérico. O gerador XML "
+            "deve usar o pacote vigente do Portal Nacional, não regex histórica numérica."
+        ),
+    ),
+    FiscalComplianceSource(
         key="rfb-cnpj-alfanumerico",
         title="CNPJ Alfanumérico - Receita Federal",
         version="produção desde 31/07/2026",
