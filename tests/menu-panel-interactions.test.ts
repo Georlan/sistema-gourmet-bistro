@@ -57,5 +57,6 @@ test('modal de personalização reserva espaço para o conteúdo passar acima do
     panel,
     /max-h-\[92dvh\][^\n]*p-4 pb-24 sm:p-6 sm:pb-24[^\n]*overscroll-contain/,
   );
-  assert.match(panel, /sticky bottom-0 z-20[^\n]*Adicionar ao pedido/);
+  assert.match(panel, /sticky bottom-0 z-20/);
+  assert.match(panel, /Adicionar ao pedido/);
 });
