@@ -48,13 +48,21 @@ test('catálogo remove Pix antecipado e preserva o trial até a implantação', 
 test('checkout só oferece meios recorrentes com R$ 0 hoje e 7 dias grátis', () => {
   assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic' \| 'account_money'/);
   assert.match(planContract, /payment_method_type: billingMethod/);
-  assert.match(planContract, /Pix Automático/);
+  assert.match(planContract, /Pix Automático via Mercado Pago/);
   assert.match(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /R\$ 0 de mensalidade fixa hoje/);
   assert.match(planContract, /primeira cobrança automática/);
   assert.doesNotMatch(planContract, /payment_method_type: 'pix'/);
   assert.doesNotMatch(planContract, /Gerar Pix anual/);
   assert.doesNotMatch(planContract, /pagamento único/);
+});
+
+test('Pix hospedado não é apresentado como QR Code bancário', () => {
+  assert.match(planContract, /Pix Automático via Mercado Pago/);
+  assert.match(planContract, /não gera QR Code/);
+  assert.match(planContract, /Este método não exibe QR Code Pix para leitura em outro banco/);
+  assert.match(planContract, /Continuar no Mercado Pago/);
+  assert.doesNotMatch(planContract, /<QrCode size=\{19\}/);
 });
 
 test('roadmap exige autorização recorrente, implantação sem consumo e trial completo', () => {
@@ -96,17 +104,17 @@ test('primeiro acesso após contratação utiliza fragment #token= e possui fall
   assert.match(planContract, /Seu acesso está sendo preparado\. Utilize o convite enviado ao responsável\./);
 });
 
-test('permite trocar de plano antes da autorização financeira sem perder dados', () => {
+test('permite trocar de plano depois de uma tentativa cancelada ou falha sem perder dados', () => {
   assert.doesNotMatch(planContract, /koma-sub-back[^>]*disabled=\{contractLocked\}/);
   assert.doesNotMatch(planContract, /Plano congelado nesta contratação/);
   assert.match(planContract, /Trocar plano ou ciclo/);
   assert.match(planContract, /handleSwitchPlanOrCycle/);
   assert.match(planContract, /\/billing\/status/);
-  assert.match(planContract, /Esta contratação já possui uma autorização financeira em andamento\. Conclua ou cancele essa autorização antes de alterar o plano\./);
-  assert.match(planContract, /Seus dados foram preservados\. Escolha outro plano ou ciclo\. Um novo aceite será registrado somente quando você continuar\./);
+  assert.match(planContract, /billingStatus === 'pending' \|\| billingStatus === 'ready'/);
+  assert.match(planContract, /Cancele essa autorização antes de iniciar outro plano ou ciclo/);
+  assert.match(planContract, /Inscrição anterior encerrada para edição\. Seus dados foram preservados/);
   assert.match(planContract, /localStorage\.removeItem\('koma_signup_resume'\)/);
   assert.match(planContract, /setSignupToken\(''\)/);
   assert.match(planContract, /setRequestId\(newRequestId\(\)\)/);
   assert.match(planContract, /setReceipt\(null\)/);
 });
-
