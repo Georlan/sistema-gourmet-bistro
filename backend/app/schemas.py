@@ -167,6 +167,13 @@ class ItemUpdate(BaseModel):
     cliente_nome: Optional[str] = None
     quantidade_adicional: Optional[int] = None
 
+
+class ItemModifierResponse(BaseModel):
+    id: str
+    nome: str
+    preco: float
+
+
 class ItemResponse(BaseModel):
     id: str
     comanda_id: str
@@ -181,6 +188,7 @@ class ItemResponse(BaseModel):
     cancelado_por: Optional[str] = None
     impresso_em: Optional[datetime] = None
     pago: bool
+    modificadores: List[ItemModifierResponse] = Field(default_factory=list)
     # Nested: produto name for display (populated via SQLAlchemy relationship)
     produto: Optional[ProdutoSimples] = None
 
@@ -313,12 +321,12 @@ class CaixaMovimentacaoCreate(BaseModel):
 class SangriaCreate(BaseModel):
     valor: float
     motivo: Optional[str] = None
-    observacao: Optional[str] = None
+    observacao: str = ""
 
 class SuprimentoCreate(BaseModel):
     valor: float
     motivo: Optional[str] = None
-    observacao: Optional[str] = None
+    observacao: str = ""
 
 class CaixaMovimentacaoResponse(BaseModel):
     id: int
@@ -331,7 +339,7 @@ class CaixaMovimentacaoResponse(BaseModel):
     saldo_posterior: float = 0.0
     descricao: str = ""
     observacao: str = ""
-    criado_em: datetime
+    criado_em: str
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -340,7 +348,7 @@ class CaixaTurnoResumoResponse(BaseModel):
     status: str
     operador_id: Optional[str] = None
     operador_nome: Optional[str] = None
-    aberto_em: Optional[datetime] = None
+    aberto_em: Optional[str] = None
     tempo_aberto_minutos: int = 0
     turno_esquecido: bool = False
     saldo_inicial: float = 0.0
@@ -858,7 +866,7 @@ class CustomerRegisterRequest(BaseModel):
             raise ValueError("E-mail inválido.")
         return email
 
-    @field_validator("endereco")
+    @field_validator("endereco", mode="before")
     @classmethod
     def normalize_address(cls, value: Optional[str]) -> str:
         return (value or "").strip()
