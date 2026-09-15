@@ -152,7 +152,7 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
     FiscalComplianceSource(
         key="nfe-informes-tecnicos",
         title="Informes Técnicos - Portal Nacional da NF-e",
-        version="página oficial monitorada em 15/09/2026",
+        version="catálogo oficial monitorado em 15/09/2026",
         jurisdiction="BR",
         source_url=(
             "https://www.nfe.fazenda.gov.br/pOrtaL/listaConteudo.aspx?"
@@ -161,8 +161,23 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         verified_on=VERIFIED_ON,
         adoption_status="monitor",
         notes=(
-            "Canal oficial de publicação antecipada de mudanças em NCM, CFOP, cClassTrib/CST, "
-            "alíquotas e outras tabelas. Nova publicação gera alerta; nunca autoativa regra."
+            "Catálogo consolidado de Informes Técnicos. Nova publicação gera alerta; "
+            "nunca autoativa regra."
+        ),
+    ),
+    FiscalComplianceSource(
+        key="nfe-portal-notices",
+        title="Avisos recentes - Portal Nacional da NF-e",
+        version="feed oficial monitorado em 15/09/2026",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.nfe.fazenda.gov.br/PORTAl/informe.aspx?ehCTG=false"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="monitor",
+        notes=(
+            "Feed recente usado para antecipar publicações ainda não refletidas no catálogo "
+            "consolidado, incluindo NCM/CFOP/NT/atos. Nunca autoativa regra."
         ),
     ),
     FiscalComplianceSource(
