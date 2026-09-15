@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from ..tax_ids import TaxIdError, normalize_cnpj as _normalize_cnpj
+
 
 class FiscalIdentifierError(ValueError):
     pass
@@ -45,35 +47,10 @@ def digits_only(value: object) -> str:
 
 
 def normalize_cnpj(value: object) -> str:
-    """Normaliza e valida CNPJ numérico ou alfanumérico.
-
-    Desde julho/2026 novas inscrições podem usar letras nos 12 primeiros
-    caracteres. Os dois DVs continuam numéricos e usam módulo 11; para o
-    cálculo oficial, cada caractere é convertido por ``ASCII - 48``.
-    """
-
-    raw = str(value or "").strip().upper()
-    cnpj = re.sub(r"[.\-/\s]", "", raw)
-    if not re.fullmatch(r"[A-Z0-9]{12}[0-9]{2}", cnpj):
-        raise FiscalIdentifierError("CNPJ inválido.")
-    if len(set(cnpj)) == 1:
-        raise FiscalIdentifierError("CNPJ inválido.")
-
-    base_values = [ord(char) - 48 for char in cnpj[:12]]
-
-    def _digit(base: list[int], weights: tuple[int, ...]) -> int:
-        total = sum(value * weight for value, weight in zip(base, weights, strict=True))
-        remainder = total % 11
-        return 0 if remainder < 2 else 11 - remainder
-
-    first = _digit(base_values, (5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2))
-    second = _digit(
-        base_values + [first],
-        (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2),
-    )
-    if cnpj[12:] != f"{first}{second}":
-        raise FiscalIdentifierError("CNPJ inválido.")
-    return cnpj
+    try:
+        return _normalize_cnpj(str(value or ""))
+    except TaxIdError as exc:
+        raise FiscalIdentifierError(str(exc)) from exc
 
 
 def normalize_ibge_municipality_code(value: object) -> str:
