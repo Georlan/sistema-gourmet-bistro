@@ -16,7 +16,7 @@ from .fiscal_onboarding import (
 )
 
 
-PREFLIGHT_MODES = {"foundation", "issuance"}
+PREFLIGHT_MODES = {"foundation", "activation", "issuance"}
 DEFAULT_MAX_REFERENCE_AGE = datetime.timedelta(days=2)
 
 
@@ -37,7 +37,7 @@ class RuntimeReferencePolicy:
 RUNTIME_REFERENCE_POLICIES: tuple[RuntimeReferencePolicy, ...] = (
     RuntimeReferencePolicy(
         source_key="rfb-ncm-json",
-        blocking_modes=("foundation", "issuance"),
+        blocking_modes=("foundation", "activation", "issuance"),
         title="Tabela NCM oficial vigente",
     ),
     RuntimeReferencePolicy(
@@ -52,7 +52,7 @@ RUNTIME_REFERENCE_POLICIES: tuple[RuntimeReferencePolicy, ...] = (
     ),
     RuntimeReferencePolicy(
         source_key="rfb-rtc-calculator-local",
-        blocking_modes=("issuance",),
+        blocking_modes=("activation", "issuance"),
         title="Calculadora oficial RTC instalada no KÔMA",
     ),
 )
