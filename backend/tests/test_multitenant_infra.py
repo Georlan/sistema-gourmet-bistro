@@ -14,7 +14,10 @@ from app.websocket_manager import ConnectionManager
 from app.main import app
 
 
-GLOBAL_MODEL_TABLES = {"restaurantes"}
+# Modelos deliberadamente globais da plataforma. Qualquer nova tabela sem
+# restaurante_id precisa ser adicionada aqui de forma explícita para não escapar
+# silenciosamente das garantias multi-tenant.
+GLOBAL_MODEL_TABLES = {"restaurantes", "fiscal_official_reference_states"}
 
 # Tabelas tenant-owned manipuladas exclusivamente pelo control plane recebem
 # restaurante_id explicitamente dentro de tenant_session_scope, em vez de depender

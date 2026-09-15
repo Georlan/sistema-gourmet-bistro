@@ -187,7 +187,7 @@ const RootApp = React.lazy(
     : isLegalRoute
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
-        ? () => import("./legal/PlanContractPage")
+        ? () => import("./legal/PlanContractPageV2")
         : isUnifiedOperationalRoute
           ? () => import("./components/auth/UnifiedOperationalEntry")
           : isOnboardingAwareManagementRoute

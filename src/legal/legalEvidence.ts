@@ -1,7 +1,7 @@
 import { LEGAL_DOCUMENTS, LEGAL_VERSION, type LegalDocument } from './legalContentRecurring';
 
-export const LEGAL_SOURCE_COMMIT = '9cea04e26a4c80a4e51868d7e23dbb7139d81167';
-export const LEGAL_SOURCE_BLOB_SHA = '41e18218432e43a3298ceb3084613782db623135';
+export const LEGAL_SOURCE_COMMIT = '3de1e9085a876fe2e6f9c2a90ff0c8a7a6ca7e79';
+export const LEGAL_SOURCE_BLOB_SHA = 'c0f67c3d2eb11602a1cc49615a814e3355e4b623';
 
 const bySlug = new Map(LEGAL_DOCUMENTS.map(document => [document.slug, document]));
 

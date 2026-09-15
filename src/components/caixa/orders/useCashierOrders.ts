@@ -458,11 +458,11 @@ export function useCashierOrders({
           .map(mapComandaToDeliveryView)
           .filter((order: DeliveryOrderView | null): order is DeliveryOrderView => order !== null)
           .map((order: DeliveryOrderView) => {
-            const pendingStatus = pendingDeliveryMutationRef.current[String(order.id)];
+            const pending = pendingDeliveryMutationRef.current[String(order.id)];
             const pendingCourier = pendingCourierAssignmentRef.current[String(order.id)];
+            const statusProjectedOrder = pending?.status ? { ...order, status: pending.status } : order;
             return {
-              ...order,
-              ...(pendingStatus?.status ? { status: pendingStatus.status } : {}),
+              ...statusProjectedOrder,
               ...(pendingCourier ? { motoboyId: pendingCourier.value ? Number(pendingCourier.value) : null } : {}),
             };
           });
