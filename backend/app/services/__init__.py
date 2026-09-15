@@ -1,5 +1,6 @@
 # Services package
 
+import logging
 from types import MethodType
 
 # Instala o gateway de planos hospedados antes que as rotas importem a instância
@@ -14,9 +15,13 @@ from .saas_mercadopago_hosted_plans import (
 )
 from .saas_mercadopago_runtime_auth import (
     build_runtime_client as _build_runtime_client,
+    public_runtime_auth_reason as _public_runtime_auth_reason,
     resolve_saas_access_token as _resolve_saas_access_token,
+    runtime_auth_reason as _runtime_auth_reason,
     runtime_token_enabled as _runtime_token_enabled,
 )
+
+_logger = logging.getLogger(__name__)
 
 # O serviço canônico usa o mesmo client para cartão, hosted plans, consulta e
 # reconciliação. Quando KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED=true em produção,
@@ -46,14 +51,18 @@ def _runtime_auth_aware_checkout_capabilities():
 
     try:
         _resolve_saas_access_token(_hosted_saas_mp_service)
-    except _saas_mercadopago.SaasMercadoPagoError:
+    except _saas_mercadopago.SaasMercadoPagoError as exc:
+        reason = _runtime_auth_reason(exc)
+        _logger.warning("saas_mp_runtime_auth_unavailable reason=%s", reason)
         capabilities["credit_card"] = False
         capabilities["pix_automatic"] = False
         capabilities["account_money"] = False
         capabilities["providerAuthReady"] = False
+        capabilities["providerAuthReason"] = _public_runtime_auth_reason(exc)
         return capabilities
 
     capabilities["providerAuthReady"] = True
+    capabilities["providerAuthReason"] = "ok"
     return capabilities
 
 
