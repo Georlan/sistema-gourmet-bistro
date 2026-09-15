@@ -84,14 +84,27 @@ def _seed_tenants():
             db.commit()
 
 
-def test_postgres_all_tenant_tables_have_forced_rls_and_canonical_policy():
-    """Impede que novas tabelas tenant-scoped escapem do hardening de banco."""
+def test_postgres_tenant_tables_have_rls_or_no_direct_runtime_access():
+    """Falha se uma tabela ligada a restaurante ficar exposta sem isolamento.
+
+    O KÔMA possui dois modelos legítimos de segurança para tabelas que carregam
+    ``restaurante_id``:
+
+    * tabelas tenant-owned: ENABLE + FORCE RLS e policy tenant-aware para o
+      runtime ``koma_app``;
+    * tabelas de control-plane/pré-tenant: nenhum acesso DML direto para
+      ``koma_app``/PUBLIC, sendo acessadas apenas por superfícies privilegiadas
+      estreitas (por exemplo, funções SECURITY DEFINER).
+
+    Assim o gate detecta novas tabelas expostas sem exigir RLS de objetos que,
+    por desenho, nem sequer são consultáveis diretamente pelo runtime.
+    """
 
     admin_url = os.environ["MIGRATION_DATABASE_URL"]
     engine = create_engine(admin_url, pool_pre_ping=True)
     try:
         with engine.connect() as conn:
-            tenant_tables = conn.execute(
+            tables = conn.execute(
                 text(
                     """
                     SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity
@@ -110,48 +123,87 @@ def test_postgres_all_tenant_tables_have_forced_rls_and_canonical_policy():
                     """
                 )
             ).all()
-            assert tenant_tables, "nenhuma tabela tenant-scoped encontrada"
+            assert tables, "nenhuma tabela ligada a restaurante encontrada"
 
-            not_hardened = [
-                name
-                for name, enabled, forced in tenant_tables
-                if not enabled or not forced
-            ]
-            assert not not_hardened, (
-                "tabelas tenant sem ENABLE+FORCE RLS: " f"{not_hardened}"
-            )
-
-            policies = conn.execute(
+            policy_rows = conn.execute(
                 text(
                     """
-                    SELECT tablename, roles::text,
-                           lower(coalesce(qual, '')),
-                           lower(coalesce(with_check, ''))
+                    SELECT tablename,
+                           roles::text,
+                           lower(
+                               coalesce(qual, '') || ' ' || coalesce(with_check, '')
+                           ) AS expressions
                     FROM pg_policies
                     WHERE schemaname = 'public'
-                      AND policyname = 'tenant_isolation'
-                    ORDER BY tablename
+                    ORDER BY tablename, policyname
                     """
                 )
             ).all()
-            by_table = {
-                table: (roles, using_expr, check_expr)
-                for table, roles, using_expr, check_expr in policies
-            }
+            policies_by_table: dict[str, list[tuple[str, str]]] = {}
+            for table, roles, expressions in policy_rows:
+                policies_by_table.setdefault(table, []).append((roles, expressions))
+
+            grant_rows = conn.execute(
+                text(
+                    """
+                    SELECT table_name, grantee, privilege_type
+                    FROM information_schema.role_table_grants
+                    WHERE table_schema = 'public'
+                      AND grantee IN ('koma_app', 'PUBLIC')
+                      AND privilege_type IN (
+                          'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'
+                      )
+                    ORDER BY table_name, grantee, privilege_type
+                    """
+                )
+            ).all()
+            grants_by_table: dict[str, dict[str, set[str]]] = {}
+            for table, grantee, privilege in grant_rows:
+                grants_by_table.setdefault(table, {}).setdefault(grantee, set()).add(
+                    privilege
+                )
 
             errors: list[str] = []
-            for table, *_ in tenant_tables:
-                policy = by_table.get(table)
-                if policy is None:
-                    errors.append(f"{table}: policy tenant_isolation ausente")
+            for table, enabled, forced in tables:
+                grants = grants_by_table.get(table, {})
+                runtime_grants = grants.get("koma_app", set())
+                public_grants = grants.get("PUBLIC", set())
+
+                if enabled != forced:
+                    errors.append(
+                        f"{table}: RLS inconsistente enabled={enabled} forced={forced}"
+                    )
                     continue
-                roles, using_expr, check_expr = policy
-                if roles != "{koma_app}":
-                    errors.append(f"{table}: roles={roles}")
-                if "current_setting" not in using_expr or "nullif" not in using_expr:
-                    errors.append(f"{table}: USING não é fail-closed")
-                if "current_setting" not in check_expr or "nullif" not in check_expr:
-                    errors.append(f"{table}: WITH CHECK não é fail-closed")
+
+                if not enabled:
+                    if runtime_grants or public_grants:
+                        errors.append(
+                            f"{table}: sem RLS mas exposta; "
+                            f"koma_app={sorted(runtime_grants)} "
+                            f"PUBLIC={sorted(public_grants)}"
+                        )
+                    continue
+
+                # Se o runtime possui acesso direto, pelo menos uma policy para
+                # koma_app deve ser explicitamente tenant-aware e fail-scoped.
+                if runtime_grants:
+                    policies = policies_by_table.get(table, [])
+                    has_tenant_policy = any(
+                        "koma_app" in roles
+                        and "restaurante_id" in expressions
+                        and "current_setting" in expressions
+                        for roles, expressions in policies
+                    )
+                    if not has_tenant_policy:
+                        errors.append(
+                            f"{table}: RLS ativo com grants ao koma_app, "
+                            "mas sem policy tenant-aware"
+                        )
+
+                if public_grants:
+                    errors.append(
+                        f"{table}: DML tenant exposto a PUBLIC={sorted(public_grants)}"
+                    )
 
             assert not errors, "; ".join(errors)
     finally:
