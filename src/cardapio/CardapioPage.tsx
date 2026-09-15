@@ -995,6 +995,7 @@ export default function CardapioPage() {
           deliveryFee={checkoutRequest.deliveryFee}
           deliveryMethod={checkoutRequest.deliveryMethod}
           address={checkoutRequest.address}
+          addressSnapshot={checkoutRequest.addressSnapshot}
           customerName={checkoutRequest.customerName}
           customerPhone={checkoutRequest.customerPhone}
           customerEmail={checkoutRequest.customerEmail}
