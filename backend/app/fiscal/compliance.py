@@ -102,6 +102,22 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         ),
     ),
     FiscalComplianceSource(
+        key="rfb-cnpj-alfanumerico",
+        title="CNPJ Alfanumérico - Receita Federal",
+        version="produção desde 31/07/2026",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/"
+            "programas-e-atividades/cnpj-alfanumerico/cnpj-alfa"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Novas inscrições podem conter letras nos 12 primeiros caracteres; "
+            "os dois dígitos verificadores permanecem numéricos e seguem o algoritmo oficial."
+        ),
+    ),
+    FiscalComplianceSource(
         key="ibge-localidades",
         title="API de Localidades - Registro de Referência de Municípios",
         version="API v1",
@@ -147,6 +163,7 @@ OFFICIAL_HOST_SUFFIXES = (
     "sefaz.ce.gov.br",
     "sefazlegis.sefaz.ce.gov.br",
     "ibge.gov.br",
+    "gov.br",
 )
 
 
