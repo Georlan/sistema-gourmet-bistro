@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Any
 
 from .reference_watch_runner import run_reference_watch
 
@@ -36,6 +37,37 @@ def reference_watch_startup_delay_seconds() -> float:
     return max(0.0, min(seconds, 300.0))
 
 
+def reference_watch_log_payload(outcome: dict[str, Any]) -> dict[str, object]:
+    """Resumo operacional seguro: sem conteúdo fiscal completo nem segredos."""
+
+    return {
+        "event": "fiscal_reference_watch",
+        "ok": outcome.get("ok"),
+        "requires_attention": outcome.get("requiresAttention"),
+        "skipped": outcome.get("skipped", False),
+        "sources": [
+            item.get("sourceKey")
+            for item in outcome.get("results", [])
+            if isinstance(item, dict)
+        ],
+        "error_sources": [
+            item.get("sourceKey")
+            for item in outcome.get("errors", [])
+            if isinstance(item, dict)
+        ],
+    }
+
+
+def emit_reference_watch_log(outcome: dict[str, Any]) -> None:
+    """Sempre emite uma linha estruturada, inclusive quando o logger INFO é filtrado."""
+
+    payload = reference_watch_log_payload(outcome)
+    serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    print(serialized, flush=True)
+    if outcome.get("requiresAttention"):
+        logger.warning(serialized)
+
+
 async def run_reference_watch_worker() -> None:
     """Observa fontes oficiais periodicamente sem bloquear o event loop HTTP."""
 
@@ -47,22 +79,7 @@ async def run_reference_watch_worker() -> None:
     while True:
         try:
             outcome = await asyncio.to_thread(run_reference_watch)
-            log_payload = {
-                "event": "fiscal_reference_watch",
-                "ok": outcome.get("ok"),
-                "requires_attention": outcome.get("requiresAttention"),
-                "skipped": outcome.get("skipped", False),
-                "sources": [
-                    item.get("sourceKey")
-                    for item in outcome.get("results", [])
-                    if isinstance(item, dict)
-                ],
-                "errors": outcome.get("errors", []),
-            }
-            if outcome.get("requiresAttention"):
-                logger.warning(json.dumps(log_payload, ensure_ascii=False, separators=(",", ":")))
-            else:
-                logger.info(json.dumps(log_payload, ensure_ascii=False, separators=(",", ":")))
+            emit_reference_watch_log(outcome)
         except asyncio.CancelledError:
             raise
         except Exception:
