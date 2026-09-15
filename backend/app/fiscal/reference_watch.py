@@ -12,7 +12,10 @@ from typing import Any, Iterable
 import httpx
 from sqlalchemy.orm import Session
 
-from ..fiscal_reference_models import FiscalOfficialReferenceState
+from ..fiscal_reference_models import (
+    FiscalOfficialReferenceSnapshot,
+    FiscalOfficialReferenceState,
+)
 
 
 NCM_JSON_URL = "https://portalunico.siscomex.gov.br/classif/api/publico/nomenclatura/download/json"
@@ -41,6 +44,7 @@ class OfficialReferenceProbe:
     source_version: str | None
     content_sha256: str | None
     metadata: dict[str, Any]
+    snapshot_payload: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -52,6 +56,8 @@ class OfficialReferenceSyncResult:
     observed_sha256: str | None
     active_version: str | None
     active_sha256: str | None
+    observed_snapshot_id: str | None
+    active_snapshot_id: str | None
     metadata: dict[str, Any]
 
 
@@ -67,6 +73,107 @@ def _canonical_json_hash(payload: Any) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _reference_identity(
+    source_version: str | None,
+    content_sha256: str | None,
+    *,
+    namespace: str = "official",
+) -> str:
+    if content_sha256:
+        if namespace == "official":
+            return content_sha256
+        seed = f"{namespace}|sha256:{content_sha256}"
+    elif source_version:
+        seed = f"{namespace}|version:{source_version}"
+    else:
+        raise FiscalReferenceWatchError(
+            "Fonte oficial não informou versão nem hash para criar snapshot imutável."
+        )
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _effective_dates(metadata: dict[str, Any]) -> list[str]:
+    raw = metadata.get("future_effective_dates")
+    if not isinstance(raw, list):
+        return []
+    return sorted({str(value) for value in raw if value})
+
+
+def _ensure_snapshot(
+    session: Session,
+    probe: OfficialReferenceProbe,
+    *,
+    observed_at: datetime.datetime,
+) -> FiscalOfficialReferenceSnapshot:
+    identity = _reference_identity(probe.source_version, probe.content_sha256)
+    snapshot = (
+        session.query(FiscalOfficialReferenceSnapshot)
+        .filter(
+            FiscalOfficialReferenceSnapshot.source_key == probe.source_key,
+            FiscalOfficialReferenceSnapshot.identity_sha256 == identity,
+        )
+        .one_or_none()
+    )
+    if snapshot is not None:
+        return snapshot
+
+    snapshot = FiscalOfficialReferenceSnapshot(
+        source_key=probe.source_key,
+        source_url=probe.source_url,
+        source_version=probe.source_version,
+        content_sha256=probe.content_sha256,
+        identity_sha256=identity,
+        metadata_json=probe.metadata,
+        payload_json=probe.snapshot_payload,
+        effective_dates_json=_effective_dates(probe.metadata),
+        observed_at=observed_at,
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
+
+
+def _ensure_legacy_active_snapshot(
+    session: Session,
+    state: FiscalOfficialReferenceState,
+    *,
+    now: datetime.datetime,
+) -> FiscalOfficialReferenceSnapshot | None:
+    if not state.active_version and not state.active_sha256:
+        return None
+
+    identity = _reference_identity(
+        state.active_version,
+        state.active_sha256,
+        namespace="legacy-active",
+    )
+    snapshot = (
+        session.query(FiscalOfficialReferenceSnapshot)
+        .filter(
+            FiscalOfficialReferenceSnapshot.source_key == state.source_key,
+            FiscalOfficialReferenceSnapshot.identity_sha256 == identity,
+        )
+        .one_or_none()
+    )
+    if snapshot is not None:
+        return snapshot
+
+    snapshot = FiscalOfficialReferenceSnapshot(
+        source_key=state.source_key,
+        source_url=state.source_url,
+        source_version=state.active_version,
+        content_sha256=state.active_sha256,
+        identity_sha256=identity,
+        metadata_json={"legacy_backfill": True},
+        payload_json=None,
+        effective_dates_json=[],
+        observed_at=state.promoted_at or state.created_at or now,
+    )
+    session.add(snapshot)
+    session.flush()
+    return snapshot
 
 
 def _extract_ncm_entries(payload: Any) -> list[dict[str, Any]]:
@@ -110,6 +217,7 @@ def probe_official_ncm(
             source_version=None,
             content_sha256=_canonical_json_hash(payload),
             metadata={"entry_count": len(rows), "kind": "ncm-json"},
+            snapshot_payload=payload,
         )
     except (httpx.HTTPError, ValueError) as exc:
         raise FiscalReferenceWatchError(f"Falha ao consultar NCM oficial: {exc}") from exc
@@ -204,18 +312,20 @@ def probe_nfe_technical_reports(
         response = http.get(NFE_TECHNICAL_REPORTS_URL)
         response.raise_for_status()
         snippets = _extract_technical_report_snippets(response.text)
-        payload = {"technical_reports": snippets}
+        payload = {"technical_reports": list(snippets)}
+        metadata = {
+            "entry_count": len(snippets),
+            "recent_entries": list(snippets[:10]),
+            "future_effective_dates": _future_effective_dates(snippets),
+            "kind": "nfe-technical-reports",
+        }
         return OfficialReferenceProbe(
             source_key="nfe-informes-tecnicos",
             source_url=NFE_TECHNICAL_REPORTS_URL,
             source_version=None,
             content_sha256=_canonical_json_hash(payload),
-            metadata={
-                "entry_count": len(snippets),
-                "recent_entries": list(snippets[:10]),
-                "future_effective_dates": _future_effective_dates(snippets),
-                "kind": "nfe-technical-reports",
-            },
+            metadata=metadata,
+            snapshot_payload=payload,
         )
     except httpx.HTTPError as exc:
         raise FiscalReferenceWatchError(
@@ -239,18 +349,20 @@ def probe_nfe_portal_notices(
         response = http.get(NFE_PORTAL_NOTICES_URL)
         response.raise_for_status()
         notices = _extract_portal_notice_snippets(response.text)
-        payload = {"notices": notices}
+        payload = {"notices": list(notices)}
+        metadata = {
+            "entry_count": len(notices),
+            "recent_entries": list(notices[:10]),
+            "future_effective_dates": _future_effective_dates(notices),
+            "kind": "nfe-portal-notices",
+        }
         return OfficialReferenceProbe(
             source_key="nfe-portal-notices",
             source_url=NFE_PORTAL_NOTICES_URL,
             source_version=None,
             content_sha256=_canonical_json_hash(payload),
-            metadata={
-                "entry_count": len(notices),
-                "recent_entries": list(notices[:10]),
-                "future_effective_dates": _future_effective_dates(notices),
-                "kind": "nfe-portal-notices",
-            },
+            metadata=metadata,
+            snapshot_payload=payload,
         )
     except httpx.HTTPError as exc:
         raise FiscalReferenceWatchError(
@@ -303,6 +415,7 @@ def probe_local_rtc_calculator(
             source_version=version,
             content_sha256=_canonical_json_hash(payload),
             metadata=metadata,
+            snapshot_payload=payload,
         )
     except (httpx.HTTPError, ValueError) as exc:
         raise FiscalReferenceWatchError(
@@ -332,6 +445,7 @@ def _differs_from_active(
 
 def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialReferenceSyncResult:
     now = _utcnow()
+    snapshot = _ensure_snapshot(session, probe, observed_at=now)
     state = session.get(FiscalOfficialReferenceState, probe.source_key)
 
     if state is None:
@@ -342,6 +456,8 @@ def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialRef
             observed_sha256=probe.content_sha256,
             active_version=probe.source_version,
             active_sha256=probe.content_sha256,
+            observed_snapshot_id=snapshot.id,
+            active_snapshot_id=snapshot.id,
             status="current",
             metadata_json=probe.metadata,
             checked_at=now,
@@ -353,11 +469,26 @@ def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialRef
         state.source_url = probe.source_url
         state.observed_version = probe.source_version
         state.observed_sha256 = probe.content_sha256
+        state.observed_snapshot_id = snapshot.id
         state.checked_at = now
         state.last_error = None
         state.metadata_json = probe.metadata
 
         changed = _differs_from_active(state, probe)
+        if state.active_snapshot_id is None:
+            active_identity = None
+            if state.active_version or state.active_sha256:
+                active_identity = _reference_identity(
+                    state.active_version,
+                    state.active_sha256,
+                )
+            if active_identity == snapshot.identity_sha256:
+                state.active_snapshot_id = snapshot.id
+            else:
+                legacy_snapshot = _ensure_legacy_active_snapshot(session, state, now=now)
+                if legacy_snapshot is not None:
+                    state.active_snapshot_id = legacy_snapshot.id
+
         if changed:
             state.status = "changed"
             if state.changed_at is None:
@@ -375,6 +506,8 @@ def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialRef
         observed_sha256=state.observed_sha256,
         active_version=state.active_version,
         active_sha256=state.active_sha256,
+        observed_snapshot_id=state.observed_snapshot_id,
+        active_snapshot_id=state.active_snapshot_id,
         metadata=probe.metadata,
     )
 
@@ -404,8 +537,13 @@ def promote_observed_reference(session: Session, source_key: str) -> None:
         raise FiscalReferenceWatchError(
             f"Fonte {source_key} ainda não possui versão/hash observado para promoção."
         )
+    if not state.observed_snapshot_id:
+        raise FiscalReferenceWatchError(
+            f"Fonte {source_key} ainda não possui snapshot observado para promoção."
+        )
     state.active_version = state.observed_version
     state.active_sha256 = state.observed_sha256
+    state.active_snapshot_id = state.observed_snapshot_id
     state.status = "current"
     state.changed_at = None
     state.promoted_at = _utcnow()

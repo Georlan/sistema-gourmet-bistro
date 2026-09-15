@@ -4,10 +4,14 @@ import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 
 from ..database import SessionLocal
 from ..fiscal.reference_watch import stale_reference_keys
-from ..fiscal_reference_models import FiscalOfficialReferenceState
+from ..fiscal_reference_models import (
+    FiscalOfficialReferenceSnapshot,
+    FiscalOfficialReferenceState,
+)
 from .super_admin import get_current_admin
 
 
@@ -30,6 +34,14 @@ def get_fiscal_compliance_health(
             .order_by(FiscalOfficialReferenceState.source_key.asc())
             .all()
         )
+        snapshot_counts = dict(
+            db.query(
+                FiscalOfficialReferenceSnapshot.source_key,
+                func.count(FiscalOfficialReferenceSnapshot.id),
+            )
+            .group_by(FiscalOfficialReferenceSnapshot.source_key)
+            .all()
+        )
         stale = set(stale_reference_keys(states))
         items = [
             {
@@ -37,8 +49,11 @@ def get_fiscal_compliance_health(
                 "sourceUrl": state.source_url,
                 "observedVersion": state.observed_version,
                 "observedSha256": state.observed_sha256,
+                "observedSnapshotId": state.observed_snapshot_id,
                 "activeVersion": state.active_version,
                 "activeSha256": state.active_sha256,
+                "activeSnapshotId": state.active_snapshot_id,
+                "snapshotCount": int(snapshot_counts.get(state.source_key, 0)),
                 "status": state.status,
                 "stale": state.source_key in stale,
                 "checkedAt": _iso(state.checked_at),

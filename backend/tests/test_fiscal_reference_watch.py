@@ -19,12 +19,16 @@ from app.fiscal.reference_watch import (
     stale_reference_keys,
 )
 from app.fiscal.rtc_calculator import RtcCalculatorClient
-from app.fiscal_reference_models import FiscalOfficialReferenceState
+from app.fiscal_reference_models import (
+    FiscalOfficialReferenceSnapshot,
+    FiscalOfficialReferenceState,
+)
 from app.routes.super_admin_fiscal_compliance import router as fiscal_compliance_router
 
 
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
+    FiscalOfficialReferenceSnapshot.__table__.create(engine)
     FiscalOfficialReferenceState.__table__.create(engine)
     return Session(engine)
 
@@ -44,6 +48,7 @@ def test_official_ncm_probe_requires_complete_structured_payload():
 
     assert probe.source_key == "rfb-ncm-json"
     assert probe.metadata["entry_count"] == 1200
+    assert probe.snapshot_payload == payload
     assert len(probe.content_sha256 or "") == 64
 
 
@@ -69,6 +74,7 @@ def test_nfe_technical_reports_probe_detects_future_effective_change():
     assert probe.source_key == "nfe-informes-tecnicos"
     assert probe.metadata["entry_count"] == 5
     assert probe.metadata["future_effective_dates"] == ["01/10/2026"]
+    assert probe.snapshot_payload["technical_reports"]
     recent = " ".join(probe.metadata["recent_entries"])
     assert "NCM" in recent
     assert "CFOP" in recent
@@ -106,6 +112,7 @@ def test_nfe_portal_notices_probe_catches_fresh_ncm_and_cfop_publications():
     assert probe.source_key == "nfe-portal-notices"
     assert probe.metadata["entry_count"] == 3
     assert probe.metadata["future_effective_dates"] == ["01/10/2026"]
+    assert probe.snapshot_payload["notices"]
     recent = " ".join(probe.metadata["recent_entries"])
     assert "CFOP" in recent
     assert "NCM" in recent
@@ -123,7 +130,7 @@ def test_nfe_portal_notices_probe_fails_closed_when_feed_shape_is_incomplete():
             probe_nfe_portal_notices(client=client)
 
 
-def test_reference_change_keeps_previous_active_baseline_until_explicit_promotion():
+def test_reference_change_keeps_previous_active_snapshot_until_explicit_promotion():
     session = _session()
     first = OfficialReferenceProbe(
         source_key="rfb-ncm-json",
@@ -131,19 +138,25 @@ def test_reference_change_keeps_previous_active_baseline_until_explicit_promotio
         source_version="v1",
         content_sha256="a" * 64,
         metadata={"entry_count": 10000},
+        snapshot_payload=[{"Codigo": "01010101", "Descricao": "v1"}],
     )
     result = record_probe(session, first)
     session.commit()
+
     assert result.status == "current"
     assert result.changed is False
     assert result.active_version == "v1"
+    assert result.observed_snapshot_id == result.active_snapshot_id
+    first_snapshot_id = result.active_snapshot_id
+    assert session.query(FiscalOfficialReferenceSnapshot).count() == 1
 
     second = OfficialReferenceProbe(
         source_key="rfb-ncm-json",
         source_url=first.source_url,
         source_version="v2",
         content_sha256="b" * 64,
-        metadata={"entry_count": 10002},
+        metadata={"entry_count": 10002, "future_effective_dates": ["01/10/2026"]},
+        snapshot_payload=[{"Codigo": "01010101", "Descricao": "v2"}],
     )
     result = record_probe(session, second)
     session.commit()
@@ -156,12 +169,24 @@ def test_reference_change_keeps_previous_active_baseline_until_explicit_promotio
     assert state.observed_sha256 == "b" * 64
     assert state.active_version == "v1"
     assert state.active_sha256 == "a" * 64
+    assert state.active_snapshot_id == first_snapshot_id
+    assert state.observed_snapshot_id != first_snapshot_id
+    assert session.query(FiscalOfficialReferenceSnapshot).count() == 2
+
+    observed_snapshot = session.get(
+        FiscalOfficialReferenceSnapshot,
+        state.observed_snapshot_id,
+    )
+    assert observed_snapshot is not None
+    assert observed_snapshot.payload_json == second.snapshot_payload
+    assert observed_snapshot.effective_dates_json == ["01/10/2026"]
 
     replay = record_probe(session, second)
     session.commit()
     assert replay.changed is True
     assert replay.status == "changed"
-    assert replay.active_version == "v1"
+    assert replay.active_snapshot_id == first_snapshot_id
+    assert session.query(FiscalOfficialReferenceSnapshot).count() == 2
 
     promote_observed_reference(session, "rfb-ncm-json")
     session.commit()
@@ -170,7 +195,52 @@ def test_reference_change_keeps_previous_active_baseline_until_explicit_promotio
     assert state.status == "current"
     assert state.active_version == "v2"
     assert state.active_sha256 == "b" * 64
+    assert state.active_snapshot_id == state.observed_snapshot_id
+    assert state.active_snapshot_id != first_snapshot_id
     assert state.promoted_at is not None
+
+
+def test_existing_reference_state_backfills_active_snapshot_without_promoting_observed():
+    session = _session()
+    legacy_state = FiscalOfficialReferenceState(
+        source_key="rfb-ncm-json",
+        source_url="https://example.invalid/ncm",
+        observed_version="v2",
+        observed_sha256="b" * 64,
+        active_version="v1",
+        active_sha256="a" * 64,
+        status="changed",
+        metadata_json={"entry_count": 10002},
+        checked_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    session.add(legacy_state)
+    session.commit()
+
+    probe = OfficialReferenceProbe(
+        source_key="rfb-ncm-json",
+        source_url=legacy_state.source_url,
+        source_version="v2",
+        content_sha256="b" * 64,
+        metadata={"entry_count": 10002},
+        snapshot_payload=[{"Codigo": "01010101", "Descricao": "v2"}],
+    )
+    result = record_probe(session, probe)
+    session.commit()
+
+    state = session.get(FiscalOfficialReferenceState, "rfb-ncm-json")
+    assert state is not None
+    assert result.changed is True
+    assert state.observed_snapshot_id is not None
+    assert state.active_snapshot_id is not None
+    assert state.observed_snapshot_id != state.active_snapshot_id
+    assert session.query(FiscalOfficialReferenceSnapshot).count() == 2
+
+    active_snapshot = session.get(FiscalOfficialReferenceSnapshot, state.active_snapshot_id)
+    assert active_snapshot is not None
+    assert active_snapshot.source_version == "v1"
+    assert active_snapshot.content_sha256 == "a" * 64
+    assert active_snapshot.metadata_json == {"legacy_backfill": True}
+    assert active_snapshot.payload_json is None
 
 
 def test_reference_staleness_is_deterministic():
@@ -206,6 +276,7 @@ def test_local_rtc_version_probe_records_app_and_database_version():
     assert probe.source_key == "rfb-rtc-calculator-local"
     assert probe.source_version == "1.3.0-af611293|db:V0042"
     assert probe.metadata["ambiente"] == "PRO"
+    assert probe.snapshot_payload == payload
 
 
 def test_rtc_adapter_uses_local_official_component_for_calculation():
