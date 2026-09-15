@@ -48,7 +48,7 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     status: 'validating',
     statusLabel: 'Em validação',
     billingCycles: ['mensal', 'anual'],
-    checkoutSummary: 'Autorize uma vez por QR Code ou Pix Copia e Cola no banco que você já usa. O recebimento será na conta Mercado Pago do KÔMA.',
+    checkoutSummary: 'Autorize uma vez por QR Code ou Pix Copia e Cola no banco que você já usa. O recebimento será na conta Mercado Pago do KÔMA e os 7 dias grátis começam após a implantação essencial.',
     landingSummary: 'Pix Automático interoperável: autorização no banco do cliente, sem exigir conta Mercado Pago, com recebimento na conta KÔMA.',
     previewTitle: 'Pix Automático universal · em integração',
     previewDescription: 'O KÔMA só disponibilizará esta opção quando o cliente puder autorizar a recorrência por QR Code ou Pix Copia e Cola em qualquer banco/PSP compatível com Pix Automático. O recebedor será a conta Mercado Pago do KÔMA, mas o pagador não precisará entrar no Mercado Pago. O checkout hospedado de assinaturas do Mercado Pago não será usado como substituto desta jornada.',
