@@ -58,6 +58,7 @@ from ...models import (
     Restaurante,
     Usuario,
 )
+from ...delivery_address_snapshot import persist_delivery_address_snapshot
 from ...services.atendimentos import ensure_launch_identity
 from ...services.clientes import (
     cadastrar_ou_atualizar_cliente,
@@ -313,8 +314,17 @@ class OrderApplicationService:
                 return cls._to_order_dto(db=db, comanda=existing_comanda, lancamento=lanc)
 
         # 2. Validação Pura e Contexto
-        delivery_addr = cmd.delivery.address if cmd.delivery else None
-        delivery_neighborhood = cmd.delivery.neighborhood if cmd.delivery else None
+        delivery_address_snapshot = cmd.delivery.address_snapshot if cmd.delivery else None
+        delivery_addr = (
+            delivery_address_snapshot.to_legacy_address()
+            if delivery_address_snapshot is not None
+            else (cmd.delivery.address if cmd.delivery else None)
+        )
+        delivery_neighborhood = (
+            delivery_address_snapshot.neighborhood
+            if delivery_address_snapshot is not None
+            else (cmd.delivery.neighborhood if cmd.delivery else None)
+        )
         clean_phone = (
             normalizar_telefone_cliente(cmd.customer.phone)
             if cmd.customer and cmd.customer.phone
@@ -554,6 +564,14 @@ class OrderApplicationService:
                     comanda.valor_desconto_cupom = float(coupon_discount_applied)
                 if quote.cashback_discount > Decimal("0.00"):
                     comanda.valor_desconto_cashback = float(quote.cashback_discount)
+
+            if cmd.fulfillment == FulfillmentType.DELIVERY and delivery_address_snapshot is not None:
+                persist_delivery_address_snapshot(
+                    db,
+                    restaurante_id=cmd.restaurant_id,
+                    comanda_id=comanda.id,
+                    address=delivery_address_snapshot,
+                )
 
             # 7. Efeitos Transacionais de Cashback no Saldo do Cliente
             if quote.cashback_discount > Decimal("0.00") and cliente is not None:

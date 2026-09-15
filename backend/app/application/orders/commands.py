@@ -14,6 +14,10 @@ from ...domain.orders.errors import (
 )
 
 
+def _clean_address_text(value: object) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
 @dataclass(frozen=True)
 class ExternalOrderReference:
     """Identificador de integração com canais terceiros (iFood, 99Food, Keeta, etc.)."""
@@ -57,17 +61,107 @@ class CustomerInput:
 
 
 @dataclass(frozen=True)
+class DeliveryAddressInput:
+    """Snapshot estruturado e imutável do endereço usado no pedido.
+
+    O cadastro do cliente pode mudar depois; estes valores pertencem ao pedido e
+    representam o destino aceito no momento do checkout.
+    """
+
+    street: str
+    number: str
+    neighborhood: str
+    city: str
+    state: str
+    postal_code: str
+    complement: Optional[str] = None
+    reference: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    def __post_init__(self) -> None:
+        street = _clean_address_text(self.street)
+        number = _clean_address_text(self.number)
+        neighborhood = _clean_address_text(self.neighborhood)
+        city = _clean_address_text(self.city)
+        state = _clean_address_text(self.state).upper()
+        postal_code = "".join(character for character in str(self.postal_code or "") if character.isdigit())
+        complement = _clean_address_text(self.complement) or None
+        reference = _clean_address_text(self.reference) or None
+
+        if not street:
+            raise InvalidFulfillmentDetailsError("Logradouro de entrega é obrigatório.")
+        if not number:
+            raise InvalidFulfillmentDetailsError("Número do endereço de entrega é obrigatório.")
+        if not neighborhood:
+            raise InvalidFulfillmentDetailsError("Bairro de entrega é obrigatório.")
+        if not city:
+            raise InvalidFulfillmentDetailsError("Cidade de entrega é obrigatória.")
+        if len(state) != 2 or not state.isalpha():
+            raise InvalidFulfillmentDetailsError("UF do endereço de entrega deve conter 2 letras.")
+        if len(postal_code) != 8:
+            raise InvalidFulfillmentDetailsError("CEP do endereço de entrega deve conter 8 dígitos.")
+        if (self.latitude is None) != (self.longitude is None):
+            raise InvalidFulfillmentDetailsError("Latitude e longitude devem ser informadas juntas.")
+        if self.latitude is not None and not -90 <= float(self.latitude) <= 90:
+            raise InvalidFulfillmentDetailsError("Latitude do endereço de entrega é inválida.")
+        if self.longitude is not None and not -180 <= float(self.longitude) <= 180:
+            raise InvalidFulfillmentDetailsError("Longitude do endereço de entrega é inválida.")
+
+        object.__setattr__(self, "street", street)
+        object.__setattr__(self, "number", number)
+        object.__setattr__(self, "neighborhood", neighborhood)
+        object.__setattr__(self, "city", city)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "postal_code", postal_code)
+        object.__setattr__(self, "complement", complement)
+        object.__setattr__(self, "reference", reference)
+        object.__setattr__(self, "latitude", float(self.latitude) if self.latitude is not None else None)
+        object.__setattr__(self, "longitude", float(self.longitude) if self.longitude is not None else None)
+
+    def to_snapshot(self) -> dict[str, object]:
+        """Contrato persistido; nomes em PT-BR para coincidir com a API pública."""
+        return {
+            "logradouro": self.street,
+            "numero": self.number,
+            "complemento": self.complement,
+            "bairro": self.neighborhood,
+            "cidade": self.city,
+            "uf": self.state,
+            "cep": self.postal_code,
+            "referencia": self.reference,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+        }
+
+    def to_legacy_address(self) -> str:
+        """Representação legada para consumidores que ainda leem delivery_endereco."""
+        parts = [f"{self.street}, {self.number}"]
+        if self.complement:
+            parts.append(self.complement)
+        parts.append(self.neighborhood)
+        parts.append(f"{self.city} - {self.state}")
+        formatted_cep = f"{self.postal_code[:5]}-{self.postal_code[5:]}"
+        parts.append(f"CEP {formatted_cep}")
+        if self.reference:
+            parts.append(f"Ref.: {self.reference}")
+        return ", ".join(parts)
+
+
+@dataclass(frozen=True)
 class DeliveryInput:
     """Dados logísticos específicos para modalidade Delivery."""
 
-    address: str
+    address: Optional[str] = None
     neighborhood: Optional[str] = None
     fee: Optional[Decimal] = None
     estimated_minutes: Optional[int] = None
     notes: Optional[str] = None
+    address_snapshot: Optional[DeliveryAddressInput] = None
 
     def __post_init__(self) -> None:
-        if not self.address or not str(self.address).strip():
+        has_legacy_address = bool(self.address and str(self.address).strip())
+        if not has_legacy_address and self.address_snapshot is None:
             raise InvalidFulfillmentDetailsError(
                 "O endereço de entrega é obrigatório para pedidos na modalidade Delivery."
             )
