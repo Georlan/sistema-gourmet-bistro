@@ -102,6 +102,19 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         ),
     ),
     FiscalComplianceSource(
+        key="ibge-localidades",
+        title="API de Localidades - Registro de Referência de Municípios",
+        version="API v1",
+        jurisdiction="BR",
+        source_url="https://servicodados.ibge.gov.br/api/docs/localidades",
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Fonte oficial para município, código IBGE e UF usados na resolução da "
+            "jurisdição fiscal do estabelecimento."
+        ),
+    ),
+    FiscalComplianceSource(
         key="ce-in-87-2025",
         title="IN SEFAZ/CE nº 87/2025 - integração de pagamentos com NF-e/NFC-e",
         version="87/2025",
@@ -133,6 +146,7 @@ OFFICIAL_HOST_SUFFIXES = (
     "nfe.fazenda.gov.br",
     "sefaz.ce.gov.br",
     "sefazlegis.sefaz.ce.gov.br",
+    "ibge.gov.br",
 )
 
 
