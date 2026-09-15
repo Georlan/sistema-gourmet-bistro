@@ -4,9 +4,11 @@ import httpx
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.database import Base
+from app.fiscal.compliance import baseline_by_key
+from app.fiscal.jurisdiction import fiscal_policy_for
 from app.fiscal.reference_watch import (
     OfficialReferenceProbe,
+    acknowledge_reference_change,
     probe_local_rtc_calculator,
     probe_official_ncm,
     record_probe,
@@ -14,6 +16,7 @@ from app.fiscal.reference_watch import (
 )
 from app.fiscal.rtc_calculator import RtcCalculatorClient
 from app.fiscal_reference_models import FiscalOfficialReferenceState
+from app.routes.super_admin_fiscal_compliance import router as fiscal_compliance_router
 
 
 def _session() -> Session:
@@ -70,6 +73,19 @@ def test_reference_change_is_detected_but_not_silently_accepted():
     assert state is not None
     assert state.status == "changed"
     assert state.acknowledged_at is None
+
+    # Nova execução com o mesmo conteúdo não pode apagar silenciosamente o alerta.
+    replay = record_probe(session, second)
+    session.commit()
+    assert replay.changed is False
+    assert replay.status == "changed"
+
+    acknowledge_reference_change(session, "rfb-ncm-json")
+    session.commit()
+    state = session.get(FiscalOfficialReferenceState, "rfb-ncm-json")
+    assert state is not None
+    assert state.status == "current"
+    assert state.acknowledged_at is not None
 
 
 def test_reference_staleness_is_deterministic():
@@ -132,3 +148,17 @@ def test_rtc_adapter_uses_local_official_component_for_calculation():
 
     assert version.database_version == "V0042"
     assert result["tributos"]["cbs"]["valor"] == 1.23
+
+
+def test_ceara_policy_is_bound_to_machine_readable_official_sources():
+    policy = fiscal_policy_for("BR-CE")
+    assert "rfb-ncm-json" in policy.compliance_keys
+    assert "rfb-rtc-calculator-offline" in policy.compliance_keys
+    assert baseline_by_key("rfb-ncm-json").official_host.endswith("gov.br")
+    assert baseline_by_key("rfb-rtc-calculator-offline").official_host.endswith("gov.br")
+    assert baseline_by_key("rfb-cbs-apuracao-api").adoption_status == "monitor"
+
+
+def test_super_admin_fiscal_compliance_route_is_registered():
+    paths = {route.path for route in fiscal_compliance_router.routes}
+    assert "/fiscal/compliance" in paths
