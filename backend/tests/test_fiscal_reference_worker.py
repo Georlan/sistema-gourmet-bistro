@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import json
+
 from app.fiscal.reference_watch_runner import (
     FISCAL_REFERENCE_WATCH_LOCK_KEY,
     _try_acquire_watch_lock,
 )
-from app.fiscal.reference_watch_worker import reference_watch_interval_seconds
+from app.fiscal.reference_watch_worker import (
+    emit_reference_watch_log,
+    reference_watch_interval_seconds,
+    reference_watch_log_payload,
+)
 from app.routes import fiscal_reference_runtime
 
 
@@ -73,3 +79,46 @@ def test_reference_watch_runtime_is_opt_in_and_never_runs_in_tests(monkeypatch):
 
     monkeypatch.setenv("ENABLE_FISCAL_REFERENCE_WATCHER", "false")
     assert fiscal_reference_runtime._enabled() is False
+
+
+def test_reference_watch_log_payload_exposes_only_operational_summary():
+    outcome = {
+        "ok": True,
+        "requiresAttention": False,
+        "skipped": False,
+        "results": [
+            {"sourceKey": "rfb-ncm-json", "metadata": {"secret": "do-not-log"}},
+            {"sourceKey": "nfe-portal-notices", "observedSha256": "abc"},
+        ],
+        "errors": [],
+    }
+    payload = reference_watch_log_payload(outcome)
+
+    assert payload == {
+        "event": "fiscal_reference_watch",
+        "ok": True,
+        "requires_attention": False,
+        "skipped": False,
+        "sources": ["rfb-ncm-json", "nfe-portal-notices"],
+        "error_sources": [],
+    }
+    assert "secret" not in json.dumps(payload)
+    assert "abc" not in json.dumps(payload)
+
+
+def test_reference_watch_always_prints_one_structured_result(capsys):
+    emit_reference_watch_log(
+        {
+            "ok": True,
+            "requiresAttention": False,
+            "skipped": False,
+            "results": [{"sourceKey": "rfb-ncm-json"}],
+            "errors": [],
+        }
+    )
+
+    line = capsys.readouterr().out.strip()
+    payload = json.loads(line)
+    assert payload["event"] == "fiscal_reference_watch"
+    assert payload["ok"] is True
+    assert payload["sources"] == ["rfb-ncm-json"]
