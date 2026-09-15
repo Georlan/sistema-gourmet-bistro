@@ -39,8 +39,10 @@ class OfficialReferenceSyncResult:
     source_key: str
     status: str
     changed: bool
-    source_version: str | None
-    content_sha256: str | None
+    observed_version: str | None
+    observed_sha256: str | None
+    active_version: str | None
+    active_sha256: str | None
     metadata: dict[str, Any]
 
 
@@ -59,8 +61,6 @@ def _canonical_json_hash(payload: Any) -> str:
 
 
 def _extract_ncm_entries(payload: Any) -> list[dict[str, Any]]:
-    """Aceita pequenas variações de envelope sem aceitar conteúdo não estruturado."""
-
     if isinstance(payload, list):
         rows = payload
     elif isinstance(payload, dict):
@@ -161,55 +161,70 @@ def probe_local_rtc_calculator(
             http.close()
 
 
+def _differs_from_active(
+    state: FiscalOfficialReferenceState,
+    probe: OfficialReferenceProbe,
+) -> bool:
+    version_changed = bool(
+        probe.source_version
+        and state.active_version
+        and probe.source_version != state.active_version
+    )
+    hash_changed = bool(
+        probe.content_sha256
+        and state.active_sha256
+        and probe.content_sha256 != state.active_sha256
+    )
+    return version_changed or hash_changed
+
+
 def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialReferenceSyncResult:
     now = _utcnow()
     state = session.get(FiscalOfficialReferenceState, probe.source_key)
-    changed = False
 
     if state is None:
+        # Primeira captura estabelece a baseline inicial observada. Isso é seguro
+        # porque ainda não existia versão anterior para ser silenciosamente trocada.
         state = FiscalOfficialReferenceState(
             source_key=probe.source_key,
             source_url=probe.source_url,
-            source_version=probe.source_version,
-            content_sha256=probe.content_sha256,
+            observed_version=probe.source_version,
+            observed_sha256=probe.content_sha256,
+            active_version=probe.source_version,
+            active_sha256=probe.content_sha256,
             status="current",
             metadata_json=probe.metadata,
             checked_at=now,
+            promoted_at=now,
         )
         session.add(state)
+        changed = False
     else:
-        version_changed = bool(
-            probe.source_version
-            and state.source_version
-            and probe.source_version != state.source_version
-        )
-        hash_changed = bool(
-            probe.content_sha256
-            and state.content_sha256
-            and probe.content_sha256 != state.content_sha256
-        )
-        changed = version_changed or hash_changed
         state.source_url = probe.source_url
+        state.observed_version = probe.source_version
+        state.observed_sha256 = probe.content_sha256
         state.checked_at = now
         state.last_error = None
         state.metadata_json = probe.metadata
+
+        changed = _differs_from_active(state, probe)
         if changed:
             state.status = "changed"
-            state.changed_at = now
-        elif state.status != "changed":
+            if state.changed_at is None:
+                state.changed_at = now
+        else:
             state.status = "current"
-
-        # Guardar o observado mais recente sem tratá-lo como versão ativa de regra.
-        state.source_version = probe.source_version
-        state.content_sha256 = probe.content_sha256
+            state.changed_at = None
 
     session.flush()
     return OfficialReferenceSyncResult(
         source_key=probe.source_key,
         status=state.status,
         changed=changed,
-        source_version=probe.source_version,
-        content_sha256=probe.content_sha256,
+        observed_version=state.observed_version,
+        observed_sha256=state.observed_sha256,
+        active_version=state.active_version,
+        active_sha256=state.active_sha256,
         metadata=probe.metadata,
     )
 
@@ -231,12 +246,25 @@ def record_probe_error(session: Session, source_key: str, source_url: str, error
     session.flush()
 
 
-def acknowledge_reference_change(session: Session, source_key: str) -> None:
+def promote_observed_reference(session: Session, source_key: str) -> None:
+    """Promove explicitamente o observado para baseline ativa após validação externa.
+
+    Não é chamado pelo watcher. O fluxo que vier a expor esta operação deve exigir
+    evidência de testes/vigência antes de invocá-la.
+    """
+
     state = session.get(FiscalOfficialReferenceState, source_key)
     if state is None:
         raise KeyError(source_key)
+    if not state.observed_version and not state.observed_sha256:
+        raise FiscalReferenceWatchError(
+            f"Fonte {source_key} ainda não possui versão/hash observado para promoção."
+        )
+    state.active_version = state.observed_version
+    state.active_sha256 = state.observed_sha256
     state.status = "current"
-    state.acknowledged_at = _utcnow()
+    state.changed_at = None
+    state.promoted_at = _utcnow()
     state.last_error = None
     session.flush()
 
