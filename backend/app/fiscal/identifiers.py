@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import re
 
-from ..tax_ids import TaxIdError, normalize_cnpj as _normalize_cnpj
+from ..tax_ids import (
+    TaxIdError,
+    is_valid_cnpj as _is_valid_cnpj,
+    normalize_cnpj as _normalize_cnpj,
+)
 
 
 class FiscalIdentifierError(ValueError):
@@ -47,10 +51,14 @@ def digits_only(value: object) -> str:
 
 
 def normalize_cnpj(value: object) -> str:
+    raw = str(value or "")
     try:
-        return _normalize_cnpj(str(value or ""))
+        normalized = _normalize_cnpj(raw)
     except TaxIdError as exc:
         raise FiscalIdentifierError(str(exc)) from exc
+    if not _is_valid_cnpj(normalized):
+        raise FiscalIdentifierError("CNPJ inválido.")
+    return normalized
 
 
 def normalize_ibge_municipality_code(value: object) -> str:
