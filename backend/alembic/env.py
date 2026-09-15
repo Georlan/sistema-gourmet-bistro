@@ -18,6 +18,7 @@ from app import support_models  # noqa: F401
 from app import financial_cash_constraints  # noqa: F401
 from app import contract_models  # noqa: F401
 from app import order_chat_models  # noqa: F401
+from app import fiscal_models  # noqa: F401
 from app.migration_runtime import (
     prepare_migration_connection,
     release_migration_lock,
