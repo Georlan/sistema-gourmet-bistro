@@ -35,13 +35,15 @@ def get_fiscal_compliance_health(
             {
                 "sourceKey": state.source_key,
                 "sourceUrl": state.source_url,
-                "sourceVersion": state.source_version,
-                "sha256": state.content_sha256,
+                "observedVersion": state.observed_version,
+                "observedSha256": state.observed_sha256,
+                "activeVersion": state.active_version,
+                "activeSha256": state.active_sha256,
                 "status": state.status,
                 "stale": state.source_key in stale,
                 "checkedAt": _iso(state.checked_at),
                 "changedAt": _iso(state.changed_at),
-                "acknowledgedAt": _iso(state.acknowledged_at),
+                "promotedAt": _iso(state.promoted_at),
                 "metadata": state.metadata_json or {},
                 "lastError": state.last_error,
             }
