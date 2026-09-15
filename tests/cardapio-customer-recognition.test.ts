@@ -2,13 +2,26 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import {
-  isCompleteBrazilianPhone,
-  recognizePublicCustomer,
-} from '../src/cardapio/customerRecognition.ts';
+const loadRecognitionModule = async () => {
+  if (!('window' in globalThis)) {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: {
+          hostname: 'localhost',
+          protocol: 'http:',
+        },
+      },
+    });
+  }
+
+  return import('../src/cardapio/customerRecognition.ts');
+};
 
 
-test('reconhecimento só consulta telefone brasileiro completo', () => {
+test('reconhecimento só consulta telefone brasileiro completo', async () => {
+  const { isCompleteBrazilianPhone } = await loadRecognitionModule();
+
   assert.equal(isCompleteBrazilianPhone('(85) 99999-1234'), true);
   assert.equal(isCompleteBrazilianPhone('(85) 3333-1234'), true);
   assert.equal(isCompleteBrazilianPhone('8599999'), false);
@@ -16,6 +29,7 @@ test('reconhecimento só consulta telefone brasileiro completo', () => {
 
 
 test('reconhecimento público envia apenas tenant e telefone normalizado', async () => {
+  const { recognizePublicCustomer } = await loadRecognitionModule();
   const originalFetch = globalThis.fetch;
   let requestBody: unknown = null;
   try {
