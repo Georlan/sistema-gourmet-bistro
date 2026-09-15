@@ -681,7 +681,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
       {selectedProductToConfigure && (
         <div className="fixed inset-0 z-50 bg-koma-overlay flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(event) => event.target === event.currentTarget && closeProductConfig()}>
-          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 space-y-4 shadow-2xl overscroll-contain">
+          <div className="w-full max-w-lg max-h-[92dvh] overflow-y-auto bg-koma-card border border-koma-border rounded-t-3xl sm:rounded-3xl p-4 pb-24 sm:p-6 sm:pb-24 space-y-4 shadow-2xl overscroll-contain">
             <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3"><div><span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400">{obterNomeCategoria(selectedProductToConfigure.categoria)}</span><h4 className="font-serif font-bold text-lg text-koma-foreground">{selectedProductToConfigure.nome}</h4>{editingDraftItemId && <span className="text-[9px] uppercase font-bold text-amber-400">Editando item do pedido</span>}</div><button type="button" disabled={isSubmitting} onClick={closeProductConfig} className="p-1.5 rounded-full text-koma-muted hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar configuração"><X size={18} /></button></div>
             {selectedProductToConfigure.descricao && <p className="text-[11px] leading-relaxed text-koma-subtle bg-koma-raised border border-koma-border rounded-xl p-3">{selectedProductToConfigure.descricao}</p>}
 
