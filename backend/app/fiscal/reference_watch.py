@@ -20,6 +20,9 @@ NFE_TECHNICAL_REPORTS_URL = (
     "https://www.nfe.fazenda.gov.br/pOrtaL/listaConteudo.aspx?"
     "tipoConteudo=hXzemuyNHW4%3D"
 )
+NFE_PORTAL_NOTICES_URL = (
+    "https://www.nfe.fazenda.gov.br/PORTAl/informe.aspx?ehCTG=false"
+)
 RTC_LOCAL_BASE_URL = os.getenv(
     "KOMA_RTC_CALCULATOR_BASE_URL",
     "http://127.0.0.1:8080/api/calculadora",
@@ -127,7 +130,7 @@ def _html_to_plain_text(raw_html: str) -> str:
 
 
 def _extract_technical_report_snippets(raw_html: str) -> tuple[str, ...]:
-    """Extrai somente entradas de Informe Técnico, ignorando estatísticas voláteis."""
+    """Extrai o catálogo estável de Informes Técnicos, sem conteúdo volátil da página."""
 
     text = _html_to_plain_text(raw_html)
     starts = [
@@ -151,12 +154,49 @@ def _extract_technical_report_snippets(raw_html: str) -> tuple[str, ...]:
     return tuple(snippets[:50])
 
 
+def _extract_portal_notice_snippets(raw_html: str) -> tuple[str, ...]:
+    """Extrai avisos recentes datados do Portal NF-e sem depender de estatísticas da home."""
+
+    text = _html_to_plain_text(raw_html)
+    matches = list(re.finditer(r"\b(\d{2}/\d{2}/\d{4})\s*-\s*", text))
+    notices: list[str] = []
+    seen: set[str] = set()
+    for index, match in enumerate(matches):
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body = text[match.end() : min(next_start, match.end() + 900)]
+        body = re.sub(r"\s+", " ", body).strip(" -|;")
+        if not body:
+            continue
+        notice = f"{match.group(1)} - {body}"
+        if notice not in seen:
+            seen.add(notice)
+            notices.append(notice)
+
+    if len(notices) < 2:
+        raise FiscalReferenceWatchError(
+            "Portal NF-e retornou poucos avisos datados; parser/fonte precisa ser revisado."
+        )
+    return tuple(notices[:25])
+
+
+def _future_effective_dates(entries: Iterable[str]) -> list[str]:
+    return sorted(
+        set(
+            re.findall(
+                r"(?:vigente\s+)?a\s+partir\s+de\s+(\d{2}/\d{2}/\d{4})",
+                " ".join(entries),
+                flags=re.IGNORECASE,
+            )
+        )
+    )
+
+
 def probe_nfe_technical_reports(
     *,
     client: httpx.Client | None = None,
     timeout_seconds: float = 30.0,
 ) -> OfficialReferenceProbe:
-    """Detecta publicações técnicas futuras antes de alterarem as tabelas vigentes."""
+    """Monitora o catálogo oficial consolidado de Informes Técnicos."""
 
     owns_client = client is None
     http = client or httpx.Client(timeout=timeout_seconds, follow_redirects=True)
@@ -164,15 +204,6 @@ def probe_nfe_technical_reports(
         response = http.get(NFE_TECHNICAL_REPORTS_URL)
         response.raise_for_status()
         snippets = _extract_technical_report_snippets(response.text)
-        effective_dates = sorted(
-            set(
-                re.findall(
-                    r"(?:vigente\s+)?a\s+partir\s+de\s+(\d{2}/\d{2}/\d{4})",
-                    " ".join(snippets),
-                    flags=re.IGNORECASE,
-                )
-            )
-        )
         payload = {"technical_reports": snippets}
         return OfficialReferenceProbe(
             source_key="nfe-informes-tecnicos",
@@ -182,13 +213,48 @@ def probe_nfe_technical_reports(
             metadata={
                 "entry_count": len(snippets),
                 "recent_entries": list(snippets[:10]),
-                "future_effective_dates": effective_dates,
+                "future_effective_dates": _future_effective_dates(snippets),
                 "kind": "nfe-technical-reports",
             },
         )
     except httpx.HTTPError as exc:
         raise FiscalReferenceWatchError(
             f"Falha ao consultar Informes Técnicos do Portal NF-e: {exc}"
+        ) from exc
+    finally:
+        if owns_client:
+            http.close()
+
+
+def probe_nfe_portal_notices(
+    *,
+    client: httpx.Client | None = None,
+    timeout_seconds: float = 30.0,
+) -> OfficialReferenceProbe:
+    """Monitora notícias recentes para detectar alterações antes do catálogo consolidado."""
+
+    owns_client = client is None
+    http = client or httpx.Client(timeout=timeout_seconds, follow_redirects=True)
+    try:
+        response = http.get(NFE_PORTAL_NOTICES_URL)
+        response.raise_for_status()
+        notices = _extract_portal_notice_snippets(response.text)
+        payload = {"notices": notices}
+        return OfficialReferenceProbe(
+            source_key="nfe-portal-notices",
+            source_url=NFE_PORTAL_NOTICES_URL,
+            source_version=None,
+            content_sha256=_canonical_json_hash(payload),
+            metadata={
+                "entry_count": len(notices),
+                "recent_entries": list(notices[:10]),
+                "future_effective_dates": _future_effective_dates(notices),
+                "kind": "nfe-portal-notices",
+            },
+        )
+    except httpx.HTTPError as exc:
+        raise FiscalReferenceWatchError(
+            f"Falha ao consultar avisos do Portal NF-e: {exc}"
         ) from exc
     finally:
         if owns_client:
