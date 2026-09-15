@@ -19,6 +19,7 @@
 | Caixa / Kanban | `docs/engineering/cashier-ownership.md` | Owners em `src/components/caixa/`; `src/domain/cashierOrderProjection.ts` |
 | Integrações / outbox | `backend/app/adapters/orders/` e busca por `IntegrationOutbox` | adapter do canal e serviço de outbox existente |
 | Impressão | `docs/engineering/universal-printing.md` | `backend/app/application/printing/`; bordas só declaram `PrintIntent` |
+| Fiscal / NFC-e | `docs/architecture/fiscal-core.md` | `backend/app/fiscal/`, `backend/app/fiscal_models.py`; regra fiscal exige fonte oficial e vigência |
 | Intenção de produto / backlog | `docs/architecture/product_intent_protection.md` | `docs/architecture/phase7_backlog.md` |
 | Cardápio público | `src/cardapio/` | `docs/architecture/cardapio_delivery_presentation.md` e `cardapio_addons_direction.md` |
 | Landing / dispositivos | `.cursor/rules/landing-device-mockups.mdc` | `docs/landing-*-mockup.md`; preservar visual 3D, alpha real e tela substituível |
