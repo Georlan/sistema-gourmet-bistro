@@ -28,6 +28,7 @@ from ..services.fiscal_onboarding import (
     readiness_payload,
     sync_restaurant_fiscal_profile_status,
 )
+from ..services.fiscal_preflight import evaluate_fiscal_preflight, preflight_payload
 
 
 router = APIRouter(prefix="/api/onboarding/fiscal", tags=["Fiscal Onboarding"])
@@ -270,3 +271,50 @@ def get_fiscal_readiness(
             ],
         }
     return readiness_payload(evaluate_restaurant_fiscal_readiness(profile))
+
+
+@router.get("/preflight")
+def get_fiscal_preflight(
+    mode: str = Query(default="foundation"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Diagnóstico executável do gate fiscal antes de qualquer emissão/numeração."""
+
+    _require_fiscal_admin(current_user)
+    normalized_mode = str(mode or "").strip().lower()
+    if normalized_mode not in {"foundation", "issuance"}:
+        raise HTTPException(
+            status_code=422,
+            detail="mode deve ser 'foundation' ou 'issuance'.",
+        )
+
+    tenant_id = require_tenant_id()
+    profile = (
+        db.query(RestaurantFiscalProfile)
+        .filter(RestaurantFiscalProfile.restaurante_id == tenant_id)
+        .one_or_none()
+    )
+    if profile is None:
+        return {
+            "ready": False,
+            "mode": normalized_mode,
+            "jurisdictionKey": None,
+            "profileReady": False,
+            "referencesReady": False,
+            "issues": [
+                {
+                    "code": "missing_profile",
+                    "message": "Perfil fiscal ainda não configurado.",
+                    "severity": "blocking",
+                    "sourceKey": None,
+                }
+            ],
+            "warnings": [],
+            "references": [],
+            "complianceBaseline": [],
+        }
+
+    return preflight_payload(
+        evaluate_fiscal_preflight(db, profile, mode=normalized_mode)
+    )
