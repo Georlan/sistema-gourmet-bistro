@@ -64,17 +64,28 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         values = parse_qs(urlsplit(back_url).query).get(_PROTOCOL_QUERY_KEY) or []
         return str(values[0] if values else "").strip().upper()
 
-    def _validate_hosted_plan_identity(self, payload: dict[str, Any]) -> None:
-        """Valida IDs somente quando `/preapproval_plan` realmente os retorna.
+    @staticmethod
+    def _expected_application_id() -> str:
+        """Retorna a identidade efetiva da aplicação usada para emitir o token.
 
-        O endpoint de planos hospedados pode omitir `application_id` e/ou
-        `collector_id` mesmo quando a autenticação pertence à aplicação correta.
-        Tratar ausência como mismatch gerava falso 409/502 em produção.
+        Em produção o token runtime é criado com `MERCADO_PAGO_CLIENT_ID`; por
+        isso esse Client ID é a fonte de verdade para `application_id` retornado
+        pela API. A variável EXPECTED_APPLICATION_ID fica apenas como fallback
+        legado para ambientes que não tenham Client ID configurado.
+        """
+        return (
+            os.getenv("MERCADO_PAGO_CLIENT_ID", "").strip()
+            or os.getenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "").strip()
+        )
 
-        A autenticação de produção continua fail-closed no token runtime
-        (Client ID/Secret + token APP_USR). Se o recurso retornar explicitamente
-        algum desses identificadores, um valor divergente continua sendo
-        bloqueado aqui.
+    def _validate_merchant_identity(self, payload: dict[str, Any]) -> None:
+        """Valida assinaturas usando a mesma aplicação que emitiu o token runtime.
+
+        A classe base compara `application_id` com um valor auxiliar legado.
+        Como esse valor pode ficar desatualizado enquanto o OAuth runtime usa um
+        Client ID diferente, o gateway hospedado canoniza a identidade pelo
+        `MERCADO_PAGO_CLIENT_ID`. Isso também cobre consultas e webhooks da
+        assinatura real após o checkout.
         """
         if self.is_mock:
             return
@@ -82,9 +93,35 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
         expected_collector = os.getenv(
             "KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", ""
         ).strip()
-        expected_application = os.getenv(
-            "KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", ""
+        expected_application = self._expected_application_id()
+        collector_id = str(payload.get("collector_id") or "").strip()
+        application_id = str(payload.get("application_id") or "").strip()
+
+        if expected_collector and collector_id != expected_collector:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago retornou uma conta recebedora diferente da conta KÔMA configurada.",
+                status_code=409,
+            )
+        if expected_application and application_id != expected_application:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago retornou uma aplicação diferente da aplicação usada pelas credenciais KÔMA.",
+                status_code=409,
+            )
+
+    def _validate_hosted_plan_identity(self, payload: dict[str, Any]) -> None:
+        """Valida IDs somente quando `/preapproval_plan` realmente os retorna.
+
+        O endpoint de planos hospedados pode omitir `application_id` e/ou
+        `collector_id`. Quando vierem, são comparados com a identidade efetiva:
+        Client ID que emitiu o token runtime e collector esperado já configurado.
+        """
+        if self.is_mock:
+            return
+
+        expected_collector = os.getenv(
+            "KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", ""
         ).strip()
+        expected_application = self._expected_application_id()
         collector_id = str(payload.get("collector_id") or "").strip()
         application_id = str(payload.get("application_id") or "").strip()
 
@@ -95,7 +132,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
             )
         if expected_application and application_id and application_id != expected_application:
             raise SaasMercadoPagoError(
-                "O Mercado Pago retornou uma aplicação diferente da aplicação KomaBilling configurada.",
+                "O Mercado Pago retornou uma aplicação diferente da aplicação usada pelas credenciais KÔMA.",
                 status_code=409,
             )
 
