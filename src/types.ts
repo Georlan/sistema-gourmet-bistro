@@ -25,6 +25,12 @@ export interface DraftItem {
   quantidade: number; // Selected quantity for this item entry
 }
 
+export interface OrderItemModifier {
+  id: string;
+  nome: string;
+  preco: number;
+}
+
 export interface OrderItem {
   id: string; // Unique ID
   produtoId: string;
@@ -33,6 +39,7 @@ export interface OrderItem {
   observacao: string;
   clienteNome: string;
   cliente_nome?: string;
+  modificadores?: OrderItemModifier[];
   status: 'preparando' | 'pronto' | 'entregue' | 'cancelado';
   pago?: boolean;
   lancamentoId?: string;
