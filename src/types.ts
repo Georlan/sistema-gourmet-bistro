@@ -79,6 +79,7 @@ export interface Order {
   /** Dados de fulfillment preservados no snapshot compartilhado para hidratar o Caixa sem uma segunda leitura bloqueante. */
   deliveryTax?: number;
   deliveryAddress?: string | null;
+  motoboyId?: number | null;
   mesaOrigemId?: number | null;
   mesaTransferidaDe?: number | null;
   isGrouped?: boolean;

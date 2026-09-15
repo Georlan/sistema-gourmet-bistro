@@ -27,7 +27,14 @@ export interface KanbanDetailSourceItem {
   readonly preco?: number;
 }
 
-/** Display-only shape supports both persisted table slices and legacy digital detail rows. */
+export interface KanbanCourierAssignment {
+  readonly value: number | null;
+  readonly options: readonly { id: number; nome: string }[];
+  readonly loading?: boolean;
+  readonly onChange: (motoboyId: string) => void;
+}
+
+/** Detail shape supports persisted table slices plus operational digital controls. */
 export interface KanbanDetailOrder {
   readonly id: string;
   readonly mesaId: number;
@@ -51,6 +58,7 @@ export interface KanbanDetailOrder {
   readonly mesaTransferidaDe?: number;
   readonly contextoSalao?: boolean;
   readonly tableContext?: Context;
+  readonly courierAssignment?: KanbanCourierAssignment;
 }
 
 export interface KanbanOrderDetailsProps {
@@ -70,7 +78,7 @@ export interface KanbanOrderDetailsProps {
   };
   readonly actions: {
     readonly close: () => void;
-    readonly advanceDigitalOrder: () => void;
+    readonly advanceDigitalOrder: (courierId?: string) => void;
     readonly reprintProduction: (launchId?: string) => void;
     readonly printFullTable: () => void;
     readonly printTableValues: () => void;
@@ -87,8 +95,6 @@ type KanbanDetailItem = {
   status: string;
   quantidade: number;
 };
-
-
 
 function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): KanbanDetailItem[] {
   const grouped = new Map<string, KanbanDetailItem>();
@@ -109,7 +115,6 @@ function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): Kanba
   return Array.from(grouped.values());
 }
 
-
 /** Modal UI only; owner callbacks preserve failure handling and close-on-success behavior. */
 export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actions, salonActions, tableMovement, saveObservation }: KanbanOrderDetailsProps) {
   const { targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId,
@@ -128,6 +133,19 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
     );
   const selectedIsDigital = Boolean(selectedKanbanOrder)
     && ['retirada', 'entrega', 'delivery'].includes(String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase());
+  const selectedIsDelivery = String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'delivery'
+    || String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'entrega';
+  const selectedDeliveryStatus = String(selectedKanbanOrder?.deliveryStatus || '').toLowerCase();
+  const selectedIsReadyDelivery = selectedIsDelivery && selectedDeliveryStatus === 'pronto';
+  const selectedCanAssignCourier = selectedIsDelivery
+    && Boolean(selectedKanbanOrder.courierAssignment)
+    && !['transito', 'finalizado', 'recusado'].includes(selectedDeliveryStatus);
+  const selectedCourierId = selectedKanbanOrder.courierAssignment?.value
+    ? String(selectedKanbanOrder.courierAssignment.value)
+    : '';
+  const selectedCourierName = selectedKanbanOrder.courierAssignment?.options.find(
+    (courier) => String(courier.id) === selectedCourierId,
+  )?.nome;
   const selectedOrderTotal = selectedKanbanOrder
     ? Number(selectedKanbanOrder.total ?? selectedKanbanOrder.itens?.reduce(
       (sum: number, item: KanbanDetailSourceItem) => sum + Number(item.preco_unit || item.preco || 0),
@@ -135,7 +153,10 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
     ) ?? 0)
     : 0;
   const selectedCanAdvanceDigital = selectedIsDigital
-    && projectCashierDeliveryState(selectedKanbanOrder?.deliveryStatus).inProduction;
+    && (
+      projectCashierDeliveryState(selectedKanbanOrder?.deliveryStatus).inProduction
+      || selectedIsReadyDelivery
+    );
   const isWholeTableDetail = Boolean(selectedKanbanOrder.tableContext);
 
   return (
@@ -252,6 +273,37 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
               {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
             </div>
           )}
+          {selectedIsDelivery && selectedKanbanOrder.courierAssignment && (
+            <div className="rounded-xl border border-koma-border bg-koma-panel/60 p-3 space-y-2">
+              <div className="orders-detail-modal__section-title">
+                <span>Entregador</span>
+                <strong>{selectedDeliveryStatus === 'transito' ? 'Em rota' : 'Atribuição logística'}</strong>
+              </div>
+              {selectedCanAssignCourier ? (
+                <select
+                  aria-label="Entregador do pedido"
+                  value={selectedCourierId}
+                  disabled={selectedKanbanOrder.courierAssignment.loading}
+                  onChange={(event) => selectedKanbanOrder.courierAssignment?.onChange(event.target.value)}
+                  className="min-h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-bold text-koma-foreground outline-none focus:border-emerald-500/60 disabled:opacity-60"
+                >
+                  <option value="">
+                    {selectedKanbanOrder.courierAssignment.loading ? 'Sincronizando entregadores...' : 'Selecionar entregador...'}
+                  </option>
+                  {selectedKanbanOrder.courierAssignment.options.map((courier) => (
+                    <option key={courier.id} value={courier.id}>{courier.nome}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs font-bold text-koma-secondary">
+                  {selectedCourierName || 'Entregador não identificado'}
+                </p>
+              )}
+              {selectedDeliveryStatus === 'producao' && (
+                <p className="text-[10px] text-koma-muted">Você pode definir o entregador agora; o pedido só entra em rota depois de ficar pronto.</p>
+              )}
+            </div>
+          )}
           {saveObservation && selectedKanbanOrder.itens.filter(item => item.id && item.status === 'preparando' && !item.pago).map(item => (
             <ItemObservationEditor key={item.id} item={item} save={saveObservation} />
           ))}
@@ -283,11 +335,18 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
             {selectedCanAdvanceDigital && (
               <button
                 type="button"
-                onClick={actions.advanceDigitalOrder}
-                className="orders-detail-modal__primary-action"
+                disabled={selectedIsReadyDelivery && (!selectedCourierId || selectedKanbanOrder.courierAssignment?.loading)}
+                onClick={() => actions.advanceDigitalOrder(selectedCourierId || undefined)}
+                className="orders-detail-modal__primary-action disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Check size={15} />
-                <span>{selectedKanbanOrder.modalidade === 'delivery' ? 'Marcar saída para entrega' : 'Marcar pronto para retirada'}</span>
+                <span>
+                  {selectedIsReadyDelivery
+                    ? 'Saiu para entrega'
+                    : selectedIsDelivery
+                      ? 'Marcar pronto para sair'
+                      : 'Marcar pronto para retirada'}
+                </span>
               </button>
             )}
             {!isWholeTableDetail && (
