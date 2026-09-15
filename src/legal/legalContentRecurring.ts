@@ -11,7 +11,7 @@ import {
 export type { LegalDocument, LegalDocumentSlug, LegalSection };
 export { LEGAL_PROVIDER_LOCATION, LEGAL_PROVIDER_NAME, LEGAL_SUPPORT_SCHEDULE };
 
-export const LEGAL_VERSION = '2.4';
+export const LEGAL_VERSION = '2.5';
 export const LEGAL_EFFECTIVE_DATE = '15/09/2026';
 
 const AGE_RESTRICTED_TERMS: LegalSection = {
@@ -37,8 +37,8 @@ const SAAS_PAYMENT_METHODS: LegalSection = {
   paragraphs: [
     'A contratação pode exigir seleção ou autorização prévia de um meio de pagamento suportado. Essa etapa, isoladamente, não representa cobrança da mensalidade, pagamento confirmado, aprovação definitiva do cadastro nem liberação automática do ambiente.',
     'Por segurança, homologação, prevenção a fraude ou procedimento operacional, o KÔMA pode exigir liberação administrativa antes do provisionamento do restaurante. Se uma sincronização indispensável com o provedor de pagamento falhar, a ativação pode permanecer pendente até a regularização.',
-    'Os meios publicados para novas contratações são cartão de crédito, Pix Automático e Saldo Mercado Pago (account_money), sujeitos às capacidades do backend e à disponibilidade do provedor. Os três meios são tratados como autorizações recorrentes; Pix avulso por QR Code não é usado como substituto de Pix Automático no checkout da assinatura.',
-    'No Pix Automático, a autorização da recorrência é concluída no ambiente seguro disponibilizado pelo provedor. O KÔMA somente considera o meio financeiro confirmado depois de validar a autorização retornada pelo provedor, inclusive a identificação do método Pix, o valor contratado, a moeda e o período gratuito aplicável.',
+    'Os meios publicados para novas contratações são cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago (account_money), sujeitos às capacidades do backend e à disponibilidade do provedor.',
+    'No Pix, cada cobrança é independente e somente é considerada paga após confirmação do provedor. O QR Code e o Pix Copia e Cola podem ser utilizados em instituições participantes do arranjo Pix; esse meio não representa débito automático nem autorização recorrente.',
   ],
 };
 
@@ -47,18 +47,18 @@ const FREE_TRIAL_TERMS: LegalSection = {
   paragraphs: [
     'Salvo oferta individual diferente, a nova contratação elegível recebe 7 dias completos de teste sem cobrança do componente fixo. O período não começa durante o preenchimento da inscrição, aceite, criação de senha ou implantação inicial.',
     'Para a oferta padrão, o teste começa quando o restaurante conclui os três passos essenciais indicados pelo KÔMA: dados básicos do estabelecimento, horários de funcionamento e ao menos um produto efetivamente publicado no catálogo. A conclusão é apurada pelos dados reais salvos na plataforma, e não por simples marcação manual de checklist.',
-    'Para cartão, Pix Automático e Saldo Mercado Pago, o KÔMA deve preservar R$ 0 de mensalidade fixa hoje e alinhar a autorização recorrente para que a primeira cobrança somente possa ocorrer depois da implantação essencial e dos 7 dias grátis completos.',
+    'Para cartão e Saldo Mercado Pago, a autorização recorrente deve preservar R$ 0 de mensalidade fixa hoje e a primeira cobrança somente pode ocorrer depois da implantação essencial e dos 7 dias grátis completos. Para Pix, nenhuma cobrança é criada no aceite; o QR Code da mensalidade é gerado quando houver valor efetivamente devido depois do trial.',
     'Durante o teste já iniciado, pagamentos online reais processados pelo sistema podem gerar a taxa percentual do plano e tarifas do respectivo provedor. O componente fixo da assinatura somente se torna exigível após o término do teste.',
-    'O contratante pode cancelar a autorização recorrente antes da primeira cobrança, observadas as regras operacionais do meio escolhido e do provedor de pagamento. O cancelamento da assinatura impede novas cobranças recorrentes pelo KÔMA após sua efetivação.',
+    'O contratante pode cancelar a assinatura antes da primeira cobrança, observadas as regras operacionais do meio escolhido e do provedor de pagamento. No Pix, cada QR Code é uma cobrança independente e não cria débito automático para períodos posteriores.',
   ],
 };
 
 const COMMERCIAL_PAYMENT_METHODS: LegalSection = {
   title: '6. Métodos de pagamento da assinatura',
   paragraphs: [
-    'O checkout KÔMA publica três meios: cartão de crédito, Pix Automático e Saldo Mercado Pago (account_money), sujeitos à disponibilidade e às capacidades publicadas pelo backend.',
-    'Os três meios são recorrentes. Cartão é autorizado com token seguro; Pix Automático e Saldo Mercado Pago concluem a autorização no ambiente seguro do provedor. O KÔMA não apresenta Pix avulso por QR Code como se fosse uma autorização recorrente.',
-    'Nenhum dos três meios cobra a mensalidade fixa no ato da contratação. A implantação inicial não consome os 7 dias grátis; o trial começa somente quando os passos essenciais da configuração forem concluídos e a primeira cobrança recorrente deve permanecer posterior ao fim desse período.',
+    'O checkout KÔMA publica três meios: cartão de crédito, Pix por QR Code e Pix Copia e Cola e Saldo Mercado Pago (account_money), sujeitos à disponibilidade e às capacidades publicadas pelo backend.',
+    'Cartão e Saldo Mercado Pago usam autorização recorrente. Pix é uma cobrança interoperável independente, pagável em qualquer banco ou PSP compatível com Pix, e não deve ser apresentado como Pix Automático.',
+    'Nenhum dos três meios cobra a mensalidade fixa no ato da contratação. A implantação inicial não consome os 7 dias grátis; o trial começa somente quando os passos essenciais da configuração forem concluídos. Para Pix, o QR da primeira mensalidade só é criado quando a cobrança estiver devida após esse período.',
   ],
 };
 
