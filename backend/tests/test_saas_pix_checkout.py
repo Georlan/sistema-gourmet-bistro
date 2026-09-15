@@ -12,10 +12,11 @@ from app.services.saas_billing_policy import (
 )
 
 
-def test_checkout_contract_has_exactly_three_methods():
-    assert CHECKOUT_PAYMENT_METHODS == {"credit_card", "pix", "account_money"}
-    assert is_trial_eligible_payment_method("pix") is True
-    assert is_recurring_trial_payment_method("pix") is False
+def test_checkout_contract_has_exactly_three_recurring_methods():
+    assert CHECKOUT_PAYMENT_METHODS == {"credit_card", "pix_automatic", "account_money"}
+    assert is_trial_eligible_payment_method("pix_automatic") is True
+    assert is_recurring_trial_payment_method("pix_automatic") is True
+    assert is_trial_eligible_payment_method("pix") is False
 
 
 def test_pix_reference_is_deterministic_per_tenant_and_due_date():
@@ -23,7 +24,7 @@ def test_pix_reference_is_deterministic_per_tenant_and_due_date():
     assert _pix_reference(42, due) == "KOMA-SAAS-PIX-42-20261001"
 
 
-def test_qr_payload_exposes_qr_copy_paste_and_no_automatic_renewal():
+def test_qr_payload_exposes_qr_copy_paste_and_no_automatic_renewal_for_fallback_pix():
     due = dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc)
     payment = {
         "id": "123",

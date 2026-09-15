@@ -21,7 +21,7 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshot 2.0 e publica fachada vigente 2.3', () => {
+test('central legal preserva snapshot 2.0 e publica fachada vigente 2.4', () => {
   for (const slug of [
     'termos',
     'planos',
@@ -36,7 +36,7 @@ test('central legal preserva snapshot 2.0 e publica fachada vigente 2.3', () => 
   }
 
   assert.match(legalV2, /LEGAL_VERSION = '2\.0'/);
-  assert.match(legalContent, /LEGAL_VERSION = '2\.3'/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.4'/);
   assert.match(legalContent, /15\/09\/2026/);
   assert.match(legalContent, /from '\.\/legalContentV2'/);
   assert.doesNotMatch(legalContent, /legalContentLegacy/);
@@ -45,11 +45,11 @@ test('central legal preserva snapshot 2.0 e publica fachada vigente 2.3', () => 
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.3 documenta cartão Pix universal e Saldo Mercado Pago', () => {
-  assert.match(legalContent, /cartão de crédito, Pix e Saldo Mercado Pago \(account_money\)/);
-  assert.match(legalContent, /O Pix é uma cobrança avulsa por QR Code e Pix Copia e Cola e não constitui débito automático/);
-  assert.match(legalContent, /sem exigir conta Mercado Pago do pagador/);
-  assert.match(legalContent, /primeiro QR de mensalidade somente pode ser criado quando o período gratuito terminar/);
+test('Legal 2.4 documenta cartão Pix Automático e Saldo Mercado Pago', () => {
+  assert.match(legalContent, /cartão de crédito, Pix Automático e Saldo Mercado Pago \(account_money\)/);
+  assert.match(legalContent, /Os três meios são tratados como autorizações recorrentes/);
+  assert.match(legalContent, /Pix avulso por QR Code não é usado como substituto de Pix Automático/);
+  assert.match(legalContent, /ambiente seguro disponibilizado pelo provedor/);
   assert.match(legalContent, /três passos essenciais indicados pelo KÔMA/);
   assert.match(legalContent, /dados básicos do estabelecimento, horários de funcionamento e ao menos um produto efetivamente publicado/);
   assert.match(legalV2, /documentos não fiscais/);
@@ -58,7 +58,7 @@ test('Legal 2.3 documenta cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 2.3 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
+test('Legal 2.4 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
   assert.match(legalContent, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
   assert.match(legalContent, /tag 18\+ ou classificação equivalente/);
   assert.match(legalContent, /gate de publicação e sincronização/);
@@ -94,15 +94,16 @@ test('contratação registra clickwrap com identidade, evidência e comprovante'
   assert.doesNotMatch(planContract, /defaultChecked/i, 'aceite não pode nascer pré-marcado');
 });
 
-test('checkout reconhece cartão Pix e Saldo Mercado Pago', () => {
-  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix' \| 'account_money'/);
+test('checkout reconhece cartão Pix Automático e Saldo Mercado Pago', () => {
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic' \| 'account_money'/);
+  assert.match(planContract, /Pix Automático/);
   assert.match(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /account_money/);
-  assert.match(planContract, /QR Code \+ Pix Copia e Cola/);
-  assert.doesNotMatch(planContract, /Pix Automático via Mercado Pago/);
+  assert.match(planContract, /\/billing\/setup/);
+  assert.doesNotMatch(planContract, /QR Code \+ Pix Copia e Cola/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.3 sem documento fiscal pessoal', () => {
+test('proveniência jurídica fixa commit e blob da Legal 2.4 sem documento fiscal pessoal', () => {
   assert.match(legalEvidence, /legalContentRecurring/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);

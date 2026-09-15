@@ -4,7 +4,7 @@ export type SubscriptionPaymentOptionStatus = 'available';
 
 export type SubscriptionPaymentOptionId =
   | 'credit_card'
-  | 'pix'
+  | 'pix_automatic'
   | 'account_money';
 
 export type SubscriptionPaymentOption = {
@@ -38,17 +38,17 @@ export const SUBSCRIPTION_PAYMENT_OPTIONS: readonly SubscriptionPaymentOption[] 
     automaticRenewal: true,
   },
   {
-    id: 'pix',
-    label: 'Pix',
+    id: 'pix_automatic',
+    label: 'Pix Automático',
     status: 'available',
     statusLabel: 'Disponível',
     billingCycles: ['mensal', 'anual'],
-    checkoutSummary: 'Pix universal por QR Code e Copia e Cola, pagável em qualquer banco/PSP Pix. R$ 0 hoje.',
-    landingSummary: 'Pix universal sem conta Mercado Pago obrigatória, com QR e Copia e Cola exibidos no KÔMA quando a cobrança vencer.',
-    previewTitle: 'Pix universal',
-    previewDescription: 'O KÔMA não cria cobrança antecipada. Depois da implantação essencial e dos 7 dias grátis, o QR Code e o Pix Copia e Cola da mensalidade são exibidos no próprio KÔMA e podem ser pagos por qualquer banco/PSP compatível com Pix.',
+    checkoutSummary: 'Autorize o Pix Automático hoje, sem cobrança. A primeira mensalidade só pode ocorrer depois da implantação e dos 7 dias grátis.',
+    landingSummary: 'Pix Automático recorrente com autorização única e R$ 0 de mensalidade fixa hoje.',
+    previewTitle: 'Pix Automático',
+    previewDescription: 'A autorização da recorrência é concluída no ambiente seguro do Mercado Pago. O KÔMA valida o mandato Pix antes de liberar a assinatura e preserva R$ 0 hoje e os 7 dias grátis completos após a implantação essencial.',
     selectable: true,
-    automaticRenewal: false,
+    automaticRenewal: true,
   },
   {
     id: 'account_money',
