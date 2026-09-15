@@ -1,5 +1,7 @@
 # Services package
 
+from types import MethodType
+
 # Instala o gateway de planos hospedados antes que as rotas importem a instância
 # canônica do Mercado Pago. O cartão continua usando o comportamento da classe
 # base; somente Pix Automático e Saldo Mercado Pago ganham o caminho alternativo
@@ -10,7 +12,16 @@ from .saas_mercadopago_hosted_plans import (
     default_saas_mp_service as _hosted_saas_mp_service,
     is_hosted_plan_provider_id as _is_hosted_plan_provider_id,
 )
+from .saas_mercadopago_runtime_auth import build_runtime_client as _build_runtime_client
 
+# O serviço canônico usa o mesmo client para cartão, hosted plans, consulta e
+# reconciliação. Quando KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED=true em produção,
+# build_runtime_client troca o token estático por um token curto obtido via
+# client_credentials, validando aplicação e conta antes de cada renovação.
+_hosted_saas_mp_service._client = MethodType(
+    lambda service: _build_runtime_client(service),
+    _hosted_saas_mp_service,
+)
 _saas_mercadopago.default_saas_mp_service = _hosted_saas_mp_service
 
 _original_upsert_billing_setup = _billing_service.upsert_billing_setup
