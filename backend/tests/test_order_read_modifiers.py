@@ -123,7 +123,7 @@ def seeded_order():
                 id=ORDER,
                 restaurante_id=TENANT,
                 garcom_id=USER,
-                mesa_id=16,
+                mesa_id=None,
                 tipo="Consumo no Local",
                 numero_pedido=709,
                 fechada=False,
