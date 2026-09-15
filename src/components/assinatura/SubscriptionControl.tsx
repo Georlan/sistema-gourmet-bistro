@@ -4,6 +4,7 @@ import { getOperatorAccessToken } from '../../utils/authSession';
 
 type Subscription = {
   status: string;
+  billingCycle?: 'monthly' | 'annual' | 'mensal' | 'anual' | null;
   paymentMethodType?: 'credit_card' | 'pix' | 'account_money' | 'pix_automatic' | null;
   paidUntil: string | null;
   trialEndsAt: string | null;
@@ -112,13 +113,17 @@ export function SubscriptionControl({ accessToken }: { accessToken?: string }) {
 
   const setupPending = Boolean(subscription.trialStartsAfterSetup);
   const isPix = subscription.paymentMethodType === 'pix';
+  const isAnnualPix = isPix && ['annual', 'anual'].includes(String(subscription.billingCycle || '').toLowerCase());
   const isCanceled = subscription.status === 'canceled';
+  const pixPeriodLabel = isAnnualPix ? 'anuidade' : 'mensalidade';
   const summary = isCanceled
     ? 'Renovação cancelada.'
     : setupPending
       ? 'Seus 7 dias grátis ainda não começaram.'
       : isPix
-        ? 'Pagamento da mensalidade por Pix.'
+        ? isAnnualPix
+          ? 'Pagamento anual por Pix.'
+          : 'Pagamento mensal por Pix.'
         : subscription.canCancel
           ? 'Cobrança recorrente autorizada.'
           : 'Sem renovação automática.';
@@ -140,6 +145,14 @@ export function SubscriptionControl({ accessToken }: { accessToken?: string }) {
         </p>
       )}
 
+      {isPix && !isCanceled && (
+        <p className="mb-3 text-xs text-koma-muted">
+          {isAnnualPix
+            ? 'No plano anual, um único Pix do valor anual é gerado depois dos 7 dias grátis e quita os próximos 12 meses.'
+            : 'No plano mensal, cada vencimento gera um novo QR Code/Pix Copia e Cola.'}
+        </p>
+      )}
+
       {isPix && !isCanceled && pixCharge && (
         <div className="my-4 rounded-xl border border-koma-border p-4">
           {pixCharge.status === 'not_due' ? (
@@ -148,18 +161,19 @@ export function SubscriptionControl({ accessToken }: { accessToken?: string }) {
               {pixCharge.dueAt ? ` Próxima cobrança em ${new Date(pixCharge.dueAt).toLocaleDateString('pt-BR')}.` : ''}
             </p>
           ) : pixCharge.status === 'approved' ? (
-            <p>Pix confirmado. Seu período pago foi atualizado.</p>
+            <p>Pix confirmado. {isAnnualPix ? 'Os próximos 12 meses estão quitados.' : 'Seu período mensal pago foi atualizado.'}</p>
           ) : (
             <div className="space-y-3">
               <div>
-                <strong>Pix da mensalidade</strong>
+                <strong>Pix da {pixPeriodLabel}</strong>
                 {pixCharge.amount && <p>Valor: R$ {pixCharge.amount.replace('.', ',')}</p>}
                 <p className="text-xs text-koma-muted">Leia com qualquer banco/PSP compatível com Pix ou use o Copia e Cola.</p>
+                {isAnnualPix && <p className="text-xs text-koma-muted">Após a confirmação, este pagamento cobre 12 meses de assinatura.</p>}
               </div>
               {pixCharge.qrCodeBase64 && (
                 <img
                   src={`data:image/png;base64,${pixCharge.qrCodeBase64}`}
-                  alt="QR Code Pix da mensalidade KÔMA"
+                  alt={`QR Code Pix da ${pixPeriodLabel} KÔMA`}
                   className="h-52 w-52 rounded-lg bg-white p-2"
                 />
               )}
