@@ -102,6 +102,51 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         ),
     ),
     FiscalComplianceSource(
+        key="nt-2026-004",
+        title="NT 2026.004 - adequação da NF-e/NFC-e ao CNPJ alfanumérico",
+        version="1.01 (08/06/2026)",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.nfe.fazenda.gov.br/pOrtaL/listaConteudo.aspx?"
+            "tipoConteudo=04BIflQt1aY="
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Schemas oficiais em uso contemplam CNPJ alfanumérico. O gerador XML "
+            "deve usar o pacote vigente do Portal Nacional, não regex histórica numérica."
+        ),
+    ),
+    FiscalComplianceSource(
+        key="rfb-cnpj-alfanumerico",
+        title="CNPJ Alfanumérico - Receita Federal",
+        version="produção desde 31/07/2026",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/"
+            "programas-e-atividades/cnpj-alfanumerico/cnpj-alfa"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Novas inscrições podem conter letras nos 12 primeiros caracteres; "
+            "os dois dígitos verificadores permanecem numéricos e seguem o algoritmo oficial."
+        ),
+    ),
+    FiscalComplianceSource(
+        key="ibge-localidades",
+        title="API de Localidades - Registro de Referência de Municípios",
+        version="API v1",
+        jurisdiction="BR",
+        source_url="https://servicodados.ibge.gov.br/api/docs/localidades",
+        verified_on=VERIFIED_ON,
+        adoption_status="baseline",
+        notes=(
+            "Fonte oficial para município, código IBGE e UF usados na resolução da "
+            "jurisdição fiscal do estabelecimento."
+        ),
+    ),
+    FiscalComplianceSource(
         key="ce-in-87-2025",
         title="IN SEFAZ/CE nº 87/2025 - integração de pagamentos com NF-e/NFC-e",
         version="87/2025",
@@ -133,6 +178,8 @@ OFFICIAL_HOST_SUFFIXES = (
     "nfe.fazenda.gov.br",
     "sefaz.ce.gov.br",
     "sefazlegis.sefaz.ce.gov.br",
+    "ibge.gov.br",
+    "gov.br",
 )
 
 

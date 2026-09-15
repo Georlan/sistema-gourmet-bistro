@@ -14,11 +14,20 @@ test('validação de CPF rejeita sequências e aceita dígitos verificadores vá
 });
 
 
-test('validação de CNPJ rejeita sequências e aceita dígitos verificadores válidos', () => {
+test('validação de CNPJ numérico permanece compatível', () => {
   assert.equal(normalizeTaxId('11.222.333/0001-81'), '11222333000181');
   assert.equal(isValidCnpj('11.222.333/0001-81'), true);
   assert.equal(taxIdKind('11.222.333/0001-81'), 'cnpj');
   assert.equal(isValidCnpj('00.000.000/0000-00'), false);
   assert.equal(isValidCnpj('11.111.111/1111-11'), false);
   assert.equal(isValidCnpj('11.222.333/0001-80'), false);
+});
+
+
+test('validação aceita CNPJ alfanumérico oficial da Receita Federal', () => {
+  assert.equal(normalizeTaxId('00.000.000/E08G-12'), '00000000E08G12');
+  assert.equal(isValidCnpj('00.000.000/E08G-12'), true);
+  assert.equal(taxIdKind('00.000.000/E08G-12'), 'cnpj');
+  assert.equal(isValidCnpj('00.000.000/E08G-13'), false);
+  assert.equal(isValidCnpj('12.ABC.345/01DE-35'), true);
 });
