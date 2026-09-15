@@ -9,10 +9,12 @@ from sqlalchemy import text
 from ..database import SessionLocal
 from .reference_watch import (
     NCM_JSON_URL,
+    NFE_PORTAL_NOTICES_URL,
     NFE_TECHNICAL_REPORTS_URL,
     RTC_LOCAL_BASE_URL,
     FiscalReferenceWatchError,
     probe_local_rtc_calculator,
+    probe_nfe_portal_notices,
     probe_nfe_technical_reports,
     probe_official_ncm,
     record_probe,
@@ -90,6 +92,14 @@ def run_reference_watch() -> dict[str, object]:
             probe_nfe_technical_reports,
             source_key="nfe-informes-tecnicos",
             source_url=NFE_TECHNICAL_REPORTS_URL,
+        )
+        _collect_probe(
+            db,
+            results,
+            errors,
+            probe_nfe_portal_notices,
+            source_key="nfe-portal-notices",
+            source_url=NFE_PORTAL_NOTICES_URL,
         )
 
         rtc_enabled = os.getenv("KOMA_RTC_CALCULATOR_WATCH_ENABLED", "false").lower() == "true"
