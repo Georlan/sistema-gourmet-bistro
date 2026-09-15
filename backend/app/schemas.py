@@ -321,12 +321,12 @@ class CaixaMovimentacaoCreate(BaseModel):
 class SangriaCreate(BaseModel):
     valor: float
     motivo: Optional[str] = None
-    observacao: str = ""
+    observacao: Optional[str] = None
 
 class SuprimentoCreate(BaseModel):
     valor: float
     motivo: Optional[str] = None
-    observacao: str = ""
+    observacao: Optional[str] = None
 
 class CaixaMovimentacaoResponse(BaseModel):
     id: int
@@ -339,7 +339,7 @@ class CaixaMovimentacaoResponse(BaseModel):
     saldo_posterior: float = 0.0
     descricao: str = ""
     observacao: str = ""
-    criado_em: str
+    criado_em: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -348,7 +348,7 @@ class CaixaTurnoResumoResponse(BaseModel):
     status: str
     operador_id: Optional[str] = None
     operador_nome: Optional[str] = None
-    aberto_em: Optional[str] = None
+    aberto_em: Optional[datetime] = None
     tempo_aberto_minutos: int = 0
     turno_esquecido: bool = False
     saldo_inicial: float = 0.0
@@ -866,7 +866,7 @@ class CustomerRegisterRequest(BaseModel):
             raise ValueError("E-mail inválido.")
         return email
 
-    @field_validator("endereco", mode="before")
+    @field_validator("endereco")
     @classmethod
     def normalize_address(cls, value: Optional[str]) -> str:
         return (value or "").strip()
