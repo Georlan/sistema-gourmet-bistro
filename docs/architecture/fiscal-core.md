@@ -1,6 +1,6 @@
 # KÔMA Fiscal Core — Ceará NFC-e
 
-Status: fundação em implementação.
+Status: fundação F0/F1 concluída; onboarding fiscal Ceará em implementação.
 Baseline verificada em: **2026-09-15**.
 Escopo inicial: **NFC-e modelo 65 para restaurantes no Ceará**.
 
@@ -39,20 +39,25 @@ SEFAZ
 ## Invariantes
 
 1. O KÔMA não adivinha tributação pelo nome do produto.
-2. Configuração fiscal do estabelecimento e dos produtos precisa ser validada
+2. IA não é fonte de verdade para alíquota, enquadramento, imposto, NCM, CFOP,
+   CST/CSOSN ou regra fiscal. Regras de produção precisam ter fonte oficial e
+   vigência registradas.
+3. Configuração fiscal do estabelecimento e dos produtos precisa ser validada
    antes de liberar cobrança integrada.
-3. O estado financeiro é separado do estado fiscal.
-4. Timeout de SEFAZ nunca é tratado automaticamente como rejeição.
-5. Documento em estado `unknown` deve ser consultado/reconciliado antes de uma
+4. O estado financeiro é separado do estado fiscal.
+5. Timeout de SEFAZ nunca é tratado automaticamente como rejeição.
+6. Documento em estado `unknown` deve ser consultado/reconciliado antes de uma
    nova tentativa que possa duplicar efeito externo.
-6. Numeração fiscal nunca será calculada por `MAX(numero) + 1`.
-7. Certificado A1, chave privada e CSC não podem ser gravados em claro no banco,
+7. Numeração fiscal nunca será calculada por `MAX(numero) + 1`.
+8. Certificado A1, chave privada e CSC não podem ser gravados em claro no banco,
    logs, frontend, commits ou testes. O banco guarda apenas referências seguras.
-8. Toda regra tributária precisa ser ligada a versão/vigência e fonte oficial.
-9. DANFE é representação do documento; o XML autorizado e o protocolo são a
-   evidência fiscal principal.
-10. Contingência é um estado operacional explícito, com transmissão e
+9. Toda regra tributária precisa ser ligada a versão/vigência e fonte oficial.
+10. DANFE é representação do documento; o XML autorizado e o protocolo são a
+    evidência fiscal principal.
+11. Contingência é um estado operacional explícito, com transmissão e
     reconciliação posteriores.
+12. O endereço fiscal resolve a jurisdição por dados oficiais; UF e município
+    derivados não podem depender de texto livre nem de inferência probabilística.
 
 ## Estados do documento fiscal
 
@@ -79,7 +84,7 @@ ou `contingency`, conforme consulta e regras oficiais vigentes.
 - `FiscalEvent`: trilha imutável de eventos e transições.
 - `FiscalSequence`: sequência por tenant + ambiente + modelo + série.
 
-Todas as tabelas são tenant-scoped e devem usar RLS no PostgreSQL.
+Todas as tabelas são tenant-scoped e usam RLS no PostgreSQL.
 
 ## Baseline oficial verificada
 
@@ -90,6 +95,8 @@ Todas as tabelas são tenant-scoped e devem usar RLS no PostgreSQL.
 | `contingencia-offline-nfce` | Contingência Offline NFC-e | v2.0 | continuidade operacional |
 | `nt-2025-002` | Reforma Tributária do Consumo | v1.51, 04/08/2026 | campos/regras IBS/CBS conforme vigência |
 | `nt-2026-002` | Vendas presenciais/não presenciais | v1.10, 04/08/2026 | monitorar vigência/aplicabilidade antes de ativar regra |
+| `rfb-cnpj-alfanumerico` | CNPJ Alfanumérico — Receita Federal | produção desde 31/07/2026 | validação de CNPJ numérico e alfanumérico |
+| `ibge-localidades` | API de Localidades / Registro de Referência de Municípios | API v1 | município, código IBGE e UF |
 | `ce-in-87-2025` | IN SEFAZ/CE 87/2025 | 09/07/2025 | vínculo tecnológico de pagamento, Grupo YA e ECONF |
 | `ce-credenciamento-nfce` | Portal de credenciamento NFC-e CE | portal vigente | credenciamento/certificado |
 
@@ -113,8 +120,42 @@ KÔMA
   -> valida, aplica deterministicamente, registra versão e transmite
 ```
 
-O KÔMA poderá sugerir classificação no futuro, mas sugestão nunca pode ser
-promovida silenciosamente para tributação ativa.
+Automação serve para remover digitação e inconsistências, não para inventar
+tributação. Sugestões futuras nunca podem ser promovidas silenciosamente para
+configuração fiscal ativa.
+
+## Resolução de jurisdição
+
+O Ceará é a primeira jurisdição operacional (`BR-CE`), mas o domínio é nacional.
+A resolução usa o **código oficial do município do IBGE**. O prefixo da UF é
+validado contra a tabela oficial, e o município é confirmado na API oficial de
+Localidades durante o onboarding.
+
+```text
+endereço fiscal
+   -> município escolhido de fonte oficial
+   -> código IBGE
+   -> UF derivada/validada
+   -> BR-CE
+   -> política fiscal Ceará
+```
+
+Depois de validado, o snapshot cadastral fica persistido. Uma venda normal não
+depende de consultar a API do IBGE. Se CNPJ, município, UF, certificado ou outro
+dado crítico tornar o perfil inconsistente, o KÔMA derruba `enabled` e exige novo
+preflight antes de emissão.
+
+Outras UFs entram no registry `FISCAL_JURISDICTIONS` no futuro; uma jurisdição
+não implementada é resolvida, mas permanece `supported=false`, sem fallback para
+regras do Ceará.
+
+## CNPJ 2026
+
+O runtime aceita o CNPJ histórico numérico e o formato alfanumérico em produção
+desde julho de 2026. Os 12 primeiros caracteres podem conter letras/números e os
+dois dígitos verificadores permanecem numéricos, calculados pelo algoritmo
+oficial da Receita Federal. O mesmo validador é compartilhado pelo fluxo de
+contratação e pelo Fiscal Core para evitar regras divergentes.
 
 ## Segurança de certificado e CSC
 
@@ -149,6 +190,8 @@ mesmo evento são replay seguro.
 - [x] registry em código com fontes oficiais
 - [x] data de verificação e versão
 - [x] distinção entre baseline e documento apenas monitorado
+- [x] fonte oficial do CNPJ alfanumérico registrada
+- [x] fonte oficial de municípios/UF registrada
 - [ ] rotina automatizada de detecção de atualização nas fontes oficiais
 
 ### F1 — Domínio fiscal
@@ -161,20 +204,34 @@ mesmo evento são replay seguro.
 - [x] `FiscalEvent`
 - [x] `FiscalSequence`
 - [x] state machine inicial
-- [x] RLS previsto na migration
+- [x] RLS na migration
 - [x] serviço transacional de reserva de número com concorrência PostgreSQL
 - [x] persistência idempotente de transições/eventos
 
-### F2/F3 — Onboarding e produto
+### F2 — Onboarding Ceará
 
-- [x] campos estruturais criados em estado `draft`
-- [ ] validações oficiais de CNPJ/IE/CRT/CNAE/município
-- [ ] fluxo seguro de certificado/CSC
-- [ ] validações oficiais de NCM/CEST/CFOP/CST/CSOSN/PIS/COFINS
-- [ ] vigência e aprovação do responsável fiscal
+- [x] CNPJ numérico e alfanumérico com DV oficial
+- [x] CNAE com validação estrutural inicial
+- [x] CRT com códigos aceitos no leiaute
+- [x] município confirmado na API oficial do IBGE
+- [x] UF/jurisdição derivada e validada pelo código IBGE
+- [x] apenas `BR-CE` habilitada; outras UFs falham fechadas
+- [x] readiness bloqueia certificado vencido/ausente
+- [x] alteração inconsistente desabilita emissão fiscal
+- [ ] validar situação cadastral e IE/CGF em fonte oficial da SEFAZ/CE
+- [ ] fluxo seguro de provisionamento do certificado A1/CSC
+- [ ] endpoint explícito de ativação após homologação
+
+### F3 — Produto e tributação
+
+- [x] estrutura versionada de `ProductFiscalProfile`
+- [ ] fonte oficial/versionada para NCM/CEST/CFOP/CST/CSOSN/PIS/COFINS
+- [ ] aprovação do responsável fiscal/contador
+- [ ] vigência do perfil e bloqueio de produto sem classificação ativa
 
 ### F4+
 
-Ainda não implementado: Tax Engine, Fiscal Preflight, XML NFC-e, assinatura,
-SEFAZ, contingência, ECONF, cancelamento/inutilização, DANFE e observabilidade.
-Nenhum tenant deve receber `fiscal_nfce=true` antes dos gates correspondentes.
+Ainda não implementado: Tax Engine, Fiscal Preflight completo, XML NFC-e,
+assinatura, comunicação SEFAZ, contingência executável, ECONF,
+cancelamento/inutilização, DANFE e observabilidade. Nenhum tenant deve receber
+`fiscal_nfce=true` antes dos gates correspondentes.
