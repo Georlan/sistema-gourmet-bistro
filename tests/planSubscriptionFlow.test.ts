@@ -40,15 +40,15 @@ test('catálogo remove Pix antecipado e preserva o trial até a implantação', 
   assert.match(paymentCatalog, /id: 'annual_installments'/);
   assert.doesNotMatch(paymentCatalog, /id: 'pix_annual'/);
   assert.doesNotMatch(paymentCatalog, /id: 'boleto'/);
-  assert.match(paymentCatalog, /Pix Automático · em validação/);
-  assert.match(paymentCatalog, /recorrência fica preservada durante a implantação/);
-  assert.match(paymentCatalog, /7 dias grátis começam somente depois dos 3 passos essenciais/);
+  assert.match(paymentCatalog, /Pix Automático universal · em integração/);
+  assert.match(paymentCatalog, /QR Code ou Pix Copia e Cola/);
+  assert.match(paymentCatalog, /sem exigir conta Mercado Pago/);
+  assert.match(paymentCatalog, /selectable: false/);
 });
 
-test('checkout só oferece meios recorrentes com R$ 0 hoje e 7 dias grátis', () => {
+test('checkout só cobra por meios recorrentes homologados com R$ 0 hoje e 7 dias grátis', () => {
   assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic' \| 'account_money'/);
   assert.match(planContract, /payment_method_type: billingMethod/);
-  assert.match(planContract, /Pix Automático via Mercado Pago/);
   assert.match(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /R\$ 0 de mensalidade fixa hoje/);
   assert.match(planContract, /primeira cobrança automática/);
@@ -57,12 +57,12 @@ test('checkout só oferece meios recorrentes com R$ 0 hoje e 7 dias grátis', ()
   assert.doesNotMatch(planContract, /pagamento único/);
 });
 
-test('Pix hospedado não é apresentado como QR Code bancário', () => {
-  assert.match(planContract, /Pix Automático via Mercado Pago/);
-  assert.match(planContract, /não gera QR Code/);
-  assert.match(planContract, /Este método não exibe QR Code Pix para leitura em outro banco/);
-  assert.match(planContract, /Continuar no Mercado Pago/);
-  assert.doesNotMatch(planContract, /<QrCode size=\{19\}/);
+test('Pix Automático de produto exige QR universal e não aceita hosted checkout como substituto', () => {
+  assert.match(paymentCatalog, /Pix Automático universal/);
+  assert.match(paymentCatalog, /QR Code ou Pix Copia e Cola/);
+  assert.match(paymentCatalog, /qualquer banco\/PSP compatível/);
+  assert.match(paymentCatalog, /O recebedor será a conta Mercado Pago do KÔMA/);
+  assert.match(paymentCatalog, /checkout hospedado de assinaturas do Mercado Pago não será usado como substituto/);
 });
 
 test('roadmap exige autorização recorrente, implantação sem consumo e trial completo', () => {
