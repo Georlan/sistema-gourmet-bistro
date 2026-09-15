@@ -167,6 +167,13 @@ class ItemUpdate(BaseModel):
     cliente_nome: Optional[str] = None
     quantidade_adicional: Optional[int] = None
 
+
+class ItemModifierResponse(BaseModel):
+    id: str
+    nome: str
+    preco: float
+
+
 class ItemResponse(BaseModel):
     id: str
     comanda_id: str
@@ -181,6 +188,7 @@ class ItemResponse(BaseModel):
     cancelado_por: Optional[str] = None
     impresso_em: Optional[datetime] = None
     pago: bool
+    modificadores: List[ItemModifierResponse] = Field(default_factory=list)
     # Nested: produto name for display (populated via SQLAlchemy relationship)
     produto: Optional[ProdutoSimples] = None
 
