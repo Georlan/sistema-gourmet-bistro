@@ -10,6 +10,7 @@ import {
 } from '../../../domain/modifierQuantity';
 import type { Product } from '../../../types';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
+import DeliveryAddressFields from '../../shared/DeliveryAddressFields';
 import ModifierPicker from '../../shared/ModifierPicker';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
@@ -87,8 +88,9 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvCustomerLookup,
     pdvOrderType,
     setPdvOrderType,
-    pdvDeliveryAddress,
-    setPdvDeliveryAddress,
+    pdvDeliveryAddressDraft,
+    pdvDeliveryAddressLegacyHint,
+    handlePdvDeliveryAddressChange,
     pdvTargetMesaId,
     setPdvTargetMesaId,
     selectedPdvTableOption,
@@ -849,24 +851,18 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       >
                         {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
                         {pdvCustomerLookup === 'found' &&
-                          'Cliente encontrado — nome e endereço preenchidos automaticamente.'}
+                          'Cliente encontrado — nome e endereço disponíveis para conferência.'}
                         {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
                       </p>
                     )}
                     {pdvOrderType === 'entrega' && (
-                      <div className="space-y-1">
-                        <label
-                          className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}
-                        >
-                          Endereço:
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Rua, Número, Bairro"
-                          required
-                          value={pdvDeliveryAddress}
-                          onChange={(e) => setPdvDeliveryAddress(e.target.value)}
-                          className={"w-full px-2 py-1.5 bg-koma-input border border-koma-border rounded-lg focus:outline-none text-koma-foreground text-[10px]"}
+                      <div className="rounded-xl border border-koma-border bg-koma-card/40 p-2">
+                        <DeliveryAddressFields
+                          value={pdvDeliveryAddressDraft}
+                          onChange={handlePdvDeliveryAddressChange}
+                          legacyHint={pdvDeliveryAddressLegacyHint || null}
+                          compact
+                          idPrefix="pdv-delivery-address"
                         />
                       </div>
                     )}

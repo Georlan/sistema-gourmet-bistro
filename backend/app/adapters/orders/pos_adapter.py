@@ -15,6 +15,7 @@ from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from ...application.orders.addressing import delivery_address_from_payload
 from ...application.orders.commands import (
     CreateOrderCommand,
     CustomerInput,
@@ -120,6 +121,17 @@ class PosAdapter:
                 detail="Tipo de pedido inválido. Use Mesa, Delivery ou Retirada.",
             )
 
+        address_snapshot = (
+            delivery_address_from_payload(venda_in.address_snapshot)
+            if tipo_pedido == "Entrega"
+            else None
+        )
+        delivery_address = (
+            address_snapshot.to_legacy_address()
+            if address_snapshot is not None
+            else (venda_in.delivery_endereco or "").strip()
+        )
+
         if tipo_pedido in {"Entrega", "Retirada"} and not (is_smartpos and is_counter_sale):
             require_waiter_permission(
                 db,
@@ -151,7 +163,7 @@ class PosAdapter:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Informe o telefone do cliente para o delivery.",
                 )
-            if not (venda_in.delivery_endereco or "").strip():
+            if not delivery_address:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Informe o endereço de entrega.",
@@ -201,10 +213,13 @@ class PosAdapter:
                 )
                 for item in venda_in.itens
             )
+            existing_address = (existing_sale.delivery_endereco or "").strip()
+            requested_address = delivery_address if tipo_pedido == "Entrega" else ""
             if (
                 existing_sale.mesa_id != venda_in.mesa_id
                 or existing_sale.tipo != tipo_pedido
                 or existing_items != requested_items
+                or (tipo_pedido == "Entrega" and existing_address != requested_address)
             ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -263,8 +278,14 @@ class PosAdapter:
         delivery_input = None
         if fulfillment == FulfillmentType.DELIVERY:
             delivery_input = DeliveryInput(
-                address=venda_in.delivery_endereco,
+                address=delivery_address,
+                neighborhood=(
+                    address_snapshot.neighborhood
+                    if address_snapshot is not None
+                    else None
+                ),
                 fee=Decimal(str(venda_in.delivery_taxa or 0.0)),
+                address_snapshot=address_snapshot,
             )
 
         cmd = CreateOrderCommand(

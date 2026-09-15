@@ -17,6 +17,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ...application.orders.addressing import delivery_address_from_payload
 from ...application.orders.commands import (
     CreateOrderCommand,
     CustomerInput,
@@ -249,7 +250,14 @@ class CardapioWebAdapter:
                 detail="tipo_pedido deve ser 'delivery' ou 'retirada'.",
             )
 
+        address_snapshot = (
+            delivery_address_from_payload(payload.address_snapshot)
+            if modalidade == "delivery"
+            else None
+        )
         endereco_entrega = (payload.endereco_entrega or "").strip()
+        if address_snapshot is not None:
+            endereco_entrega = address_snapshot.to_legacy_address()
         if modalidade == "delivery" and not endereco_entrega:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -465,8 +473,13 @@ class CardapioWebAdapter:
             if modalidade == "delivery":
                 delivery_input = DeliveryInput(
                     address=endereco_comanda,
-                    neighborhood=payload.bairro,
+                    neighborhood=(
+                        address_snapshot.neighborhood
+                        if address_snapshot is not None
+                        else payload.bairro
+                    ),
                     fee=None,
+                    address_snapshot=address_snapshot,
                 )
 
             cmd = CreateOrderCommand(

@@ -224,6 +224,54 @@ class ComandaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DeliveryAddressSnapshotSchema(BaseModel):
+    """Contrato compartilhado de endereço para Cardápio Online e Caixa/PDV."""
+
+    logradouro: str = Field(min_length=1, max_length=180)
+    numero: str = Field(min_length=1, max_length=32)
+    complemento: Optional[str] = Field(default=None, max_length=120)
+    bairro: str = Field(min_length=1, max_length=100)
+    cidade: str = Field(min_length=1, max_length=100)
+    uf: str = Field(min_length=2, max_length=2)
+    cep: str = Field(min_length=8, max_length=10)
+    referencia: Optional[str] = Field(default=None, max_length=180)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+
+    @field_validator(
+        "logradouro",
+        "numero",
+        "complemento",
+        "bairro",
+        "cidade",
+        "referencia",
+        mode="before",
+    )
+    @classmethod
+    def normalize_text(cls, value):
+        if value is None:
+            return None
+        return " ".join(str(value).strip().split())
+
+    @field_validator("uf")
+    @classmethod
+    def normalize_state(cls, value: str) -> str:
+        state = value.strip().upper()
+        if len(state) != 2 or not state.isalpha():
+            raise ValueError("UF deve conter 2 letras.")
+        return state
+
+    @field_validator("cep")
+    @classmethod
+    def normalize_postal_code(cls, value: str) -> str:
+        postal_code = "".join(character for character in value if character.isdigit())
+        if len(postal_code) != 8:
+            raise ValueError("CEP deve conter 8 dígitos.")
+        return postal_code
+
+    model_config = ConfigDict(extra="forbid")
+
+
 # ----------------- ACTIONS & CREATIONS -----------------
 class ComandaCreate(BaseModel):
     mesa_id: Optional[int] = None
@@ -255,6 +303,7 @@ class VendaDiretaCreate(BaseModel):
     delivery_status: Optional[str] = None
     delivery_telefone: Optional[str] = None
     delivery_endereco: Optional[str] = None
+    address_snapshot: Optional[DeliveryAddressSnapshotSchema] = None
     delivery_taxa: float = 0.0
     origem: Optional[Literal["smartpos"]] = None
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
@@ -927,6 +976,7 @@ class CardapioPedidoCreate(BaseModel):
     cliente_nome: str = Field(min_length=2, max_length=100)
     cliente_telefone: str = Field(min_length=10, max_length=20)
     endereco_entrega: str = Field(default="", max_length=300)
+    address_snapshot: Optional[DeliveryAddressSnapshotSchema] = None
     taxa_entrega: float = Field(default=0.0, ge=0, le=10_000)
     forma_pagamento: Literal["na_entrega", "online"] = "na_entrega"
     forma_pagamento_detalhe: Optional[str] = Field(default="dinheiro", max_length=50)
