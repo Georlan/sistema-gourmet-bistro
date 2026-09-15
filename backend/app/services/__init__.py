@@ -1,5 +1,7 @@
 # Services package
 
+from types import MethodType
+
 # Instala o gateway de planos hospedados antes que as rotas importem a instância
 # canônica do Mercado Pago. O cartão continua usando o comportamento da classe
 # base; somente Pix Automático e Saldo Mercado Pago ganham o caminho alternativo
@@ -10,11 +12,52 @@ from .saas_mercadopago_hosted_plans import (
     default_saas_mp_service as _hosted_saas_mp_service,
     is_hosted_plan_provider_id as _is_hosted_plan_provider_id,
 )
+from .saas_mercadopago_runtime_auth import (
+    build_runtime_client as _build_runtime_client,
+    resolve_saas_access_token as _resolve_saas_access_token,
+    runtime_token_enabled as _runtime_token_enabled,
+)
 
+# O serviço canônico usa o mesmo client para cartão, hosted plans, consulta e
+# reconciliação. Quando KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED=true em produção,
+# build_runtime_client troca o token estático por um token curto obtido via
+# client_credentials, validando aplicação e conta antes de cada renovação.
+_hosted_saas_mp_service._client = MethodType(
+    lambda service: _build_runtime_client(service),
+    _hosted_saas_mp_service,
+)
 _saas_mercadopago.default_saas_mp_service = _hosted_saas_mp_service
 
+_original_checkout_capabilities = _hosted_saas_mp_service.checkout_capabilities
 _original_upsert_billing_setup = _billing_service.upsert_billing_setup
 _original_get_billing_setup_by_provider_sub = _billing_service.get_billing_setup_by_provider_sub
+
+
+def _runtime_auth_aware_checkout_capabilities():
+    """Não anuncia checkout quando a credencial runtime não pode ser obtida.
+
+    Além de evitar a UX enganosa de mostrar Pix/Saldo como disponíveis com uma
+    credencial inválida, esta consulta pública aquece o token curto de forma
+    segura antes de o usuário enviar a contratação. Nenhum segredo é retornado.
+    """
+    capabilities = dict(_original_checkout_capabilities())
+    if not _runtime_token_enabled() or _hosted_saas_mp_service.environment != "production":
+        return capabilities
+
+    try:
+        _resolve_saas_access_token(_hosted_saas_mp_service)
+    except _saas_mercadopago.SaasMercadoPagoError:
+        capabilities["credit_card"] = False
+        capabilities["pix_automatic"] = False
+        capabilities["account_money"] = False
+        capabilities["providerAuthReady"] = False
+        return capabilities
+
+    capabilities["providerAuthReady"] = True
+    return capabilities
+
+
+_hosted_saas_mp_service.checkout_capabilities = _runtime_auth_aware_checkout_capabilities
 
 
 def _hosted_plan_aware_upsert_billing_setup(
