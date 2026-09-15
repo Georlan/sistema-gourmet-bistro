@@ -1,5 +1,5 @@
 import { readCheckLaunchIdentities } from '../../../domain/orderIdentity';
-import type { Order, Product } from '../../../types';
+import type { Order, OrderItemModifier, Product } from '../../../types';
 import { parseBackendTimestamp } from '../../../utils/dateTime';
 
 const parseBackendDateTime = (dateStr: any): number =>
@@ -15,6 +15,18 @@ const readOperationalOrigin = (comanda: any): NonNullable<Order['origemOperacion
   if (origins.includes('garcom')) return 'garcom';
   return 'desconhecida';
 };
+
+const readPersistedModifiers = (item: any): OrderItemModifier[] =>
+  (Array.isArray(item?.modificadores) ? item.modificadores : []).flatMap((modifier: any) => {
+    const id = String(modifier?.id || '').trim();
+    const nome = String(modifier?.nome || '').trim();
+    if (!id || !nome) return [];
+    return [{
+      id,
+      nome,
+      preco: Number(modifier?.preco) || 0,
+    }];
+  });
 
 /**
  * Normaliza a comanda compartilhada preservando, também nos itens, o contexto
@@ -71,6 +83,7 @@ export function mapBackendComandaToOperationalOrder({
           preco: item.preco_unit,
           observacao: item.observacao || '',
           clienteNome: item.cliente_nome || 'Consumo Geral',
+          modificadores: readPersistedModifiers(item),
           status: item.status,
           pago: Boolean(item.pago),
           lancamentoId: launchId,

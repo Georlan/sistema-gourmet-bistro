@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
@@ -62,6 +63,41 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
             return ""
         values = parse_qs(urlsplit(back_url).query).get(_PROTOCOL_QUERY_KEY) or []
         return str(values[0] if values else "").strip().upper()
+
+    def _validate_hosted_plan_identity(self, payload: dict[str, Any]) -> None:
+        """Valida IDs somente quando `/preapproval_plan` realmente os retorna.
+
+        O endpoint de planos hospedados pode omitir `application_id` e/ou
+        `collector_id` mesmo quando a autenticação pertence à aplicação correta.
+        Tratar ausência como mismatch gerava falso 409/502 em produção.
+
+        A autenticação de produção continua fail-closed no token runtime
+        (Client ID/Secret + token APP_USR). Se o recurso retornar explicitamente
+        algum desses identificadores, um valor divergente continua sendo
+        bloqueado aqui.
+        """
+        if self.is_mock:
+            return
+
+        expected_collector = os.getenv(
+            "KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", ""
+        ).strip()
+        expected_application = os.getenv(
+            "KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", ""
+        ).strip()
+        collector_id = str(payload.get("collector_id") or "").strip()
+        application_id = str(payload.get("application_id") or "").strip()
+
+        if expected_collector and collector_id and collector_id != expected_collector:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago retornou uma conta recebedora diferente da conta KÔMA configurada.",
+                status_code=409,
+            )
+        if expected_application and application_id and application_id != expected_application:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago retornou uma aplicação diferente da aplicação KomaBilling configurada.",
+                status_code=409,
+            )
 
     @staticmethod
     def _plan_payload(
@@ -166,7 +202,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
                         "O Mercado Pago não retornou o link do plano de assinatura.",
                         status_code=502,
                     )
-                self._validate_merchant_identity(result)
+                self._validate_hosted_plan_identity(result)
                 return {
                     **result,
                     "id": self._plan_storage_id(plan_id),
@@ -235,7 +271,7 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
                         status_code=response.status_code,
                     )
                 result = response.json()
-                self._validate_merchant_identity(result)
+                self._validate_hosted_plan_identity(result)
                 return result
         except httpx.RequestError as exc:
             raise SaasMercadoPagoError("Erro de comunicação ao consultar plano de assinatura.") from exc

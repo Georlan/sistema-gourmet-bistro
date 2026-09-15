@@ -28,8 +28,6 @@ def _configure_identity(monkeypatch):
     monkeypatch.setenv("KOMA_SAAS_MP_RUNTIME_TOKEN_ENABLED", "true")
     monkeypatch.setenv("MERCADO_PAGO_CLIENT_ID", "123456789")
     monkeypatch.setenv("MERCADO_PAGO_CLIENT_SECRET", "client-secret")
-    # Esses IDs auxiliares podem ficar desatualizados sem derrubar uma
-    # credencial que prove pertencer à aplicação pela Public Key oficial.
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_APPLICATION_ID", "old-app-id")
     monkeypatch.setenv("KOMA_SAAS_MERCADO_PAGO_EXPECTED_COLLECTOR_ID", "old-user-id")
     monkeypatch.setattr(settings, "KOMA_SAAS_MERCADO_PAGO_PUBLIC_KEY", "APP_USR-public")
@@ -90,7 +88,7 @@ def test_stale_expected_application_and_collector_do_not_block_valid_application
     assert runtime_auth.resolve_saas_access_token(_service()).startswith("APP_USR-123456789-")
 
 
-def test_runtime_token_requires_public_key_binding(monkeypatch):
+def test_runtime_token_rejects_public_key_mismatch_when_provider_returns_it(monkeypatch):
     _configure_identity(monkeypatch)
     monkeypatch.setattr(
         runtime_auth,
@@ -121,7 +119,7 @@ def test_runtime_token_rejects_embedded_client_id_mismatch(monkeypatch):
     assert runtime_auth.runtime_auth_reason(exc_info.value) == "token_client_id_mismatch"
 
 
-def test_runtime_token_requires_returned_public_key(monkeypatch):
+def test_runtime_token_accepts_response_without_public_key(monkeypatch):
     _configure_identity(monkeypatch)
     monkeypatch.setattr(
         runtime_auth,
@@ -129,10 +127,9 @@ def test_runtime_token_requires_returned_public_key(monkeypatch):
         lambda **_kwargs: _valid_payload(public_key=""),
     )
 
-    with pytest.raises(SaasMercadoPagoError, match="Public Key") as exc_info:
-        runtime_auth.resolve_saas_access_token(_service())
-
-    assert runtime_auth.runtime_auth_reason(exc_info.value) == "missing_returned_public_key"
+    assert runtime_auth.resolve_saas_access_token(_service()) == (
+        "APP_USR-123456789-091512-abcdef-99887766"
+    )
 
 
 def test_runtime_token_rejects_test_credential_in_production(monkeypatch):

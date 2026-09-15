@@ -102,8 +102,6 @@ def _mint_client_credentials_token(
         ) from exc
 
     if response.status_code >= 400:
-        # Nunca propagamos corpo, Client Secret ou tokens. O reason é um enum
-        # seguro e suficiente para operação.
         raise _auth_error(
             f"Mercado Pago recusou a renovação da credencial SaaS (HTTP {response.status_code}).",
             reason=_safe_provider_error_code(response),
@@ -127,8 +125,6 @@ def _mint_client_credentials_token(
 
 
 def _token_embedded_client_id(access_token: str) -> str:
-    # A documentação do Mercado Pago descreve APP_USR-<client_id>-... como
-    # formato do token de produção. A validação é complementar à Public Key.
     match = re.match(r"^APP_USR-([0-9]+)-", access_token)
     return match.group(1) if match else ""
 
@@ -168,13 +164,12 @@ def _validate_oauth_identity(
             reason="missing_provider_user",
             status_code=502,
         )
-    if not returned_public_key:
-        raise _auth_error(
-            "Mercado Pago não informou a Public Key vinculada à credencial renovada.",
-            reason="missing_returned_public_key",
-            status_code=502,
-        )
-    if returned_public_key != configured_public_key:
+
+    # O endpoint OAuth client_credentials nem sempre devolve `public_key`.
+    # Quando ela vier, usamos como vínculo adicional. Quando não vier, a
+    # identidade continua sendo provada pelo par Client ID/Secret que emitiu o
+    # token e pelo Client ID embutido no token APP_USR.
+    if returned_public_key and returned_public_key != configured_public_key:
         raise _auth_error(
             "A credencial renovada pertence a uma aplicação Mercado Pago diferente da aplicação KÔMA configurada.",
             reason="public_key_mismatch",
@@ -198,13 +193,7 @@ def _validate_oauth_identity(
 
 
 def resolve_saas_access_token(service: SaasMercadoPagoService) -> str:
-    """Retorna o token efetivo sem persistir ou logar credenciais.
-
-    Em produção, quando a flag runtime está ativa, usa `client_credentials` do
-    Mercado Pago. A identidade canônica é validada pela Public Key da aplicação
-    já usada pelo checkout KÔMA e pelo Client ID embutido no token, evitando que
-    IDs auxiliares desatualizados bloqueiem uma credencial válida.
-    """
+    """Retorna o token efetivo sem persistir ou logar credenciais."""
     if not runtime_token_enabled():
         return service.access_token
     if service.environment != "production":
@@ -243,7 +232,6 @@ def runtime_auth_reason(exc: BaseException) -> str:
 
 
 def public_runtime_auth_reason(exc: BaseException) -> str:
-    """Mapeia detalhe interno para um código seguro que pode ir à capability."""
     reason = runtime_auth_reason(exc)
     if reason in {
         "missing_client_credentials",
@@ -258,7 +246,6 @@ def public_runtime_auth_reason(exc: BaseException) -> str:
         "test_credential",
         "unexpected_token_type",
         "missing_provider_user",
-        "missing_returned_public_key",
     }:
         return "provider_identity_not_ready"
     return "provider_temporarily_unavailable"
