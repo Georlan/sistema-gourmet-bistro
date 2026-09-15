@@ -11,6 +11,7 @@ from app.fiscal.reference_watch import (
     FiscalReferenceWatchError,
     OfficialReferenceProbe,
     probe_local_rtc_calculator,
+    probe_nfe_portal_notices,
     probe_nfe_technical_reports,
     probe_official_ncm,
     promote_observed_reference,
@@ -83,6 +84,43 @@ def test_nfe_technical_reports_probe_fails_closed_when_page_shape_is_incomplete(
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(FiscalReferenceWatchError, match="poucos Informes Técnicos"):
             probe_nfe_technical_reports(client=client)
+
+
+def test_nfe_portal_notices_probe_catches_fresh_ncm_and_cfop_publications():
+    html = """
+    <html><body>
+      <div>04/09/2026 - Publicado Informe Técnico 2023.002 v.2.10 que divulga atualização na tabela de CFOP.</div>
+      <div>03/09/2026 - Publicado Informe Técnico 2024.001 v.2.40 que divulga atualização na tabela de NCM a partir de 01/10/2026.</div>
+      <div>25/08/2026 - Publicado Ato Conjunto RFB/CGIBS nº 2, de 2026.</div>
+      <script>99/99/9999 - conteúdo volátil ignorado</script>
+    </body></html>
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.host == "www.nfe.fazenda.gov.br"
+        return httpx.Response(200, text=html)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        probe = probe_nfe_portal_notices(client=client)
+
+    assert probe.source_key == "nfe-portal-notices"
+    assert probe.metadata["entry_count"] == 3
+    assert probe.metadata["future_effective_dates"] == ["01/10/2026"]
+    recent = " ".join(probe.metadata["recent_entries"])
+    assert "CFOP" in recent
+    assert "NCM" in recent
+    assert "Ato Conjunto" in recent
+
+
+def test_nfe_portal_notices_probe_fails_closed_when_feed_shape_is_incomplete():
+    html = "<html><body>04/09/2026 - Publicado Informe Técnico isolado.</body></html>"
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=html)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(FiscalReferenceWatchError, match="poucos avisos datados"):
+            probe_nfe_portal_notices(client=client)
 
 
 def test_reference_change_keeps_previous_active_baseline_until_explicit_promotion():
@@ -206,6 +244,8 @@ def test_ceara_policy_is_bound_to_machine_readable_official_sources():
     assert baseline_by_key("rfb-cbs-apuracao-api").adoption_status == "monitor"
     assert baseline_by_key("nfe-informes-tecnicos").adoption_status == "monitor"
     assert baseline_by_key("nfe-informes-tecnicos").official_host == "www.nfe.fazenda.gov.br"
+    assert baseline_by_key("nfe-portal-notices").adoption_status == "monitor"
+    assert baseline_by_key("nfe-portal-notices").official_host == "www.nfe.fazenda.gov.br"
 
 
 def test_super_admin_fiscal_compliance_route_is_registered():
