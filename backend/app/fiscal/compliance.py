@@ -150,6 +150,37 @@ OFFICIAL_FISCAL_BASELINE: tuple[FiscalComplianceSource, ...] = (
         ),
     ),
     FiscalComplianceSource(
+        key="nfe-informes-tecnicos",
+        title="Informes Técnicos - Portal Nacional da NF-e",
+        version="catálogo oficial monitorado em 15/09/2026",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.nfe.fazenda.gov.br/pOrtaL/listaConteudo.aspx?"
+            "tipoConteudo=hXzemuyNHW4%3D"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="monitor",
+        notes=(
+            "Catálogo consolidado de Informes Técnicos. Nova publicação gera alerta; "
+            "nunca autoativa regra."
+        ),
+    ),
+    FiscalComplianceSource(
+        key="nfe-portal-notices",
+        title="Avisos recentes - Portal Nacional da NF-e",
+        version="feed oficial monitorado em 15/09/2026",
+        jurisdiction="BR",
+        source_url=(
+            "https://www.nfe.fazenda.gov.br/PORTAl/informe.aspx?ehCTG=false"
+        ),
+        verified_on=VERIFIED_ON,
+        adoption_status="monitor",
+        notes=(
+            "Feed recente usado para antecipar publicações ainda não refletidas no catálogo "
+            "consolidado, incluindo NCM/CFOP/NT/atos. Nunca autoativa regra."
+        ),
+    ),
+    FiscalComplianceSource(
         key="rfb-rtc-calculator-offline",
         title="Calculadora oficial da Reforma Tributária do Consumo",
         version="portal PRO V0042 / 1.3.0-af611293 em 15/09/2026",
