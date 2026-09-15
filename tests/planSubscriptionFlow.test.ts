@@ -26,29 +26,28 @@ test('seleção comercial mantém mensal e anual com trial após implantação',
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 
-test('checkout expõe exatamente cartão Pix Automático e Saldo Mercado Pago', () => {
-  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix_automatic' \| 'account_money'/);
+test('checkout expõe exatamente cartão Pix e Saldo Mercado Pago', () => {
+  assert.match(planContract, /type BillingMethod = 'credit_card' \| 'pix' \| 'account_money'/);
   assert.match(planContract, /Cartão de crédito/);
-  assert.match(planContract, /Pix Automático/);
+  assert.match(planContract, /QR Code \+ Pix Copia e Cola/);
   assert.match(planContract, /Saldo Mercado Pago/);
-  assert.match(planContract, /\/api\/contracts\/payment-methods/);
+  assert.match(planContract, /payment-methods-v2/);
+  assert.doesNotMatch(planContract, /Pix Automático via Mercado Pago/);
 });
 
-test('Pix Automático usa o setup recorrente e redireciona para autorização', () => {
-  assert.match(planContract, /payment_method_type: billingMethod/);
-  assert.match(planContract, /\/billing\/setup/);
-  assert.match(planContract, /billingMethod === 'pix_automatic'/);
-  assert.match(planContract, /authorization_required/);
-  assert.match(planContract, /window\.location\.assign\(String\(payload\.authorizationUrl\)\)/);
-  assert.doesNotMatch(planContract, /\/billing\/pix\/select/);
-  assert.doesNotMatch(planContract, /QR Code \+ Pix Copia e Cola/);
+test('Pix é universal e não gera cobrança no aceite', () => {
+  assert.match(planContract, /\/billing\/pix\/select/);
+  assert.match(planContract, /pague com qualquer banco/);
+  assert.match(planContract, /o KÔMA exibirá o QR Code e o Pix Copia e Cola aqui dentro/);
+  assert.match(planContract, /Não há débito Pix automático/);
+  assert.doesNotMatch(planContract, /Continuar no Mercado Pago.*Pix/);
 });
 
 test('catálogo contém somente os três meios publicados', () => {
   assert.match(paymentCatalog, /id: 'credit_card'/);
-  assert.match(paymentCatalog, /id: 'pix_automatic'/);
+  assert.match(paymentCatalog, /id: 'pix'/);
   assert.match(paymentCatalog, /id: 'account_money'/);
-  assert.doesNotMatch(paymentCatalog, /id: 'pix'|nupay|annual_installments|boleto/);
+  assert.doesNotMatch(paymentCatalog, /pix_automatic|nupay|annual_installments|boleto/);
 });
 
 test('retomada de inscrição é escolha explícita e troca de plano permanece possível', () => {
@@ -69,26 +68,10 @@ test('CNPJ exige representante pessoa física e CPF usa o próprio titular', () 
 
 test('campo de CPF / CNPJ da contratação aceita CNPJ alfanumérico e não restringe teclado a numérico', () => {
   const v1 = readFileSync('src/legal/PlanContractPage.tsx', 'utf8');
-  assert.doesNotMatch(
-    v1,
-    /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/,
-    'campo de CPF / CNPJ em PlanContractPage não deve restringir o teclado com inputMode="numeric"',
-  );
-  assert.match(
-    v1,
-    /<input[^<]*?value=\{form\.taxId\}[^<]*?autoCapitalize="characters"/,
-    'campo de CPF / CNPJ deve permitir texto com autoCapitalize="characters"',
-  );
-  assert.match(
-    v1,
-    /<input[^<]*?value=\{form\.representativeTaxId\}[^<]*?inputMode="numeric"/,
-    'campo CPF do responsável continua restrito a teclado numérico',
-  );
-  assert.doesNotMatch(
-    planContract,
-    /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/,
-    'campo de CPF / CNPJ em PlanContractPageV2 não deve restringir o teclado com inputMode="numeric"',
-  );
+  assert.doesNotMatch(v1, /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/);
+  assert.match(v1, /<input[^<]*?value=\{form\.taxId\}[^<]*?autoCapitalize="characters"/);
+  assert.match(v1, /<input[^<]*?value=\{form\.representativeTaxId\}[^<]*?inputMode="numeric"/);
+  assert.doesNotMatch(planContract, /<input[^<]*?value=\{form\.taxId\}[^<]*?inputMode="numeric"/);
   assert.equal(taxIdKind('00.000.000/E08G-12'), 'cnpj');
   assert.equal(isValidCnpj('00.000.000/E08G-12'), true);
 });
