@@ -4,6 +4,8 @@ import json
 import logging
 import os
 
+from sqlalchemy import text
+
 from ..database import SessionLocal
 from .reference_watch import (
     NCM_JSON_URL,
@@ -17,6 +19,10 @@ from .reference_watch import (
 
 
 logger = logging.getLogger("koma.fiscal.reference_watch")
+
+# Lock global da plataforma: a baseline oficial é compartilhada por todos os
+# tenants. O lock transacional evita trabalho duplicado se houver várias réplicas.
+FISCAL_REFERENCE_WATCH_LOCK_KEY = 876_240_915
 
 
 def _sync_payload(synced) -> dict[str, object]:
@@ -32,6 +38,18 @@ def _sync_payload(synced) -> dict[str, object]:
     }
 
 
+def _try_acquire_watch_lock(db) -> bool:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        # SQLite é usado nos testes locais; não há múltiplas réplicas concorrentes.
+        return True
+    acquired = db.execute(
+        text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+        {"lock_key": FISCAL_REFERENCE_WATCH_LOCK_KEY},
+    ).scalar()
+    return bool(acquired)
+
+
 def run_reference_watch() -> dict[str, object]:
     """Executa uma rodada do watcher oficial fora do caminho crítico da venda."""
 
@@ -39,6 +57,17 @@ def run_reference_watch() -> dict[str, object]:
     results: list[dict[str, object]] = []
     errors: list[dict[str, str]] = []
     try:
+        if not _try_acquire_watch_lock(db):
+            db.rollback()
+            return {
+                "ok": True,
+                "requiresAttention": False,
+                "skipped": True,
+                "reason": "another-replica-holds-lock",
+                "results": [],
+                "errors": [],
+            }
+
         try:
             results.append(_sync_payload(record_probe(db, probe_official_ncm())))
         except FiscalReferenceWatchError as exc:
@@ -73,6 +102,7 @@ def run_reference_watch() -> dict[str, object]:
     return {
         "ok": not requires_attention,
         "requiresAttention": requires_attention,
+        "skipped": False,
         "results": results,
         "errors": errors,
     }
