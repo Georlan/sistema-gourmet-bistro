@@ -77,7 +77,10 @@ def test_ibge_municipality_code_derives_ceara_without_manual_uf_choice():
     assert resolution.jurisdiction_key == "BR-CE"
     assert resolution.supported is True
     assert resolution.document_model == "65"
-    assert fiscal_policy_for("BR-CE").payment_linkage_required is True
+    policy = fiscal_policy_for("BR-CE")
+    assert policy.payment_linkage_required is True
+    assert "nt-2026-004" in policy.compliance_keys
+    assert "ibge-localidades" in policy.compliance_keys
 
 
 def test_declared_uf_mismatch_is_blocked():
@@ -169,6 +172,9 @@ def test_official_identity_and_location_sources_are_registered():
     rfb = baseline_by_key("rfb-cnpj-alfanumerico")
     assert rfb.jurisdiction == "BR"
     assert rfb.official_host == "www.gov.br"
+    nt = baseline_by_key("nt-2026-004")
+    assert nt.version.startswith("1.01")
+    assert nt.adoption_status == "baseline"
 
 
 def test_fiscal_onboarding_routes_are_registered_for_admin_flow():
