@@ -24,6 +24,11 @@ def test_courier_preassignment_is_tenant_scoped_and_does_not_dispatch_order():
     with SessionLocal() as db:
         _ensure_restaurant(db, 1, f"courier-assign-1-{suffix}")
         _ensure_restaurant(db, 2, f"courier-assign-2-{suffix}")
+        # SQLite CI enforces the Motoboy -> Restaurante FK immediately. Flush
+        # tenant fixtures first so the test validates assignment semantics, not
+        # ORM insert ordering.
+        db.flush()
+
         admin = Usuario(
             id=user_id,
             restaurante_id=1,
