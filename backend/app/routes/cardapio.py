@@ -20,13 +20,15 @@ from ..services.public_orders import (
 )
 from ..services.scheduled_orders import scheduled_for_order
 from ..adapters.orders.web_adapter import CardapioWebAdapter
+from .validation_observability import ValidationObservabilityRoute
 # Stable Python compatibility export; order creation already uses the Core.
 from ..services.order_numbers import gerar_novo_numero_pedido_atomico as gerar_novo_numero_pedido
 
 logger = logging.getLogger("koma.cardapio")
 router = APIRouter(
     prefix="/cardapio",
-    tags=["Cardápio Digital Client"]
+    tags=["Cardápio Digital Client"],
+    route_class=ValidationObservabilityRoute,
 )
 
 MAX_PUBLIC_ORDER_UNITS = 200
