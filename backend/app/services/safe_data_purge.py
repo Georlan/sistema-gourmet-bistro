@@ -19,35 +19,18 @@ from sqlalchemy.exc import NoReferencedTableError
 
 KEEP_RESTAURANT_ID = 1
 CONFIRMATION_PHRASE = "PURGE_KEEP_RESTAURANT_1"
+WAIVE_BACKUP_PHRASE = "PURGE_WITHOUT_BACKUP_CONFIRMED"
 
-# Estrutura intrínseca do tenant 1. Filhos de catálogo são listados
-# explicitamente para que uma mudança de FK não os transforme em dado operacional.
+# Após a limpeza, o tenant 1 deve ficar como uma casca funcional mínima.
+# Preservamos apenas identidade técnica do restaurante e entitlement/plano.
+# Cardápio, mesas, clientes, pedidos, caixa, fidelidade, fiscal e contas de
+# pagamento são deliberadamente removidos para evitar qualquer resíduo de
+# homologação ou conflito de email/telefone antes de uma apresentação.
 PRESERVE_TENANT_ONE_TABLES = frozenset(
     {
         "restaurantes",
-        "categorias",
-        "produtos",
-        "produto_insumos",
-        "grupo_modificadores",
-        "opcao_modificadores",
-        "produto_grupo_modificadores",
-        "categoria_relacoes",
-        "categoria_grupo_modificadores",
-        "observacoes_predefinidas",
-        "insumos",
-        "mesas",
-        "configuracoes_restaurante",
-        "configuracoes_ia",
-        "config_fidelizacao",
-        "restaurante_operation_profiles",
         "restaurante_capabilities",
-        "restaurant_payment_accounts",
-        "restaurant_fiscal_profiles",
-        "product_fiscal_profiles",
-        "fiscal_credential_secrets",
-        "fiscal_sequences",
         "saas_subscriptions",
-        "restaurant_contract_acceptances",
     }
 )
 
@@ -55,7 +38,7 @@ PRESERVE_TENANT_ONE_TABLES = frozenset(
 # configuração do Resend; apenas filas/capabilities antigas armazenadas no banco.
 GLOBAL_OPERATIONAL_TABLES = frozenset({"restaurant_signups", "signup_notifications"})
 
-REQUIRED_PRESERVED_TABLES = ("restaurantes", "categorias", "produtos", "configuracoes_restaurante")
+REQUIRED_PRESERVED_TABLES = ("restaurantes",)
 
 
 @dataclass(frozen=True)
@@ -236,12 +219,19 @@ def apply_purge(
     expected_fingerprint: str,
     expected_database: str,
     confirmation: str,
-    backup_reference: str,
+    backup_reference: str = "",
+    backup_waiver: str = "",
 ) -> dict[str, Any]:
     if confirmation != CONFIRMATION_PHRASE:
         raise RuntimeError("Frase de confirmação inválida.")
-    if not backup_reference.strip():
-        raise RuntimeError("Uma referência de backup/snapshot restaurável é obrigatória.")
+    has_backup = bool(backup_reference.strip())
+    has_waiver = backup_waiver == WAIVE_BACKUP_PHRASE
+    if not has_backup and not has_waiver:
+        raise RuntimeError(
+            "Informe uma referência de backup restaurável ou a renúncia explícita de backup."
+        )
+    if backup_waiver and not has_waiver:
+        raise RuntimeError("Frase de renúncia de backup inválida.")
 
     with engine.begin() as connection:
         if connection.dialect.name == "postgresql":
@@ -271,7 +261,7 @@ def apply_purge(
         if after.delete_counts.get("restaurantes", 0) != 0:
             raise RuntimeError("Validação final falhou: ainda existem restaurantes diferentes de id=1.")
         if any(after.preserved_counts.get(name) != count for name, count in plan.preserved_counts.items()):
-            raise RuntimeError("Validação final falhou: dados estruturais do tenant 1 foram alterados.")
+            raise RuntimeError("Validação final falhou: dados técnicos preservados do tenant 1 foram alterados.")
         if any(after.delete_counts.values()):
             remaining = {name: count for name, count in after.delete_counts.items() if count}
             raise RuntimeError(f"Validação final falhou: dados removíveis permaneceram: {remaining}")
@@ -279,7 +269,8 @@ def apply_purge(
         return {
             "mode": "apply",
             "database": plan.database,
-            "backup_reference": backup_reference,
+            "backup_reference": backup_reference or None,
+            "backup_waived": has_waiver and not has_backup,
             "fingerprint": plan.fingerprint,
             "removed": removed,
             "removed_total": sum(removed.values()),
