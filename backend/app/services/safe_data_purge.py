@@ -133,7 +133,7 @@ def _tenant_predicate(
         )
         if parent_scope is None:
             continue
-        pairs = [child == parent_column for child, parent_column in constraint.column_pairs]
+        pairs = [element.parent == element.column for element in constraint.elements]
         alternatives.append(exists(select(1).select_from(parent).where(and_(*pairs, parent_scope))))
     return or_(*alternatives) if alternatives else None
 
