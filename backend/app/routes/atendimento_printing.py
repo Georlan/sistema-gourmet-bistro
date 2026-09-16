@@ -60,6 +60,49 @@ def _enqueue_reprint(
     return jobs
 
 
+def _reprint_response(jobs, *, mesa_id: Optional[int] = None) -> dict:
+    return {
+        "status": "success",
+        "detail": "Reimpressão do pedido enviada para a fila",
+        "job_id": jobs[0].id,
+        "job_ids": [job.id for job in jobs],
+        "mesa_id": mesa_id,
+    }
+
+
+@router.post(
+    "/comandas/{comanda_id}/imprimir-recibo",
+    status_code=status.HTTP_200_OK,
+)
+def reimprimir_comanda_compatibilidade(
+    comanda_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Compatibilidade para Caixas antigos sem reintroduzir formatter legado.
+
+    O frontend histórico usa esta URL para imprimir conferência de pedidos sem
+    mesa. A rota apenas traduz a chamada para o Core Universal; a primeira via
+    automática continua sendo responsabilidade do aceite canônico do pedido.
+    """
+    require_waiter_permission(db, current_user, "perm_garcom_print")
+    rid = require_tenant_id()
+    exists = db.query(Comanda.id).filter(
+        Comanda.restaurante_id == rid,
+        Comanda.id == comanda_id,
+    ).first()
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+
+    jobs = _enqueue_reprint(
+        db=db,
+        restaurante_id=rid,
+        lancamento_id=comanda_id,
+        current_user=current_user,
+    )
+    return _reprint_response(jobs)
+
+
 @router.post(
     "/comandas/lancamentos/{lancamento_id}/reimprimir",
     status_code=status.HTTP_200_OK,
@@ -90,13 +133,7 @@ def reimprimir_lancamento_na_mesa_atual(
             lancamento_id=lancamento_id,
             current_user=current_user,
         )
-        return {
-            "status": "success",
-            "detail": "Reimpressão do pedido enviada para a fila",
-            "job_id": jobs[0].id,
-            "job_ids": [job.id for job in jobs],
-            "mesa_id": None,
-        }
+        return _reprint_response(jobs)
 
     lancamento = (
         db.query(Lancamento)
@@ -127,13 +164,7 @@ def reimprimir_lancamento_na_mesa_atual(
             lancamento_id=lancamento_id,
             current_user=current_user,
         )
-        return {
-            "status": "success",
-            "detail": "Reimpressão do pedido enviada para a fila",
-            "job_id": jobs[0].id,
-            "job_ids": [job.id for job in jobs],
-            "mesa_id": None,
-        }
+        return _reprint_response(jobs)
 
     current_tables = {
         int(table_id)
@@ -184,10 +215,4 @@ def reimprimir_lancamento_na_mesa_atual(
         current_user=current_user,
         table_id=target_table,
     )
-    return {
-        "status": "success",
-        "detail": "Reimpressão do pedido enviada para a fila",
-        "job_id": jobs[0].id,
-        "job_ids": [job.id for job in jobs],
-        "mesa_id": target_table,
-    }
+    return _reprint_response(jobs, mesa_id=target_table)
