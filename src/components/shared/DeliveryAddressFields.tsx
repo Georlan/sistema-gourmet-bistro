@@ -4,6 +4,7 @@ import {
   formatCepInput,
   updateDeliveryAddressGeographicField,
 } from '../../domain/deliveryAddress';
+import GooglePlacesAddressAutocomplete from './GooglePlacesAddressAutocomplete';
 
 type NeighborhoodOption = {
   value: string;
@@ -52,6 +53,13 @@ export default function DeliveryAddressFields({
           Endereço salvo anteriormente: {legacyHint}. Confirme os campos abaixo para este pedido.
         </div>
       )}
+
+      <GooglePlacesAddressAutocomplete
+        value={value}
+        onChange={onChange}
+        compact={compact}
+        idPrefix={idPrefix}
+      />
 
       <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-2">
         <label>
