@@ -41,6 +41,17 @@ test('fiscal screen makes official reference lineage and RTC blocker visible', (
   assert.match(fiscal, /não emitimos|não emite uma nota/i);
 });
 
+test('new fiscal profile never guesses CRT or municipality', () => {
+  assert.match(fiscal, /crt: ''/);
+  assert.match(fiscal, /municipioCodigoIbge: ''/);
+  assert.doesNotMatch(fiscal, /crt: '1'/);
+  assert.doesNotMatch(fiscal, /municipioCodigoIbge: '2304400'/);
+  assert.match(fiscal, /Selecione o CRT cadastrado/);
+  assert.match(fiscal, /Selecione o município fiscal/);
+  assert.match(fiscal, /profileFormReady/);
+  assert.match(fiscal, /não são inferidos nem pré-selecionados pelo KÔMA/);
+});
+
 test('technical settings expose a dedicated Fiscal tab without replacing existing integrations', () => {
   assert.match(integrations, /CashierFiscalSettings/);
   assert.match(integrations, />\s*Fiscal\s*</);
