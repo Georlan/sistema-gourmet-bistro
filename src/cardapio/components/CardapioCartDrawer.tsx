@@ -40,6 +40,16 @@ import {
   recognizePublicCustomer,
 } from "../customerRecognition";
 import { API_BASE_URL } from "../../config/api";
+import {
+  EMPTY_DELIVERY_ADDRESS,
+  type DeliveryAddressDraft,
+  type DeliveryAddressSnapshot,
+  deliveryAddressDraftToSnapshot,
+  formatDeliveryAddressLegacy,
+  getDeliveryAddressValidationError,
+  parseDeliveryAddressLegacy,
+} from "../../domain/deliveryAddress";
+import DeliveryAddressFields from "../../components/shared/DeliveryAddressFields";
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
@@ -55,6 +65,7 @@ export interface CartItem {
 export interface CardapioCheckoutRequest {
   deliveryMethod: "delivery" | "pickup";
   address: string;
+  addressSnapshot?: DeliveryAddressSnapshot;
   deliveryFee: number;
   customerName: string;
   customerPhone: string;
@@ -90,6 +101,8 @@ const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 }).format(value);
 
+const emptyAddress = (): DeliveryAddressDraft => ({ ...EMPTY_DELIVERY_ADDRESS });
+
 export default function CardapioCartDrawer({
   cart,
   restaurantId,
@@ -108,7 +121,13 @@ export default function CardapioCartDrawer({
 }: CardapioCartDrawerProps) {
   const [deliveryMethod, setDeliveryMethod] = useState<"delivery" | "pickup">("pickup");
   const [address, setAddress] = useState(user?.address || "");
-  const [selectedBairro, setSelectedBairro] = useState("");
+  const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddressDraft>(() => (
+    parseDeliveryAddressLegacy(user?.address) || emptyAddress()
+  ));
+  const [legacyAddressHint, setLegacyAddressHint] = useState<string | null>(() => (
+    user?.address && !parseDeliveryAddressLegacy(user.address) ? user.address : null
+  ));
+  const [selectedBairro, setSelectedBairro] = useState(() => deliveryAddressDraft.bairro);
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
@@ -179,10 +198,24 @@ export default function CardapioCartDrawer({
   const [useCashback, setUseCashback] = useState(false);
 
   useEffect(() => {
+    const applyStoredAddress = (storedAddress: string) => {
+      setAddress(storedAddress);
+      const parsedAddress = parseDeliveryAddressLegacy(storedAddress);
+      if (parsedAddress) {
+        setDeliveryAddressDraft(parsedAddress);
+        setSelectedBairro(parsedAddress.bairro);
+        setLegacyAddressHint(null);
+      } else if (storedAddress.trim()) {
+        setDeliveryAddressDraft(emptyAddress());
+        setSelectedBairro("");
+        setLegacyAddressHint(storedAddress.trim());
+      }
+    };
+
     if (user) {
       setGuestName(user.name || "");
       setGuestPhone(formatBrazilianPhone(user.phone || ""));
-      if (user.address) setAddress(user.address);
+      applyStoredAddress(user.address || "");
       return;
     }
 
@@ -191,7 +224,7 @@ export default function CardapioCartDrawer({
     setGuestName(parsed.name);
     setGuestPhone(formatBrazilianPhone(parsed.phone));
     setGuestEmail(parsed.email);
-    setAddress(parsed.address);
+    applyStoredAddress(parsed.address || "");
   }, [restaurantId, user]);
 
   useEffect(() => {
@@ -380,8 +413,15 @@ export default function CardapioCartDrawer({
       reportValidationError("Informe um celular válido com DDD.", "input-guest-phone");
       return;
     }
-    if (deliveryMethod === "delivery" && address.trim().length < 5) {
-      reportValidationError("Informe onde o pedido deve ser entregue.", "input-delivery-address");
+
+    const addressSnapshot = deliveryMethod === "delivery"
+      ? deliveryAddressDraftToSnapshot(deliveryAddressDraft)
+      : null;
+    if (deliveryMethod === "delivery" && !addressSnapshot) {
+      reportValidationError(
+        getDeliveryAddressValidationError(deliveryAddressDraft) || "Informe o endereço completo de entrega.",
+        "delivery-address-logradouro",
+      );
       return;
     }
 
@@ -395,18 +435,18 @@ export default function CardapioCartDrawer({
       return;
     }
 
+    const canonicalAddress = addressSnapshot ? formatDeliveryAddressLegacy(addressSnapshot) : "";
     onPlaceOrder({
       deliveryFee,
       deliveryMethod,
-      address: deliveryMethod === "delivery" 
-        ? (selectedBairro ? `${address.trim()}, ${selectedBairro}` : address.trim())
-        : "Retirada no Balcão",
+      address: deliveryMethod === "delivery" ? canonicalAddress : "Retirada no Balcão",
+      addressSnapshot: addressSnapshot || undefined,
       customerName: customerName.trim(),
       customerPhone: normalizeBrazilianPhone(customerPhone),
       customerEmail: paymentDetail === "pix" ? guestEmail.trim().toLowerCase() : undefined,
       paymentMethodDetail: paymentDetail,
       trocoPara: paymentDetail === "dinheiro" && precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
-      bairro: selectedBairro || undefined,
+      bairro: addressSnapshot?.bairro || undefined,
       cupomCodigo: appliedCoupon?.codigo,
       descontoCupom: couponDiscount > 0 ? couponDiscount : undefined,
       usarCashback: useCashback && cashbackDiscount > 0,
@@ -645,7 +685,7 @@ export default function CardapioCartDrawer({
                 </section>
               )}
 
-              {/* Section 2: Delivery Method & Address & Bairro */}
+              {/* Section 2: Delivery Method & Address */}
               <section className="border-t border-koma-border pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
                 <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</h3>
                 <div className="mt-3 grid grid-cols-2 gap-2">
@@ -670,36 +710,28 @@ export default function CardapioCartDrawer({
 
                 {deliveryMethod === "delivery" && (
                   <div className="mt-3 space-y-3">
-                    {/* Bairro Selector if configured */}
-                    {brandConfig?.tabelaTaxasBairros && brandConfig.tabelaTaxasBairros.length > 0 && (
-                      <div>
-                        <label htmlFor="delivery-neighborhood" className="mb-1.5 block text-xs font-semibold text-koma-foreground">Bairro de entrega</label>
-                        <select
-                          id="delivery-neighborhood"
-                          aria-describedby="delivery-neighborhood-help"
-                          value={selectedBairro}
-                          onChange={(e) => setSelectedBairro(e.target.value)}
-                          className="w-full min-w-0 h-12 px-3 bg-koma-card border border-koma-border rounded-xl text-base text-koma-foreground outline-none focus:border-emerald-500"
-                        >
-                          <option value="">Selecione seu bairro...</option>
-                          {brandConfig.tabelaTaxasBairros.map((b) => (
-                            <option key={b.bairro} value={b.bairro}>
-                              {b.bairro} ({b.taxa === 0 ? 'Grátis' : formatPrice(b.taxa)})
-                            </option>
-                          ))}
-                        </select>
-                        <p id="delivery-neighborhood-help" className="mt-1.5 break-words text-xs leading-relaxed text-koma-muted" aria-live="polite">
-                          {deliveryQuote.awaitingNeighborhood
-                            ? "Selecione seu bairro para atualizar a taxa. Por enquanto, o total usa a taxa padrão estimada."
-                            : `${selectedBairro ? `${selectedBairro}: ` : ""}${deliveryQuote.fee === 0 ? "sem taxa de entrega neste pedido." : `taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}`}
-                        </p>
-                      </div>
-                    )}
-
-                    <label className="block">
-                      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-koma-foreground"><MapPin className="h-4 w-4 text-emerald-500" /> Endereço de entrega</span>
-                      <textarea rows={3} autoComplete="street-address" placeholder="Rua, número, complemento e bairro" value={address} onChange={(event) => { setAddress(event.target.value); clearValidation("input-delivery-address"); }} aria-invalid={invalidField === "input-delivery-address"} aria-describedby={invalidField === "input-delivery-address" ? "cart-checkout-error" : undefined} className={`w-full resize-none rounded-xl border bg-koma-card p-3 text-base leading-relaxed text-koma-foreground outline-none transition placeholder:text-koma-subtle focus:border-emerald-500 ${invalidField === "input-delivery-address" ? "border-rose-500" : "border-koma-border"}`} id="input-delivery-address" />
-                    </label>
+                    <DeliveryAddressFields
+                      value={deliveryAddressDraft}
+                      onChange={(nextAddress) => {
+                        setDeliveryAddressDraft(nextAddress);
+                        setSelectedBairro(nextAddress.bairro);
+                        const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
+                        setAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : "");
+                        setLegacyAddressHint(null);
+                        clearValidation("delivery-address-logradouro");
+                      }}
+                      neighborhoodOptions={(brandConfig?.tabelaTaxasBairros || []).map((item) => ({
+                        value: item.bairro,
+                        label: `${item.bairro} (${item.taxa === 0 ? "Grátis" : formatPrice(item.taxa)})`,
+                      }))}
+                      legacyHint={legacyAddressHint}
+                      idPrefix="delivery-address"
+                    />
+                    <p className="break-words text-xs leading-relaxed text-koma-muted" aria-live="polite">
+                      {deliveryQuote.awaitingNeighborhood
+                        ? "Selecione ou informe seu bairro para atualizar a taxa. Por enquanto, o total usa a taxa padrão estimada."
+                        : `${selectedBairro ? `${selectedBairro}: ` : ""}${deliveryQuote.fee === 0 ? "sem taxa de entrega neste pedido." : `taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}`}
+                    </p>
                   </div>
                 )}
               </section>

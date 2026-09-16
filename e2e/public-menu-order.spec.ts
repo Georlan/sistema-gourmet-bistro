@@ -159,6 +159,15 @@ async function openCart(page: Page) {
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
 }
 
+async function fillDeliveryAddress(page: Page) {
+  await page.locator('#delivery-address-cep').fill('60000000');
+  await page.locator('#delivery-address-uf').fill('CE');
+  await page.locator('#delivery-address-cidade').fill('Fortaleza');
+  await page.locator('#delivery-address-bairro').fill('Centro');
+  await page.locator('#delivery-address-logradouro').fill('Rua das Flores');
+  await page.locator('#delivery-address-numero').fill('123');
+}
+
 test('cartão do produto mantém detalhes e adição como controles separados', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders);
@@ -217,12 +226,11 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
 
   await phone.fill('85999999999');
   await page.locator('#btn-confirm-order').click();
-  const address = page.locator('#input-delivery-address');
+  const address = page.locator('#delivery-address-logradouro');
   await expect(address).toBeFocused();
-  await expect(address).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe onde o pedido deve ser entregue.');
+  await expect(page.locator('#cart-checkout-error')).toHaveText('Informe o logradouro.');
 
-  await address.fill('Rua do Teste, 123');
+  await fillDeliveryAddress(page);
   await page.locator('#btn-confirm-order').click();
   const email = page.locator('#input-customer-email');
   await expect(email).toBeFocused();
@@ -299,10 +307,11 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   const deliveryButton = page.getByRole('button', { name: /^Entrega\b/ });
   await deliveryButton.click();
   await expect(deliveryButton).toHaveAttribute('aria-pressed', 'true');
-  await page.getByPlaceholder('Rua, número, complemento e bairro').fill('Rua das Flores, 123, Centro');
+  await fillDeliveryAddress(page);
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
-  await expect(page.locator('#checkout-card').getByText('Rua das Flores, 123, Centro', { exact: true })).toBeVisible();
+  const canonicalAddress = 'Rua das Flores, 123, Centro, Fortaleza - CE, CEP 60000-000';
+  await expect(page.locator('#checkout-card').getByText(canonicalAddress, { exact: true })).toBeVisible();
   await expect(page.getByText(/Taxa de entrega estimada/)).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
@@ -313,7 +322,7 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
     cliente_telefone: '85988887777',
     tipo_pedido: 'delivery',
     taxa_entrega: 0,
-    endereco_entrega: 'Rua das Flores, 123, Centro',
+    endereco_entrega: canonicalAddress,
   });
   expect(backend.getOtpRequests()).toBe(0);
 });

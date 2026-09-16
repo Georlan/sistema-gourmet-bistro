@@ -70,6 +70,40 @@ def _normalize_scheduled_for(scheduled: Optional[datetime.datetime | str]) -> Op
     return dt.isoformat()
 
 
+def _normalize_address_snapshot(address_snapshot: object | None) -> dict[str, Any] | None:
+    if address_snapshot is None:
+        return None
+    if hasattr(address_snapshot, "model_dump"):
+        raw = address_snapshot.model_dump()  # type: ignore[attr-defined]
+    elif isinstance(address_snapshot, dict):
+        raw = dict(address_snapshot)
+    else:
+        return None
+
+    def clean_text(name: str) -> str | None:
+        value = raw.get(name)
+        if value is None:
+            return None
+        cleaned = " ".join(str(value).strip().split())
+        return cleaned or None
+
+    postal_code = "".join(c for c in str(raw.get("cep") or "") if c.isdigit())
+    latitude = raw.get("latitude")
+    longitude = raw.get("longitude")
+    return {
+        "bairro": clean_text("bairro"),
+        "cep": postal_code or None,
+        "cidade": clean_text("cidade"),
+        "complemento": clean_text("complemento"),
+        "latitude": float(latitude) if latitude is not None else None,
+        "logradouro": clean_text("logradouro"),
+        "longitude": float(longitude) if longitude is not None else None,
+        "numero": clean_text("numero"),
+        "referencia": clean_text("referencia"),
+        "uf": (clean_text("uf") or "").upper() or None,
+    }
+
+
 def build_order_intent_canonical_dict(
     *,
     restaurante_id: int,
@@ -78,6 +112,7 @@ def build_order_intent_canonical_dict(
     cliente_nome: Optional[str] = None,
     cliente_telefone: Optional[str] = None,
     endereco_entrega: Optional[str] = None,
+    address_snapshot: object | None = None,
     bairro: Optional[str] = None,
     forma_pagamento: Optional[str] = None,
     forma_pagamento_detalhe: Optional[str] = None,
@@ -125,6 +160,7 @@ def build_order_intent_canonical_dict(
     is_delivery = normalized_modalidade == "delivery"
     clean_address = str(endereco_entrega or "").strip() if is_delivery and endereco_entrega else None
     clean_bairro = str(bairro or "").strip() if is_delivery and bairro else None
+    clean_snapshot = _normalize_address_snapshot(address_snapshot) if is_delivery else None
 
     clean_cupom = str(cupom_codigo).strip().upper() if cupom_codigo and str(cupom_codigo).strip() else None
     clean_email = str(cliente_email).strip().lower() if cliente_email and str(cliente_email).strip() else None
@@ -135,7 +171,7 @@ def build_order_intent_canonical_dict(
     clean_troco = _normalize_monetary_amount(troco_para)
     clean_scheduled = _normalize_scheduled_for(scheduled_for)
 
-    return {
+    canonical = {
         "bairro": clean_bairro,
         "cliente_email": clean_email,
         "cliente_nome": clean_nome,
@@ -151,6 +187,11 @@ def build_order_intent_canonical_dict(
         "troco_para": clean_troco,
         "usar_cashback": bool(usar_cashback),
     }
+    # Compatibilidade: pedidos legados sem snapshot preservam exatamente o
+    # payload canônico v1 anterior e, portanto, o mesmo hash em retries antigos.
+    if clean_snapshot is not None:
+        canonical["address_snapshot"] = clean_snapshot
+    return canonical
 
 
 def compute_order_intent_fingerprint(
@@ -161,6 +202,7 @@ def compute_order_intent_fingerprint(
     cliente_nome: Optional[str] = None,
     cliente_telefone: Optional[str] = None,
     endereco_entrega: Optional[str] = None,
+    address_snapshot: object | None = None,
     bairro: Optional[str] = None,
     forma_pagamento: Optional[str] = None,
     forma_pagamento_detalhe: Optional[str] = None,
@@ -179,6 +221,7 @@ def compute_order_intent_fingerprint(
         cliente_nome=cliente_nome,
         cliente_telefone=cliente_telefone,
         endereco_entrega=endereco_entrega,
+        address_snapshot=address_snapshot,
         bairro=bairro,
         forma_pagamento=forma_pagamento,
         forma_pagamento_detalhe=forma_pagamento_detalhe,
@@ -221,6 +264,7 @@ def compute_fingerprint_for_public_payload(
         cliente_nome=payload.cliente_nome,
         cliente_telefone=payload.cliente_telefone,
         endereco_entrega=payload.endereco_entrega,
+        address_snapshot=getattr(payload, "address_snapshot", None),
         bairro=payload.bairro,
         forma_pagamento=payload.forma_pagamento,
         forma_pagamento_detalhe=payload.forma_pagamento_detalhe,

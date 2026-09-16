@@ -21,6 +21,7 @@ import { BrandConfig } from "../CardapioTypes";
 import { CartItem } from "./CardapioCartDrawer";
 import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
+import type { DeliveryAddressSnapshot } from "../../domain/deliveryAddress";
 import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
@@ -59,6 +60,7 @@ interface CardapioDigitalProps {
   deliveryFee: number;
   deliveryMethod: "delivery" | "pickup";
   address: string;
+  addressSnapshot?: DeliveryAddressSnapshot | null;
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
@@ -112,6 +114,7 @@ export default function CardapioDigital({
   deliveryFee,
   deliveryMethod,
   address,
+  addressSnapshot,
   customerName,
   customerPhone,
   customerEmail,
@@ -332,6 +335,7 @@ export default function CardapioDigital({
       cliente_nome: finalClienteNome,
       cliente_telefone: normalizedPhone,
       endereco_entrega: deliveryMethod === "delivery" ? normalizedAddress : "",
+      address_snapshot: deliveryMethod === "delivery" ? addressSnapshot || undefined : undefined,
       taxa_entrega: deliveryMethod === "delivery" ? deliveryFee : 0,
       forma_pagamento: paymentMethodDetail === "pix" ? "online" : "na_entrega",
       forma_pagamento_detalhe: paymentMethodDetail,
