@@ -26,6 +26,7 @@ required_files=(
     config.py
     pairing.py
     worker.py
+    wake_listener.py
     dispatcher.py
     api_client.py
     journal.py
