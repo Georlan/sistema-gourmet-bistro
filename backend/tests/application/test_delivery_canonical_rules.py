@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.application.orders.service import OrderApplicationService
+from app.application.orders.commands import DeliveryAddressInput
 from app.database import SessionLocal
 from app.domain.orders.errors import OrderValidationError
 from app.domain.orders.types import FulfillmentType
@@ -249,6 +250,53 @@ class TestDeliveryCanonicalRules:
             db.commit()
             db.close()
 
+    def test_resolve_delivery_fee_distancia_usa_rota_e_tabela_canonica(self, char_setup):
+        class RouteStub:
+            def distance_meters(self, **kwargs):
+                assert kwargs["tenant_id"] == CHAR_RESTAURANT_ID
+                assert kwargs["origin"] == (-3.7319, -38.5267)
+                return 4200
+
+        db: Session = SessionLocal()
+        try:
+            config = self._get_or_create_config(db)
+            restaurant = db.query(Restaurante).filter(Restaurante.id == CHAR_RESTAURANT_ID).one()
+            previous_coordinates = (restaurant.latitude, restaurant.longitude)
+            restaurant.latitude = -3.7319
+            restaurant.longitude = -38.5267
+            config.tipo_taxa_entrega = "distancia"
+            config.tabela_taxas_km = [
+                {"ate_km": 3, "taxa": 5},
+                {"ate_km": 5, "taxa": 8.5},
+            ]
+            config.frete_gratis_valor = 0
+            db.commit()
+
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("30.00"),
+                delivery_address=DeliveryAddressInput(
+                    street="Rua das Flores",
+                    number="123",
+                    neighborhood="Centro",
+                    city="Fortaleza",
+                    state="CE",
+                    postal_code="60000000",
+                    latitude=-3.725,
+                    longitude=-38.496,
+                ),
+                route_distance_provider=RouteStub(),
+            )
+            assert fee == Decimal("8.50")
+        finally:
+            config.tipo_taxa_entrega = "fixa"
+            config.tabela_taxas_km = []
+            restaurant.latitude, restaurant.longitude = previous_coordinates
+            db.commit()
+            db.close()
+
     def test_configuracoes_get_and_put_taxa_entrega_fixa(self, char_client, char_setup):
         """Endpoints /caixa/configuracoes leem e persistem taxa_entrega_fixa."""
         headers = char_setup["headers"]
@@ -369,4 +417,3 @@ class TestDeliveryCanonicalRules:
             config.tabela_taxas_bairros = []
             db.commit()
             db.close()
-
