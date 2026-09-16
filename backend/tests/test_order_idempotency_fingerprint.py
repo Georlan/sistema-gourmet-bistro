@@ -20,6 +20,7 @@ from app.main import app
 from app.models import (
     Categoria,
     Comanda,
+    ConfiguracaoRestaurante,
     Cupom,
     GrupoModificador,
     OpcaoModificador,
@@ -71,6 +72,17 @@ def setup_fingerprint_test_environment():
             db.add(rest)
         else:
             rest.status_override = "Automático"
+        db.commit()
+
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == RESTAURANTE_ID,
+        ).first()
+        if config is None:
+            config = ConfiguracaoRestaurante(restaurante_id=RESTAURANTE_ID)
+            db.add(config)
+        config.delivery_ativo = True
+        config.tipo_taxa_entrega = "fixa"
+        config.taxa_entrega_fixa = 7.0
         db.commit()
 
         # Capability para pedidos agendados

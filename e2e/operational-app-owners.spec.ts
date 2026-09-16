@@ -16,7 +16,7 @@ async function setup(page: Page, withDrafts = true, onSocket?: (socket: WebSocke
     localStorage.setItem('koma_waiter_name', 'Operador de teste');
     if (withDrafts) {
       const draft = (id: number) => [{ id: `draft-${id}`, produtoId: '101', nome: 'Risoto da casa', preco: 42, quantidade: 2, observacao: 'Sem cebola', clienteNome: 'Cliente de teste' }];
-      localStorage.setItem('koma_drafts_vFinal_v3', JSON.stringify({ 7: draft(7), 8: draft(8) }));
+      localStorage.setItem('koma_drafts_v4:99001:waiter-app-owner', JSON.stringify({ 7: draft(7), 8: draft(8) }));
     }
   }, { withDrafts });
 }
