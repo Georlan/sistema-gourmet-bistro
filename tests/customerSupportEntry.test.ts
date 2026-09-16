@@ -17,12 +17,17 @@ test('ajuda não usa mais botão flutuante sobre as telas', () => {
 
 test('menus autenticados expõem Ajuda e feedback sem adicionar entrada ao SuperAdmin', () => {
   const cashierFooter = source('src/components/caixa/navigation/CashierSidebarFooter.tsx');
-  const operationalDrawer = source('src/components/app/OperationalDrawer.tsx');
+  const operationalDrawerBoundary = source('src/components/app/OperationalDrawer.tsx');
+  const operationalDrawer = source('src/components/app/OperationalDrawerLegacy.tsx');
+  const app = source('src/App.tsx');
   const main = source('src/main.tsx');
 
   assert.match(cashierFooter, /Ajuda e feedback/);
   assert.match(cashierFooter, /openCustomerSupport/);
   assert.match(operationalDrawer, /id="drawer-open-customer-support"/);
   assert.match(operationalDrawer, /Dúvidas, sugestões, problemas ou reclamações/);
+  assert.match(operationalDrawerBoundary, /OperationalDrawerLegacy/);
+  assert.match(app, /from '\.\/components\/app\/OperationalDrawer'/);
+  assert.doesNotMatch(app, /OperationalDrawerLegacy/);
   assert.match(main, /!pathname\.startsWith\("\/super-admin"\)/);
 });
