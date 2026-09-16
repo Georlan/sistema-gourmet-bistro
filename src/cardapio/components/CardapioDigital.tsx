@@ -23,6 +23,7 @@ import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
 import type { DeliveryAddressSnapshot } from "../../domain/deliveryAddress";
 import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
+import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
@@ -387,7 +388,7 @@ export default function CardapioDigital({
         throw new Error("Sua identificação expirou. Você pode tentar novamente sem perder a sacola.");
       }
       if (!response.ok || !(data?.comanda_id || data?.id) || data?.numero_pedido == null) {
-        throw new Error(data?.detail || "Não foi possível registrar o pedido. Tente novamente.");
+        throw new Error(formatCardapioApiError(data));
       }
 
       const comandaId = String(data.comanda_id || data.id);
