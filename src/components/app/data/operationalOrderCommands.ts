@@ -4,7 +4,7 @@ import { operationalFetch } from '../../../utils/operationalRequest';
 type AuthHeadersFactory = (contentType?: string) => Record<string, string>;
 
 export type CloseOperationalComandasResult =
-  | { ok: true }
+  | { ok: true; message?: never }
   | { ok: false; message: string };
 
 const readErrorMessage = async (response: Response): Promise<string> => {
