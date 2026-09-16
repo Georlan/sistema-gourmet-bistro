@@ -1,0 +1,4 @@
+FROM postgres:18
+
+ENTRYPOINT ["/bin/sh", "-lc"]
+CMD ["set -eu; pg_dump --no-owner --no-privileges \"$SRC_URL\" | psql \"$DEST_URL\"; echo BACKUP_COPY_COMPLETE"]
