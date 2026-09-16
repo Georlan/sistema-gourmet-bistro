@@ -100,9 +100,11 @@ test('desktop 1366x768 compacta banners e libera a área operacional', async ({ 
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
 
-  const pdvHero = page.locator('.orders-hero').first();
+  const pdvHeading = page.locator('#counter-heading');
+  await expect(pdvHeading).toBeVisible();
+  await expect(pdvHeading).toHaveText('Novo pedido rápido e simples');
+  const pdvHero = page.locator('.orders-hero').filter({ has: pdvHeading });
   await expect(pdvHero).toBeVisible();
-  await expect(pdvHero.getByRole('heading', { name: 'Novo pedido', exact: true })).toBeVisible();
   await expect(pdvHero.locator('.orders-eyebrow')).toBeHidden();
   await expect(pdvHero.locator('.orders-hero__copy > p:last-child')).toBeHidden();
   expect(await pdvHero.evaluate(element => element.getBoundingClientRect().height)).toBeLessThanOrEqual(50);

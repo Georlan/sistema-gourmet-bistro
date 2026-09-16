@@ -49,13 +49,15 @@ test('pedido mínimo bloqueia somente entrega, nunca retirada', () => {
 });
 
 const cart = readFileSync(new URL('../src/cardapio/components/CardapioCartDrawer.tsx', import.meta.url), 'utf8');
+const deliveryAddressFields = readFileSync(new URL('../src/components/shared/DeliveryAddressFields.tsx', import.meta.url), 'utf8');
 
 test('UI expõe seleção, nome acessível do bairro e endereço legível sem alterar checkout', () => {
   assert.match(cart, /aria-pressed=\{deliveryMethod === "pickup"\}/);
   assert.match(cart, /aria-pressed=\{deliveryMethod === "delivery"\}/);
-  assert.match(cart, /htmlFor="delivery-neighborhood"/);
-  assert.match(cart, /id="delivery-neighborhood"/);
-  assert.match(cart, /autoComplete="street-address"/);
+  assert.match(cart, /idPrefix="delivery-address"/);
+  assert.match(deliveryAddressFields, /<span className=\{labelClass\}>Bairro<\/span>/);
+  assert.match(deliveryAddressFields, /id=\{`\$\{idPrefix\}-bairro`\}/);
+  assert.match(deliveryAddressFields, /autoComplete="address-line1"/);
   assert.match(cart, /deliveryMethod === "delivery" \? deliveryQuote.fee : 0/);
 });
 

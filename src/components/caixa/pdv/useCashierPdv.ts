@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
+import {
+  EMPTY_DELIVERY_ADDRESS,
+  type DeliveryAddressDraft,
+  deliveryAddressDraftToSnapshot,
+  formatDeliveryAddressLegacy,
+  getDeliveryAddressValidationError,
+  parseDeliveryAddressLegacy,
+} from '../../../domain/deliveryAddress';
 import { smartSearchMatch } from '../../../domain/search';
 import { Product } from '../../../types';
 import { makeOperationKey, operationalFetch } from '../../../utils/operationalRequest';
@@ -44,6 +52,8 @@ type Props = {
   pdvTableOptions: Array<ReturnType<typeof projectCashierSalonTables>[number] & { label: string }>;
 };
 
+const emptyDeliveryAddress = (): DeliveryAddressDraft => ({ ...EMPTY_DELIVERY_ADDRESS });
+
 export function useCashierPdv({
   apiBaseUrl,
   authHeaders,
@@ -85,7 +95,18 @@ export function useCashierPdv({
 
   const [pdvOrderType, setPdvOrderType] = useState<'retirada' | 'entrega' | 'mesa'>('retirada');
 
+  // Legacy text remains only as a projection/backward-compatible payload. The
+  // editable source of truth for new delivery orders is the structured draft.
   const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
+  const [pdvDeliveryAddressDraft, setPdvDeliveryAddressDraft] = useState<DeliveryAddressDraft>(emptyDeliveryAddress);
+  const [pdvDeliveryAddressLegacyHint, setPdvDeliveryAddressLegacyHint] = useState('');
+
+  const handlePdvDeliveryAddressChange = (nextAddress: DeliveryAddressDraft) => {
+    setPdvDeliveryAddressDraft(nextAddress);
+    setPdvDeliveryAddressLegacyHint('');
+    const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
+    setPdvDeliveryAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : '');
+  };
 
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);
 
@@ -129,7 +150,16 @@ export function useCashierPdv({
         setPdvCustomerId(String(customer.id));
         setPdvCustomerName(String(customer.cliente || customer.nome || ''));
         if (pdvOrderType === 'entrega' && customer.endereco) {
-          setPdvDeliveryAddress(String(customer.endereco));
+          const storedAddress = String(customer.endereco).trim();
+          const parsedAddress = parseDeliveryAddressLegacy(storedAddress);
+          setPdvDeliveryAddress(storedAddress);
+          if (parsedAddress) {
+            setPdvDeliveryAddressDraft(parsedAddress);
+            setPdvDeliveryAddressLegacyHint('');
+          } else {
+            setPdvDeliveryAddressDraft(emptyDeliveryAddress());
+            setPdvDeliveryAddressLegacyHint(storedAddress);
+          }
         }
         setPdvCustomerLookup('found');
       } catch (error) {
@@ -250,6 +280,18 @@ export function useCashierPdv({
       showToast('Informe o nome do cliente.', 'info');
       return;
     }
+
+    const deliverySnapshot = pdvOrderType === 'entrega'
+      ? deliveryAddressDraftToSnapshot(pdvDeliveryAddressDraft)
+      : null;
+    if (pdvOrderType === 'entrega' && !deliverySnapshot) {
+      showToast(
+        getDeliveryAddressValidationError(pdvDeliveryAddressDraft) || 'Informe o endereço completo de entrega.',
+        'info',
+      );
+      return;
+    }
+
     isPdvSubmittingRef.current = true;
     setIsLoading(true);
 
@@ -259,7 +301,9 @@ export function useCashierPdv({
     const orderType = pdvOrderType;
     const customerPhone = pdvCustomerPhone;
     const customerId = pdvCustomerId;
-    const deliveryAddress = pdvDeliveryAddress;
+    const deliveryAddressDraft = { ...pdvDeliveryAddressDraft };
+    const deliveryAddressLegacyHint = pdvDeliveryAddressLegacyHint;
+    const deliveryAddress = deliverySnapshot ? formatDeliveryAddressLegacy(deliverySnapshot) : '';
     const deliveryTaxa = pdvDeliveryTaxa;
 
     setActiveTab('operacao');
@@ -322,6 +366,8 @@ export function useCashierPdv({
     setPdvCustomerLookup('idle');
     setPdvCustomerCPF('');
     setPdvDeliveryAddress('');
+    setPdvDeliveryAddressDraft(emptyDeliveryAddress());
+    setPdvDeliveryAddressLegacyHint('');
     setPdvDeliveryTaxa(0);
 
     try {
@@ -341,6 +387,7 @@ export function useCashierPdv({
         delivery_status: orderType === 'mesa' ? undefined : 'producao',
         delivery_telefone: orderType === 'mesa' ? undefined : customerPhone,
         delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
+        address_snapshot: orderType === 'entrega' ? deliverySnapshot || undefined : undefined,
         delivery_taxa: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0.0,
         itens: itemsList,
       };
@@ -388,6 +435,8 @@ export function useCashierPdv({
         setPdvCustomerPhone(customerPhone);
         setPdvCustomerId(customerId);
         setPdvDeliveryAddress(deliveryAddress);
+        setPdvDeliveryAddressDraft(deliveryAddressDraft);
+        setPdvDeliveryAddressLegacyHint(deliveryAddressLegacyHint);
         setPdvDeliveryTaxa(deliveryTaxa);
       }
     } catch (err) {
@@ -399,6 +448,8 @@ export function useCashierPdv({
       setPdvCustomerPhone(customerPhone);
       setPdvCustomerId(customerId);
       setPdvDeliveryAddress(deliveryAddress);
+      setPdvDeliveryAddressDraft(deliveryAddressDraft);
+      setPdvDeliveryAddressLegacyHint(deliveryAddressLegacyHint);
       setPdvDeliveryTaxa(deliveryTaxa);
     } finally {
       isPdvSubmittingRef.current = false;
@@ -497,7 +548,9 @@ export function useCashierPdv({
     pdvOrderType,
     setPdvOrderType,
     pdvDeliveryAddress,
-    setPdvDeliveryAddress,
+    pdvDeliveryAddressDraft,
+    pdvDeliveryAddressLegacyHint,
+    handlePdvDeliveryAddressChange,
     pdvTargetMesaId,
     setPdvTargetMesaId,
     selectedPdvTableOption,
