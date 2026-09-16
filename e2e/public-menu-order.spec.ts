@@ -50,6 +50,16 @@ type CapturedOrder = {
   forma_pagamento?: string;
   forma_pagamento_detalhe?: string;
   endereco_entrega?: string;
+  address_snapshot?: {
+    logradouro?: string;
+    numero?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+    cep?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  };
   itens?: Array<{ produto_id?: string | number; quantidade?: number }>;
 };
 
@@ -325,6 +335,72 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
     endereco_entrega: canonicalAddress,
   });
   expect(backend.getOtpRequests()).toBe(0);
+});
+
+test('autocomplete alimenta o snapshot universal e correção manual invalida coordenadas', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1024', 'Fluxo externo coberto uma vez por matriz.');
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders);
+  await page.route('https://maps.googleapis.com/maps/api/js**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: `
+        window.google = { maps: { importLibrary: async () => ({
+          AutocompleteSessionToken: class {},
+          AutocompleteSuggestion: {
+            fetchAutocompleteSuggestions: async () => ({ suggestions: [{
+              placePrediction: {
+                text: { toString: () => 'Avenida Beira Mar, 1000, Fortaleza' },
+                toPlace: () => ({
+                  fetchFields: async function () {
+                    this.addressComponents = [
+                      { longText: 'Avenida Beira Mar', types: ['route'] },
+                      { longText: '1000', types: ['street_number'] },
+                      { longText: 'Meireles', types: ['sublocality_level_1'] },
+                      { longText: 'Fortaleza', types: ['administrative_area_level_2'] },
+                      { longText: 'Ceará', shortText: 'CE', types: ['administrative_area_level_1'] },
+                      { longText: '60165-121', types: ['postal_code'] }
+                    ];
+                    this.location = { lat: () => -3.725, lng: () => -38.496 };
+                  }
+                })
+              }
+            }] })
+          }
+        }) } };
+        window.__komaGoogleMapsReady();
+      `,
+    });
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Cliente Autocomplete');
+  await page.getByPlaceholder('(00) 00000-0000').fill('85988887777');
+  await page.getByRole('button', { name: /^Entrega\b/ }).click();
+  await page.locator('#delivery-address-google-search').fill('Avenida Beira Mar');
+  await page.getByRole('option', { name: 'Avenida Beira Mar, 1000, Fortaleza' }).click();
+
+  await expect(page.locator('#delivery-address-logradouro')).toHaveValue('Avenida Beira Mar');
+  await expect(page.locator('#delivery-address-numero')).toHaveValue('1000');
+  await expect(page.locator('#delivery-address-bairro')).toHaveValue('Meireles');
+  await page.locator('#delivery-address-numero').fill('1001');
+  await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+
+  expect(capturedOrders).toHaveLength(1);
+  expect(capturedOrders[0].address_snapshot).toMatchObject({
+    logradouro: 'Avenida Beira Mar',
+    numero: '1001',
+    bairro: 'Meireles',
+    cidade: 'Fortaleza',
+    uf: 'CE',
+    cep: '60165121',
+    latitude: null,
+    longitude: null,
+  });
 });
 
 test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial', async ({ page }) => {
