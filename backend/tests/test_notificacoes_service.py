@@ -1,9 +1,14 @@
 import asyncio
+import logging
 import uuid
 import pytest
 from app.database import SessionLocal
 from app.models import NotificacaoWhatsApp
-from app.services.notificacoes import notificar_cliente_status_pedido, agendar_notificacao_status_task
+from app.services.notificacoes import (
+    _agendar_corrotina,
+    agendar_notificacao_status_task,
+    notificar_cliente_status_pedido,
+)
 
 
 def test_notificar_cliente_status_pedido_todos_status(monkeypatch):
@@ -138,6 +143,29 @@ def test_agendar_notificacao_status_task(monkeypatch):
         ).one()
         assert notificacao.restaurante_id == 1
         assert notificacao.wamid == "scheduled-message-id"
+
+
+def test_background_notification_failure_is_logged_and_does_not_escape(caplog):
+    class MockBackgroundTasks:
+        def __init__(self):
+            self.tasks = []
+
+        def add_task(self, func, *args, **kwargs):
+            self.tasks.append((func, args, kwargs))
+
+    async def failing_runner():
+        raise RuntimeError("falha simulada do provedor")
+
+    bg = MockBackgroundTasks()
+    _agendar_corrotina(bg, failing_runner)
+    assert len(bg.tasks) == 1
+
+    func, args, kwargs = bg.tasks[0]
+    with caplog.at_level(logging.ERROR, logger="koma.notificacoes"):
+        # Regression: this must not raise into Starlette's BackgroundTask stack.
+        func(*args, **kwargs)
+
+    assert "NOTIFICAÇÃO WA TASK ERROR" in caplog.text
 
 
 def test_notificacao_de_status_identica_e_deduplicada(monkeypatch):

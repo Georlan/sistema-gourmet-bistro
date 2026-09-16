@@ -191,13 +191,14 @@ async def notificar_cliente_status_pedido(
 def _agendar_corrotina(background_tasks, runner) -> None:
     def _task_wrapper():
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                asyncio.create_task(runner())
-            else:
-                loop.run_until_complete(runner())
-        except RuntimeError:
+            # Starlette executa callbacks síncronos de BackgroundTasks em worker
+            # threads. Crie um loop dedicado para esta coroutine e nunca dependa
+            # de um event loop herdado da thread da requisição.
             asyncio.run(runner())
+        except Exception:
+            # Notificação é side effect opcional: uma falha aqui não pode voltar
+            # para o ASGI stack depois que a operação de domínio já foi concluída.
+            logger.exception("[NOTIFICAÇÃO WA TASK ERROR] Falha em tarefa assíncrona de notificação")
 
     if background_tasks is not None:
         background_tasks.add_task(_task_wrapper)
