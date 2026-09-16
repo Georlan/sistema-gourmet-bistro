@@ -21,7 +21,15 @@ def _engine():
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     with Session.begin() as db:
-        db.add(Restaurante(id=1, nome="KÔMA Base", slug="base", billing_mode="legacy"))
+        # O metadata global do runtime já semeia o tenant 1 após create_all.
+        base = db.query(Restaurante).filter_by(id=1).one_or_none()
+        if base is None:
+            base = Restaurante(id=1, nome="KÔMA Base", slug="base", billing_mode="legacy")
+            db.add(base)
+        else:
+            base.nome = "KÔMA Base"
+            base.slug = "base"
+            base.billing_mode = "legacy"
     return engine
 
 
