@@ -242,6 +242,6 @@ def test_legacy_command_receipt_alias_routes_to_universal_printing_core():
     assert payload["job_id"]
     jobs = _jobs()
     assert len(jobs) == 1
-    assert jobs[0].source_type == "pedido"
+    assert jobs[0].source_type == "reimpressao"
     assert jobs[0].source_id == COMMAND_ID
     assert "REIMPRESSÃO" in jobs[0].payload_text
