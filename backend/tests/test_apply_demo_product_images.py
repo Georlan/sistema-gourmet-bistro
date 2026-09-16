@@ -31,6 +31,15 @@ def _engine():
             demo.billing_mode = "legacy"
         db.flush()
 
+        db.add(
+            Categoria(
+                restaurante_id=1,
+                id="base-categoria-imagem",
+                nome="Categoria Base",
+                destino_impressao="COZINHA",
+            )
+        )
+
         for category_id, name, destination in DEMO_CATEGORIES:
             if db.query(Categoria).filter_by(restaurante_id=2, id=category_id).one_or_none() is None:
                 db.add(
@@ -64,7 +73,7 @@ def _engine():
                 restaurante_id=1,
                 id="base-produto-imagem",
                 nome="Produto Base",
-                categoria_id=None,
+                categoria_id="base-categoria-imagem",
                 preco=10,
                 descricao="Preservar imagem",
                 imagem="https://example.invalid/preserve.jpg",
