@@ -7,6 +7,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
+import { closeOperationalComandas } from './components/app/data/operationalOrderCommands';
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
@@ -1240,39 +1241,40 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
   };
 
-  // 9. Close Table (Settle whole balance) - Restricted to Cashier
+  // 9. Close Table (Settle whole balance) - Management roles authorized by backend
   const handleCloseTable = async (mesaId: number) => {
-    if (activeRole !== 'caixa') {
-      showToast('Apenas o operador de Caixa possui autorização para encerrar contas.', 'error');
+    if (!isManagementRole(activeRole)) {
+      showToast('Apenas operadores de gestão podem encerrar contas.', 'error');
       return;
     }
+
+    const opKey = `close-${mesaId}`;
+    if (inflightTableOpsRef.current.has(opKey)) return;
 
     const tableComandas = orders.filter(o => o.mesaId === mesaId);
     if (tableComandas.length === 0) return;
 
-    // 0ms: remove a mesa do estado local imediatamente
-    setOrders(prev => prev.filter(o => o.mesaId !== mesaId));
-    setSelectedTableId(null);
-    showToast(`Mesa ${mesaId} encerrada e liberada.`, 'success');
-
+    inflightTableOpsRef.current.add(opKey);
     try {
-      for (const comanda of tableComandas) {
-        const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
-          method: "PUT",
-          headers: getAuthHeaders()
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          showToast(`Erro ao fechar comanda: ${errData.detail}`, 'error');
-          fetchOrdersFromAPI(); // Rollback
-          return;
-        }
+      const result = await closeOperationalComandas(
+        tableComandas.map((comanda) => comanda.id),
+        getAuthHeaders,
+      );
+      if (!result.ok) {
+        showToast(`Erro ao fechar comanda: ${result.message}`, 'error');
+        await fetchOrdersFromAPI();
+        return;
       }
-      fetchOrdersFromAPI();
+
+      await fetchOrdersFromAPI();
+      setSelectedTableId(null);
+      showToast(`Mesa ${mesaId} encerrada e liberada.`, 'success');
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao encerrar mesa.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      await fetchOrdersFromAPI();
+    } finally {
+      inflightTableOpsRef.current.delete(opKey);
     }
   };
 
