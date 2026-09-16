@@ -133,33 +133,33 @@ const EMPTY_PROFILE: FiscalProfileForm = {
   inscricaoEstadual: '',
   razaoSocial: '',
   nomeFantasia: '',
-  crt: '1',
+  crt: '',
   cnaePrincipal: '',
   cep: '',
   logradouro: '',
   numero: '',
   complemento: '',
   bairro: '',
-  municipioCodigoIbge: '2304400',
+  municipioCodigoIbge: '',
   series: '1',
   environment: 'homologacao',
 };
 
 function profileToForm(profile: FiscalProfile | null): FiscalProfileForm {
-  if (!profile?.id) return EMPTY_PROFILE;
+  if (!profile?.id) return { ...EMPTY_PROFILE };
   return {
     cnpj: profile.cnpj ?? '',
     inscricaoEstadual: profile.inscricaoEstadual ?? '',
     razaoSocial: profile.razaoSocial ?? '',
     nomeFantasia: profile.nomeFantasia ?? '',
-    crt: profile.crt ?? '1',
+    crt: profile.crt ?? '',
     cnaePrincipal: profile.cnaePrincipal ?? '',
     cep: profile.enderecoFiscal?.cep ?? '',
     logradouro: profile.enderecoFiscal?.logradouro ?? '',
     numero: profile.enderecoFiscal?.numero ?? '',
     complemento: profile.enderecoFiscal?.complemento ?? '',
     bairro: profile.enderecoFiscal?.bairro ?? '',
-    municipioCodigoIbge: profile.municipioCodigoIbge ?? profile.enderecoFiscal?.municipio_codigo_ibge ?? '2304400',
+    municipioCodigoIbge: profile.municipioCodigoIbge ?? profile.enderecoFiscal?.municipio_codigo_ibge ?? '',
     series: String(profile.series ?? 1),
     environment: profile.environment === 'producao' ? 'producao' : 'homologacao',
   };
@@ -212,7 +212,7 @@ function statusClass(ok: boolean) {
 
 export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
   const [profile, setProfile] = useState<FiscalProfile | null>(null);
-  const [form, setForm] = useState<FiscalProfileForm>(EMPTY_PROFILE);
+  const [form, setForm] = useState<FiscalProfileForm>({ ...EMPTY_PROFILE });
   const [municipalities, setMunicipalities] = useState<Municipality[]>([]);
   const [preflight, setPreflight] = useState<FiscalPreflight | null>(null);
   const [preflightMode, setPreflightMode] = useState<PreflightMode>('foundation');
@@ -240,16 +240,6 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
       },
     });
   }, [apiBaseUrl, authHeaders]);
-
-  const loadProfile = useCallback(async () => {
-    const response = await request('/api/onboarding/fiscal/profile');
-    const payload = await readJson(response);
-    if (!response.ok) throw new Error(apiError(payload, 'Falha ao carregar o perfil fiscal.'));
-    const next = payload as FiscalProfile;
-    setProfile(next);
-    setForm(profileToForm(next));
-    return next;
-  }, [request]);
 
   const runPreflight = useCallback(async (mode: PreflightMode) => {
     setRunningPreflight(true);
@@ -297,8 +287,30 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const profileFormReady = useMemo(() => Boolean(
+    form.cnpj.trim()
+    && form.inscricaoEstadual.trim()
+    && form.razaoSocial.trim()
+    && form.crt
+    && /^\d{7}$/.test(form.cnaePrincipal)
+    && form.cep.trim()
+    && form.logradouro.trim()
+    && form.numero.trim()
+    && form.bairro.trim()
+    && form.municipioCodigoIbge
+    && Number(form.series) >= 1
+  ), [form]);
+
   const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!form.crt) {
+      setNotice({ type: 'error', text: 'Selecione explicitamente o CRT cadastrado do estabelecimento.' });
+      return;
+    }
+    if (!form.municipioCodigoIbge) {
+      setNotice({ type: 'error', text: 'Selecione explicitamente o município fiscal na lista oficial do IBGE.' });
+      return;
+    }
     setSavingProfile(true);
     setNotice(null);
     try {
@@ -611,6 +623,12 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
           </div>
         </div>
 
+        {!profile?.id && (
+          <div className="mb-4 rounded-xl border border-amber-500/25 bg-amber-500/8 p-3 text-[10px] leading-relaxed text-amber-900 dark:text-amber-100">
+            CRT e município fiscal não são inferidos nem pré-selecionados pelo KÔMA. Confirme esses dados com o cadastro oficial/responsável fiscal antes de salvar.
+          </div>
+        )}
+
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <label className="text-[10px] font-bold text-koma-secondary">CNPJ
             <input value={form.cnpj} onChange={(e) => setField('cnpj', e.target.value.toUpperCase())} autoCapitalize="characters" required className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-[11px] text-koma-foreground" />
@@ -619,7 +637,8 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
             <input value={form.inscricaoEstadual} onChange={(e) => setField('inscricaoEstadual', e.target.value)} required className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-[11px] text-koma-foreground" />
           </label>
           <label className="text-[10px] font-bold text-koma-secondary">CRT
-            <select value={form.crt} onChange={(e) => setField('crt', e.target.value)} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-[11px] text-koma-foreground">
+            <select value={form.crt} onChange={(e) => setField('crt', e.target.value)} required className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-[11px] text-koma-foreground">
+              <option value="" disabled>Selecione o CRT cadastrado</option>
               <option value="1">1 · Simples Nacional</option>
               <option value="2">2 · Simples Nacional — excesso</option>
               <option value="3">3 · Regime Normal</option>
@@ -661,14 +680,18 @@ export function CashierFiscalSettings({ apiBaseUrl, authHeaders }: Props) {
           </label>
           <label className="text-[10px] font-bold text-koma-secondary md:col-span-2">Município oficial IBGE
             <select value={form.municipioCodigoIbge} onChange={(e) => setField('municipioCodigoIbge', e.target.value)} required className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-[11px] text-koma-foreground">
+              <option value="" disabled>Selecione o município fiscal</option>
               {municipalities.map((municipality) => <option key={municipality.code} value={municipality.code}>{municipality.name} · {municipality.code}</option>)}
             </select>
           </label>
           <div className="self-end rounded-lg border border-koma-border bg-koma-page px-3 py-2 text-[10px] text-koma-muted">UF: CE · {selectedMunicipality?.name || 'município pendente'}</div>
         </div>
 
-        <div className="mt-4 flex items-center justify-end">
-          <button type="submit" disabled={savingProfile} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-[10px] font-black text-white disabled:opacity-50">
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-[9px] leading-relaxed text-koma-muted">
+            O KÔMA valida CNPJ, CNAE e município no backend; enquadramento fiscal deve ser confirmado antes da ativação.
+          </p>
+          <button type="submit" disabled={savingProfile || !profileFormReady} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
             {savingProfile ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
             Salvar perfil fiscal
           </button>
