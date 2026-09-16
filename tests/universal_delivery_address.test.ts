@@ -5,6 +5,7 @@ import {
   formatDeliveryAddressLegacy,
   getDeliveryAddressValidationError,
   parseDeliveryAddressLegacy,
+  updateDeliveryAddressGeographicField,
 } from '../src/domain/deliveryAddress';
 
 const completeDraft = () => ({
@@ -53,6 +54,8 @@ describe('universal delivery address source', () => {
       uf: 'CE',
       cep: '60000000',
       referencia: 'Portaria lateral',
+      latitude: null,
+      longitude: null,
     });
   });
 
@@ -64,5 +67,40 @@ describe('universal delivery address source', () => {
     const draft = { ...completeDraft(), cep: '60000' };
     assert.equal(getDeliveryAddressValidationError(draft), 'Informe um CEP com 8 dígitos.');
     assert.equal(deliveryAddressDraftToSnapshot(draft), null);
+  });
+
+  it('preserva coordenadas válidas vindas de geocodificação', () => {
+    const snapshot = deliveryAddressDraftToSnapshot({
+      ...completeDraft(),
+      latitude: -3.7319,
+      longitude: -38.5267,
+    });
+
+    assert.equal(snapshot?.latitude, -3.7319);
+    assert.equal(snapshot?.longitude, -38.5267);
+  });
+
+  it('invalida coordenadas quando o usuário corrige um campo geográfico', () => {
+    const geocoded = {
+      ...completeDraft(),
+      latitude: -3.7319,
+      longitude: -38.5267,
+    };
+
+    const corrected = updateDeliveryAddressGeographicField(geocoded, 'numero', '125');
+    assert.equal(corrected.numero, '125');
+    assert.equal(corrected.latitude, null);
+    assert.equal(corrected.longitude, null);
+  });
+
+  it('rejeita coordenadas parciais ou fora dos limites', () => {
+    assert.equal(
+      getDeliveryAddressValidationError({ ...completeDraft(), latitude: -3.7319 }),
+      'Latitude e longitude devem ser informadas juntas.',
+    );
+    assert.equal(
+      getDeliveryAddressValidationError({ ...completeDraft(), latitude: -91, longitude: -38.5267 }),
+      'Latitude inválida.',
+    );
   });
 });

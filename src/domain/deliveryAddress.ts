@@ -20,6 +20,8 @@ export interface DeliveryAddressDraft {
   uf: string;
   cep: string;
   referencia: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export const EMPTY_DELIVERY_ADDRESS: DeliveryAddressDraft = {
@@ -31,10 +33,36 @@ export const EMPTY_DELIVERY_ADDRESS: DeliveryAddressDraft = {
   uf: '',
   cep: '',
   referencia: '',
+  latitude: null,
+  longitude: null,
 };
 
 const compactWhitespace = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ');
 const cepDigits = (value: unknown) => String(value ?? '').replace(/\D/g, '').slice(0, 8);
+const normalizedCoordinate = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) ? coordinate : null;
+};
+
+export type DeliveryAddressGeographicField =
+  | 'logradouro'
+  | 'numero'
+  | 'bairro'
+  | 'cidade'
+  | 'uf'
+  | 'cep';
+
+export const updateDeliveryAddressGeographicField = (
+  draft: DeliveryAddressDraft,
+  field: DeliveryAddressGeographicField,
+  value: string,
+): DeliveryAddressDraft => ({
+  ...draft,
+  [field]: value,
+  latitude: null,
+  longitude: null,
+});
 
 export const normalizeDeliveryAddressDraft = (draft: DeliveryAddressDraft): DeliveryAddressDraft => ({
   logradouro: compactWhitespace(draft.logradouro),
@@ -45,6 +73,8 @@ export const normalizeDeliveryAddressDraft = (draft: DeliveryAddressDraft): Deli
   uf: compactWhitespace(draft.uf).replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase(),
   cep: cepDigits(draft.cep),
   referencia: compactWhitespace(draft.referencia),
+  latitude: normalizedCoordinate(draft.latitude),
+  longitude: normalizedCoordinate(draft.longitude),
 });
 
 export const getDeliveryAddressValidationError = (draft: DeliveryAddressDraft): string | null => {
@@ -55,6 +85,15 @@ export const getDeliveryAddressValidationError = (draft: DeliveryAddressDraft): 
   if (!value.cidade) return 'Informe a cidade.';
   if (value.uf.length !== 2) return 'Informe a UF com 2 letras.';
   if (value.cep.length !== 8) return 'Informe um CEP com 8 dígitos.';
+  if ((value.latitude === null) !== (value.longitude === null)) {
+    return 'Latitude e longitude devem ser informadas juntas.';
+  }
+  if (value.latitude !== null && (value.latitude < -90 || value.latitude > 90)) {
+    return 'Latitude inválida.';
+  }
+  if (value.longitude !== null && (value.longitude < -180 || value.longitude > 180)) {
+    return 'Longitude inválida.';
+  }
   return null;
 };
 
@@ -72,8 +111,8 @@ export const deliveryAddressDraftToSnapshot = (
     uf: value.uf,
     cep: value.cep,
     referencia: value.referencia || null,
-    latitude: null,
-    longitude: null,
+    latitude: value.latitude,
+    longitude: value.longitude,
   };
 };
 
@@ -143,6 +182,8 @@ export const parseDeliveryAddressLegacy = (value: unknown): DeliveryAddressDraft
     uf,
     cep,
     referencia,
+    latitude: null,
+    longitude: null,
   });
   return getDeliveryAddressValidationError(draft) ? null : draft;
 };

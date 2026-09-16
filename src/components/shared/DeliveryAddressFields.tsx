@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import {
   type DeliveryAddressDraft,
   formatCepInput,
+  updateDeliveryAddressGeographicField,
 } from '../../domain/deliveryAddress';
 
 type NeighborhoodOption = {
@@ -61,7 +62,11 @@ export default function DeliveryAddressFields({
             autoComplete="postal-code"
             placeholder="00000-000"
             value={formatCepInput(value.cep)}
-            onChange={(event) => onChange({ ...value, cep: event.target.value.replace(/\D/g, '').slice(0, 8) })}
+            onChange={(event) => onChange(updateDeliveryAddressGeographicField(
+              value,
+              'cep',
+              event.target.value.replace(/\D/g, '').slice(0, 8),
+            ))}
             className={inputClass}
             required
           />
@@ -74,7 +79,11 @@ export default function DeliveryAddressFields({
             placeholder="CE"
             maxLength={2}
             value={value.uf}
-            onChange={(event) => onChange({ ...value, uf: event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase() })}
+            onChange={(event) => onChange(updateDeliveryAddressGeographicField(
+              value,
+              'uf',
+              event.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase(),
+            ))}
             className={inputClass}
             required
           />
@@ -89,7 +98,7 @@ export default function DeliveryAddressFields({
             autoComplete="address-level2"
             placeholder="Fortaleza"
             value={value.cidade}
-            onChange={(event) => onChange(updateField(value, 'cidade', event))}
+            onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'cidade', event.target.value))}
             className={inputClass}
             required
           />
@@ -101,7 +110,7 @@ export default function DeliveryAddressFields({
               id={`${idPrefix}-bairro`}
               autoComplete="address-level3"
               value={value.bairro}
-              onChange={(event) => onChange(updateField(value, 'bairro', event))}
+              onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
               className={inputClass}
               required
             >
@@ -118,7 +127,7 @@ export default function DeliveryAddressFields({
               autoComplete="address-level3"
               placeholder="Centro"
               value={value.bairro}
-              onChange={(event) => onChange(updateField(value, 'bairro', event))}
+              onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'bairro', event.target.value))}
               className={inputClass}
               required
             />
@@ -134,7 +143,7 @@ export default function DeliveryAddressFields({
             autoComplete="address-line1"
             placeholder="Rua, avenida..."
             value={value.logradouro}
-            onChange={(event) => onChange(updateField(value, 'logradouro', event))}
+            onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'logradouro', event.target.value))}
             className={inputClass}
             required
           />
@@ -146,7 +155,7 @@ export default function DeliveryAddressFields({
             autoComplete="address-line2"
             placeholder="123"
             value={value.numero}
-            onChange={(event) => onChange(updateField(value, 'numero', event))}
+            onChange={(event) => onChange(updateDeliveryAddressGeographicField(value, 'numero', event.target.value))}
             className={inputClass}
             required
           />
