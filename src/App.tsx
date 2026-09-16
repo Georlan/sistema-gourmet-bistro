@@ -1240,39 +1240,43 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
   };
 
-  // 9. Close Table (Settle whole balance) - Restricted to Cashier
+  // 9. Close Table (Settle whole balance) - Management roles authorized by backend
   const handleCloseTable = async (mesaId: number) => {
-    if (activeRole !== 'caixa') {
-      showToast('Apenas o operador de Caixa possui autorização para encerrar contas.', 'error');
+    if (!isManagementRole(activeRole)) {
+      showToast('Apenas operadores de gestão podem encerrar contas.', 'error');
       return;
     }
+
+    const opKey = `close-${mesaId}`;
+    if (inflightTableOpsRef.current.has(opKey)) return;
 
     const tableComandas = orders.filter(o => o.mesaId === mesaId);
     if (tableComandas.length === 0) return;
 
-    // 0ms: remove a mesa do estado local imediatamente
-    setOrders(prev => prev.filter(o => o.mesaId !== mesaId));
-    setSelectedTableId(null);
-    showToast(`Mesa ${mesaId} encerrada e liberada.`, 'success');
-
+    inflightTableOpsRef.current.add(opKey);
     try {
       for (const comanda of tableComandas) {
-        const res = await fetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
+        const res = await operationalFetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
           method: "PUT",
           headers: getAuthHeaders()
         });
         if (!res.ok) {
-          const errData = await res.json();
-          showToast(`Erro ao fechar comanda: ${errData.detail}`, 'error');
-          fetchOrdersFromAPI(); // Rollback
+          const errData = await res.json().catch(() => null);
+          showToast(`Erro ao fechar comanda: ${errData?.detail || res.statusText}`, 'error');
+          await fetchOrdersFromAPI();
           return;
         }
       }
-      fetchOrdersFromAPI();
+
+      await fetchOrdersFromAPI();
+      setSelectedTableId(null);
+      showToast(`Mesa ${mesaId} encerrada e liberada.`, 'success');
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao encerrar mesa.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      await fetchOrdersFromAPI();
+    } finally {
+      inflightTableOpsRef.current.delete(opKey);
     }
   };
 
