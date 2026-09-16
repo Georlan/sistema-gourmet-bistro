@@ -228,3 +228,20 @@ def test_legacy_reprint_alias_uses_same_model_and_only_adds_reprint_marker():
     reprint_payload = _jobs()[-1].payload_text
     assert "REIMPRESSÃO" in reprint_payload
     assert _without_reprint_marker(reprint_payload) == original_payload.rstrip()
+
+
+def test_legacy_command_receipt_alias_routes_to_universal_printing_core():
+    response = client.post(
+        f"/comandas/{COMMAND_ID}/imprimir-recibo",
+        headers=_headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["job_id"]
+    jobs = _jobs()
+    assert len(jobs) == 1
+    assert jobs[0].source_type == "pedido"
+    assert jobs[0].source_id == COMMAND_ID
+    assert "REIMPRESSÃO" in jobs[0].payload_text
