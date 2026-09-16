@@ -7,6 +7,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
+import { closeOperationalComandas } from './components/app/data/operationalOrderCommands';
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
@@ -1255,17 +1256,14 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
     inflightTableOpsRef.current.add(opKey);
     try {
-      for (const comanda of tableComandas) {
-        const res = await operationalFetch(`${API_BASE_URL}/comandas/${comanda.id}/fechar`, {
-          method: "PUT",
-          headers: getAuthHeaders()
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => null);
-          showToast(`Erro ao fechar comanda: ${errData?.detail || res.statusText}`, 'error');
-          await fetchOrdersFromAPI();
-          return;
-        }
+      const result = await closeOperationalComandas(
+        tableComandas.map((comanda) => comanda.id),
+        getAuthHeaders,
+      );
+      if (!result.ok) {
+        showToast(`Erro ao fechar comanda: ${result.message}`, 'error');
+        await fetchOrdersFromAPI();
+        return;
       }
 
       await fetchOrdersFromAPI();
