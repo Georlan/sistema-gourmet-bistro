@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import hashlib
+import math
 import os
 import threading
 import time
@@ -32,6 +34,22 @@ class DistanceFeeBracket:
     fee: Decimal
 
 
+def validated_coordinates(value: tuple[float, float], *, label: str) -> tuple[float, float]:
+    try:
+        latitude, longitude = (float(value[0]), float(value[1]))
+    except (IndexError, TypeError, ValueError):
+        raise DeliveryRouteError(f"As coordenadas de {label} são inválidas.") from None
+    if (
+        not math.isfinite(latitude)
+        or not math.isfinite(longitude)
+        or not -90 <= latitude <= 90
+        or not -180 <= longitude <= 180
+        or (latitude == 0 and longitude == 0)
+    ):
+        raise DeliveryRouteError(f"As coordenadas de {label} são inválidas.")
+    return latitude, longitude
+
+
 def normalize_distance_fee_brackets(raw: Sequence[object]) -> tuple[DistanceFeeBracket, ...]:
     brackets: list[DistanceFeeBracket] = []
     for item in raw:
@@ -42,18 +60,24 @@ def normalize_distance_fee_brackets(raw: Sequence[object]) -> tuple[DistanceFeeB
             fee = Decimal(str(item.get("taxa")))
         except (InvalidOperation, TypeError, ValueError):
             raise DeliveryRouteError("A tabela de taxa por distância é inválida.") from None
-        if max_km <= 0 or fee < 0:
+        if not max_km.is_finite() or not fee.is_finite() or max_km <= 0 or fee < 0 or fee > 10_000:
             raise DeliveryRouteError("A tabela de taxa por distância é inválida.")
         brackets.append(DistanceFeeBracket(max_km=max_km, fee=fee.quantize(Decimal("0.01"))))
 
-    ordered = tuple(sorted(brackets, key=lambda bracket: bracket.max_km))
-    if not ordered or len({bracket.max_km for bracket in ordered}) != len(ordered):
+    ordered = tuple(brackets)
+    if (
+        not ordered
+        or any(
+            current.max_km <= previous.max_km
+            for previous, current in zip(ordered, ordered[1:])
+        )
+    ):
         raise DeliveryRouteError("A tabela de taxa por distância é inválida.")
     return ordered
 
 
 def delivery_fee_for_route_distance(distance_meters: int, raw_brackets: Sequence[object]) -> Decimal:
-    if distance_meters < 0:
+    if isinstance(distance_meters, bool) or not isinstance(distance_meters, int) or distance_meters < 0:
         raise DeliveryRouteError("A distância calculada para entrega é inválida.")
     distance_km = Decimal(distance_meters) / Decimal(1000)
     for bracket in normalize_distance_fee_brackets(raw_brackets):
@@ -74,15 +98,23 @@ class GoogleRoutesDistanceProvider:
     def __init__(self, api_key: str | None = None, client: httpx.Client | None = None) -> None:
         configured_key = api_key if api_key is not None else os.getenv("GOOGLE_MAPS_ROUTES_API_KEY", "")
         self._api_key = configured_key.strip()
+        self._provider_cache_namespace = hashlib.sha256(
+            self._api_key.encode("utf-8")
+        ).hexdigest()[:12]
         self._client = client
 
-    @staticmethod
     def _cache_key(
+        self,
         tenant_id: int,
         origin: tuple[float, float],
         destination: tuple[float, float],
     ) -> tuple[object, ...]:
-        return (tenant_id, *(round(value, 5) for value in (*origin, *destination)))
+        return (
+            "google-routes-v2",
+            self._provider_cache_namespace,
+            tenant_id,
+            *(round(value, 6) for value in (*origin, *destination)),
+        )
 
     def distance_meters(
         self,
@@ -93,6 +125,11 @@ class GoogleRoutesDistanceProvider:
     ) -> int:
         if not self._api_key:
             raise DeliveryRouteError("O cálculo de rota não está configurado no servidor.")
+
+        if isinstance(tenant_id, bool) or not isinstance(tenant_id, int) or tenant_id <= 0:
+            raise DeliveryRouteError("O tenant da rota é inválido.")
+        origin = validated_coordinates(origin, label="origem")
+        destination = validated_coordinates(destination, label="destino")
 
         cache_key = self._cache_key(tenant_id, origin, destination)
         now = time.monotonic()
@@ -120,13 +157,16 @@ class GoogleRoutesDistanceProvider:
 
         try:
             if self._client is not None:
-                response = self._client.post(self.endpoint, json=payload, headers=headers)
+                response = self._client.post(self.endpoint, json=payload, headers=headers, timeout=3.0)
             else:
                 with httpx.Client(timeout=3.0, trust_env=False) as client:
                     response = client.post(self.endpoint, json=payload, headers=headers)
             response.raise_for_status()
             routes = response.json().get("routes") or []
-            distance = int(routes[0]["distanceMeters"])
+            raw_distance = routes[0]["distanceMeters"]
+            if isinstance(raw_distance, bool) or not isinstance(raw_distance, int):
+                raise ValueError
+            distance = raw_distance
             if distance < 0:
                 raise ValueError
         except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as exc:

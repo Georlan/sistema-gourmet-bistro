@@ -103,6 +103,20 @@ describe('universal delivery address source', () => {
       getDeliveryAddressValidationError({ ...completeDraft(), latitude: -91, longitude: -38.5267 }),
       'Latitude inválida.',
     );
+    assert.equal(
+      getDeliveryAddressValidationError({ ...completeDraft(), latitude: 0, longitude: 0 }),
+      'As coordenadas não podem ser 0,0.',
+    );
+  });
+
+  it('preserva coordenadas ao editar complemento e referência', () => {
+    const geocoded = {
+      ...completeDraft(),
+      latitude: -3.7319,
+      longitude: -38.5267,
+    };
+    assert.equal({ ...geocoded, complemento: 'Bloco B' }.latitude, -3.7319);
+    assert.equal({ ...geocoded, referencia: 'Portão azul' }.longitude, -38.5267);
   });
 
   it('converte uma sugestão do Google para o mesmo rascunho universal sem apagar complemento', async () => {

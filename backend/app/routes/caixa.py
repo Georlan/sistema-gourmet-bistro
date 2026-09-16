@@ -7,6 +7,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import uuid
 import datetime
 import logging
+import os
 
 import re
 from ..database import get_db, require_tenant_id
@@ -42,6 +43,11 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.capabilities import has_capability
+from ..services.delivery_routes import (
+    DeliveryRouteError,
+    normalize_distance_fee_brackets,
+    validated_coordinates,
+)
 from ..services.notificacoes import agendar_convite_equipe_task
 from ..timezone_utils import elapsed_minutes_since
 
@@ -1591,6 +1597,26 @@ def atualizar_configuracoes(
         config.tabela_taxas_bairros = config_in.tabela_taxas_bairros
     if config_in.tabela_taxas_km is not None:
         config.tabela_taxas_km = config_in.tabela_taxas_km
+
+    if config.tipo_taxa_entrega == "distancia":
+        restaurant = config.restaurante or db.query(Restaurante).filter(
+            Restaurante.id == current_user.restaurante_id
+        ).first()
+        try:
+            if restaurant is None or restaurant.latitude is None or restaurant.longitude is None:
+                raise DeliveryRouteError("A origem da entrega não possui coordenadas válidas.")
+            validated_coordinates(
+                (restaurant.latitude, restaurant.longitude),
+                label="origem",
+            )
+            normalize_distance_fee_brackets(config.tabela_taxas_km or [])
+            if not os.getenv("GOOGLE_MAPS_ROUTES_API_KEY", "").strip():
+                raise DeliveryRouteError("A chave server-side do Google Routes não está configurada.")
+        except DeliveryRouteError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Não foi possível ativar a taxa por distância: {exc}",
+            ) from exc
     if config_in.taxa_servico_ativa is not None:
         config.taxa_servico_ativa = config_in.taxa_servico_ativa
     if config_in.taxa_servico_padrao is not None:

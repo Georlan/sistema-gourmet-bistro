@@ -71,6 +71,7 @@ from ...services.delivery_routes import (
     GoogleRoutesDistanceProvider,
     RouteDistanceProvider,
     delivery_fee_for_route_distance,
+    validated_coordinates,
 )
 from .commands import (
     AcceptOrderCommand,
@@ -86,6 +87,16 @@ from .dto import CustomerDTO, DeliveryDTO, OrderDTO, OrderItemDTO, OrderModifier
 from .validation_loader import ValidationDataLoader
 
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
+
+
+def _validated_configured_delivery_fee(value: object) -> Decimal:
+    try:
+        fee = to_money_decimal(value)
+    except (ArithmeticError, TypeError, ValueError):
+        raise OrderValidationError("A taxa de entrega configurada é inválida.") from None
+    if not fee.is_finite() or fee < 0 or fee > Decimal("10000.00"):
+        raise OrderValidationError("A taxa de entrega configurada é inválida.")
+    return fee
 
 _CHANNEL_TO_ORIGEM = {
     OrderChannel.WEB_CARDAPIO: "cardapio",
@@ -186,16 +197,9 @@ class OrderApplicationService:
             .first()
         )
         if config is None:
-            rest = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if rest is not None:
-                config = ConfiguracaoRestaurante(
-                    restaurante_id=restaurante_id,
-                    delivery_ativo=True,
-                    tipo_taxa_entrega="fixa",
-                    taxa_entrega_fixa=7.0,
-                )
-            else:
-                raise OrderValidationError("Configurações do restaurante não foram encontradas para calcular a entrega.")
+            raise OrderValidationError(
+                "Configurações do restaurante não foram encontradas para calcular a entrega."
+            )
 
         tipo_taxa = getattr(config, "tipo_taxa_entrega", None)
         if tipo_taxa not in ("fixa", "bairro", "distancia"):
@@ -213,7 +217,7 @@ class OrderApplicationService:
             tabela = config.tabela_taxas_bairros or []
             for b in tabela:
                 if isinstance(b, dict) and str(b.get("bairro", "")).strip().casefold() == normalized_target:
-                    matched_bairro_taxa = to_money_decimal(b.get("taxa", 0.0))
+                    matched_bairro_taxa = _validated_configured_delivery_fee(b.get("taxa"))
                     break
 
             if matched_bairro_taxa is None:
@@ -229,10 +233,18 @@ class OrderApplicationService:
                 raise OrderValidationError("Selecione um endereço válido para calcular a rota de entrega.")
             provider = route_distance_provider or GoogleRoutesDistanceProvider()
             try:
+                origin = validated_coordinates(
+                    (restaurant.latitude, restaurant.longitude),
+                    label="origem",
+                )
+                destination = validated_coordinates(
+                    (delivery_address.latitude, delivery_address.longitude),
+                    label="destino",
+                )
                 distance_meters = provider.distance_meters(
                     tenant_id=restaurante_id,
-                    origin=(float(restaurant.latitude), float(restaurant.longitude)),
-                    destination=(float(delivery_address.latitude), float(delivery_address.longitude)),
+                    origin=origin,
+                    destination=destination,
                 )
                 distance_fee = delivery_fee_for_route_distance(
                     distance_meters,
@@ -250,7 +262,7 @@ class OrderApplicationService:
         if tipo_taxa == "fixa":
             if config.taxa_entrega_fixa is None:
                 raise OrderValidationError("Taxa de entrega fixa não configurada no estabelecimento.")
-            return to_money_decimal(config.taxa_entrega_fixa)
+            return _validated_configured_delivery_fee(config.taxa_entrega_fixa)
 
         if tipo_taxa == "bairro":
             return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")

@@ -345,6 +345,8 @@ test('autocomplete alimenta o snapshot universal e correção manual invalida co
     await route.fulfill({
       contentType: 'application/javascript',
       body: `
+        window.__autocompleteRequests = [];
+        window.__autocompleteResolved = [];
         window.google = { maps: { importLibrary: async () => ({
           AutocompleteSessionToken: class {},
           AutocompleteSuggestion: {
@@ -401,6 +403,49 @@ test('autocomplete alimenta o snapshot universal e correção manual invalida co
     latitude: null,
     longitude: null,
   });
+});
+
+test('autocomplete ignora resposta antiga que chega fora de ordem', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1024', 'Concorrência coberta uma vez por matriz.');
+  await mockPublicMenuBackend(page, []);
+  await page.route('https://maps.googleapis.com/maps/api/js**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: `
+        window.google = { maps: { importLibrary: async () => ({
+          AutocompleteSessionToken: class {},
+          AutocompleteSuggestion: {
+            fetchAutocompleteSuggestions: async ({ input }) => {
+              window.__autocompleteRequests.push(input);
+              await new Promise(resolve => setTimeout(resolve, input === 'Rua A' ? 700 : 10));
+              window.__autocompleteResolved.push(input);
+              return { suggestions: [{ placePrediction: {
+                text: { toString: () => input + ' resultado' },
+                toPlace: () => ({ fetchFields: async () => undefined })
+              } }] };
+            }
+          }
+        }) } };
+        window.__komaGoogleMapsReady();
+      `,
+    });
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  await page.getByRole('button', { name: /^Entrega\b/ }).click();
+  const search = page.locator('#delivery-address-google-search');
+  await search.fill('Rua A');
+  await expect.poll(() => page.evaluate(() => (
+    (window as unknown as { __autocompleteRequests: string[] }).__autocompleteRequests
+  ))).toContain('Rua A');
+  await search.fill('Rua ABC');
+  await expect(page.getByRole('option', { name: 'Rua ABC resultado' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (
+    (window as unknown as { __autocompleteResolved: string[] }).__autocompleteResolved
+  ))).toContain('Rua A');
+  await expect(page.getByRole('option', { name: 'Rua A resultado' })).toHaveCount(0);
 });
 
 test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial', async ({ page }) => {

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
 import uuid
@@ -269,7 +269,15 @@ class DeliveryAddressSnapshotSchema(BaseModel):
             raise ValueError("CEP deve conter 8 dígitos.")
         return postal_code
 
-    model_config = ConfigDict(extra="forbid")
+    @model_validator(mode="after")
+    def validate_coordinate_pair(self):
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Latitude e longitude devem ser informadas juntas.")
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError("As coordenadas não podem ser 0,0.")
+        return self
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 # ----------------- ACTIONS & CREATIONS -----------------

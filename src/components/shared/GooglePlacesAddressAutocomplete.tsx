@@ -20,16 +20,17 @@ export default function GooglePlacesAddressAutocomplete({ value, onChange, compa
   const [unavailable, setUnavailable] = useState(false);
   const sessionToken = useRef<object | null>(null);
   const requestSequence = useRef(0);
+  const selectionSequence = useRef(0);
 
   const enabled = Boolean(getGoogleMapsBrowserKey());
 
   useEffect(() => {
+    const sequence = ++requestSequence.current;
     if (!enabled || query.trim().length < 3) {
       setSuggestions([]);
       return undefined;
     }
 
-    const sequence = ++requestSequence.current;
     const timer = window.setTimeout(async () => {
       try {
         const library = await loadGooglePlacesLibrary();
@@ -66,15 +67,17 @@ export default function GooglePlacesAddressAutocomplete({ value, onChange, compa
     : 'mb-1.5 block text-xs font-semibold text-koma-foreground';
 
   const selectSuggestion = async (suggestion: GooglePlacePrediction) => {
+    const sequence = ++selectionSequence.current;
     try {
       const nextAddress = await placePredictionToAddressDraft(suggestion, value);
+      if (sequence !== selectionSequence.current) return;
       onChange(nextAddress);
       setQuery('');
       setSuggestions([]);
       sessionToken.current = null;
       setUnavailable(false);
     } catch {
-      setUnavailable(true);
+      if (sequence === selectionSequence.current) setUnavailable(true);
     }
   };
 

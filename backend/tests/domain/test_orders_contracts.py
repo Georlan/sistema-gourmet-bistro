@@ -38,6 +38,7 @@ from app.application.orders.commands import (
     OrderItemInput,
     CustomerInput,
     DeliveryInput,
+    DeliveryAddressInput,
     CreateOrderCommand,
     AcceptOrderCommand,
     CancelOrderCommand,
@@ -177,6 +178,42 @@ class TestOrderCommandsAndInvariants:
     def test_delivery_input_rejects_negative_fee(self):
         with pytest.raises(InvalidFulfillmentDetailsError):
             DeliveryInput(address="Rua das Flores, 123", fee=Decimal("-5.00"))
+
+    @pytest.mark.parametrize(
+        ("latitude", "longitude"),
+        [
+            (0, 0),
+            (91, -38),
+            (-3, 181),
+            (float("nan"), -38),
+            (-3, float("inf")),
+            ("not-a-number", -38),
+        ],
+    )
+    def test_delivery_address_rejects_invalid_coordinates(self, latitude, longitude):
+        with pytest.raises(InvalidFulfillmentDetailsError):
+            DeliveryAddressInput(
+                street="Rua das Flores",
+                number="123",
+                neighborhood="Centro",
+                city="Fortaleza",
+                state="CE",
+                postal_code="60000000",
+                latitude=latitude,
+                longitude=longitude,
+            )
+
+    def test_delivery_address_rejects_partial_coordinates(self):
+        with pytest.raises(InvalidFulfillmentDetailsError, match="informadas juntas"):
+            DeliveryAddressInput(
+                street="Rua das Flores",
+                number="123",
+                neighborhood="Centro",
+                city="Fortaleza",
+                state="CE",
+                postal_code="60000000",
+                latitude=-3.7,
+            )
 
     def test_external_reference_requires_provider_and_id(self):
         with pytest.raises(InvalidExternalReferenceError):

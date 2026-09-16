@@ -94,6 +94,9 @@ export const getDeliveryAddressValidationError = (draft: DeliveryAddressDraft): 
   if (value.longitude !== null && (value.longitude < -180 || value.longitude > 180)) {
     return 'Longitude inválida.';
   }
+  if (value.latitude === 0 && value.longitude === 0) {
+    return 'As coordenadas não podem ser 0,0.';
+  }
   return null;
 };
 
