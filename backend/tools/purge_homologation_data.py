@@ -5,9 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from sqlalchemy import create_engine
+
+# Permite executar este arquivo diretamente (`python tools/...py`) a partir do
+# diretório backend, como faz o runner operacional no Railway.
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.services.safe_data_purge import (
     CONFIRMATION_PHRASE,
