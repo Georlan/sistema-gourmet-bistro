@@ -6,8 +6,11 @@ import {
   getOrCreatePersistedOperationKey,
   operationalFetch,
 } from '../../../utils/operationalRequest';
-
-const LOCAL_STORAGE_DRAFTS_KEY = 'koma_drafts_vFinal_v3';
+import {
+  readOperationalDraftsForKey,
+  resolveOperationalDraftStorageKey,
+  writeOperationalDraftsForKey,
+} from './operationalDraftStorage';
 import type { OperationalRequestContext, OperationalNotice } from '../operationalContracts';
 import type { useOperationalOrders } from '../data/useOperationalOrders';
 
@@ -44,22 +47,37 @@ export function useOperationalDrafts({
 }: BoundaryProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const isSubmittingRef = useRef<boolean>(false);
+  const initialStorageKeyRef = useRef<string | null>(null);
 
   const [drafts, setDrafts] = useState<{ [mesaId: number]: DraftItem[] }>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_DRAFTS_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading drafts from localStorage', e);
-      }
-    }
-    return {};
+    const key = resolveOperationalDraftStorageKey();
+    initialStorageKeyRef.current = key;
+    return readOperationalDraftsForKey(key);
   });
 
+  const storageKey = resolveOperationalDraftStorageKey();
+  const loadedStorageKeyRef = useRef<string | null>(initialStorageKeyRef.current);
+  const skipNextStorageWriteRef = useRef(false);
+
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_DRAFTS_KEY, JSON.stringify(drafts));
-  }, [drafts]);
+    if (storageKey === loadedStorageKeyRef.current) return;
+
+    // A troca de login/tenant pode acontecer sem desmontar o App. Troque o
+    // namespace antes de qualquer persistência para nunca copiar o rascunho do
+    // tenant anterior para o novo restaurante.
+    loadedStorageKeyRef.current = storageKey;
+    skipNextStorageWriteRef.current = true;
+    setDrafts(readOperationalDraftsForKey(storageKey));
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || loadedStorageKeyRef.current !== storageKey) return;
+    if (skipNextStorageWriteRef.current) {
+      skipNextStorageWriteRef.current = false;
+      return;
+    }
+    writeOperationalDraftsForKey(storageKey, drafts);
+  }, [drafts, storageKey]);
 
   const getDraftItems = (mesaId: number) => drafts[mesaId] || [];
 
