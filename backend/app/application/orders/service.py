@@ -66,11 +66,18 @@ from ...services.clientes import (
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
+from ...services.delivery_routes import (
+    DeliveryRouteError,
+    GoogleRoutesDistanceProvider,
+    RouteDistanceProvider,
+    delivery_fee_for_route_distance,
+)
 from .commands import (
     AcceptOrderCommand,
     CancelOrderCommand,
     CompleteOrderCommand,
     CreateOrderCommand,
+    DeliveryAddressInput,
     DispatchOrderCommand,
     MarkOrderReadyCommand,
     RejectOrderCommand,
@@ -157,6 +164,8 @@ class OrderApplicationService:
         fulfillment: FulfillmentType,
         items_subtotal: Decimal,
         neighborhood: Optional[str] = None,
+        delivery_address: DeliveryAddressInput | None = None,
+        route_distance_provider: RouteDistanceProvider | None = None,
     ) -> Decimal:
         """Calcula de forma autoritativa no servidor a taxa de entrega.
 
@@ -189,10 +198,11 @@ class OrderApplicationService:
                 raise OrderValidationError("Configurações do restaurante não foram encontradas para calcular a entrega.")
 
         tipo_taxa = getattr(config, "tipo_taxa_entrega", None)
-        if tipo_taxa not in ("fixa", "bairro"):
+        if tipo_taxa not in ("fixa", "bairro", "distancia"):
             raise OrderValidationError(f"Tipo de taxa de entrega '{tipo_taxa}' inválido ou não suportado.")
 
         matched_bairro_taxa: Decimal | None = None
+        distance_fee: Decimal | None = None
 
         if tipo_taxa == "bairro":
             clean_bairro = str(neighborhood or "").strip()
@@ -211,6 +221,26 @@ class OrderApplicationService:
                     f"O bairro '{clean_bairro}' não está na área de entrega atendida pelo restaurante."
                 )
 
+        if tipo_taxa == "distancia":
+            restaurant = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
+            if restaurant is None or restaurant.latitude is None or restaurant.longitude is None:
+                raise OrderValidationError("A origem da entrega não possui coordenadas configuradas.")
+            if delivery_address is None or delivery_address.latitude is None or delivery_address.longitude is None:
+                raise OrderValidationError("Selecione um endereço válido para calcular a rota de entrega.")
+            provider = route_distance_provider or GoogleRoutesDistanceProvider()
+            try:
+                distance_meters = provider.distance_meters(
+                    tenant_id=restaurante_id,
+                    origin=(float(restaurant.latitude), float(restaurant.longitude)),
+                    destination=(float(delivery_address.latitude), float(delivery_address.longitude)),
+                )
+                distance_fee = delivery_fee_for_route_distance(
+                    distance_meters,
+                    config.tabela_taxas_km or [],
+                )
+            except DeliveryRouteError as exc:
+                raise OrderValidationError(str(exc)) from exc
+
         # 4. Validar cobertura ANTES de aplicar frete grátis por valor de subtotal
         if config.frete_gratis_valor and float(config.frete_gratis_valor) > 0:
             if items_subtotal >= to_money_decimal(config.frete_gratis_valor):
@@ -222,8 +252,10 @@ class OrderApplicationService:
                 raise OrderValidationError("Taxa de entrega fixa não configurada no estabelecimento.")
             return to_money_decimal(config.taxa_entrega_fixa)
 
-        # 6. Modo taxa por bairro
-        return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")
+        if tipo_taxa == "bairro":
+            return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")
+
+        return distance_fee if distance_fee is not None else Decimal("0.00")
 
     @classmethod
     def _validate_service_idempotent_replay(
@@ -367,6 +399,7 @@ class OrderApplicationService:
             fulfillment=cmd.fulfillment,
             items_subtotal=subtotal_base,
             neighborhood=delivery_neighborhood,
+            delivery_address=delivery_addr,
         )
 
         pricing_context = validated_input.to_pricing_context(
