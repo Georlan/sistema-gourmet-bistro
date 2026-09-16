@@ -10,14 +10,13 @@ from pathlib import Path
 
 from sqlalchemy import create_engine
 
-# Permite executar este arquivo diretamente (`python tools/...py`) a partir do
-# diretório backend, como faz o runner operacional no Railway.
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.services.safe_data_purge import (
     CONFIRMATION_PHRASE,
+    WAIVE_BACKUP_PHRASE,
     apply_purge,
     build_purge_plan,
 )
@@ -30,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-database")
     parser.add_argument("--confirm")
     parser.add_argument("--backup-reference")
+    parser.add_argument("--waive-backup")
     parser.add_argument("--report-json", type=Path)
     return parser.parse_args()
 
@@ -52,18 +52,22 @@ def main() -> int:
                     ("--expected-fingerprint", args.expected_fingerprint),
                     ("--expected-database", args.expected_database),
                     ("--confirm", args.confirm),
-                    ("--backup-reference", args.backup_reference),
                 )
                 if not value
             ]
             if missing:
                 raise SystemExit("Aplicação bloqueada; flags obrigatórias: " + ", ".join(missing))
+            if not args.backup_reference and not args.waive_backup:
+                raise SystemExit(
+                    "Aplicação bloqueada; informe --backup-reference ou --waive-backup com confirmação explícita."
+                )
             result = apply_purge(
                 engine,
                 expected_fingerprint=args.expected_fingerprint,
                 expected_database=args.expected_database,
                 confirmation=args.confirm,
-                backup_reference=args.backup_reference,
+                backup_reference=args.backup_reference or "",
+                backup_waiver=args.waive_backup or "",
             )
         else:
             with engine.connect() as connection:
@@ -73,7 +77,8 @@ def main() -> int:
                 "python backend/tools/purge_homologation_data.py --apply "
                 f"--expected-database {result['database']} "
                 f"--expected-fingerprint {result['fingerprint']} "
-                f"--confirm {CONFIRMATION_PHRASE} --backup-reference <SNAPSHOT_ID>"
+                f"--confirm {CONFIRMATION_PHRASE} "
+                f"--waive-backup {WAIVE_BACKUP_PHRASE}"
             )
 
         rendered = json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True, default=str)

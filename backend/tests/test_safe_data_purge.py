@@ -2,6 +2,7 @@ from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table, cre
 
 from app.services.safe_data_purge import (
     CONFIRMATION_PHRASE,
+    WAIVE_BACKUP_PHRASE,
     apply_purge,
     build_purge_plan,
 )
@@ -26,6 +27,18 @@ def _test_engine():
     )
     Table(
         "configuracoes_restaurante",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("restaurante_id", ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False),
+    )
+    Table(
+        "restaurante_capabilities",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("restaurante_id", ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False),
+    )
+    Table(
+        "saas_subscriptions",
         metadata,
         Column("id", Integer, primary_key=True),
         Column("restaurante_id", ForeignKey("restaurantes.id", ondelete="CASCADE"), nullable=False),
@@ -71,6 +84,14 @@ def _test_engine():
                 {"id": restaurant_id, "restaurante_id": restaurant_id},
             )
             connection.execute(
+                metadata.tables["restaurante_capabilities"].insert(),
+                {"id": restaurant_id, "restaurante_id": restaurant_id},
+            )
+            connection.execute(
+                metadata.tables["saas_subscriptions"].insert(),
+                {"id": restaurant_id, "restaurante_id": restaurant_id},
+            )
+            connection.execute(
                 metadata.tables["usuarios"].insert(),
                 {"id": restaurant_id, "restaurante_id": restaurant_id, "email": "reuse@example.com"},
             )
@@ -86,21 +107,26 @@ def _test_engine():
     return engine
 
 
-def test_dry_run_is_non_mutating_and_reports_indirect_children():
+def test_dry_run_is_non_mutating_and_reports_full_cleanup():
     engine = _test_engine()
     with engine.connect() as connection:
         plan = build_purge_plan(connection)
         assert plan.delete_counts["usuarios"] == 2
         assert plan.delete_counts["comandas"] == 2
         assert plan.delete_counts["itens"] == 2
+        assert plan.delete_counts["categorias"] == 2
+        assert plan.delete_counts["produtos"] == 2
+        assert plan.delete_counts["configuracoes_restaurante"] == 2
         assert plan.delete_counts["restaurant_signups"] == 1
         assert plan.delete_counts["restaurantes"] == 1
-        assert plan.preserved_counts["produtos"] == 1
+        assert plan.preserved_counts["restaurantes"] == 1
+        assert plan.preserved_counts["restaurante_capabilities"] == 1
+        assert plan.preserved_counts["saas_subscriptions"] == 1
         users = Table("usuarios", MetaData(), autoload_with=connection)
         assert len(connection.execute(select(users)).all()) == 2
 
 
-def test_apply_preserves_tenant_one_structure_and_clears_operational_data():
+def test_apply_keeps_only_minimal_tenant_one_shell():
     engine = _test_engine()
     with engine.connect() as connection:
         plan = build_purge_plan(connection)
@@ -110,30 +136,35 @@ def test_apply_preserves_tenant_one_structure_and_clears_operational_data():
         expected_fingerprint=plan.fingerprint,
         expected_database=plan.database,
         confirmation=CONFIRMATION_PHRASE,
-        backup_reference="snapshot-test-001",
+        backup_waiver=WAIVE_BACKUP_PHRASE,
     )
     assert result["validation"] == "passed"
+    assert result["backup_waived"] is True
 
     metadata = MetaData()
     metadata.reflect(bind=engine)
     with engine.connect() as connection:
         assert connection.execute(select(metadata.tables["restaurantes"].c.id)).scalars().all() == [1]
-        assert connection.execute(select(metadata.tables["categorias"].c.restaurante_id)).scalars().all() == [1]
-        assert connection.execute(select(metadata.tables["produtos"].c.restaurante_id)).scalars().all() == [1]
+        assert connection.execute(select(metadata.tables["restaurante_capabilities"].c.restaurante_id)).scalars().all() == [1]
+        assert connection.execute(select(metadata.tables["saas_subscriptions"].c.restaurante_id)).scalars().all() == [1]
+        assert connection.execute(select(metadata.tables["categorias"])).all() == []
+        assert connection.execute(select(metadata.tables["produtos"])).all() == []
+        assert connection.execute(select(metadata.tables["configuracoes_restaurante"])).all() == []
         assert connection.execute(select(metadata.tables["usuarios"])).all() == []
         assert connection.execute(select(metadata.tables["comandas"])).all() == []
         assert connection.execute(select(metadata.tables["itens"])).all() == []
         assert connection.execute(select(metadata.tables["restaurant_signups"])).all() == []
 
 
-def test_apply_requires_exact_dry_run_and_backup_reference():
+def test_apply_requires_exact_dry_run_and_backup_or_waiver():
     engine = _test_engine()
     with engine.connect() as connection:
         plan = build_purge_plan(connection)
 
     for kwargs, expected in (
         ({"confirmation": "wrong", "backup_reference": "snapshot"}, "confirmação"),
-        ({"confirmation": CONFIRMATION_PHRASE, "backup_reference": ""}, "backup"),
+        ({"confirmation": CONFIRMATION_PHRASE}, "backup"),
+        ({"confirmation": CONFIRMATION_PHRASE, "backup_waiver": "wrong"}, "renúncia"),
     ):
         try:
             apply_purge(
@@ -146,6 +177,22 @@ def test_apply_requires_exact_dry_run_and_backup_reference():
             assert expected in str(exc).lower()
         else:
             raise AssertionError("purge destrutivo deveria ter sido bloqueado")
+
+
+def test_apply_still_accepts_real_backup_reference():
+    engine = _test_engine()
+    with engine.connect() as connection:
+        plan = build_purge_plan(connection)
+
+    result = apply_purge(
+        engine,
+        expected_fingerprint=plan.fingerprint,
+        expected_database=plan.database,
+        confirmation=CONFIRMATION_PHRASE,
+        backup_reference="snapshot-test-001",
+    )
+    assert result["validation"] == "passed"
+    assert result["backup_waived"] is False
 
 
 def test_apply_blocks_new_unclassified_table():
@@ -163,11 +210,9 @@ def test_apply_blocks_new_unclassified_table():
             expected_fingerprint=plan.fingerprint,
             expected_database=plan.database,
             confirmation=CONFIRMATION_PHRASE,
-            backup_reference="snapshot-test-002",
+            backup_waiver=WAIVE_BACKUP_PHRASE,
         )
     except RuntimeError as exc:
-        # A fingerprint ainda coincide porque a tabela nova está vazia, mas a
-        # classificação obrigatória é uma trava independente.
         assert "não classificadas" in str(exc)
     else:
         raise AssertionError("tabela nova não classificada deveria bloquear o purge")
