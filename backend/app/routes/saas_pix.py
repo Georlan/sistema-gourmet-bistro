@@ -167,7 +167,13 @@ def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
             "paymentMethodType": "pix",
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
-            "message": "Pix selecionado. Nenhum valor é cobrado hoje; o QR da primeira mensalidade será gerado somente quando ela vencer após o trial.",
+            "message": (
+                "Pix anual selecionado. Nenhum valor é cobrado hoje; depois da implantação e dos 7 dias grátis, "
+                "um único QR do valor anual será gerado e quitará os próximos 12 meses."
+                if canonical_cycle == "annual"
+                else "Pix mensal selecionado. Nenhum valor é cobrado hoje; depois da implantação e dos 7 dias grátis, "
+                "o QR da primeira mensalidade será gerado no vencimento."
+            ),
         }
 
     provisioned = provision_restaurant_for_contract(

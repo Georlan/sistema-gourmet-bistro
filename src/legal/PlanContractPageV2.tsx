@@ -700,7 +700,7 @@ export default function PlanContractPageV2() {
                       <label className="koma-sub-field koma-sub-field-full"><span>CPF/CNPJ do titular <small>(opcional se for o mesmo responsável)</small></span><div><FileText size={16} /><input value={cardDoc} onChange={event => setCardDoc(event.target.value)} /></div></label>
                     </div>
                   )}
-                  {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola aqui dentro; você poderá pagar com qualquer banco ou PSP Pix.</div>}
+                  {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
                   {billingMethod === 'account_money' && capabilities.account_money && <div className="koma-sub-locked-note"><Wallet size={17} /> Ao continuar, você será levado ao Mercado Pago apenas para autorizar o uso do seu saldo. A recorrência começa depois do trial.</div>}
                   {!capabilities.credit_card && !capabilities.pix && !capabilities.account_money && <p role="status">Sua inscrição fica salva. Os meios de pagamento estão temporariamente indisponíveis.</p>}
                 </section>
@@ -710,7 +710,9 @@ export default function PlanContractPageV2() {
                   <label htmlFor="legal-acceptance">
                     Declaro que as informações estão corretas, que <strong>possuo poderes</strong> para contratar e aceito os <a href="/legal/termos" target="_blank" rel="noreferrer">Termos de Contratação</a>, as <a href="/legal/planos" target="_blank" rel="noreferrer">Condições Comerciais</a>, o <a href="/legal/dpa" target="_blank" rel="noreferrer">Anexo de Tratamento de Dados</a> e a <a href="/legal/privacidade" target="_blank" rel="noreferrer">Política de Privacidade</a>, versão {LEGAL_VERSION}.{' '}
                     {billingMethod === 'pix'
-                      ? <strong>Escolho Pix: R$ 0 hoje; depois da implantação e dos 7 dias grátis, cada vencimento será pago por novo QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}. Não há débito Pix automático.</strong>
+                      ? activeBillingCycle === 'anual'
+                        ? <strong>Escolho Pix anual: R$ 0 hoje; depois da implantação e dos 7 dias grátis, será gerado um único QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}, quitando os próximos 12 meses. Não há débito Pix automático.</strong>
+                        : <strong>Escolho Pix mensal: R$ 0 hoje; depois da implantação e dos 7 dias grátis, cada vencimento mensal será pago por um novo QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}. Não há débito Pix automático.</strong>
                       : <strong>Autorizo a recorrência por {billingMethodLabel}: R$ 0 hoje e primeira cobrança automática de {formatCurrency(nextChargeAmount)} somente depois dos 7 dias grátis.</strong>}
                   </label>
                 </section>
@@ -735,7 +737,7 @@ export default function PlanContractPageV2() {
               <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : billingMethod === 'account_money' ? <Wallet size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
             </div>
             <div className="koma-sub-due-row"><span>A pagar hoje</span><strong>{formatCurrency(0)}</strong></div>
-            <p className="koma-sub-summary-note">Pix não é débito automático: cada vencimento gera um QR/Copia e Cola universal. Cartão e Saldo Mercado Pago são recorrentes.</p>
+            <p className="koma-sub-summary-note">{activeBillingCycle === 'anual' ? 'Pix anual não é débito automático: depois do trial, um único QR/Copia e Cola universal quita os próximos 12 meses.' : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'} Cartão e Saldo Mercado Pago são recorrentes.</p>
             {step === 1 ? (
               <button type="button" className="koma-sub-primary-action" onClick={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
