@@ -192,7 +192,7 @@ def _accept(client: TestClient, plan: str = "pro", cycle: str = "mensal") -> str
     return str(response.json()["protocol"])
 
 
-def test_card_authorization_starts_same_seven_day_trial_without_upfront_charge(client_and_session):
+def test_card_authorization_waits_for_essential_setup_before_starting_trial(client_and_session):
     client, Session = client_and_session
     protocol = _accept(client, "pocket", "mensal")
 
@@ -212,15 +212,16 @@ def test_card_authorization_starts_same_seven_day_trial_without_upfront_charge(c
         assert setup.payment_method_type == "credit_card"
         assert setup.status == "ready"
         sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == tenant_id).one()
-        assert sub.status == "trialing"
-        assert sub.trial_ends_at is not None
-        assert sub.current_period_end == sub.trial_ends_at
+        assert sub.status == "onboarding"
+        assert sub.trial_started_at is None
+        assert sub.trial_ends_at is None
+        assert sub.current_period_end is None
         entitlement = resolve_tenant_entitlement(db, tenant_id)
         assert entitlement.allowed is True
-        assert entitlement.reason == "trial_active"
+        assert entitlement.reason == "onboarding_setup"
 
 
-def test_pix_automatic_is_available_for_monthly_and_returns_authorization_url_with_zero_due_today(client_and_session):
+def test_pix_automatic_cannot_start_a_new_monthly_contract(client_and_session):
     client, Session = client_and_session
     protocol = _accept(client, "pro", "mensal")
 
@@ -228,24 +229,16 @@ def test_pix_automatic_is_available_for_monthly_and_returns_authorization_url_wi
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "pix_automatic"},
     )
-    assert response.status_code == 200, response.text
-    data = response.json()
-    assert data["status"] == "authorization_required"
-    assert data["paymentMethodType"] == "pix_automatic"
-    assert data["amountDueToday"] == 0
-    assert data["trialDays"] == 7
-    assert data["authorizationUrl"].startswith("https://www.mercadopago.com.br/")
+    assert response.status_code == 422, response.text
+    assert "Pix Automático legado" in response.text
 
     with Session() as db:
         setup = get_billing_setup(db, protocol)
-        assert setup is not None
-        assert setup.payment_method_type == "pix_automatic"
-        assert setup.status == "pending"
-        assert setup.restaurante_id is None
+        assert setup is None
         assert db.query(SaaSSubscription).count() == 0
 
 
-def test_pix_automatic_annual_keeps_discounted_annual_amount_but_defers_charge_until_after_trial(client_and_session):
+def test_pix_automatic_cannot_start_a_new_annual_contract(client_and_session):
     client, _Session = client_and_session
     protocol = _accept(client, "premium", "anual")
 
@@ -253,9 +246,8 @@ def test_pix_automatic_annual_keeps_discounted_annual_amount_but_defers_charge_u
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "pix_automatic"},
     )
-    assert response.status_code == 200, response.text
-    assert response.json()["amountDueToday"] == 0
-    assert response.json()["trialDays"] == 7
+    assert response.status_code == 422, response.text
+    assert "Pix Automático legado" in response.text
     assert float(subscription_annual_total("premium")) > float(subscription_monthly_price("premium"))
 
 
@@ -268,37 +260,11 @@ def test_legacy_upfront_pix_is_rejected_even_for_annual_contract(client_and_sess
         json={"payment_method_type": "pix"},
     )
     assert response.status_code == 422
-    assert "Pix avulso antecipado foi removido" in response.text
+    assert "Pix universal usa a seleção dedicada" in response.text
 
     with Session() as db:
         assert get_billing_setup(db, protocol) is None
         assert db.query(Restaurante).count() == 0
-
-
-def test_pix_automatic_webhook_only_activates_after_provider_confirms_pix_mandate(client_and_session):
-    client, Session = client_and_session
-    protocol = _accept(client, "pro", "mensal")
-    setup_response = client.post(
-        f"/api/contracts/{protocol}/billing/setup",
-        json={"payment_method_type": "pix_automatic"},
-    )
-    subscription_id = setup_response.json()["subscriptionId"]
-
-    webhook = client.post(
-        "/api/integrations/saas-billing/mercado-pago/webhook",
-        json={"type": "subscription_preapproval", "data": {"id": subscription_id}},
-    )
-    assert webhook.status_code == 200, webhook.text
-
-    with Session() as db:
-        setup = get_billing_setup(db, protocol)
-        assert setup is not None
-        assert setup.status == "ready"
-        assert setup.payment_method_type == "pix_automatic"
-        assert setup.restaurante_id is not None
-        sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == setup.restaurante_id).one()
-        assert sub.status == "trialing"
-        assert sub.payment_method_type == "pix_automatic"
 
 
 def test_webhook_accepts_query_parameters_data_id(client_and_session):
@@ -306,7 +272,7 @@ def test_webhook_accepts_query_parameters_data_id(client_and_session):
     protocol = _accept(client, "pro", "mensal")
     setup_response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
-        json={"payment_method_type": "pix_automatic"},
+        json={"payment_method_type": "account_money"},
     )
     subscription_id = setup_response.json()["subscriptionId"]
 
@@ -436,7 +402,9 @@ def test_account_money_webhook_activates_after_provider_confirms_mandate(client_
         assert setup.payment_method_type == "account_money"
         assert setup.restaurante_id is not None
         sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == setup.restaurante_id).one()
-        assert sub.status == "trialing"
+        assert sub.status == "onboarding"
+        assert sub.trial_started_at is None
+        assert sub.trial_ends_at is None
         assert sub.payment_method_type == "account_money"
 
 
@@ -476,4 +444,3 @@ def test_account_money_rejects_mismatched_payment_method(client_and_session, mon
     )
     assert webhook.status_code == 409
     assert "não é Saldo Mercado Pago" in webhook.text
-

@@ -148,13 +148,13 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
         assert {item.id.rsplit(":", 1)[-1] for item in releases} == {"email", "whatsapp"}
 
 
-def test_pix_automatic_authorization_waits_for_manual_release(client_and_session, monkeypatch):
+def test_account_money_authorization_waits_for_manual_release(client_and_session, monkeypatch):
     client, Session = client_and_session
     monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
     protocol = client.post("/api/contracts/accept", json=_contract_payload("pocket", "mensal")).json()["protocol"]
     setup = client.post(
         f"/api/contracts/{protocol}/billing/setup",
-        json={"payment_method_type": "pix_automatic"},
+        json={"payment_method_type": "account_money"},
     )
     assert setup.status_code == 200, setup.text
     sub_id = setup.json()["subscriptionId"]
@@ -167,7 +167,7 @@ def test_pix_automatic_authorization_waits_for_manual_release(client_and_session
     with Session() as db:
         billing = db.query(SaaSBillingSetup).one()
         assert billing.status == "ready"
-        assert billing.payment_method_type == "pix_automatic"
+        assert billing.payment_method_type == "account_money"
         assert billing.restaurante_id is None
         assert db.query(Restaurante).count() == 0
         assert db.query(SaaSSubscription).count() == 0
