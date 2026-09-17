@@ -737,7 +737,13 @@ export default function PlanContractPageV2() {
               <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : billingMethod === 'account_money' ? <Wallet size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
             </div>
             <div className="koma-sub-due-row"><span>A pagar hoje</span><strong>{formatCurrency(0)}</strong></div>
-            <p className="koma-sub-summary-note">{activeBillingCycle === 'anual' ? 'Pix anual não é débito automático: depois do trial, um único QR/Copia e Cola universal quita os próximos 12 meses.' : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'} Cartão e Saldo Mercado Pago são recorrentes.</p>
+            <p className="koma-sub-summary-note">{billingMethod === 'pix'
+              ? activeBillingCycle === 'anual'
+                ? 'Pix anual não é débito automático: depois do trial, um único QR/Copia e Cola universal quita os próximos 12 meses.'
+                : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'
+              : billingMethod === 'account_money'
+                ? 'Saldo Mercado Pago é recorrente e depende de saldo disponível na sua conta Mercado Pago no vencimento.'
+                : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>
             {step === 1 ? (
               <button type="button" className="koma-sub-primary-action" onClick={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
