@@ -48,7 +48,7 @@ _MONEY_QUANTUM = Decimal("0.01")
 
 
 class SaasBillingSetupRequest(BaseModel):
-    payment_method_type: str = Field(min_length=3, max_length=30)  # credit_card | pix_automatic
+    payment_method_type: str = Field(min_length=3, max_length=30)
     card_token_id: str | None = None
     payer_email: str | None = None
 
@@ -60,10 +60,14 @@ class SaasBillingSetupRequest(BaseModel):
         norm = v.strip().lower()
         if norm == "pix":
             raise ValueError(
-                "Pix avulso antecipado foi removido. Use 'pix_automatic' para autorizar a recorrência com 7 dias grátis."
+                "Pix universal usa a seleção dedicada por QR Code e Pix Copia e Cola; "
+                "nenhuma cobrança é criada antes do vencimento."
             )
         if norm not in RECURRING_TRIAL_PAYMENT_METHODS:
-            raise ValueError("Método de pagamento inválido. Use 'credit_card', 'pix_automatic' ou 'account_money'.")
+            raise ValueError(
+                "Método de pagamento inválido. Use 'credit_card' ou 'account_money'; "
+                "Pix universal possui seleção dedicada."
+            )
         return norm
 
 
@@ -156,6 +160,14 @@ def setup_contract_billing(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    if payload.payment_method_type == "pix_automatic":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "Pix Automático legado não está disponível para novas contratações. "
+                "Use Pix por QR Code e Pix Copia e Cola."
+            ),
+        )
     from ..services.saas_checkout_lock import checkout_lock
     with checkout_lock(db, _normalize_protocol(protocol)):
         return _setup_contract_billing(protocol, payload, background_tasks, db)
