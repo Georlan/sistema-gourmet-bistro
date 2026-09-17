@@ -65,7 +65,7 @@ def enqueue_acceptance(
 ):
     message = (
         f"Olá, {representative_name}! A inscrição do {restaurant_name} no KÔMA foi recebida. "
-        f"Protocolo: {protocol}. Agora escolha o meio de pagamento. Nada será cobrado hoje. "
+        f"Protocolo: {protocol}. Agora escolha o meio de pagamento. A mensalidade fixa é R$ 0 hoje. "
         "Depois da liberação você configura o restaurante com calma; os 7 dias grátis só começam "
         "quando os 3 passos essenciais da implantação estiverem concluídos."
     )
