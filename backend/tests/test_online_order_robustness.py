@@ -5,7 +5,14 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, current_restaurante_id, engine
 from app.main import app
-from app.models import Categoria, Comanda, Produto, Restaurante, Usuario
+from app.models import (
+    Categoria,
+    Comanda,
+    ConfiguracaoRestaurante,
+    Produto,
+    Restaurante,
+    Usuario,
+)
 
 
 RESTAURANTE_ID = 910100
@@ -35,6 +42,17 @@ def setup_online_order_restaurant():
             db.add(restaurante)
         else:
             restaurante.status_override = "Automático"
+        db.commit()
+
+        config = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == RESTAURANTE_ID,
+        ).first()
+        if config is None:
+            config = ConfiguracaoRestaurante(restaurante_id=RESTAURANTE_ID)
+            db.add(config)
+        config.delivery_ativo = True
+        config.tipo_taxa_entrega = "fixa"
+        config.taxa_entrega_fixa = 7.0
         db.commit()
 
         categoria = db.query(Categoria).filter(

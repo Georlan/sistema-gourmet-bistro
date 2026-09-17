@@ -62,8 +62,8 @@ import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
 const ACTIVE_ORDER_REFRESH_MS = 20_000;
-// O CSP ainda permite https://viacep.com.br por compatibilidade com telas legadas;
-// o MVP do cardápio não executa lookup externo de CEP nem depende desse serviço.
+// A consulta pública de CEP é apenas conveniência progressiva; o checkout
+// permanece totalmente utilizável com preenchimento manual.
 
 interface PublicMenuPayload {
   restaurante: Record<string, any>;

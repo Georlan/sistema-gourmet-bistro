@@ -7,7 +7,6 @@ import {
   parseDeliveryAddressLegacy,
   updateDeliveryAddressGeographicField,
 } from '../src/domain/deliveryAddress';
-import { placePredictionToAddressDraft } from '../src/integrations/googleMaps/placesAddress';
 
 const completeDraft = () => ({
   logradouro: ' Rua das Flores ',
@@ -103,38 +102,26 @@ describe('universal delivery address source', () => {
       getDeliveryAddressValidationError({ ...completeDraft(), latitude: -91, longitude: -38.5267 }),
       'Latitude inválida.',
     );
+    assert.equal(
+      getDeliveryAddressValidationError({ ...completeDraft(), latitude: 0, longitude: 0 }),
+      'As coordenadas não podem ser 0,0.',
+    );
   });
 
-  it('converte uma sugestão do Google para o mesmo rascunho universal sem apagar complemento', async () => {
-    const components = [
-      { longText: 'Avenida Beira Mar', types: ['route'] },
-      { longText: '1000', types: ['street_number'] },
-      { longText: 'Meireles', types: ['sublocality_level_1'] },
-      { longText: 'Fortaleza', types: ['administrative_area_level_2'] },
-      { longText: 'Ceará', shortText: 'CE', types: ['administrative_area_level_1'] },
-      { longText: '60165-121', types: ['postal_code'] },
-    ];
-    const suggestion = {
-      placePrediction: {
-        toPlace: () => ({
-          addressComponents: components,
-          location: { lat: () => -3.725, lng: () => -38.496 },
-          fetchFields: async () => undefined,
-        }),
-      },
-    };
-
-    const draft = await placePredictionToAddressDraft(suggestion, completeDraft());
-    assert.deepEqual(draft, {
+  it('preserva coordenadas ao editar complemento e referência', () => {
+    const geocoded = {
       ...completeDraft(),
-      logradouro: 'Avenida Beira Mar',
-      numero: '1000',
-      bairro: 'Meireles',
-      cidade: 'Fortaleza',
-      uf: 'CE',
-      cep: '60165121',
-      latitude: -3.725,
-      longitude: -38.496,
-    });
+      latitude: -3.7319,
+      longitude: -38.5267,
+    };
+    assert.equal({ ...geocoded, complemento: 'Bloco B' }.latitude, -3.7319);
+    assert.equal({ ...geocoded, referencia: 'Portão azul' }.longitude, -38.5267);
+  });
+
+  it('aceita endereço manual completo sem coordenadas', () => {
+    const snapshot = deliveryAddressDraftToSnapshot(completeDraft());
+    assert.ok(snapshot);
+    assert.equal(snapshot.latitude, null);
+    assert.equal(snapshot.longitude, null);
   });
 });

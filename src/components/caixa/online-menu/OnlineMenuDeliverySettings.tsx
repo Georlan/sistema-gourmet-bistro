@@ -79,7 +79,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
     pedido_minimo: 0,
     frete_gratis_valor: 0,
     tipo_taxa_entrega: 'fixa',
-    taxa_entrega_fixa: 7,
+    taxa_entrega_fixa: 0,
     tabela_taxas_bairros: [],
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');

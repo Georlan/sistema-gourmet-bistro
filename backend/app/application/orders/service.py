@@ -66,11 +66,10 @@ from ...services.clientes import (
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
-from ...services.delivery_routes import (
-    DeliveryRouteError,
-    GoogleRoutesDistanceProvider,
-    RouteDistanceProvider,
-    delivery_fee_for_route_distance,
+from ...services.delivery_fee_policy import (
+    normalize_neighborhood,
+    normalize_neighborhood_fee_table,
+    validate_delivery_fee,
 )
 from .commands import (
     AcceptOrderCommand,
@@ -86,6 +85,13 @@ from .dto import CustomerDTO, DeliveryDTO, OrderDTO, OrderItemDTO, OrderModifier
 from .validation_loader import ValidationDataLoader
 
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
+
+
+def _validated_configured_delivery_fee(value: object) -> Decimal:
+    try:
+        return validate_delivery_fee(value)
+    except ValueError as exc:
+        raise OrderValidationError(str(exc)) from exc
 
 _CHANNEL_TO_ORIGEM = {
     OrderChannel.WEB_CARDAPIO: "cardapio",
@@ -165,7 +171,6 @@ class OrderApplicationService:
         items_subtotal: Decimal,
         neighborhood: Optional[str] = None,
         delivery_address: DeliveryAddressInput | None = None,
-        route_distance_provider: RouteDistanceProvider | None = None,
     ) -> Decimal:
         """Calcula de forma autoritativa no servidor a taxa de entrega.
 
@@ -186,60 +191,35 @@ class OrderApplicationService:
             .first()
         )
         if config is None:
-            rest = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if rest is not None:
-                config = ConfiguracaoRestaurante(
-                    restaurante_id=restaurante_id,
-                    delivery_ativo=True,
-                    tipo_taxa_entrega="fixa",
-                    taxa_entrega_fixa=7.0,
-                )
-            else:
-                raise OrderValidationError("Configurações do restaurante não foram encontradas para calcular a entrega.")
+            raise OrderValidationError(
+                "Configurações do restaurante não foram encontradas para calcular a entrega."
+            )
 
         tipo_taxa = getattr(config, "tipo_taxa_entrega", None)
-        if tipo_taxa not in ("fixa", "bairro", "distancia"):
+        if tipo_taxa not in ("fixa", "bairro"):
             raise OrderValidationError(f"Tipo de taxa de entrega '{tipo_taxa}' inválido ou não suportado.")
 
         matched_bairro_taxa: Decimal | None = None
-        distance_fee: Decimal | None = None
 
         if tipo_taxa == "bairro":
-            clean_bairro = str(neighborhood or "").strip()
+            clean_bairro = " ".join(str(neighborhood or "").strip().split())
             if not clean_bairro:
                 raise OrderValidationError("Bairro de entrega é obrigatório quando a cobrança é por bairro.")
 
-            normalized_target = clean_bairro.casefold()
-            tabela = config.tabela_taxas_bairros or []
+            normalized_target = normalize_neighborhood(clean_bairro)
+            try:
+                tabela = normalize_neighborhood_fee_table(config.tabela_taxas_bairros or [])
+            except ValueError as exc:
+                raise OrderValidationError(str(exc)) from exc
             for b in tabela:
-                if isinstance(b, dict) and str(b.get("bairro", "")).strip().casefold() == normalized_target:
-                    matched_bairro_taxa = to_money_decimal(b.get("taxa", 0.0))
+                if normalize_neighborhood(b["bairro"]) == normalized_target:
+                    matched_bairro_taxa = _validated_configured_delivery_fee(b.get("taxa"))
                     break
 
             if matched_bairro_taxa is None:
                 raise OrderValidationError(
                     f"O bairro '{clean_bairro}' não está na área de entrega atendida pelo restaurante."
                 )
-
-        if tipo_taxa == "distancia":
-            restaurant = db.query(Restaurante).filter(Restaurante.id == restaurante_id).first()
-            if restaurant is None or restaurant.latitude is None or restaurant.longitude is None:
-                raise OrderValidationError("A origem da entrega não possui coordenadas configuradas.")
-            if delivery_address is None or delivery_address.latitude is None or delivery_address.longitude is None:
-                raise OrderValidationError("Selecione um endereço válido para calcular a rota de entrega.")
-            provider = route_distance_provider or GoogleRoutesDistanceProvider()
-            try:
-                distance_meters = provider.distance_meters(
-                    tenant_id=restaurante_id,
-                    origin=(float(restaurant.latitude), float(restaurant.longitude)),
-                    destination=(float(delivery_address.latitude), float(delivery_address.longitude)),
-                )
-                distance_fee = delivery_fee_for_route_distance(
-                    distance_meters,
-                    config.tabela_taxas_km or [],
-                )
-            except DeliveryRouteError as exc:
-                raise OrderValidationError(str(exc)) from exc
 
         # 4. Validar cobertura ANTES de aplicar frete grátis por valor de subtotal
         if config.frete_gratis_valor and float(config.frete_gratis_valor) > 0:
@@ -250,12 +230,12 @@ class OrderApplicationService:
         if tipo_taxa == "fixa":
             if config.taxa_entrega_fixa is None:
                 raise OrderValidationError("Taxa de entrega fixa não configurada no estabelecimento.")
-            return to_money_decimal(config.taxa_entrega_fixa)
+            return _validated_configured_delivery_fee(config.taxa_entrega_fixa)
 
         if tipo_taxa == "bairro":
             return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")
 
-        return distance_fee if distance_fee is not None else Decimal("0.00")
+        raise OrderValidationError("A política de entrega configurada é inválida.")
 
     @classmethod
     def _validate_service_idempotent_replay(

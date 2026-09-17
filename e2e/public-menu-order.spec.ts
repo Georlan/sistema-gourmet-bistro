@@ -337,53 +337,24 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
   expect(backend.getOtpRequests()).toBe(0);
 });
 
-test('autocomplete alimenta o snapshot universal e correção manual invalida coordenadas', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop-1024', 'Fluxo externo coberto uma vez por matriz.');
+test('consulta de CEP alimenta o snapshot universal e permite correção manual', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1024', 'Fluxo de CEP coberto uma vez por matriz.');
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders);
-  await page.route('https://maps.googleapis.com/maps/api/js**', async (route) => {
-    await route.fulfill({
-      contentType: 'application/javascript',
-      body: `
-        window.google = { maps: { importLibrary: async () => ({
-          AutocompleteSessionToken: class {},
-          AutocompleteSuggestion: {
-            fetchAutocompleteSuggestions: async () => ({ suggestions: [{
-              placePrediction: {
-                text: { toString: () => 'Avenida Beira Mar, 1000, Fortaleza' },
-                toPlace: () => ({
-                  fetchFields: async function () {
-                    this.addressComponents = [
-                      { longText: 'Avenida Beira Mar', types: ['route'] },
-                      { longText: '1000', types: ['street_number'] },
-                      { longText: 'Meireles', types: ['sublocality_level_1'] },
-                      { longText: 'Fortaleza', types: ['administrative_area_level_2'] },
-                      { longText: 'Ceará', shortText: 'CE', types: ['administrative_area_level_1'] },
-                      { longText: '60165-121', types: ['postal_code'] }
-                    ];
-                    this.location = { lat: () => -3.725, lng: () => -38.496 };
-                  }
-                })
-              }
-            }] })
-          }
-        }) } };
-        window.__komaGoogleMapsReady();
-      `,
-    });
-  });
+  await page.route('https://viacep.com.br/ws/60165121/json/', route => route.fulfill({ json: {
+    cep: '60165-121', logradouro: 'Avenida Beira Mar', bairro: 'Meireles',
+    localidade: 'Fortaleza', uf: 'CE',
+  } }));
 
   await page.goto('/cardapio?restaurante_id=2');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
-  await page.getByPlaceholder('Como devemos chamar você?').fill('Cliente Autocomplete');
+  await page.getByPlaceholder('Como devemos chamar você?').fill('Cliente CEP');
   await page.getByPlaceholder('(00) 00000-0000').fill('85988887777');
   await page.getByRole('button', { name: /^Entrega\b/ }).click();
-  await page.locator('#delivery-address-google-search').fill('Avenida Beira Mar');
-  await page.getByRole('option', { name: 'Avenida Beira Mar, 1000, Fortaleza' }).click();
+  await page.locator('#delivery-address-cep').fill('60165121');
 
   await expect(page.locator('#delivery-address-logradouro')).toHaveValue('Avenida Beira Mar');
-  await expect(page.locator('#delivery-address-numero')).toHaveValue('1000');
   await expect(page.locator('#delivery-address-bairro')).toHaveValue('Meireles');
   await page.locator('#delivery-address-numero').fill('1001');
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
@@ -398,9 +369,35 @@ test('autocomplete alimenta o snapshot universal e correção manual invalida co
     cidade: 'Fortaleza',
     uf: 'CE',
     cep: '60165121',
-    latitude: null,
-    longitude: null,
+    latitude: null, longitude: null,
   });
+});
+
+test('consulta de CEP ignora resposta antiga que chega fora de ordem', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1024', 'Concorrência de CEP coberta uma vez por matriz.');
+  await mockPublicMenuBackend(page, []);
+  const requestedPostalCodes: string[] = [];
+  await page.route('https://viacep.com.br/ws/**', async route => {
+    const first = route.request().url().includes('60000000');
+    requestedPostalCodes.push(first ? '60000000' : '60165121');
+    if (first) await new Promise(resolve => setTimeout(resolve, 700));
+    await route.fulfill({ json: first
+      ? { cep: '60000-000', logradouro: 'Rua Antiga', bairro: 'Centro', localidade: 'Fortaleza', uf: 'CE' }
+      : { cep: '60165-121', logradouro: 'Rua Atual', bairro: 'Meireles', localidade: 'Fortaleza', uf: 'CE' }
+    });
+  });
+
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').click();
+  await openCart(page);
+  await page.getByRole('button', { name: /^Entrega\b/ }).click();
+  const cep = page.locator('#delivery-address-cep');
+  await cep.fill('60000000');
+  await expect.poll(() => requestedPostalCodes).toContain('60000000');
+  await cep.fill('60165121');
+  await expect(page.locator('#delivery-address-logradouro')).toHaveValue('Rua Atual');
+  await page.waitForTimeout(800);
+  await expect(page.locator('#delivery-address-logradouro')).toHaveValue('Rua Atual');
 });
 
 test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial', async ({ page }) => {

@@ -7,7 +7,6 @@ from decimal import Decimal, ROUND_HALF_UP
 import uuid
 import datetime
 import logging
-
 import re
 from ..database import get_db, require_tenant_id
 from ..services.restaurant_profile import apply_restaurant_profile_update
@@ -42,6 +41,10 @@ from ..services.clientes import (
     registrar_movimento_fidelidade,
 )
 from ..services.capabilities import has_capability
+from ..services.delivery_fee_policy import (
+    normalize_neighborhood_fee_table,
+    validate_delivery_fee,
+)
 from ..services.notificacoes import agendar_convite_equipe_task
 from ..timezone_utils import elapsed_minutes_since
 
@@ -1562,6 +1565,22 @@ def atualizar_configuracoes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
+    if config_in.tipo_taxa_entrega is not None and config_in.tipo_taxa_entrega not in {"fixa", "bairro"}:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Use taxa fixa ou taxa por bairro. Taxa por distância não está disponível.",
+        )
+    try:
+        normalized_fixed_fee = (
+            validate_delivery_fee(config_in.taxa_entrega_fixa)
+            if config_in.taxa_entrega_fixa is not None else None
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
     config = db.query(ConfiguracaoRestaurante).options(joinedload(ConfiguracaoRestaurante.restaurante)).filter(
         ConfiguracaoRestaurante.restaurante_id == current_user.restaurante_id
     ).first()
@@ -1572,6 +1591,21 @@ def atualizar_configuracoes(
         db.add(config)
         db.commit()
         db.refresh(config)
+
+    effective_fee_mode = config_in.tipo_taxa_entrega or config.tipo_taxa_entrega
+    normalized_neighborhoods = None
+    if effective_fee_mode == "bairro":
+        try:
+            normalized_neighborhoods = normalize_neighborhood_fee_table(
+                config_in.tabela_taxas_bairros
+                if config_in.tabela_taxas_bairros is not None
+                else (config.tabela_taxas_bairros or [])
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
         
     if config_in.nicho is not None:
         config.nicho = config_in.nicho
@@ -1586,11 +1620,14 @@ def atualizar_configuracoes(
     if config_in.tipo_taxa_entrega is not None:
         config.tipo_taxa_entrega = config_in.tipo_taxa_entrega
     if config_in.taxa_entrega_fixa is not None:
-        config.taxa_entrega_fixa = config_in.taxa_entrega_fixa
+        config.taxa_entrega_fixa = float(normalized_fixed_fee)
     if config_in.tabela_taxas_bairros is not None:
-        config.tabela_taxas_bairros = config_in.tabela_taxas_bairros
+        config.tabela_taxas_bairros = list(
+            normalized_neighborhoods or config_in.tabela_taxas_bairros
+        )
     if config_in.tabela_taxas_km is not None:
         config.tabela_taxas_km = config_in.tabela_taxas_km
+
     if config_in.taxa_servico_ativa is not None:
         config.taxa_servico_ativa = config_in.taxa_servico_ativa
     if config_in.taxa_servico_padrao is not None:

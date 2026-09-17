@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+import math
 from typing import Optional, Tuple
 from ...domain.orders.types import FulfillmentType, OrderChannel
 from ...domain.orders.errors import (
@@ -16,6 +17,22 @@ from ...domain.orders.errors import (
 
 def _clean_address_text(value: object) -> str:
     return " ".join(str(value or "").strip().split())
+
+
+def _validated_coordinate(value: object, *, latitude: bool) -> float:
+    label = "Latitude" if latitude else "Longitude"
+    try:
+        coordinate = float(value)
+    except (TypeError, ValueError):
+        raise InvalidFulfillmentDetailsError(
+            f"{label} do endereço de entrega é inválida."
+        ) from None
+    limit = 90 if latitude else 180
+    if not math.isfinite(coordinate) or not -limit <= coordinate <= limit:
+        raise InvalidFulfillmentDetailsError(
+            f"{label} do endereço de entrega é inválida."
+        )
+    return coordinate
 
 
 @dataclass(frozen=True)
@@ -103,10 +120,20 @@ class DeliveryAddressInput:
             raise InvalidFulfillmentDetailsError("CEP do endereço de entrega deve conter 8 dígitos.")
         if (self.latitude is None) != (self.longitude is None):
             raise InvalidFulfillmentDetailsError("Latitude e longitude devem ser informadas juntas.")
-        if self.latitude is not None and not -90 <= float(self.latitude) <= 90:
-            raise InvalidFulfillmentDetailsError("Latitude do endereço de entrega é inválida.")
-        if self.longitude is not None and not -180 <= float(self.longitude) <= 180:
-            raise InvalidFulfillmentDetailsError("Longitude do endereço de entrega é inválida.")
+        latitude = (
+            _validated_coordinate(self.latitude, latitude=True)
+            if self.latitude is not None
+            else None
+        )
+        longitude = (
+            _validated_coordinate(self.longitude, latitude=False)
+            if self.longitude is not None
+            else None
+        )
+        if latitude == 0 and longitude == 0:
+            raise InvalidFulfillmentDetailsError(
+                "As coordenadas do endereço de entrega não podem ser 0,0."
+            )
 
         object.__setattr__(self, "street", street)
         object.__setattr__(self, "number", number)
@@ -116,8 +143,8 @@ class DeliveryAddressInput:
         object.__setattr__(self, "postal_code", postal_code)
         object.__setattr__(self, "complement", complement)
         object.__setattr__(self, "reference", reference)
-        object.__setattr__(self, "latitude", float(self.latitude) if self.latitude is not None else None)
-        object.__setattr__(self, "longitude", float(self.longitude) if self.longitude is not None else None)
+        object.__setattr__(self, "latitude", latitude)
+        object.__setattr__(self, "longitude", longitude)
 
     def to_snapshot(self) -> dict[str, object]:
         """Contrato persistido; nomes em PT-BR para coincidir com a API pública."""
