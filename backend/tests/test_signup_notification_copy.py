@@ -77,7 +77,7 @@ def test_release_required_message_describes_authorization_not_payment(monkeypatc
     message = calls[0]["message"]
     assert "Autorização recorrente confirmada" in message
     assert "Nenhuma mensalidade fixa foi cobrada hoje" in message
-    assert "trial de 7 dias começa somente na liberação" in message
+    assert "7 dias grátis só começarão depois que os 3 passos essenciais forem concluídos" in message
     assert "Pagamento confirmado" not in message
 
 
@@ -97,8 +97,8 @@ def test_activation_message_marks_trial_start_and_next_steps(monkeypatch):
 
     assert len(calls) == 1
     message = calls[0]["message"]
-    assert "7 dias grátis começaram" in message
+    assert "7 dias grátis ainda não estão correndo" in message
     assert "válido por 72 horas" in message
-    assert "configure horários" in message
-    assert "pedido de teste" in message
+    assert "dados do restaurante, horários e cardápio" in message
+    assert "3 passos essenciais" in message
     assert "https://komafood.com.br/ativar#token=invite-token" in message
