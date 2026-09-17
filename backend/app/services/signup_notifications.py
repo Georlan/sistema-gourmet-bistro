@@ -65,7 +65,7 @@ def enqueue_acceptance(
 ):
     message = (
         f"Olá, {representative_name}! A inscrição do {restaurant_name} no KÔMA foi recebida. "
-        f"Protocolo: {protocol}. Agora autorize o meio de pagamento recorrente. Nada será cobrado hoje. "
+        f"Protocolo: {protocol}. Agora escolha o meio de pagamento. A mensalidade fixa é R$ 0 hoje. "
         "Depois da liberação você configura o restaurante com calma; os 7 dias grátis só começam "
         "quando os 3 passos essenciais da implantação estiverem concluídos."
     )
@@ -78,15 +78,16 @@ def enqueue_acceptance(
         subject="Inscrição recebida — KÔMA",
         message=message,
     )
+    owner_email = settings.KOMA_OWNER_EMAIL
     owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
-    if owner_phone:
+    if owner_email or owner_phone:
         enqueue(
             db,
             protocol=protocol,
             kind="owner",
-            email=None,
+            email=owner_email,
             phone=owner_phone,
-            subject="Nova inscrição",
+            subject="Nova inscrição iniciada — KÔMA",
             message=(
                 f"Nova inscrição KÔMA iniciada: {restaurant_name}. Protocolo: {protocol}. "
                 "Acompanhe o status na aba Inscrições do SuperAdmin."
