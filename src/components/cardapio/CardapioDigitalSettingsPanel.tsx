@@ -53,7 +53,7 @@ type RestaurantConfig = {
   formas_pagamento_aceitas: string[];
   pedido_minimo: number;
   frete_gratis_valor: number;
-  tipo_taxa_entrega: 'fixa' | 'bairro' | 'distancia';
+  tipo_taxa_entrega: 'fixa' | 'bairro';
   tabela_taxas_bairros: BairroTaxaRow[];
 };
 

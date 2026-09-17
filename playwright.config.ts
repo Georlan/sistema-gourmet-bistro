@@ -42,7 +42,6 @@ export default defineConfig({
     env: {
       KOMA_E2E: 'true',
       DISABLE_HMR: 'true',
-      VITE_GOOGLE_MAPS_BROWSER_KEY: 'e2e-browser-key',
     },
     command: process.env.KOMA_E2E_PREVIEW === 'true'
       ? `npm run preview -- --host=127.0.0.1 --port=${port} --strictPort`

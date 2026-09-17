@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
 import uuid
@@ -269,7 +269,15 @@ class DeliveryAddressSnapshotSchema(BaseModel):
             raise ValueError("CEP deve conter 8 dígitos.")
         return postal_code
 
-    model_config = ConfigDict(extra="forbid")
+    @model_validator(mode="after")
+    def validate_coordinate_pair(self):
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Latitude e longitude devem ser informadas juntas.")
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError("As coordenadas não podem ser 0,0.")
+        return self
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 # ----------------- ACTIONS & CREATIONS -----------------
@@ -515,7 +523,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     pedido_minimo: Optional[float] = 0.0
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
-    taxa_entrega_fixa: Optional[float] = 7.0
+    taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
     plano: Optional[str] = "pocket"
@@ -819,10 +827,10 @@ class CardapioPublicRestaurantResponse(BaseModel):
     pedido_minimo: Optional[float] = 0.0
     frete_gratis_valor: Optional[float] = 0.0
     tipo_taxa_entrega: Optional[str] = "fixa"
-    taxa_entrega_fixa: Optional[float] = 7.0
+    taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[Any] = []
     tabela_taxas_km: Optional[Any] = []
-    taxa_entrega_padrao: Optional[float] = 0.0
+    taxa_entrega_padrao: Optional[float] = None
 
 
 class CardapioPublicCategoryResponse(BaseModel):

@@ -14,11 +14,10 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.application.orders.service import OrderApplicationService
-from app.application.orders.commands import DeliveryAddressInput
 from app.database import SessionLocal
 from app.domain.orders.errors import OrderValidationError
 from app.domain.orders.types import FulfillmentType
-from app.models import ConfiguracaoRestaurante, Restaurante
+from app.models import ConfiguracaoRestaurante
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
     char_client,
@@ -79,6 +78,28 @@ class TestDeliveryCanonicalRules:
         finally:
             config.taxa_entrega_fixa = 7.0
             db.commit()
+            db.close()
+
+    @pytest.mark.parametrize("configured_fee", [-1, 10_001, float("nan"), float("inf")])
+    def test_resolve_delivery_fee_rejects_invalid_configured_fixed_fee(
+        self, char_setup, configured_fee
+    ):
+        db: Session = SessionLocal()
+        try:
+            config = self._get_or_create_config(db)
+            config.tipo_taxa_entrega = "fixa"
+            config.taxa_entrega_fixa = configured_fee
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("30.00"),
+            )
+            raise AssertionError(f"taxa insegura foi aceita: {fee}")
+        except OrderValidationError as exc:
+            assert "configurada é inválida" in str(exc)
+        finally:
+            db.rollback()
             db.close()
 
     def test_resolve_delivery_fee_bairro_cadastrado(self, char_setup):
@@ -250,50 +271,23 @@ class TestDeliveryCanonicalRules:
             db.commit()
             db.close()
 
-    def test_resolve_delivery_fee_distancia_usa_rota_e_tabela_canonica(self, char_setup):
-        class RouteStub:
-            def distance_meters(self, **kwargs):
-                assert kwargs["tenant_id"] == CHAR_RESTAURANT_ID
-                assert kwargs["origin"] == (-3.7319, -38.5267)
-                return 4200
-
+    def test_resolve_delivery_fee_distancia_legada_rejeita_sem_servico_externo(self, char_setup):
         db: Session = SessionLocal()
         try:
             config = self._get_or_create_config(db)
-            restaurant = db.query(Restaurante).filter(Restaurante.id == CHAR_RESTAURANT_ID).one()
-            previous_coordinates = (restaurant.latitude, restaurant.longitude)
-            restaurant.latitude = -3.7319
-            restaurant.longitude = -38.5267
             config.tipo_taxa_entrega = "distancia"
-            config.tabela_taxas_km = [
-                {"ate_km": 3, "taxa": 5},
-                {"ate_km": 5, "taxa": 8.5},
-            ]
-            config.frete_gratis_valor = 0
             db.commit()
 
-            fee = OrderApplicationService.resolve_server_delivery_fee(
-                db=db,
-                restaurante_id=CHAR_RESTAURANT_ID,
-                fulfillment=FulfillmentType.DELIVERY,
-                items_subtotal=Decimal("30.00"),
-                delivery_address=DeliveryAddressInput(
-                    street="Rua das Flores",
-                    number="123",
+            with pytest.raises(OrderValidationError, match="inválido ou não suportado"):
+                OrderApplicationService.resolve_server_delivery_fee(
+                    db=db,
+                    restaurante_id=CHAR_RESTAURANT_ID,
+                    fulfillment=FulfillmentType.DELIVERY,
+                    items_subtotal=Decimal("30.00"),
                     neighborhood="Centro",
-                    city="Fortaleza",
-                    state="CE",
-                    postal_code="60000000",
-                    latitude=-3.725,
-                    longitude=-38.496,
-                ),
-                route_distance_provider=RouteStub(),
-            )
-            assert fee == Decimal("8.50")
+                )
         finally:
             config.tipo_taxa_entrega = "fixa"
-            config.tabela_taxas_km = []
-            restaurant.latitude, restaurant.longitude = previous_coordinates
             db.commit()
             db.close()
 
@@ -330,6 +324,30 @@ class TestDeliveryCanonicalRules:
             headers=headers,
             json={"taxa_entrega_fixa": 7.00},
         )
+
+    def test_configuracoes_rejeita_taxa_por_distancia(self, char_client, char_setup):
+        response = char_client.put(
+            "/caixa/configuracoes",
+            headers=char_setup["headers"],
+            json={"tipo_taxa_entrega": "distancia"},
+        )
+        assert response.status_code == 422
+        assert "taxa fixa ou taxa por bairro" in response.json()["detail"]
+
+    def test_configuracoes_rejeita_bairros_duplicados_normalizados(self, char_client, char_setup):
+        response = char_client.put(
+            "/caixa/configuracoes",
+            headers=char_setup["headers"],
+            json={
+                "tipo_taxa_entrega": "bairro",
+                "tabela_taxas_bairros": [
+                    {"bairro": "Centro", "taxa": 5},
+                    {"bairro": "  CENTRO  ", "taxa": 7},
+                ],
+            },
+        )
+        assert response.status_code == 422
+        assert "duplicado" in response.json()["detail"]
 
     def test_public_cardapio_order_rejects_unserved_neighborhood_even_with_high_subtotal(
         self, char_client, char_setup

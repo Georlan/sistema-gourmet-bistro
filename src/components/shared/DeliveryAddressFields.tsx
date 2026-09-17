@@ -4,7 +4,7 @@ import {
   formatCepInput,
   updateDeliveryAddressGeographicField,
 } from '../../domain/deliveryAddress';
-import GooglePlacesAddressAutocomplete from './GooglePlacesAddressAutocomplete';
+import PostalCodeLookupStatus from './PostalCodeLookupStatus';
 
 type NeighborhoodOption = {
   value: string;
@@ -54,13 +54,6 @@ export default function DeliveryAddressFields({
         </div>
       )}
 
-      <GooglePlacesAddressAutocomplete
-        value={value}
-        onChange={onChange}
-        compact={compact}
-        idPrefix={idPrefix}
-      />
-
       <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-2">
         <label>
           <span className={labelClass}>CEP</span>
@@ -97,6 +90,7 @@ export default function DeliveryAddressFields({
           />
         </label>
       </div>
+      <PostalCodeLookupStatus value={value} onChange={onChange} compact={compact} />
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <label>

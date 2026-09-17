@@ -945,7 +945,7 @@ class ConfiguracaoRestaurante(Base):
     delivery_ativo = Column(Boolean, default=True)
     pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
-    tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
+    tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro"
     taxa_entrega_fixa = Column(Numeric(14, 2, asdecimal=False), default=7.0, nullable=False)
     tabela_taxas_bairros = Column(JSON, default=list)
     tabela_taxas_km = Column(JSON, default=list)
