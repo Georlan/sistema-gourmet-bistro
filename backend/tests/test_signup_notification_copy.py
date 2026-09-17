@@ -16,6 +16,7 @@ def _capture_enqueue(monkeypatch):
 def test_acceptance_message_does_not_claim_upfront_payment(monkeypatch):
     calls = _capture_enqueue(monkeypatch)
     monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "")
 
     signup_notifications.enqueue_acceptance(
         object(),
@@ -30,9 +31,32 @@ def test_acceptance_message_does_not_claim_upfront_payment(monkeypatch):
     message = calls[0]["message"]
     assert "R$ 0 hoje" in message
     assert "7 dias grátis" in message
-    assert "autorize o meio de pagamento recorrente" in message
+    assert "escolha o meio de pagamento" in message
+    assert "meio de pagamento recorrente" not in message
     assert "Conclua o pagamento para liberar" not in message
-    assert "aguarda a liberação" in message
+
+
+def test_acceptance_notifies_owner_by_email_without_requiring_whatsapp(monkeypatch):
+    calls = _capture_enqueue(monkeypatch)
+    monkeypatch.delenv("KOMA_OWNER_WHATSAPP_PHONE", raising=False)
+    monkeypatch.setattr(signup_notifications.settings, "KOMA_OWNER_EMAIL", "owner@example.com")
+
+    signup_notifications.enqueue_acceptance(
+        object(),
+        protocol="KOMA-CTR-20260913-ABCDEF123456",
+        restaurant_name="Restaurante QA",
+        representative_name="Ana",
+        email="ana@example.com",
+        phone="5584999999999",
+    )
+
+    assert len(calls) == 2
+    owner = calls[1]
+    assert owner["kind"] == "owner"
+    assert owner["email"] == "owner@example.com"
+    assert owner["phone"] == ""
+    assert owner["subject"] == "Nova inscrição iniciada — KÔMA"
+    assert "Acompanhe o status na aba Inscrições do SuperAdmin" in owner["message"]
 
 
 def test_release_required_message_describes_authorization_not_payment(monkeypatch):
