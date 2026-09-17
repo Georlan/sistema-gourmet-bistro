@@ -52,6 +52,12 @@ test('checkout diferencia claramente Pix mensal de Pix anual', () => {
   assert.doesNotMatch(planContract, /cada vencimento será pago por novo QR Code/);
 });
 
+test('resumo lateral acompanha o meio de pagamento selecionado', () => {
+  assert.match(planContract, /billingMethod === 'pix'[\s\S]*Pix anual não é débito automático/);
+  assert.match(planContract, /billingMethod === 'account_money'[\s\S]*Saldo Mercado Pago é recorrente/);
+  assert.match(planContract, /Cartão de crédito é recorrente/);
+});
+
 test('catálogo contém somente os três meios publicados', () => {
   assert.match(paymentCatalog, /id: 'credit_card'/);
   assert.match(paymentCatalog, /id: 'pix'/);
