@@ -14,12 +14,34 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.services.safe_data_purge import (
-    CONFIRMATION_PHRASE,
-    WAIVE_BACKUP_PHRASE,
-    apply_purge,
-    build_purge_plan,
-)
+
+def _load_safe_data_purge():
+    try:
+        from app.services import safe_data_purge as module
+
+        return module
+    except RuntimeError:
+        # Quando executado em containers/ambientes dedicados de manutenção ou CLI sem segredos
+        # de web server (como SECRET_KEY/ENCRYPTION_KEY exigidos por app.config ao carregar o
+        # pacote app.services), importa safe_data_purge diretamente pois o serviço depende apenas
+        # de SQLAlchemy e reflexão de schema.
+        import importlib.util
+
+        target = BACKEND_ROOT / "app" / "services" / "safe_data_purge.py"
+        spec = importlib.util.spec_from_file_location("app.services.safe_data_purge", target)
+        if spec is None or spec.loader is None:
+            raise
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["app.services.safe_data_purge"] = module
+        spec.loader.exec_module(module)
+        return module
+
+
+_safe_data_purge = _load_safe_data_purge()
+CONFIRMATION_PHRASE = _safe_data_purge.CONFIRMATION_PHRASE
+WAIVE_BACKUP_PHRASE = _safe_data_purge.WAIVE_BACKUP_PHRASE
+apply_purge = _safe_data_purge.apply_purge
+build_purge_plan = _safe_data_purge.build_purge_plan
 
 
 def parse_args() -> argparse.Namespace:

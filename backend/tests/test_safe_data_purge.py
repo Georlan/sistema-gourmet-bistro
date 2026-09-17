@@ -216,3 +216,27 @@ def test_apply_blocks_new_unclassified_table():
         assert "não classificadas" in str(exc)
     else:
         raise AssertionError("tabela nova não classificada deveria bloquear o purge")
+
+
+def test_purge_cli_loads_without_web_secrets():
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend_root = Path(__file__).resolve().parents[1]
+    cli_path = backend_root / "tools" / "purge_homologation_data.py"
+
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("SECRET_KEY", "ENCRYPTION_KEY")
+    }
+    result = subprocess.run(
+        [sys.executable, str(cli_path), "--help"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "CLI segura para limpar dados históricos" in result.stdout
