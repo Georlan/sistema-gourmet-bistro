@@ -38,9 +38,18 @@ test('checkout expõe exatamente cartão Pix e Saldo Mercado Pago', () => {
 test('Pix é universal e não gera cobrança no aceite', () => {
   assert.match(planContract, /\/billing\/pix\/select/);
   assert.match(planContract, /pague com qualquer banco/);
-  assert.match(planContract, /o KÔMA exibirá o QR Code e o Pix Copia e Cola aqui dentro/);
+  assert.match(planContract, /Você poderá pagar com qualquer banco ou PSP Pix/);
   assert.match(planContract, /Não há débito Pix automático/);
   assert.doesNotMatch(planContract, /Continuar no Mercado Pago.*Pix/);
+});
+
+test('checkout diferencia claramente Pix mensal de Pix anual', () => {
+  assert.match(planContract, /Escolho Pix anual/);
+  assert.match(planContract, /um único QR Code\/Pix Copia e Cola/);
+  assert.match(planContract, /quitando os próximos 12 meses/);
+  assert.match(planContract, /Escolho Pix mensal/);
+  assert.match(planContract, /cada vencimento mensal será pago por um novo QR Code\/Pix Copia e Cola/);
+  assert.doesNotMatch(planContract, /cada vencimento será pago por novo QR Code/);
 });
 
 test('catálogo contém somente os três meios publicados', () => {
