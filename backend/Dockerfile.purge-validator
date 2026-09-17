@@ -1,0 +1,15 @@
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.lock requirements.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY tools ./tools
+
+CMD ["python", "tools/purge_homologation_data.py", "--report-json", "/tmp/purge-dry-run.json"]
