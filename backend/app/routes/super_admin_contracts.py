@@ -469,6 +469,10 @@ def activate_contract(
 
         existing_tenant_id = acceptance.get("linked_restaurante_id")
         if existing_tenant_id is not None:
+            if not contract_fixed_billing_required(db, normalized):
+                acceptance["billing_status"] = "not_required"
+                acceptance["billing_provider"] = None
+                acceptance["payment_method_type"] = None
             return _activation_response(
                 acceptance,
                 int(existing_tenant_id),
