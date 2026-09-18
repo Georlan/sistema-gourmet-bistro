@@ -49,29 +49,48 @@ def setup_operational_safety_db():
         db.query(Comanda).filter(Comanda.restaurante_id.in_([RID, RID_OTHER])).delete(
             synchronize_session=False
         )
-        db.query(Usuario).filter(Usuario.restaurante_id.in_([RID, RID_OTHER])).delete(
-            synchronize_session=False
-        )
-        db.query(Restaurante).filter(Restaurante.id.in_([RID, RID_OTHER])).delete(
-            synchronize_session=False
-        )
         db.commit()
 
-        db.add_all(
-            [
-                Restaurante(id=RID, nome="KOMA Safety A", plano="pro", slug="koma-safety-a"),
-                Restaurante(id=RID_OTHER, nome="KOMA Safety B", plano="pro", slug="koma-safety-b"),
-                Usuario(
-                    id=ADMIN_ID,
-                    restaurante_id=RID,
-                    nome="Gerente Safety",
-                    email="safety-admin@koma.test",
-                    cargo="admin",
-                    role="admin",
-                    status="ativo",
-                ),
-            ]
-        )
+        # Preserve os pais: outras suítes podem manter FKs legítimas para estes
+        # tenants no banco SQLite compartilhado do CI. Esta fixture só é dona
+        # dos registros operacionais que limpa acima.
+        restaurant = db.query(Restaurante).filter(Restaurante.id == RID).first()
+        if restaurant is None:
+            restaurant = Restaurante(id=RID, nome="KOMA Safety A", plano="pro", slug="koma-safety-a")
+            db.add(restaurant)
+        else:
+            restaurant.nome = "KOMA Safety A"
+            restaurant.plano = "pro"
+            restaurant.slug = "koma-safety-a"
+
+        other = db.query(Restaurante).filter(Restaurante.id == RID_OTHER).first()
+        if other is None:
+            other = Restaurante(id=RID_OTHER, nome="KOMA Safety B", plano="pro", slug="koma-safety-b")
+            db.add(other)
+        else:
+            other.nome = "KOMA Safety B"
+            other.plano = "pro"
+            other.slug = "koma-safety-b"
+
+        admin = db.query(Usuario).filter(Usuario.id == ADMIN_ID).first()
+        if admin is None:
+            admin = Usuario(
+                id=ADMIN_ID,
+                restaurante_id=RID,
+                nome="Gerente Safety",
+                email="safety-admin@koma.test",
+                cargo="admin",
+                role="admin",
+                status="ativo",
+            )
+            db.add(admin)
+        else:
+            admin.restaurante_id = RID
+            admin.nome = "Gerente Safety"
+            admin.email = "safety-admin@koma.test"
+            admin.cargo = "admin"
+            admin.role = "admin"
+            admin.status = "ativo"
         db.commit()
         yield
     finally:
@@ -243,12 +262,12 @@ def test_customer_block_keeps_phone_out_of_storage_and_expires():
         db.close()
 
 
-def test_block_list_does_not_expose_phone_fingerprint_and_is_tenant_scoped():
+def test_block_list_keeps_history_without_exposing_phone_fingerprint():
     db = SessionLocal()
     try:
         with tenant_session_scope(db, RID):
             order = _add_order(db, order_id="safety-block-api-1", phone="11977776666")
-            block_from_order(
+            block = block_from_order(
                 db,
                 restaurante_id=RID,
                 comanda=order,
@@ -257,16 +276,31 @@ def test_block_list_does_not_expose_phone_fingerprint_and_is_tenant_scoped():
                 duration_hours=None,
             )
             db.commit()
+            block_id = block.id
     finally:
         db.close()
 
     response = client.get("/api/online-orders/blocks", headers=_admin_headers())
     assert response.status_code == 200
-    assert len(response.json()) == 1
-    serialized = response.json()[0]
+    serialized = next(item for item in response.json() if item["id"] == block_id)
     assert "phone_hash" not in serialized
     assert "telefone" not in serialized
     assert serialized["reason"] == "Spam de pedidos"
+    assert serialized["active"] is True
+    assert serialized["status"] == "active"
+
+    released = client.post(
+        f"/api/online-orders/blocks/{block_id}/release",
+        headers=_admin_headers(),
+        json={"reason": "Operação revisou o bloqueio"},
+    )
+    assert released.status_code == 200
+
+    history = client.get("/api/online-orders/blocks", headers=_admin_headers())
+    assert history.status_code == 200
+    historical = next(item for item in history.json() if item["id"] == block_id)
+    assert historical["active"] is False
+    assert historical["status"] == "released"
 
 
 def test_operational_control_rejects_unauthenticated_callers():
