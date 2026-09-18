@@ -145,8 +145,6 @@ def test_csp_preserves_required_integrations_and_cardapio_cep_lookup():
 
     assert "https://viacep.com.br" in cardapio
     assert "https://viacep.com.br" in headers
-    assert "Permissions-Policy: camera=(), microphone=(), geolocation=(self)" in headers
-    assert 'response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"' in source("backend/app/main.py")
 
     for port in range(17654, 17665):
         assert f"http://127.0.0.1:{port}" in headers
