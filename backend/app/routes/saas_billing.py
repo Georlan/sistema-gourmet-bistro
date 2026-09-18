@@ -16,6 +16,7 @@ from ..models import Restaurante
 from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import (
     contract_billing_terms,
+    contract_fixed_billing_required,
     get_billing_setup,
     get_billing_setup_by_provider_sub,
     upsert_billing_setup,
@@ -153,6 +154,98 @@ def available_payment_methods():
     return default_saas_mp_service.checkout_capabilities()
 
 
+@router.post("/{protocol}/billing/activate-free")
+def activate_contract_without_fixed_billing(
+    protocol: str,
+    db: Session = Depends(get_db),
+):
+    """Ativa contrato com billingAmount zero sem criar assinatura no provedor."""
+    normalized_protocol = _normalize_protocol(protocol)
+    acceptance = resolve_activation_acceptance(db, normalized_protocol)
+    if acceptance is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Aceite contratual não encontrado para este protocolo.",
+        )
+
+    existing_tenant_id = acceptance.get("linked_restaurante_id")
+    if existing_tenant_id is not None:
+        return {
+            "success": True,
+            "status": "already_activated",
+            "restaurantId": str(existing_tenant_id),
+            "message": "Este contrato já foi ativado previamente.",
+        }
+
+    if contract_fixed_billing_required(db, normalized_protocol):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este contrato possui componente fixo e exige configuração de cobrança.",
+        )
+
+    existing = get_billing_setup(db, normalized_protocol)
+    if existing is not None and (
+        existing.provider_subscription_id
+        or str(existing.status).strip().lower() in {"pending", "ready"}
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Existe configuração financeira associada a este contrato gratuito. "
+                "Ela deve ser encerrada antes da ativação."
+            ),
+        )
+
+    plan = str(acceptance.get("plan") or "pocket").lower()
+    raw_cycle = str(acceptance.get("billing_cycle") or "mensal").lower()
+    canonical_cycle = "annual" if raw_cycle in {"annual", "anual"} else "monthly"
+
+    if settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED:
+        enqueue_release_required(
+            db,
+            protocol=normalized_protocol,
+            restaurant_name=str(acceptance.get("restaurant_name") or "Restaurante"),
+            plan=plan,
+            billing_cycle=canonical_cycle,
+        )
+        db.commit()
+        return {
+            "success": True,
+            "status": "awaiting_release",
+            "amountDueToday": 0,
+            "trialDays": 0,
+            "fixedBillingRequired": False,
+            "message": (
+                "Contratação registrada sem mensalidade fixa. "
+                "Nenhuma assinatura recorrente foi criada no provedor."
+            ),
+        }
+
+    provisioned = provision_restaurant_for_contract(
+        db,
+        acceptance=acceptance,
+        billing_setup=None,
+        actor="saas_checkout",
+        reason="Ativação de contrato sem componente fixo; recorrência do provedor não aplicável",
+    )
+    return {
+        "success": True,
+        "status": "ready",
+        "restaurantId": str(provisioned["restaurant_id"]),
+        "slug": provisioned.get("slug"),
+        "trialDays": 0,
+        "trialStartsAfterSetup": False,
+        "trialEndsAt": None,
+        "activationToken": provisioned.get("invitation_token"),
+        "amountDueToday": 0,
+        "fixedBillingRequired": False,
+        "message": (
+            "Pocket ativado sem mensalidade fixa. "
+            "Nenhuma assinatura recorrente foi criada no Mercado Pago."
+        ),
+    }
+
+
 @router.post("/{protocol}/billing/setup")
 def setup_contract_billing(
     protocol: str,
@@ -201,6 +294,14 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
     is_annual = raw_cycle in ("annual", "anual")
     canonical_cycle = "annual" if is_annual else "monthly"
     terms = contract_billing_terms(db, normalized_protocol)
+    if _normalized_money(terms["commercial"]["billingAmount"]) == Decimal("0.00"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Este contrato não possui mensalidade fixa. "
+                "Use a ativação gratuita; nenhuma recorrência deve ser criada no provedor."
+            ),
+        )
     payer_email = (payload.payer_email or str(acceptance.get("email") or "")).strip().lower()
     if not payer_email or "@" not in payer_email:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="E-mail do pagador inválido.")
@@ -490,6 +591,7 @@ def get_contract_billing_status(protocol: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aceite contratual não encontrado para este protocolo.")
 
     billing = get_billing_setup(db, normalized_protocol)
+    fixed_billing_required = contract_fixed_billing_required(db, normalized_protocol)
     linked_tenant_id = acceptance.get("linked_restaurante_id")
     restaurant_slug = None
     if linked_tenant_id is not None:
@@ -499,7 +601,7 @@ def get_contract_billing_status(protocol: str, db: Session = Depends(get_db)):
 
     return {
         "protocol": normalized_protocol,
-        "billingStatus": billing.status if billing else "pending",
+        "billingStatus": billing.status if billing else ("pending" if fixed_billing_required else "not_required"),
         "provider": billing.provider if billing else None,
         "paymentMethodType": billing.payment_method_type if billing else None,
         "isActivated": linked_tenant_id is not None,
