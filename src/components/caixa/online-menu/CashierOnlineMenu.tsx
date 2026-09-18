@@ -46,63 +46,6 @@ const sectionBySubTab = {
 } as const;
 
 type OnlineMenuSection = (typeof sectionBySubTab)[keyof typeof sectionBySubTab];
-type OnlineMenuWorkspace = 'loja' | 'operacao' | 'divulgacao';
-
-const workspaceBySection: Record<OnlineMenuSection, OnlineMenuWorkspace> = {
-  perfil: 'loja',
-  marca: 'loja',
-  pedidos: 'operacao',
-  entrega: 'operacao',
-  pagamentos: 'operacao',
-  qr_links: 'divulgacao',
-};
-
-const detailsByWorkspace: Record<OnlineMenuWorkspace, { label: string; target: string; section: OnlineMenuSection }[]> = {
-  loja: [
-    { label: 'Perfil', target: 'cardapio_perfil', section: 'perfil' },
-    { label: 'Marca', target: 'cardapio_marca', section: 'marca' },
-  ],
-  operacao: [
-    { label: 'Pedidos & horários', target: 'cardapio_pedidos', section: 'pedidos' },
-    { label: 'Entrega & áreas', target: 'cardapio_entrega', section: 'entrega' },
-    { label: 'Pagamentos', target: 'cardapio_pagamentos', section: 'pagamentos' },
-  ],
-  divulgacao: [
-    { label: 'QR & links', target: 'cardapio_qr_links', section: 'qr_links' },
-  ],
-};
-
-function CompactOnlineMenuNavigation({
-  activeSection,
-  setActiveSubTab,
-}: {
-  activeSection: OnlineMenuSection;
-  setActiveSubTab: (tab: string) => void;
-}) {
-  const activeWorkspace = workspaceBySection[activeSection];
-  const detailOptions = detailsByWorkspace[activeWorkspace];
-
-  if (detailOptions.length <= 1) return null;
-
-  return (
-    <div className="mb-4 flex flex-wrap gap-1.5">
-      {detailOptions.map((option) => (
-        <button
-          key={option.target}
-          type="button"
-          onClick={() => setActiveSubTab(option.target)}
-          className={`rounded-lg border px-3 py-1.5 text-[9px] font-bold transition-colors ${
-            option.section === activeSection
-              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-              : 'border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 /** Plan gate and online-channel composition only. Technical integrations live under Sistema. */
 export default function CashierOnlineMenu({
@@ -151,12 +94,14 @@ export default function CashierOnlineMenu({
           publicMenuUrl={publicMenuUrl}
         />
 
+        <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+
         <details className="group rounded-2xl border border-koma-border bg-koma-panel">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
             <div>
-              <strong className="block text-sm text-koma-foreground">Proteções operacionais</strong>
+              <strong className="block text-sm text-koma-foreground">Limite de segurança</strong>
               <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">
-                Limite de pedidos ativos e clientes bloqueados. Abra somente quando precisar ajustar exceções.
+                Use somente se quiser limitar a quantidade de pedidos online ativos ao mesmo tempo.
               </span>
             </div>
             <ChevronDown
@@ -164,9 +109,8 @@ export default function CashierOnlineMenu({
               className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
             />
           </summary>
-          <div className="space-y-4 border-t border-koma-border px-4 py-4 sm:px-5">
+          <div className="border-t border-koma-border px-4 py-4 sm:px-5">
             <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
-            <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
           </div>
         </details>
       </div>
@@ -208,10 +152,5 @@ export default function CashierOnlineMenu({
     );
   }
 
-  return (
-    <>
-      <CompactOnlineMenuNavigation activeSection={activeSection} setActiveSubTab={setActiveSubTab} />
-      {content}
-    </>
-  );
+  return content;
 }
