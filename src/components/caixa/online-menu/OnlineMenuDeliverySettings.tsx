@@ -114,6 +114,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
     message: 'Sugestão inicial enquanto ainda não há entregas concluídas suficientes.',
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [needsAutomaticMigration, setNeedsAutomaticMigration] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingOrigin, setIsSavingOrigin] = useState(false);
@@ -169,7 +170,12 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
       const data = await configResponse.json().catch(() => ({}));
       if (!configResponse.ok) throw new Error(data.detail || 'Não foi possível carregar as regras de entrega.');
       const initialPayload = applyLoadedConfig(data as Record<string, unknown>);
-      setSavedSnapshot(JSON.stringify(initialPayload));
+      const currentMode = String((data as Record<string, unknown>).tipo_taxa_entrega || 'fixa');
+      const migrationNeeded = currentMode !== 'distancia';
+      setNeedsAutomaticMigration(migrationNeeded);
+      setSavedSnapshot(JSON.stringify(
+        migrationNeeded ? { ...initialPayload, tipo_taxa_entrega: currentMode } : initialPayload,
+      ));
 
       const suggestionData = await suggestionResponse.json().catch(() => null);
       if (suggestionResponse.ok && suggestionData) {
@@ -286,6 +292,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
       if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar as regras de entrega.');
       const persisted = applyLoadedConfig(data as Record<string, unknown>);
       setSavedSnapshot(JSON.stringify(persisted));
+      setNeedsAutomaticMigration(false);
       setFeedback({ type: 'success', text: 'Entrega automática atualizada.' });
     } catch (error) {
       setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Erro ao salvar entrega.' });
@@ -504,7 +511,9 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
             </span>
           ) : (
             <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-              Alterações ainda não publicadas.
+              {needsAutomaticMigration
+                ? 'A regra antiga será convertida para taxa automática ao salvar.'
+                : 'Alterações ainda não publicadas.'}
             </span>
           )}
           {hasUnsavedChanges && (
