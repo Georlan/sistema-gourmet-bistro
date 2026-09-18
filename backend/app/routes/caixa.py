@@ -1524,12 +1524,17 @@ def recusar_pagamento(
 
 
 from ..models import ConfiguracaoRestaurante
-from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUpdate
+from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUpdate, DeliveryOriginUpdate
 from sqlalchemy.orm import joinedload
 
 
 def _serializar_configuracoes(config: ConfiguracaoRestaurante) -> dict:
     payload = ConfiguracaoRestauranteResponse.model_validate(config).model_dump()
+    payload["delivery_origin_configured"] = bool(
+        config.restaurante
+        and config.restaurante.latitude is not None
+        and config.restaurante.longitude is not None
+    )
     payload["plano_efetivo"] = get_effective_subscription_plan(
         config.restaurante_id,
         config.plano,
@@ -1557,6 +1562,29 @@ def obter_configuracoes(
             detail="Configurações do restaurante ainda não foram provisionadas.",
         )
     return _serializar_configuracoes(config)
+
+
+@router.put("/configuracoes/delivery-origin")
+def atualizar_origem_entrega(
+    origin: DeliveryOriginUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    """Salva o ponto de origem usado no cálculo local de distância do delivery."""
+    restaurante = (
+        db.query(Restaurante)
+        .filter(Restaurante.id == current_user.restaurante_id)
+        .first()
+    )
+    if restaurante is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
+        )
+    restaurante.latitude = origin.latitude
+    restaurante.longitude = origin.longitude
+    db.commit()
+    return {"configured": True}
 
 
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
