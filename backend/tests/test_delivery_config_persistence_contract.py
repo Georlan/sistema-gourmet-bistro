@@ -30,6 +30,8 @@ def test_caixa_config_update_persists_canonical_delivery_fields():
     assert "if config_in.tabela_taxas_km is not None:" in route
     assert "normalize_distance_fee_config(" in route
     assert "config.tabela_taxas_km = (" in route
+    assert '@router.put("/configuracoes/delivery-origin")' in route
+    assert "DeliveryOriginUpdate" in route
 
 
 def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
@@ -43,3 +45,5 @@ def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
     assert "tabela_taxas_km" in screen
     assert "Automático por distância" in screen
     assert "Gerar sugestão" in screen
+    assert "${apiBaseUrl}/caixa/configuracoes/delivery-origin" in screen
+    assert "Usar localização deste dispositivo" in screen
