@@ -19,7 +19,11 @@ from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog,
 from app.routes import contracts, saas_billing
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
-from app.services.billing_service import get_billing_setup, resolve_tenant_entitlement
+from app.services.billing_service import (
+    get_billing_setup,
+    resolve_tenant_entitlement,
+    upsert_billing_setup,
+)
 from app.services.saas_mercadopago import SaasMercadoPagoError
 from app.subscription import subscription_annual_total, subscription_monthly_price
 
@@ -228,6 +232,32 @@ def test_pocket_zero_activates_without_provider_recurrence(client_and_session, m
         entitlement = resolve_tenant_entitlement(db, tenant_id)
         assert entitlement.allowed is True
         assert entitlement.billing_status == "active"
+
+
+def test_pocket_zero_rejects_any_preexisting_billing_setup(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pocket", "mensal")
+
+    with Session() as db:
+        upsert_billing_setup(
+            db,
+            protocol=protocol,
+            payment_method_type="credit_card",
+            status="failed",
+            billing_cycle="monthly",
+        )
+        db.commit()
+
+    response = client.post(f"/api/contracts/{protocol}/billing/activate-free")
+    assert response.status_code == 409
+    assert "encerrada explicitamente" in response.text
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None
+        assert setup.status == "failed"
+        assert db.query(Restaurante).count() == 0
+        assert db.query(SaaSSubscription).count() == 0
 
 
 def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_session, monkeypatch):
