@@ -96,11 +96,12 @@ def create_profiled_tenant(
     payload: ProfiledTenantOnboardingRequest,
     admin: dict[str, Any] = Depends(get_current_admin),
 ):
-    """Provisiona tenant + perfil na mesma transação tenant-local.
+    """Provisiona tenant administrativo/QA + perfil na mesma transação.
 
-    Este endpoint é a evolução profile-aware do onboarding histórico. A rota
-    legada `/restaurantes` permanece compatível durante a migração do frontend.
-    Selecionar um perfil não aplica templates nem altera o domínio do cardápio.
+    Este fluxo NÃO registra ContractAcceptance nem termos comerciais. Novos
+    clientes comerciais devem entrar pelo aceite contratual e ativação canônica.
+    Selecionar um plano aqui define somente o perfil de recursos do tenant
+    administrativo; split/billing comercial falham fechado sem contrato.
     """
     normalized = _normalize_payload(payload)
     operation_profile = payload.operation_profile or "generic"
@@ -175,6 +176,7 @@ def create_profiled_tenant(
                         "admin_user_id": initial_admin.id,
                         "admin_email": normalized["admin_email"],
                         "mercado_pago": "disconnected",
+                        "commercial_terms_status": "not_contracted",
                     },
                 )
             )
@@ -197,6 +199,7 @@ def create_profiled_tenant(
                 "operationProfile": operation_profile,
                 "status": "ACTIVE",
                 "onlinePaymentStatus": "disconnected",
+                "commercialTermsStatus": "not_contracted",
                 "trial": {
                     "status": "active",
                     "startedAt": trial["started_at"].isoformat(),
@@ -214,7 +217,10 @@ def create_profiled_tenant(
                     "cashier": "/?view=caixa",
                     "publicMenu": f"/c/{normalized['slug']}",
                 },
-                "message": "Restaurante provisionado com 7 dias grátis.",
+                "message": (
+                    "Tenant administrativo provisionado sem termos comerciais. "
+                    "Para cliente comercial, registre o aceite e use a ativação canônica."
+                ),
             }
     except HTTPException:
         if db.in_transaction():
