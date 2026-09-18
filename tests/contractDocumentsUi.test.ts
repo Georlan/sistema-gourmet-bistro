@@ -31,7 +31,10 @@ test('segunda via mostra prova, documentos e exportação reproduzível', () => 
   assert.match(contractPanel, /requestId/);
   assert.match(contractPanel, /sourceIp/);
   assert.match(contractPanel, /userAgent/);
-  assert.match(contractPanel, /document\.hash/);
+  assert.match(contractPanel, /documentRef\.hash/);
+  assert.match(contractPanel, /acceptedDocuments/);
+  assert.match(contractPanel, /Integridade dos snapshots validada/);
+  assert.match(contractPanel, /Ver versão pública atual/);
   assert.match(contractPanel, /window\.open/);
   assert.match(contractPanel, /printWindow\.print\(\)/);
 });
