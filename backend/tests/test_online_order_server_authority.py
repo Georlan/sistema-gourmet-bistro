@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.services.online_order_policy import (
     evaluate_online_order_policy,
+    next_schedule_opening_label,
     schedule_is_open,
 )
 
@@ -167,7 +168,15 @@ def test_parser_de_horarios_entende_faixa_e_virada_da_meia_noite():
     assert schedule_is_open(schedule, now=sabado_meio_dia) is False
 
 
-def test_agenda_ausente_preserva_compatibilidade_e_forcado_aberto_tem_precedencia():
+def test_proxima_abertura_e_comunicada_a_partir_da_mesma_agenda():
+    now = datetime.datetime(2026, 9, 18, 16, 30, tzinfo=ZoneInfo("America/Fortaleza"))
+    schedule = [{"days": "Segunda a Domingo", "hours": "18:00 - 23:00"}]
+
+    assert schedule_is_open(schedule, now=now) is False
+    assert next_schedule_opening_label(schedule, now=now) == "hoje às 18:00"
+
+
+def test_agenda_ausente_preserva_compatibilidade_mas_horario_fechado_e_autoritativo():
     restaurant = SimpleNamespace(
         status_override="Automático",
         horarios_funcionamento=None,
@@ -179,7 +188,9 @@ def test_agenda_ausente_preserva_compatibilidade_e_forcado_aberto_tem_precedenci
     restaurant.horarios_funcionamento = [
         {"days": "Segunda a Domingo", "hours": "Fechado"},
     ]
-    assert evaluate_online_order_policy(restaurant, config, modalidade="delivery").accepting_orders is True
+    policy = evaluate_online_order_policy(restaurant, config, modalidade="delivery")
+    assert policy.accepting_orders is False
+    assert policy.source == "schedule"
 
 
 def test_cliente_nao_controla_taxa_de_delivery():
@@ -307,7 +318,7 @@ def test_horario_automatico_fechado_e_bloqueado_no_backend():
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "O restaurante está fora do horário de pedidos online."
+    assert response.json()["detail"] == "O estabelecimento está fechado neste horário."
 
 
 def test_replay_idempotente_nao_quebra_se_loja_fechar_depois():

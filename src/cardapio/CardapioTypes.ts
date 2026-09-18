@@ -107,6 +107,8 @@ export interface BrandConfig {
   acceptingOrders?: boolean;
   orderingMessage?: string;
   availabilitySource?: string;
+  nextOpening?: string;
+  nextOpeningLabel?: string;
   deliveryEnabled?: boolean;
   pedidoMinimo?: number;
   freteGratisValor?: number;

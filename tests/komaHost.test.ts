@@ -66,6 +66,18 @@ describe('resolveKomaHost', () => {
     }
   });
 
+  it('honors explicit operational views on localhost and preview hosts', () => {
+    for (const host of ['localhost', '127.0.0.1', 'preview-652.pages.dev']) {
+      const caixa = resolveKomaHost(host, '/', '?view=caixa');
+      assert.equal(caixa.kind, 'generic');
+      assert.equal(caixa.surface, 'caixa');
+
+      const garcom = resolveKomaHost(host, '/', '?view=garcom');
+      assert.equal(garcom.kind, 'generic');
+      assert.equal(garcom.surface, 'garcom');
+    }
+  });
+
   it('keeps explicit public routes sovereign on Cloudflare previews', () => {
     const resolved = resolveKomaHost('preview-652.pages.dev', '/c/pordosol', '');
     assert.equal(resolved.kind, 'tenant');
