@@ -44,6 +44,8 @@ def test_online_delivery_screen_uses_caixa_config_as_the_only_writer():
     assert "tabela_taxas_bairros" in screen
     assert "tabela_taxas_km" in screen
     assert "Automático por distância" in screen
-    assert "Gerar sugestão" in screen
+    assert "Taxa mínima (R$)" in screen
+    assert "Valor por km (R$)" in screen
+    assert "Gerar sugestão" not in screen
     assert "${apiBaseUrl}/caixa/configuracoes/delivery-origin" in screen
-    assert "Usar localização deste dispositivo" in screen
+    assert "Definir localização" in screen
