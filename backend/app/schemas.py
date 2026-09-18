@@ -831,6 +831,8 @@ class CardapioPublicRestaurantResponse(BaseModel):
     aceitando_pedidos: bool = True
     motivo_indisponibilidade: Optional[str] = None
     origem_disponibilidade: str = "automatic"
+    proxima_abertura: Optional[str] = None
+    proxima_abertura_texto: Optional[str] = None
     socials: Optional[Any] = None
     horarios_funcionamento: Optional[Any] = None
     formas_pagamento_aceitas: Optional[Any] = None
