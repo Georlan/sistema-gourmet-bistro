@@ -35,7 +35,7 @@ test('operational aliases route common restaurant language to the canonical func
   assert.equal(searchCashierFunctions(entries, 'qr code')[0]?.id, 'online_divulgacao');
   assert.equal(searchCashierFunctions(entries, 'entrega')[0]?.id, 'online_entrega');
   assert.equal(searchCashierFunctions(entries, 'taxa de entrega')[0]?.id, 'online_entrega');
-  assert.equal(searchCashierFunctions(entries, 'clientes bloqueados')[0]?.id, 'online_pedidos');
+  assert.equal(searchCashierFunctions(entries, 'clientes bloqueados')[0]?.id, 'online_bloqueios');
 });
 
 test('exact function names outrank broader related labels', () => {
