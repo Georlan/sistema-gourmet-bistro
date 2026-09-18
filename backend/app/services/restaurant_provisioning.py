@@ -42,7 +42,7 @@ def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] 
     """Busca os dados do aceite contratual para ativação ou setup de billing."""
     from sqlalchemy import text
     from ..contract_models import ContractAcceptance
-    from ..saas_billing_models import SaaSBillingSetup
+    from ..saas_billing_models import SaaSBillingSetup, SaaSPlanChange
     from .billing_service import get_billing_setup
 
     normalized = protocol.strip().upper()
@@ -64,10 +64,18 @@ def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] 
                 res["billing_status"] = "pending"
                 res["billing_provider"] = None
                 res["payment_method_type"] = None
+        owner = db.execute(
+            text(
+                "SELECT koma_internal.plan_change_owner_for_acceptance(:acceptance_id)"
+            ),
+            {"acceptance_id": str(res.get("acceptance_id") or "")},
+        ).scalar_one_or_none()
+        res["plan_change_restaurante_id"] = int(owner) if owner is not None else None
         return res
 
     SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
     SaaSSubscription.__table__.create(db.get_bind(), checkfirst=True)
+    SaaSPlanChange.__table__.create(db.get_bind(), checkfirst=True)
     row = (
         db.query(ContractAcceptance, RestaurantContractAcceptance, SaaSBillingSetup)
         .outerjoin(
@@ -84,6 +92,16 @@ def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] 
     if row is None:
         return None
     acceptance, link, billing = row
+    plan_change_owner_row = (
+        db.query(SaaSPlanChange.restaurante_id)
+        .filter(SaaSPlanChange.acceptance_id == str(acceptance.id))
+        .one_or_none()
+    )
+    plan_change_owner = (
+        int(plan_change_owner_row[0])
+        if plan_change_owner_row is not None
+        else None
+    )
     return {
         "acceptance_id": acceptance.id,
         "protocol": acceptance.protocol,
@@ -99,6 +117,7 @@ def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] 
         "billing_status": billing.status if billing else "pending",
         "billing_provider": billing.provider if billing else None,
         "payment_method_type": billing.payment_method_type if billing else None,
+        "plan_change_restaurante_id": plan_change_owner,
     }
 
 
@@ -129,6 +148,13 @@ def provision_restaurant_for_contract(
     prontos, sem consumir trial durante a implantação.
     """
     protocol = str(acceptance["protocol"]).strip().upper()
+    if acceptance.get("plan_change_restaurante_id") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Aceite de mudança de plano não pode ser usado para provisionamento inicial."
+            ),
+        )
     plan = str(acceptance.get("plan") or "").strip().lower()
     fixed_billing_required = contract_fixed_billing_required(db, protocol)
     if plan not in VALID_SUBSCRIPTION_PLANS:

@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
-from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from ..saas_billing_models import SaaSBillingSetup, SaaSPlanChange, SaaSSubscription
 from ..services.billing_service import (
     contract_fixed_billing_required,
     get_billing_setup,
@@ -81,11 +81,43 @@ def _normalize_protocol_path(protocol: str) -> str:
     return normalized
 
 
+def _plan_change_owner(db, acceptance_id: str) -> int | None:
+    normalized = str(acceptance_id or "").strip()
+    if not normalized:
+        return None
+    if db.get_bind().dialect.name == "postgresql":
+        owner = db.execute(
+            text(
+                "SELECT koma_internal.plan_change_owner_for_acceptance(:acceptance_id)"
+            ),
+            {"acceptance_id": normalized},
+        ).scalar_one_or_none()
+        return int(owner) if owner is not None else None
+
+    SaaSPlanChange.__table__.create(db.get_bind(), checkfirst=True)
+    owner_row = (
+        db.query(SaaSPlanChange.restaurante_id)
+        .filter(SaaSPlanChange.acceptance_id == normalized)
+        .one_or_none()
+    )
+    return int(owner_row[0]) if owner_row is not None else None
+
+
 def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     linked_restaurante_id = row.get("linked_restaurante_id")
-    operational_status = (
-        "ACTIVATED" if linked_restaurante_id is not None else "SIGNED_PENDING_ACTIVATION"
-    )
+    plan_change_restaurante_id = row.get("plan_change_restaurante_id")
+    if plan_change_restaurante_id is not None:
+        operational_status = (
+            "PLAN_CHANGE_APPLIED"
+            if linked_restaurante_id is not None
+            else "PLAN_CHANGE_PENDING"
+        )
+    else:
+        operational_status = (
+            "ACTIVATED"
+            if linked_restaurante_id is not None
+            else "SIGNED_PENDING_ACTIVATION"
+        )
     billing_status = str(row.get("billing_status") or "pending").strip().lower()
     billing_provider = row.get("billing_provider")
     payment_method_type = row.get("payment_method_type")
@@ -101,7 +133,11 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     )
     enforcement_enabled = is_billing_enforcement_enabled()
     is_ready = (billing_status == "ready") or not fixed_billing_required
-    activation_eligible = (linked_restaurante_id is None) and (not enforcement_enabled or is_ready)
+    activation_eligible = (
+        linked_restaurante_id is None
+        and plan_change_restaurante_id is None
+        and (not enforcement_enabled or is_ready)
+    )
     return {
         "acceptanceId": str(row["acceptance_id"]),
         "protocol": str(row["protocol"]),
@@ -111,6 +147,14 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
         "paymentMethodType": str(payment_method_type) if payment_method_type else None,
         "billingEnforcementEnabled": enforcement_enabled,
         "activationEligible": activation_eligible,
+        "contractPurpose": (
+            "plan_change" if plan_change_restaurante_id is not None else "new_subscription"
+        ),
+        "planChangeRestaurantId": (
+            str(plan_change_restaurante_id)
+            if plan_change_restaurante_id is not None
+            else None
+        ),
         "acceptedAt": _datetime_text(row.get("accepted_at")),
         "restaurantName": str(row.get("restaurant_name") or ""),
         "contractingPartyName": str(row.get("contracting_party_name") or ""),
@@ -151,6 +195,7 @@ def _ensure_sqlite_billing_tables(db) -> None:
     if bind.dialect.name != "postgresql":
         SaaSBillingSetup.__table__.create(bind, checkfirst=True)
         SaaSSubscription.__table__.create(bind, checkfirst=True)
+        SaaSPlanChange.__table__.create(bind, checkfirst=True)
 
 
 def _list_acceptances(db, limit: int) -> list[dict[str, Any]]:
@@ -161,7 +206,15 @@ def _list_acceptances(db, limit: int) -> list[dict[str, Any]]:
             ),
             {"limit": limit},
         ).mappings().all()
-        return [_admin_inbox_item(dict(row)) for row in rows]
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["plan_change_restaurante_id"] = _plan_change_owner(
+                db,
+                str(item.get("acceptance_id") or ""),
+            )
+            result.append(_admin_inbox_item(item))
+        return result
 
     _ensure_sqlite_billing_tables(db)
     rows = (
@@ -210,6 +263,10 @@ def _list_acceptances(db, limit: int) -> list[dict[str, Any]]:
                     "billing_status": billing.status if billing else "pending",
                     "billing_provider": billing.provider if billing else None,
                     "payment_method_type": billing.payment_method_type if billing else None,
+                    "plan_change_restaurante_id": _plan_change_owner(
+                        db,
+                        str(acceptance.id),
+                    ),
                 }
             )
         )
@@ -424,6 +481,10 @@ def preview_contract(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Aceite contratual não encontrado.",
             )
+        plan_change_owner = _plan_change_owner(
+            db,
+            str(acceptance["acceptance_id"]),
+        )
         billing_status = str(acceptance.get("billing_status") or "pending").strip().lower()
         enforcement_enabled = is_billing_enforcement_enabled()
         is_ready = is_billing_ready(db, normalized)
@@ -439,7 +500,15 @@ def preview_contract(
             "billingProvider": acceptance.get("billing_provider"),
             "paymentMethodType": acceptance.get("payment_method_type"),
             "billingEnforcementEnabled": enforcement_enabled,
-            "activationEligible": not enforcement_enabled or is_ready,
+            "activationEligible": (
+                plan_change_owner is None and (not enforcement_enabled or is_ready)
+            ),
+            "contractPurpose": (
+                "plan_change" if plan_change_owner is not None else "new_subscription"
+            ),
+            "planChangeRestaurantId": (
+                str(plan_change_owner) if plan_change_owner is not None else None
+            ),
         }
     finally:
         db.close()
@@ -465,6 +534,19 @@ def activate_contract(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Aceite contratual não encontrado.",
+            )
+
+        plan_change_owner = _plan_change_owner(
+            db,
+            str(acceptance["acceptance_id"]),
+        )
+        if plan_change_owner is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Este aceite pertence a uma mudança comercial de tenant existente "
+                    "e não pode provisionar um novo restaurante."
+                ),
             )
 
         existing_tenant_id = acceptance.get("linked_restaurante_id")
@@ -532,6 +614,20 @@ def link_contract(
 
         tenant_id = int(payload.restaurant_id)
         with tenant_session_scope(db, tenant_id):
+            plan_change_owner = _plan_change_owner(
+                db,
+                str(acceptance["acceptance_id"]),
+            )
+
+            if plan_change_owner is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Este aceite pertence a uma mudança comercial canônica e "
+                        "não pode ser vinculado manualmente."
+                    ),
+                )
+
             restaurant = (
                 db.query(Restaurante)
                 .filter(Restaurante.id == tenant_id)
@@ -542,6 +638,24 @@ def link_contract(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Restaurante não encontrado.",
                 )
+            current_contract = (
+                db.query(RestaurantContractAcceptance)
+                .filter(RestaurantContractAcceptance.restaurante_id == tenant_id)
+                .order_by(
+                    RestaurantContractAcceptance.linked_at.desc(),
+                    RestaurantContractAcceptance.id.desc(),
+                )
+                .first()
+            )
+            if current_contract is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Este restaurante já possui autoridade contratual vinculada. "
+                        "Substituições devem usar o fluxo canônico de mudança de plano/termos."
+                    ),
+                )
+
             if str(restaurant.plano or "").lower() != str(acceptance["plan"]).lower():
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
