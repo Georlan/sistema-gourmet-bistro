@@ -65,6 +65,18 @@ def legacy_v25_marketplace_rate(stored_plan: Optional[str]) -> Decimal:
     return LEGACY_V25_MARKETPLACE_RATES[normalize_subscription_plan(stored_plan)]
 
 
+def legacy_v25_monthly_price(stored_plan: Optional[str]) -> Decimal:
+    """Mensalidade fixa imutável para billing legado sem snapshot vinculado."""
+    return LEGACY_V25_MONTHLY_PRICES[normalize_subscription_plan(stored_plan)]
+
+
+def legacy_v25_annual_total(stored_plan: Optional[str]) -> Decimal:
+    monthly = legacy_v25_monthly_price(stored_plan)
+    return (
+        monthly * Decimal("12") * (Decimal("1") - ANNUAL_DISCOUNT_RATE)
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def subscription_monthly_price(stored_plan: Optional[str]) -> Decimal:
     return SUBSCRIPTION_MONTHLY_PRICES[normalize_subscription_plan(stored_plan)]
 
