@@ -51,6 +51,7 @@ class TenantCommercialTerms:
     annual_monthly_equivalent: Decimal | None
     marketplace_rate: Decimal
     legal_version: str
+    pricing_version: str | None = None
 
 
 def _commercial_decimal(value: Any, *, field: str, allow_none: bool = False) -> Decimal | None:
@@ -159,6 +160,7 @@ def tenant_commercial_terms(
         annual_monthly_equivalent=annual_monthly_equivalent,
         marketplace_rate=marketplace_rate,
         legal_version=legal_version,
+        pricing_version=str(commercial.get("pricingVersion") or "").strip() or None,
     )
 
 
@@ -340,15 +342,28 @@ def upsert_billing_setup(
     return str(new_setup.id)
 
 
+def contract_fixed_billing_required(db: Session, protocol: str) -> bool:
+    """Retorna se o snapshot aceito possui componente fixo a cobrar."""
+    terms = contract_billing_terms(db, protocol.strip().upper())
+    commercial = terms.get("commercial") or {}
+    amount = _commercial_decimal(commercial.get("billingAmount"), field="billingAmount")
+    if amount is None or amount < 0:
+        raise RuntimeError("Comprovante contratual contém billingAmount inválido.")
+    return amount > 0
+
+
 def is_billing_ready(db: Session, protocol: str) -> bool:
     """
-    Verifica se a contratação possui autorização recorrente pronta no gateway.
-    Nenhum método de assinatura do KÔMA pode depender de pagamento antecipado para liberar o trial.
+    Billing é considerado pronto quando o provider foi configurado OU quando o
+    próprio snapshot contratado declara billingAmount = 0.
     """
     setup = get_billing_setup(db, protocol)
-    if setup is None:
+    if setup is not None and str(setup.status).strip().lower() == "ready":
+        return True
+    try:
+        return not contract_fixed_billing_required(db, protocol)
+    except Exception:
         return False
-    return str(setup.status).strip().lower() == "ready"
 
 
 def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitlement:
