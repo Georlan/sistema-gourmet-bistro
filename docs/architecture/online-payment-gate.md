@@ -32,11 +32,19 @@ A ordem de autoridade é:
 
 `tenant -> último aceite comercial vinculado -> marketplaceRate contratada -> OnlinePaymentIntent.marketplace_fee -> Mercado Pago application_fee`.
 
+O resolvedor canônico `tenant_marketplace_rate(...)` deve ser usado por qualquer cálculo financeiro tenant-scoped que dependa da taxa KÔMA, inclusive simuladores de margem/fidelidade. `restaurante.plano` identifica o perfil de recursos/entitlements; ele não é autoridade para preço ou taxa de um tenant contratado. Alterar somente esse campo não pode alterar o split.
+
+Quando existe mais de um aceite histórico vinculado ao mesmo tenant, a autoridade vigente é escolhida deterministicamente por `linked_at DESC, accepted_at DESC, link.id DESC`. Os aceites anteriores permanecem imutáveis e auditáveis.
+
 A trava `ONLINE_PAYMENT_PLAN_FEES_ENABLED=false` prevalece sobre qualquer taxa contratada e materializa `0.00`. Quando habilitada, a taxa resolvida é calculada e gravada na `OnlinePaymentIntent` no momento da criação do pagamento. O provider usa esse valor materializado; mudanças comerciais posteriores não alteram retroativamente uma intenção já criada.
 
 Planos legados (`bistro`, `delivery`, `gold`, `platinum`) continuam normalizados como Premium somente no fallback legado. O override de homologação `KOMA_TEST_PREMIUM_RESTAURANTE_IDS` continua limitado a recursos e não muda a taxa financeira.
 
 A edição genérica do Super Admin não pode trocar `restaurante.plano` isoladamente. Mudanças reais de plano devem passar por um fluxo canônico que coordene novo aceite/termos, billing SaaS, provider, taxa transacional, entitlements e auditoria antes de confirmar a alteração.
+
+No estado atual, a aba **Planos & Upgrade** é somente um canal de contato e não executa mudança de plano. Enquanto a orquestração canônica de mudança de plano não existir, qualquer tentativa administrativa de trocar apenas o slug/plano de recursos deve permanecer bloqueada. Isso evita divergência entre recursos, cobrança fixa, autorização do provider e split.
+
+Uma mudança canônica futura só poderá tornar o novo aceite a autoridade depois que a transição de billing/provider estiver em estado seguro. Intenções de pagamento online já criadas nunca são recalculadas; apenas novas intenções passam a usar a nova `marketplaceRate`.
 
 ## Configuração para ativar
 
