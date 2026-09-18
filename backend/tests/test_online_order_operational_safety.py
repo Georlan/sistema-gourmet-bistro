@@ -243,12 +243,12 @@ def test_customer_block_keeps_phone_out_of_storage_and_expires():
         db.close()
 
 
-def test_block_list_does_not_expose_phone_fingerprint_and_is_tenant_scoped():
+def test_block_list_keeps_history_without_exposing_phone_fingerprint():
     db = SessionLocal()
     try:
         with tenant_session_scope(db, RID):
             order = _add_order(db, order_id="safety-block-api-1", phone="11977776666")
-            block_from_order(
+            block = block_from_order(
                 db,
                 restaurante_id=RID,
                 comanda=order,
@@ -257,16 +257,31 @@ def test_block_list_does_not_expose_phone_fingerprint_and_is_tenant_scoped():
                 duration_hours=None,
             )
             db.commit()
+            block_id = block.id
     finally:
         db.close()
 
     response = client.get("/api/online-orders/blocks", headers=_admin_headers())
     assert response.status_code == 200
-    assert len(response.json()) == 1
-    serialized = response.json()[0]
+    serialized = next(item for item in response.json() if item["id"] == block_id)
     assert "phone_hash" not in serialized
     assert "telefone" not in serialized
     assert serialized["reason"] == "Spam de pedidos"
+    assert serialized["active"] is True
+    assert serialized["status"] == "active"
+
+    released = client.post(
+        f"/api/online-orders/blocks/{block_id}/release",
+        headers=_admin_headers(),
+        json={"reason": "Operação revisou o bloqueio"},
+    )
+    assert released.status_code == 200
+
+    history = client.get("/api/online-orders/blocks", headers=_admin_headers())
+    assert history.status_code == 200
+    historical = next(item for item in history.json() if item["id"] == block_id)
+    assert historical["active"] is False
+    assert historical["status"] == "released"
 
 
 def test_operational_control_rejects_unauthenticated_callers():
