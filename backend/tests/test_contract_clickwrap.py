@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import uuid
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -14,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.contract_validation import is_valid_cnpj, is_valid_cpf, tax_id_kind
 from app.crypt import decrypt_field, encrypt_field
+from app.database import current_restaurante_id
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.routes import contracts, super_admin_contracts
 from app.services.billing_service import tenant_commercial_terms
@@ -321,6 +323,86 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         assert acceptance.receipt_snapshot_encrypted == frozen_ciphertext
         assert json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted)) == legacy_receipt
     finally:
+        db.close()
+
+
+def test_current_contract_returns_verified_accepted_document_snapshots(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pro", billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    db = Session()
+    token = current_restaurante_id.set(989)
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=989,
+                acceptance_id=acceptance.id,
+            )
+        )
+        db.commit()
+
+        result = contracts.get_current_contract(
+            db=db,
+            current_user=SimpleNamespace(cargo="admin"),
+        )
+        assert result["tenantId"] == 989
+        assert result["receipt"]["protocol"] == accepted.json()["protocol"]
+        assert result["acceptedDocuments"] == _documents()
+        assert result["acceptedDocuments"]["commercial"]["version"] == LEGAL_VERSION
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+
+def test_current_contract_fails_closed_when_accepted_snapshot_hash_diverges(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pro", billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    db = Session()
+    token = current_restaurante_id.set(990)
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=990,
+                acceptance_id=acceptance.id,
+            )
+        )
+        acceptance.terms_snapshot = json.dumps(
+            {
+                "slug": "termos",
+                "title": "Texto adulterado",
+                "version": LEGAL_VERSION,
+                "sections": [],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        db.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            contracts.get_current_contract(
+                db=db,
+                current_user=SimpleNamespace(cargo="admin"),
+            )
+        assert exc_info.value.status_code == 409
+        assert "Integridade do snapshot jurídico inválida: terms" in str(
+            exc_info.value.detail
+        )
+    finally:
+        current_restaurante_id.reset(token)
         db.close()
 
 
