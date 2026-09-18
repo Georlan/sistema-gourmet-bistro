@@ -19,6 +19,7 @@ from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import (
     CaixaTurno,
     Categoria,
+    Cliente,
     Comanda,
     IntegrationOutbox,
     Item,
@@ -377,7 +378,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANT_ID).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == RESTAURANT_ID).delete(synchronize_session=False)
         db.commit()
@@ -520,7 +521,7 @@ def test_pix_creation_approved_immediately_applies_financial_effects_once(monkey
         ).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()
@@ -741,7 +742,7 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
         ).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()
@@ -928,7 +929,7 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
         ).count() == 0
     finally:
         db.rollback()
-        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()
