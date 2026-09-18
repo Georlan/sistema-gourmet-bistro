@@ -13,6 +13,7 @@ const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
 const header = readFileSync('src/landing/sections/Header.tsx', 'utf8');
 const plans = readFileSync('src/landing/sections/Plans.tsx', 'utf8');
 const finalCta = readFileSync('src/landing/sections/FinalCTA.tsx', 'utf8');
+const contractDocumentsPanel = readFileSync('src/components/assinatura/ContractDocumentsPanel.tsx', 'utf8');
 
 test('rotas legal e contratação são públicas e isoladas do app operacional', () => {
   assert.match(main, /pathname\.startsWith\("\/legal"\)/);
@@ -97,6 +98,15 @@ test('proveniência jurídica fixa commit e blob da Legal 2.6 sem documento fisc
   assert.match(legalEvidence, /requireDocument\('dpa'\)/);
   assert.match(legalEvidence, /requireDocument\('privacidade'\)/);
   assert.doesNotMatch(legalEvidence, /KOMA_LEGAL_PROVIDER_TAX_ID/);
+});
+
+test('segunda via reproduz o snapshot aceito sem confundir com a versão pública atual', () => {
+  assert.match(contractDocumentsPanel, /acceptedDocuments/);
+  assert.match(contractDocumentsPanel, /snapshot v\{receipt\.documents\.version\}/);
+  assert.match(contractDocumentsPanel, /Conteúdo jurídico congelado no aceite/);
+  assert.match(contractDocumentsPanel, /Ver versão pública atual/);
+  assert.match(contractDocumentsPanel, /Integridade/);
+  assert.doesNotMatch(contractDocumentsPanel, />\{label\}\s*<ExternalLink/);
 });
 
 test('landing não privilegia Pocket e envia cada plano para sua própria contratação', () => {
