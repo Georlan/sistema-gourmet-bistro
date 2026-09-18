@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.services.online_order_policy import (
     evaluate_online_order_policy,
+    next_schedule_opening_label,
     schedule_is_open,
 )
 
@@ -165,6 +166,14 @@ def test_parser_de_horarios_entende_faixa_e_virada_da_meia_noite():
     assert schedule_is_open(schedule, now=segunda_noite) is True
     assert schedule_is_open(schedule, now=terca_madrugada) is True
     assert schedule_is_open(schedule, now=sabado_meio_dia) is False
+
+
+def test_proxima_abertura_e_comunicada_a_partir_da_mesma_agenda():
+    now = datetime.datetime(2026, 9, 18, 16, 30, tzinfo=ZoneInfo("America/Fortaleza"))
+    schedule = [{"days": "Segunda a Domingo", "hours": "18:00 - 23:00"}]
+
+    assert schedule_is_open(schedule, now=now) is False
+    assert next_schedule_opening_label(schedule, now=now) == "hoje às 18:00"
 
 
 def test_agenda_ausente_preserva_compatibilidade_mas_horario_fechado_e_autoritativo():
