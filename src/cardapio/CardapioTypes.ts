@@ -53,6 +53,16 @@ export interface BairroTaxa {
   taxa: number;
 }
 
+export interface DistanceFeeConfig {
+  taxa_minima: number;
+  km_inclusos: number;
+  incremento_valor: number;
+  incremento_km: number;
+  taxa_maxima?: number | null;
+  distancia_maxima_km?: number | null;
+  fallback_sem_localizacao?: 'minima';
+}
+
 export interface SocialNetwork {
   platform: string;
   url: string;
@@ -102,6 +112,7 @@ export interface BrandConfig {
   freteGratisValor?: number;
   tipoTaxaEntrega?: string;
   tabelaTaxasBairros?: BairroTaxa[];
+  tabelaTaxasKm?: DistanceFeeConfig[];
   taxaEntregaPadrao?: number;
 }
 

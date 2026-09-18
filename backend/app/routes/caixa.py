@@ -42,6 +42,7 @@ from ..services.clientes import (
 )
 from ..services.capabilities import has_capability
 from ..services.delivery_fee_policy import (
+    normalize_distance_fee_config,
     normalize_neighborhood_fee_table,
     validate_delivery_fee,
 )
@@ -1523,12 +1524,17 @@ def recusar_pagamento(
 
 
 from ..models import ConfiguracaoRestaurante
-from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUpdate
+from ..schemas import ConfiguracaoRestauranteResponse, ConfiguracaoRestauranteUpdate, DeliveryOriginUpdate
 from sqlalchemy.orm import joinedload
 
 
 def _serializar_configuracoes(config: ConfiguracaoRestaurante) -> dict:
     payload = ConfiguracaoRestauranteResponse.model_validate(config).model_dump()
+    payload["delivery_origin_configured"] = bool(
+        config.restaurante
+        and config.restaurante.latitude is not None
+        and config.restaurante.longitude is not None
+    )
     payload["plano_efetivo"] = get_effective_subscription_plan(
         config.restaurante_id,
         config.plano,
@@ -1558,6 +1564,29 @@ def obter_configuracoes(
     return _serializar_configuracoes(config)
 
 
+@router.put("/configuracoes/delivery-origin")
+def atualizar_origem_entrega(
+    origin: DeliveryOriginUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    """Salva o ponto de origem usado no cálculo local de distância do delivery."""
+    restaurante = (
+        db.query(Restaurante)
+        .filter(Restaurante.id == current_user.restaurante_id)
+        .first()
+    )
+    if restaurante is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
+        )
+    restaurante.latitude = origin.latitude
+    restaurante.longitude = origin.longitude
+    db.commit()
+    return {"configured": True}
+
+
 @router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)
 def atualizar_configuracoes(
     config_in: ConfiguracaoRestauranteUpdate,
@@ -1565,10 +1594,10 @@ def atualizar_configuracoes(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar"))
 ):
-    if config_in.tipo_taxa_entrega is not None and config_in.tipo_taxa_entrega not in {"fixa", "bairro"}:
+    if config_in.tipo_taxa_entrega is not None and config_in.tipo_taxa_entrega not in {"fixa", "bairro", "distancia"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Use taxa fixa ou taxa por bairro. Taxa por distância não está disponível.",
+            detail="Use taxa fixa, taxa por bairro ou cobrança automática por distância.",
         )
     try:
         normalized_fixed_fee = (
@@ -1594,6 +1623,7 @@ def atualizar_configuracoes(
 
     effective_fee_mode = config_in.tipo_taxa_entrega or config.tipo_taxa_entrega
     normalized_neighborhoods = None
+    normalized_distance_config = None
     if effective_fee_mode == "bairro":
         try:
             normalized_neighborhoods = normalize_neighborhood_fee_table(
@@ -1606,7 +1636,19 @@ def atualizar_configuracoes(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=str(exc),
             ) from exc
-        
+    if effective_fee_mode == "distancia":
+        try:
+            normalized_distance_config = normalize_distance_fee_config(
+                config_in.tabela_taxas_km
+                if config_in.tabela_taxas_km is not None
+                else (config.tabela_taxas_km or [])
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
+
     if config_in.nicho is not None:
         config.nicho = config_in.nicho
     if config_in.mapa_mesas_ativo is not None:
@@ -1626,7 +1668,11 @@ def atualizar_configuracoes(
             normalized_neighborhoods or config_in.tabela_taxas_bairros
         )
     if config_in.tabela_taxas_km is not None:
-        config.tabela_taxas_km = config_in.tabela_taxas_km
+        config.tabela_taxas_km = (
+            [normalized_distance_config]
+            if normalized_distance_config is not None
+            else config_in.tabela_taxas_km
+        )
 
     if config_in.taxa_servico_ativa is not None:
         config.taxa_servico_ativa = config_in.taxa_servico_ativa

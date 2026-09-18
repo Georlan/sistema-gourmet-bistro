@@ -63,10 +63,23 @@ describe('universal delivery address source', () => {
     assert.equal(parseDeliveryAddressLegacy('Rua antiga perto da praça, casa azul'), null);
   });
 
-  it('bloqueia snapshot incompleto antes do envio', () => {
-    const draft = { ...completeDraft(), cep: '60000' };
-    assert.equal(getDeliveryAddressValidationError(draft), 'Informe um CEP com 8 dígitos.');
-    assert.equal(deliveryAddressDraftToSnapshot(draft), null);
+  it('CEP é opcional, mas quando informado precisa ter 8 dígitos', () => {
+    const withoutCep = { ...completeDraft(), cep: '' };
+    const snapshot = deliveryAddressDraftToSnapshot(withoutCep);
+    assert.ok(snapshot);
+    assert.equal(snapshot.cep, '');
+    assert.equal(
+      formatDeliveryAddressLegacy(snapshot),
+      'Rua das Flores, 123, Apto 10, Centro, Fortaleza - CE, Ref.: Portaria lateral',
+    );
+    assert.equal(parseDeliveryAddressLegacy(formatDeliveryAddressLegacy(snapshot))?.cep, '');
+
+    const invalidCep = { ...completeDraft(), cep: '60000' };
+    assert.equal(
+      getDeliveryAddressValidationError(invalidCep),
+      'Informe um CEP com 8 dígitos ou deixe o campo vazio.',
+    );
+    assert.equal(deliveryAddressDraftToSnapshot(invalidCep), null);
   });
 
   it('preserva coordenadas válidas vindas de geocodificação', () => {

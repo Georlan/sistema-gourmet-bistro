@@ -84,7 +84,7 @@ export const getDeliveryAddressValidationError = (draft: DeliveryAddressDraft): 
   if (!value.bairro) return 'Informe o bairro.';
   if (!value.cidade) return 'Informe a cidade.';
   if (value.uf.length !== 2) return 'Informe a UF com 2 letras.';
-  if (value.cep.length !== 8) return 'Informe um CEP com 8 dígitos.';
+  if (value.cep && value.cep.length !== 8) return 'Informe um CEP com 8 dígitos ou deixe o campo vazio.';
   if ((value.latitude === null) !== (value.longitude === null)) {
     return 'Latitude e longitude devem ser informadas juntas.';
   }
@@ -130,7 +130,7 @@ export const formatDeliveryAddressLegacy = (snapshot: DeliveryAddressSnapshot): 
     compactWhitespace(snapshot.complemento),
     compactWhitespace(snapshot.bairro),
     `${compactWhitespace(snapshot.cidade)} - ${compactWhitespace(snapshot.uf).toUpperCase()}`,
-    `CEP ${formattedCep}`,
+    formattedCep ? `CEP ${formattedCep}` : '',
   ].filter(Boolean);
   const reference = compactWhitespace(snapshot.referencia);
   if (reference) parts.push(`Ref.: ${reference}`);
@@ -158,10 +158,12 @@ export const parseDeliveryAddressLegacy = (value: unknown): DeliveryAddressDraft
     raw = raw.slice(0, referenceIndex).trim();
   }
 
+  let cep = '';
   const cepMatch = raw.match(/^(.*), CEP\s+(\d{5})-?(\d{3})$/i);
-  if (!cepMatch) return null;
-  const cep = `${cepMatch[2]}${cepMatch[3]}`;
-  raw = cepMatch[1].trim();
+  if (cepMatch) {
+    cep = `${cepMatch[2]}${cepMatch[3]}`;
+    raw = cepMatch[1].trim();
+  }
 
   const cityMatch = raw.match(/^(.*),\s*([^,]+?)\s*-\s*([A-Za-z]{2})$/);
   if (!cityMatch) return null;

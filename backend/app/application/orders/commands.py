@@ -116,8 +116,8 @@ class DeliveryAddressInput:
             raise InvalidFulfillmentDetailsError("Cidade de entrega é obrigatória.")
         if len(state) != 2 or not state.isalpha():
             raise InvalidFulfillmentDetailsError("UF do endereço de entrega deve conter 2 letras.")
-        if len(postal_code) != 8:
-            raise InvalidFulfillmentDetailsError("CEP do endereço de entrega deve conter 8 dígitos.")
+        if postal_code and len(postal_code) != 8:
+            raise InvalidFulfillmentDetailsError("CEP do endereço de entrega deve conter 8 dígitos quando informado.")
         if (self.latitude is None) != (self.longitude is None):
             raise InvalidFulfillmentDetailsError("Latitude e longitude devem ser informadas juntas.")
         latitude = (
@@ -168,8 +168,9 @@ class DeliveryAddressInput:
             parts.append(self.complement)
         parts.append(self.neighborhood)
         parts.append(f"{self.city} - {self.state}")
-        formatted_cep = f"{self.postal_code[:5]}-{self.postal_code[5:]}"
-        parts.append(f"CEP {formatted_cep}")
+        if self.postal_code:
+            formatted_cep = f"{self.postal_code[:5]}-{self.postal_code[5:]}"
+            parts.append(f"CEP {formatted_cep}")
         if self.reference:
             parts.append(f"Ref.: {self.reference}")
         return ", ".join(parts)

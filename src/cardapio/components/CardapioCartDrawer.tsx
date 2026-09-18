@@ -20,6 +20,7 @@ import {
   DollarSign,
   MapPin,
   Mail,
+  Loader2,
   Minus,
   Percent,
   Phone,
@@ -134,6 +135,13 @@ export default function CardapioCartDrawer({
   const [customerRecognition, setCustomerRecognition] = useState<CustomerRecognitionStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [invalidField, setInvalidField] = useState("");
+  const [locationQuote, setLocationQuote] = useState<{
+    status: "idle" | "loading" | "success" | "error";
+    fee?: number;
+    distanceKm?: number | null;
+    usedFallback?: boolean;
+    message?: string;
+  }>({ status: "idle" });
 
   const clearValidation = (fieldId?: string) => {
     if (!fieldId || invalidField === fieldId) setInvalidField("");
@@ -287,10 +295,23 @@ export default function CardapioCartDrawer({
 
   const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
   const deliveryEnabled = brandConfig?.deliveryEnabled !== false;
-  const deliveryFee = deliveryMethod === "delivery" ? deliveryQuote.fee : 0;
-  const deliveryLabel = deliveryQuote.awaitingNeighborhood
-    ? "Taxa por bairro"
-    : deliveryQuote.fee === 0 ? "Sem taxa de entrega" : `Taxa de ${formatPrice(deliveryQuote.fee)}`;
+  const distanceMode = brandConfig?.tipoTaxaEntrega === "distancia";
+  const quotedDistanceFee = distanceMode && locationQuote.status === "success"
+    ? Number(locationQuote.fee)
+    : null;
+  const effectiveDeliveryQuoteFee = quotedDistanceFee != null && Number.isFinite(quotedDistanceFee)
+    ? quotedDistanceFee
+    : deliveryQuote.fee;
+  const deliveryFee = deliveryMethod === "delivery" ? effectiveDeliveryQuoteFee : 0;
+  const deliveryLabel = distanceMode
+    ? locationQuote.status === "success" && locationQuote.distanceKm != null
+      ? `${locationQuote.distanceKm.toFixed(1)} km · ${effectiveDeliveryQuoteFee === 0 ? "sem taxa" : `taxa de ${formatPrice(effectiveDeliveryQuoteFee)}`}`
+      : effectiveDeliveryQuoteFee === 0
+        ? "Sem taxa de entrega"
+        : `A partir de ${formatPrice(effectiveDeliveryQuoteFee)}`
+    : deliveryQuote.awaitingNeighborhood
+      ? "Taxa por bairro"
+      : deliveryQuote.fee === 0 ? "Sem taxa de entrega" : `Taxa de ${formatPrice(deliveryQuote.fee)}`;
   const minimumOrder = brandConfig?.pedidoMinimo || 0;
   const remainingMinimum = getDeliveryMinimumRemaining(brandConfig, subtotal, deliveryMethod);
   const freeDeliveryThreshold = brandConfig?.freteGratisValor || 0;
@@ -301,6 +322,78 @@ export default function CardapioCartDrawer({
       setSelectedBairro("");
     }
   }, [deliveryEnabled, deliveryMethod]);
+
+  useEffect(() => {
+    const latitude = deliveryAddressDraft.latitude;
+    const longitude = deliveryAddressDraft.longitude;
+    if (!distanceMode || deliveryMethod !== "delivery" || latitude == null || longitude == null) return;
+
+    const controller = new AbortController();
+    setLocationQuote((current) => ({ ...current, status: "loading", message: undefined }));
+    fetch(`${API_BASE_URL}/api/cardapio-digital/delivery/quote?restaurante_id=${encodeURIComponent(String(restaurantId))}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({ latitude, longitude, subtotal }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível calcular a distância.");
+        return data;
+      })
+      .then((data) => {
+        setLocationQuote({
+          status: "success",
+          fee: Number(data.fee) || 0,
+          distanceKm: data.distance_km == null ? null : Number(data.distance_km),
+          usedFallback: data.used_fallback === true,
+          message: data.message || undefined,
+        });
+      })
+      .catch((error: unknown) => {
+        if ((error as Error | undefined)?.name === "AbortError") return;
+        setLocationQuote({
+          status: "error",
+          message: error instanceof Error ? error.message : "Não foi possível calcular a distância.",
+        });
+      });
+
+    return () => controller.abort();
+  }, [
+    deliveryAddressDraft.latitude,
+    deliveryAddressDraft.longitude,
+    deliveryMethod,
+    distanceMode,
+    restaurantId,
+    subtotal,
+  ]);
+
+  const requestDeliveryLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationQuote({
+        status: "error",
+        message: "Seu navegador não oferece localização. A taxa mínima continuará sendo usada.",
+      });
+      return;
+    }
+    setLocationQuote({ status: "loading" });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setDeliveryAddressDraft((current) => ({
+          ...current,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }));
+      },
+      () => {
+        setLocationQuote({
+          status: "error",
+          message: "Localização não autorizada. Você pode continuar normalmente com a taxa mínima.",
+        });
+      },
+      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 120_000 },
+    );
+  };
 
   // Cashback deduction calculation
   const userCashbackBalance = Number(user?.saldo_cashback || 0);
@@ -411,6 +504,27 @@ export default function CardapioCartDrawer({
     }
     if (normalizeBrazilianPhone(customerPhone).length < 10) {
       reportValidationError("Informe um celular válido com DDD.", "input-guest-phone");
+      return;
+    }
+
+    if (
+      deliveryMethod === "delivery"
+      && distanceMode
+      && deliveryAddressDraft.latitude != null
+      && deliveryAddressDraft.longitude != null
+      && locationQuote.status === "loading"
+    ) {
+      reportValidationError("Aguarde um instante enquanto calculamos a taxa pela sua localização.", "cart-receive-methods");
+      return;
+    }
+    if (
+      deliveryMethod === "delivery"
+      && distanceMode
+      && deliveryAddressDraft.latitude != null
+      && deliveryAddressDraft.longitude != null
+      && locationQuote.status === "error"
+    ) {
+      reportValidationError(locationQuote.message || "Não foi possível validar a distância de entrega.", "cart-receive-methods");
       return;
     }
 
@@ -715,6 +829,9 @@ export default function CardapioCartDrawer({
                       onChange={(nextAddress) => {
                         setDeliveryAddressDraft(nextAddress);
                         setSelectedBairro(nextAddress.bairro);
+                        if (distanceMode && (nextAddress.latitude == null || nextAddress.longitude == null)) {
+                          setLocationQuote({ status: "idle" });
+                        }
                         const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
                         setAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : "");
                         setLegacyAddressHint(null);
@@ -727,10 +844,42 @@ export default function CardapioCartDrawer({
                       legacyHint={legacyAddressHint}
                       idPrefix="delivery-address"
                     />
+                    {distanceMode && (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <strong className="text-xs text-koma-foreground">Está no local da entrega?</strong>
+                            <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Use sua localização somente se o pedido for entregue onde você está agora. Para outro endereço, continue sem localização.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={requestDeliveryLocation}
+                            disabled={locationQuote.status === "loading"}
+                            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-black text-emerald-600 transition hover:bg-emerald-500/15 disabled:cursor-wait disabled:opacity-60 dark:text-emerald-300"
+                          >
+                            {locationQuote.status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                            {locationQuote.status === "loading" ? "Calculando…" : "Usar minha localização"}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[10px] leading-relaxed text-koma-muted" aria-live="polite">
+                          {locationQuote.status === "success"
+                            ? locationQuote.distanceKm != null
+                              ? `Distância estimada: ${locationQuote.distanceKm.toFixed(1)} km. ${effectiveDeliveryQuoteFee === 0 ? "Entrega grátis neste pedido." : `Taxa calculada: ${formatPrice(effectiveDeliveryQuoteFee)}.`}`
+                              : "Não foi possível medir a distância; a taxa mínima foi aplicada."
+                            : locationQuote.status === "error"
+                              ? locationQuote.message
+                              : `Sem localização, o pedido continua usando a taxa mínima de ${formatPrice(deliveryQuote.fee)}.`}
+                        </p>
+                      </div>
+                    )}
                     <p className="break-words text-xs leading-relaxed text-koma-muted" aria-live="polite">
-                      {deliveryQuote.awaitingNeighborhood
-                        ? "Selecione ou informe seu bairro para atualizar a taxa. Por enquanto, o total usa a taxa padrão estimada."
-                        : `${selectedBairro ? `${selectedBairro}: ` : ""}${deliveryQuote.fee === 0 ? "sem taxa de entrega neste pedido." : `taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}`}
+                      {distanceMode
+                        ? effectiveDeliveryQuoteFee === 0
+                          ? "Sem taxa de entrega neste pedido."
+                          : `Taxa de ${formatPrice(effectiveDeliveryQuoteFee)} incluída no resumo.`
+                        : deliveryQuote.awaitingNeighborhood
+                          ? "Selecione ou informe seu bairro para atualizar a taxa. Por enquanto, o total usa a taxa padrão estimada."
+                          : `${selectedBairro ? `${selectedBairro}: ` : ""}${deliveryQuote.fee === 0 ? "sem taxa de entrega neste pedido." : `taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}`}
                     </p>
                   </div>
                 )}

@@ -233,7 +233,7 @@ class DeliveryAddressSnapshotSchema(BaseModel):
     bairro: str = Field(min_length=1, max_length=100)
     cidade: str = Field(min_length=1, max_length=100)
     uf: str = Field(min_length=2, max_length=2)
-    cep: str = Field(min_length=8, max_length=10)
+    cep: str = Field(default="", max_length=10)
     referencia: Optional[str] = Field(default=None, max_length=180)
     latitude: Optional[float] = Field(default=None, ge=-90, le=90)
     longitude: Optional[float] = Field(default=None, ge=-180, le=180)
@@ -264,9 +264,9 @@ class DeliveryAddressSnapshotSchema(BaseModel):
     @field_validator("cep")
     @classmethod
     def normalize_postal_code(cls, value: str) -> str:
-        postal_code = "".join(character for character in value if character.isdigit())
-        if len(postal_code) != 8:
-            raise ValueError("CEP deve conter 8 dígitos.")
+        postal_code = "".join(character for character in str(value or "") if character.isdigit())
+        if postal_code and len(postal_code) != 8:
+            raise ValueError("CEP deve conter 8 dígitos quando informado.")
         return postal_code
 
     @model_validator(mode="after")
@@ -526,11 +526,25 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
+    delivery_origin_configured: bool = False
     plano: Optional[str] = "pocket"
     plano_efetivo: Optional[str] = "pocket"
     plano_modo_teste: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DeliveryOriginUpdate(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def reject_zero_coordinates(self):
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError("As coordenadas do restaurante não podem ser 0,0.")
+        return self
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class ConfiguracaoRestauranteUpdate(BaseModel):
@@ -853,6 +867,29 @@ class CardapioPublicResponse(BaseModel):
     restaurante: CardapioPublicRestaurantResponse
     categorias: List[CardapioPublicCategoryResponse]
     produtos: List[CardapioPublicProductResponse]
+
+
+class DeliveryFeeQuoteRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    subtotal: float = Field(default=0.0, ge=0, le=1_000_000)
+
+    @model_validator(mode="after")
+    def reject_zero_coordinates(self):
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError("As coordenadas não podem ser 0,0.")
+        return self
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+
+class DeliveryFeeQuoteResponse(BaseModel):
+    available: bool = True
+    fee: float
+    distance_km: Optional[float] = None
+    used_fallback: bool = False
+    free_shipping: bool = False
+    message: Optional[str] = None
 
 
 class CustomerOtpRequest(BaseModel):
