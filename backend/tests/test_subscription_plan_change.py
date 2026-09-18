@@ -425,6 +425,88 @@ def test_pending_pix_blocks_plan_change_and_preserves_old_contract(plan_change_e
         db.close()
 
 
+def test_approved_pix_waiting_for_reconciliation_blocks_plan_change(
+    plan_change_env,
+    monkeypatch,
+):
+    client, Session = plan_change_env
+    _seed_legacy_pro(
+        client,
+        Session,
+        payment_method="pix",
+        provider_ref="pix-old-approved",
+    )
+    approved_at = dt.datetime(2026, 9, 20, 12, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr(
+        default_saas_mp_service,
+        "get_payment",
+        lambda _ref: {
+            "id": "pix-old-approved",
+            "status": "approved",
+            "date_approved": approved_at.isoformat(),
+            "date_of_expiration": (
+                approved_at + dt.timedelta(hours=1)
+            ).isoformat(),
+        },
+    )
+
+    accepted = client.post(
+        "/api/subscription/plan-change/accept",
+        json=_payload("premium"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    applied = client.post(
+        f"/api/subscription/plan-change/{accepted.json()['id']}/apply",
+    )
+    assert applied.status_code == 409
+    assert "aguardando reconciliação" in applied.text
+    assert _fee(Session) == Decimal("0.69")
+
+    db = Session()
+    try:
+        restaurant = db.query(Restaurante).filter(Restaurante.id == TENANT_ID).one()
+        assert restaurant.plano == "pro"
+    finally:
+        db.close()
+
+
+def test_plan_change_acceptance_is_not_exposed_as_new_tenant_activation(plan_change_env):
+    client, Session = plan_change_env
+    _seed_legacy_pro(client, Session)
+
+    accepted = client.post(
+        "/api/subscription/plan-change/accept",
+        json=_payload("premium"),
+    )
+    assert accepted.status_code == 201, accepted.text
+    protocol = accepted.json()["protocol"]
+
+    inbox = client.get("/api/super-admin/contracts?status=all")
+    assert inbox.status_code == 200, inbox.text
+    item = next(
+        row for row in inbox.json()["items"]
+        if row["protocol"] == protocol
+    )
+    assert item["status"] == "PLAN_CHANGE_PENDING"
+    assert item["contractPurpose"] == "plan_change"
+    assert item["planChangeRestaurantId"] == str(TENANT_ID)
+    assert item["activationEligible"] is False
+
+    preview = client.get(f"/api/super-admin/contracts/preview/{protocol}")
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["contractPurpose"] == "plan_change"
+    assert preview.json()["activationEligible"] is False
+
+    activation = client.post(
+        f"/api/super-admin/contracts/{protocol}/activate",
+        json={"reason": "Não deve provisionar um novo tenant"},
+    )
+    assert activation.status_code == 409
+    assert "não pode provisionar um novo restaurante" in activation.text
+    assert _fee(Session) == Decimal("0.69")
+
+
 def test_fee_flag_false_still_forces_zero_after_plan_change(plan_change_env, monkeypatch):
     client, Session = plan_change_env
     _seed_legacy_pro(client, Session)
