@@ -152,7 +152,11 @@ export function resolveKomaHost(
   }
 
   // 3. Landing page oficial.
-  const isApexLandingDomain = cleanHost === 'komafood.com.br' || cleanHost === 'www.komafood.com.br';
+  const isApexLandingDomain = cleanHost === 'komafood.com.br'
+    || cleanHost === 'www.komafood.com.br'
+    || cleanHost.endsWith('.pages.dev')
+    || cleanHost === 'localhost'
+    || cleanHost === '127.0.0.1';
   const isExplicitLandingRoute = pathname.startsWith('/landing') || viewParam === 'landing';
 
   if (isExplicitLandingRoute || (isApexLandingDomain && pathname === '/')) {
