@@ -32,6 +32,7 @@ from ..models import Usuario
 from ..security import IPRateLimiter, get_current_user
 from ..services.contract_notifications import schedule_contract_accepted_notifications
 from ..subscription import (
+    COMMERCIAL_PRICING_VERSION,
     VALID_SUBSCRIPTION_PLANS,
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
@@ -233,6 +234,12 @@ def accept_contract(
     snapshots = _validate_legal_bundle(payload)
     hashes = {key: _document_hash(value) for key, value in snapshots.items()}
 
+    if payload.plan == "pocket" and payload.billing_cycle == "anual":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Pocket não possui componente fixo anual. Use o ciclo mensal sem mensalidade.",
+        )
+
     try:
         provider = get_legal_provider_identity()
     except RuntimeError as exc:
@@ -286,14 +293,16 @@ def accept_contract(
             "powersDeclared": True,
         },
         "commercial": {
+            "pricingVersion": COMMERCIAL_PRICING_VERSION,
             "plan": payload.plan,
             "billingCycle": payload.billing_cycle,
             "fixedMonthlyPrice": _serialize_money(fixed_monthly_price),
             "billingAmount": _serialize_money(billing_amount),
             "annualMonthlyEquivalent": _serialize_money(annual_monthly_equivalent),
             "marketplaceRate": _serialize_rate(marketplace_rate),
-            "trialDays": 7,
-            "trialWaivesFixedFeeOnly": True,
+            "fixedBillingRequired": billing_amount > 0,
+            "trialDays": 0 if billing_amount == 0 else 7,
+            "trialWaivesFixedFeeOnly": billing_amount > 0,
         },
         "documents": {
             "version": LEGAL_VERSION,
