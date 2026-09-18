@@ -156,12 +156,12 @@ def upgrade() -> None:
         SECURITY DEFINER
         STABLE
         SET search_path = pg_catalog
-        AS $
+        AS $function$
             SELECT c.restaurante_id
             FROM public.saas_plan_changes AS c
             WHERE c.acceptance_id = p_acceptance_id
             LIMIT 1
-        $
+        $function$
         """
     )
     op.execute(
