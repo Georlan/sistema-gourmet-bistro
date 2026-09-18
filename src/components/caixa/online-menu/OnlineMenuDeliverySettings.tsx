@@ -83,6 +83,7 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
     : rawMode === 'distancia'
       ? 'distancia'
       : 'fixa';
+  const distanceRows = normalizeDistanceConfig(data.tabela_taxas_km, fixedFee);
   return {
     delivery_ativo: data.delivery_ativo !== false,
     pedido_minimo: Number(data.pedido_minimo) || 0,
@@ -90,7 +91,9 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
     tipo_taxa_entrega: mode,
     taxa_entrega_fixa: fixedFee,
     tabela_taxas_bairros: normalizeNeighborhoods(data.tabela_taxas_bairros),
-    tabela_taxas_km: normalizeDistanceConfig(data.tabela_taxas_km, fixedFee),
+    tabela_taxas_km: mode === 'distancia' && distanceRows.length === 0
+      ? [suggestedDistanceConfig(fixedFee)]
+      : distanceRows,
   };
 }
 
