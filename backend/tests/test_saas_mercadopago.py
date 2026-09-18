@@ -19,7 +19,7 @@ def test_mock_service_creates_card_preapproval_with_seven_days_trial(monkeypatch
         protocol="KOMA-CTR-20260907-TEST12345678",
         plan="pro",
         billing_cycle="mensal",
-        amount=Decimal("209.00"),
+        amount=Decimal("129.00"),
         card_token_id="token_card_123",
         payer_email="cliente@example.com",
     )
@@ -27,7 +27,7 @@ def test_mock_service_creates_card_preapproval_with_seven_days_trial(monkeypatch
     assert res["id"].startswith("mock-sub-")
     assert res["external_reference"] == "KOMA-CTR-20260907-TEST12345678"
     assert res["auto_recurring"]["frequency"] == 1
-    assert res["auto_recurring"]["transaction_amount"] == 209.0
+    assert res["auto_recurring"]["transaction_amount"] == 129.0
     assert res["auto_recurring"]["free_trial"] == {"frequency": 7, "frequency_type": "days"}
 
 
@@ -36,14 +36,14 @@ def test_mock_service_creates_annual_card_preapproval_frequency_12(monkeypatch):
     service = SaasMercadoPagoService("mock-token")
     res = service.create_preapproval(
         protocol="KOMA-CTR-20260907-TESTANNUAL12",
-        plan="pocket",
+        plan="pro",
         billing_cycle="anual",
-        amount=Decimal("1177.20"),
+        amount=Decimal("1393.20"),
         card_token_id="token_card_annual",
         payer_email="annual@example.com",
     )
     assert res["auto_recurring"]["frequency"] == 12
-    assert res["auto_recurring"]["transaction_amount"] == 1177.20
+    assert res["auto_recurring"]["transaction_amount"] == 1393.20
     assert res["auto_recurring"]["free_trial"]["frequency"] == 7
 
 
@@ -52,9 +52,9 @@ def test_mock_service_creates_pix_automatic_pending_authorization_with_trial(mon
     service = SaasMercadoPagoService("mock-token")
     res = service.create_pix_automatic_preapproval(
         protocol="KOMA-CTR-20260907-PIXAUTO12345",
-        plan="pocket",
+        plan="pro",
         billing_cycle="mensal",
-        amount=Decimal("109.00"),
+        amount=Decimal("129.00"),
         payer_email="pix@example.com",
     )
     assert res["id"].startswith("mock-pix-auto-")
@@ -69,9 +69,9 @@ def test_mock_service_creates_account_money_pending_authorization_with_trial(mon
     service = SaasMercadoPagoService("mock-token")
     res = service.create_account_money_preapproval(
         protocol="KOMA-CTR-20260907-ACCMONEY123",
-        plan="pocket",
+        plan="pro",
         billing_cycle="mensal",
-        amount=Decimal("109.00"),
+        amount=Decimal("129.00"),
         payer_email="saldo@example.com",
     )
     assert res["id"].startswith("mock-acc-money-")
@@ -143,7 +143,7 @@ def test_mock_provider_fails_closed_in_production(monkeypatch):
             protocol="KOMA-CTR-20260907-FAILCLOSED01",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             card_token_id="token_card_123",
             payer_email="cliente@example.com",
         )
@@ -153,7 +153,7 @@ def test_mock_provider_fails_closed_in_production(monkeypatch):
             protocol="KOMA-CTR-20260907-FAILCLOSED02",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             payer_email="cliente@example.com",
         )
 
@@ -162,7 +162,7 @@ def test_mock_provider_fails_closed_in_production(monkeypatch):
             protocol="KOMA-CTR-20260907-FAILCLOSED03",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             payer_email="cliente@example.com",
         )
 
@@ -269,7 +269,7 @@ def test_test_buyer_rejected_with_production_credentials_for_all_recurring_metho
             protocol="KOMA-CTR-20260912-TESTBUYER01",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             card_token_id="tok_123",
             payer_email="test_user_12345@testuser.com",
         )
@@ -278,7 +278,7 @@ def test_test_buyer_rejected_with_production_credentials_for_all_recurring_metho
             protocol="KOMA-CTR-20260912-TESTBUYER02",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             payer_email="test_user_99999@testuser.com",
         )
     with pytest.raises(SaasMercadoPagoError, match="compradores de teste"):
@@ -286,7 +286,7 @@ def test_test_buyer_rejected_with_production_credentials_for_all_recurring_metho
             protocol="KOMA-CTR-20260912-TESTBUYER03",
             plan="pro",
             billing_cycle="mensal",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             payer_email="test_user_88888@testuser.com",
         )
 
