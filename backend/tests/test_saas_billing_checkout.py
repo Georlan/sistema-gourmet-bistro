@@ -288,7 +288,7 @@ def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_
 
 
 def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
-    client, _Session = client_and_session
+    client, Session = client_and_session
     service = saas_billing.default_saas_mp_service
 
     pro_protocol = _accept(client, "pro", "mensal")
@@ -297,7 +297,12 @@ def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
         json={"payment_method_type": "credit_card", "card_token_id": "tok_pro"},
     )
     assert pro.status_code == 200, pro.text
-    pro_mandate = service.get_preapproval(pro.json()["subscriptionId"])
+    with Session() as db:
+        pro_setup = get_billing_setup(db, pro_protocol)
+        assert pro_setup is not None
+        assert pro_setup.provider_subscription_id
+        pro_subscription_id = pro_setup.provider_subscription_id
+    pro_mandate = service.get_preapproval(pro_subscription_id)
     assert pro_mandate["auto_recurring"]["transaction_amount"] == 129.0
 
     premium_protocol = _accept(client, "premium", "mensal")
@@ -306,7 +311,12 @@ def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
         json={"payment_method_type": "credit_card", "card_token_id": "tok_premium"},
     )
     assert premium.status_code == 200, premium.text
-    premium_mandate = service.get_preapproval(premium.json()["subscriptionId"])
+    with Session() as db:
+        premium_setup = get_billing_setup(db, premium_protocol)
+        assert premium_setup is not None
+        assert premium_setup.provider_subscription_id
+        premium_subscription_id = premium_setup.provider_subscription_id
+    premium_mandate = service.get_preapproval(premium_subscription_id)
     assert premium_mandate["auto_recurring"]["transaction_amount"] == 249.0
 
 
