@@ -54,10 +54,12 @@ test("Gestão de restaurantes mantém create/list/edit/status no mesmo fluxo rea
   assert.match(onboardingModal, /Mercado Pago do cardápio: desconectado/);
 });
 
-test("Novo restaurante nasce com 7 dias grátis sem criar cobrança SaaS automática", () => {
-  assert.match(onboardingModal, /7 dias grátis/);
-  assert.match(onboardingModal, /daysGranted/);
-  assert.match(onboardingModal, /daysRemaining/);
-  assert.match(onboardingModal, /A cobrança SaaS recorrente ainda não é criada automaticamente/);
-  assert.match(onboardingModal, /não suspende o restaurante automaticamente nesta etapa/);
+test("Provisionamento manual é administrativo e não finge contratação comercial", () => {
+  assert.match(onboardingModal, /Provisionamento administrativo\/QA/);
+  assert.match(onboardingModal, /Não registra ContractAcceptance/);
+  assert.match(onboardingModal, /commercialTermsStatus/);
+  assert.match(onboardingModal, /Janela administrativa de homologação/);
+  assert.match(onboardingModal, /Nenhum preço ou taxa comercial foi contratado/);
+  assert.doesNotMatch(onboardingModal, /formatCurrency\(item\.price\)/);
+  assert.doesNotMatch(onboardingModal, /formatPercentage\(item\.splitFeeRate\)/);
 });
