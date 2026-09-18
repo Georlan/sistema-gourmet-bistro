@@ -73,7 +73,7 @@ test('sem tabela informa estimativa existente; sem valor não inventa taxa ou pr
   assert.doesNotMatch(absent, /R\$|minutos|Grátis/);
 });
 
-test('modo distância mostra a taxa mínima ativa e ignora taxa fixa e bairros antigos', () => {
+test('modo distância comunica somente a taxa mínima ativa', () => {
   const html = render(createElement(CardapioDeliveryInfo, {
     brand: brand({
       tipoTaxaEntrega: 'distancia',
@@ -81,21 +81,14 @@ test('modo distância mostra a taxa mínima ativa e ignora taxa fixa e bairros a
       tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }],
       tabelaTaxasKm: [{
         taxa_minima: 5,
-        km_inclusos: 5,
-        incremento_valor: 1,
-        incremento_km: 2,
-        taxa_maxima: 8,
-        distancia_maxima_km: null,
+        valor_por_km: 1,
         fallback_sem_localizacao: 'minima',
       }],
     }),
   }));
-  assert.match(html, /Taxa a partir de/);
+  assert.match(html, /Taxa de entrega a partir de/);
   assert.match(html, /R\$ 5,00/);
-  assert.match(html, /Até 5 km/);
-  assert.match(html, /\+R\$ 1,00 a cada 2 km/);
-  assert.match(html, /máximo de R\$ 8,00/);
-  assert.doesNotMatch(html, /Taxa padrão estimada|R\$ 7,00|Taxas por bairro|Centro|R\$ 9,00/);
+  assert.doesNotMatch(html, /km|máximo|Taxa padrão estimada|R\$ 7,00|Taxas por bairro|Centro|R\$ 9,00/);
 });
 
 test('revisão apresenta a forma realmente escolhida e momento do pagamento', () => {
