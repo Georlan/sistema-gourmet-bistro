@@ -175,6 +175,7 @@ test('online-menu detail sections stay open under exactly one sidebar child', ()
   const cases = [
     ['cardapio_marca', 'online_marca'],
     ['cardapio_pedidos', 'online_pedidos'],
+    ['cardapio_bloqueios', 'online_bloqueios'],
     ['cardapio_entrega', 'online_entrega'],
     ['cardapio_pagamentos', 'online_pagamentos'],
     ['cardapio_qr_links', 'online_divulgacao'],
@@ -237,6 +238,7 @@ test('online menu has direct searchable destinations and no horizontal online su
     'online_perfil',
     'online_marca',
     'online_pedidos',
+    'online_bloqueios',
     'online_entrega',
     'online_pagamentos',
     'online_divulgacao',
