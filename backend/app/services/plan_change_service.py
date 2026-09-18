@@ -514,6 +514,27 @@ def _sync_provider(change: SaaSPlanChange, subscription: SaaSSubscription) -> No
                 409,
                 "Existe uma cobrança Pix pendente. Aguarde o pagamento ou a expiração antes de trocar o plano.",
             )
+        if provider_status == "approved":
+            approved_at = _parse_provider_datetime(payment.get("date_approved"))
+            current_period_start = subscription.current_period_start
+            if current_period_start is not None and current_period_start.tzinfo is None:
+                current_period_start = current_period_start.replace(
+                    tzinfo=datetime.timezone.utc
+                )
+            elif current_period_start is not None:
+                current_period_start = current_period_start.astimezone(
+                    datetime.timezone.utc
+                )
+            if (
+                approved_at is None
+                or current_period_start is None
+                or current_period_start < approved_at
+            ):
+                raise HTTPException(
+                    409,
+                    "Existe um Pix aprovado aguardando reconciliação. "
+                    "Aguarde o KÔMA atualizar o período pago antes de trocar o plano.",
+                )
         return
     if not provider_ref:
         raise HTTPException(409, "Assinatura recorrente sem vínculo com o provedor.")
