@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import datetime
+import json
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import text
@@ -35,6 +37,129 @@ class BillingSetupData:
     billing_cycle: str | None
     created_at: Any = None
     updated_at: Any = None
+
+
+@dataclass(frozen=True)
+class TenantCommercialTerms:
+    """Snapshot comercial aceito pelo tenant, independente do catálogo vigente."""
+
+    protocol: str
+    plan: str
+    billing_cycle: str
+    fixed_monthly_price: Decimal
+    billing_amount: Decimal
+    annual_monthly_equivalent: Decimal | None
+    marketplace_rate: Decimal
+    legal_version: str
+
+
+def _commercial_decimal(value: Any, *, field: str, allow_none: bool = False) -> Decimal | None:
+    if value is None and allow_none:
+        return None
+    try:
+        parsed = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise RuntimeError(f"Termo comercial inválido no comprovante: {field}.") from exc
+    if not parsed.is_finite():
+        raise RuntimeError(f"Termo comercial inválido no comprovante: {field}.")
+    return parsed
+
+
+def tenant_commercial_terms(
+    db: Session,
+    restaurante_id: int,
+) -> TenantCommercialTerms | None:
+    """Resolve o último aceite vinculado ao tenant.
+
+    None significa somente que o tenant não possui aceite vinculado e, portanto,
+    deve seguir o fallback legado explicitamente congelado. Se existir um aceite
+    mas o snapshot estiver inválido, falhamos fechado em vez de recalcular pelo
+    slug atual do plano.
+    """
+
+    from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
+    from ..crypt import decrypt_field
+
+    protocol = ""
+    raw_receipt: str | None = None
+
+    if db.get_bind().dialect.name == "postgresql":
+        row = db.execute(
+            text("SELECT * FROM koma_internal.current_contract_receipt()")
+        ).mappings().one_or_none()
+        if row is None:
+            return None
+        protocol = str(row.get("protocol") or "")
+        raw_receipt = row.get("receipt_snapshot_encrypted")
+    else:
+        link = (
+            db.query(RestaurantContractAcceptance)
+            .filter(RestaurantContractAcceptance.restaurante_id == restaurante_id)
+            .order_by(RestaurantContractAcceptance.linked_at.desc())
+            .first()
+        )
+        if link is None:
+            return None
+        acceptance = db.get(ContractAcceptance, link.acceptance_id)
+        if acceptance is None:
+            raise RuntimeError(
+                "Aceite contratual vinculado ao tenant não foi encontrado."
+            )
+        protocol = str(acceptance.protocol or "")
+        raw_receipt = acceptance.receipt_snapshot_encrypted
+
+    if not raw_receipt:
+        raise RuntimeError("Comprovante contratual vinculado ao tenant está indisponível.")
+
+    try:
+        receipt = json.loads(decrypt_field(raw_receipt))
+        commercial = receipt["commercial"]
+        documents = receipt["documents"]
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Comprovante contratual comercial inválido.") from exc
+
+    fixed_monthly_price = _commercial_decimal(
+        commercial.get("fixedMonthlyPrice"),
+        field="fixedMonthlyPrice",
+    )
+    billing_amount = _commercial_decimal(
+        commercial.get("billingAmount"),
+        field="billingAmount",
+    )
+    annual_monthly_equivalent = _commercial_decimal(
+        commercial.get("annualMonthlyEquivalent"),
+        field="annualMonthlyEquivalent",
+        allow_none=True,
+    )
+    marketplace_rate = _commercial_decimal(
+        commercial.get("marketplaceRate"),
+        field="marketplaceRate",
+    )
+
+    assert fixed_monthly_price is not None
+    assert billing_amount is not None
+    assert marketplace_rate is not None
+    if fixed_monthly_price < 0 or billing_amount < 0:
+        raise RuntimeError("Comprovante contratual contém valor financeiro negativo.")
+    if marketplace_rate < 0 or marketplace_rate > 1:
+        raise RuntimeError("Comprovante contratual contém taxa transacional inválida.")
+
+    plan = str(commercial.get("plan") or "").strip().lower()
+    billing_cycle = str(commercial.get("billingCycle") or "").strip().lower()
+    legal_version = str(documents.get("version") or "").strip()
+    if not protocol or not plan or not billing_cycle or not legal_version:
+        raise RuntimeError("Comprovante contratual comercial está incompleto.")
+
+    return TenantCommercialTerms(
+        protocol=protocol,
+        plan=plan,
+        billing_cycle=billing_cycle,
+        fixed_monthly_price=fixed_monthly_price,
+        billing_amount=billing_amount,
+        annual_monthly_equivalent=annual_monthly_equivalent,
+        marketplace_rate=marketplace_rate,
+        legal_version=legal_version,
+    )
 
 
 def is_billing_enforcement_enabled() -> bool:

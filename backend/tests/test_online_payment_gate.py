@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import time
 from decimal import Decimal
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -9,7 +10,6 @@ import pytest
 from app.application.orders.commands import (
     CreateOrderCommand,
     CustomerInput,
-    DeliveryInput,
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
@@ -19,6 +19,7 @@ from app.domain.orders.types import FulfillmentType, OrderChannel
 from app.models import (
     CaixaTurno,
     Categoria,
+    Cliente,
     Comanda,
     IntegrationOutbox,
     Item,
@@ -32,8 +33,12 @@ from app.models import (
 )
 from app.services.online_payments.base import ProviderPayment
 from app.services.online_payments.mercado_pago import MercadoPagoError, MercadoPagoProvider
-from app.services.online_payments.service import OnlinePaymentService
+from app.services.online_payments.service import (
+    OnlinePaymentConfigurationError,
+    OnlinePaymentService,
+)
 from app.services.online_payments.signature import verify_mercado_pago_signature
+from app.subscription import SUBSCRIPTION_MARKETPLACE_RATES
 
 
 RESTAURANT_ID = 9917
@@ -168,6 +173,90 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
     assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.49")
 
 
+def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setitem(
+        SUBSCRIPTION_MARKETPLACE_RATES,
+        "pocket",
+        Decimal("0.0179"),
+    )
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: SimpleNamespace(
+            marketplace_rate=Decimal("0.0149")
+        ),
+    )
+
+    restaurant = SimpleNamespace(id=123, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("1.49")
+
+
+def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setitem(
+        SUBSCRIPTION_MARKETPLACE_RATES,
+        "pocket",
+        Decimal("0.0179"),
+    )
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: None,
+    )
+
+    restaurant = SimpleNamespace(id=124, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("1.49")
+
+
+def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
+
+    def _unexpected_lookup(_db, _restaurante_id):
+        raise AssertionError("contract terms must not be read while fees are disabled")
+
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        _unexpected_lookup,
+    )
+
+    restaurant = SimpleNamespace(id=125, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("0.00")
+
+
+def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+
+    def _broken_contract(_db, _restaurante_id):
+        raise RuntimeError("invalid signed receipt")
+
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        _broken_contract,
+    )
+
+    restaurant = SimpleNamespace(id=126, plano="pocket")
+    with pytest.raises(
+        OnlinePaymentConfigurationError,
+        match="Termos comerciais indisponíveis",
+    ):
+        OnlinePaymentService.marketplace_fee_for_tenant(
+            None,
+            Decimal("100.00"),
+            restaurant,
+        )
+
+
 def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch):
     Base.metadata.create_all(bind=engine)
     token = current_restaurante_id.set(RESTAURANT_ID)
@@ -217,10 +306,9 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         command = CreateOrderCommand(
             restaurant_id=RESTAURANT_ID,
             channel=OrderChannel.WEB_CARDAPIO,
-            fulfillment=FulfillmentType.DELIVERY,
+            fulfillment=FulfillmentType.PICKUP,
             items=(OrderItemInput(product_id="payment-gate-product", quantity=Decimal("1")),),
             customer=CustomerInput(name="Cliente Teste", phone="85999999999"),
-            delivery=DeliveryInput(address="Rua Teste, 10"),
             payment_method="pix",
             idempotency_key="payment-gate-order-key",
             operator_user_id="payment-gate-user",
@@ -290,7 +378,7 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANT_ID).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == RESTAURANT_ID).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == RESTAURANT_ID).delete(synchronize_session=False)
         db.commit()
@@ -348,10 +436,9 @@ def test_pix_creation_approved_immediately_applies_financial_effects_once(monkey
         command = CreateOrderCommand(
             restaurant_id=rid,
             channel=OrderChannel.WEB_CARDAPIO,
-            fulfillment=FulfillmentType.DELIVERY,
+            fulfillment=FulfillmentType.PICKUP,
             items=(OrderItemInput(product_id="immediate-payment-product", quantity=Decimal("1")),),
             customer=CustomerInput(name="Cliente Imediato", phone="85988888888"),
-            delivery=DeliveryInput(address="Rua Teste, 20"),
             payment_method="pix",
             idempotency_key="immediate-payment-order-key",
             operator_user_id="immediate-payment-user",
@@ -434,7 +521,7 @@ def test_pix_creation_approved_immediately_applies_financial_effects_once(monkey
         ).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()
@@ -655,7 +742,7 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
         ).count() == 1
     finally:
         db.rollback()
-        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()
@@ -717,10 +804,9 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
         command = CreateOrderCommand(
             restaurant_id=rid,
             channel=OrderChannel.WEB_CARDAPIO,
-            fulfillment=FulfillmentType.DELIVERY,
+            fulfillment=FulfillmentType.PICKUP,
             items=(OrderItemInput(product_id="webhook-prod-9920", quantity=Decimal("1")),),
             customer=CustomerInput(name="Cliente Divergente", phone="85999997777"),
-            delivery=DeliveryInput(address="Rua Divergente, 200"),
             payment_method="pix",
             idempotency_key="webhook-order-key-9920",
             operator_user_id="webhook-user-9920",
@@ -843,7 +929,7 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
         ).count() == 0
     finally:
         db.rollback()
-        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
+        for model in (OnlinePaymentWebhookEvent, OnlinePaymentIntent, Pagamento, IntegrationOutbox, Item, Lancamento, Comanda, Cliente, Produto, Categoria, CaixaTurno, RestaurantPaymentAccount, Usuario):
             db.query(model).filter(model.restaurante_id == rid).delete(synchronize_session=False)
         db.query(Restaurante).filter(Restaurante.id == rid).delete(synchronize_session=False)
         db.commit()

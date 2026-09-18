@@ -2,7 +2,11 @@ import re
 from decimal import Decimal
 from pathlib import Path
 
-from app.subscription import SUBSCRIPTION_MARKETPLACE_RATES
+from app.subscription import (
+    LEGACY_V25_MARKETPLACE_RATES,
+    LEGACY_V25_MONTHLY_PRICES,
+    SUBSCRIPTION_MARKETPLACE_RATES,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -48,3 +52,13 @@ def test_frontend_comparison_labels_match_financial_rates():
     assert "pocket: '1,49%'" in source
     assert "pro: '0,69%'" in source
     assert "premium: '0,29%'" in source
+
+
+def test_legacy_v25_fallback_stays_frozen_when_current_catalog_changes():
+    assert LEGACY_V25_MONTHLY_PRICES == {
+        "pocket": Decimal("109.00"),
+        "pro": Decimal("209.00"),
+        "premium": Decimal("309.00"),
+    }
+    assert LEGACY_V25_MARKETPLACE_RATES == EXPECTED_RATES
+    assert LEGACY_V25_MARKETPLACE_RATES is not SUBSCRIPTION_MARKETPLACE_RATES

@@ -11,16 +11,34 @@ VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 ANNUAL_DISCOUNT_RATE = Decimal("0.10")
 
-# Fonte de verdade financeira no servidor para a mensalidade fixa do SaaS.
+# Catálogo comercial vigente para NOVAS contratações.
+#
+# IMPORTANTE: estas estruturas podem mudar quando uma nova versão comercial entrar
+# em vigor. Elas nunca devem ser usadas, isoladamente, para recalcular os termos de
+# um tenant que já aceitou um contrato.
 SUBSCRIPTION_MONTHLY_PRICES: dict[str, Decimal] = {
     "pocket": Decimal("109.00"),
     "pro": Decimal("209.00"),
     "premium": Decimal("309.00"),
 }
 
-# Fonte de verdade financeira no servidor para a comissão KÔMA sobre pedidos
-# online pagos. Valores são frações decimais: 0.0149 = 1,49%.
 SUBSCRIPTION_MARKETPLACE_RATES: dict[str, Decimal] = {
+    "pocket": Decimal("0.0149"),
+    "pro": Decimal("0.0069"),
+    "premium": Decimal("0.0029"),
+}
+
+# Fallback congelado para tenants legados que ainda não possuem um
+# ContractAcceptance vinculado. Quando o catálogo vigente mudar, este snapshot
+# NÃO deve acompanhar a mudança: ele representa os termos comerciais anteriores
+# já praticados antes do versionamento contratual ser a autoridade do split.
+LEGACY_V25_MONTHLY_PRICES: dict[str, Decimal] = {
+    "pocket": Decimal("109.00"),
+    "pro": Decimal("209.00"),
+    "premium": Decimal("309.00"),
+}
+
+LEGACY_V25_MARKETPLACE_RATES: dict[str, Decimal] = {
     "pocket": Decimal("0.0149"),
     "pro": Decimal("0.0069"),
     "premium": Decimal("0.0029"),
@@ -37,8 +55,13 @@ def normalize_subscription_plan(plan: Optional[str]) -> str:
 
 
 def subscription_marketplace_rate(stored_plan: Optional[str]) -> Decimal:
-    """Retorna a taxa comercial do plano contratado, sem aplicar override de teste."""
+    """Retorna a taxa do catálogo vigente para novas vendas/cálculos públicos."""
     return SUBSCRIPTION_MARKETPLACE_RATES[normalize_subscription_plan(stored_plan)]
+
+
+def legacy_v25_marketplace_rate(stored_plan: Optional[str]) -> Decimal:
+    """Fallback imutável para tenants sem aceite contratual comercial vinculado."""
+    return LEGACY_V25_MARKETPLACE_RATES[normalize_subscription_plan(stored_plan)]
 
 
 def subscription_monthly_price(stored_plan: Optional[str]) -> Decimal:

@@ -1,6 +1,5 @@
 import os
 import pytest
-from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -19,7 +18,6 @@ from app.models import (
 )
 from app.routes import super_admin
 from app.security import create_access_token, get_password_hash
-from app.subscription import subscription_marketplace_rate
 
 
 client = TestClient(app)
@@ -159,26 +157,26 @@ def test_b_default_restaurante_saas_status_is_active(setup_test_tenants):
         db.close()
 
 
-def test_c_alterar_plano_persiste_e_muda_taxa_comercial(setup_test_tenants):
-    # Pro -> Premium
+def test_c_alterar_plano_direto_e_bloqueado_sem_estado_parcial(setup_test_tenants):
     resp = client.patch(
         "/api/super-admin/restaurantes/1",
         headers=_superadmin_headers(),
         json={"plan": "premium", "reason": "Cliente solicitou upgrade para Premium"},
     )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["plan"] == "premium"
+    assert resp.status_code == 409
+    assert "fluxo canônico" in resp.json()["detail"]
 
     db: Session = SessionLocal()
     try:
         r = db.query(Restaurante).filter(Restaurante.id == 1).first()
         assert r is not None
-        assert r.plano == "premium"
-
-        # Test canonical marketplace rate
-        rate = subscription_marketplace_rate(r.plano)
-        assert rate == Decimal("0.0029")  # 0.29% for premium
+        assert r.plano == "pro"
+        assert (
+            db.query(SuperAdminAuditLog)
+            .filter(SuperAdminAuditLog.restaurante_id == 1)
+            .count()
+            == 0
+        )
     finally:
         db.close()
 
@@ -331,11 +329,11 @@ def test_l_m_toda_mutacao_gera_exatamente_um_audit_log_com_atomicidade(setup_tes
     finally:
         db.close()
 
-    # 1. Update name and plan
+    # 1. Update name (plan changes use the canonical subscription flow)
     resp1 = client.patch(
         "/api/super-admin/restaurantes/1",
         headers=_superadmin_headers(),
-        json={"name": "Koma Novo Nome", "plan": "premium", "reason": "Rebranding do cliente"},
+        json={"name": "Koma Novo Nome", "reason": "Rebranding do cliente"},
     )
     assert resp1.status_code == 200
 
@@ -361,7 +359,7 @@ def test_l_m_toda_mutacao_gera_exatamente_um_audit_log_com_atomicidade(setup_tes
         assert logs[0].reason == "Rebranding do cliente"
         assert logs[0].before_data["nome"] == "Restaurante Teste 1"
         assert logs[0].after_data["nome"] == "Koma Novo Nome"
-        assert logs[0].after_data["plano"] == "premium"
+        assert "plano" not in logs[0].after_data
 
         assert logs[1].action == "SUPERADMIN_TENANT_SUSPEND"
         assert logs[1].reason == "Fim do contrato"

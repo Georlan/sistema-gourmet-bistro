@@ -16,6 +16,7 @@ from app.contract_validation import is_valid_cnpj, is_valid_cpf, tax_id_kind
 from app.crypt import decrypt_field
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.routes import contracts, super_admin_contracts
+from app.services.billing_service import tenant_commercial_terms
 from app.subscription import (
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
@@ -170,6 +171,40 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
         assert decrypt_field(row.source_ip_encrypted) == "203.0.113.25"
         assert row.terms_hash == receipt["documents"]["terms"]["hash"]
         assert json.loads(decrypt_field(row.receipt_snapshot_encrypted))["protocol"] == data["protocol"]
+    finally:
+        db.close()
+
+
+def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    db = Session()
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=987,
+                acceptance_id=acceptance.id,
+            )
+        )
+        db.commit()
+
+        terms = tenant_commercial_terms(db, 987)
+        assert terms is not None
+        assert terms.protocol == accepted.json()["protocol"]
+        assert terms.plan == "pocket"
+        assert terms.billing_cycle == "mensal"
+        assert terms.fixed_monthly_price == Decimal("109.00")
+        assert terms.billing_amount == Decimal("109.00")
+        assert terms.annual_monthly_equivalent is None
+        assert terms.marketplace_rate == Decimal("0.014900")
+        assert terms.legal_version == LEGAL_VERSION
     finally:
         db.close()
 
