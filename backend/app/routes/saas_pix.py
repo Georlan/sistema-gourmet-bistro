@@ -230,6 +230,13 @@ def _subscription_amount(db: Session, subscription: SaaSSubscription, restaurant
     if terms is not None:
         return terms.billing_amount.quantize(_MONEY_QUANTUM)
 
+    if str(getattr(restaurant, "billing_mode", "") or "").strip().lower() != "legacy":
+        raise HTTPException(
+            409,
+            "Tenant de assinatura sem aceite comercial vinculado; "
+            "a cobrança não pode usar preço legado.",
+        )
+
     cycle = str(subscription.billing_cycle or "monthly").strip().lower()
     if cycle in {"annual", "anual"}:
         return legacy_v25_annual_total(restaurant.plano)
