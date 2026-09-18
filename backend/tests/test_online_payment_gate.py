@@ -10,7 +10,6 @@ import pytest
 from app.application.orders.commands import (
     CreateOrderCommand,
     CustomerInput,
-    DeliveryInput,
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
@@ -306,10 +305,9 @@ def test_online_order_is_published_and_settled_only_after_provider_approval(monk
         command = CreateOrderCommand(
             restaurant_id=RESTAURANT_ID,
             channel=OrderChannel.WEB_CARDAPIO,
-            fulfillment=FulfillmentType.DELIVERY,
+            fulfillment=FulfillmentType.PICKUP,
             items=(OrderItemInput(product_id="payment-gate-product", quantity=Decimal("1")),),
             customer=CustomerInput(name="Cliente Teste", phone="85999999999"),
-            delivery=DeliveryInput(address="Rua Teste, 10"),
             payment_method="pix",
             idempotency_key="payment-gate-order-key",
             operator_user_id="payment-gate-user",
@@ -437,10 +435,9 @@ def test_pix_creation_approved_immediately_applies_financial_effects_once(monkey
         command = CreateOrderCommand(
             restaurant_id=rid,
             channel=OrderChannel.WEB_CARDAPIO,
-            fulfillment=FulfillmentType.DELIVERY,
+            fulfillment=FulfillmentType.PICKUP,
             items=(OrderItemInput(product_id="immediate-payment-product", quantity=Decimal("1")),),
             customer=CustomerInput(name="Cliente Imediato", phone="85988888888"),
-            delivery=DeliveryInput(address="Rua Teste, 20"),
             payment_method="pix",
             idempotency_key="immediate-payment-order-key",
             operator_user_id="immediate-payment-user",
@@ -806,10 +803,9 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
         command = CreateOrderCommand(
             restaurant_id=rid,
             channel=OrderChannel.WEB_CARDAPIO,
-            fulfillment=FulfillmentType.DELIVERY,
+            fulfillment=FulfillmentType.PICKUP,
             items=(OrderItemInput(product_id="webhook-prod-9920", quantity=Decimal("1")),),
             customer=CustomerInput(name="Cliente Divergente", phone="85999997777"),
-            delivery=DeliveryInput(address="Rua Divergente, 200"),
             payment_method="pix",
             idempotency_key="webhook-order-key-9920",
             operator_user_id="webhook-user-9920",
