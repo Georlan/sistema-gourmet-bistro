@@ -526,11 +526,25 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     taxa_entrega_fixa: Optional[float] = None
     tabela_taxas_bairros: Optional[list] = []
     tabela_taxas_km: Optional[list] = []
+    delivery_origin_configured: bool = False
     plano: Optional[str] = "pocket"
     plano_efetivo: Optional[str] = "pocket"
     plano_modo_teste: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DeliveryOriginUpdate(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def reject_zero_coordinates(self):
+        if self.latitude == 0 and self.longitude == 0:
+            raise ValueError("As coordenadas do restaurante não podem ser 0,0.")
+        return self
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class ConfiguracaoRestauranteUpdate(BaseModel):
