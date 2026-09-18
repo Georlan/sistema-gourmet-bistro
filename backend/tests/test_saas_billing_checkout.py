@@ -192,9 +192,97 @@ def _accept(client: TestClient, plan: str = "pro", cycle: str = "mensal") -> str
     return str(response.json()["protocol"])
 
 
-def test_card_authorization_waits_for_essential_setup_before_starting_trial(client_and_session):
+def test_pocket_zero_activates_without_provider_recurrence(client_and_session, monkeypatch):
     client, Session = client_and_session
     protocol = _accept(client, "pocket", "mensal")
+
+    service = saas_billing.default_saas_mp_service
+
+    def _provider_must_not_run(**_kwargs):
+        raise AssertionError("Pocket R$0 não pode criar recorrência no Mercado Pago")
+
+    monkeypatch.setattr(service, "create_preapproval", _provider_must_not_run)
+    monkeypatch.setattr(service, "create_account_money_preapproval", _provider_must_not_run)
+
+    response = client.post(f"/api/contracts/{protocol}/billing/activate-free")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "ready"
+    assert data["amountDueToday"] == 0
+    assert data["trialDays"] == 0
+    assert data["fixedBillingRequired"] is False
+
+    tenant_id = int(data["restaurantId"])
+    with Session() as db:
+        assert get_billing_setup(db, protocol) is None
+        sub = (
+            db.query(SaaSSubscription)
+            .filter(SaaSSubscription.restaurante_id == tenant_id)
+            .one()
+        )
+        assert sub.status == "active"
+        assert sub.provider_subscription_id is None
+        assert sub.payment_method_type is None
+        assert sub.trial_started_at is None
+        assert sub.trial_ends_at is None
+        entitlement = resolve_tenant_entitlement(db, tenant_id)
+        assert entitlement.allowed is True
+        assert entitlement.billing_status == "active"
+
+
+def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    protocol = _accept(client, "pocket", "mensal")
+    provider_called = False
+
+    def _unexpected_provider(**_kwargs):
+        nonlocal provider_called
+        provider_called = True
+        raise AssertionError("provider should not be called")
+
+    monkeypatch.setattr(
+        saas_billing.default_saas_mp_service,
+        "create_preapproval",
+        _unexpected_provider,
+    )
+    response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_test"},
+    )
+    assert response.status_code == 409
+    assert "não possui mensalidade fixa" in response.text
+    assert provider_called is False
+    with Session() as db:
+        assert get_billing_setup(db, protocol) is None
+        assert db.query(SaaSSubscription).count() == 0
+
+
+def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
+    client, _Session = client_and_session
+    service = saas_billing.default_saas_mp_service
+
+    pro_protocol = _accept(client, "pro", "mensal")
+    pro = client.post(
+        f"/api/contracts/{pro_protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_pro"},
+    )
+    assert pro.status_code == 200, pro.text
+    pro_mandate = service.get_preapproval(pro.json()["subscriptionId"])
+    assert pro_mandate["auto_recurring"]["transaction_amount"] == 129.0
+
+    premium_protocol = _accept(client, "premium", "mensal")
+    premium = client.post(
+        f"/api/contracts/{premium_protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_premium"},
+    )
+    assert premium.status_code == 200, premium.text
+    premium_mandate = service.get_preapproval(premium.json()["subscriptionId"])
+    assert premium_mandate["auto_recurring"]["transaction_amount"] == 249.0
+
+
+def test_card_authorization_waits_for_essential_setup_before_starting_trial(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pro", "mensal")
 
     response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
