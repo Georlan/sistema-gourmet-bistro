@@ -151,7 +151,7 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
 def test_account_money_authorization_waits_for_manual_release(client_and_session, monkeypatch):
     client, Session = client_and_session
     monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
-    protocol = client.post("/api/contracts/accept", json=_contract_payload("pocket", "mensal")).json()["protocol"]
+    protocol = client.post("/api/contracts/accept", json=_contract_payload("pro", "mensal")).json()["protocol"]
     setup = client.post(
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "account_money"},
