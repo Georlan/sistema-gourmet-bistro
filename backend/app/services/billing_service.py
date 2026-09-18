@@ -96,8 +96,16 @@ def tenant_commercial_terms(
     else:
         link = (
             db.query(RestaurantContractAcceptance)
+            .join(
+                ContractAcceptance,
+                ContractAcceptance.id == RestaurantContractAcceptance.acceptance_id,
+            )
             .filter(RestaurantContractAcceptance.restaurante_id == restaurante_id)
-            .order_by(RestaurantContractAcceptance.linked_at.desc())
+            .order_by(
+                RestaurantContractAcceptance.linked_at.desc(),
+                ContractAcceptance.accepted_at.desc(),
+                RestaurantContractAcceptance.id.desc(),
+            )
             .first()
         )
         if link is None:
