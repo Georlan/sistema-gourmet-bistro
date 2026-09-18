@@ -410,6 +410,43 @@ class TestDeliveryCanonicalRules:
         )
         assert reset.status_code == 200
 
+    def test_public_quote_por_localizacao_retorna_taxa_sem_servico_externo(self, char_client, char_setup):
+        db: Session = SessionLocal()
+        try:
+            config = self._get_or_create_config(db)
+            restaurante = db.query(Restaurante).filter(Restaurante.id == CHAR_RESTAURANT_ID).first()
+            assert restaurante is not None
+            restaurante.latitude = -3.7319
+            restaurante.longitude = -38.5267
+            config.tipo_taxa_entrega = "distancia"
+            config.tabela_taxas_km = [{
+                "taxa_minima": 5,
+                "km_inclusos": 3,
+                "incremento_valor": 1,
+                "incremento_km": 3,
+                "taxa_maxima": 7,
+                "distancia_maxima_km": 0,
+            }]
+            config.frete_gratis_valor = 0
+            db.commit()
+
+            response = char_client.post(
+                f"/api/cardapio-digital/delivery/quote?restaurante_id={CHAR_RESTAURANT_ID}",
+                json={"latitude": -3.7319, "longitude": -38.4816, "subtotal": 30},
+            )
+            assert response.status_code == 200, response.text
+            data = response.json()
+            assert data["fee"] == 6.0
+            assert 4 < data["distance_km"] < 6
+            assert data["used_fallback"] is False
+        finally:
+            restaurante.latitude = None
+            restaurante.longitude = None
+            config.tipo_taxa_entrega = "fixa"
+            config.tabela_taxas_km = []
+            db.commit()
+            db.close()
+
     def test_configuracoes_rejeita_bairros_duplicados_normalizados(self, char_client, char_setup):
         response = char_client.put(
             "/caixa/configuracoes",
