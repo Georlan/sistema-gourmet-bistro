@@ -18,25 +18,25 @@ def test_growth_recommendation_preserves_target_margin_and_koma_split():
     )
 
     economics = result["economics"]
-    assert economics["koma_fee_percent"] == 1.49
-    assert economics["koma_revenue_per_average_order"] == 1.49
-    assert economics["contribution_margin_before_incentive_percent"] == 38.51
-    assert economics["safe_incentive_ceiling_percent"] == 18.51
-    assert economics["safe_incentive_ceiling_on_average_order"] == 18.51
+    assert economics["koma_fee_percent"] == 1.79
+    assert economics["koma_revenue_per_average_order"] == 1.79
+    assert economics["contribution_margin_before_incentive_percent"] == 38.21
+    assert economics["safe_incentive_ceiling_percent"] == 18.21
+    assert economics["safe_incentive_ceiling_on_average_order"] == 18.21
 
     conservative, balanced, limit = result["options"]
-    assert conservative["incentive_percent"] == 6.17
-    assert balanced["incentive_percent"] == 12.34
-    assert limit["incentive_percent"] == 18.51
+    assert conservative["incentive_percent"] == 6.07
+    assert balanced["incentive_percent"] == 12.14
+    assert limit["incentive_percent"] == 18.21
     assert limit["estimated_margin_after_incentive_percent"] == 20.0
     assert all(option["preserves_minimum_margin"] for option in result["options"])
 
-    assert balanced["coupon"]["fixed_discount_on_average_ticket"] == 12.34
+    assert balanced["coupon"]["fixed_discount_on_average_ticket"] == 12.14
     assert balanced["coupon"]["suggested_minimum_order_for_fixed_discount"] == 100.0
-    assert balanced["cashback"]["earn_percent"] == 12.34
+    assert balanced["cashback"]["earn_percent"] == 12.14
     assert balanced["cashback"]["worst_case_redemption_assumption_percent"] == 100.0
     assert balanced["loyalty_points"]["points_per_real"] == 1.0
-    assert balanced["loyalty_points"]["suggested_point_value_brl"] == 0.1234
+    assert balanced["loyalty_points"]["suggested_point_value_brl"] == 0.1214
 
 
 def test_growth_recommendation_does_not_invent_budget_when_target_margin_is_unavailable():
@@ -47,7 +47,7 @@ def test_growth_recommendation_does_not_invent_budget_when_target_margin_is_unav
         koma_fee_fraction=subscription_marketplace_rate("pro"),
     )
 
-    assert result["economics"]["contribution_margin_before_incentive_percent"] == 19.31
+    assert result["economics"]["contribution_margin_before_incentive_percent"] == 19.5
     assert result["economics"]["safe_incentive_ceiling_percent"] == 0.0
     assert result["options"] == []
     assert result["warnings"]
@@ -72,9 +72,9 @@ def test_loyalty_auto_rate_is_capped_at_five_percent():
 @pytest.mark.parametrize(
     ("plan", "expected"),
     [
-        ("pocket", Decimal("0.0149")),
-        ("pro", Decimal("0.0069")),
-        ("premium", Decimal("0.0029")),
+        ("pocket", Decimal("0.0179")),
+        ("pro", Decimal("0.0050")),
+        ("premium", Decimal("0.0020")),
     ],
 )
 def test_growth_economics_uses_existing_canonical_plan_rates(plan, expected):
