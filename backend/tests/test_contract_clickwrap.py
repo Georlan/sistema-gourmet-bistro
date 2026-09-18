@@ -16,10 +16,12 @@ from sqlalchemy.pool import StaticPool
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.contract_validation import is_valid_cnpj, is_valid_cpf, tax_id_kind
 from app.crypt import decrypt_field, encrypt_field
+from app.config import settings
 from app.database import current_restaurante_id
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.routes import contracts, super_admin_contracts
 from app.services.billing_service import tenant_commercial_terms
+from app.services.online_payments.service import OnlinePaymentService
 from app.subscription import (
     COMMERCIAL_PRICING_VERSION,
     subscription_annual_monthly_equivalent,
@@ -327,7 +329,10 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         db.close()
 
 
-def test_latest_linked_acceptance_becomes_authority_without_rewriting_history(client_and_session):
+def test_latest_linked_acceptance_switches_future_split_without_rewriting_history(
+    client_and_session,
+    monkeypatch,
+):
     client, Session = client_and_session
     old_response = client.post(
         "/api/contracts/accept",
@@ -340,6 +345,7 @@ def test_latest_linked_acceptance_becomes_authority_without_rewriting_history(cl
     assert old_response.status_code == 201, old_response.text
     assert new_response.status_code == 201, new_response.text
 
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     db = Session()
     try:
         old_acceptance = (
@@ -375,24 +381,40 @@ def test_latest_linked_acceptance_becomes_authority_without_rewriting_history(cl
         old_acceptance.legal_version = "2.5"
 
         base_time = dt.datetime(2026, 9, 18, 12, 0, tzinfo=dt.timezone.utc)
-        db.add_all(
-            [
-                RestaurantContractAcceptance(
-                    id="00000000-0000-0000-0000-000000000001",
-                    restaurante_id=991,
-                    acceptance_id=old_acceptance.id,
-                    linked_at=base_time,
-                ),
-                RestaurantContractAcceptance(
-                    id="00000000-0000-0000-0000-000000000002",
-                    restaurante_id=991,
-                    acceptance_id=new_acceptance.id,
-                    linked_at=base_time + dt.timedelta(seconds=1),
-                ),
-            ]
+        db.add(
+            RestaurantContractAcceptance(
+                id="00000000-0000-0000-0000-000000000001",
+                restaurante_id=991,
+                acceptance_id=old_acceptance.id,
+                linked_at=base_time,
+            )
         )
         db.commit()
         frozen_old_ciphertext = old_acceptance.receipt_snapshot_encrypted
+
+        # O slug de recursos já pode até dizer Premium: dinheiro continua Pro 2.5
+        # enquanto o novo aceite ainda não virou autoridade.
+        restaurant = SimpleNamespace(
+            id=991,
+            plano="premium",
+            billing_mode="subscription",
+        )
+        assert OnlinePaymentService.marketplace_fee_for_tenant(
+            db,
+            Decimal("100.00"),
+            restaurant,
+        ) == Decimal("0.69")
+
+        # A mudança financeira só acontece quando o novo aceite é vinculado.
+        db.add(
+            RestaurantContractAcceptance(
+                id="00000000-0000-0000-0000-000000000002",
+                restaurante_id=991,
+                acceptance_id=new_acceptance.id,
+                linked_at=base_time + dt.timedelta(seconds=1),
+            )
+        )
+        db.commit()
 
         terms = tenant_commercial_terms(db, 991)
         assert terms is not None
@@ -400,7 +422,13 @@ def test_latest_linked_acceptance_becomes_authority_without_rewriting_history(cl
         assert terms.plan == "premium"
         assert terms.marketplace_rate == Decimal("0.002000")
         assert terms.pricing_version == COMMERCIAL_PRICING_VERSION
+        assert OnlinePaymentService.marketplace_fee_for_tenant(
+            db,
+            Decimal("100.00"),
+            restaurant,
+        ) == Decimal("0.20")
 
+        # O histórico contratual anterior permanece imutável.
         db.refresh(old_acceptance)
         assert old_acceptance.receipt_snapshot_encrypted == frozen_old_ciphertext
         assert (
