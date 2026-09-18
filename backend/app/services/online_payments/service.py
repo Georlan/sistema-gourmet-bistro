@@ -214,11 +214,15 @@ class OnlinePaymentService:
             raise OnlinePaymentConfigurationError(
                 "Termos comerciais indisponíveis para calcular a taxa do pagamento."
             ) from exc
-        rate = (
-            terms.marketplace_rate
-            if terms is not None
-            else legacy_v25_marketplace_rate(restaurant.plano)
-        )
+        if terms is not None:
+            rate = terms.marketplace_rate
+        elif str(getattr(restaurant, "billing_mode", "") or "").strip().lower() == "legacy":
+            rate = legacy_v25_marketplace_rate(restaurant.plano)
+        else:
+            raise OnlinePaymentConfigurationError(
+                "Tenant de assinatura sem aceite comercial vinculado; "
+                "o split não pode usar fallback legado."
+            )
         return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
 
     @classmethod

@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import uuid
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -13,11 +14,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.contract_validation import is_valid_cnpj, is_valid_cpf, tax_id_kind
-from app.crypt import decrypt_field
+from app.crypt import decrypt_field, encrypt_field
+from app.database import current_restaurante_id
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.routes import contracts, super_admin_contracts
 from app.services.billing_service import tenant_commercial_terms
 from app.subscription import (
+    COMMERCIAL_PRICING_VERSION,
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
     subscription_marketplace_rate,
@@ -62,7 +65,7 @@ def _documents() -> dict[str, dict]:
     }
 
 
-def _payload(*, tax_id: str = VALID_CNPJ, representative_tax_id: str = VALID_CPF, billing_cycle: str = "anual") -> dict:
+def _payload(*, tax_id: str = VALID_CNPJ, representative_tax_id: str = VALID_CPF, plan: str = "pocket", billing_cycle: str = "mensal") -> dict:
     return {
         "request_id": str(uuid.uuid4()),
         "contracting_party_name": "Restaurante Teste Ltda",
@@ -73,7 +76,7 @@ def _payload(*, tax_id: str = VALID_CNPJ, representative_tax_id: str = VALID_CPF
         "representative_role": "Sócio administrador",
         "email": "contratos@example.com",
         "phone": "85999999999",
-        "plan": "pocket",
+        "plan": plan,
         "billing_cycle": billing_cycle,
         "powers_declared": True,
         "legal_version": LEGAL_VERSION,
@@ -127,10 +130,20 @@ def test_cpf_cnpj_validation_rejects_repeated_digits_and_accepts_valid_examples(
 
 
 def test_server_is_source_of_truth_for_contract_prices():
-    assert subscription_monthly_price("pocket") == Decimal("109.00")
-    assert subscription_marketplace_rate("pocket") == Decimal("0.0149")
-    assert subscription_annual_total("pocket") == Decimal("1177.20")
-    assert subscription_annual_monthly_equivalent("pocket") == Decimal("98.10")
+    assert subscription_monthly_price("pocket") == Decimal("0.00")
+    assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
+    assert subscription_annual_total("pocket") == Decimal("0.00")
+    assert subscription_annual_monthly_equivalent("pocket") == Decimal("0.00")
+
+    assert subscription_monthly_price("pro") == Decimal("129.00")
+    assert subscription_marketplace_rate("pro") == Decimal("0.0050")
+    assert subscription_annual_total("pro") == Decimal("1393.20")
+    assert subscription_annual_monthly_equivalent("pro") == Decimal("116.10")
+
+    assert subscription_monthly_price("premium") == Decimal("249.00")
+    assert subscription_marketplace_rate("premium") == Decimal("0.0020")
+    assert subscription_annual_total("premium") == Decimal("2689.20")
+    assert subscription_annual_monthly_equivalent("premium") == Decimal("224.10")
 
 
 def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_session):
@@ -147,12 +160,14 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
     data = response.json()
     assert data["protocol"].startswith("KOMA-CTR-")
     receipt = data["receipt"]
-    assert receipt["commercial"]["fixedMonthlyPrice"] == "109.00"
-    assert receipt["commercial"]["billingAmount"] == "1177.20"
-    assert receipt["commercial"]["annualMonthlyEquivalent"] == "98.10"
-    assert receipt["commercial"]["marketplaceRate"] == "0.014900"
-    assert receipt["commercial"]["trialDays"] == 7
-    assert receipt["commercial"]["trialWaivesFixedFeeOnly"] is True
+    assert receipt["commercial"]["pricingVersion"] == COMMERCIAL_PRICING_VERSION
+    assert receipt["commercial"]["fixedMonthlyPrice"] == "0.00"
+    assert receipt["commercial"]["billingAmount"] == "0.00"
+    assert receipt["commercial"]["annualMonthlyEquivalent"] is None
+    assert receipt["commercial"]["marketplaceRate"] == "0.017900"
+    assert receipt["commercial"]["fixedBillingRequired"] is False
+    assert receipt["commercial"]["trialDays"] == 0
+    assert receipt["commercial"]["trialWaivesFixedFeeOnly"] is False
     assert receipt["documents"]["sourceCommit"] == LEGAL_SOURCE_COMMIT
     assert receipt["documents"]["sourceBlobSha"] == LEGAL_SOURCE_BLOB_SHA
     assert receipt["evidence"]["sourceIp"] == "203.0.113.25"
@@ -173,6 +188,43 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
         assert json.loads(decrypt_field(row.receipt_snapshot_encrypted))["protocol"] == data["protocol"]
     finally:
         db.close()
+
+
+def test_paid_annual_contract_snapshots_discounted_fixed_amount_only(client_and_session):
+    client, _Session = client_and_session
+
+    pro = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pro", billing_cycle="anual"),
+    )
+    assert pro.status_code == 201, pro.text
+    pro_receipt = pro.json()["receipt"]["commercial"]
+    assert pro_receipt["fixedMonthlyPrice"] == "129.00"
+    assert pro_receipt["billingAmount"] == "1393.20"
+    assert pro_receipt["annualMonthlyEquivalent"] == "116.10"
+    assert pro_receipt["marketplaceRate"] == "0.005000"
+    assert pro_receipt["trialDays"] == 7
+
+    premium = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="premium", billing_cycle="anual"),
+    )
+    assert premium.status_code == 201, premium.text
+    premium_receipt = premium.json()["receipt"]["commercial"]
+    assert premium_receipt["fixedMonthlyPrice"] == "249.00"
+    assert premium_receipt["billingAmount"] == "2689.20"
+    assert premium_receipt["annualMonthlyEquivalent"] == "224.10"
+    assert premium_receipt["marketplaceRate"] == "0.002000"
+
+
+def test_pocket_rejects_meaningless_annual_fixed_cycle(client_and_session):
+    client, _Session = client_and_session
+    response = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pocket", billing_cycle="anual"),
+    )
+    assert response.status_code == 422
+    assert "não possui componente fixo anual" in response.json()["detail"]
 
 
 def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_session):
@@ -200,12 +252,157 @@ def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_sessi
         assert terms.protocol == accepted.json()["protocol"]
         assert terms.plan == "pocket"
         assert terms.billing_cycle == "mensal"
+        assert terms.fixed_monthly_price == Decimal("0.00")
+        assert terms.billing_amount == Decimal("0.00")
+        assert terms.annual_monthly_equivalent is None
+        assert terms.marketplace_rate == Decimal("0.017900")
+        assert terms.legal_version == LEGAL_VERSION
+        assert terms.pricing_version == COMMERCIAL_PRICING_VERSION
+    finally:
+        db.close()
+
+
+def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pocket", billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    db = Session()
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        legacy_receipt = json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted))
+        legacy_receipt["commercial"].pop("pricingVersion", None)
+        legacy_receipt["commercial"]["fixedMonthlyPrice"] = "109.00"
+        legacy_receipt["commercial"]["billingAmount"] = "109.00"
+        legacy_receipt["commercial"]["annualMonthlyEquivalent"] = None
+        legacy_receipt["commercial"]["marketplaceRate"] = "0.014900"
+        legacy_receipt["commercial"]["fixedBillingRequired"] = True
+        legacy_receipt["commercial"]["trialDays"] = 7
+        legacy_receipt["commercial"]["trialWaivesFixedFeeOnly"] = True
+        legacy_receipt["documents"]["version"] = "2.5"
+
+        legacy_snapshot = json.dumps(
+            legacy_receipt,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        acceptance.fixed_monthly_price = Decimal("109.00")
+        acceptance.billing_amount = Decimal("109.00")
+        acceptance.annual_monthly_equivalent = None
+        acceptance.marketplace_rate = Decimal("0.0149")
+        acceptance.legal_version = "2.5"
+        acceptance.receipt_snapshot_encrypted = encrypt_field(legacy_snapshot)
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=988,
+                acceptance_id=acceptance.id,
+            )
+        )
+        db.commit()
+        frozen_ciphertext = acceptance.receipt_snapshot_encrypted
+
+        # Catálogo atual já é o vNext; o contrato antigo não acompanha a mudança.
+        assert subscription_monthly_price("pocket") == Decimal("0.00")
+        assert subscription_marketplace_rate("pocket") == Decimal("0.0179")
+
+        terms = tenant_commercial_terms(db, 988)
+        assert terms is not None
+        assert terms.plan == "pocket"
         assert terms.fixed_monthly_price == Decimal("109.00")
         assert terms.billing_amount == Decimal("109.00")
-        assert terms.annual_monthly_equivalent is None
         assert terms.marketplace_rate == Decimal("0.014900")
-        assert terms.legal_version == LEGAL_VERSION
+        assert terms.legal_version == "2.5"
+        assert terms.pricing_version is None
+
+        db.refresh(acceptance)
+        assert acceptance.receipt_snapshot_encrypted == frozen_ciphertext
+        assert json.loads(decrypt_field(acceptance.receipt_snapshot_encrypted)) == legacy_receipt
     finally:
+        db.close()
+
+
+def test_current_contract_returns_verified_accepted_document_snapshots(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pro", billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    db = Session()
+    token = current_restaurante_id.set(989)
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=989,
+                acceptance_id=acceptance.id,
+            )
+        )
+        db.commit()
+
+        result = contracts.get_current_contract(
+            db=db,
+            current_user=SimpleNamespace(cargo="admin"),
+        )
+        assert result["tenantId"] == 989
+        assert result["receipt"]["protocol"] == accepted.json()["protocol"]
+        assert result["acceptedDocuments"] == _documents()
+        assert result["acceptedDocuments"]["commercial"]["version"] == LEGAL_VERSION
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+
+def test_current_contract_fails_closed_when_accepted_snapshot_hash_diverges(client_and_session):
+    client, Session = client_and_session
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_payload(plan="pro", billing_cycle="mensal"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    db = Session()
+    token = current_restaurante_id.set(990)
+    try:
+        acceptance = db.execute(select(ContractAcceptance)).scalar_one()
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=990,
+                acceptance_id=acceptance.id,
+            )
+        )
+        acceptance.terms_snapshot = json.dumps(
+            {
+                "slug": "termos",
+                "title": "Texto adulterado",
+                "version": LEGAL_VERSION,
+                "sections": [],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        db.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            contracts.get_current_contract(
+                db=db,
+                current_user=SimpleNamespace(cargo="admin"),
+            )
+        assert exc_info.value.status_code == 409
+        assert "Integridade do snapshot jurídico inválida: terms" in str(
+            exc_info.value.detail
+        )
+    finally:
+        current_restaurante_id.reset(token)
         db.close()
 
 
@@ -229,7 +426,10 @@ def test_superadmin_inbox_lists_pending_acceptance_without_exposing_full_tax_ids
     assert item["status"] == "SIGNED_PENDING_ACTIVATION"
     assert item["plan"] == "pocket"
     assert item["billingCycle"] == "mensal"
-    assert item["fixedMonthlyPrice"] == "109.00"
+    assert item["fixedMonthlyPrice"] == "0.00"
+    assert item["billingAmount"] == "0.00"
+    assert item["billingStatus"] == "not_required"
+    assert item["activationEligible"] is True
     assert item["contractingPartyTaxIdLast4"] == VALID_CNPJ[-4:]
     assert item["representativeTaxIdLast4"] == VALID_CPF[-4:]
     serialized = json.dumps(item)

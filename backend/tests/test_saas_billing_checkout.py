@@ -19,7 +19,11 @@ from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog,
 from app.routes import contracts, saas_billing
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
-from app.services.billing_service import get_billing_setup, resolve_tenant_entitlement
+from app.services.billing_service import (
+    get_billing_setup,
+    resolve_tenant_entitlement,
+    upsert_billing_setup,
+)
 from app.services.saas_mercadopago import SaasMercadoPagoError
 from app.subscription import subscription_annual_total, subscription_monthly_price
 
@@ -192,9 +196,133 @@ def _accept(client: TestClient, plan: str = "pro", cycle: str = "mensal") -> str
     return str(response.json()["protocol"])
 
 
-def test_card_authorization_waits_for_essential_setup_before_starting_trial(client_and_session):
+def test_pocket_zero_activates_without_provider_recurrence(client_and_session, monkeypatch):
     client, Session = client_and_session
     protocol = _accept(client, "pocket", "mensal")
+
+    service = saas_billing.default_saas_mp_service
+
+    def _provider_must_not_run(**_kwargs):
+        raise AssertionError("Pocket R$0 não pode criar recorrência no Mercado Pago")
+
+    monkeypatch.setattr(service, "create_preapproval", _provider_must_not_run)
+    monkeypatch.setattr(service, "create_account_money_preapproval", _provider_must_not_run)
+
+    response = client.post(f"/api/contracts/{protocol}/billing/activate-free")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "ready"
+    assert data["amountDueToday"] == 0
+    assert data["trialDays"] == 0
+    assert data["fixedBillingRequired"] is False
+
+    tenant_id = int(data["restaurantId"])
+    with Session() as db:
+        assert get_billing_setup(db, protocol) is None
+        sub = (
+            db.query(SaaSSubscription)
+            .filter(SaaSSubscription.restaurante_id == tenant_id)
+            .one()
+        )
+        assert sub.status == "active"
+        assert sub.provider_subscription_id is None
+        assert sub.payment_method_type is None
+        assert sub.trial_started_at is None
+        assert sub.trial_ends_at is None
+        entitlement = resolve_tenant_entitlement(db, tenant_id)
+        assert entitlement.allowed is True
+        assert entitlement.billing_status == "active"
+
+
+def test_pocket_zero_rejects_any_preexisting_billing_setup(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pocket", "mensal")
+
+    with Session() as db:
+        upsert_billing_setup(
+            db,
+            protocol=protocol,
+            payment_method_type="credit_card",
+            status="failed",
+            billing_cycle="monthly",
+        )
+        db.commit()
+
+    response = client.post(f"/api/contracts/{protocol}/billing/activate-free")
+    assert response.status_code == 409
+    assert "encerrada explicitamente" in response.text
+
+    with Session() as db:
+        setup = get_billing_setup(db, protocol)
+        assert setup is not None
+        assert setup.status == "failed"
+        assert db.query(Restaurante).count() == 0
+        assert db.query(SaaSSubscription).count() == 0
+
+
+def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    protocol = _accept(client, "pocket", "mensal")
+    provider_called = False
+
+    def _unexpected_provider(**_kwargs):
+        nonlocal provider_called
+        provider_called = True
+        raise AssertionError("provider should not be called")
+
+    monkeypatch.setattr(
+        saas_billing.default_saas_mp_service,
+        "create_preapproval",
+        _unexpected_provider,
+    )
+    response = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_test"},
+    )
+    assert response.status_code == 409
+    assert "não possui mensalidade fixa" in response.text
+    assert provider_called is False
+    with Session() as db:
+        assert get_billing_setup(db, protocol) is None
+        assert db.query(SaaSSubscription).count() == 0
+
+
+def test_paid_plan_billing_uses_signed_vnext_amounts(client_and_session):
+    client, Session = client_and_session
+    service = saas_billing.default_saas_mp_service
+
+    pro_protocol = _accept(client, "pro", "mensal")
+    pro = client.post(
+        f"/api/contracts/{pro_protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_pro"},
+    )
+    assert pro.status_code == 200, pro.text
+    with Session() as db:
+        pro_setup = get_billing_setup(db, pro_protocol)
+        assert pro_setup is not None
+        assert pro_setup.provider_subscription_id
+        pro_subscription_id = pro_setup.provider_subscription_id
+    pro_mandate = service.get_preapproval(pro_subscription_id)
+    assert pro_mandate["auto_recurring"]["transaction_amount"] == 129.0
+
+    premium_protocol = _accept(client, "premium", "mensal")
+    premium = client.post(
+        f"/api/contracts/{premium_protocol}/billing/setup",
+        json={"payment_method_type": "credit_card", "card_token_id": "tok_premium"},
+    )
+    assert premium.status_code == 200, premium.text
+    with Session() as db:
+        premium_setup = get_billing_setup(db, premium_protocol)
+        assert premium_setup is not None
+        assert premium_setup.provider_subscription_id
+        premium_subscription_id = premium_setup.provider_subscription_id
+    premium_mandate = service.get_preapproval(premium_subscription_id)
+    assert premium_mandate["auto_recurring"]["transaction_amount"] == 249.0
+
+
+def test_card_authorization_waits_for_essential_setup_before_starting_trial(client_and_session):
+    client, Session = client_and_session
+    protocol = _accept(client, "pro", "mensal")
 
     response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
@@ -382,7 +510,7 @@ def test_account_money_returns_authorization_url_with_zero_due_today(client_and_
 
 def test_account_money_webhook_activates_after_provider_confirms_mandate(client_and_session):
     client, Session = client_and_session
-    protocol = _accept(client, "pocket", "anual")
+    protocol = _accept(client, "pro", "anual")
     setup_response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "account_money"},
@@ -431,7 +559,7 @@ def test_account_money_rejects_mismatched_payment_method(client_and_session, mon
             "auto_recurring": {
                 "frequency": 1,
                 "frequency_type": "months",
-                "transaction_amount": 209.0,
+                "transaction_amount": 129.0,
                 "currency_id": "BRL",
                 "free_trial": {"frequency": 7, "frequency_type": "days"},
             },

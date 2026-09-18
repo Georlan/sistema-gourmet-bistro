@@ -32,6 +32,7 @@ from ..models import Usuario
 from ..security import IPRateLimiter, get_current_user
 from ..services.contract_notifications import schedule_contract_accepted_notifications
 from ..subscription import (
+    COMMERCIAL_PRICING_VERSION,
     VALID_SUBSCRIPTION_PLANS,
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
@@ -233,6 +234,12 @@ def accept_contract(
     snapshots = _validate_legal_bundle(payload)
     hashes = {key: _document_hash(value) for key, value in snapshots.items()}
 
+    if payload.plan == "pocket" and payload.billing_cycle == "anual":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Pocket não possui componente fixo anual. Use o ciclo mensal sem mensalidade.",
+        )
+
     try:
         provider = get_legal_provider_identity()
     except RuntimeError as exc:
@@ -286,14 +293,16 @@ def accept_contract(
             "powersDeclared": True,
         },
         "commercial": {
+            "pricingVersion": COMMERCIAL_PRICING_VERSION,
             "plan": payload.plan,
             "billingCycle": payload.billing_cycle,
             "fixedMonthlyPrice": _serialize_money(fixed_monthly_price),
             "billingAmount": _serialize_money(billing_amount),
             "annualMonthlyEquivalent": _serialize_money(annual_monthly_equivalent),
             "marketplaceRate": _serialize_rate(marketplace_rate),
-            "trialDays": 7,
-            "trialWaivesFixedFeeOnly": True,
+            "fixedBillingRequired": billing_amount > 0,
+            "trialDays": 0 if billing_amount == 0 else 7,
+            "trialWaivesFixedFeeOnly": billing_amount > 0,
         },
         "documents": {
             "version": LEGAL_VERSION,
@@ -408,6 +417,8 @@ def get_current_contract(
     tenant_id = require_tenant_id()
     row: dict[str, Any] | None = None
 
+    document_snapshots: dict[str, str] = {}
+
     if db.get_bind().dialect.name == "postgresql":
         row = db.execute(
             text("SELECT * FROM koma_internal.current_contract_receipt()")
@@ -418,6 +429,24 @@ def get_current_contract(
                 detail="Nenhum aceite contratual está vinculado a este restaurante.",
             )
         encrypted_receipt = row["receipt_snapshot_encrypted"]
+
+        document_row = db.execute(
+            text("SELECT * FROM koma_internal.current_contract_documents()")
+        ).mappings().one_or_none()
+        if (
+            document_row is None
+            or str(document_row.get("protocol") or "") != str(row.get("protocol") or "")
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Os snapshots jurídicos vinculados ao contrato estão indisponíveis.",
+            )
+        document_snapshots = {
+            "terms": str(document_row["terms_snapshot"]),
+            "commercial": str(document_row["commercial_snapshot"]),
+            "dpa": str(document_row["dpa_snapshot"]),
+            "privacy": str(document_row["privacy_snapshot"]),
+        }
     else:
         link = (
             db.query(RestaurantContractAcceptance)
@@ -437,9 +466,47 @@ def get_current_contract(
                 detail="Evidência contratual não encontrada.",
             )
         encrypted_receipt = acceptance.receipt_snapshot_encrypted
+        document_snapshots = {
+            "terms": str(acceptance.terms_snapshot),
+            "commercial": str(acceptance.commercial_snapshot),
+            "dpa": str(acceptance.dpa_snapshot),
+            "privacy": str(acceptance.privacy_snapshot),
+        }
 
-    raw = decrypt_field(encrypted_receipt)
+    try:
+        receipt = json.loads(decrypt_field(encrypted_receipt))
+        receipt_documents = receipt["documents"]
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="O comprovante contratual vinculado está inválido.",
+        ) from exc
+
+    accepted_documents: dict[str, dict[str, Any]] = {}
+    for key, snapshot in document_snapshots.items():
+        expected = receipt_documents.get(key) or {}
+        expected_hash = str(expected.get("hash") or "")
+        if not expected_hash or _document_hash(snapshot) != expected_hash:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Integridade do snapshot jurídico inválida: {key}.",
+            )
+        try:
+            document = json.loads(snapshot)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Snapshot jurídico inválido: {key}.",
+            ) from exc
+        if str(document.get("version") or "") != str(receipt_documents.get("version") or ""):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Versão do snapshot jurídico divergente: {key}.",
+            )
+        accepted_documents[key] = document
+
     return {
-        "receipt": json.loads(raw),
+        "receipt": receipt,
+        "acceptedDocuments": accepted_documents,
         "tenantId": tenant_id,
     }

@@ -2,8 +2,6 @@ import React, { useMemo, useState } from "react";
 import { CheckCircle2, Copy, ExternalLink, Plus, X } from "lucide-react";
 import {
   SUBSCRIPTION_PLANS,
-  formatCurrency,
-  formatPercentage,
 } from "../config/subscriptionPlans";
 import { getOperationalAppUrl, getTenantPublicMenuUrl } from "../domain/komaHost";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
@@ -23,6 +21,7 @@ type OnboardingResponse = {
   operationProfile: string;
   status: string;
   onlinePaymentStatus: string;
+  commercialTermsStatus: "not_contracted";
   trial: {
     status: string;
     startedAt: string;
@@ -182,8 +181,8 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
                 <CheckCircle2 className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-koma-foreground">Restaurante criado</h3>
-                <p className="mt-1 text-xs text-koma-muted">Tenant #{created.id} provisionado com {created.trial.daysGranted} dias grátis.</p>
+                <h3 className="text-base font-bold text-koma-foreground">Tenant administrativo criado</h3>
+                <p className="mt-1 text-xs text-koma-muted">Tenant #{created.id} provisionado para operação/QA. Nenhum preço ou taxa comercial foi contratado neste fluxo.</p>
               </div>
             </div>
             <button type="button" onClick={close} className="text-koma-subtle hover:text-koma-foreground"><X className="h-5 w-5" /></button>
@@ -196,9 +195,9 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
           </div>
 
           <div className="mt-4 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-4 text-xs">
-            <p className="font-bold text-emerald-200">Período grátis ativo</p>
+            <p className="font-bold text-emerald-200">Janela administrativa de homologação</p>
             <p className="mt-1 text-[10px] leading-relaxed text-emerald-100/70">
-              {created.trial.daysRemaining} dias disponíveis · termina em {formatTrialEnd(created.trial.endsAt)}. A expiração não suspende o restaurante automaticamente nesta etapa; o Super Admin mantém o controle da decisão.
+              {created.trial.daysRemaining} dias disponíveis · termina em {formatTrialEnd(created.trial.endsAt)}. Esta janela não representa trial comercial do componente fixo e não cria contrato, cobrança recorrente ou taxa KÔMA contratada.
             </p>
           </div>
 
@@ -231,7 +230,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-koma-foreground"><Plus className="h-5 w-5 text-[#00b894]" /> Novo restaurante</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">Cria o tenant, perfil operacional, configuração padrão, administrador inicial e 7 dias grátis em uma única operação.</p>
+            <p className="mt-1 text-[10px] text-koma-muted">Provisionamento administrativo/QA. Não registra ContractAcceptance nem condições comerciais; clientes devem usar o fluxo de contratação.</p>
           </div>
           <button type="button" onClick={close} disabled={isSubmitting} className="text-koma-subtle hover:text-koma-foreground disabled:opacity-50"><X className="h-5 w-5" /></button>
         </div>
@@ -244,7 +243,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
 
           <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Tipo de operação</span><select value={operationProfile} onChange={event => setOperationProfile(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{OPERATION_PROFILES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="mt-1 block text-[10px] leading-relaxed text-koma-subtle">Isso só adapta sugestões e atalhos. Você continua com acesso a todos os recursos do KÔMA e o cardápio não é preenchido automaticamente.</span></label>
 
-          <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Plano de recursos durante o trial</span><select value={plan} onChange={event => setPlan(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{SUBSCRIPTION_PLANS.map(item => <option key={item.id} value={item.id}>{item.name} — referência {formatCurrency(item.price)}/mês · {formatPercentage(item.splitFeeRate)} split</option>)}</select>{selectedPlan && <span className="mt-1 block text-[10px] text-koma-subtle">O restaurante testa os recursos do {selectedPlan.name} por 7 dias. A cobrança SaaS recorrente ainda não é criada automaticamente.</span>}</label>
+          <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Perfil de recursos administrativo</span><select value={plan} onChange={event => setPlan(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{SUBSCRIPTION_PLANS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{selectedPlan && <span className="mt-1 block text-[10px] text-koma-subtle">Libera o conjunto de recursos do {selectedPlan.name} para homologação. Preço e taxa só existem após aceite comercial vinculado.</span>}</label>
 
           <div className="border-t border-zinc-800 pt-4">
             <p className="mb-3 font-bold text-koma-foreground">Administrador inicial</p>
@@ -255,13 +254,13 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
             <label className="mt-4 block"><span className="mb-1 block font-medium text-koma-secondary">Senha temporária</span><input type="password" value={temporaryPassword} onChange={event => setTemporaryPassword(event.target.value)} required minLength={8} maxLength={72} autoComplete="new-password" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Mínimo 8 caracteres" /><span className="mt-1 block text-[10px] text-koma-subtle">Não será retornada pelo backend. Após a criação, aparece uma única vez a partir deste formulário.</span></label>
           </div>
 
-          <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-[10px] leading-relaxed text-emerald-100/75">O restaurante nasce <strong className="text-emerald-200">ativo com 7 dias grátis</strong>. O fim do trial é acompanhado pelo Super Admin e não suspende automaticamente nesta etapa. O Mercado Pago do Cardápio Online nasce <strong className="text-amber-300">desconectado</strong> e será vinculado depois pelo OAuth oficial.</div>
+          <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-[10px] leading-relaxed text-emerald-100/75">O tenant nasce <strong className="text-emerald-200">ativo para homologação administrativa</strong>. Não existe preço/taxa contratada neste fluxo; operações financeiras que exigem termos comerciais falham fechado. O Mercado Pago do Cardápio Online nasce <strong className="text-amber-300">desconectado</strong>.</div>
 
           {error && <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/40 p-3 text-xs text-rose-300">{error}</div>}
 
           <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
             <button type="button" onClick={close} disabled={isSubmitting} className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-semibold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
-            <button type="submit" disabled={isSubmitting} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-bold text-black hover:bg-[#00c996] disabled:opacity-50">{isSubmitting ? "Provisionando..." : "Criar com 7 dias grátis"}</button>
+            <button type="submit" disabled={isSubmitting} className="rounded-lg bg-[#00b894] px-4 py-2 text-xs font-bold text-black hover:bg-[#00c996] disabled:opacity-50">{isSubmitting ? "Provisionando..." : "Criar tenant administrativo"}</button>
           </div>
         </form>
       </div>

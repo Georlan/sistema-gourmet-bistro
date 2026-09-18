@@ -224,11 +224,11 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                 <p className="text-xs text-koma-muted mt-1">{currentPlan.tagline}</p>
               </div>
 
-              <div className="font-mono text-right">
-                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold text-lg">{formatCurrency(currentPlan.price)}</span>
-                <span className="text-koma-muted text-[10px]">/mês</span>
-                <span className="block text-koma-muted text-[10px]">Preço de tabela</span>
-                <span className="block text-koma-muted text-[10px]">+ {formatPercentage(currentPlan.splitFeeRate)} por pedido online pago</span>
+              <div className="max-w-[220px] text-right">
+                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Recursos do plano</span>
+                <span className="mt-1 block text-[10px] leading-4 text-koma-muted">
+                  Valores e taxa efetivamente contratados ficam no comprovante vinculado.
+                </span>
               </div>
             </div>
 
@@ -257,7 +257,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             </div>
 
             <div className="pt-2">
-              <p className="mb-3 text-[10px] text-koma-muted">Sua cobrança segue as condições contratadas. Os preços e taxas abaixo são da oferta atual.</p>
+              <p className="mb-3 text-[10px] text-koma-muted">Este cartão identifica o plano de recursos. Consulte “Contrato e documentos” para ver a mensalidade e a taxa congeladas no seu aceite.</p>
               <button
                 type="button"
                 onClick={() => setActiveSubTab('planos_upgrade')}
@@ -316,7 +316,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
             >
               <PricingSwitch isYearly={isYearly} onSwitch={setIsYearly} />
               <p className="min-h-4 text-[10px] text-koma-muted">
-                {isYearly ? '10% de desconto na assinatura; a taxa por pedido não muda' : 'Valores da assinatura cobrados mensalmente'}
+                {isYearly ? 'Pro e Premium: 10% de desconto somente no componente fixo; Pocket continua sem componente anual' : 'Oferta atual mensal para comparação'}
               </p>
             </TimelineContent>
           </div>
@@ -329,7 +329,10 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
               const isPopular = plan.recommended;
 
               const pricing = getSubscriptionPricing(plan.price);
-              const displayPrice = isYearly ? pricing.annualMonthlyEquivalent : pricing.monthly;
+              const hasAnnualFixedPlan = plan.id !== 'pocket';
+              const displayPrice = isYearly && hasAnnualFixedPlan
+                ? pricing.annualMonthlyEquivalent
+                : pricing.monthly;
 
               return (
                 <TimelineContent
@@ -375,14 +378,16 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
                           <span className="text-koma-muted text-xs font-mono pb-0.5 sm:pb-1">/mês</span>
                         </div>
                         <p className="mt-0.5 sm:mt-1 min-h-4 text-[10px] leading-4 text-koma-muted font-medium">
-                          {isYearly
+                          {isYearly && hasAnnualFixedPlan
                             ? `${formatCurrency(pricing.annualTotal)} cobrados anualmente`
-                            : 'Cobrança mensal · sem taxa de implantação'}
+                            : plan.id === 'pocket'
+                              ? 'Sem mensalidade fixa · sem componente anual'
+                              : 'Cobrança mensal · sem taxa de implantação'}
                         </p>
                         <p className="mt-1 text-[10px] leading-4 text-koma-muted">
                           Taxa KÔMA: <strong className="text-emerald-700 dark:text-emerald-400">{formatPercentage(plan.splitFeeRate)}</strong> por pedido online pago
                         </p>
-                        {isYearly && <p className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Economize {formatCurrency(pricing.annualSavings)} por ano na assinatura</p>}
+                        {isYearly && hasAnnualFixedPlan && <p className="mt-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">Economize {formatCurrency(pricing.annualSavings)} por ano no componente fixo</p>}
                       </div>
                     </CardHeader>
 

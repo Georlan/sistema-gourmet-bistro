@@ -16,7 +16,12 @@ from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
 from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
-from ..services.billing_service import get_billing_setup, is_billing_enforcement_enabled, is_billing_ready
+from ..services.billing_service import (
+    contract_fixed_billing_required,
+    get_billing_setup,
+    is_billing_enforcement_enabled,
+    is_billing_ready,
+)
 from .super_admin import get_current_admin
 from .super_admin_onboarding import DEFAULT_TRIAL_DAYS
 
@@ -84,14 +89,24 @@ def _admin_inbox_item(row: dict[str, Any]) -> dict[str, Any]:
     billing_status = str(row.get("billing_status") or "pending").strip().lower()
     billing_provider = row.get("billing_provider")
     payment_method_type = row.get("payment_method_type")
+    billing_amount = row.get("billing_amount")
+    fixed_billing_required = True
+    if billing_amount is not None:
+        try:
+            fixed_billing_required = Decimal(str(billing_amount)) > 0
+        except Exception:
+            fixed_billing_required = True
+    effective_billing_status = (
+        billing_status if fixed_billing_required else "not_required"
+    )
     enforcement_enabled = is_billing_enforcement_enabled()
-    is_ready = (billing_status == "ready")
+    is_ready = (billing_status == "ready") or not fixed_billing_required
     activation_eligible = (linked_restaurante_id is None) and (not enforcement_enabled or is_ready)
     return {
         "acceptanceId": str(row["acceptance_id"]),
         "protocol": str(row["protocol"]),
         "status": operational_status,
-        "billingStatus": billing_status,
+        "billingStatus": effective_billing_status,
         "billingProvider": str(billing_provider) if billing_provider else None,
         "paymentMethodType": str(payment_method_type) if payment_method_type else None,
         "billingEnforcementEnabled": enforcement_enabled,
@@ -411,7 +426,8 @@ def preview_contract(
             )
         billing_status = str(acceptance.get("billing_status") or "pending").strip().lower()
         enforcement_enabled = is_billing_enforcement_enabled()
-        is_ready = (billing_status == "ready")
+        is_ready = is_billing_ready(db, normalized)
+        effective_billing_status = billing_status if not is_ready or billing_status == "ready" else "not_required"
         return {
             "protocol": acceptance["protocol"],
             "plan": acceptance["plan"],
@@ -419,7 +435,7 @@ def preview_contract(
             "restaurantName": acceptance["restaurant_name"],
             "contractingPartyName": acceptance["contracting_party_name"],
             "email": acceptance["email"],
-            "billingStatus": billing_status,
+            "billingStatus": effective_billing_status,
             "billingProvider": acceptance.get("billing_provider"),
             "paymentMethodType": acceptance.get("payment_method_type"),
             "billingEnforcementEnabled": enforcement_enabled,
@@ -453,6 +469,10 @@ def activate_contract(
 
         existing_tenant_id = acceptance.get("linked_restaurante_id")
         if existing_tenant_id is not None:
+            if not contract_fixed_billing_required(db, normalized):
+                acceptance["billing_status"] = "not_required"
+                acceptance["billing_provider"] = None
+                acceptance["payment_method_type"] = None
             return _activation_response(
                 acceptance,
                 int(existing_tenant_id),
@@ -473,6 +493,10 @@ def activate_contract(
             reason=clean_reason,
         )
         latest = resolve_activation_acceptance(db, normalized) or acceptance
+        if not contract_fixed_billing_required(db, normalized):
+            latest["billing_status"] = "not_required"
+            latest["billing_provider"] = None
+            latest["payment_method_type"] = None
         invitation_token = result.get("invitation_token")
         admin_user_id = result.get("admin_user_id")
         return _activation_response(

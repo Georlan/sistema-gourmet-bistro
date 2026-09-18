@@ -27,17 +27,13 @@ test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
 test("Super Admin Phase 2 usa o catálogo comercial oficial", () => {
   assert.match(onboardingModal, /SUBSCRIPTION_PLANS/);
   assert.match(tenantsTab, /SUBSCRIPTION_PLANS/);
-  assert.match(subscriptionPlans, /price:\s*109/);
-  assert.match(subscriptionPlans, /price:\s*209/);
-  assert.match(subscriptionPlans, /price:\s*309/);
+  assert.match(subscriptionPlans, /price:\s*0,/);
+  assert.match(subscriptionPlans, /price:\s*129/);
+  assert.match(subscriptionPlans, /price:\s*249/);
 
-  for (const staleValue of ["97", "197", "347", "1.79", "0.89", "0.39"]) {
-    assert.equal(
-      onboardingModal.includes(staleValue),
-      false,
-      `o onboarding não pode reintroduzir valor comercial antigo: ${staleValue}`,
-    );
-  }
+  assert.doesNotMatch(onboardingModal, /formatCurrency\(item\.price\)/);
+  assert.doesNotMatch(onboardingModal, /formatPercentage\(item\.splitFeeRate\)/);
+  assert.doesNotMatch(onboardingModal, /R\$\s*(?:89|179|269)(?:[,.]00)?/);
 });
 
 test("Gestão de restaurantes mantém create/list/edit/status no mesmo fluxo real", () => {
@@ -54,10 +50,21 @@ test("Gestão de restaurantes mantém create/list/edit/status no mesmo fluxo rea
   assert.match(onboardingModal, /Mercado Pago do cardápio: desconectado/);
 });
 
-test("Novo restaurante nasce com 7 dias grátis sem criar cobrança SaaS automática", () => {
-  assert.match(onboardingModal, /7 dias grátis/);
-  assert.match(onboardingModal, /daysGranted/);
-  assert.match(onboardingModal, /daysRemaining/);
-  assert.match(onboardingModal, /A cobrança SaaS recorrente ainda não é criada automaticamente/);
-  assert.match(onboardingModal, /não suspende o restaurante automaticamente nesta etapa/);
+test("Gestão de restaurantes não oferece mutação direta de plano comercial", () => {
+  assert.doesNotMatch(tenantsTab, /const \[editPlan,/);
+  assert.doesNotMatch(tenantsTab, /plan:\s*editPlan/);
+  assert.doesNotMatch(tenantsTab, /Plano Comercial<\/span><select/);
+  assert.match(tenantsTab, /Mudança de plano não é permitida por esta edição genérica/);
+  assert.match(tenantsTab, /Mensalidade e taxa transacional efetivas não são inferidas pelo slug do plano/);
+  assert.match(tenantsTab, /Consulte o aceite vinculado em <strong>Contratações<\/strong>/);
+});
+
+test("Provisionamento manual é administrativo e não finge contratação comercial", () => {
+  assert.match(onboardingModal, /Provisionamento administrativo\/QA/);
+  assert.match(onboardingModal, /Não registra ContractAcceptance/);
+  assert.match(onboardingModal, /commercialTermsStatus/);
+  assert.match(onboardingModal, /Janela administrativa de homologação/);
+  assert.match(onboardingModal, /Nenhum preço ou taxa comercial foi contratado/);
+  assert.doesNotMatch(onboardingModal, /formatCurrency\(item\.price\)/);
+  assert.doesNotMatch(onboardingModal, /formatPercentage\(item\.splitFeeRate\)/);
 });

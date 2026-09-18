@@ -58,6 +58,21 @@ describe('resolveKomaHost', () => {
     assert.equal(resolved.surface, 'landing');
   });
 
+  it('resolves Cloudflare preview and local root paths to the landing', () => {
+    for (const host of ['sistema-gourmet-bistro.pages.dev', 'preview-652.pages.dev', 'localhost', '127.0.0.1']) {
+      const resolved = resolveKomaHost(host, '/', '');
+      assert.equal(resolved.kind, 'landing');
+      assert.equal(resolved.surface, 'landing');
+    }
+  });
+
+  it('keeps explicit public routes sovereign on Cloudflare previews', () => {
+    const resolved = resolveKomaHost('preview-652.pages.dev', '/c/pordosol', '');
+    assert.equal(resolved.kind, 'tenant');
+    assert.equal(resolved.surface, 'public');
+    assert.equal(resolved.tenantSlug, 'pordosol');
+  });
+
   it('resolves central.komafood.com.br to central super admin', () => {
     const resolved = resolveKomaHost('central.komafood.com.br', '/', '');
     assert.equal(resolved.kind, 'central');

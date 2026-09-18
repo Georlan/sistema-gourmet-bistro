@@ -65,7 +65,7 @@ def test_pix_automatic_uses_preapproval_plan_hosted_checkout(monkeypatch):
                 "auto_recurring": {
                     "frequency": 1,
                     "frequency_type": "months",
-                    "transaction_amount": 309.0,
+                    "transaction_amount": 249.0,
                     "currency_id": "BRL",
                     "free_trial": {"frequency": 7, "frequency_type": "days"},
                 },
@@ -78,7 +78,7 @@ def test_pix_automatic_uses_preapproval_plan_hosted_checkout(monkeypatch):
         protocol="KOMA-CTR-20260914-ABCDEF123456",
         plan="premium",
         billing_cycle="monthly",
-        amount=Decimal("309.00"),
+        amount=Decimal("249.00"),
         payer_email="cliente@example.com",
         back_url="https://homolog.komafood.test/legal/contrato/confirmacao",
     )
@@ -115,7 +115,7 @@ def test_account_money_uses_dedicated_allowed_payment_method(monkeypatch):
         protocol="KOMA-CTR-20260914-123456ABCDEF",
         plan="pro",
         billing_cycle="monthly",
-        amount=Decimal("209.00"),
+        amount=Decimal("129.00"),
         payer_email="cliente@example.com",
         back_url="https://homolog.komafood.test/legal/contrato/confirmacao",
     )
@@ -137,7 +137,7 @@ def test_plan_marker_resolves_real_subscription_and_enriches_contract_terms(monk
         "auto_recurring": {
             "frequency": 1,
             "frequency_type": "months",
-            "transaction_amount": 109.0,
+            "transaction_amount": 129.0,
             "currency_id": "BRL",
             "free_trial": {"frequency": 7, "frequency_type": "days"},
         },
@@ -157,7 +157,7 @@ def test_plan_marker_resolves_real_subscription_and_enriches_contract_terms(monk
                     "auto_recurring": {
                         "frequency": 1,
                         "frequency_type": "months",
-                        "transaction_amount": 109.0,
+                        "transaction_amount": 129.0,
                         "currency_id": "BRL",
                     },
                 },

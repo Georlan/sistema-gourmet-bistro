@@ -166,11 +166,28 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     amount = Decimal("100.00")
 
-    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.49")
-    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.69")
-    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.29")
-    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.29")
-    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.49")
+    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.79")
+    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.50")
+    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.20")
+    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.20")
+    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.79")
+
+
+def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: SimpleNamespace(
+            marketplace_rate=Decimal("0.0179")
+        ),
+    )
+
+    restaurant = SimpleNamespace(id=122, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("1.79")
 
 
 def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monkeypatch):
@@ -207,12 +224,35 @@ def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(
         lambda _db, _restaurante_id: None,
     )
 
-    restaurant = SimpleNamespace(id=124, plano="pocket")
+    restaurant = SimpleNamespace(id=124, plano="pocket", billing_mode="legacy")
     assert OnlinePaymentService.marketplace_fee_for_tenant(
         None,
         Decimal("100.00"),
         restaurant,
     ) == Decimal("1.49")
+
+
+def test_subscription_tenant_without_acceptance_fails_closed_instead_of_using_legacy_rate(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: None,
+    )
+
+    restaurant = SimpleNamespace(
+        id=127,
+        plano="pocket",
+        billing_mode="subscription",
+    )
+    with pytest.raises(
+        OnlinePaymentConfigurationError,
+        match="sem aceite comercial",
+    ):
+        OnlinePaymentService.marketplace_fee_for_tenant(
+            None,
+            Decimal("100.00"),
+            restaurant,
+        )
 
 
 def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
@@ -547,7 +587,14 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
     db = SessionLocal()
     try:
         monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-        db.add(Restaurante(id=rid, nome="Webhook Integration Test", plano="premium"))
+        db.add(
+            Restaurante(
+                id=rid,
+                nome="Webhook Integration Test",
+                plano="premium",
+                billing_mode="legacy",
+            )
+        )
         db.flush()
         db.add(Usuario(
             id="webhook-test-user-9919",
@@ -761,7 +808,14 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
     db = SessionLocal()
     try:
         monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-        db.add(Restaurante(id=rid, nome="Webhook Divergence Test", plano="premium"))
+        db.add(
+            Restaurante(
+                id=rid,
+                nome="Webhook Divergence Test",
+                plano="premium",
+                billing_mode="legacy",
+            )
+        )
         db.flush()
         db.add(Usuario(
             id="webhook-user-9920",

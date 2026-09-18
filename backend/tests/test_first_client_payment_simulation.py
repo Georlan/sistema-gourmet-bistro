@@ -110,7 +110,14 @@ def _seed_online_order(db, restaurante_id: int):
     product_id = f"first-client-product-{restaurante_id}"
     account_id = f"first-client-account-{restaurante_id}"
 
-    db.add(Restaurante(id=restaurante_id, nome="First Client Payment Simulation", plano="pro"))
+    db.add(
+        Restaurante(
+            id=restaurante_id,
+            nome="First Client Payment Simulation",
+            plano="pro",
+            billing_mode="legacy",
+        )
+    )
     db.flush()
     db.add(
         Usuario(

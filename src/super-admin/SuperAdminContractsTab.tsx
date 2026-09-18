@@ -17,7 +17,7 @@ export interface ContractInboxItem {
   acceptanceId: string;
   protocol: string;
   status: ContractInboxStatus;
-  billingStatus?: "pending" | "ready" | "failed" | "canceled";
+  billingStatus?: "pending" | "ready" | "failed" | "canceled" | "not_required";
   billingProvider?: string | null;
   paymentMethodType?: string | null;
   billingEnforcementEnabled?: boolean;
@@ -98,6 +98,32 @@ function whatsappHref(phone: string): string | null {
   if (!digits) return null;
   const normalized = digits.startsWith("55") ? digits : `55${digits}`;
   return `https://wa.me/${normalized}`;
+}
+
+function billingStatusLabel(status?: ContractInboxItem["billingStatus"]): string {
+  if (status === "ready") return "Billing pronto";
+  if (status === "not_required") return "Billing não requerido";
+  if (status === "failed") return "Falha no billing";
+  if (status === "canceled") return "Billing cancelado";
+  return "Aguardando pagamento";
+}
+
+function billingStatusDetail(status?: ContractInboxItem["billingStatus"]): string {
+  if (status === "ready") return "Confirmado (pronto para ativação)";
+  if (status === "not_required") return "Não aplicável (sem mensalidade fixa)";
+  if (status === "failed") return "Falhou (requer correção)";
+  if (status === "canceled") return "Cancelado";
+  return "Pendente (aguardando forma de pagamento)";
+}
+
+function billingStatusTone(status?: ContractInboxItem["billingStatus"]): string {
+  if (status === "ready" || status === "not_required") {
+    return "border-emerald-700/60 bg-emerald-950/40 text-emerald-300";
+  }
+  if (status === "failed") {
+    return "border-rose-700/60 bg-rose-950/40 text-rose-300";
+  }
+  return "border-amber-700/60 bg-amber-950/40 text-amber-300";
 }
 
 export function SuperAdminContractsTab({
@@ -287,8 +313,8 @@ export function SuperAdminContractsTab({
                         {item.status === "SIGNED_PENDING_ACTIVATION" ? "Pendente" : "Vinculada"}
                       </span>
                       {item.status === "SIGNED_PENDING_ACTIVATION" && (
-                        <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide border ${item.billingStatus === "ready" ? "border-emerald-700/60 bg-emerald-950/40 text-emerald-300" : "border-amber-700/60 bg-amber-950/40 text-amber-300"}`}>
-                          {item.billingStatus === "ready" ? "Billing pronto" : "Aguardando pagamento"}
+                        <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide border ${billingStatusTone(item.billingStatus)}`}>
+                          {billingStatusLabel(item.billingStatus)}
                         </span>
                       )}
                     </div>
@@ -380,8 +406,8 @@ export function SuperAdminContractsTab({
 
               <div className="mt-4 flex flex-wrap items-center gap-3 border-b border-zinc-800 pb-4 text-xs">
                 <span className="text-[10px] font-black uppercase tracking-wider text-koma-muted">Status do billing:</span>
-                <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide border ${selected.billingStatus === "ready" ? "border-emerald-700/60 bg-emerald-950/40 text-emerald-300" : "border-amber-700/60 bg-amber-950/40 text-amber-300"}`}>
-                  {selected.billingStatus === "ready" ? "Confirmado (Pronto para ativação)" : "Pendente (Aguardando forma de pagamento)"}
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide border ${billingStatusTone(selected.billingStatus)}`}>
+                  {billingStatusDetail(selected.billingStatus)}
                 </span>
                 {selected.paymentMethodType && (
                   <span className="text-[10px] text-koma-secondary">
@@ -403,11 +429,23 @@ export function SuperAdminContractsTab({
                 </div>
               </div>
 
-              <div className={`mt-5 rounded-lg border p-3 text-xs ${selected.status === "SIGNED_PENDING_ACTIVATION" ? (selected.billingStatus === "ready" ? "border-emerald-900/50 bg-emerald-950/20 text-emerald-200" : "border-amber-900/50 bg-amber-950/20 text-amber-200") : "border-emerald-900/50 bg-emerald-950/20 text-emerald-200"}`}>
+              <div className={`mt-5 rounded-lg border p-3 text-xs ${
+                selected.status !== "SIGNED_PENDING_ACTIVATION" ||
+                selected.billingStatus === "ready" ||
+                selected.billingStatus === "not_required"
+                  ? "border-emerald-900/50 bg-emerald-950/20 text-emerald-200"
+                  : selected.billingStatus === "failed"
+                    ? "border-rose-900/50 bg-rose-950/20 text-rose-200"
+                    : "border-amber-900/50 bg-amber-950/20 text-amber-200"
+              }`}>
                 {selected.status === "SIGNED_PENDING_ACTIVATION"
-                  ? selected.billingStatus === "ready"
-                    ? "Aceite registrado e forma de pagamento pronta. Pronto para provisionamento atômico sem expor credenciais."
-                    : "Aceite registrado, aguardando forma de pagamento. A ativação cria tenant, administrador pendente, trial e vínculo contratual sem expor credenciais assim que o billing estiver pronto."
+                  ? selected.billingStatus === "not_required"
+                    ? "Aceite registrado sem componente fixo. Pronto para provisionamento; nenhuma recorrência de R$ 0 é necessária."
+                    : selected.billingStatus === "ready"
+                      ? "Aceite registrado e forma de pagamento pronta. Pronto para provisionamento atômico sem expor credenciais."
+                      : selected.billingStatus === "failed"
+                        ? "Aceite registrado, mas o billing falhou. Corrija o estado financeiro antes de ativar o restaurante."
+                        : "Aceite registrado, aguardando forma de pagamento. A ativação só prossegue quando o billing obrigatório estiver pronto."
                   : `Aceite vinculado ao restaurante #${selected.linkedRestaurantId ?? "—"} em ${formatDate(selected.linkedAt)}.`}
               </div>
             </article>

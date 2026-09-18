@@ -16,12 +16,18 @@ from ..database import get_db, tenant_session_scope
 from ..models import Restaurante
 from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
-from ..services.billing_service import contract_billing_terms, get_billing_setup, upsert_billing_setup
+from ..services.billing_service import (
+    contract_billing_terms,
+    contract_fixed_billing_required,
+    get_billing_setup,
+    tenant_commercial_terms,
+    upsert_billing_setup,
+)
 from ..services.restaurant_provisioning import provision_restaurant_for_contract, resolve_activation_acceptance
 from ..services.saas_billing_policy import SAAS_TRIAL_DAYS
 from ..services.saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 from ..services.signup_notifications import enqueue_release_required
-from ..subscription import subscription_annual_total, subscription_monthly_price
+from ..subscription import legacy_v25_annual_total, legacy_v25_monthly_price
 
 
 contract_router = APIRouter(prefix="/api/contracts", tags=["SaaS Pix"])
@@ -118,6 +124,11 @@ def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
     if acceptance is None:
         raise HTTPException(404, "Aceite contratual não encontrado para este protocolo.")
+    if not contract_fixed_billing_required(db, normalized_protocol):
+        raise HTTPException(
+            409,
+            "Este contrato não possui mensalidade fixa. Use a ativação gratuita; nenhum Pix de assinatura é necessário.",
+        )
 
     existing_tenant_id = acceptance.get("linked_restaurante_id")
     if existing_tenant_id is not None:
@@ -204,13 +215,32 @@ def _administrator(user=Depends(get_current_user)):
 
 
 def _subscription_amount(db: Session, subscription: SaaSSubscription, restaurante_id: int) -> Decimal:
+    """Resolve valor do Pix SaaS pelo contrato do tenant, nunca pelo catálogo atual."""
     restaurant = db.query(Restaurante).filter(Restaurante.id == restaurante_id).one_or_none()
     if restaurant is None:
         raise HTTPException(404, "Restaurante não encontrado.")
+
+    try:
+        terms = tenant_commercial_terms(db, restaurante_id)
+    except RuntimeError as exc:
+        raise HTTPException(
+            409,
+            "Os termos comerciais contratados estão indisponíveis para gerar a cobrança.",
+        ) from exc
+    if terms is not None:
+        return terms.billing_amount.quantize(_MONEY_QUANTUM)
+
+    if str(getattr(restaurant, "billing_mode", "") or "").strip().lower() != "legacy":
+        raise HTTPException(
+            409,
+            "Tenant de assinatura sem aceite comercial vinculado; "
+            "a cobrança não pode usar preço legado.",
+        )
+
     cycle = str(subscription.billing_cycle or "monthly").strip().lower()
     if cycle in {"annual", "anual"}:
-        return subscription_annual_total(restaurant.plano)
-    return subscription_monthly_price(restaurant.plano)
+        return legacy_v25_annual_total(restaurant.plano)
+    return legacy_v25_monthly_price(restaurant.plano)
 
 
 def _pix_reference(restaurante_id: int, due_at: dt.datetime) -> str:
