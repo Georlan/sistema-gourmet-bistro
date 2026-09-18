@@ -56,7 +56,7 @@ export default function DeliveryAddressFields({
 
       <div className="grid grid-cols-[minmax(0,1fr)_88px] gap-2">
         <label>
-          <span className={labelClass}>CEP</span>
+          <span className={labelClass}>CEP <span className="font-normal opacity-70">(opcional)</span></span>
           <input
             id={`${idPrefix}-cep`}
             inputMode="numeric"
@@ -69,7 +69,6 @@ export default function DeliveryAddressFields({
               event.target.value.replace(/\D/g, '').slice(0, 8),
             ))}
             className={inputClass}
-            required
           />
         </label>
         <label>
