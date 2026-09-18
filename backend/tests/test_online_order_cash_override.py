@@ -36,10 +36,10 @@ def test_fora_do_horario_com_caixa_fechado_continua_bloqueado():
 
     assert policy.accepting_orders is False
     assert policy.source == "schedule"
-    assert policy.reason == "O restaurante está fora do horário de pedidos online."
+    assert policy.reason == "O estabelecimento está fechado neste horário."
 
 
-def test_fora_do_horario_com_caixa_aberto_aceita_pedido():
+def test_fora_do_horario_com_caixa_aberto_continua_fechado():
     policy = evaluate_online_order_policy(
         _restaurant(),
         _config(),
@@ -47,8 +47,8 @@ def test_fora_do_horario_com_caixa_aberto_aceita_pedido():
         cash_open=True,
     )
 
-    assert policy.accepting_orders is True
-    assert policy.source == "cash_open"
+    assert policy.accepting_orders is False
+    assert policy.source == "schedule"
 
 
 def test_forcado_fechado_tem_precedencia_sobre_caixa_aberto():
@@ -83,7 +83,7 @@ def test_dentro_do_horario_aceita_mesmo_sem_caixa_aberto():
     )
 
     assert policy.accepting_orders is True
-    assert policy.source == "automatic"
+    assert policy.source == "schedule"
 
 
 def test_caixa_aberto_nao_reativa_delivery_desligado():
@@ -152,8 +152,8 @@ def test_restaurante_anexado_a_sessao_detecta_turno_de_caixa_aberto():
             modalidade="retirada",
         )
 
-        assert policy.accepting_orders is True
-        assert policy.source == "cash_open"
+        assert policy.accepting_orders is False
+        assert policy.source == "schedule"
     finally:
         db.rollback()
         db.query(CaixaTurno).filter(
@@ -162,3 +162,15 @@ def test_restaurante_anexado_a_sessao_detecta_turno_de_caixa_aberto():
         db.commit()
         current_restaurante_id.reset(tenant)
         db.close()
+
+
+def test_caixa_aberto_preserva_compatibilidade_quando_nao_ha_agenda_interpretavel():
+    policy = evaluate_online_order_policy(
+        _restaurant(schedule=[]),
+        _config(),
+        modalidade="retirada",
+        cash_open=True,
+    )
+
+    assert policy.accepting_orders is True
+    assert policy.source == "cash_open"
