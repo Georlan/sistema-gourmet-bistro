@@ -19,10 +19,11 @@ from app.crypt import decrypt_field, encrypt_field
 from app.database import current_restaurante_id, get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import Restaurante, SuperAdminAuditLog
-from app.routes import contracts, subscription_account, super_admin_contracts
+from app.routes import contracts, saas_billing, subscription_account, super_admin_contracts
 from app.saas_billing_models import SaaSPlanChange, SaaSSubscription
 from app.services.billing_service import tenant_commercial_terms
 from app.services.online_payments.service import OnlinePaymentService
+from app.services.restaurant_provisioning import resolve_activation_acceptance
 from app.services.saas_mercadopago import default_saas_mp_service
 from app.signup_models import SignupBase
 
@@ -88,6 +89,7 @@ def plan_change_env(monkeypatch):
 
     app = FastAPI()
     app.include_router(contracts.router)
+    app.include_router(saas_billing.router)
     app.include_router(subscription_account.router)
     app.include_router(super_admin_contracts.router, prefix="/api/super-admin")
 
@@ -530,6 +532,76 @@ def test_fee_flag_false_still_forces_zero_after_plan_change(plan_change_env, mon
 
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
     assert _fee(Session) == Decimal("0.00")
+
+
+def test_plan_change_acceptance_cannot_enter_initial_billing_checkout(
+    plan_change_env,
+    monkeypatch,
+):
+    client, Session = plan_change_env
+    _seed_legacy_pro(client, Session)
+
+    accepted = client.post(
+        "/api/subscription/plan-change/accept",
+        json=_payload("premium"),
+    )
+    assert accepted.status_code == 201, accepted.text
+    protocol = accepted.json()["protocol"]
+
+    db = Session()
+    try:
+        resolved = resolve_activation_acceptance(db, protocol)
+        assert resolved is not None
+        assert resolved["plan_change_restaurante_id"] == TENANT_ID
+    finally:
+        db.close()
+
+    monkeypatch.setattr(
+        saas_billing.default_saas_mp_service,
+        "checkout_capabilities",
+        lambda: {"credit_card": True},
+    )
+    setup = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json={
+            "payment_method_type": "credit_card",
+            "card_token_id": "must-not-reach-provider",
+            "payer_email": "admin-migracao@koma.test",
+        },
+    )
+    assert setup.status_code == 409
+    assert "mudança de plano" in setup.text
+
+    db = Session()
+    try:
+        assert saas_billing.get_billing_setup(db, protocol) is None
+    finally:
+        db.close()
+
+
+def test_plan_change_to_pocket_cannot_use_initial_free_activation(plan_change_env):
+    client, Session = plan_change_env
+    _seed_legacy_pro(client, Session)
+
+    accepted = client.post(
+        "/api/subscription/plan-change/accept",
+        json=_payload("pocket"),
+    )
+    assert accepted.status_code == 201, accepted.text
+    protocol = accepted.json()["protocol"]
+
+    activation = client.post(
+        f"/api/contracts/{protocol}/billing/activate-free",
+    )
+    assert activation.status_code == 409
+    assert "mudança de plano" in activation.text
+
+    db = Session()
+    try:
+        restaurants = db.query(Restaurante).all()
+        assert [row.id for row in restaurants] == [TENANT_ID]
+    finally:
+        db.close()
 
 
 def test_superadmin_cannot_replace_existing_contract_authority_by_manual_link(plan_change_env):
