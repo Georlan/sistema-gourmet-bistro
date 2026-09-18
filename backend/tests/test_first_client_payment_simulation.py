@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 from decimal import Decimal
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -286,6 +287,15 @@ def test_first_client_split_payment_and_full_refund_simulation(monkeypatch):
         user_id, account, shift, comanda, intent = _seed_online_order(db, restaurante_id)
         assert Decimal(str(intent.marketplace_fee)) == EXPECTED_PRO_FEE
         assert comanda.online_payment_status == "pending"
+
+        # A intenção congela a fee. Mesmo que os termos comerciais resolvidos para
+        # pagamentos futuros mudem depois, este Pix continua enviando a fee original.
+        monkeypatch.setattr(
+            "app.services.online_payments.service.tenant_commercial_terms",
+            lambda _db, _restaurante_id: SimpleNamespace(
+                marketplace_rate=Decimal("0.50")
+            ),
+        )
 
         created = OnlinePaymentService.ensure_pix_created(
             db,
