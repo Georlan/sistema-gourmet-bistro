@@ -27,6 +27,7 @@ type DeliveryConfig = {
   taxa_entrega_fixa: number;
   tabela_taxas_bairros: BairroTaxaRow[];
   tabela_taxas_km: DistanceFeeRow[];
+  delivery_origin_configured: boolean;
 };
 
 interface Props {
@@ -94,6 +95,7 @@ function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
     tabela_taxas_km: mode === 'distancia' && distanceRows.length === 0
       ? [suggestedDistanceConfig(fixedFee)]
       : distanceRows,
+    delivery_origin_configured: data.delivery_origin_configured === true,
   };
 }
 
@@ -138,10 +140,12 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
     taxa_entrega_fixa: 0,
     tabela_taxas_bairros: [],
     tabela_taxas_km: [],
+    delivery_origin_configured: false,
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingOrigin, setIsSavingOrigin] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadConfig = useCallback(async () => {
@@ -208,6 +212,41 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
       ...current,
       tabela_taxas_km: [{ ...(current.tabela_taxas_km[0] || suggestedDistanceConfig(current.taxa_entrega_fixa)), ...patch }],
     }));
+  };
+
+  const saveRestaurantOrigin = () => {
+    if (!navigator.geolocation) {
+      setFeedback({ type: 'error', text: 'Este navegador não oferece acesso à localização.' });
+      return;
+    }
+    setIsSavingOrigin(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const response = await fetch(`${apiBaseUrl}/caixa/configuracoes/delivery-origin`, {
+            method: 'PUT',
+            headers: { ...authHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar a localização do restaurante.');
+          setConfig((current) => ({ ...current, delivery_origin_configured: true }));
+          setFeedback({ type: 'success', text: 'Localização do restaurante definida para o cálculo de distância.' });
+        } catch (error) {
+          setFeedback({ type: 'error', text: error instanceof Error ? error.message : 'Falha ao salvar a localização do restaurante.' });
+        } finally {
+          setIsSavingOrigin(false);
+        }
+      },
+      () => {
+        setIsSavingOrigin(false);
+        setFeedback({ type: 'error', text: 'Localização não autorizada. Faça isso em um dispositivo que esteja no restaurante.' });
+      },
+      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 120_000 },
+    );
   };
 
   const save = async () => {
@@ -438,6 +477,37 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               >
                 Gerar sugestão
               </button>
+            </div>
+
+            <div className={clsx(
+              'rounded-xl border p-4',
+              config.delivery_origin_configured
+                ? 'border-emerald-500/20 bg-emerald-500/5'
+                : 'border-amber-500/25 bg-amber-500/5',
+            )}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-xs font-black text-koma-foreground">Ponto de partida das entregas</h4>
+                  <p className="mt-1 max-w-2xl text-[9px] leading-relaxed text-koma-muted">
+                    {config.delivery_origin_configured
+                      ? 'Localização do restaurante já definida. Atualize apenas se o ponto de saída das entregas mudar.'
+                      : 'Defina uma vez estando fisicamente no restaurante. Sem isso, o KÔMA usa apenas a taxa mínima.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveRestaurantOrigin}
+                  disabled={isSavingOrigin}
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/35 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isSavingOrigin ? <Loader2 size={13} className="animate-spin" /> : <MapPin size={13} />}
+                  {isSavingOrigin
+                    ? 'Salvando…'
+                    : config.delivery_origin_configured
+                      ? 'Atualizar localização'
+                      : 'Usar localização deste dispositivo'}
+                </button>
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
