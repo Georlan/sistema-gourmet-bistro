@@ -435,6 +435,9 @@ export const ContractDocumentsPanel: React.FC = () => {
               <p className="mt-1 text-xs text-koma-subtle">
                 Segunda via preservada do aceite eletrônico. Ela não é regenerada a partir dos termos atuais.
               </p>
+              <p className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                <ShieldCheck size={11} /> Integridade dos snapshots validada contra os hashes do aceite.
+              </p>
               <p className="mt-2 font-mono text-xs font-bold text-emerald-700 dark:text-emerald-400">{receipt.protocol}</p>
             </div>
           </div>
