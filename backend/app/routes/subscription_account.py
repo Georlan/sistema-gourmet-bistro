@@ -1,15 +1,17 @@
 """Self-service subscription management, including the free-trial window."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..database import get_db
 from ..models import SuperAdminAuditLog
-from ..saas_billing_models import SaaSSubscription
+from ..saas_billing_models import SaaSPlanChange, SaaSSubscription
 from ..security import get_current_user
 from ..services.saas_billing_policy import (
     is_recurring_trial_payment_method,
     is_trial_eligible_payment_method,
 )
+from ..services.plan_change_service import apply_plan_change, create_plan_change
 from ..services.saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
+from .contracts import ContractAcceptanceRequest
 
 router = APIRouter(prefix='/api/subscription', tags=['Assinatura'])
 
@@ -41,6 +43,67 @@ def current_subscription(user=Depends(administrator), db=Depends(get_db)):
             'canCancel': is_trial_eligible_payment_method(sub.payment_method_type) and normalized_status != 'canceled',
         }
     }
+
+
+@router.get('/plan-change/current')
+def current_plan_change(user=Depends(administrator), db=Depends(get_db)):
+    change = (
+        db.query(SaaSPlanChange)
+        .filter(SaaSPlanChange.restaurante_id == user.restaurante_id)
+        .order_by(SaaSPlanChange.created_at.desc(), SaaSPlanChange.id.desc())
+        .first()
+    )
+    if change is None:
+        return {'planChange': None}
+    return {
+        'planChange': {
+            'id': change.id,
+            'status': change.status,
+            'sourceProtocol': change.source_protocol,
+            'sourcePlan': change.source_plan,
+            'targetPlan': change.target_plan,
+            'billingCycle': change.billing_cycle,
+            'billingAmount': str(change.target_billing_amount),
+            'marketplaceRate': str(change.target_marketplace_rate),
+            'pricingVersion': change.pricing_version,
+            'providerAction': change.provider_action,
+            'billingSetupRequired': change.provider_action == 'billing_setup_required',
+            'lastErrorCode': change.last_error_code,
+            'providerSyncedAt': change.provider_synced_at,
+            'appliedAt': change.applied_at,
+            'createdAt': change.created_at,
+        }
+    }
+
+
+@router.post('/plan-change/accept', status_code=status.HTTP_201_CREATED)
+def accept_plan_change(
+    payload: ContractAcceptanceRequest,
+    request: Request,
+    user=Depends(administrator),
+    db=Depends(get_db),
+):
+    return create_plan_change(
+        db,
+        tenant_id=int(user.restaurante_id),
+        user_id=str(user.id),
+        payload=payload,
+        request=request,
+    )
+
+
+@router.post('/plan-change/{change_id}/apply')
+def apply_accepted_plan_change(
+    change_id: str,
+    user=Depends(administrator),
+    db=Depends(get_db),
+):
+    return apply_plan_change(
+        db,
+        tenant_id=int(user.restaurante_id),
+        user_id=str(user.id),
+        change_id=change_id,
+    )
 
 
 @router.post('/cancel')
