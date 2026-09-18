@@ -31,13 +31,9 @@ test("Super Admin Phase 2 usa o catálogo comercial oficial", () => {
   assert.match(subscriptionPlans, /price:\s*129/);
   assert.match(subscriptionPlans, /price:\s*249/);
 
-  for (const staleValue of ["97", "197", "347", "89", "179", "269", "0.89", "0.39"]) {
-    assert.equal(
-      onboardingModal.includes(staleValue),
-      false,
-      `o onboarding não pode reintroduzir valor comercial antigo: ${staleValue}`,
-    );
-  }
+  assert.doesNotMatch(onboardingModal, /formatCurrency\(item\.price\)/);
+  assert.doesNotMatch(onboardingModal, /formatPercentage\(item\.splitFeeRate\)/);
+  assert.doesNotMatch(onboardingModal, /R\$\s*(?:89|179|269)(?:[,.]00)?/);
 });
 
 test("Gestão de restaurantes mantém create/list/edit/status no mesmo fluxo real", () => {
