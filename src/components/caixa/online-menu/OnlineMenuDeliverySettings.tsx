@@ -106,7 +106,13 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
   const [perKmInput, setPerKmInput] = useState('1');
   const [orderMinimumInput, setOrderMinimumInput] = useState('');
   const [freeShippingInput, setFreeShippingInput] = useState('');
-  const [suggestion, setSuggestion] = useState<DeliverySuggestion | null>(null);
+  const [suggestion, setSuggestion] = useState<DeliverySuggestion>({
+    taxa_minima: DEFAULT_MINIMUM_FEE,
+    valor_por_km: DEFAULT_PER_KM_FEE,
+    source: 'default',
+    sample_size: 0,
+    message: 'Sugestão inicial enquanto ainda não há entregas concluídas suficientes.',
+  });
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -195,7 +201,6 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
   const hasUnsavedChanges = JSON.stringify(payload) !== savedSnapshot;
 
   const useSuggestion = () => {
-    if (!suggestion) return;
     setMinimumInput(moneyInputValue(suggestion.taxa_minima));
     setPerKmInput(moneyInputValue(suggestion.valor_por_km));
     setFeedback({
@@ -399,8 +404,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           </div>
         </div>
 
-        {suggestion && (
-          <div className="mt-3 flex flex-col gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex flex-col gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2.5">
               <Sparkles size={16} className="mt-0.5 shrink-0 text-emerald-500" />
               <div>
@@ -424,7 +428,6 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               Usar sugestão
             </button>
           </div>
-        )}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label>
