@@ -7,8 +7,9 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 test('Pedidos online expõe gestão e histórico de clientes bloqueados sem ficar escondido', () => {
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.match(onlineMenu, /OnlineOrderCustomerBlocks/);
+  assert.match(onlineMenu, /cardapio_bloqueios: 'bloqueios'/);
+  assert.match(onlineMenu, /activeSection === 'bloqueios'/);
   assert.match(onlineMenu, /<OnlineOrderCustomerBlocks apiBaseUrl=\{apiBaseUrl\} authHeaders=\{authHeaders\} \/>/);
-  assert.ok(onlineMenu.indexOf('<OnlineOrderCustomerBlocks') < onlineMenu.indexOf('<details'));
 });
 
 test('gestão de bloqueios usa apenas as rotas autenticadas canônicas', () => {
