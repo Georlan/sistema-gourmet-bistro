@@ -111,7 +111,8 @@ describe('Super Admin Hardening & Integrity', () => {
       'utf-8'
     );
     assert.ok(billing.includes('Catálogo vigente para novas contratações'));
-    assert.ok(billing.includes('não representa os contratos nem a receita recebida'));
+    assert.ok(billing.includes('não é receita recebida'));
+    assert.ok(billing.includes('não representa os contratos dos tenants'));
     assert.ok(overview.includes('Catálogo de split'));
     assert.ok(overview.includes('Oferta vigente para novos aceites'));
     assert.ok(payments.includes('A taxa efetiva de cada restaurante vem do contrato vinculado'));
