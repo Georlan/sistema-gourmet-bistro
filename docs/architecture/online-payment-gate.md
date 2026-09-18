@@ -34,7 +34,7 @@ A ordem de autoridade é:
 
 O resolvedor canônico `tenant_marketplace_rate(...)` deve ser usado por qualquer cálculo financeiro tenant-scoped que dependa da taxa KÔMA, inclusive simuladores de margem/fidelidade. `restaurante.plano` identifica o perfil de recursos/entitlements; ele não é autoridade para preço ou taxa de um tenant contratado. Alterar somente esse campo não pode alterar o split.
 
-Quando existe mais de um aceite histórico vinculado ao mesmo tenant, a autoridade vigente é escolhida deterministicamente por `linked_at DESC, accepted_at DESC, link.id DESC`. Os aceites anteriores permanecem imutáveis e auditáveis.
+Quando existe mais de um aceite histórico vinculado ao mesmo tenant, a autoridade vigente é escolhida deterministicamente. No PostgreSQL, a ordem é `linked_at DESC, accepted_at DESC, link.id DESC`; no fallback SQLite de testes, `linked_at DESC, link.id DESC`. Os aceites anteriores permanecem imutáveis e auditáveis.
 
 A trava `ONLINE_PAYMENT_PLAN_FEES_ENABLED=false` prevalece sobre qualquer taxa contratada e materializa `0.00`. Quando habilitada, a taxa resolvida é calculada e gravada na `OnlinePaymentIntent` no momento da criação do pagamento. O provider usa esse valor materializado; mudanças comerciais posteriores não alteram retroativamente uma intenção já criada.
 
