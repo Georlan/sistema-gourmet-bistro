@@ -310,9 +310,10 @@ export default function CardapioPage() {
         tabelaTaxasKm: Array.isArray(restaurant.tabela_taxas_km)
           ? restaurant.tabela_taxas_km.map((row: any) => ({
               taxa_minima: Number(row.taxa_minima || 0),
-              km_inclusos: Number(row.km_inclusos || 0),
-              incremento_valor: Number(row.incremento_valor || 0),
-              incremento_km: Number(row.incremento_km || 0),
+              valor_por_km: row.valor_por_km == null ? undefined : Number(row.valor_por_km),
+              km_inclusos: row.km_inclusos == null ? undefined : Number(row.km_inclusos),
+              incremento_valor: row.incremento_valor == null ? undefined : Number(row.incremento_valor),
+              incremento_km: row.incremento_km == null ? undefined : Number(row.incremento_km),
               taxa_maxima: row.taxa_maxima == null ? null : Number(row.taxa_maxima),
               distancia_maxima_km: row.distancia_maxima_km == null ? null : Number(row.distancia_maxima_km),
               fallback_sem_localizacao: 'minima' as const,
