@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs';
 const main = readFileSync('src/main.tsx', 'utf8');
 const legacyLegalContent = readFileSync('src/legal/legalContentLegacy.ts', 'utf8');
 const legalV2 = readFileSync('src/legal/legalContentV2.ts', 'utf8');
-const legalContent = readFileSync('src/legal/legalContentRecurring.ts', 'utf8');
+const legalV25 = readFileSync('src/legal/legalContentRecurring.ts', 'utf8');
+const legalContent = readFileSync('src/legal/legalContentV26.ts', 'utf8');
 const legalEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const legalPage = readFileSync('src/legal/LegalPage.tsx', 'utf8');
 const planContract = readFileSync('src/legal/PlanContractPageV2.tsx', 'utf8');
@@ -21,34 +22,35 @@ test('rotas legal e contratação são públicas e isoladas do app operacional',
   assert.match(main, /isPublicCommercialRoute\(\)/);
 });
 
-test('central legal preserva snapshot 2.0 e publica fachada vigente 2.5', () => {
+test('central legal preserva snapshots 2.0 e 2.5 e publica fachada vigente 2.6', () => {
   for (const slug of ['termos','planos','privacidade','dpa','suboperadores','cookies','cardapio-termos','cardapio-privacidade']) {
     assert.match(legalV2, new RegExp(`slug: '${slug}'`));
   }
   assert.match(legalV2, /LEGAL_VERSION = '2\.0'/);
-  assert.match(legalContent, /LEGAL_VERSION = '2\.5'/);
-  assert.match(legalContent, /15\/09\/2026/);
-  assert.match(legalContent, /from '\.\/legalContentV2'/);
-  assert.doesNotMatch(legalContent, /legalContentLegacy/);
+  assert.match(legalV25, /LEGAL_VERSION = '2\.5'/);
+  assert.match(legalV25, /15\/09\/2026/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.6'/);
+  assert.match(legalContent, /18\/09\/2026/);
+  assert.match(legalContent, /from '\.\/legalContentRecurring'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
-  assert.match(legalPage, /legalContentRecurring/);
+  assert.match(legalPage, /legalContentV26/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
-test('Legal 2.5 documenta cartão Pix universal e Saldo Mercado Pago', () => {
+test('Legal 2.6 documenta cobrança fixa, Pocket gratuito e pagamentos separados', () => {
+  assert.match(legalContent, /mensalidade fixa é R\$ 0/);
+  assert.match(legalContent, /sem criar recorrência de valor zero no provedor/);
   assert.match(legalContent, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
-  assert.match(legalContent, /esse meio não representa débito automático nem autorização recorrente/);
-  assert.match(legalContent, /QR Code da mensalidade é gerado quando houver valor efetivamente devido depois do trial/);
-  assert.match(legalContent, /pagável em qualquer banco ou PSP compatível com Pix/);
+  assert.match(legalContent, /conta Mercado Pago conectada pelo próprio estabelecimento/);
   assert.match(legalContent, /três passos essenciais indicados pelo KÔMA/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
 });
 
-test('Legal 2.5 trata 18+ como gate de publicação e não como checkout com autodeclaração', () => {
-  assert.match(legalContent, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
-  assert.match(legalContent, /tag 18\+ ou classificação equivalente/);
-  assert.match(legalContent, /gate de publicação e sincronização/);
-  assert.doesNotMatch(legalContent, /autodeclaração.*suficiente/i);
+test('Legal 2.6 herda a política 18+ da Legal 2.5', () => {
+  assert.match(legalV25, /cardápio e o checkout online não são canais destinados à oferta de bebidas alcoólicas/);
+  assert.match(legalV25, /tag 18\+ ou classificação equivalente/);
+  assert.match(legalV25, /gate de publicação e sincronização/);
+  assert.doesNotMatch(legalV25, /autodeclaração.*suficiente/i);
 });
 
 test('contratação registra clickwrap com identidade, evidência e comprovante', () => {
@@ -82,11 +84,12 @@ test('checkout reconhece cartão Pix universal e Saldo Mercado Pago', () => {
   assert.match(planContract, /QR Code \+ Pix Copia e Cola/);
   assert.match(planContract, /Saldo Mercado Pago/);
   assert.match(planContract, /\/billing\/pix\/select/);
+  assert.match(planContract, /\/billing\/activate-free/);
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 2.5 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentRecurring/);
+test('proveniência jurídica fixa commit e blob da Legal 2.6 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV26/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -109,15 +112,22 @@ test('landing não privilegia Pocket e envia cada plano para sua própria contra
   assert.match(finalCta, /href="\/legal\/privacidade"/);
 });
 
-test('condições comerciais preservam catálogo oficial, anual e política vigente', () => {
-  assert.match(legalV2, /Pocket: R\$ 109 por mês \+ 1,49%/);
-  assert.match(legalV2, /Pro: R\$ 209 por mês \+ 0,69%/);
-  assert.match(legalV2, /Premium: R\$ 309 por mês \+ 0,29%/);
-  assert.match(legalV2, /Pocket R\$ 1\.177,20/);
-  assert.match(legalV2, /Pro R\$ 2\.257,20/);
-  assert.match(legalV2, /Premium R\$ 3\.337,20/);
-  assert.match(legalV2, /desconto de 10%/);
-  assert.doesNotMatch(legalV2, /12 meses \+ 7 dias de bônus/);
+test('condições comerciais 2.6 publicam novo catálogo sem apagar o snapshot 2.5', () => {
+  assert.match(legalContent, /Pocket: R\$ 0 por mês \+ 1,79%/);
+  assert.match(legalContent, /Pro: R\$ 129 por mês \+ 0,50%/);
+  assert.match(legalContent, /Premium: R\$ 249 por mês \+ 0,20%/);
+  assert.match(legalContent, /Pro R\$ 1\.393,20 por ano/);
+  assert.match(legalContent, /R\$ 116,10 por mês/);
+  assert.match(legalContent, /Premium R\$ 2\.689,20 por ano/);
+  assert.match(legalContent, /R\$ 224,10 por mês/);
+  assert.match(legalContent, /10% de desconto exclusivamente ao componente fixo/);
+  assert.match(legalContent, /taxa percentual sobre pagamentos online não recebe desconto anual/);
+  assert.match(legalContent, /não realiza upgrade automático de plano com base em volume de vendas ou GMV/);
+  assert.match(legalContent, /snapshot comercial aceito/);
+
+  assert.match(legalV25, /Pocket: R\$ 109 por mês \+ 1,49%/);
+  assert.match(legalV25, /Pro: R\$ 209 por mês \+ 0,69%/);
+  assert.match(legalV25, /Premium: R\$ 309 por mês \+ 0,29%/);
 });
 
 test('pacote jurídico cobre LGPD, transferências, incidentes e dados sensíveis', () => {
