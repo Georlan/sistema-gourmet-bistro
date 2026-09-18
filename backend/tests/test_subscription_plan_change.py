@@ -24,6 +24,7 @@ from app.saas_billing_models import SaaSPlanChange, SaaSSubscription
 from app.services.billing_service import tenant_commercial_terms
 from app.services.online_payments.service import OnlinePaymentService
 from app.services.saas_mercadopago import default_saas_mp_service
+from app.signup_models import SignupBase
 
 
 TENANT_ID = 7742
@@ -71,6 +72,7 @@ def plan_change_env(monkeypatch):
     Restaurante.__table__.create(engine)
     SuperAdminAuditLog.__table__.create(engine)
     ContractAcceptance.__table__.create(engine)
+    SignupBase.metadata.create_all(engine)
     RestaurantContractAcceptance.__table__.create(engine)
     SaaSSubscription.__table__.create(engine)
     SaaSPlanChange.__table__.create(engine)
