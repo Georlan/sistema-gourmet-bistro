@@ -20,7 +20,8 @@ from ...models import (
     Restaurante,
     RestaurantPaymentAccount,
 )
-from ...subscription import subscription_marketplace_rate
+from ...subscription import legacy_v25_marketplace_rate, subscription_marketplace_rate
+from ..billing_service import tenant_commercial_terms
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
@@ -199,6 +200,28 @@ class OnlinePaymentService:
         return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
 
     @classmethod
+    def marketplace_fee_for_tenant(
+        cls,
+        db: Session,
+        amount: Decimal,
+        restaurant: Restaurante,
+    ) -> Decimal:
+        if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
+            return Decimal("0.00")
+        try:
+            terms = tenant_commercial_terms(db, int(restaurant.id))
+        except RuntimeError as exc:
+            raise OnlinePaymentConfigurationError(
+                "Termos comerciais indisponíveis para calcular a taxa do pagamento."
+            ) from exc
+        rate = (
+            terms.marketplace_rate
+            if terms is not None
+            else legacy_v25_marketplace_rate(restaurant.plano)
+        )
+        return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
+
+    @classmethod
     def create_intent_in_session(
         cls,
         db: Session,
@@ -223,7 +246,7 @@ class OnlinePaymentService:
             method="pix",
             status="created",
             amount=float(normalized_amount),
-            marketplace_fee=float(cls.marketplace_fee(normalized_amount, restaurant.plano)),
+            marketplace_fee=float(cls.marketplace_fee_for_tenant(db, normalized_amount, restaurant)),
             idempotency_key=idempotency_key,
         )
         comanda.online_payment_status = "pending"
