@@ -4,10 +4,11 @@ import test from 'node:test';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('Pedidos & horários expõe gestão operacional de clientes bloqueados', () => {
+test('Pedidos online expõe gestão e histórico de clientes bloqueados sem ficar escondido', () => {
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.match(onlineMenu, /OnlineOrderCustomerBlocks/);
   assert.match(onlineMenu, /<OnlineOrderCustomerBlocks apiBaseUrl=\{apiBaseUrl\} authHeaders=\{authHeaders\} \/>/);
+  assert.ok(onlineMenu.indexOf('<OnlineOrderCustomerBlocks') < onlineMenu.indexOf('<details'));
 });
 
 test('gestão de bloqueios usa apenas as rotas autenticadas canônicas', () => {
@@ -24,5 +25,7 @@ test('liberação exige confirmação e mantém mensagem pública de bloqueio fo
   assert.match(blocks, /window\.confirm/);
   assert.match(blocks, /Desbloquear/);
   assert.match(blocks, /Bloqueio removido pela operação no painel KÔMA/);
+  assert.match(blocks, /Histórico de bloqueios/);
+  assert.match(blocks, /statusLabel/);
   assert.doesNotMatch(blocks, /Não foi possível receber um novo pedido com estes dados neste momento/);
 });
