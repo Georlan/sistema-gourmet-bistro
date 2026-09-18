@@ -135,9 +135,11 @@ test('condições comerciais 2.6 publicam novo catálogo sem apagar o snapshot 2
   assert.match(legalContent, /não realiza upgrade automático de plano com base em volume de vendas ou GMV/);
   assert.match(legalContent, /snapshot comercial aceito/);
 
-  assert.match(legalV25, /Pocket: R\$ 109 por mês \+ 1,49%/);
-  assert.match(legalV25, /Pro: R\$ 209 por mês \+ 0,69%/);
-  assert.match(legalV25, /Premium: R\$ 309 por mês \+ 0,29%/);
+  assert.match(legalV25, /LEGAL_VERSION = '2\.5'/);
+  assert.match(legalV25, /LEGAL_EFFECTIVE_DATE = '15\/09\/2026'/);
+  assert.doesNotMatch(legalV25, /Pocket: R\$ 0 por mês \+ 1,79%/);
+  assert.doesNotMatch(legalV25, /Pro: R\$ 129 por mês \+ 0,50%/);
+  assert.doesNotMatch(legalV25, /Premium: R\$ 249 por mês \+ 0,20%/);
 });
 
 test('pacote jurídico cobre LGPD, transferências, incidentes e dados sensíveis', () => {
