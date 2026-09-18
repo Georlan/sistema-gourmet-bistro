@@ -54,6 +54,15 @@ test("Gestão de restaurantes mantém create/list/edit/status no mesmo fluxo rea
   assert.match(onboardingModal, /Mercado Pago do cardápio: desconectado/);
 });
 
+test("Gestão de restaurantes não oferece mutação direta de plano comercial", () => {
+  assert.doesNotMatch(tenantsTab, /const \[editPlan,/);
+  assert.doesNotMatch(tenantsTab, /plan:\s*editPlan/);
+  assert.doesNotMatch(tenantsTab, /Plano Comercial<\/span><select/);
+  assert.match(tenantsTab, /Mudança de plano não é permitida por esta edição genérica/);
+  assert.match(tenantsTab, /Mensalidade e taxa transacional efetivas não são inferidas pelo slug do plano/);
+  assert.match(tenantsTab, /Consulte o aceite vinculado em <strong>Contratações<\/strong>/);
+});
+
 test("Provisionamento manual é administrativo e não finge contratação comercial", () => {
   assert.match(onboardingModal, /Provisionamento administrativo\/QA/);
   assert.match(onboardingModal, /Não registra ContractAcceptance/);
