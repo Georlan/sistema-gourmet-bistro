@@ -97,6 +97,44 @@ def test_pix_automatic_uses_preapproval_plan_hosted_checkout(monkeypatch):
     assert sent["headers"]["X-Idempotency-Key"]
 
 
+def test_hosted_plan_rejects_provider_amount_different_from_vnext_contract(monkeypatch):
+    service = _production_service(monkeypatch)
+    client = RecordingClient(
+        post_response=FakeResponse(
+            201,
+            {
+                "id": "plan-stale-pro",
+                "status": "active",
+                "init_point": (
+                    "https://www.mercadopago.com.br/subscriptions/checkout"
+                    "?preapproval_plan_id=plan-stale-pro"
+                ),
+                "auto_recurring": {
+                    "frequency": 1,
+                    "frequency_type": "months",
+                    "transaction_amount": 209.0,
+                    "currency_id": "BRL",
+                    "free_trial": {"frequency": 7, "frequency_type": "days"},
+                },
+            },
+        )
+    )
+    monkeypatch.setattr(service, "_client", lambda: client)
+
+    with pytest.raises(
+        SaasMercadoPagoError,
+        match="valor diferente do contrato",
+    ):
+        service.create_account_money_preapproval(
+            protocol="KOMA-CTR-20260918-STALE209ABCD",
+            plan="pro",
+            billing_cycle="monthly",
+            amount=Decimal("129.00"),
+            payer_email="cliente@example.com",
+            back_url="https://homolog.komafood.test/legal/contrato/confirmacao",
+        )
+
+
 def test_account_money_uses_dedicated_allowed_payment_method(monkeypatch):
     service = _production_service(monkeypatch)
     client = RecordingClient(
