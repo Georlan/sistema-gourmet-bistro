@@ -81,8 +81,33 @@ type ContractReceipt = {
   };
 };
 
+type AcceptedLegalSection = {
+  title: string;
+  paragraphs?: string[];
+  bullets?: string[];
+};
+
+type AcceptedLegalDocument = {
+  slug: string;
+  title: string;
+  shortTitle?: string;
+  summary?: string;
+  audience?: string;
+  version: string;
+  effectiveDate?: string;
+  sections: AcceptedLegalSection[];
+};
+
+type AcceptedDocuments = {
+  terms: AcceptedLegalDocument;
+  commercial: AcceptedLegalDocument;
+  dpa: AcceptedLegalDocument;
+  privacy: AcceptedLegalDocument;
+};
+
 type CurrentContractResponse = {
   receipt: ContractReceipt;
+  acceptedDocuments?: AcceptedDocuments;
   tenantId: number | string;
 };
 
@@ -135,6 +160,20 @@ const escapeHtml = (value: unknown) => String(value ?? '')
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;')
   .replaceAll("'", '&#039;');
+
+const acceptedDocumentHtml = (document: AcceptedLegalDocument | undefined) => {
+  if (!document) return '<p class="muted">Snapshot textual indisponível nesta resposta.</p>';
+  const sections = (document.sections || []).map(section => {
+    const paragraphs = (section.paragraphs || [])
+      .map(paragraph => `<p>${escapeHtml(paragraph)}</p>`)
+      .join('');
+    const bullets = section.bullets?.length
+      ? `<ul>${section.bullets.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+      : '';
+    return `<section><h3>${escapeHtml(section.title)}</h3>${paragraphs}${bullets}</section>`;
+  }).join('');
+  return `<article><h2>${escapeHtml(document.title)}</h2><p class="muted">Legal v${escapeHtml(document.version)}${document.effectiveDate ? ` · vigência ${escapeHtml(document.effectiveDate)}` : ''}</p>${sections}</article>`;
+};
 
 const getPlanLabel = (plan: string) => {
   if (plan === 'pocket' || plan === 'pro' || plan === 'premium') {
@@ -227,6 +266,9 @@ export const ContractDocumentsPanel: React.FC = () => {
       const item = receipt.documents[key];
       return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(receipt.documents.version)}</td><td class="mono">${escapeHtml(item.hash)}</td></tr>`;
     }).join('');
+    const acceptedDocumentsHtml = legalDocuments.map(({ key }) =>
+      acceptedDocumentHtml(data?.acceptedDocuments?.[key]),
+    ).join('');
 
     const html = `<!doctype html>
 <html lang="pt-BR">
@@ -238,7 +280,9 @@ export const ContractDocumentsPanel: React.FC = () => {
   body { font-family: Arial, Helvetica, sans-serif; color: #171717; margin: 0; padding: 36px; font-size: 12px; line-height: 1.45; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   h2 { font-size: 14px; margin: 24px 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+  h3 { font-size: 12px; margin: 16px 0 6px; }
   p { margin: 4px 0; }
+  ul { margin: 6px 0 10px 20px; padding: 0; }
   .muted { color: #666; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; }
   .label { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
@@ -289,6 +333,9 @@ export const ContractDocumentsPanel: React.FC = () => {
     <thead><tr><th>Documento</th><th>Versão</th><th>SHA-256</th></tr></thead>
     <tbody>${documentRows}</tbody>
   </table>
+
+  <h2>Conteúdo jurídico congelado no aceite</h2>
+  ${acceptedDocumentsHtml}
 
   <h2>Evidências técnicas</h2>
   <p>Request ID: <span class="mono">${escapeHtml(receipt.evidence.requestId)}</span></p>
@@ -497,23 +544,56 @@ export const ContractDocumentsPanel: React.FC = () => {
 
         <div className="mt-4 divide-y divide-koma-border overflow-hidden rounded-2xl border border-koma-border">
           {legalDocuments.map(({ key, label, href }) => {
-            const document = receipt.documents[key];
+            const documentRef = receipt.documents[key];
+            const acceptedDocument = data?.acceptedDocuments?.[key];
             return (
-              <div key={key} className="flex flex-col gap-2 bg-koma-raised/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
+              <details key={key} className="bg-koma-raised/40 p-3">
+                <summary className="cursor-pointer list-none">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-koma-foreground">{label}</span>
+                      <p className="mt-1 break-all font-mono text-[9px] text-koma-muted" title={documentRef.hash}>{compactHash(documentRef.hash)}</p>
+                    </div>
+                    <span className="shrink-0 rounded-lg border border-koma-border px-2 py-1 text-[9px] font-bold text-koma-subtle">snapshot v{receipt.documents.version}</span>
+                  </div>
+                </summary>
+                <div className="mt-3 border-t border-koma-border pt-3">
+                  {acceptedDocument ? (
+                    <div className="space-y-4 text-xs text-koma-subtle">
+                      <div>
+                        <p className="font-bold text-koma-foreground">{acceptedDocument.title}</p>
+                        {acceptedDocument.effectiveDate && <p className="mt-1 text-[10px] text-koma-muted">Vigência registrada: {acceptedDocument.effectiveDate}</p>}
+                      </div>
+                      {acceptedDocument.sections.map((section, sectionIndex) => (
+                        <section key={`${key}-${sectionIndex}`} className="space-y-2">
+                          <h5 className="font-bold text-koma-foreground">{section.title}</h5>
+                          {section.paragraphs?.map((paragraph, paragraphIndex) => (
+                            <p key={`p-${paragraphIndex}`} className="leading-5">{paragraph}</p>
+                          ))}
+                          {section.bullets?.length ? (
+                            <ul className="list-disc space-y-1 pl-5">
+                              {section.bullets.map((bullet, bulletIndex) => <li key={`b-${bulletIndex}`}>{bullet}</li>)}
+                            </ul>
+                          ) : null}
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      O hash histórico está preservado, mas o backend desta resposta ainda não forneceu o snapshot textual. Atualize novamente após a publicação do backend.
+                    </p>
+                  )}
                   <a
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-koma-foreground hover:text-emerald-700 dark:hover:text-emerald-400"
+                    className="mt-4 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400"
                   >
-                    {label}
+                    Ver versão pública atual
                     <ExternalLink size={11} />
                   </a>
-                  <p className="mt-1 break-all font-mono text-[9px] text-koma-muted" title={document.hash}>{compactHash(document.hash)}</p>
                 </div>
-                <span className="shrink-0 rounded-lg border border-koma-border px-2 py-1 text-[9px] font-bold text-koma-subtle">v{receipt.documents.version}</span>
-              </div>
+              </details>
             );
           })}
         </div>
