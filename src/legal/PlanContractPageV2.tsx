@@ -651,7 +651,7 @@ export default function PlanContractPageV2() {
                   return (
                     <button key={candidate.id} type="button" role="radio" aria-checked={selected} className={`koma-sub-plan-card ${selected ? 'is-selected' : ''}`} onClick={() => setSelectedPlanId(candidate.id)}>
                       <div className="koma-sub-plan-top"><span>{candidate.name.replace('Kôma ', '')}</span>{candidate.recommended && <em>Recomendado</em>}</div>
-                      <strong>{formatCurrency(displayedPrice)}<small>/mês{billingCycle === 'anual' ? ' equiv.' : ''}</small></strong>
+                      <strong>{formatCurrency(displayedPrice)}<small>/mês{billingCycle === 'anual' && candidate.id !== 'pocket' ? ' equiv.' : ''}</small></strong>
                       <p>{candidate.tagline}</p><span className="koma-sub-fee">{formatPercentage(candidate.splitFeeRate)} por pedido online pago</span>
                       <ul>{candidate.features.slice(0, 3).map(feature => <li key={feature}><Check size={14} /> {feature}</li>)}</ul>
                     </button>
