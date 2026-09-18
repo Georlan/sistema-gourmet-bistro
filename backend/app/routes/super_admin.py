@@ -506,6 +506,16 @@ def update_tenant(
                     detail="Restaurante não encontrado.",
                 )
 
+            if plan_norm is not None and (restaurante.plano or "").strip().lower() != plan_norm:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Mudança de plano exige o fluxo canônico de assinatura para sincronizar "
+                        "contrato, billing, provedor, taxa transacional e entitlements. "
+                        "A edição administrativa direta foi bloqueada para evitar estado financeiro inconsistente."
+                    ),
+                )
+
             before_data: dict[str, Any] = {}
             after_data: dict[str, Any] = {}
 
@@ -518,11 +528,6 @@ def update_tenant(
                 before_data["slug"] = restaurante.slug
                 after_data["slug"] = slug_norm
                 restaurante.slug = slug_norm
-
-            if plan_norm is not None and (restaurante.plano or "").lower() != plan_norm:
-                before_data["plano"] = restaurante.plano
-                after_data["plano"] = plan_norm
-                restaurante.plano = plan_norm
 
             if after_data:
                 audit = SuperAdminAuditLog(
