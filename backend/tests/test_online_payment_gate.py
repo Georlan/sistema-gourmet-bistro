@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import time
 from decimal import Decimal
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -34,6 +35,7 @@ from app.services.online_payments.base import ProviderPayment
 from app.services.online_payments.mercado_pago import MercadoPagoError, MercadoPagoProvider
 from app.services.online_payments.service import OnlinePaymentService
 from app.services.online_payments.signature import verify_mercado_pago_signature
+from app.subscription import SUBSCRIPTION_MARKETPLACE_RATES
 
 
 RESTAURANT_ID = 9917
@@ -166,6 +168,90 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
     assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.29")
     assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.29")
     assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.49")
+
+
+def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setitem(
+        SUBSCRIPTION_MARKETPLACE_RATES,
+        "pocket",
+        Decimal("0.0179"),
+    )
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: SimpleNamespace(
+            marketplace_rate=Decimal("0.0149")
+        ),
+    )
+
+    restaurant = SimpleNamespace(id=123, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("1.49")
+
+
+def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setitem(
+        SUBSCRIPTION_MARKETPLACE_RATES,
+        "pocket",
+        Decimal("0.0179"),
+    )
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: None,
+    )
+
+    restaurant = SimpleNamespace(id=124, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("1.49")
+
+
+def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
+
+    def _unexpected_lookup(_db, _restaurante_id):
+        raise AssertionError("contract terms must not be read while fees are disabled")
+
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        _unexpected_lookup,
+    )
+
+    restaurant = SimpleNamespace(id=125, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("0.00")
+
+
+def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+
+    def _broken_contract(_db, _restaurante_id):
+        raise RuntimeError("invalid signed receipt")
+
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        _broken_contract,
+    )
+
+    restaurant = SimpleNamespace(id=126, plano="pocket")
+    with pytest.raises(
+        Exception,
+        match="Termos comerciais indisponíveis",
+    ):
+        OnlinePaymentService.marketplace_fee_for_tenant(
+            None,
+            Decimal("100.00"),
+            restaurant,
+        )
 
 
 def test_online_order_is_published_and_settled_only_after_provider_approval(monkeypatch):
