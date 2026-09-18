@@ -451,7 +451,11 @@ export const ContractDocumentsPanel: React.FC = () => {
             </div>
             <div>
               <dt className="text-[9px] font-bold uppercase tracking-wider text-koma-muted">Trial</dt>
-              <dd className="mt-1 font-bold text-koma-foreground">{receipt.commercial.trialDays} dias · mensalidade fixa</dd>
+              <dd className="mt-1 font-bold text-koma-foreground">
+                {receipt.commercial.trialDays > 0
+                  ? `${receipt.commercial.trialDays} dias · somente componente fixo`
+                  : 'Não aplicável ao componente fixo'}
+              </dd>
             </div>
           </dl>
         </section>
