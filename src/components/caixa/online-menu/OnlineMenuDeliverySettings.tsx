@@ -8,7 +8,16 @@ type BairroTaxaRow = {
   taxa: number;
 };
 
-type DeliveryFeeMode = 'fixa' | 'bairro';
+type DistanceFeeRow = {
+  taxa_minima: number;
+  km_inclusos: number;
+  incremento_valor: number;
+  incremento_km: number;
+  taxa_maxima: number;
+  distancia_maxima_km: number;
+};
+
+type DeliveryFeeMode = 'fixa' | 'bairro' | 'distancia';
 
 type DeliveryConfig = {
   delivery_ativo: boolean;
@@ -17,6 +26,7 @@ type DeliveryConfig = {
   tipo_taxa_entrega: DeliveryFeeMode;
   taxa_entrega_fixa: number;
   tabela_taxas_bairros: BairroTaxaRow[];
+  tabela_taxas_km: DistanceFeeRow[];
 };
 
 interface Props {
@@ -40,14 +50,47 @@ function normalizeNeighborhoods(value: unknown): BairroTaxaRow[] {
     .filter((row) => row.bairro);
 }
 
+function suggestedDistanceConfig(baseFee: number): DistanceFeeRow {
+  const minimum = Math.max(0, Number(baseFee) || 5);
+  return {
+    taxa_minima: minimum,
+    km_inclusos: 3,
+    incremento_valor: 1,
+    incremento_km: 3,
+    taxa_maxima: minimum + 2,
+    distancia_maxima_km: 0,
+  };
+}
+
+function normalizeDistanceConfig(value: unknown, baseFee: number): DistanceFeeRow[] {
+  if (!Array.isArray(value) || !value[0] || typeof value[0] !== 'object') return [];
+  const row = value[0] as Record<string, unknown>;
+  return [{
+    taxa_minima: Math.max(0, Number(row.taxa_minima) || Number(baseFee) || 0),
+    km_inclusos: Math.max(0.01, Number(row.km_inclusos) || 3),
+    incremento_valor: Math.max(0, Number(row.incremento_valor) || 0),
+    incremento_km: Math.max(0.01, Number(row.incremento_km) || 3),
+    taxa_maxima: Math.max(0, Number(row.taxa_maxima) || 0),
+    distancia_maxima_km: Math.max(0, Number(row.distancia_maxima_km) || 0),
+  }];
+}
+
 function normalizeConfig(data: Record<string, unknown>): DeliveryConfig {
+  const fixedFee = Number(data.taxa_entrega_fixa ?? 0);
+  const rawMode = data.tipo_taxa_entrega;
+  const mode: DeliveryFeeMode = rawMode === 'bairro'
+    ? 'bairro'
+    : rawMode === 'distancia'
+      ? 'distancia'
+      : 'fixa';
   return {
     delivery_ativo: data.delivery_ativo !== false,
     pedido_minimo: Number(data.pedido_minimo) || 0,
     frete_gratis_valor: Number(data.frete_gratis_valor) || 0,
-    tipo_taxa_entrega: data.tipo_taxa_entrega === 'bairro' ? 'bairro' : 'fixa',
-    taxa_entrega_fixa: Number(data.taxa_entrega_fixa ?? 0),
+    tipo_taxa_entrega: mode,
+    taxa_entrega_fixa: fixedFee,
     tabela_taxas_bairros: normalizeNeighborhoods(data.tabela_taxas_bairros),
+    tabela_taxas_km: normalizeDistanceConfig(data.tabela_taxas_km, fixedFee),
   };
 }
 
@@ -55,6 +98,15 @@ function persistedPayload(config: DeliveryConfig) {
   const neighborhoods = config.tabela_taxas_bairros
     .map(({ bairro, taxa }) => ({ bairro: bairro.trim(), taxa: Math.max(0, Number(taxa) || 0) }))
     .filter((row) => row.bairro);
+  const distanceRows = config.tabela_taxas_km.slice(0, 1).map((row) => ({
+    taxa_minima: Math.max(0, Number(row.taxa_minima) || 0),
+    km_inclusos: Math.max(0, Number(row.km_inclusos) || 0),
+    incremento_valor: Math.max(0, Number(row.incremento_valor) || 0),
+    incremento_km: Math.max(0, Number(row.incremento_km) || 0),
+    taxa_maxima: Math.max(0, Number(row.taxa_maxima) || 0),
+    distancia_maxima_km: Math.max(0, Number(row.distancia_maxima_km) || 0),
+    fallback_sem_localizacao: 'minima',
+  }));
   return {
     delivery_ativo: config.delivery_ativo,
     pedido_minimo: Math.max(0, Number(config.pedido_minimo) || 0),
@@ -62,6 +114,7 @@ function persistedPayload(config: DeliveryConfig) {
     tipo_taxa_entrega: config.tipo_taxa_entrega,
     taxa_entrega_fixa: Math.max(0, Number(config.taxa_entrega_fixa) || 0),
     tabela_taxas_bairros: neighborhoods,
+    tabela_taxas_km: distanceRows,
   };
 }
 
@@ -81,6 +134,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
     tipo_taxa_entrega: 'fixa',
     taxa_entrega_fixa: 0,
     tabela_taxas_bairros: [],
+    tabela_taxas_km: [],
   });
   const [savedSnapshot, setSavedSnapshot] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -115,7 +169,6 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
 
   const payload = useMemo(() => persistedPayload(config), [config]);
   const hasUnsavedChanges = JSON.stringify(payload) !== savedSnapshot;
-  const areasCount = config.tipo_taxa_entrega === 'bairro' ? payload.tabela_taxas_bairros.length : 0;
 
   const chooseFeeMode = (mode: DeliveryFeeMode) => {
     if (mode === config.tipo_taxa_entrega) return;
@@ -126,6 +179,31 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
         mode === 'bairro' && current.tabela_taxas_bairros.length === 0
           ? [{ id: `bairro-${Date.now()}`, bairro: '', taxa: 0 }]
           : current.tabela_taxas_bairros,
+      tabela_taxas_km:
+        mode === 'distancia' && current.tabela_taxas_km.length === 0
+          ? [suggestedDistanceConfig(current.taxa_entrega_fixa)]
+          : current.tabela_taxas_km,
+    }));
+  };
+
+  const distanceConfig = config.tabela_taxas_km[0] || suggestedDistanceConfig(config.taxa_entrega_fixa);
+  const distancePreview = useMemo(() => {
+    const rows: Array<{ limit: number; fee: number }> = [];
+    const maxRows = 4;
+    for (let index = 0; index < maxRows; index += 1) {
+      const limit = distanceConfig.km_inclusos + (index * distanceConfig.incremento_km);
+      const rawFee = distanceConfig.taxa_minima + (index * distanceConfig.incremento_valor);
+      const fee = distanceConfig.taxa_maxima > 0 ? Math.min(rawFee, distanceConfig.taxa_maxima) : rawFee;
+      rows.push({ limit, fee });
+      if (distanceConfig.taxa_maxima > 0 && fee >= distanceConfig.taxa_maxima) break;
+    }
+    return rows;
+  }, [distanceConfig]);
+
+  const updateDistanceConfig = (patch: Partial<DistanceFeeRow>) => {
+    setConfig((current) => ({
+      ...current,
+      tabela_taxas_km: [{ ...(current.tabela_taxas_km[0] || suggestedDistanceConfig(current.taxa_entrega_fixa)), ...patch }],
     }));
   };
 
@@ -234,42 +312,35 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           </div>
           <div>
             <h3 className="text-sm font-black text-koma-foreground">Como cobrar a entrega</h3>
-            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">Escolha entre taxa única para todas as entregas ou valores específicos por bairro.</p>
+            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">Escolha a regra que combina com a operação. O KÔMA calcula a taxa final no servidor.</p>
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            aria-pressed={config.tipo_taxa_entrega === 'fixa'}
-            onClick={() => chooseFeeMode('fixa')}
-            className={clsx(
-              'rounded-xl border p-3 text-left transition',
-              config.tipo_taxa_entrega === 'fixa'
-                ? 'border-emerald-500/50 bg-emerald-500/10'
-                : 'border-koma-border bg-koma-card hover:border-emerald-500/25',
-            )}
-          >
-            <strong className="block text-xs text-koma-foreground">Taxa única</strong>
-            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Mesmo valor cobrado em todas as entregas.</span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={config.tipo_taxa_entrega === 'bairro'}
-            onClick={() => chooseFeeMode('bairro')}
-            className={clsx(
-              'rounded-xl border p-3 text-left transition',
-              config.tipo_taxa_entrega === 'bairro'
-                ? 'border-emerald-500/50 bg-emerald-500/10'
-                : 'border-koma-border bg-koma-card hover:border-emerald-500/25',
-            )}
-          >
-            <strong className="block text-xs text-koma-foreground">Taxa por bairro</strong>
-            <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">Defina o valor cobrado para cada bairro atendido.</span>
-          </button>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {([
+            ['fixa', 'Taxa única', 'Mesmo valor em todas as entregas.'],
+            ['bairro', 'Taxa por bairro', 'Defina o valor de cada bairro atendido.'],
+            ['distancia', 'Automático por distância', 'Taxa mínima com aumento progressivo, sem API paga.'],
+          ] as const).map(([mode, title, description]) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={config.tipo_taxa_entrega === mode}
+              onClick={() => chooseFeeMode(mode)}
+              className={clsx(
+                'rounded-xl border p-3 text-left transition',
+                config.tipo_taxa_entrega === mode
+                  ? 'border-emerald-500/50 bg-emerald-500/10'
+                  : 'border-koma-border bg-koma-card hover:border-emerald-500/25',
+              )}
+            >
+              <strong className="block text-xs text-koma-foreground">{title}</strong>
+              <span className="mt-1 block text-[9px] leading-relaxed text-koma-muted">{description}</span>
+            </button>
+          ))}
         </div>
 
-        {config.tipo_taxa_entrega === 'fixa' ? (
+        {config.tipo_taxa_entrega === 'fixa' && (
           <div className="mt-4 rounded-xl border border-koma-border bg-koma-card p-4">
             <label className="block max-w-xs">
               <FieldLabel>Valor da taxa única (R$)</FieldLabel>
@@ -278,21 +349,16 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
                 min="0"
                 step="0.01"
                 value={config.taxa_entrega_fixa || ''}
-                onChange={(event) =>
-                  setConfig((current) => ({
-                    ...current,
-                    taxa_entrega_fixa: Number(event.target.value) || 0,
-                  }))
-                }
+                onChange={(event) => setConfig((current) => ({ ...current, taxa_entrega_fixa: Number(event.target.value) || 0 }))}
                 className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
                 placeholder="0,00"
               />
-              <span className="mt-1 block text-[9px] text-koma-muted">
-                Cobrado em todas as entregas realizadas pelo cardápio.
-              </span>
+              <span className="mt-1 block text-[9px] text-koma-muted">Cobrado em todas as entregas realizadas pelo cardápio.</span>
             </label>
           </div>
-        ) : (
+        )}
+
+        {config.tipo_taxa_entrega === 'bairro' && (
           <div className="mt-4 border-t border-koma-border pt-4">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -351,6 +417,71 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {config.tipo_taxa_entrega === 'distancia' && (
+          <div className="mt-4 space-y-4 border-t border-koma-border pt-4">
+            <div className="flex flex-col gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h4 className="text-xs font-black text-koma-foreground">Cobrança automática sem serviço pago</h4>
+                <p className="mt-1 max-w-2xl text-[9px] leading-relaxed text-koma-muted">Quando o cliente autorizar a localização, o KÔMA calcula a distância em linha reta. Sem localização, usa a taxa mínima.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfig((current) => ({ ...current, tabela_taxas_km: [suggestedDistanceConfig(current.taxa_entrega_fixa)] }))}
+                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-black text-emerald-700 dark:text-emerald-300"
+              >
+                Gerar sugestão
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label>
+                <FieldLabel>Taxa mínima (R$)</FieldLabel>
+                <input type="number" min="0" step="0.01" value={distanceConfig.taxa_minima || ''} onChange={(event) => updateDistanceConfig({ taxa_minima: Number(event.target.value) || 0 })} className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60" />
+                <span className="mt-1 block text-[9px] text-koma-muted">Valor cobrado nas entregas próximas e no fallback sem localização.</span>
+              </label>
+              <label>
+                <FieldLabel>A taxa mínima cobre até (km)</FieldLabel>
+                <input type="number" min="0.01" step="0.1" value={distanceConfig.km_inclusos || ''} onChange={(event) => updateDistanceConfig({ km_inclusos: Number(event.target.value) || 0 })} className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60" />
+              </label>
+              <label>
+                <FieldLabel>Aumentar (R$)</FieldLabel>
+                <input type="number" min="0" step="0.01" value={distanceConfig.incremento_valor || ''} onChange={(event) => updateDistanceConfig({ incremento_valor: Number(event.target.value) || 0 })} className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60" />
+              </label>
+              <label>
+                <FieldLabel>A cada (km)</FieldLabel>
+                <input type="number" min="0.01" step="0.1" value={distanceConfig.incremento_km || ''} onChange={(event) => updateDistanceConfig({ incremento_km: Number(event.target.value) || 0 })} className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60" />
+              </label>
+              <label>
+                <FieldLabel>Taxa máxima (R$)</FieldLabel>
+                <input type="number" min="0" step="0.01" value={distanceConfig.taxa_maxima || ''} onChange={(event) => updateDistanceConfig({ taxa_maxima: Number(event.target.value) || 0 })} className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60" placeholder="Sem limite" />
+                <span className="mt-1 block text-[9px] text-koma-muted">Zero deixa a taxa sem teto.</span>
+              </label>
+              <label>
+                <FieldLabel>Distância máxima (km)</FieldLabel>
+                <input type="number" min="0" step="0.1" value={distanceConfig.distancia_maxima_km || ''} onChange={(event) => updateDistanceConfig({ distancia_maxima_km: Number(event.target.value) || 0 })} className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60" placeholder="Sem limite" />
+                <span className="mt-1 block text-[9px] text-koma-muted">Zero mantém a entrega sem limite por distância.</span>
+              </label>
+            </div>
+
+            <div className="rounded-xl border border-koma-border bg-koma-card p-4">
+              <h4 className="text-xs font-black text-koma-foreground">Prévia da regra</h4>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {distancePreview.map((row) => (
+                  <div key={row.limit} className="rounded-lg border border-koma-border bg-koma-raised px-3 py-2">
+                    <span className="block text-[9px] text-koma-muted">Até {row.limit.toFixed(1)} km</span>
+                    <strong className="mt-0.5 block text-xs text-koma-foreground">R$ {row.fee.toFixed(2).replace('.', ',')}</strong>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[9px] leading-relaxed text-koma-muted">
+                {distanceConfig.distancia_maxima_km > 0
+                  ? `Acima de ${distanceConfig.distancia_maxima_km.toFixed(1)} km o endereço fica fora da área de entrega.`
+                  : 'Sem distância máxima: o teto de taxa, quando configurado, continua valendo para locais mais distantes.'}
+              </p>
             </div>
           </div>
         )}
