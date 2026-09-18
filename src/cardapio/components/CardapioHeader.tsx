@@ -108,7 +108,11 @@ export default function CardapioHeader({
   const statusLabel = activeBrand.storeStatus === "open"
     ? "Aberto para pedidos"
     : activeBrand.storeStatus === "closed"
-      ? activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados"
+      ? activeBrand.availabilitySource === "schedule"
+        ? activeBrand.nextOpeningLabel
+          ? `Fechado · abre ${activeBrand.nextOpeningLabel}`
+          : "Estabelecimento fechado"
+        : "Pedidos pausados"
       : "Ver horários";
 
   return (
