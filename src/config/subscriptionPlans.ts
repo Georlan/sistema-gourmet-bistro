@@ -12,6 +12,7 @@ export interface SubscriptionPlan {
 }
 
 export const ANNUAL_DISCOUNT_RATE = 0.1;
+export const COMMERCIAL_PRICING_VERSION = '2026-09-vnext';
 
 export function getSubscriptionPricing(monthlyPrice: number) {
   const monthlyPriceInCents = Math.round(monthlyPrice * 100);
@@ -46,9 +47,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pocket',
     name: 'Kôma Pocket',
-    price: 109,
-    splitFeeRate: 0.0149,
-    tagline: 'Venda no salão e online sem complicação.',
+    price: 0,
+    splitFeeRate: 0.0179,
+    tagline: 'Comece sem mensalidade.',
     features: [
       'Mesas, comandas e balcão',
       'Cardápio digital e QR Code com pedidos no PDV',
@@ -66,9 +67,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'pro',
     name: 'Kôma Pro',
-    price: 209,
-    splitFeeRate: 0.0069,
-    tagline: 'Controle operação, equipe, estoque e financeiro.',
+    price: 129,
+    splitFeeRate: 0.005,
+    tagline: 'Seu restaurante cresceu. Sua taxa diminui.',
     recommended: true,
     features: [
       'Tudo do Pocket',
@@ -84,9 +85,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'premium',
     name: 'Kôma Premium',
-    price: 309,
-    splitFeeRate: 0.0029,
-    tagline: 'Menor taxa, entregas e fidelização para escalar.',
+    price: 249,
+    splitFeeRate: 0.002,
+    tagline: 'Mais volume, menor taxa.',
     features: [
       'Tudo do Pro',
       'App do entregador incluído',
@@ -116,7 +117,7 @@ export const PLAN_COMPARISON_MATRIX: FeatureComparisonRow[] = [
   { category: 'Gestão & Equipe', feature: 'Estoque e Fichas Técnicas', pocket: false, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Cardápio Online & Pedidos via QR Code', pocket: true, pro: true, premium: true },
   { category: 'Cardápio Digital', feature: 'Aceite de Pedidos Digitais no PDV', pocket: true, pro: true, premium: true },
-  { category: 'Pagamento Online', feature: 'Taxa KÔMA por pedido online pago', pocket: '1,49%', pro: '0,69%', premium: '0,29%' },
+  { category: 'Pagamento Online', feature: 'Taxa KÔMA por pedido online pago', pocket: '1,79%', pro: '0,50%', premium: '0,20%' },
   { category: 'Entrega', feature: 'App do Entregador', pocket: false, pro: false, premium: true },
   { category: 'Clientes', feature: 'Cadastro e Histórico de Clientes', pocket: true, pro: true, premium: true },
   { category: 'Clientes', feature: 'Pontos, Cashback e Cupons', pocket: false, pro: false, premium: true },
