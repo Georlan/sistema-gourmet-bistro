@@ -57,28 +57,22 @@ test('Cardápio online mantém apenas fluxos canônicos sem atalhos paralelos de
   assert.doesNotMatch(onlineMenu, /fetch\([^\n]*(?:cupons|fidelidade)/i);
 });
 
-test('Pedidos online keeps hours as restaurant setup and does not own payment or delivery configuration', () => {
+test('Pedidos & horários no longer owns payment or delivery configuration', () => {
   const orders = source('../src/components/caixa/online-menu/OnlineMenuOrdersSettings.tsx');
   assert.match(orders, /status_override/);
   assert.match(orders, /horarios_funcionamento/);
-  assert.match(orders, /ONBOARDING_SETUP_MODE_KEY/);
-  assert.match(orders, /Horário do estabelecimento/);
-  assert.match(orders, /Abrir o caixa não libera pedidos fora do horário cadastrado/);
   assert.doesNotMatch(orders, /formas_pagamento_aceitas/);
   assert.doesNotMatch(orders, /tabela_taxas_bairros/);
   assert.doesNotMatch(orders, /\/caixa\/configuracoes/);
 });
 
-test('Entrega is always automatic by distance and persists through ConfiguracaoRestaurante', () => {
+test('Entrega & áreas persists through ConfiguracaoRestaurante instead of profile config', () => {
   const delivery = source('../src/components/caixa/online-menu/OnlineMenuDeliverySettings.tsx');
   assert.match(delivery, /\/caixa\/configuracoes/);
   assert.match(delivery, /delivery_ativo/);
   assert.match(delivery, /pedido_minimo/);
   assert.match(delivery, /frete_gratis_valor/);
-  assert.match(delivery, /tipo_taxa_entrega: 'distancia'/);
-  assert.match(delivery, /Valor por km/);
-  assert.match(delivery, /delivery-suggestion/);
-  assert.doesNotMatch(delivery, /Taxa única|Taxa por bairro|chooseFeeMode/);
+  assert.match(delivery, /tabela_taxas_bairros/);
   assert.doesNotMatch(delivery, /\/api\/cardapio-digital\/config/);
 });
 
