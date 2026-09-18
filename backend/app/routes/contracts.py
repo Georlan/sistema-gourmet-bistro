@@ -451,7 +451,10 @@ def get_current_contract(
         link = (
             db.query(RestaurantContractAcceptance)
             .filter(RestaurantContractAcceptance.restaurante_id == tenant_id)
-            .order_by(RestaurantContractAcceptance.linked_at.desc())
+            .order_by(
+                RestaurantContractAcceptance.linked_at.desc(),
+                RestaurantContractAcceptance.id.desc(),
+            )
             .first()
         )
         if link is None:

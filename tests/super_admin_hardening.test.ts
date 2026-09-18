@@ -97,6 +97,27 @@ describe('Super Admin Hardening & Integrity', () => {
     assert.equal(formatPercentage(0.10), '10,00%');
   });
 
+  it('rotula o catálogo do Super Admin como oferta, não como contrato do tenant', () => {
+    const billing = fs.readFileSync(
+      path.join(process.cwd(), 'src/super-admin/SuperAdminBillingTab.tsx'),
+      'utf-8'
+    );
+    const overview = fs.readFileSync(
+      path.join(process.cwd(), 'src/super-admin/SuperAdminOverviewTab.tsx'),
+      'utf-8'
+    );
+    const payments = fs.readFileSync(
+      path.join(process.cwd(), 'src/super-admin/SuperAdminPaymentsTab.tsx'),
+      'utf-8'
+    );
+    assert.ok(billing.includes('Catálogo vigente para novas contratações'));
+    assert.ok(billing.includes('não é receita recebida'));
+    assert.ok(billing.includes('não representa os contratos dos tenants'));
+    assert.ok(overview.includes('Catálogo de split'));
+    assert.ok(overview.includes('Oferta vigente para novos aceites'));
+    assert.ok(payments.includes('A taxa efetiva de cada restaurante vem do contrato vinculado'));
+  });
+
   it('separa plano de recursos de termos comerciais contratados', () => {
     const tenantsTab = fs.readFileSync(
       path.join(process.cwd(), 'src/super-admin/SuperAdminTenantsTab.tsx'),

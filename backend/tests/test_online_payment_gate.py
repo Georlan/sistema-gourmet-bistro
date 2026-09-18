@@ -176,7 +176,7 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
 def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setattr(
-        "app.services.online_payments.service.tenant_commercial_terms",
+        "app.services.billing_service.tenant_commercial_terms",
         lambda _db, _restaurante_id: SimpleNamespace(
             marketplace_rate=Decimal("0.0179")
         ),
@@ -190,7 +190,7 @@ def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
     ) == Decimal("1.79")
 
 
-def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monkeypatch):
+def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_and_plan_slug_change(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setitem(
         SUBSCRIPTION_MARKETPLACE_RATES,
@@ -198,13 +198,15 @@ def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monke
         Decimal("0.0179"),
     )
     monkeypatch.setattr(
-        "app.services.online_payments.service.tenant_commercial_terms",
+        "app.services.billing_service.tenant_commercial_terms",
         lambda _db, _restaurante_id: SimpleNamespace(
             marketplace_rate=Decimal("0.0149")
         ),
     )
 
-    restaurant = SimpleNamespace(id=123, plano="pocket")
+    # Mesmo uma mutação isolada do slug/plano de recursos não pode alterar
+    # a taxa financeira enquanto o aceite comercial vigente continua antigo.
+    restaurant = SimpleNamespace(id=123, plano="premium", billing_mode="subscription")
     assert OnlinePaymentService.marketplace_fee_for_tenant(
         None,
         Decimal("100.00"),
@@ -220,7 +222,7 @@ def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(
         Decimal("0.0179"),
     )
     monkeypatch.setattr(
-        "app.services.online_payments.service.tenant_commercial_terms",
+        "app.services.billing_service.tenant_commercial_terms",
         lambda _db, _restaurante_id: None,
     )
 
@@ -235,7 +237,7 @@ def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(
 def test_subscription_tenant_without_acceptance_fails_closed_instead_of_using_legacy_rate(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setattr(
-        "app.services.online_payments.service.tenant_commercial_terms",
+        "app.services.billing_service.tenant_commercial_terms",
         lambda _db, _restaurante_id: None,
     )
 
@@ -262,7 +264,7 @@ def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypa
         raise AssertionError("contract terms must not be read while fees are disabled")
 
     monkeypatch.setattr(
-        "app.services.online_payments.service.tenant_commercial_terms",
+        "app.services.billing_service.tenant_commercial_terms",
         _unexpected_lookup,
     )
 
@@ -281,7 +283,7 @@ def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypa
         raise RuntimeError("invalid signed receipt")
 
     monkeypatch.setattr(
-        "app.services.online_payments.service.tenant_commercial_terms",
+        "app.services.billing_service.tenant_commercial_terms",
         _broken_contract,
     )
 

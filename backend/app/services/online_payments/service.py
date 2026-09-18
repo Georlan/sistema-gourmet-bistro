@@ -20,8 +20,8 @@ from ...models import (
     Restaurante,
     RestaurantPaymentAccount,
 )
-from ...subscription import legacy_v25_marketplace_rate, subscription_marketplace_rate
-from ..billing_service import tenant_commercial_terms
+from ...subscription import subscription_marketplace_rate
+from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
@@ -209,20 +209,14 @@ class OnlinePaymentService:
         if not settings.ONLINE_PAYMENT_PLAN_FEES_ENABLED:
             return Decimal("0.00")
         try:
-            terms = tenant_commercial_terms(db, int(restaurant.id))
+            rate = tenant_marketplace_rate(db, restaurant)
         except RuntimeError as exc:
+            detail = str(exc)
+            if "sem aceite comercial" in detail:
+                raise OnlinePaymentConfigurationError(detail) from exc
             raise OnlinePaymentConfigurationError(
                 "Termos comerciais indisponíveis para calcular a taxa do pagamento."
             ) from exc
-        if terms is not None:
-            rate = terms.marketplace_rate
-        elif str(getattr(restaurant, "billing_mode", "") or "").strip().lower() == "legacy":
-            rate = legacy_v25_marketplace_rate(restaurant.plano)
-        else:
-            raise OnlinePaymentConfigurationError(
-                "Tenant de assinatura sem aceite comercial vinculado; "
-                "o split não pode usar fallback legado."
-            )
         return (amount * rate).quantize(MONEY, rounding=ROUND_HALF_UP)
 
     @classmethod
