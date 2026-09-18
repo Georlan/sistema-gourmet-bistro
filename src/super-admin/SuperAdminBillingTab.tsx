@@ -50,7 +50,7 @@ export function SuperAdminBillingTab({
           </div>
           <p className="text-[11px] text-koma-subtle">
             {tenantsAvailable
-              ? "Soma dos preços do catálogo atual pelos perfis de recursos ativos; não representa os contratos nem a receita recebida"
+              ? "Soma dos preços do catálogo atual pelos perfis de recursos ativos; não é receita recebida e não representa os contratos dos tenants"
               : "Fonte de restaurantes indisponível"}
           </p>
         </div>
