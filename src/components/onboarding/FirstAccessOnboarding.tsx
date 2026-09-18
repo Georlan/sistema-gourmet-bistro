@@ -164,7 +164,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'hours',
       title: 'Defina os horários de funcionamento',
-      description: 'O cardápio online usa os horários para saber quando o restaurante pode receber pedidos.',
+      description: 'Este é o horário geral do estabelecimento. O cardápio usa essa agenda para abrir e fechar automaticamente e informar a próxima abertura.',
       done: snapshot.steps.hours,
       actionLabel: snapshot.steps.hours ? 'Revisar horários' : 'Configurar horários',
       tab: 'cardapio_digital',
