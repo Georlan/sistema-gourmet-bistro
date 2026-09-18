@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
-from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from ..saas_billing_models import SaaSBillingSetup, SaaSPlanChange, SaaSSubscription
 from ..services.billing_service import (
     contract_fixed_billing_required,
     get_billing_setup,
@@ -532,6 +532,33 @@ def link_contract(
 
         tenant_id = int(payload.restaurant_id)
         with tenant_session_scope(db, tenant_id):
+            if db.get_bind().dialect.name == "postgresql":
+                plan_change_owner = db.execute(
+                    text(
+                        "SELECT koma_internal.plan_change_owner_for_acceptance(:acceptance_id)"
+                    ),
+                    {"acceptance_id": str(acceptance["acceptance_id"])},
+                ).scalar_one_or_none()
+            else:
+                owner_row = (
+                    db.query(SaaSPlanChange.restaurante_id)
+                    .filter(
+                        SaaSPlanChange.acceptance_id
+                        == str(acceptance["acceptance_id"])
+                    )
+                    .one_or_none()
+                )
+                plan_change_owner = int(owner_row[0]) if owner_row is not None else None
+
+            if plan_change_owner is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Este aceite pertence a uma mudança comercial canônica e "
+                        "não pode ser vinculado manualmente."
+                    ),
+                )
+
             restaurant = (
                 db.query(Restaurante)
                 .filter(Restaurante.id == tenant_id)
