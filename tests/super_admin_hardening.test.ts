@@ -16,18 +16,18 @@ describe('Super Admin Hardening & Integrity', () => {
 
     const pocket = SUBSCRIPTION_PLANS.find(p => p.id === 'pocket');
     assert.ok(pocket);
-    assert.equal(pocket.price, 109);
-    assert.equal(pocket.splitFeeRate, 0.0149);
+    assert.equal(pocket.price, 0);
+    assert.equal(pocket.splitFeeRate, 0.0179);
 
     const pro = SUBSCRIPTION_PLANS.find(p => p.id === 'pro');
     assert.ok(pro);
-    assert.equal(pro.price, 209);
-    assert.equal(pro.splitFeeRate, 0.0069);
+    assert.equal(pro.price, 129);
+    assert.equal(pro.splitFeeRate, 0.005);
 
     const premium = SUBSCRIPTION_PLANS.find(p => p.id === 'premium');
     assert.ok(premium);
-    assert.equal(premium.price, 309);
-    assert.equal(premium.splitFeeRate, 0.0029);
+    assert.equal(premium.price, 249);
+    assert.equal(premium.splitFeeRate, 0.002);
   });
 
   it('impede regressao para hardcodes, Sentry, Asaas e tenants ficticios', () => {
@@ -40,7 +40,6 @@ describe('Super Admin Hardening & Integrity', () => {
       /price:\s*89\b/,
       /price:\s*179\b/,
       /price:\s*269\b/,
-      /1[,.]79%/,
       /0[,.]89%/,
       /0[,.]39%/,
       /\bINITIAL_TENANTS\b/,
@@ -92,9 +91,9 @@ describe('Super Admin Hardening & Integrity', () => {
   it('formata moedas e percentuais conforme padrão KÔMA', () => {
     assert.match(formatCurrency(109), /^R\$\s*109,00$/);
     assert.match(formatCurrency(209.5), /^R\$\s*209,50$/);
-    assert.equal(formatPercentage(0.0149), '1,49%');
-    assert.equal(formatPercentage(0.0069), '0,69%');
-    assert.equal(formatPercentage(0.0029), '0,29%');
+    assert.equal(formatPercentage(0.0179), '1,79%');
+    assert.equal(formatPercentage(0.005), '0,50%');
+    assert.equal(formatPercentage(0.002), '0,20%');
     assert.equal(formatPercentage(0.10), '10,00%');
   });
 
