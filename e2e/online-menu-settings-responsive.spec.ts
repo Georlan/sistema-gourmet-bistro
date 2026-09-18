@@ -117,6 +117,9 @@ for (const theme of ['dark', 'light'] as const) {
       await navigate(page, 'Pedidos online');
       await expect(page.getByRole('heading', { name: 'Pedidos online', exact: true })).toBeVisible();
       await expect(page.getByText('Horário do estabelecimento', { exact: true })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+
+      await navigate(page, 'Clientes bloqueados');
       await expect(page.getByRole('heading', { name: 'Clientes bloqueados', exact: true })).toBeVisible();
       await expect(page.getByText('Histórico de bloqueios', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
