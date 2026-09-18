@@ -67,8 +67,10 @@ from ...services.clientes import (
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from ...services.delivery_fee_policy import (
+    normalize_distance_fee_config,
     normalize_neighborhood,
     normalize_neighborhood_fee_table,
+    resolve_distance_delivery_fee,
     validate_delivery_fee,
 )
 from .commands import (
@@ -177,10 +179,11 @@ class OrderApplicationService:
         Regras canônicas:
         1. Se não é delivery (ex: pickup/salão/balcão) -> taxa 0.00.
         2. Carregar configuração do restaurante: se ausente ou tipo inválido -> OrderValidationError.
-        3. Modo bairro: exige bairro preenchido; se ausente ou não cadastrado -> OrderValidationError (fora da cobertura).
-        4. Validar cobertura ANTES de calcular frete grátis: se frete grátis atingido -> taxa 0.00.
-        5. Modo fixa -> usa exclusivamente taxa_entrega_fixa persistida.
-        6. Modo bairro -> usa taxa cadastrada da linha do bairro encontrado.
+        3. Modo bairro valida cobertura pelo bairro cadastrado.
+        4. Modo distância calcula localmente por Haversine quando há coordenadas confiáveis;
+           sem coordenadas usa a taxa mínima configurada como fallback.
+        5. Validar cobertura ANTES de calcular frete grátis.
+        6. O valor enviado pelo cliente nunca é autoridade para a taxa final.
         """
         if fulfillment != FulfillmentType.DELIVERY:
             return Decimal("0.00")
@@ -196,10 +199,11 @@ class OrderApplicationService:
             )
 
         tipo_taxa = getattr(config, "tipo_taxa_entrega", None)
-        if tipo_taxa not in ("fixa", "bairro"):
+        if tipo_taxa not in ("fixa", "bairro", "distancia"):
             raise OrderValidationError(f"Tipo de taxa de entrega '{tipo_taxa}' inválido ou não suportado.")
 
         matched_bairro_taxa: Decimal | None = None
+        distance_fee: Decimal | None = None
 
         if tipo_taxa == "bairro":
             clean_bairro = " ".join(str(neighborhood or "").strip().split())
@@ -221,6 +225,34 @@ class OrderApplicationService:
                     f"O bairro '{clean_bairro}' não está na área de entrega atendida pelo restaurante."
                 )
 
+        if tipo_taxa == "distancia":
+            try:
+                normalize_distance_fee_config(config.tabela_taxas_km or [])
+                restaurante = getattr(config, "restaurante", None)
+                if restaurante is None:
+                    restaurante = (
+                        db.query(Restaurante)
+                        .filter(Restaurante.id == restaurante_id)
+                        .first()
+                    )
+                origin_latitude = getattr(restaurante, "latitude", None) if restaurante else None
+                origin_longitude = getattr(restaurante, "longitude", None) if restaurante else None
+                destination_latitude = (
+                    delivery_address.latitude if delivery_address is not None else None
+                )
+                destination_longitude = (
+                    delivery_address.longitude if delivery_address is not None else None
+                )
+                distance_fee, _distance_km = resolve_distance_delivery_fee(
+                    config.tabela_taxas_km or [],
+                    origin_latitude=origin_latitude,
+                    origin_longitude=origin_longitude,
+                    destination_latitude=destination_latitude,
+                    destination_longitude=destination_longitude,
+                )
+            except ValueError as exc:
+                raise OrderValidationError(str(exc)) from exc
+
         # 4. Validar cobertura ANTES de aplicar frete grátis por valor de subtotal
         if config.frete_gratis_valor and float(config.frete_gratis_valor) > 0:
             if items_subtotal >= to_money_decimal(config.frete_gratis_valor):
@@ -234,6 +266,9 @@ class OrderApplicationService:
 
         if tipo_taxa == "bairro":
             return matched_bairro_taxa if matched_bairro_taxa is not None else Decimal("0.00")
+
+        if tipo_taxa == "distancia":
+            return distance_fee if distance_fee is not None else Decimal("0.00")
 
         raise OrderValidationError("A política de entrega configurada é inválida.")
 

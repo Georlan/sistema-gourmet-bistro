@@ -37,6 +37,26 @@ test('taxa configurada zero não se confunde com configuração ausente no cálc
   assert.equal(getDeliveryQuote(undefined, 25, '').fee, 0);
 });
 
+test('modo distância usa taxa mínima como fallback antes da localização', () => {
+  const config = {
+    tipoTaxaEntrega: 'distancia',
+    tabelaTaxasKm: [{
+      taxa_minima: 5,
+      km_inclusos: 3,
+      incremento_valor: 1,
+      incremento_km: 3,
+      taxa_maxima: 7,
+      distancia_maxima_km: null,
+      fallback_sem_localizacao: 'minima' as const,
+    }],
+  };
+  assert.deepEqual(getDeliveryQuote(config, 25, ''), {
+    fee: 5,
+    awaitingNeighborhood: false,
+    awaitingLocation: true,
+  });
+});
+
 test('cotações usam apenas a configuração fornecida de cada restaurante', () => {
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }] }, 25, 'Centro').fee, 9);
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Centro').fee, 5);
@@ -58,7 +78,7 @@ test('UI expõe seleção, nome acessível do bairro e endereço legível sem al
   assert.match(deliveryAddressFields, /<span className=\{labelClass\}>Bairro<\/span>/);
   assert.match(deliveryAddressFields, /id=\{`\$\{idPrefix\}-bairro`\}/);
   assert.match(deliveryAddressFields, /autoComplete="address-line1"/);
-  assert.match(cart, /deliveryMethod === "delivery" \? deliveryQuote.fee : 0/);
+  assert.match(cart, /deliveryMethod === "delivery" \? effectiveDeliveryQuoteFee : 0/);
 });
 
 test('resumo não promete total final, mostra mínimo e preserva bloqueio de loja pausada', () => {
@@ -75,4 +95,12 @@ test('UI impede selecionar entrega desativada sem bloquear retirada', () => {
 
 test('promoção ausente não renderiza zero solto na sacola', () => {
   assert.match(cart, /\{freeDeliveryThreshold > 0 && deliveryMethod === "delivery" &&/);
+});
+
+test('checkout pede localização somente no contexto da entrega e mantém fallback mínimo', () => {
+  assert.match(cart, /Usar minha localização/);
+  assert.match(cart, /navigator\.geolocation\.getCurrentPosition/);
+  assert.match(cart, /Para outro endereço, continue sem localização/);
+  assert.match(cart, /taxa mínima/);
+  assert.match(deliveryAddressFields, /CEP <span className="font-normal opacity-70">\(opcional\)<\/span>/);
 });

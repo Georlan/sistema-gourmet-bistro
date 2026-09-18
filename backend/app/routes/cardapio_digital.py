@@ -30,12 +30,15 @@ from ..security import require_permission, get_current_garcom_optional
 from ..schemas import (
     CardapioPublicRestaurantResponse,
     CardapioPublicResponse,
+    DeliveryFeeQuoteRequest,
+    DeliveryFeeQuoteResponse,
     RestauranteConfigResponse,
     RestauranteConfigUpdate,
 )
 from ..websocket_manager import manager
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.online_order_policy import evaluate_online_order_policy
+from ..services.delivery_fee_policy import resolve_distance_delivery_fee
 from .products import notify_catalog_update, ordered_categories as _ordered_categories
 
 logger = logging.getLogger("koma.cardapio_digital")
@@ -354,6 +357,66 @@ def obter_cardapio_publico(
                 )
                 for product in produtos
             ],
+        }
+
+
+@router.post("/delivery/quote", response_model=DeliveryFeeQuoteResponse)
+def quote_delivery_by_location(
+    payload: DeliveryFeeQuoteRequest,
+    restaurante_id: Optional[str] = None,
+    slug: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Cota entrega por distância usando apenas coordenadas e matemática local."""
+    with public_tenant_scope(restaurante_id, slug, db) as rest_id:
+        restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+        configuracao = db.query(ConfiguracaoRestaurante).filter(
+            ConfiguracaoRestaurante.restaurante_id == rest_id
+        ).first()
+        if not restaurante or not configuracao:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Configurações de entrega não encontradas.",
+            )
+        if configuracao.tipo_taxa_entrega != "distancia":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A cobrança por distância não está ativa para este restaurante.",
+            )
+
+        try:
+            fee, distance_km = resolve_distance_delivery_fee(
+                configuracao.tabela_taxas_km or [],
+                origin_latitude=restaurante.latitude,
+                origin_longitude=restaurante.longitude,
+                destination_latitude=payload.latitude,
+                destination_longitude=payload.longitude,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
+
+        free_shipping = bool(
+            configuracao.frete_gratis_valor
+            and float(configuracao.frete_gratis_valor) > 0
+            and payload.subtotal >= float(configuracao.frete_gratis_valor)
+        )
+        if free_shipping:
+            fee = fee * 0
+
+        return {
+            "available": True,
+            "fee": float(fee),
+            "distance_km": distance_km,
+            "used_fallback": distance_km is None,
+            "free_shipping": free_shipping,
+            "message": (
+                "Taxa mínima aplicada porque não foi possível calcular a distância."
+                if distance_km is None
+                else None
+            ),
         }
 
 
