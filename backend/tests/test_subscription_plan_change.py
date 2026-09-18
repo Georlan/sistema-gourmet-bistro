@@ -19,7 +19,7 @@ from app.crypt import decrypt_field, encrypt_field
 from app.database import current_restaurante_id, get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import Restaurante, SuperAdminAuditLog
-from app.routes import contracts, subscription_account
+from app.routes import contracts, subscription_account, super_admin_contracts
 from app.saas_billing_models import SaaSPlanChange, SaaSSubscription
 from app.services.billing_service import tenant_commercial_terms
 from app.services.online_payments.service import OnlinePaymentService
@@ -79,6 +79,7 @@ def plan_change_env(monkeypatch):
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     monkeypatch.setattr(contracts, "SessionLocal", Session)
+    monkeypatch.setattr(super_admin_contracts, "SessionLocal", Session)
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_NAME", "KÔMA Testes")
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_TAX_ID", VALID_CPF)
     monkeypatch.setenv("KOMA_LEGAL_PROVIDER_ADDRESS", "Rua Teste, 100")
@@ -88,6 +89,7 @@ def plan_change_env(monkeypatch):
     app = FastAPI()
     app.include_router(contracts.router)
     app.include_router(subscription_account.router)
+    app.include_router(super_admin_contracts.router, prefix="/api/super-admin")
 
     def override_get_db():
         db = Session()
@@ -104,6 +106,9 @@ def plan_change_env(monkeypatch):
     )
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[subscription_account.administrator] = lambda: admin
+    app.dependency_overrides[super_admin_contracts.get_current_admin] = lambda: {
+        "user": "superadmin-plan-change-test"
+    }
 
     token = current_restaurante_id.set(TENANT_ID)
     try:
@@ -443,3 +448,47 @@ def test_fee_flag_false_still_forces_zero_after_plan_change(plan_change_env, mon
 
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", False)
     assert _fee(Session) == Decimal("0.00")
+
+
+def test_superadmin_cannot_replace_existing_contract_authority_by_manual_link(plan_change_env):
+    client, Session = plan_change_env
+    _seed_legacy_pro(client, Session)
+
+    replacement = client.post("/api/contracts/accept", json=_payload("pro"))
+    assert replacement.status_code == 201, replacement.text
+
+    response = client.post(
+        "/api/super-admin/contracts/link",
+        json={
+            "restaurant_id": TENANT_ID,
+            "protocol": replacement.json()["protocol"],
+            "reason": "Tentativa de substituir termos manualmente",
+        },
+    )
+    assert response.status_code == 409
+    assert "fluxo canônico" in response.text
+
+    assert _fee(Session) == Decimal("0.69")
+
+
+def test_superadmin_cannot_manually_link_acceptance_owned_by_plan_change(plan_change_env):
+    client, Session = plan_change_env
+    _seed_legacy_pro(client, Session)
+
+    accepted = client.post(
+        "/api/subscription/plan-change/accept",
+        json=_payload("premium"),
+    )
+    assert accepted.status_code == 201, accepted.text
+
+    response = client.post(
+        "/api/super-admin/contracts/link",
+        json={
+            "restaurant_id": TENANT_ID,
+            "protocol": accepted.json()["protocol"],
+            "reason": "Tentativa de furar state machine",
+        },
+    )
+    assert response.status_code == 409
+    assert "mudança comercial canônica" in response.text
+    assert _fee(Session) == Decimal("0.69")
