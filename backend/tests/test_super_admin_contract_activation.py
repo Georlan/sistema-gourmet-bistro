@@ -17,6 +17,7 @@ from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog,
 from app.routes import contracts, super_admin_contracts
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.services import restaurant_provisioning
+from app.saas_billing_models import SaaSSubscription
 from app.signup_models import SignupNotification
 
 
@@ -139,7 +140,8 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     assert body["idempotent"] is False
     assert body["credentialDelivery"] == "outbox_scheduled"
     assert body["admin"]["status"] == "pendente_ativacao"
-    assert body["trial"]["daysGranted"] == 7
+    assert body["billingStatus"] == "not_required"
+    assert "trial" not in body
     assert body["subdomain"].endswith(protocol[-12:].lower())
 
     serialized = json.dumps(body).lower()
@@ -165,9 +167,15 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
         assert admin_user.senha_hash is None
         assert admin_user.token_convite
 
-        trial = db.execute(select(restaurant_trials)).mappings().one()
-        assert trial["restaurante_id"] == tenant_id
-        assert trial["trial_status"] == "active"
+        assert db.execute(select(restaurant_trials)).mappings().all() == []
+
+        subscription = db.execute(select(SaaSSubscription)).scalar_one()
+        assert subscription.restaurante_id == tenant_id
+        assert subscription.status == "active"
+        assert subscription.provider_subscription_id is None
+        assert subscription.payment_method_type is None
+        assert subscription.trial_started_at is None
+        assert subscription.trial_ends_at is None
 
         link = db.execute(select(RestaurantContractAcceptance)).scalar_one()
         assert link.restaurante_id == tenant_id
@@ -193,11 +201,13 @@ def test_one_click_activation_is_atomic_secure_and_idempotent(client_and_session
     repeated_body = repeated.json()
     assert repeated_body["idempotent"] is True
     assert repeated_body["restaurantId"] == str(tenant_id)
+    assert repeated_body["billingStatus"] == "not_required"
     db = Session()
     try:
         assert len(db.execute(select(Restaurante)).scalars().all()) == 1
         assert len(db.execute(select(Usuario)).scalars().all()) == 1
         assert len(db.execute(select(RestaurantContractAcceptance)).scalars().all()) == 1
+        assert len(db.execute(select(SaaSSubscription)).scalars().all()) == 1
         assert len(db.execute(select(SuperAdminAuditLog)).scalars().all()) == 1
     finally:
         db.close()
