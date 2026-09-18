@@ -97,6 +97,18 @@ describe('Super Admin Hardening & Integrity', () => {
     assert.equal(formatPercentage(0.10), '10,00%');
   });
 
+  it('separa plano de recursos de termos comerciais contratados', () => {
+    const tenantsTab = fs.readFileSync(
+      path.join(process.cwd(), 'src/super-admin/SuperAdminTenantsTab.tsx'),
+      'utf-8'
+    );
+    assert.equal(tenantsTab.includes('plan: editPlan'), false);
+    assert.equal(tenantsTab.includes('Comercial Oficial'), false);
+    assert.ok(tenantsTab.includes('Autoridade comercial'));
+    assert.ok(tenantsTab.includes('termos comerciais congelados deste tenant'));
+    assert.ok(tenantsTab.includes('Mudança de plano não é permitida por esta edição genérica'));
+  });
+
   it('mantem fail-closed para a disponibilidade cross-tenant', () => {
     const panelContent = fs.readFileSync(
       path.join(process.cwd(), 'src/super-admin/SuperAdminPanel.tsx'),
