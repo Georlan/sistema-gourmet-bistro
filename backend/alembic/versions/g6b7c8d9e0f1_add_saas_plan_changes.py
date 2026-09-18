@@ -54,7 +54,7 @@ def upgrade() -> None:
             name="ck_saas_plan_changes_status",
         ),
         sa.CheckConstraint(
-            "provider_action IN ('none', 'update_amount', 'cancel', 'billing_setup_required')",
+            "provider_action IN ('none', 'update_amount', 'cancel', 'verify_pix', 'billing_setup_required')",
             name="ck_saas_plan_changes_provider_action",
         ),
         sa.CheckConstraint(
