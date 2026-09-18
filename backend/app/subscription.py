@@ -10,6 +10,7 @@ logger = logging.getLogger("koma.subscription")
 VALID_SUBSCRIPTION_PLANS = {"pocket", "pro", "premium"}
 LEGACY_PREMIUM_PLANS = {"bistro", "delivery", "gold", "platinum"}
 ANNUAL_DISCOUNT_RATE = Decimal("0.10")
+COMMERCIAL_PRICING_VERSION = "2026-09-vnext"
 
 # Catálogo comercial vigente para NOVAS contratações.
 #
@@ -17,15 +18,15 @@ ANNUAL_DISCOUNT_RATE = Decimal("0.10")
 # em vigor. Elas nunca devem ser usadas, isoladamente, para recalcular os termos de
 # um tenant que já aceitou um contrato.
 SUBSCRIPTION_MONTHLY_PRICES: dict[str, Decimal] = {
-    "pocket": Decimal("109.00"),
-    "pro": Decimal("209.00"),
-    "premium": Decimal("309.00"),
+    "pocket": Decimal("0.00"),
+    "pro": Decimal("129.00"),
+    "premium": Decimal("249.00"),
 }
 
 SUBSCRIPTION_MARKETPLACE_RATES: dict[str, Decimal] = {
-    "pocket": Decimal("0.0149"),
-    "pro": Decimal("0.0069"),
-    "premium": Decimal("0.0029"),
+    "pocket": Decimal("0.0179"),
+    "pro": Decimal("0.0050"),
+    "premium": Decimal("0.0020"),
 }
 
 # Fallback congelado para tenants legados que ainda não possuem um
