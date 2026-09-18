@@ -298,7 +298,7 @@ def test_first_client_split_payment_and_full_refund_simulation(monkeypatch):
         # A intenção congela a fee. Mesmo que os termos comerciais resolvidos para
         # pagamentos futuros mudem depois, este Pix continua enviando a fee original.
         monkeypatch.setattr(
-            "app.services.online_payments.service.tenant_commercial_terms",
+            "app.services.billing_service.tenant_commercial_terms",
             lambda _db, _restaurante_id: SimpleNamespace(
                 marketplace_rate=Decimal("0.50")
             ),
