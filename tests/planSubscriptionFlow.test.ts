@@ -13,16 +13,18 @@ test('fluxo unificado de contratação usa o checkout de três meios', () => {
   assert.match(main, /pathname\.startsWith\("\/contratar"\)/);
   assert.match(main, /PlanContractPageV2/);
   assert.match(planContract, /01 · PLANO E COBRANÇA/);
-  assert.match(planContract, /03 · CONTRATAÇÃO E PAGAMENTO/);
+  assert.match(planContract, /03 · CONTRATAÇÃO\{fixedBillingRequired \? ' E PAGAMENTO' : ''\}/);
+  assert.match(planContract, /Pocket não exige meio de pagamento para a mensalidade fixa de R\$ 0/);
   assert.match(planContract, /SUBSCRIPTION_PLANS\.map/);
 });
 
-test('seleção comercial mantém mensal e anual com trial após implantação', () => {
+test('seleção comercial mantém Pocket mensal e anual apenas nos planos pagos', () => {
   assert.match(planContract, /type BillingCycle = 'mensal' \| 'anual'/);
-  assert.match(planContract, /Economize 10%/);
+  assert.match(planContract, /plan\.id !== 'pocket'/);
   assert.match(planContract, /annualMonthlyEquivalent/);
   assert.match(planContract, /Os 7 dias só começam depois dos 3 passos essenciais/);
-  assert.match(landingPlans, /É apenas uma referência de preço/);
+  assert.match(landingPlans, /Pro e Premium: valor mensal equivalente/);
+  assert.match(landingPlans, /Pocket permanece sem mensalidade e sem componente anual/);
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 
