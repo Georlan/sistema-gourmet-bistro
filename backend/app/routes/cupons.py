@@ -27,8 +27,8 @@ from ..models import (
 )
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
 from ..security import get_current_user, require_permission
+from ..services.billing_service import tenant_marketplace_rate
 from ..services.coupon_eligibility import customer_matches_targeted_coupon
-from ..subscription import subscription_marketplace_rate
 
 router = APIRouter(
     prefix="/caixa/cupons",
@@ -48,6 +48,19 @@ class GrowthRecommendationRequest(BaseModel):
     average_ticket: Optional[float] = Field(default=None, gt=0, le=1_000_000)
     variable_cost_percent: Optional[float] = Field(default=None, ge=0, lt=100)
     minimum_margin_percent: Optional[float] = Field(default=None, gt=0, lt=100)
+
+
+def _contracted_marketplace_rate(db: Session, restaurant: Restaurante):
+    try:
+        return tenant_marketplace_rate(db, restaurant)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Não foi possível resolver a taxa comercial contratada. "
+                "Vincule um aceite comercial válido antes de calcular incentivos."
+            ),
+        ) from exc
 
 
 def _validate_coupon_configuration(payload: CupomCreate) -> None:
@@ -174,7 +187,7 @@ def _automatic_loyalty_recommendation(
     cost_coverage_percent = (
         (covered_revenue / total_revenue) * 100.0 if total_revenue > 0 else 0.0
     )
-    koma_fee_percent = float(subscription_marketplace_rate(restaurante.plano)) * 100.0
+    koma_fee_percent = float(_contracted_marketplace_rate(db, restaurante)) * 100.0
 
     known_contribution_percent: float | None = None
     source = "conservative_default"
@@ -319,7 +332,7 @@ def recomendar_incentivos(
         average_ticket=payload.average_ticket,
         variable_cost_percent=payload.variable_cost_percent,
         minimum_margin_percent=payload.minimum_margin_percent,
-        koma_fee_fraction=subscription_marketplace_rate(restaurante.plano),
+        koma_fee_fraction=_contracted_marketplace_rate(db, restaurante),
     )
 
 
