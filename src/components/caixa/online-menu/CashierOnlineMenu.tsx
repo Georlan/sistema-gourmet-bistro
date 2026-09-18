@@ -39,6 +39,7 @@ const sectionBySubTab = {
   cardapio_digital: 'perfil',
   cardapio_perfil: 'perfil',
   cardapio_pedidos: 'pedidos',
+  cardapio_bloqueios: 'bloqueios',
   cardapio_marca: 'marca',
   cardapio_entrega: 'entrega',
   cardapio_pagamentos: 'pagamentos',
@@ -94,8 +95,6 @@ export default function CashierOnlineMenu({
           publicMenuUrl={publicMenuUrl}
         />
 
-        <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
-
         <details className="group rounded-2xl border border-koma-border bg-koma-panel">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
             <div>
@@ -115,6 +114,8 @@ export default function CashierOnlineMenu({
         </details>
       </div>
     );
+  } else if (activeSection === 'bloqueios') {
+    content = <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
   } else if (activeSection === 'entrega') {
     content = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} publicMenuUrl={publicMenuUrl} />;
   } else if (activeSection === 'pagamentos') {
