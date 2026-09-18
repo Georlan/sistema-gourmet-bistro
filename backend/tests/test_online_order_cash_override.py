@@ -87,11 +87,20 @@ def test_dentro_do_horario_aceita_mesmo_sem_caixa_aberto():
 
 
 def test_caixa_aberto_nao_reativa_delivery_desligado():
+    now = datetime.datetime(
+        2026,
+        8,
+        27,
+        19,
+        0,
+        tzinfo=ZoneInfo("America/Fortaleza"),
+    )
     policy = evaluate_online_order_policy(
-        _restaurant(),
+        _restaurant(schedule=[{"days": "Quinta", "hours": "18:30 - 23:30"}]),
         _config(delivery_ativo=False),
         modalidade="delivery",
         cash_open=True,
+        now=now,
     )
 
     assert policy.accepting_orders is False
