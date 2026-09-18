@@ -147,10 +147,37 @@ def upgrade() -> None:
         """
     )
 
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION koma_internal.plan_change_owner_for_acceptance(
+            p_acceptance_id text
+        ) RETURNS integer
+        LANGUAGE sql
+        SECURITY DEFINER
+        STABLE
+        SET search_path = pg_catalog
+        AS $
+            SELECT c.restaurante_id
+            FROM public.saas_plan_changes AS c
+            WHERE c.acceptance_id = p_acceptance_id
+            LIMIT 1
+        $
+        """
+    )
+    op.execute(
+        "REVOKE ALL ON FUNCTION koma_internal.plan_change_owner_for_acceptance(text) FROM PUBLIC"
+    )
+    op.execute(
+        "GRANT EXECUTE ON FUNCTION koma_internal.plan_change_owner_for_acceptance(text) TO koma_app"
+    )
+
 
 def downgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
+        op.execute(
+            "DROP FUNCTION IF EXISTS koma_internal.plan_change_owner_for_acceptance(text)"
+        )
         op.execute("DROP POLICY IF EXISTS saas_plan_changes_update ON public.saas_plan_changes")
         op.execute("DROP POLICY IF EXISTS saas_plan_changes_insert ON public.saas_plan_changes")
         op.execute("DROP POLICY IF EXISTS saas_plan_changes_select ON public.saas_plan_changes")
