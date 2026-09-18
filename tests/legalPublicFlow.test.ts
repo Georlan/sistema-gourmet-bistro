@@ -100,7 +100,7 @@ test('proveniência jurídica fixa commit e blob da Legal 2.6 sem documento fisc
 });
 
 test('landing não privilegia Pocket e envia cada plano para sua própria contratação', () => {
-  assert.match(plans, /href=\{`\/contratar\/\$\{plan\.id\}\?cobranca=\$\{billing\}`\}/);
+  assert.match(plans, /plan\.id === 'pocket' \? 'mensal' : billing/);
   assert.match(plans, /CONTRATAR \{planLabel\}/);
   assert.match(header, /href="\/#planos"/);
   assert.doesNotMatch(header, /href="\/landing#planos"/);
