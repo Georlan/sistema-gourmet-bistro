@@ -1729,7 +1729,9 @@ def atualizar_configuracoes(
         
     db.commit()
     db.refresh(config)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    rest_id = require_tenant_id()
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    background_tasks.add_task(manager.broadcast, {"event": "config_updated"}, rest_id)
     return _serializar_configuracoes(config)
 
 

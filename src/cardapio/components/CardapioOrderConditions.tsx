@@ -132,6 +132,9 @@ export function CardapioConditionsSummary({ brand, onOpen }: { brand: BrandConfi
 
 export function CardapioDeliveryInfo({ brand }: { brand: BrandConfig }) {
   const neighborhoods = brand.tabelaTaxasBairros ?? [];
+  const deliveryMode = brand.tipoTaxaEntrega
+    || (neighborhoods.length > 0 ? 'bairro' : 'fixa');
+  const distanceConfig = brand.tabelaTaxasKm?.[0];
   if (brand.deliveryEnabled === false) {
     return (
       <section aria-labelledby="store-delivery-title">
@@ -145,7 +148,7 @@ export function CardapioDeliveryInfo({ brand }: { brand: BrandConfig }) {
       <h3 id="store-delivery-title" className="flex items-center gap-2 text-sm font-bold text-koma-foreground"><Truck className="h-4 w-4 text-emerald-500" aria-hidden="true" />Entrega e retirada</h3>
       {(brand.pedidoMinimo ?? 0) > 0 && <p className="mt-3 text-xs leading-relaxed text-koma-secondary">Pedido mínimo para entrega: <strong>{money(brand.pedidoMinimo!)}</strong> em produtos.</p>}
       {(brand.freteGratisValor ?? 0) > 0 && <p className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs leading-relaxed text-koma-secondary">Frete grátis a partir de <strong>{money(brand.freteGratisValor!)}</strong> em produtos.</p>}
-      {neighborhoods.length > 0 ? (
+      {deliveryMode === 'bairro' && neighborhoods.length > 0 ? (
         <>
           <p className="mt-3 text-xs text-koma-muted">Taxas por bairro</p>
           <ul className="mt-2 overflow-hidden rounded-xl border border-koma-border bg-koma-card">
@@ -156,6 +159,21 @@ export function CardapioDeliveryInfo({ brand }: { brand: BrandConfig }) {
             ))}
           </ul>
         </>
+      ) : deliveryMode === 'distancia' && distanceConfig ? (
+        <div className="mt-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs leading-relaxed text-koma-secondary">
+          <p>
+            Taxa a partir de <strong>{money(Number(distanceConfig.taxa_minima || 0))}</strong>, calculada conforme a distância do endereço.
+          </p>
+          <p className="mt-1 text-koma-muted">
+            Até {Number(distanceConfig.km_inclusos || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km na taxa mínima
+            {Number(distanceConfig.incremento_valor || 0) > 0 && Number(distanceConfig.incremento_km || 0) > 0
+              ? `; depois +${money(Number(distanceConfig.incremento_valor))} a cada ${Number(distanceConfig.incremento_km).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`
+              : ''}
+            {Number(distanceConfig.taxa_maxima || 0) > 0
+              ? `; máximo de ${money(Number(distanceConfig.taxa_maxima))}`
+              : ''}.
+          </p>
+        </div>
       ) : (
         <p className="mt-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs leading-relaxed text-koma-secondary">
           {Number.isFinite(brand.taxaEntregaPadrao) ? <>Taxa padrão estimada: <strong>{money(brand.taxaEntregaPadrao!)}</strong>.</> : 'Consulte a taxa de entrega na sacola.'}

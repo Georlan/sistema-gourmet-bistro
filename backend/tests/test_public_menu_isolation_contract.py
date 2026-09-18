@@ -33,7 +33,9 @@ def test_public_menu_does_not_inherit_operator_theme_prepaint_or_bootstrap():
 def test_public_menu_config_sync_is_tenant_scoped_and_refetches_source_of_truth():
     page = source("src/cardapio/CardapioPage.tsx")
     settings_panel = source("src/components/cardapio/CardapioDigitalSettingsPanel.tsx")
+    delivery_settings = source("src/components/caixa/online-menu/OnlineMenuDeliverySettings.tsx")
     route = source("backend/app/routes/cardapio_digital.py")
+    caixa_route = source("backend/app/routes/caixa.py")
     manager = source("backend/app/websocket_manager.py")
 
     assert "/api/cardapio-digital/public?" in page
@@ -45,6 +47,15 @@ def test_public_menu_config_sync_is_tenant_scoped_and_refetches_source_of_truth(
     assert "`${apiBaseUrl}/api/cardapio-digital/config`" in settings_panel
     assert "headers: authHeaders" in settings_panel
     assert "method: 'PUT'" in settings_panel
+
+    assert "${apiBaseUrl}/caixa/configuracoes" in delivery_settings
+    assert "method: 'PUT'" in delivery_settings
+    config_update_section = caixa_route[
+        caixa_route.index('@router.put("/configuracoes", response_model=ConfiguracaoRestauranteResponse)'):
+        caixa_route.index("# ----------------- CONFIGURAÇÕES WHITELABEL DO RESTAURANTE -----------------")
+    ]
+    assert '{"event": "config_updated"}' in config_update_section
+    assert "rest_id = require_tenant_id()" in config_update_section
 
     assert "with tenant_session_scope(db, rest_id):" in route
     assert 'require_permission("configuracoes:administrar")' in route
