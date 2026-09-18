@@ -13,20 +13,20 @@ import { Plans } from '../src/landing/sections/Plans';
 
 test('plan prices and split fees match the commercial catalog', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => [plan.id, plan.price, plan.splitFeeRate]), [
-    ['pocket', 109, 0.0149],
-    ['pro', 209, 0.0069],
-    ['premium', 309, 0.0029],
+    ['pocket', 0, 0.0179],
+    ['pro', 129, 0.005],
+    ['premium', 249, 0.002],
   ]);
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => formatPercentage(plan.splitFeeRate)), [
-    '1,49%', '0,69%', '0,29%',
+    '1,79%', '0,50%', '0,20%',
   ]);
 });
 
 test('annual totals and savings apply ten percent only to the fixed subscription', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => getSubscriptionPricing(plan.price)), [
-    { monthly: 109, annualMonthlyEquivalent: 98.1, annualTotal: 1177.2, annualSavings: 130.8 },
-    { monthly: 209, annualMonthlyEquivalent: 188.1, annualTotal: 2257.2, annualSavings: 250.8 },
-    { monthly: 309, annualMonthlyEquivalent: 278.1, annualTotal: 3337.2, annualSavings: 370.8 },
+    { monthly: 0, annualMonthlyEquivalent: 0, annualTotal: 0, annualSavings: 0 },
+    { monthly: 129, annualMonthlyEquivalent: 116.1, annualTotal: 1393.2, annualSavings: 154.8 },
+    { monthly: 249, annualMonthlyEquivalent: 224.1, annualTotal: 2689.2, annualSavings: 298.8 },
   ]);
 });
 
@@ -47,7 +47,7 @@ test('essential delivery stays in every plan while advanced modules require upgr
 test('comparison matrix publishes the exact KOMA online-payment fee by plan', () => {
   const fee = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'Taxa KÔMA por pedido online pago');
   assert.ok(fee);
-  assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['1,49%', '0,69%', '0,29%']);
+  assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['1,79%', '0,50%', '0,20%']);
 });
 
 test('landing starts monthly, has no setup fee or addons, and shows all current prices and split fees', () => {
@@ -63,7 +63,7 @@ test('landing starts monthly, has no setup fee or addons, and shows all current 
   assert.ok(html.includes('MENOR TAXA'));
 
   for (const plan of SUBSCRIPTION_PLANS) {
-    assert.ok(html.includes(`${plan.price},00 por mês`));
+    assert.ok(html.includes(plan.price === 0 ? '0,00 por mês' : `${plan.price},00 por mês`));
     assert.ok(html.includes(formatPercentage(plan.splitFeeRate)));
     for (const feature of plan.features) assert.ok(html.includes(feature));
   }
@@ -90,4 +90,22 @@ test('landing does not promise unrelated modules as part of the commercial offer
   const html = renderToStaticMarkup(createElement(Plans));
   assert.ok(html.includes('Emissão fiscal e integração com marketplaces não fazem parte desta oferta.'));
   assert.equal(PLAN_COMPARISON_MATRIX.some(row => row.category === 'Notificações'), false);
+});
+
+
+test('Pocket keeps zero fixed component while annual discount applies only to paid fixed plans', () => {
+  const pocket = getSubscriptionPricing(0);
+  const pro = getSubscriptionPricing(129);
+  const premium = getSubscriptionPricing(249);
+  assert.equal(pocket.annualTotal, 0);
+  assert.equal(pro.annualTotal, 1393.2);
+  assert.equal(pro.annualMonthlyEquivalent, 116.1);
+  assert.equal(premium.annualTotal, 2689.2);
+  assert.equal(premium.annualMonthlyEquivalent, 224.1);
+
+  const html = renderToStaticMarkup(createElement(Plans));
+  assert.ok(html.includes('Sem mensalidade fixa'));
+  assert.ok(html.includes('sem componente anual'));
+  assert.ok(html.includes('Seu restaurante cresceu. Sua taxa diminui.'));
+  assert.ok(html.includes('Mais volume, menor taxa.'));
 });
