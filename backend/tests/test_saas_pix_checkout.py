@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import datetime as dt
 from decimal import Decimal
+from types import SimpleNamespace
 
-from app.routes.saas_pix import _advance_paid_period, _payment_qr_payload, _pix_reference
+import app.routes.saas_pix as saas_pix
+from app.routes.saas_pix import (
+    _advance_paid_period,
+    _payment_qr_payload,
+    _pix_reference,
+    _subscription_amount,
+)
 from app.saas_billing_models import SaaSSubscription
 from app.services.saas_billing_policy import (
     CHECKOUT_PAYMENT_METHODS,
@@ -37,12 +44,90 @@ def test_qr_payload_exposes_qr_copy_paste_and_no_automatic_renewal():
             }
         },
     }
-    result = _payment_qr_payload(payment, due_at=due, amount=Decimal("209.00"))
+    result = _payment_qr_payload(payment, due_at=due, amount=Decimal("129.00"))
     assert result["paymentMethodType"] == "pix"
     assert result["automaticRenewal"] is False
     assert result["qrCode"] == "000201-koma"
     assert result["qrCodeBase64"].startswith("iVBOR")
-    assert result["amount"] == "209.00"
+    assert result["amount"] == "129.00"
+
+
+class _FakeRestaurantQuery:
+    def __init__(self, restaurant):
+        self.restaurant = restaurant
+
+    def filter(self, *_args, **_kwargs):
+        return self
+
+    def one_or_none(self):
+        return self.restaurant
+
+
+class _FakeDb:
+    def __init__(self, restaurant):
+        self.restaurant = restaurant
+
+    def query(self, _model):
+        return _FakeRestaurantQuery(self.restaurant)
+
+
+def test_saas_pix_uses_signed_legacy_billing_amount_after_catalog_changes(monkeypatch):
+    db = _FakeDb(SimpleNamespace(id=10, plano="pro"))
+    subscription = SaaSSubscription(
+        restaurante_id=10,
+        provider="mercado_pago",
+        payment_method_type="pix",
+        status="active",
+        billing_cycle="monthly",
+    )
+    monkeypatch.setattr(
+        saas_pix,
+        "tenant_commercial_terms",
+        lambda _db, _restaurant_id: SimpleNamespace(
+            billing_amount=Decimal("209.00")
+        ),
+    )
+
+    assert _subscription_amount(db, subscription, 10) == Decimal("209.00")
+
+
+def test_saas_pix_legacy_without_acceptance_uses_frozen_v25_price(monkeypatch):
+    db = _FakeDb(SimpleNamespace(id=11, plano="pro"))
+    subscription = SaaSSubscription(
+        restaurante_id=11,
+        provider="mercado_pago",
+        payment_method_type="pix",
+        status="active",
+        billing_cycle="monthly",
+    )
+    monkeypatch.setattr(
+        saas_pix,
+        "tenant_commercial_terms",
+        lambda _db, _restaurant_id: None,
+    )
+
+    # O catálogo vigente é R$ 129, mas o fallback pré-aceite permanece R$ 209.
+    assert _subscription_amount(db, subscription, 11) == Decimal("209.00")
+
+
+def test_saas_pix_new_pro_uses_signed_vnext_amount(monkeypatch):
+    db = _FakeDb(SimpleNamespace(id=12, plano="pro"))
+    subscription = SaaSSubscription(
+        restaurante_id=12,
+        provider="mercado_pago",
+        payment_method_type="pix",
+        status="active",
+        billing_cycle="monthly",
+    )
+    monkeypatch.setattr(
+        saas_pix,
+        "tenant_commercial_terms",
+        lambda _db, _restaurant_id: SimpleNamespace(
+            billing_amount=Decimal("129.00")
+        ),
+    )
+
+    assert _subscription_amount(db, subscription, 12) == Decimal("129.00")
 
 
 def test_approved_monthly_pix_advances_one_month_but_never_reactivates_canceled_subscription():
