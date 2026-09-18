@@ -4,6 +4,9 @@ import datetime as dt
 from decimal import Decimal
 from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
+
 import app.routes.saas_pix as saas_pix
 from app.routes.saas_pix import (
     _advance_paid_period,
@@ -92,7 +95,7 @@ def test_saas_pix_uses_signed_legacy_billing_amount_after_catalog_changes(monkey
 
 
 def test_saas_pix_legacy_without_acceptance_uses_frozen_v25_price(monkeypatch):
-    db = _FakeDb(SimpleNamespace(id=11, plano="pro"))
+    db = _FakeDb(SimpleNamespace(id=11, plano="pro", billing_mode="legacy"))
     subscription = SaaSSubscription(
         restaurante_id=11,
         provider="mercado_pago",
@@ -108,6 +111,29 @@ def test_saas_pix_legacy_without_acceptance_uses_frozen_v25_price(monkeypatch):
 
     # O catálogo vigente é R$ 129, mas o fallback pré-aceite permanece R$ 209.
     assert _subscription_amount(db, subscription, 11) == Decimal("209.00")
+
+
+def test_saas_pix_subscription_tenant_without_acceptance_fails_closed(monkeypatch):
+    db = _FakeDb(
+        SimpleNamespace(id=13, plano="pro", billing_mode="subscription")
+    )
+    subscription = SaaSSubscription(
+        restaurante_id=13,
+        provider="mercado_pago",
+        payment_method_type="pix",
+        status="active",
+        billing_cycle="monthly",
+    )
+    monkeypatch.setattr(
+        saas_pix,
+        "tenant_commercial_terms",
+        lambda _db, _restaurant_id: None,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        _subscription_amount(db, subscription, 13)
+    assert exc_info.value.status_code == 409
+    assert "sem aceite comercial" in str(exc_info.value.detail)
 
 
 def test_saas_pix_new_pro_uses_signed_vnext_amount(monkeypatch):
