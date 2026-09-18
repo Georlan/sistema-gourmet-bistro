@@ -207,7 +207,12 @@ export default function PlanContractPageV2() {
     [activePlanId],
   );
   const pricing = useMemo(() => getSubscriptionPricing(plan.price), [plan.price]);
-  const nextChargeAmount = activeBillingCycle === 'anual' ? pricing.annualTotal : pricing.monthly;
+  const fixedBillingRequired = receipt
+    ? Number.parseFloat(receipt.commercial.fixedMonthlyPrice) > 0
+    : plan.price > 0;
+  const nextChargeAmount = fixedBillingRequired
+    ? (activeBillingCycle === 'anual' ? pricing.annualTotal : pricing.monthly)
+    : 0;
   const contractLocked = Boolean(receipt);
   const contractingTaxKind = taxIdKind(form.taxId);
   const isCompany = contractingTaxKind === 'cnpj';
@@ -226,12 +231,12 @@ export default function PlanContractPageV2() {
     && cardHolder.trim().length >= 2
     && /^\d{2}\/\d{2,4}$/.test(cardExp.trim())
     && /^\d{3,4}$/.test(cardCvv.trim());
-  const paymentFieldsValid = billingMethod !== 'credit_card' || cardFieldsValid;
-  const methodAvailable = billingMethod === 'credit_card'
+  const paymentFieldsValid = !fixedBillingRequired || billingMethod !== 'credit_card' || cardFieldsValid;
+  const methodAvailable = !fixedBillingRequired || (billingMethod === 'credit_card'
     ? capabilities.credit_card
     : billingMethod === 'pix'
       ? capabilities.pix
-      : capabilities.account_money;
+      : capabilities.account_money);
   const canContinue = methodAvailable
     && ((baseFieldsValid && representativeValid && accepted) || Boolean(receipt))
     && paymentFieldsValid
@@ -266,6 +271,12 @@ export default function PlanContractPageV2() {
   useEffect(() => {
     document.title = `Contratar ${plan.name} | KÔMA`;
   }, [plan.name]);
+
+  useEffect(() => {
+    if (!contractLocked && selectedPlanId === 'pocket' && billingCycle !== 'mensal') {
+      setBillingCycle('mensal');
+    }
+  }, [selectedPlanId, billingCycle, contractLocked]);
 
   useEffect(() => {
     if (contractLocked) return;
@@ -522,8 +533,14 @@ export default function PlanContractPageV2() {
     setError(null);
     try {
       const activeReceipt = await createAcceptance();
+      const freeFixedContract = Number.parseFloat(activeReceipt.commercial.fixedMonthlyPrice) === 0;
       let response: Response;
-      if (billingMethod === 'pix') {
+      if (freeFixedContract) {
+        response = await fetch(
+          `${API_BASE_URL}/api/contracts/${activeReceipt.protocol}/billing/activate-free`,
+          { method: 'POST' },
+        );
+      } else if (billingMethod === 'pix') {
         response = await fetch(`${API_BASE_URL}/api/contracts/${activeReceipt.protocol}/billing/pix/select`, { method: 'POST' });
       } else {
         const body: Record<string, string> = {
@@ -549,7 +566,7 @@ export default function PlanContractPageV2() {
         status: payload.status,
         message: payload.message,
         slug: payload.slug || undefined,
-        trialDays: payload.trialDays || 7,
+        trialDays: payload.trialDays ?? (freeFixedContract ? 0 : 7),
         trialEndsAt: payload.trialEndsAt || undefined,
         activationToken: payload.activationToken || undefined,
       });
@@ -559,7 +576,7 @@ export default function PlanContractPageV2() {
   };
 
   if (activationResult && receipt) {
-    const pixSelected = billingMethod === 'pix';
+    const pixSelected = fixedBillingRequired && billingMethod === 'pix';
     return (
       <div className="koma-sub-wrapper">
         <header className="koma-sub-header">
@@ -571,9 +588,11 @@ export default function PlanContractPageV2() {
             <span className="koma-sub-success-icon"><CheckCircle2 size={32} /></span>
             <span className="koma-sub-eyebrow">{activationResult.status === 'awaiting_release' ? 'CONTRATAÇÃO RECEBIDA' : 'CONTRATAÇÃO CONCLUÍDA'}</span>
             <h1>{activationResult.status === 'awaiting_release' ? 'Recebemos sua contratação.' : 'Seu KÔMA está pronto.'}</h1>
-            <p>{activationResult.message || (pixSelected
-              ? 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
-              : 'A mensalidade fixa continua R$ 0 hoje e os 7 dias grátis começam após a implantação essencial.')}</p>
+            <p>{activationResult.message || (!fixedBillingRequired
+              ? 'Pocket ativado sem mensalidade fixa e sem assinatura recorrente de R$ 0 no provedor.'
+              : pixSelected
+                ? 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
+                : 'A mensalidade fixa continua R$ 0 hoje e os 7 dias grátis começam após a implantação essencial.')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
             {activationResult.status === 'awaiting_release' ? (
               <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Aguarde o convite para criar sua senha.</strong></div>
