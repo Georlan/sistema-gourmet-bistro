@@ -62,7 +62,12 @@ def _documents() -> dict[str, dict]:
     }
 
 
-def _contract_payload(restaurant_name: str = "Bistrô Billing Test") -> dict[str, Any]:
+def _contract_payload(
+    restaurant_name: str = "Bistrô Billing Test",
+    *,
+    plan: str = "pro",
+    billing_cycle: str = "anual",
+) -> dict[str, Any]:
     return {
         "request_id": str(uuid.uuid4()),
         "contracting_party_name": "Restaurante Billing Ltda",
@@ -73,8 +78,8 @@ def _contract_payload(restaurant_name: str = "Bistrô Billing Test") -> dict[str
         "representative_role": "Sócio administrador",
         "email": f"billing-{uuid.uuid4().hex[:6]}@example.com",
         "phone": "85999999999",
-        "plan": "pro",
-        "billing_cycle": "anual",
+        "plan": plan,
+        "billing_cycle": billing_cycle,
         "powers_declared": True,
         "legal_version": LEGAL_VERSION,
         "legal_source_commit": LEGAL_SOURCE_COMMIT,
@@ -124,8 +129,21 @@ def client_and_session(monkeypatch):
     engine.dispose()
 
 
-def _accept_contract(client: TestClient, restaurant_name: str = "Bistrô Billing Test") -> str:
-    accepted = client.post("/api/contracts/accept", json=_contract_payload(restaurant_name))
+def _accept_contract(
+    client: TestClient,
+    restaurant_name: str = "Bistrô Billing Test",
+    *,
+    plan: str = "pro",
+    billing_cycle: str = "anual",
+) -> str:
+    accepted = client.post(
+        "/api/contracts/accept",
+        json=_contract_payload(
+            restaurant_name,
+            plan=plan,
+            billing_cycle=billing_cycle,
+        ),
+    )
     assert accepted.status_code == 201, accepted.text
     return accepted.json()["protocol"]
 
@@ -199,10 +217,68 @@ def test_billing_enforcement_enabled_allows_ready_billing(client_and_session, mo
 
         # Verifica criação da assinatura canônica
         sub = db.query(SaaSSubscription).filter_by(restaurante_id=restaurant_id).one()
-        assert sub.status == "trialing"
+        assert sub.status == "onboarding"
         assert sub.provider == "mercado_pago"
         assert sub.payment_method_type == "credit_card"
         assert sub.billing_cycle == "anual"
+
+
+def test_billing_enforcement_treats_free_pocket_as_not_required(client_and_session, monkeypatch):
+    client, Session = client_and_session
+    monkeypatch.setattr(
+        super_admin_contracts,
+        "is_billing_enforcement_enabled",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "app.services.billing_service.is_billing_enforcement_enabled",
+        lambda: True,
+    )
+
+    protocol = _accept_contract(
+        client,
+        "Pocket Sem Mensalidade",
+        plan="pocket",
+        billing_cycle="mensal",
+    )
+
+    preview = client.get(f"/api/super-admin/contracts/preview/{protocol}")
+    assert preview.status_code == 200, preview.text
+    preview_data = preview.json()
+    assert preview_data["billingStatus"] == "not_required"
+    assert preview_data["billingEnforcementEnabled"] is True
+    assert preview_data["activationEligible"] is True
+    assert preview_data["billingProvider"] is None
+    assert preview_data["paymentMethodType"] is None
+
+    activated = client.post(
+        f"/api/super-admin/contracts/{protocol}/activate",
+        json={"reason": "Ativação Pocket gratuito com enforcement ligado"},
+    )
+    assert activated.status_code == 200, activated.text
+    data = activated.json()
+    assert data["billingStatus"] == "not_required"
+    assert "billingProvider" not in data
+    assert "paymentMethodType" not in data
+    assert "trial" not in data
+
+    tenant_id = int(data["restaurantId"])
+    with Session() as db:
+        assert get_billing_setup(db, protocol) is None
+        sub = (
+            db.query(SaaSSubscription)
+            .filter(SaaSSubscription.restaurante_id == tenant_id)
+            .one()
+        )
+        assert sub.status == "active"
+        assert sub.provider_subscription_id is None
+        assert sub.payment_method_type is None
+        assert sub.trial_started_at is None
+        assert sub.trial_ends_at is None
+
+        entitlement = resolve_tenant_entitlement(db, tenant_id)
+        assert entitlement.allowed is True
+        assert entitlement.billing_status == "active"
 
 
 def test_backward_compatibility_when_enforcement_disabled(client_and_session, monkeypatch):
