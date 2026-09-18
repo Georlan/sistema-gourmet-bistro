@@ -25,11 +25,7 @@ def test_delivery_config_update_notifies_public_menu_and_exposes_active_distance
             "taxa_entrega_fixa": 7,
             "tabela_taxas_km": [{
                 "taxa_minima": 5,
-                "km_inclusos": 5,
-                "incremento_valor": 1,
-                "incremento_km": 2,
-                "taxa_maxima": 8,
-                "distancia_maxima_km": 0,
+                "valor_por_km": 1,
             }],
         },
     )
@@ -49,11 +45,7 @@ def test_delivery_config_update_notifies_public_menu_and_exposes_active_distance
     assert restaurant["taxa_entrega_fixa"] == 7.0
     assert restaurant["tabela_taxas_km"][0] == {
         "taxa_minima": 5.0,
-        "km_inclusos": 5.0,
-        "incremento_valor": 1.0,
-        "incremento_km": 2.0,
-        "taxa_maxima": 8.0,
-        "distancia_maxima_km": None,
+        "valor_por_km": 1.0,
         "fallback_sem_localizacao": "minima",
     }
 
