@@ -56,7 +56,7 @@ def test_hosted_plan_accepts_response_without_application_or_collector(monkeypat
         protocol="KOMA-CTR-20260915-ABCDEF123456",
         plan="premium",
         billing_cycle="monthly",
-        amount=Decimal("309.00"),
+        amount=Decimal("249.00"),
         payer_email="cliente@example.com",
     )
 
@@ -80,7 +80,7 @@ def test_hosted_plan_rejects_explicit_application_mismatch(monkeypatch):
             protocol="KOMA-CTR-20260915-123456ABCDEF",
             plan="premium",
             billing_cycle="monthly",
-            amount=Decimal("309.00"),
+            amount=Decimal("249.00"),
             payer_email="cliente@example.com",
         )
 
@@ -103,7 +103,7 @@ def test_hosted_plan_rejects_explicit_collector_mismatch(monkeypatch):
             protocol="KOMA-CTR-20260915-FFEEDDCCBBAA",
             plan="pro",
             billing_cycle="monthly",
-            amount=Decimal("209.00"),
+            amount=Decimal("129.00"),
             payer_email="cliente@example.com",
         )
 
