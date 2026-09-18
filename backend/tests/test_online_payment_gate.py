@@ -224,12 +224,35 @@ def test_tenant_without_acceptance_uses_frozen_legacy_rate_after_catalog_change(
         lambda _db, _restaurante_id: None,
     )
 
-    restaurant = SimpleNamespace(id=124, plano="pocket")
+    restaurant = SimpleNamespace(id=124, plano="pocket", billing_mode="legacy")
     assert OnlinePaymentService.marketplace_fee_for_tenant(
         None,
         Decimal("100.00"),
         restaurant,
     ) == Decimal("1.49")
+
+
+def test_subscription_tenant_without_acceptance_fails_closed_instead_of_using_legacy_rate(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: None,
+    )
+
+    restaurant = SimpleNamespace(
+        id=127,
+        plano="pocket",
+        billing_mode="subscription",
+    )
+    with pytest.raises(
+        OnlinePaymentConfigurationError,
+        match="sem aceite comercial",
+    ):
+        OnlinePaymentService.marketplace_fee_for_tenant(
+            None,
+            Decimal("100.00"),
+            restaurant,
+        )
 
 
 def test_tenant_marketplace_fee_flag_disabled_does_not_resolve_contract(monkeypatch):
