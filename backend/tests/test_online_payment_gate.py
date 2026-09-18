@@ -587,7 +587,14 @@ def test_mercado_pago_webhook_approved_integration_and_idempotency(monkeypatch):
     db = SessionLocal()
     try:
         monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-        db.add(Restaurante(id=rid, nome="Webhook Integration Test", plano="premium"))
+        db.add(
+            Restaurante(
+                id=rid,
+                nome="Webhook Integration Test",
+                plano="premium",
+                billing_mode="legacy",
+            )
+        )
         db.flush()
         db.add(Usuario(
             id="webhook-test-user-9919",
@@ -801,7 +808,14 @@ def test_mercado_pago_webhook_rejects_divergent_amount_or_reference(monkeypatch)
     db = SessionLocal()
     try:
         monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
-        db.add(Restaurante(id=rid, nome="Webhook Divergence Test", plano="premium"))
+        db.add(
+            Restaurante(
+                id=rid,
+                nome="Webhook Divergence Test",
+                plano="premium",
+                billing_mode="legacy",
+            )
+        )
         db.flush()
         db.add(Usuario(
             id="webhook-user-9920",
