@@ -163,6 +163,51 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
             "back_url": back_url,
         }
 
+    @staticmethod
+    def _validate_hosted_plan_terms(
+        payload: dict[str, Any],
+        *,
+        expected_amount: Decimal,
+        billing_cycle: str,
+    ) -> None:
+        """Falha fechado se o provider devolver um plano com termos diferentes."""
+        recurring = payload.get("auto_recurring")
+        if not isinstance(recurring, dict) or not recurring:
+            return
+
+        expected = Decimal(str(expected_amount)).quantize(Decimal("0.01"))
+        try:
+            actual = Decimal(str(recurring.get("transaction_amount"))).quantize(
+                Decimal("0.01")
+            )
+        except Exception as exc:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago devolveu um plano sem valor financeiro válido.",
+                status_code=409,
+            ) from exc
+
+        if actual != expected:
+            raise SaasMercadoPagoError(
+                "O Mercado Pago devolveu um plano com valor diferente do contrato.",
+                status_code=409,
+            )
+        if str(recurring.get("currency_id") or "").upper() != "BRL":
+            raise SaasMercadoPagoError(
+                "O Mercado Pago devolveu um plano com moeda diferente do contrato.",
+                status_code=409,
+            )
+
+        is_annual = billing_cycle.strip().lower() in {"anual", "annual"}
+        expected_frequency = 12 if is_annual else 1
+        if (
+            int(recurring.get("frequency") or 0) != expected_frequency
+            or str(recurring.get("frequency_type") or "").lower() != "months"
+        ):
+            raise SaasMercadoPagoError(
+                "O Mercado Pago devolveu um plano com ciclo diferente do contrato.",
+                status_code=409,
+            )
+
     def _create_hosted_plan(
         self,
         *,
@@ -232,6 +277,11 @@ class HostedPlanSaasMercadoPagoService(SaasMercadoPagoService):
                         status_code=response.status_code,
                     )
                 result = response.json()
+                self._validate_hosted_plan_terms(
+                    result,
+                    expected_amount=amount,
+                    billing_cycle=billing_cycle,
+                )
                 plan_id = str(result.get("id") or "").strip()
                 init_point = str(result.get("init_point") or "").strip()
                 if not plan_id or not init_point:

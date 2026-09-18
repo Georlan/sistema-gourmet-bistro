@@ -6,7 +6,11 @@ from fastapi import HTTPException
 
 from ..database import tenant_session_scope
 from ..saas_billing_models import SaaSSubscription
-from .billing_service import contract_billing_terms, get_billing_setup_by_provider_sub
+from .billing_service import (
+    contract_billing_terms,
+    get_billing_setup_by_provider_sub,
+    tenant_commercial_terms,
+)
 from .saas_billing_policy import is_recurring_trial_payment_method
 from .saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 
@@ -77,22 +81,46 @@ def reconcile_invoice(db, invoice_id):
             "reason": "payment_method_mismatch",
         }
 
-    try:
-        amount = Decimal(str(verified.get("transaction_amount")))
-        expected = Decimal(
-            str(contract_billing_terms(db, billing.protocol)["commercial"]["billingAmount"])
-        )
-        if (
-            verified.get("currency_id") != "BRL"
-            or not amount.is_finite()
-            or amount <= 0
-            or amount != expected
-        ):
-            return {"status": "received", "reconciled": False}
-    except (InvalidOperation, TypeError):
-        return {"status": "received", "reconciled": False}
-
     with tenant_session_scope(db, billing.restaurante_id):
+        try:
+            amount = Decimal(str(verified.get("transaction_amount")))
+            current_terms = tenant_commercial_terms(
+                db,
+                int(billing.restaurante_id),
+            )
+            if current_terms is not None:
+                expected = Decimal(str(current_terms.billing_amount))
+            else:
+                # Compatibilidade somente para tenant sem aceite atual. O protocolo
+                # original continua sendo a evidência da autorização do provider.
+                expected = Decimal(
+                    str(
+                        contract_billing_terms(
+                            db,
+                            billing.protocol,
+                        )["commercial"]["billingAmount"]
+                    )
+                )
+            if (
+                verified.get("currency_id") != "BRL"
+                or not amount.is_finite()
+                or amount <= 0
+                or amount != expected
+            ):
+                return {
+                    "status": "received",
+                    "reconciled": False,
+                    "reason": "billing_amount_mismatch",
+                }
+        except RuntimeError:
+            return {
+                "status": "received",
+                "reconciled": False,
+                "reason": "commercial_terms_unavailable",
+            }
+        except (InvalidOperation, TypeError):
+            return {"status": "received", "reconciled": False}
+
         sub = (
             db.query(SaaSSubscription)
             .filter(SaaSSubscription.restaurante_id == billing.restaurante_id)

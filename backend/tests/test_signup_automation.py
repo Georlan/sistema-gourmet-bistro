@@ -151,7 +151,7 @@ def test_authorized_card_waits_for_manual_release_and_notifies_owner(client_and_
 def test_account_money_authorization_waits_for_manual_release(client_and_session, monkeypatch):
     client, Session = client_and_session
     monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
-    protocol = client.post("/api/contracts/accept", json=_contract_payload("pocket", "mensal")).json()["protocol"]
+    protocol = client.post("/api/contracts/accept", json=_contract_payload("pro", "mensal")).json()["protocol"]
     setup = client.post(
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "account_money"},
@@ -195,7 +195,7 @@ def test_card_network_timeout_recovers_without_creating_second_mandate(client_an
             "external_reference": protocol,
             "payer_id": "payer-recovered",
             "auto_recurring": {
-                "transaction_amount": 209,
+                "transaction_amount": 129,
                 "currency_id": "BRL",
                 "free_trial": {"frequency": 7, "frequency_type": "days"},
             },
@@ -206,6 +206,63 @@ def test_card_network_timeout_recovers_without_creating_second_mandate(client_an
     assert len(calls) == 1
     with Session() as db:
         assert db.query(SaaSSubscription).count() == 1
+
+
+def test_card_network_recovery_rejects_legacy_amount_for_vnext_contract(
+    client_and_session,
+    monkeypatch,
+):
+    client, Session = client_and_session
+    protocol = client.post(
+        "/api/contracts/accept",
+        json=_contract_payload("pro", "mensal"),
+    ).json()["protocol"]
+
+    monkeypatch.setattr(
+        default_saas_mp_service,
+        "create_preapproval",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            SaasMercadoPagoError("connection lost after provider accepted")
+        ),
+    )
+    payload = {
+        "payment_method_type": "credit_card",
+        "card_token_id": "one-time-token",
+    }
+    assert (
+        client.post(
+            f"/api/contracts/{protocol}/billing/setup",
+            json=payload,
+        ).status_code
+        == 402
+    )
+
+    monkeypatch.setattr(
+        default_saas_mp_service,
+        "find_preapproval",
+        lambda *_args: {
+            "id": "legacy-value-mandate",
+            "status": "authorized",
+            "external_reference": protocol,
+            "payer_id": "payer-legacy-value",
+            "auto_recurring": {
+                "transaction_amount": 209,
+                "currency_id": "BRL",
+                "free_trial": {"frequency": 7, "frequency_type": "days"},
+            },
+        },
+    )
+    recovered = client.post(
+        f"/api/contracts/{protocol}/billing/setup",
+        json=payload,
+    )
+    assert recovered.status_code == 409, recovered.text
+    assert "valor diferente do contrato" in recovered.text
+
+    with Session() as db:
+        assert db.query(SaaSSubscription).count() == 0
+        setup = db.query(SaaSBillingSetup).one()
+        assert setup.status == "pending"
 
 
 def test_superadmin_release_preserves_trial_until_onboarding_is_complete(signup_client, monkeypatch):
