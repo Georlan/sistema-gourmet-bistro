@@ -114,6 +114,7 @@ export function Plans() {
                 <small>{presentation.action}</small>
               </div>
 
+              <p className="koma-plan-tagline">{plan.tagline}</p>
               <p className="koma-plan-fit"><b>PARA QUEM É</b>{presentation.fit}</p>
 
               <div className="koma-plan-price" aria-label={`${formatCurrency(displayPrice)} por mês${isYearly && hasAnnualFixedPlan ? ', equivalente no plano anual' : ''}`}>
