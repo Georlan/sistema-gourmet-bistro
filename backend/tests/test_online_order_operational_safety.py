@@ -49,29 +49,48 @@ def setup_operational_safety_db():
         db.query(Comanda).filter(Comanda.restaurante_id.in_([RID, RID_OTHER])).delete(
             synchronize_session=False
         )
-        db.query(Usuario).filter(Usuario.restaurante_id.in_([RID, RID_OTHER])).delete(
-            synchronize_session=False
-        )
-        db.query(Restaurante).filter(Restaurante.id.in_([RID, RID_OTHER])).delete(
-            synchronize_session=False
-        )
         db.commit()
 
-        db.add_all(
-            [
-                Restaurante(id=RID, nome="KOMA Safety A", plano="pro", slug="koma-safety-a"),
-                Restaurante(id=RID_OTHER, nome="KOMA Safety B", plano="pro", slug="koma-safety-b"),
-                Usuario(
-                    id=ADMIN_ID,
-                    restaurante_id=RID,
-                    nome="Gerente Safety",
-                    email="safety-admin@koma.test",
-                    cargo="admin",
-                    role="admin",
-                    status="ativo",
-                ),
-            ]
-        )
+        # Preserve os pais: outras suítes podem manter FKs legítimas para estes
+        # tenants no banco SQLite compartilhado do CI. Esta fixture só é dona
+        # dos registros operacionais que limpa acima.
+        restaurant = db.query(Restaurante).filter(Restaurante.id == RID).first()
+        if restaurant is None:
+            restaurant = Restaurante(id=RID, nome="KOMA Safety A", plano="pro", slug="koma-safety-a")
+            db.add(restaurant)
+        else:
+            restaurant.nome = "KOMA Safety A"
+            restaurant.plano = "pro"
+            restaurant.slug = "koma-safety-a"
+
+        other = db.query(Restaurante).filter(Restaurante.id == RID_OTHER).first()
+        if other is None:
+            other = Restaurante(id=RID_OTHER, nome="KOMA Safety B", plano="pro", slug="koma-safety-b")
+            db.add(other)
+        else:
+            other.nome = "KOMA Safety B"
+            other.plano = "pro"
+            other.slug = "koma-safety-b"
+
+        admin = db.query(Usuario).filter(Usuario.id == ADMIN_ID).first()
+        if admin is None:
+            admin = Usuario(
+                id=ADMIN_ID,
+                restaurante_id=RID,
+                nome="Gerente Safety",
+                email="safety-admin@koma.test",
+                cargo="admin",
+                role="admin",
+                status="ativo",
+            )
+            db.add(admin)
+        else:
+            admin.restaurante_id = RID
+            admin.nome = "Gerente Safety"
+            admin.email = "safety-admin@koma.test"
+            admin.cargo = "admin"
+            admin.role = "admin"
+            admin.status = "ativo"
         db.commit()
         yield
     finally:
