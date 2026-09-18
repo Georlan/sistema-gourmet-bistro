@@ -24,7 +24,9 @@ O catálogo em `backend/app/subscription.py` descreve a oferta vigente para **no
 
 Para um tenant contratado, o backend resolve o `ContractAcceptance` mais recente vinculado ao restaurante e lê do comprovante assinado o snapshot comercial, incluindo `plan`, `fixedMonthlyPrice`, `billingAmount`, `marketplaceRate` e versão jurídica. Em PostgreSQL essa leitura usa a função tenant-scoped `koma_internal.current_contract_receipt()`; o runtime não recebe leitura direta irrestrita da tabela global de evidências.
 
-Se um tenant legado ainda não possuir `ContractAcceptance` vinculado, o split usa o snapshot legado congelado `LEGACY_V25_MARKETPLACE_RATES`. Esse fallback não acompanha mudanças futuras do catálogo público. Portanto, alterar Pocket de 1,49% para uma nova taxa em uma versão comercial futura não altera automaticamente um Pocket legado.
+Se um tenant realmente legado ainda não possuir `ContractAcceptance` vinculado **e** estiver marcado com `billing_mode=legacy`, o split usa o snapshot legado congelado `LEGACY_V25_MARKETPLACE_RATES`. Esse fallback não acompanha mudanças futuras do catálogo público.
+
+Um tenant com `billing_mode=subscription` sem aceite comercial vinculado **não** recebe o fallback legado: o cálculo falha fechado. Isso impede que um tenant novo provisionado administrativamente herde 1,49%/0,69%/0,29% por acidente só porque ainda não possui contrato.
 
 A ordem de autoridade é:
 
@@ -41,7 +43,7 @@ A edição genérica do Super Admin não pode trocar `restaurante.plano` isolada
 O deploy precisa definir:
 
 - `KOMA_PUBLIC_API_URL`: origem HTTPS pública do backend.
-- `ONLINE_PAYMENT_PLAN_FEES_ENABLED`: `false` por padrão. Somente `true` autoriza o backend a calcular e enviar as taxas por plano ao provedor.
+- `ONLINE_PAYMENT_PLAN_FEES_ENABLED`: `false` por padrão. Somente `true` autoriza o backend a calcular e enviar a taxa comercial resolvida do contrato do tenant ao provedor.
 - `ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES`: validade do Pix.
 
 A trava existe para impedir que um merge de código passe a cobrar comissão em produção sem decisão operacional explícita. Antes de habilitar, validar contrato, documentação fiscal, fluxo OAuth/marketplace, credenciais do provedor, reembolso, chargeback e conciliação.
