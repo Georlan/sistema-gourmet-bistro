@@ -33,7 +33,10 @@ from app.models import (
 )
 from app.services.online_payments.base import ProviderPayment
 from app.services.online_payments.mercado_pago import MercadoPagoError, MercadoPagoProvider
-from app.services.online_payments.service import OnlinePaymentService
+from app.services.online_payments.service import (
+    OnlinePaymentConfigurationError,
+    OnlinePaymentService,
+)
 from app.services.online_payments.signature import verify_mercado_pago_signature
 from app.subscription import SUBSCRIPTION_MARKETPLACE_RATES
 
@@ -244,7 +247,7 @@ def test_tenant_marketplace_fee_fails_closed_for_broken_linked_contract(monkeypa
 
     restaurant = SimpleNamespace(id=126, plano="pocket")
     with pytest.raises(
-        Exception,
+        OnlinePaymentConfigurationError,
         match="Termos comerciais indisponíveis",
     ):
         OnlinePaymentService.marketplace_fee_for_tenant(
