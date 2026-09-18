@@ -329,6 +329,8 @@ export default function CardapioPage() {
         acceptingOrders,
         orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
         availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
+        nextOpening: restaurant.proxima_abertura ? String(restaurant.proxima_abertura) : undefined,
+        nextOpeningLabel: restaurant.proxima_abertura_texto ? String(restaurant.proxima_abertura_texto) : undefined,
       };
 
       setActiveBrand(brand);
@@ -860,7 +862,11 @@ export default function CardapioPage() {
             )} />
             <span>
               {activeBrand.storeStatus === "closed"
-                ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados")
+                ? (activeBrand.availabilitySource === "schedule"
+                  ? activeBrand.nextOpeningLabel
+                    ? `Fechado · abre ${activeBrand.nextOpeningLabel}`
+                    : "Estabelecimento fechado"
+                  : "Pedidos pausados")
                 : activeBrand.storeStatus === "open"
                   ? "Aberto para pedidos"
                   : "Ver horários"}
@@ -872,7 +878,15 @@ export default function CardapioPage() {
 
         {activeBrand.storeStatus === "closed" && (
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-            <strong>{activeBrand.availabilitySource === "schedule" ? "O restaurante está fora do horário de pedidos online." : "Pedidos pausados."}</strong>{activeBrand.availabilitySource === "schedule" ? " " : ` ${orderingMessage} `}O cardápio continua disponível para consulta.
+            <strong>
+              {activeBrand.availabilitySource === "schedule"
+                ? activeBrand.nextOpeningLabel
+                  ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
+                  : "Estabelecimento fechado."
+                : "Pedidos pausados."}
+            </strong>
+            {activeBrand.availabilitySource !== "schedule" && orderingMessage ? ` ${orderingMessage} ` : " "}
+            O cardápio continua disponível para consulta.
           </div>
         )}
 
