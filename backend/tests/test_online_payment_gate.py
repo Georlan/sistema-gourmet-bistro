@@ -166,11 +166,28 @@ def test_marketplace_fee_uses_exact_commercial_rate_for_stored_plan(monkeypatch)
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     amount = Decimal("100.00")
 
-    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.49")
-    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.69")
-    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.29")
-    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.29")
-    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.49")
+    assert OnlinePaymentService.marketplace_fee(amount, "pocket") == Decimal("1.79")
+    assert OnlinePaymentService.marketplace_fee(amount, "pro") == Decimal("0.50")
+    assert OnlinePaymentService.marketplace_fee(amount, "premium") == Decimal("0.20")
+    assert OnlinePaymentService.marketplace_fee(amount, "gold") == Decimal("0.20")
+    assert OnlinePaymentService.marketplace_fee(amount, "unknown") == Decimal("1.79")
+
+
+def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.online_payments.service.tenant_commercial_terms",
+        lambda _db, _restaurante_id: SimpleNamespace(
+            marketplace_rate=Decimal("0.0179")
+        ),
+    )
+
+    restaurant = SimpleNamespace(id=122, plano="pocket")
+    assert OnlinePaymentService.marketplace_fee_for_tenant(
+        None,
+        Decimal("100.00"),
+        restaurant,
+    ) == Decimal("1.79")
 
 
 def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monkeypatch):
