@@ -184,15 +184,12 @@ def activate_contract_without_fixed_billing(
         )
 
     existing = get_billing_setup(db, normalized_protocol)
-    if existing is not None and (
-        existing.provider_subscription_id
-        or str(existing.status).strip().lower() in {"pending", "ready"}
-    ):
+    if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "Existe configuração financeira associada a este contrato gratuito. "
-                "Ela deve ser encerrada antes da ativação."
+                "Ela deve ser encerrada explicitamente antes da ativação sem mensalidade."
             ),
         )
 
