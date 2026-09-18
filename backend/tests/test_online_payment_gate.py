@@ -190,7 +190,7 @@ def test_new_pocket_tenant_uses_signed_vnext_marketplace_rate(monkeypatch):
     ) == Decimal("1.79")
 
 
-def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monkeypatch):
+def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_and_plan_slug_change(monkeypatch):
     monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
     monkeypatch.setitem(
         SUBSCRIPTION_MARKETPLACE_RATES,
@@ -204,7 +204,9 @@ def test_tenant_marketplace_fee_preserves_signed_rate_after_catalog_change(monke
         ),
     )
 
-    restaurant = SimpleNamespace(id=123, plano="pocket")
+    # Mesmo uma mutação isolada do slug/plano de recursos não pode alterar
+    # a taxa financeira enquanto o aceite comercial vigente continua antigo.
+    restaurant = SimpleNamespace(id=123, plano="premium", billing_mode="subscription")
     assert OnlinePaymentService.marketplace_fee_for_tenant(
         None,
         Decimal("100.00"),
