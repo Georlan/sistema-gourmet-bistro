@@ -27,11 +27,11 @@ test("Super Admin Phase 2 usa o endpoint canônico de onboarding", () => {
 test("Super Admin Phase 2 usa o catálogo comercial oficial", () => {
   assert.match(onboardingModal, /SUBSCRIPTION_PLANS/);
   assert.match(tenantsTab, /SUBSCRIPTION_PLANS/);
-  assert.match(subscriptionPlans, /price:\s*109/);
-  assert.match(subscriptionPlans, /price:\s*209/);
-  assert.match(subscriptionPlans, /price:\s*309/);
+  assert.match(subscriptionPlans, /price:\s*0,/);
+  assert.match(subscriptionPlans, /price:\s*129/);
+  assert.match(subscriptionPlans, /price:\s*249/);
 
-  for (const staleValue of ["97", "197", "347", "1.79", "0.89", "0.39"]) {
+  for (const staleValue of ["97", "197", "347", "89", "179", "269", "0.89", "0.39"]) {
     assert.equal(
       onboardingModal.includes(staleValue),
       false,
