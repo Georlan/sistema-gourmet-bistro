@@ -10,9 +10,10 @@ test('Cardápio online expõe funções diretas sem uma segunda camada de abas',
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
-    ['Perfil', 'Marca', 'Pedidos online', 'Entrega', 'Pagamentos', 'Divulgação'],
+    ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação'],
   );
   assert.deepEqual(getCashierNavigationTarget('online_perfil'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
+  assert.deepEqual(getCashierNavigationTarget('online_bloqueios'), { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' });
   assert.deepEqual(getCashierNavigationTarget('online_entrega'), { tab: 'cardapio_digital', subTab: 'cardapio_entrega' });
   assert.deepEqual(getCashierNavigationTarget('online_pagamentos'), { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' });
   assert.deepEqual(getCashierNavigationTarget('online_divulgacao'), { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' });
