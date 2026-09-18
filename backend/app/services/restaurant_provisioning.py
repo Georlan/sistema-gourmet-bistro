@@ -20,7 +20,11 @@ from ..routes.super_admin_onboarding import (
     _slug_owner_id,
 )
 from ..saas_billing_models import SaaSSubscription
-from ..services.billing_service import BillingSetupData, link_billing_setup_to_tenant
+from ..services.billing_service import (
+    BillingSetupData,
+    contract_fixed_billing_required,
+    link_billing_setup_to_tenant,
+)
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .onboarding_trial import ONBOARDING_SUBSCRIPTION_STATUS, pause_provider_during_onboarding
 from .saas_billing_policy import (
@@ -126,6 +130,7 @@ def provision_restaurant_for_contract(
     """
     protocol = str(acceptance["protocol"]).strip().upper()
     plan = str(acceptance.get("plan") or "").strip().lower()
+    fixed_billing_required = contract_fixed_billing_required(db, protocol)
     if plan not in VALID_SUBSCRIPTION_PLANS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -151,7 +156,21 @@ def provision_restaurant_for_contract(
         )
 
     if (
-        billing_setup is not None
+        not fixed_billing_required
+        and billing_setup is not None
+        and billing_setup.provider_subscription_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Contrato sem componente fixo não pode ser provisionado com "
+                "assinatura recorrente do provedor."
+            ),
+        )
+
+    if (
+        fixed_billing_required
+        and billing_setup is not None
         and billing_setup.status == "ready"
         and not is_trial_eligible_payment_method(billing_setup.payment_method_type)
     ):
@@ -197,7 +216,8 @@ def provision_restaurant_for_contract(
         # onboarding. Pix universal não possui mandato: nenhum pagamento é criado
         # aqui; o QR só nasce depois do trial, quando existir valor devido.
         if (
-            billing_setup is not None
+            fixed_billing_required
+            and billing_setup is not None
             and billing_setup.status == "ready"
             and is_recurring_trial_payment_method(billing_setup.payment_method_type)
             and billing_setup.provider_subscription_id
@@ -261,14 +281,26 @@ def provision_restaurant_for_contract(
         if billing_setup is not None:
             link_billing_setup_to_tenant(db, protocol, tenant_id)
 
-        if billing_setup is not None and billing_setup.status == "ready":
+        if (not fixed_billing_required) or (
+            billing_setup is not None and billing_setup.status == "ready"
+        ):
             canonical_sub = SaaSSubscription(
                 restaurante_id=tenant_id,
-                provider=billing_setup.provider,
-                provider_customer_id=billing_setup.provider_customer_id,
-                provider_subscription_id=billing_setup.provider_subscription_id,
-                payment_method_type=billing_setup.payment_method_type,
-                status=ONBOARDING_SUBSCRIPTION_STATUS,
+                provider=billing_setup.provider if billing_setup is not None else "mercado_pago",
+                provider_customer_id=(
+                    billing_setup.provider_customer_id if billing_setup is not None else None
+                ),
+                provider_subscription_id=(
+                    billing_setup.provider_subscription_id if billing_setup is not None else None
+                ),
+                payment_method_type=(
+                    billing_setup.payment_method_type if billing_setup is not None else None
+                ),
+                status=(
+                    ONBOARDING_SUBSCRIPTION_STATUS
+                    if fixed_billing_required
+                    else "active"
+                ),
                 billing_cycle=acceptance.get("billing_cycle") or "monthly",
                 trial_started_at=None,
                 trial_ends_at=None,
@@ -293,11 +325,15 @@ def provision_restaurant_for_contract(
                     "slug": slug,
                     "plan": plan,
                     "billing_cycle": acceptance.get("billing_cycle") or "monthly",
-                    "billing_status": billing_setup.status if billing_setup else "pending",
+                    "billing_status": (
+                        billing_setup.status
+                        if billing_setup is not None
+                        else ("not_required" if not fixed_billing_required else "pending")
+                    ),
                     "billing_provider": billing_setup.provider if billing_setup else None,
                     "payment_method_type": billing_setup.payment_method_type if billing_setup else None,
-                    "trial_status": "pending_onboarding",
-                    "trial_days": DEFAULT_TRIAL_DAYS,
+                    "trial_status": "pending_onboarding" if fixed_billing_required else "not_applicable",
+                    "trial_days": DEFAULT_TRIAL_DAYS if fixed_billing_required else 0,
                     "trial_ends_at": None,
                     "admin_user_id": initial_admin.id,
                     "admin_email": admin_email,
@@ -326,5 +362,5 @@ def provision_restaurant_for_contract(
             "admin_user_id": initial_admin.id,
             "admin_email": admin_email,
             "trial_ends_at": None,
-            "trial_status": ONBOARDING_SUBSCRIPTION_STATUS,
+            "trial_status": ONBOARDING_SUBSCRIPTION_STATUS if fixed_billing_required else "active",
         }
