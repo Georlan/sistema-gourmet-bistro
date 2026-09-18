@@ -99,7 +99,7 @@ export function SuperAdminPaymentsTab({
             Catálogo vigente
           </h3>
           <p className="text-[11px] text-koma-muted leading-relaxed">
-            Oferta vigente para novos aceites. A taxa efetiva de cada restaurante vem do contrato vinculado; tarifas do provedor são separadas.
+            A taxa KÔMA incide somente em pedido online pago. A tabela abaixo é a oferta vigente para novos aceites; a taxa efetiva de cada restaurante vem do contrato vinculado. Tarifas do provedor são separadas.
           </p>
           <div className="space-y-2">
             {SUBSCRIPTION_PLANS.map(plan => (
