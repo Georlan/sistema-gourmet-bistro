@@ -19,10 +19,13 @@ def test_caixa_config_update_persists_canonical_delivery_fields():
         "pedido_minimo",
         "frete_gratis_valor",
         "tipo_taxa_entrega",
-        "tabela_taxas_bairros",
     ):
         assert f"if config_in.{field} is not None:" in route
         assert f"config.{field} = config_in.{field}" in route
+
+    assert "if config_in.tabela_taxas_bairros is not None:" in route
+    assert "normalize_neighborhood_fee_table(" in route
+    assert "config.tabela_taxas_bairros = list(" in route
 
     assert "if config_in.tabela_taxas_km is not None:" in route
     assert "normalize_distance_fee_config(" in route
