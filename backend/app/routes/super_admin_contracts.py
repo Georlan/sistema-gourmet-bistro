@@ -542,6 +542,24 @@ def link_contract(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Restaurante não encontrado.",
                 )
+            current_contract = (
+                db.query(RestaurantContractAcceptance)
+                .filter(RestaurantContractAcceptance.restaurante_id == tenant_id)
+                .order_by(
+                    RestaurantContractAcceptance.linked_at.desc(),
+                    RestaurantContractAcceptance.id.desc(),
+                )
+                .first()
+            )
+            if current_contract is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Este restaurante já possui autoridade contratual vinculada. "
+                        "Substituições devem usar o fluxo canônico de mudança de plano/termos."
+                    ),
+                )
+
             if str(restaurant.plano or "").lower() != str(acceptance["plan"]).lower():
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
