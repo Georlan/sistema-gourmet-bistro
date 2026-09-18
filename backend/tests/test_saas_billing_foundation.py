@@ -437,13 +437,22 @@ def test_entitlement_resolution_lifecycle(client_and_session):
         )
         db.add_all([r5, s5])
 
-        # Tenant 6: suspenso
+        # Tenant 6: suspenso administrativamente, mesmo com estado
+        # financeiro que poderia ser confundido com pausa técnica de onboarding.
         r6 = Restaurante(id=106, nome="Tenant 106", slug="t106", plano="premium", saas_status="suspended")
         s6 = SaaSSubscription(
             restaurante_id=106,
             status="suspended",
         )
         db.add_all([r6, s6])
+
+        # Tenant 7: suspensão administrativa também vence assinatura ativa.
+        r7 = Restaurante(id=107, nome="Tenant 107", slug="t107", plano="premium", saas_status="suspended")
+        s7 = SaaSSubscription(
+            restaurante_id=107,
+            status="active",
+        )
+        db.add_all([r7, s7])
 
         db.commit()
 
@@ -471,3 +480,8 @@ def test_entitlement_resolution_lifecycle(client_and_session):
         e6 = resolve_tenant_entitlement(db, 106)
         assert e6.allowed is False
         assert e6.reason == "tenant_suspended"
+
+        e7 = resolve_tenant_entitlement(db, 107)
+        assert e7.allowed is False
+        assert e7.reason == "tenant_suspended"
+        assert e7.billing_status == "suspended"
