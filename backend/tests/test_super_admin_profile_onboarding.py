@@ -6,7 +6,13 @@ from sqlalchemy import text
 
 from app.database import SessionLocal, tenant_session_scope
 from app.main import app
-from app.models import Categoria, Produto, RestaurantPaymentAccount, SuperAdminAuditLog
+from app.models import (
+    Categoria,
+    Produto,
+    Restaurante,
+    RestaurantPaymentAccount,
+    SuperAdminAuditLog,
+)
 from app.restaurant_profile_models import RestauranteOperationProfile
 from app.routes import super_admin
 from app.security import create_access_token, get_password_hash
@@ -94,10 +100,17 @@ def test_profiled_onboarding_persists_profile_without_catalog_side_effects():
 
         assert body["operationProfile"] == "pizzaria"
         assert body["onlinePaymentStatus"] == "disconnected"
+        assert body["commercialTermsStatus"] == "not_contracted"
+        assert "sem termos comerciais" in body["message"].lower()
 
         db = SessionLocal()
         try:
             with tenant_session_scope(db, tenant_id):
+                restaurant = db.query(Restaurante).filter(
+                    Restaurante.id == tenant_id
+                ).one()
+                assert restaurant.billing_mode == "subscription"
+
                 profile = db.query(RestauranteOperationProfile).filter(
                     RestauranteOperationProfile.restaurante_id == tenant_id
                 ).one()
@@ -118,6 +131,7 @@ def test_profiled_onboarding_persists_profile_without_catalog_side_effects():
                     SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
                 ).one()
                 assert audit.after_data["operation_profile"] == "pizzaria"
+                assert audit.after_data["commercial_terms_status"] == "not_contracted"
         finally:
             db.close()
     finally:
