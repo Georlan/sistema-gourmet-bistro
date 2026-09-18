@@ -374,6 +374,27 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
     """
     now = datetime.datetime.now(datetime.timezone.utc)
 
+    # Suspensão administrativa do tenant tem precedência sobre qualquer estado
+    # financeiro. Billing ativo/onboarding nunca pode reabrir um restaurante
+    # explicitamente suspenso pelo control plane.
+    restaurante = (
+        db.query(Restaurante)
+        .filter(Restaurante.id == restaurante_id)
+        .one_or_none()
+    )
+    if restaurante is None:
+        return TenantEntitlement(
+            allowed=False,
+            reason="tenant_not_found",
+            billing_status="suspended",
+        )
+    if str(getattr(restaurante, "saas_status", "active") or "active").lower() == "suspended":
+        return TenantEntitlement(
+            allowed=False,
+            reason="tenant_suspended",
+            billing_status="suspended",
+        )
+
     # 1. Verifica se há assinatura canônica em saas_subscriptions
     sub = (
         db.query(SaaSSubscription)
@@ -442,14 +463,7 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
                 return TenantEntitlement(allowed=True, reason="canceled_active_until_end", billing_status="canceled")
             return TenantEntitlement(allowed=False, reason="canceled_expired", billing_status="canceled")
 
-    # 2. Fallback de compatibilidade avaliando o restaurante
-    restaurante = db.query(Restaurante).filter(Restaurante.id == restaurante_id).one_or_none()
-    if restaurante is None:
-        return TenantEntitlement(allowed=False, reason="tenant_not_found", billing_status="suspended")
-
-    if getattr(restaurante, "saas_status", "active") == "suspended":
-        return TenantEntitlement(allowed=False, reason="tenant_suspended", billing_status="suspended")
-
+    # 2. Fallback de compatibilidade usando o tenant já validado acima.
     billing_mode = getattr(restaurante, "billing_mode", "subscription") or "subscription"
     if billing_mode == "legacy":
         return TenantEntitlement(allowed=True, reason="legacy_grandfathered", billing_status="active")
