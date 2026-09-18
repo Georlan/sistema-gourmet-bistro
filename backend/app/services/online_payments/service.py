@@ -211,6 +211,9 @@ class OnlinePaymentService:
         try:
             rate = tenant_marketplace_rate(db, restaurant)
         except RuntimeError as exc:
+            detail = str(exc)
+            if "sem aceite comercial" in detail:
+                raise OnlinePaymentConfigurationError(detail) from exc
             raise OnlinePaymentConfigurationError(
                 "Termos comerciais indisponíveis para calcular a taxa do pagamento."
             ) from exc
