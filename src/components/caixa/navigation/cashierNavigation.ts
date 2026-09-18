@@ -132,8 +132,12 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' },
         capability: 'online-menu',
         children: [
-          { id: 'online_loja', label: 'Loja', target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' } },
-          { id: 'online_operacao', label: 'Operação', target: { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' } },
+          { id: 'online_perfil', label: 'Perfil', target: { tab: 'cardapio_digital', subTab: 'cardapio_perfil' } },
+          { id: 'online_marca', label: 'Marca', target: { tab: 'cardapio_digital', subTab: 'cardapio_marca' } },
+          { id: 'online_pedidos', label: 'Pedidos online', target: { tab: 'cardapio_digital', subTab: 'cardapio_pedidos' } },
+          { id: 'online_bloqueios', label: 'Clientes bloqueados', target: { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' } },
+          { id: 'online_entrega', label: 'Entrega', target: { tab: 'cardapio_digital', subTab: 'cardapio_entrega' } },
+          { id: 'online_pagamentos', label: 'Pagamentos', target: { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' } },
           { id: 'online_divulgacao', label: 'Divulgação', target: { tab: 'cardapio_digital', subTab: 'cardapio_qr_links' } },
         ],
       },
@@ -281,8 +285,12 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
 const VALID_TABS = new Set<CashierTab>(CASHIER_PARENT_ITEMS.map((item) => item.target.tab));
 
 const CHILD_DETAIL_SUBTABS: Readonly<Record<string, readonly string[]>> = {
-  online_loja: ['cardapio_perfil', 'cardapio_marca'],
-  online_operacao: ['cardapio_pedidos', 'cardapio_entrega', 'cardapio_pagamentos'],
+  online_perfil: ['cardapio_perfil'],
+  online_marca: ['cardapio_marca'],
+  online_pedidos: ['cardapio_pedidos'],
+  online_bloqueios: ['cardapio_bloqueios'],
+  online_entrega: ['cardapio_entrega'],
+  online_pagamentos: ['cardapio_pagamentos'],
   online_divulgacao: ['cardapio_qr_links'],
 };
 

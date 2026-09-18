@@ -173,9 +173,11 @@ test('child aliases select the canonical visible shortcut only inside their pare
 
 test('online-menu detail sections stay open under exactly one sidebar child', () => {
   const cases = [
-    ['cardapio_marca', 'online_loja'],
-    ['cardapio_entrega', 'online_operacao'],
-    ['cardapio_pagamentos', 'online_operacao'],
+    ['cardapio_marca', 'online_marca'],
+    ['cardapio_pedidos', 'online_pedidos'],
+    ['cardapio_bloqueios', 'online_bloqueios'],
+    ['cardapio_entrega', 'online_entrega'],
+    ['cardapio_pagamentos', 'online_pagamentos'],
     ['cardapio_qr_links', 'online_divulgacao'],
   ] as const;
   const online = parents().find((item) => item.id === 'cardapio_digital');
@@ -227,4 +229,24 @@ test('CaixaPanel delegates operation subnav clicks and active state to the share
   );
   assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
   assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+});
+
+
+test('online menu has direct searchable destinations and no horizontal online subnav', () => {
+  const online = parents().find((item) => item.id === 'cardapio_digital');
+  assert.deepEqual(online?.children?.map((child) => child.id), [
+    'online_perfil',
+    'online_marca',
+    'online_pedidos',
+    'online_bloqueios',
+    'online_entrega',
+    'online_pagamentos',
+    'online_divulgacao',
+  ]);
+
+  const caixa = readFileSync(
+    new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
+  );
+  assert.doesNotMatch(caixa, /onlineMenuSubnavItems/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
