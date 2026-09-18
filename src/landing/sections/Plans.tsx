@@ -86,7 +86,7 @@ export function Plans() {
         </div>
         <p>
           {isYearly
-            ? `Valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura. É apenas uma referência de preço; as condições de pagamento são apresentadas na contratação.`
+            ? `Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto somente no componente fixo. O Pocket permanece sem mensalidade e sem componente anual.`
             : 'Pague mês a mês, sem taxa de implantação.'}
         </p>
       </div>
