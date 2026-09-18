@@ -64,7 +64,6 @@ const loadCashierTeam = () => import('./caixa/team/CashierTeam');
 const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
 const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [];
-const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -761,14 +760,11 @@ export function CaixaPanel({
             </div>
           </header>
 
-          <div className={"cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none"}>
+          <div className={clsx(
+            "cashier-subnav bg-koma-panel/80 backdrop-blur-md border-b border-koma-border px-6 py-1.5 flex gap-2 shrink-0 overflow-x-auto scrollbar-none",
+            activeTab === 'cardapio_digital' && 'hidden',
+          )}>
             {activeTab === 'operacao' && operationSubnavItems.map((sub) => (
-              <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
-                {sub.label}
-              </button>
-            ))}
-
-            {activeTab === 'cardapio_digital' && onlineMenuSubnavItems.map((sub) => (
               <button key={sub.id} onClick={() => handleSidebarNavigation(sub.id)} className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}>
                 {sub.label}
               </button>
