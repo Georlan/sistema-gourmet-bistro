@@ -510,7 +510,7 @@ def test_account_money_returns_authorization_url_with_zero_due_today(client_and_
 
 def test_account_money_webhook_activates_after_provider_confirms_mandate(client_and_session):
     client, Session = client_and_session
-    protocol = _accept(client, "pocket", "anual")
+    protocol = _accept(client, "pro", "anual")
     setup_response = client.post(
         f"/api/contracts/{protocol}/billing/setup",
         json={"payment_method_type": "account_money"},
@@ -559,7 +559,7 @@ def test_account_money_rejects_mismatched_payment_method(client_and_session, mon
             "auto_recurring": {
                 "frequency": 1,
                 "frequency_type": "months",
-                "transaction_amount": 209.0,
+                "transaction_amount": 129.0,
                 "currency_id": "BRL",
                 "free_trial": {"frequency": 7, "frequency_type": "days"},
             },
