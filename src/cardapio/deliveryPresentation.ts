@@ -9,20 +9,42 @@ export function getDeliveryMinimumRemaining(
   return Math.max(0, Number(config?.pedidoMinimo || 0) - subtotal);
 }
 
-type DeliveryConfig = Pick<BrandConfig, 'freteGratisValor' | 'tabelaTaxasBairros' | 'taxaEntregaPadrao'>;
+type DeliveryConfig = Pick<
+  BrandConfig,
+  'freteGratisValor' | 'tipoTaxaEntrega' | 'tabelaTaxasBairros' | 'tabelaTaxasKm' | 'taxaEntregaPadrao'
+>;
 
-/** Existing cart fee rules, also used to preview delivery while pickup is selected. */
+/** Regras de apresentação; o backend continua sendo a autoridade do valor final. */
 export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: number, bairro: string) {
-  const threshold = config?.freteGratisValor || 0;
+  const threshold = Number(config?.freteGratisValor || 0);
   const freeBySubtotal = threshold > 0 && subtotal >= threshold;
-  const neighborhoods = config?.tabelaTaxasBairros ?? [];
-  const selected = bairro
-    ? neighborhoods.find((row) => row.bairro.toLowerCase() === bairro.toLowerCase())
-    : undefined;
+  const mode = config?.tipoTaxaEntrega || 'fixa';
+
+  if (mode === 'distancia') {
+    const distanceConfig = config?.tabelaTaxasKm?.[0];
+    const minimumFee = Number(distanceConfig?.taxa_minima ?? config?.taxaEntregaPadrao ?? 0);
+    return {
+      fee: freeBySubtotal ? 0 : minimumFee,
+      awaitingNeighborhood: false,
+      awaitingLocation: !freeBySubtotal,
+    };
+  }
+
+  if (mode === 'bairro') {
+    const neighborhoods = config?.tabelaTaxasBairros ?? [];
+    const selected = bairro
+      ? neighborhoods.find((row) => row.bairro.toLowerCase() === bairro.toLowerCase())
+      : undefined;
+    return {
+      fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
+      awaitingNeighborhood: neighborhoods.length > 0 && !selected && !freeBySubtotal,
+      awaitingLocation: false,
+    };
+  }
 
   return {
-    fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
-    // The default fee remains in the calculation; only its provisional nature is clarified.
-    awaitingNeighborhood: neighborhoods.length > 0 && !selected && !freeBySubtotal,
+    fee: freeBySubtotal ? 0 : config?.taxaEntregaPadrao ?? 0,
+    awaitingNeighborhood: false,
+    awaitingLocation: false,
   };
 }
