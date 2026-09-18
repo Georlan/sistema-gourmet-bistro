@@ -13,11 +13,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
+from app.application.orders.commands import DeliveryAddressInput
 from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
 from app.domain.orders.errors import OrderValidationError
 from app.domain.orders.types import FulfillmentType
-from app.models import ConfiguracaoRestaurante
+from app.models import ConfiguracaoRestaurante, Restaurante
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
     char_client,
@@ -271,23 +272,79 @@ class TestDeliveryCanonicalRules:
             db.commit()
             db.close()
 
-    def test_resolve_delivery_fee_distancia_legada_rejeita_sem_servico_externo(self, char_setup):
+    def test_resolve_delivery_fee_distancia_usa_taxa_minima_sem_localizacao(self, char_setup):
         db: Session = SessionLocal()
         try:
             config = self._get_or_create_config(db)
             config.tipo_taxa_entrega = "distancia"
+            config.tabela_taxas_km = [{
+                "taxa_minima": 5,
+                "km_inclusos": 3,
+                "incremento_valor": 1,
+                "incremento_km": 3,
+                "taxa_maxima": 7,
+                "distancia_maxima_km": 0,
+            }]
+            config.frete_gratis_valor = 0
             db.commit()
 
-            with pytest.raises(OrderValidationError, match="inválido ou não suportado"):
-                OrderApplicationService.resolve_server_delivery_fee(
-                    db=db,
-                    restaurante_id=CHAR_RESTAURANT_ID,
-                    fulfillment=FulfillmentType.DELIVERY,
-                    items_subtotal=Decimal("30.00"),
-                    neighborhood="Centro",
-                )
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("30.00"),
+                neighborhood="Centro",
+            )
+            assert fee == Decimal("5.00")
         finally:
             config.tipo_taxa_entrega = "fixa"
+            config.tabela_taxas_km = []
+            db.commit()
+            db.close()
+
+    def test_resolve_delivery_fee_distancia_calcula_incremento_sem_api_externa(self, char_setup):
+        db: Session = SessionLocal()
+        try:
+            config = self._get_or_create_config(db)
+            restaurante = db.query(Restaurante).filter(Restaurante.id == CHAR_RESTAURANT_ID).first()
+            assert restaurante is not None
+            restaurante.latitude = -3.7319
+            restaurante.longitude = -38.5267
+            config.tipo_taxa_entrega = "distancia"
+            config.tabela_taxas_km = [{
+                "taxa_minima": 5,
+                "km_inclusos": 3,
+                "incremento_valor": 1,
+                "incremento_km": 3,
+                "taxa_maxima": 7,
+                "distancia_maxima_km": 0,
+            }]
+            config.frete_gratis_valor = 0
+            db.commit()
+
+            address = DeliveryAddressInput(
+                street="Rua Teste",
+                number="10",
+                neighborhood="Centro",
+                city="Fortaleza",
+                state="CE",
+                postal_code="",
+                latitude=-3.7319,
+                longitude=-38.4816,
+            )
+            fee = OrderApplicationService.resolve_server_delivery_fee(
+                db=db,
+                restaurante_id=CHAR_RESTAURANT_ID,
+                fulfillment=FulfillmentType.DELIVERY,
+                items_subtotal=Decimal("30.00"),
+                delivery_address=address,
+            )
+            assert fee == Decimal("6.00")
+        finally:
+            restaurante.latitude = None
+            restaurante.longitude = None
+            config.tipo_taxa_entrega = "fixa"
+            config.tabela_taxas_km = []
             db.commit()
             db.close()
 
@@ -325,14 +382,33 @@ class TestDeliveryCanonicalRules:
             json={"taxa_entrega_fixa": 7.00},
         )
 
-    def test_configuracoes_rejeita_taxa_por_distancia(self, char_client, char_setup):
+    def test_configuracoes_aceita_taxa_por_distancia_validada(self, char_client, char_setup):
         response = char_client.put(
             "/caixa/configuracoes",
             headers=char_setup["headers"],
-            json={"tipo_taxa_entrega": "distancia"},
+            json={
+                "tipo_taxa_entrega": "distancia",
+                "tabela_taxas_km": [{
+                    "taxa_minima": 5,
+                    "km_inclusos": 3,
+                    "incremento_valor": 1,
+                    "incremento_km": 3,
+                    "taxa_maxima": 7,
+                    "distancia_maxima_km": 12,
+                }],
+            },
         )
-        assert response.status_code == 422
-        assert "taxa fixa ou taxa por bairro" in response.json()["detail"]
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["tipo_taxa_entrega"] == "distancia"
+        assert data["tabela_taxas_km"][0]["taxa_minima"] == 5.0
+
+        reset = char_client.put(
+            "/caixa/configuracoes",
+            headers=char_setup["headers"],
+            json={"tipo_taxa_entrega": "fixa", "tabela_taxas_km": []},
+        )
+        assert reset.status_code == 200
 
     def test_configuracoes_rejeita_bairros_duplicados_normalizados(self, char_client, char_setup):
         response = char_client.put(
