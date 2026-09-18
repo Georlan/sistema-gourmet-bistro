@@ -310,9 +310,10 @@ export default function CardapioPage() {
         tabelaTaxasKm: Array.isArray(restaurant.tabela_taxas_km)
           ? restaurant.tabela_taxas_km.map((row: any) => ({
               taxa_minima: Number(row.taxa_minima || 0),
-              km_inclusos: Number(row.km_inclusos || 0),
-              incremento_valor: Number(row.incremento_valor || 0),
-              incremento_km: Number(row.incremento_km || 0),
+              valor_por_km: row.valor_por_km == null ? undefined : Number(row.valor_por_km),
+              km_inclusos: row.km_inclusos == null ? undefined : Number(row.km_inclusos),
+              incremento_valor: row.incremento_valor == null ? undefined : Number(row.incremento_valor),
+              incremento_km: row.incremento_km == null ? undefined : Number(row.incremento_km),
               taxa_maxima: row.taxa_maxima == null ? null : Number(row.taxa_maxima),
               distancia_maxima_km: row.distancia_maxima_km == null ? null : Number(row.distancia_maxima_km),
               fallback_sem_localizacao: 'minima' as const,
@@ -329,6 +330,8 @@ export default function CardapioPage() {
         acceptingOrders,
         orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
         availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
+        nextOpening: restaurant.proxima_abertura ? String(restaurant.proxima_abertura) : undefined,
+        nextOpeningLabel: restaurant.proxima_abertura_texto ? String(restaurant.proxima_abertura_texto) : undefined,
       };
 
       setActiveBrand(brand);
@@ -860,7 +863,11 @@ export default function CardapioPage() {
             )} />
             <span>
               {activeBrand.storeStatus === "closed"
-                ? (activeBrand.availabilitySource === "schedule" ? "Fora do horário" : "Pedidos pausados")
+                ? (activeBrand.availabilitySource === "schedule"
+                  ? activeBrand.nextOpeningLabel
+                    ? `Fechado · abre ${activeBrand.nextOpeningLabel}`
+                    : "Estabelecimento fechado"
+                  : "Pedidos pausados")
                 : activeBrand.storeStatus === "open"
                   ? "Aberto para pedidos"
                   : "Ver horários"}
@@ -872,7 +879,15 @@ export default function CardapioPage() {
 
         {activeBrand.storeStatus === "closed" && (
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-100">
-            <strong>{activeBrand.availabilitySource === "schedule" ? "O restaurante está fora do horário de pedidos online." : "Pedidos pausados."}</strong>{activeBrand.availabilitySource === "schedule" ? " " : ` ${orderingMessage} `}O cardápio continua disponível para consulta.
+            <strong>
+              {activeBrand.availabilitySource === "schedule"
+                ? activeBrand.nextOpeningLabel
+                  ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
+                  : "Estabelecimento fechado."
+                : "Pedidos pausados."}
+            </strong>
+            {activeBrand.availabilitySource !== "schedule" && orderingMessage ? ` ${orderingMessage} ` : " "}
+            O cardápio continua disponível para consulta.
           </div>
         )}
 
