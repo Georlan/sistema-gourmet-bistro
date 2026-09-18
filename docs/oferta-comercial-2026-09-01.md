@@ -1,28 +1,34 @@
-# Oferta comercial — atualizada em 02/09/2026
+# Oferta comercial — atualizada em 18/09/2026
 
 ## Decisão
 
-A oferta comercial do KÔMA passa a usar três planos sem taxa de implantação e sem add-ons. A mensalidade remunera o software e a comissão variável diminui conforme o restaurante sobe de plano.
+A oferta comercial vigente do KÔMA usa três planos sem taxa de implantação e sem add-ons. O Pocket é a porta de entrada sem mensalidade fixa; Pro e Premium reduzem a taxa KÔMA conforme o restaurante cresce.
 
-A fonte de preços e recursos exibidos no frontend é `src/config/subscriptionPlans.ts`. A fonte de verdade financeira das taxas usadas pelo backend é `backend/app/subscription.py`.
+O catálogo vigente serve para **novas contratações**. Ele não substitui os termos comerciais já aceitos por um tenant. Para contratos existentes, a autoridade financeira é o snapshot comercial vinculado ao restaurante.
+
+A fonte compartilhada do catálogo público no frontend é `src/config/subscriptionPlans.ts`. O backend mantém o catálogo de novas contratações em `backend/app/subscription.py`, mas split e billing de um tenant contratado devem resolver os valores do respectivo `ContractAcceptance`.
 
 ## Oferta vigente
 
-| Plano | Assinatura mensal | Taxa KÔMA por pedido online pago | Posicionamento |
+| Plano | Assinatura mensal | Taxa KÔMA por pagamento online elegível | Posicionamento |
 | --- | ---: | ---: | --- |
-| Pocket | R$ 109/mês | 1,49% | Entrada simples |
-| Pro | R$ 209/mês | 0,69% | Mais recomendado |
-| Premium | R$ 309/mês | 0,29% | Menor taxa |
+| Pocket | R$ 0/mês | 1,79% | Comece sem mensalidade |
+| Pro | R$ 129/mês | 0,50% | Seu restaurante cresceu. Sua taxa diminui |
+| Premium | R$ 249/mês | 0,20% | Mais volume, menor taxa |
 
 Regras:
 
 - Taxa de implantação: **R$ 0**.
 - Add-ons: **não existem na oferta atual**.
 - Recursos que não pertencem ao plano exigem upgrade; não são vendidos separadamente.
-- A taxa KÔMA incide somente sobre pedido online efetivamente pago pelo fluxo integrado.
-- Custos do provedor de pagamento são separados e seguem as condições do provedor.
+- A taxa KÔMA incide somente sobre pagamentos online aprovados e elegíveis no fluxo integrado.
+- Tarifas do provedor de pagamento são separadas da taxa KÔMA.
 - Uma assinatura por estabelecimento.
-- O plano anual mantém 10% de desconto apenas sobre a assinatura fixa; a taxa por pedido não recebe desconto.
+- Pro e Premium podem usar plano anual com 10% de desconto somente no componente fixo.
+- A taxa percentual não recebe desconto anual.
+- Pocket não possui componente fixo anual e não cria recorrência de R$ 0.
+- Não existe upgrade automático por GMV.
+- Mudança do catálogo não altera contratos antigos.
 
 ## Recursos por plano
 
@@ -56,38 +62,55 @@ O app do entregador não promete GPS ao vivo e suporte prioritário não signifi
 
 ## Plano anual
 
-Com 10% de desconto sobre a mensalidade fixa:
+O desconto de 10% vale exclusivamente para o componente fixo:
 
 | Plano | Equivalente mensal | Total anual | Economia anual |
 | --- | ---: | ---: | ---: |
-| Pocket | R$ 98,10 | R$ 1.177,20 | R$ 130,80 |
-| Pro | R$ 188,10 | R$ 2.257,20 | R$ 250,80 |
-| Premium | R$ 278,10 | R$ 3.337,20 | R$ 370,80 |
+| Pocket | Não aplicável | Não aplicável | Não aplicável |
+| Pro | R$ 116,10 | R$ 1.393,20 | R$ 154,80 |
+| Premium | R$ 224,10 | R$ 2.689,20 | R$ 298,80 |
 
-A comissão por pedido continua em 1,49% / 0,69% / 0,29% independentemente do ciclo mensal ou anual.
+As taxas permanecem 1,79% / 0,50% / 0,20% para novas contratações, independentemente do ciclo do componente fixo.
 
-## Pontos econômicos de upgrade
+## Pontos econômicos de comparação
 
-Considerando apenas mensalidade + taxa KÔMA e o mesmo volume de pagamentos online:
+Considerando apenas mensalidade fixa + taxa KÔMA e o mesmo volume mensal de pagamentos online elegíveis:
 
-- Pocket e Pro se igualam em **R$ 12.500/mês** de GMV online: ambos geram/custam **R$ 295,25** antes dos custos do provedor.
-- Pro e Premium se igualam em **R$ 25.000/mês** de GMV online: ambos geram/custam **R$ 381,50** antes dos custos do provedor.
+- Pocket e Pro se igualam em **R$ 10.000/mês**: 1,79% × R$ 10.000 = R$ 179, e R$ 129 + 0,50% × R$ 10.000 = R$ 179.
+- Pro e Premium se igualam em **R$ 40.000/mês**: R$ 129 + 0,50% × R$ 40.000 = R$ 329, e R$ 249 + 0,20% × R$ 40.000 = R$ 329.
 
-Isso cria a escada econômica pretendida: Pocket para menor volume, Pro como faixa intermediária e Premium para operações com maior volume online. O upgrade também libera funcionalidades, então a decisão não depende apenas da matemática da taxa.
+Esses pontos podem futuramente embasar recomendações de economia, mas **não autorizam mudança automática de plano**.
+
+## Grandfathering e autoridade comercial
+
+É válido coexistirem simultaneamente, por exemplo:
+
+- Pocket legado: R$ 109 + 1,49%.
+- Pocket vNext: R$ 0 + 1,79%.
+- Pro vNext: R$ 129 + 0,50%.
+- Premium vNext: R$ 249 + 0,20%.
+
+Para tenants com aceite vinculado, preço fixo, billing amount, taxa transacional e versão jurídica vêm do snapshot aceito. Tenants realmente legados sem aceite vinculado usam o fallback v2.5 explicitamente congelado até existir processo de migração.
+
+`OnlinePaymentIntent.marketplace_fee` congela a fee de cada pagamento no momento de criação. Mudanças comerciais posteriores não recalculam intenções já criadas.
 
 ## Comunicação comercial
 
 Na landing:
 
-- Pro recebe o destaque **“Mais recomendado”**. Não usar “mais comprado” enquanto não houver dado real que sustente essa afirmação.
-- Premium recebe **“Menor taxa”**, que é uma afirmação objetiva do catálogo.
-- Destacar “Sem taxa de implantação”, “Sem add-ons” e “Você só paga a taxa quando vende online”.
-- Não somar nem prometer uma taxa total do provedor + KÔMA sem confirmar as condições atuais da conta do restaurante.
+- Pocket: **“Comece sem mensalidade.”**
+- Pro: **“Seu restaurante cresceu. Sua taxa diminui.”**
+- Premium: **“Mais volume, menor taxa.”**
+- Pro mantém o destaque “Mais recomendado” enquanto essa for a decisão editorial; não usar “mais comprado” sem dado real.
+- Destacar “Sem taxa de implantação”, “Sem add-ons” e que a taxa KÔMA se aplica somente ao pagamento online elegível.
+- Não somar nem prometer uma taxa total do provedor + KÔMA sem confirmar as condições da conta do restaurante.
 
 ## Segurança financeira da ativação
 
-As taxas por plano estão definidas no backend, mas a cobrança é protegida por `ONLINE_PAYMENT_PLAN_FEES_ENABLED=false` por padrão.
+A cobrança de `application_fee` continua protegida por `ONLINE_PAYMENT_PLAN_FEES_ENABLED=false` por padrão.
 
-Somente depois de validar contrato, documentação fiscal, OAuth/marketplace, reembolso, chargeback e conciliação a variável deve ser alterada para `true` no ambiente que realmente cobrará a comissão. Um merge de código, sozinho, não deve iniciar cobrança em produção.
+Quando a flag estiver desligada, a fee deve ser zero. Quando estiver habilitada, o backend usa a taxa **contratada pelo tenant**, não simplesmente a taxa atual do slug do plano.
 
-Planos legados continuam normalizados como Premium para compatibilidade de funcionalidades. O modo de teste Premium não altera a assinatura salva e também não deve reduzir a taxa financeira do plano contratado.
+Somente depois de homologar contrato, OAuth/marketplace, split, refund, chargeback e conciliação a variável deve ser alterada para `true` no ambiente que realmente cobrará a comissão. Um merge de código, sozinho, não deve iniciar cobrança em produção.
+
+Pocket R$ 0 não exige uma assinatura recorrente de R$ 0 no Mercado Pago. O tenant continua com `SaaSSubscription`/entitlement canônico e conecta separadamente a conta Mercado Pago OAuth do restaurante para receber pagamentos online dos seus clientes.
