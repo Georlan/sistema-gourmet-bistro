@@ -307,6 +307,17 @@ export default function CardapioPage() {
               taxa: Number(b.taxa || 0),
             }))
           : [],
+        tabelaTaxasKm: Array.isArray(restaurant.tabela_taxas_km)
+          ? restaurant.tabela_taxas_km.map((row: any) => ({
+              taxa_minima: Number(row.taxa_minima || 0),
+              km_inclusos: Number(row.km_inclusos || 0),
+              incremento_valor: Number(row.incremento_valor || 0),
+              incremento_km: Number(row.incremento_km || 0),
+              taxa_maxima: row.taxa_maxima == null ? null : Number(row.taxa_maxima),
+              distancia_maxima_km: row.distancia_maxima_km == null ? null : Number(row.distancia_maxima_km),
+              fallback_sem_localizacao: 'minima' as const,
+            }))
+          : [],
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
         storeStatus: hasServerAvailability
           ? acceptingOrders ? "open" : "closed"
