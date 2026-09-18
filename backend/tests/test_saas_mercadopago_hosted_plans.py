@@ -121,7 +121,12 @@ def test_account_money_uses_dedicated_allowed_payment_method(monkeypatch):
     )
 
     assert result["id"] == "plan:plan-wallet-1"
-    assert client.posts[0]["json"]["payment_methods_allowed"] == {
+    assert result["provider_plan_id"] == "plan-wallet-1"
+    sent = client.posts[0]["json"]
+    assert sent["reason"] == "KÔMA - Plano Pro (Mensal)"
+    assert sent["auto_recurring"]["transaction_amount"] == 129.0
+    assert sent["auto_recurring"]["currency_id"] == "BRL"
+    assert sent["payment_methods_allowed"] == {
         "payment_methods": [{"id": "account_money"}]
     }
 
@@ -203,6 +208,7 @@ def test_plan_marker_is_persisted_as_payment_reference_not_subscription_id(monke
     result = services_package._hosted_plan_aware_upsert_billing_setup(
         object(),
         protocol="KOMA-CTR-20260914-FFEEDDCCBBAA",
+        contract_acceptance_id="accept-vnext-premium",
         payment_method_type="pix_automatic",
         provider_subscription_id="plan:plan-99",
         billing_cycle="monthly",
@@ -211,6 +217,7 @@ def test_plan_marker_is_persisted_as_payment_reference_not_subscription_id(monke
     assert result == "setup-1"
     assert captured["provider_subscription_id"] is None
     assert captured["provider_payment_method_reference"] == "plan:plan-99"
+    assert captured["contract_acceptance_id"] == "accept-vnext-premium"
 
 
 def test_real_subscription_webhook_is_linked_back_to_plan_marker(monkeypatch):
