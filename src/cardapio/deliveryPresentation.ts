@@ -18,7 +18,8 @@ type DeliveryConfig = Pick<
 export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: number, bairro: string) {
   const threshold = Number(config?.freteGratisValor || 0);
   const freeBySubtotal = threshold > 0 && subtotal >= threshold;
-  const mode = config?.tipoTaxaEntrega || 'fixa';
+  const mode = config?.tipoTaxaEntrega
+    || ((config?.tabelaTaxasBairros?.length || 0) > 0 ? 'bairro' : 'fixa');
 
   if (mode === 'distancia') {
     const distanceConfig = config?.tabelaTaxasKm?.[0];
@@ -38,13 +39,11 @@ export function getDeliveryQuote(config: DeliveryConfig | undefined, subtotal: n
     return {
       fee: freeBySubtotal ? 0 : selected?.taxa ?? config?.taxaEntregaPadrao ?? 0,
       awaitingNeighborhood: neighborhoods.length > 0 && !selected && !freeBySubtotal,
-      awaitingLocation: false,
     };
   }
 
   return {
     fee: freeBySubtotal ? 0 : config?.taxaEntregaPadrao ?? 0,
     awaitingNeighborhood: false,
-    awaitingLocation: false,
   };
 }
