@@ -51,9 +51,23 @@ async function setup(page: Page, theme: 'dark' | 'light') {
     await route.fulfill({ json: { ...profile, ...payload } });
   });
   await page.route('**/api/restaurant-features/scheduled-orders', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: { enabled: false } });
+      return;
+    }
     const payload = route.request().postDataJSON() || {};
     await route.fulfill({ json: { enabled: Boolean(payload.enabled) } });
   });
+  await page.route('**/caixa/configuracoes/delivery-suggestion', route => route.fulfill({
+    json: {
+      taxa_minima: 5,
+      valor_por_km: 1,
+      source: 'default',
+      sample_size: 0,
+      message: 'Sugestão inicial enquanto ainda não há entregas concluídas suficientes.',
+    },
+  }));
+  await page.route('**/api/online-orders/blocks', route => route.fulfill({ json: [] }));
 }
 
 async function navigate(page: Page, label: string) {
@@ -67,10 +81,6 @@ async function navigate(page: Page, label: string) {
     .first()
     .click();
   await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
-}
-
-function cashierSubnavButton(page: Page, name: string) {
-  return page.locator('.cashier-subnav').getByRole('button', { name, exact: true });
 }
 
 async function openOnlineMenu(page: Page, theme: 'dark' | 'light') {
@@ -93,45 +103,43 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize(viewport);
       await openOnlineMenu(page, theme);
 
-      for (const label of ['Loja', 'Operação', 'Divulgação']) {
-        const button = cashierSubnavButton(page, label);
-        await expect(button).toBeVisible();
-        const box = await button.boundingBox();
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-      }
-      await expect(page.locator('.cashier-subnav').getByRole('button', { name: /Cupons|Fidelidade/i })).toHaveCount(0);
-
+      await expect(page.locator('.cashier-subnav')).toBeHidden();
       await expect(page.getByRole('heading', { name: 'Perfil do cardápio', exact: true })).toBeVisible();
       await expect(page.getByText('Informações principais', { exact: true })).toBeVisible();
       const additional = page.locator('details').filter({ hasText: 'Informações adicionais' });
       await expect(additional).toBeVisible();
       await expect(additional).not.toHaveAttribute('open', '');
 
-      await page.getByRole('button', { name: 'Marca', exact: true }).click();
+      await navigate(page, 'Marca');
       await expect(page.getByRole('heading', { name: 'Marca', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await cashierSubnavButton(page, 'Operação').click();
-      await expect(page.getByRole('heading', { name: 'Pedidos e horários', exact: true })).toBeVisible();
-      for (const label of ['Pedidos & horários', 'Entrega & áreas', 'Pagamentos']) {
-        await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
-      }
-      const protections = page.locator('details').filter({ hasText: 'Proteções operacionais' });
-      await expect(protections).toBeVisible();
-      await expect(protections).not.toHaveAttribute('open', '');
+      await navigate(page, 'Pedidos online');
+      await expect(page.getByRole('heading', { name: 'Pedidos online', exact: true })).toBeVisible();
+      await expect(page.getByText('Horário do estabelecimento', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await page.getByRole('button', { name: 'Entrega & áreas', exact: true }).click();
+      await navigate(page, 'Clientes bloqueados');
+      await expect(page.getByRole('heading', { name: 'Clientes bloqueados', exact: true })).toBeVisible();
+      await expect(page.getByText('Histórico de bloqueios', { exact: true })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+
+      await navigate(page, 'Entrega');
       await expect(page.getByRole('heading', { name: 'Entrega', exact: true })).toBeVisible();
-      await expect(page.getByText('Como cobrar a entrega', { exact: true })).toBeVisible();
+      await expect(page.getByText('Taxa de entrega automática', { exact: true })).toBeVisible();
+      await expect(page.getByText('Sugestão do KÔMA', { exact: true })).toBeVisible();
+      const perKm = page.getByLabel('Valor por km da entrega');
+      await expect(perKm).toBeVisible();
+      await perKm.fill('0,50');
+      await expect(perKm).toHaveValue('0,50');
       await expectNoHorizontalOverflow(page);
 
-      await page.getByRole('button', { name: 'Pagamentos', exact: true }).click();
+      await navigate(page, 'Pagamentos');
       await expect(page.getByRole('heading', { name: 'Pagamentos', exact: true })).toBeVisible();
       await expect(page.getByText('Formas aceitas', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await cashierSubnavButton(page, 'Divulgação').click();
+      await navigate(page, 'Divulgação');
       await expect(page.getByRole('heading', { name: 'Link e QR Code', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 

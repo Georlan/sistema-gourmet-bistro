@@ -130,3 +130,38 @@ def test_distance_fee_rejects_destination_beyond_configured_limit():
 
 def test_haversine_same_point_is_zero():
     assert haversine_distance_km(-3.7319, -38.5267, -3.7319, -38.5267) == 0.0
+
+
+def test_simplified_distance_config_uses_only_minimum_and_per_km_value():
+    assert normalize_distance_fee_config([{
+        "taxa_minima": 5,
+        "valor_por_km": 1,
+    }]) == {
+        "taxa_minima": 5.0,
+        "valor_por_km": 1.0,
+        "fallback_sem_localizacao": "minima",
+    }
+
+
+def test_simplified_distance_fee_is_minimum_then_linear_per_km():
+    raw = [{"taxa_minima": 5, "valor_por_km": 1}]
+
+    near_fee, near_distance = resolve_distance_delivery_fee(
+        raw,
+        origin_latitude=-3.7319,
+        origin_longitude=-38.5267,
+        destination_latitude=-3.7319,
+        destination_longitude=-38.50,
+    )
+    assert near_distance < 5
+    assert near_fee == Decimal("5.00")
+
+    farther_fee, farther_distance = resolve_distance_delivery_fee(
+        raw,
+        origin_latitude=-3.7319,
+        origin_longitude=-38.5267,
+        destination_latitude=-3.7319,
+        destination_longitude=-38.4725,
+    )
+    assert 5 < farther_distance < 7
+    assert farther_fee == Decimal("6.01")
