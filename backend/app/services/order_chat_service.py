@@ -16,10 +16,11 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from ..models import Comanda, Item
-from ..order_chat_models import OrderConversation, OrderMessage
+from ..order_chat_models import OrderConversation, OrderConversationEvent, OrderMessage
 from .order_chat_hub import queue_order_chat_event
 
 CANONICAL_STATUS_MESSAGES = {
@@ -105,6 +106,16 @@ def assert_conversation_writable(conv: OrderConversation) -> None:
 
 
 
+def _chat_savepoint(db: Session):
+    # Python's SQLite legacy mode does not BEGIN for SELECT/SAVEPOINT. Ensure
+    # RELEASE cannot accidentally commit an insertion before the outer commit.
+    if db.get_bind().dialect.name == "sqlite":
+        connection = db.connection()
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN")
+    return db.begin_nested()
+
+
 def _normalize_client_message_id(client_message_id: str | None) -> str | None:
     """Valida e canonicaliza a chave idempotente gerada pelo remetente."""
     raw = (client_message_id or "").strip()
@@ -131,11 +142,10 @@ def _existing_human_message(
     # Compatibilidade de rollout: versões imediatamente anteriores codificavam
     # a chave humana em event_key. Novas mensagens nunca voltam a gravar ali.
     legacy_event_key = f"{sender_type}:{client_message_id}"
-    return (
+    existing = (
         db.query(OrderMessage)
         .filter(
             OrderMessage.conversation_id == conversation_id,
-            OrderMessage.sender_type == sender_type,
             or_(
                 OrderMessage.client_message_id == client_message_id,
                 OrderMessage.event_key == legacy_event_key,
@@ -143,6 +153,10 @@ def _existing_human_message(
         )
         .first()
     )
+
+    if existing is not None and existing.sender_type != sender_type:
+        raise HTTPException(status_code=409, detail="Identificador da mensagem já utilizado por outro remetente.")
+    return existing
 
 
 def create_conversation_for_order(
@@ -237,7 +251,7 @@ def post_system_order_event(
     pedido_id: str,
     new_status: str,
 ) -> dict[str, Any] | None:
-    """Projeta uma transição canônica no realtime sem criar mensagem artificial.
+    """Persiste a projeção da transição no feed, separada de mensagens humanas.
 
     O status continua pertencendo à Comanda. O evento SSE é apenas um hint
     transacional e só deixa o banco depois do commit via PostgreSQL NOTIFY
@@ -258,28 +272,55 @@ def post_system_order_event(
     if not norm_status:
         return None
 
-    body = CANONICAL_STATUS_MESSAGES.get(
-        norm_status,
-        f"Status do pedido atualizado: {norm_status}.",
-    )
     now = datetime.datetime.now(datetime.timezone.utc)
     if norm_status in TERMINAL_ORDER_STATUSES and conv.closed_at is None:
         conv.closed_at = now
-        db.flush()
-
-    payload = {
-        "status": norm_status,
-        "body": body,
-        "closed_at": conv.closed_at.isoformat() if conv.closed_at else None,
-    }
-    queue_order_chat_event(
-        db,
-        restaurante_id=restaurante_id,
-        conversation_id=conv.id,
-        kind="status",
-        data=payload,
+    event = append_order_feed_event(
+        db, conv=conv, event_key=f"status:{norm_status}", order_status=norm_status,
+        body=CANONICAL_STATUS_MESSAGES.get(norm_status, f"Status do pedido atualizado: {norm_status}."),
     )
-    return payload
+    return {"status": norm_status, "body": event.body,
+            "closed_at": conv.closed_at.isoformat() if conv.closed_at else None}
+
+
+def append_order_feed_event(
+    db: Session, *, conv: OrderConversation, event_key: str,
+    body: str, order_status: str | None = None,
+) -> OrderConversationEvent:
+    existing = db.query(OrderConversationEvent).filter_by(
+        restaurante_id=conv.restaurante_id, conversation_id=conv.id, event_key=event_key,
+    ).first()
+    if existing is not None:
+        return existing
+    event = OrderConversationEvent(
+        restaurante_id=conv.restaurante_id, conversation_id=conv.id,
+        pedido_id=conv.pedido_id, event_key=event_key, status=order_status, body=body,
+    )
+    try:
+        with _chat_savepoint(db):
+            db.add(event)
+            db.flush()
+    except IntegrityError:
+        existing = db.query(OrderConversationEvent).filter_by(
+            restaurante_id=conv.restaurante_id, conversation_id=conv.id, event_key=event_key,
+        ).first()
+        if existing is None:
+            raise
+        return existing
+    queue_order_chat_event(db, restaurante_id=conv.restaurante_id,
+                          conversation_id=conv.id, kind="status", data={"event_id": event.id})
+    return event
+
+
+def serialize_feed_event(event: OrderConversationEvent) -> dict[str, Any]:
+    return {
+        "id": event.id, "kind": "order_event", "sender_type": "system",
+        "conversation_id": event.conversation_id, "pedido_id": event.pedido_id,
+        "status": event.status, "event_key": event.event_key,
+        "body": html.unescape(event.body) if event.body_format == LEGACY_ESCAPED_BODY_FORMAT else event.body,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
 
 def send_customer_message(
     db: Session,
@@ -306,8 +347,6 @@ def send_customer_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversa não encontrada.",
         )
-    assert_conversation_writable(conv)
-
     normalized_client_message_id = _normalize_client_message_id(client_message_id)
     existing = _existing_human_message(
         db,
@@ -317,6 +356,7 @@ def send_customer_message(
     )
     if existing is not None:
         return existing
+    assert_conversation_writable(conv)
 
     one_minute_ago = now - datetime.timedelta(minutes=1)
     recent_count = (
@@ -348,14 +388,15 @@ def send_customer_message(
         created_at=now,
     )
     try:
-        with db.begin_nested():
+        with _chat_savepoint(db):
             db.add(msg)
             conv.updated_at = now
             db.flush()
-    except Exception:
+    except IntegrityError:
         existing = _existing_human_message(
             db,
             conversation_id=conv.id,
+            sender_type="customer",
             client_message_id=normalized_client_message_id,
         )
         if existing is not None:
@@ -367,7 +408,7 @@ def send_customer_message(
         restaurante_id=restaurante_id,
         conversation_id=conv.id,
         kind="message",
-        data=serialize_message(msg),
+        data={"message_id": msg.id},
     )
     return msg
 
@@ -397,8 +438,6 @@ def send_staff_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversa não encontrada.",
         )
-    assert_conversation_writable(conv)
-
     normalized_client_message_id = _normalize_client_message_id(client_message_id)
     existing = _existing_human_message(
         db,
@@ -408,6 +447,7 @@ def send_staff_message(
     )
     if existing is not None:
         return existing
+    assert_conversation_writable(conv)
 
     msg = OrderMessage(
         id=str(uuid.uuid4()),
@@ -422,14 +462,15 @@ def send_staff_message(
         created_at=now,
     )
     try:
-        with db.begin_nested():
+        with _chat_savepoint(db):
             db.add(msg)
             conv.updated_at = now
             db.flush()
-    except Exception:
+    except IntegrityError:
         existing = _existing_human_message(
             db,
             conversation_id=conv.id,
+            sender_type="staff",
             client_message_id=normalized_client_message_id,
         )
         if existing is not None:
@@ -441,7 +482,7 @@ def send_staff_message(
         restaurante_id=restaurante_id,
         conversation_id=conv.id,
         kind="message",
-        data=serialize_message(msg),
+        data={"message_id": msg.id},
     )
     return msg
 
@@ -536,6 +577,7 @@ def serialize_message(msg: OrderMessage) -> dict[str, Any]:
         body = html.unescape(body)
     return {
         "id": msg.id,
+        "kind": "message",
         "conversation_id": msg.conversation_id,
         "pedido_id": msg.pedido_id,
         "sender_type": msg.sender_type,
@@ -568,7 +610,11 @@ def list_recent_messages(
         .all()
     )
     rows.reverse()
-    return [serialize_message(msg) for msg in rows]
+    events = db.query(OrderConversationEvent).filter_by(
+        restaurante_id=restaurante_id, conversation_id=conversation_id,
+    ).order_by(OrderConversationEvent.created_at.desc(), OrderConversationEvent.id.desc()).limit(bounded_limit).all()
+    feed = [serialize_message(msg) for msg in rows] + [serialize_feed_event(event) for event in events]
+    return sorted(feed, key=lambda item: (item["created_at"] or "", item["id"]))[-bounded_limit:]
 
 def list_caixa_conversations(
     db: Session,

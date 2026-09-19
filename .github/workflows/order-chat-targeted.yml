@@ -8,7 +8,8 @@ on:
       - "backend/app/routes/caixa_chat.py"
       - "backend/app/services/order_chat_*.py"
       - "backend/app/services/order_rejection_notice.py"
-      - "backend/tests/test_order_chat_unit.py"
+      - "backend/tests/test_order_chat*.py"
+      - "backend/alembic/versions/*order_feed_events.py"
       - "backend/tests/test_order_tracking_performance.py"
       - "backend/tests/test_online_order_reasoned_rejection.py"
       - "src/cardapio/CardapioPage.tsx"
@@ -28,7 +29,22 @@ jobs:
   chat-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chat_test
+          POSTGRES_PASSWORD: chat_test
+          POSTGRES_DB: chat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chat_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
+      ORDER_CHAT_TEST_DATABASE_URL: postgresql://chat_test:chat_test@127.0.0.1:5432/chat_test
       ENVIRONMENT: test
       SECRET_KEY: order-chat-ci-secret-key
       ENCRYPTION_KEY: dgvrWayyUxrh0PjzBcjn1AJ5woxjUE3lLTRptHDUSEQ=
@@ -68,7 +84,7 @@ jobs:
         run: |
           DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
           MIGRATION_DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
-            python -m pytest -q -ra backend/tests/test_order_chat_unit.py
+            python -m pytest -q -ra backend/tests/test_order_chat_unit.py backend/tests/test_order_chat_p0.py backend/tests/test_order_chat_p0_postgres.py
 
           DATABASE_URL=sqlite:///./order-chat-performance-ci.db \
           MIGRATION_DATABASE_URL=sqlite:///./order-chat-performance-ci.db \

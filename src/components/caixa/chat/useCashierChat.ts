@@ -197,6 +197,11 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
           }
         },
         onEvent: ({ event, data }) => {
+          if (event === 'connected') {
+            void fetchUnread();
+            realtimeSequenceRef.current += 1;
+            setChatRealtimeEvent({ event: 'reconnected', data: null, sequence: realtimeSequenceRef.current });
+          }
           if (event !== 'connected') {
             realtimeSequenceRef.current += 1;
             setChatRealtimeEvent({

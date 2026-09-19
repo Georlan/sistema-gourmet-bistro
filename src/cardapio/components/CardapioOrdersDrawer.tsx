@@ -191,6 +191,7 @@ export default function CardapioOrdersDrawer({
         if (isReconnect) void refreshUnreadCounts();
       };
       source.onerror = () => markDegraded(order.id);
+      source.addEventListener("connected", () => { void refreshUnreadCounts(); });
 
       source.addEventListener("message", (event: MessageEvent) => {
         try {

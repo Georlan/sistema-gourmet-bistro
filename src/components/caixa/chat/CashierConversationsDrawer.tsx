@@ -529,6 +529,9 @@ export function CashierConversationsDrawer({
         void fetchConversations({ background: true });
         return;
       case 'status_changed':
+        if (data?.feed_event && typeof data.feed_event === 'object') {
+          appendRealtimeMessage(data.feed_event as Record<string, unknown>);
+        }
         void fetchConversations({ background: true });
         return;
       case 'read_update':

@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.models import PublicRateLimit, Categoria, Cliente, Comanda, Item, Lancamento, Produto, Restaurante, Usuario
-from app.order_chat_models import OrderConversation, OrderMessage
+from app.order_chat_models import OrderConversation, OrderConversationEvent, OrderMessage
 from app.routes.caixa_chat import router as caixa_chat_router
 from app.routes.order_tracking import router as order_tracking_router
 from app.security import create_access_token
@@ -35,7 +35,7 @@ from app.services.order_chat_hub import order_chat_hub
 
 
 @pytest.fixture()
-def client_and_session():
+def client_and_session(monkeypatch):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -52,9 +52,11 @@ def client_and_session():
     Item.__table__.create(engine)
     OrderConversation.__table__.create(engine)
     OrderMessage.__table__.create(engine)
+    OrderConversationEvent.__table__.create(engine)
     PublicRateLimit.__table__.create(engine)
 
     SessionTesting = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    monkeypatch.setattr("app.services.order_chat_hub.SessionLocal", SessionTesting)
     session = SessionTesting()
 
     test_app = FastAPI()
@@ -409,7 +411,9 @@ def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(cli
 
     history = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert history.status_code == 200
-    assert len(history.json()) == 1
+    assert len(history.json()) == 5
+    assert sum(item["kind"] == "message" for item in history.json()) == 1
+    assert sum(item["kind"] == "order_event" for item in history.json()) == 4
 
 
 def test_human_message_idempotency_reuses_existing_row(client_and_session):

@@ -39,6 +39,7 @@ interface TrackingPayload {
 
 interface TrackingMessage {
   id: string;
+  kind?: "message" | "order_event";
   sender_type: "system" | "customer" | "staff";
   body: string;
   created_at?: string | null;
@@ -209,6 +210,7 @@ export default function CardapioOrderChatPanel({
         if (isReconnect) void refresh();
       };
       source.onerror = startFallback;
+      source.addEventListener("connected", () => { void refresh(); });
       source.addEventListener("message", (event: MessageEvent) => {
         try {
           const incoming = JSON.parse(event.data) as TrackingMessage;
@@ -228,7 +230,14 @@ export default function CardapioOrderChatPanel({
           const data = JSON.parse((event as MessageEvent).data) as {
             status?: unknown;
             closed_at?: unknown;
+            feed_event?: TrackingMessage;
           };
+          if (data.feed_event?.id) {
+            const incoming = data.feed_event;
+            setMessages((current) => current.some((item) => item.id === incoming.id)
+              ? current
+              : [...current, incoming]);
+          }
           if (typeof data.status !== "string" || !data.status) return;
           setTracking((current) => {
             const tipo = current?.tipo || order.tipo || "Retirada";

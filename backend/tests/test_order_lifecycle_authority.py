@@ -91,7 +91,7 @@ def test_aggregate_target_still_advances_a_lagging_launch():
     with patch.object(
         OrderLifecycleCoordinator,
         "_apply_single_transition",
-    ) as apply_transition:
+    ) as apply_transition, patch("app.services.order_chat_service.post_system_order_event"):
         result = OrderLifecycleCoordinator.transition_check_status(
             FakeSession(),
             restaurant_id=CHAR_RESTAURANT_ID,
