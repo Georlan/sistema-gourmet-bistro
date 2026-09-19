@@ -222,7 +222,7 @@ function safeParseJson<T>(raw: string | null): T | null {
   }
 }
 
-function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
+export function resolveTrackingToken(order: Partial<StoredOrder>): string {
   const direct = String(order.tracking_token || "").trim();
   if (direct) return direct;
   const legacyUrl = String(order.tracking_url || "").trim();
@@ -247,7 +247,7 @@ function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
 function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrder | null {
   if (!order?.id || now - Number(order.timestamp || 0) > ACTIVE_ORDER_TTL_MS) return null;
 
-  const trackingToken = trackingTokenFromOrder(order);
+  const trackingToken = resolveTrackingToken(order);
   const legacyKey = String(order.idempotency_key || "").trim();
   if (!trackingToken && !legacyKey) return null;
 
