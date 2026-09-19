@@ -209,9 +209,9 @@ export default function CardapioOrdersDrawer({
         }
       });
 
-      source.addEventListener("read_update", (event: MessageEvent) => {
+      source.addEventListener("read_update", (event) => {
         try {
-          const data = JSON.parse(event.data) as { reader?: unknown };
+          const data = JSON.parse((event as MessageEvent).data) as { reader?: unknown };
           if (data.reader === "customer") {
             setUnreadByOrder((current) => ({ ...current, [order.id]: 0 }));
           }
@@ -220,9 +220,9 @@ export default function CardapioOrdersDrawer({
         }
       });
 
-      source.addEventListener("status", (event: MessageEvent) => {
+      source.addEventListener("status", (event) => {
         try {
-          const data = JSON.parse(event.data) as { status?: unknown; closed_at?: unknown };
+          const data = JSON.parse((event as MessageEvent).data) as { status?: unknown; closed_at?: unknown };
           const status = typeof data.status === "string" ? data.status : "";
           if (!status) return;
           onRealtimeStatus?.(
