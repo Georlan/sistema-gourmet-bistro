@@ -59,15 +59,21 @@ function createConnection(url: string): SharedConnection {
     health: 'connecting',
   };
 
-  source.onopen = () => setHealth(connection, 'healthy');
+  // Abrir o HTTP stream não prova que o LISTEN PostgreSQL está saudável.
+  // A confirmação autoritativa vem do evento connected/transport do backend.
+  source.onopen = () => setHealth(connection, 'connecting');
   source.onerror = () => setHealth(connection, 'degraded');
 
   const bind = (eventName: string) => {
     source.addEventListener(eventName, (event: MessageEvent) => {
-      dispatch(connection, { event: eventName, data: parseData(event) });
+      const data = parseData(event);
+      if (eventName === 'connected' || eventName === 'transport') {
+        setHealth(connection, data?.push_available === false ? 'degraded' : 'healthy');
+      }
+      dispatch(connection, { event: eventName, data });
     });
   };
-  ['connected', 'message', 'status', 'read_update'].forEach(bind);
+  ['connected', 'transport', 'message', 'status', 'read_update'].forEach(bind);
   return connection;
 }
 
