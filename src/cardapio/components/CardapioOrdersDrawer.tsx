@@ -111,11 +111,18 @@ export default function CardapioOrdersDrawer({
       targets.map(async ({ order, token }) => {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`,
+            `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}/summary`,
             { cache: "no-store" },
           );
           if (!response.ok) return null;
-          const payload = await response.json() as { conversa?: { unread_count?: number } };
+          const payload = await response.json() as {
+            status?: string;
+            closed_at?: string | null;
+            conversa?: { unread_count?: number };
+          };
+          if (payload.status) {
+            onRealtimeStatus?.(order.id, payload.status, payload.closed_at || null);
+          }
           return [order.id, Math.max(0, Number(payload?.conversa?.unread_count || 0))] as const;
         } catch {
           return null;
@@ -133,7 +140,7 @@ export default function CardapioOrdersDrawer({
       });
       return next;
     });
-  }, [activeChatOrders]);
+  }, [activeChatOrders, onRealtimeStatus]);
 
   React.useEffect(() => {
     chatOrderIdRef.current = chatOrderId;
