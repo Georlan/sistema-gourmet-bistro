@@ -104,3 +104,10 @@ test('checkout pede localização somente no contexto da entrega e mantém fallb
   assert.match(cart, /taxa mínima/);
   assert.match(deliveryAddressFields, /CEP <span className="font-normal opacity-70">\(opcional\)<\/span>/);
 });
+
+test('checkout exige uma posição atual e suficientemente precisa antes de cotar distância', () => {
+  assert.match(cart, /position\.coords\.accuracy > 200/);
+  assert.match(cart, /Ative a localização precisa e tente novamente/);
+  assert.match(cart, /enableHighAccuracy: true/);
+  assert.match(cart, /maximumAge: 0/);
+});

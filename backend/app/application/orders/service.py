@@ -411,7 +411,10 @@ class OrderApplicationService:
             fulfillment=cmd.fulfillment,
             items_subtotal=subtotal_base,
             neighborhood=delivery_neighborhood,
-            delivery_address=delivery_addr,
+            # O cálculo por distância depende das coordenadas do snapshot.
+            # ``delivery_addr`` é apenas a representação textual legada e não
+            # pode substituir o value object estruturado nesta fronteira.
+            delivery_address=delivery_address_snapshot,
         )
 
         pricing_context = validated_input.to_pricing_context(
