@@ -455,7 +455,11 @@ export async function refreshAllStoredOrders(
   if (storedList.length === 0) return [];
 
   const results = await Promise.allSettled(
-    storedList.map((order) => fetchOrderLiveStatus(order, apiBaseUrl)),
+    storedList.map((order) => (
+      resolveOrderState(order).terminal
+        ? Promise.resolve(order)
+        : fetchOrderLiveStatus(order, apiBaseUrl)
+    )),
   );
 
   const updatedList: StoredOrder[] = [];
