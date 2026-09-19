@@ -163,8 +163,8 @@ export const isTerminalConversation = (conversation: CaixaConversationItem) =>
   Boolean(conversation.closed_at) || TERMINAL_CHAT_STATUSES.has(normalizeStatus(conversation.status_pedido || ''));
 
 /**
- * Pedido terminal vira histórico por padrão. Se o cliente voltar a escrever,
- * a thread retorna para a fila ativa como pós-venda sem reabrir o pedido.
+ * Defesa visual para snapshots atrasados: pedido terminal nunca volta para a
+ * fila operacional e a escrita continua bloqueada pelo backend.
  */
 export const isArchivedConversation = (conversation: CaixaConversationItem) =>
   isTerminalConversation(conversation)
