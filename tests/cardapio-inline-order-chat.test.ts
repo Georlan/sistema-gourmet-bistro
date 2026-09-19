@@ -5,6 +5,8 @@ import test from 'node:test';
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const drawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 const panel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
+const realtime = source('../src/cardapio/orderChatRealtime.ts');
+const page = source('../src/cardapio/CardapioPage.tsx');
 const header = source('../src/cardapio/components/CardapioHeader.tsx');
 const customIcons = source('../src/cardapio/components/KomaPublicIcons.tsx');
 const chatPolish = source('../src/cardapio/cardapioChatPolish.css');
@@ -21,19 +23,24 @@ test('chat do pedido permanece dentro do cardapio em vez de navegar para outra p
 
 test('painel lateral oferece timeline, historico e envio de mensagem', () => {
   assert.match(panel, /api\/cardapio\/pedidos\/acompanhar/);
-  assert.match(panel, /new EventSource/);
+  assert.match(panel, /subscribeOrderRealtime/);
+  assert.doesNotMatch(panel, /new EventSource/);
+  assert.match(realtime, /new EventSource/);
+  assert.match(realtime, /const connections = new Map/);
   assert.match(panel, /\/messages/);
   assert.match(panel, /Chat e acompanhamento sem sair do cardápio/);
   assert.match(panel, /\["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"\]/);
 });
 
-test('fallback do chat nao gera polling com a aba oculta e reconcilia ao voltar', () => {
-  assert.match(panel, /const fallbackTick = \(\) => \{/);
-  assert.match(panel, /document\.visibilityState === "visible"\) void refresh\(\)/);
-  assert.match(panel, /window\.setInterval\(fallbackTick, 15000\)/);
-  assert.match(panel, /document\.addEventListener\("visibilitychange", handleFallbackVisibility\)/);
-  assert.match(panel, /fallbackInterval !== null[\s\S]*void refresh\(\)/);
-  assert.match(panel, /document\.removeEventListener\("visibilitychange", handleFallbackVisibility\)/);
+test('fallback do chat só entra quando o transporte realtime degrada e reconcilia ao voltar', () => {
+  assert.match(panel, /health === "degraded"/);
+  assert.match(panel, /window\.setInterval\(\(\) => \{/);
+  assert.match(panel, /document\.visibilityState === "visible"/);
+  assert.match(panel, /15000/);
+  assert.match(panel, /document\.addEventListener\("visibilitychange", handleVisibility\)/);
+  assert.match(panel, /document\.removeEventListener\("visibilitychange", handleVisibility\)/);
+  assert.match(realtime, /push_available === false/);
+  assert.match(realtime, /'transport'/);
 });
 
 test('cabecalho deixa o retorno ao pedido e chat explicito', () => {
@@ -96,4 +103,13 @@ test('modal deixa explicito que somente o cardapio online sera pausado', () => {
   assert.match(emergencyControl, /O restaurante continua operando normalmente/);
   assert.match(emergencyControl, /Só novas compras pelo cardápio online serão bloqueadas/);
   assert.match(emergencyControl, /Pausar cardápio online/);
+});
+
+
+test('cardapio substitui polling quente de 20s por SSE compartilhado com fallback lento', () => {
+  assert.match(page, /subscribeOrderRealtime/);
+  assert.match(page, /ACTIVE_ORDER_FALLBACK_REFRESH_MS = 60_000/);
+  assert.doesNotMatch(page, /ACTIVE_ORDER_REFRESH_MS = 20_000/);
+  assert.match(page, /activeOrderRealtimeKey/);
+  assert.match(page, /state === "healthy"/);
 });

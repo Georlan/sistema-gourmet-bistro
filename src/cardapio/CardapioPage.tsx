@@ -56,12 +56,14 @@ import {
   removeStoredOrder,
   clearAllStoredOrders,
   resolveOrderState,
+  resolveTrackingToken,
 } from "./orderTracking";
+import { subscribeOrderRealtime } from "./orderChatRealtime";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
-const ACTIVE_ORDER_REFRESH_MS = 20_000;
+const ACTIVE_ORDER_FALLBACK_REFRESH_MS = 60_000;
 // A consulta pública de CEP é apenas conveniência progressiva; o checkout
 // permanece totalmente utilizável com preenchimento manual.
 
@@ -141,6 +143,11 @@ export default function CardapioPage() {
   const activeOrders = useMemo(
     () => storedOrders.filter((order) => !resolveOrderState(order).terminal),
     [storedOrders],
+  );
+
+  const activeOrderRealtimeKey = useMemo(
+    () => JSON.stringify(activeOrders.map((order) => [String(order.id), resolveTrackingToken(order)])),
+    [activeOrders],
   );
 
   const activeOrder = useMemo(() => {
@@ -432,21 +439,61 @@ export default function CardapioPage() {
     const restaurantId = Number(activeBrand.id);
     if (!Number.isFinite(restaurantId)) return;
 
-    let intervalId: ReturnType<typeof setInterval> | undefined;
+    let targets: Array<[string, string]> = [];
+    try {
+      targets = JSON.parse(activeOrderRealtimeKey) as Array<[string, string]>;
+    } catch {
+      targets = [];
+    }
+    if (targets.length === 0) return;
+
+    const healthByOrder = new Map<string, boolean>();
+    let fallbackInterval: ReturnType<typeof setInterval> | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
     const refresh = () => {
-      if (document.hidden) return;
-      if (activeOrders.length > 0) void checkActiveOrders(restaurantId);
+      if (!document.hidden) void checkActiveOrders(restaurantId);
     };
-    intervalId = setInterval(refresh, ACTIVE_ORDER_REFRESH_MS);
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(refresh, 150);
+    };
+    const ensureFallback = () => {
+      const needsFallback = targets.some(([orderId, token]) => !token || healthByOrder.get(orderId) !== true);
+      if (needsFallback && !fallbackInterval) {
+        fallbackInterval = setInterval(refresh, ACTIVE_ORDER_FALLBACK_REFRESH_MS);
+      } else if (!needsFallback && fallbackInterval) {
+        clearInterval(fallbackInterval);
+        fallbackInterval = undefined;
+      }
+    };
+
+    const unsubscribers = targets
+      .filter(([, token]) => Boolean(token))
+      .map(([orderId, token]) => subscribeOrderRealtime({
+        apiBaseUrl: API_BASE_URL,
+        token,
+        onState: (state) => {
+          healthByOrder.set(orderId, state === "healthy");
+          ensureFallback();
+        },
+        onEvent: ({ event }) => {
+          if (event === "connected" || event === "status") scheduleRefresh();
+        },
+      }));
+
+    ensureFallback();
     const onVisibility = () => {
-      if (!document.hidden) refresh();
+      if (!document.hidden) scheduleRefresh();
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      if (refreshTimer) clearTimeout(refreshTimer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeBrand?.id, activeOrders.length, checkActiveOrders]);
+  }, [activeBrand?.id, activeOrderRealtimeKey, checkActiveOrders]);
 
   useEffect(() => {
     if (!activeBrand?.id) return;

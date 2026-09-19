@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import './cashierChatAttention.css';
-import { consumeCashierChatEvents } from './cashierChatRealtime';
+import { CashierChatStreamEvent, consumeCashierChatEvents } from './cashierChatRealtime';
 
 export type CashierChatHealth = 'idle' | 'loading' | 'healthy' | 'degraded';
 
@@ -24,6 +24,8 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
   const chatAudioCtxRef = useRef<AudioContext | null>(null);
   const chatAudioUnlockedRef = useRef(false);
   const soundedMessageIdsRef = useRef<Set<string>>(new Set());
+  const realtimeListenersRef = useRef<Set<(event: CashierChatStreamEvent) => void>>(new Set());
+  const realtimePushAvailableRef = useRef<boolean | null>(null);
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [chatUnreadStatus, setChatUnreadStatus] = useState<CashierChatHealth>('idle');
@@ -66,7 +68,11 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
 
   const maybePlayChatMessageAlert = useCallback((data: Record<string, unknown> | null) => {
     if (data?.sender_type !== 'customer') return;
-    const messageId = typeof data?.id === 'string' ? data.id : null;
+    const messageId = typeof data?.message_id === 'string'
+      ? data.message_id
+      : typeof data?.id === 'string'
+        ? data.id
+        : null;
     if (!messageId || soundedMessageIdsRef.current.has(messageId)) return;
 
     soundedMessageIdsRef.current.add(messageId);
@@ -77,6 +83,13 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     playChatMessageAlert();
   }, [playChatMessageAlert]);
 
+  const subscribeChatRealtime = useCallback((listener: (event: CashierChatStreamEvent) => void) => {
+    realtimeListenersRef.current.add(listener);
+    return () => {
+      realtimeListenersRef.current.delete(listener);
+    };
+  }, []);
+
   const fetchUnread = useCallback(async () => {
     const generation = ++requestGeneration.current;
     if (!authorization) {
@@ -85,7 +98,10 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
       return;
     }
 
-    setChatUnreadStatus((current) => current === 'healthy' ? current : 'loading');
+    setChatUnreadStatus((current) => {
+      if (realtimePushAvailableRef.current === false) return 'degraded';
+      return current === 'healthy' ? current : 'loading';
+    });
     const base = apiBaseUrl || API_BASE_URL;
     try {
       const response = await fetch(`${base}/api/caixa/conversas/unread-count`, {
@@ -102,7 +118,11 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
         throw new Error('Unread count returned an invalid payload.');
       }
       setChatUnreadCount(Math.floor(total));
-      setChatUnreadStatus('healthy');
+      setChatUnreadStatus((current) => {
+        if (realtimePushAvailableRef.current === false) return 'degraded';
+        if (realtimePushAvailableRef.current === true) return 'healthy';
+        return current === 'degraded' ? current : 'loading';
+      });
     } catch (error) {
       if (generation !== requestGeneration.current) return;
       // UNKNOWN nunca vira ZERO: preserva o último snapshot válido.
@@ -149,6 +169,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
       return;
     }
 
+    realtimePushAvailableRef.current = null;
     void fetchUnread();
     const controller = new AbortController();
     const base = apiBaseUrl || API_BASE_URL;
@@ -177,19 +198,43 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
         authorization,
         signal: controller.signal,
         onOpen: () => {
-          stopFallback();
+          // HTTP aberto ainda não garante que o LISTEN PostgreSQL está pronto.
           void fetchUnread();
         },
-        onEvent: ({ event, data }) => {
+        onEvent: (streamEvent) => {
+          const { event, data } = streamEvent;
+          if (event === 'connected' || event === 'transport') {
+            const pushAvailable = data?.push_available !== false;
+            realtimePushAvailableRef.current = pushAvailable;
+            if (pushAvailable) {
+              setChatUnreadStatus('healthy');
+              stopFallback();
+            } else {
+              setChatUnreadStatus('degraded');
+              startFallback();
+            }
+          }
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
-          if (event === 'new_message' || event === 'status_changed' || event === 'read_update') {
+          if (
+            event === 'new_message'
+            || event === 'read_update'
+            || (event === 'status_changed' && Boolean(data?.closed_at))
+          ) {
             void fetchUnread();
           }
+          realtimeListenersRef.current.forEach((listener) => {
+            try {
+              listener(streamEvent);
+            } catch (error) {
+              console.warn('Falha em consumidor local do realtime do chat:', error);
+            }
+          });
         },
       }).catch((error) => {
         if (stopped || controller.signal.aborted) return;
+        realtimePushAvailableRef.current = false;
         setChatUnreadStatus('degraded');
         reportUnreadFailure(error);
         startFallback();
@@ -205,6 +250,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
 
     return () => {
       stopped = true;
+      realtimePushAvailableRef.current = null;
       requestGeneration.current += 1;
       controller.abort();
       stopFallback();
@@ -230,5 +276,6 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     chatUnreadStatus,
     setChatUnreadCount,
     refreshChatUnreadCount: fetchUnread,
+    subscribeChatRealtime,
   };
 }

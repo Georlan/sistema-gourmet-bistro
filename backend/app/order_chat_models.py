@@ -86,6 +86,11 @@ class OrderMessage(Base):
             name="ck_order_messages_sender_type",
         ),
         UniqueConstraint("conversation_id", "event_key", name="uq_order_messages_conv_event_key"),
+        UniqueConstraint(
+            "conversation_id",
+            "client_message_id",
+            name="uq_order_messages_conv_client_message_id",
+        ),
         Index("ix_order_messages_conv_created", "conversation_id", "created_at"),
         Index("ix_order_messages_tenant_created", "restaurante_id", "created_at"),
     )
@@ -117,6 +122,9 @@ class OrderMessage(Base):
         server_default="plain_text_v2",
     )
     event_key = Column(String(64), nullable=True)
+    # UUID/opaco gerado pelo remetente para tornar retries HTTP idempotentes.
+    # NULL preserva mensagens legadas e avisos de sistema históricos.
+    client_message_id = Column(String(64), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),

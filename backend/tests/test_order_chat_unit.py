@@ -16,6 +16,7 @@ from app.routes.caixa_chat import router as caixa_chat_router
 from app.routes.order_tracking import router as order_tracking_router
 from app.security import create_access_token
 from app.session_models import UserSessionVersion
+from app.services.order_chat_hub import order_chat_hub
 from app.services.order_chat_service import (
     LEGACY_ESCAPED_BODY_FORMAT,
     PLAIN_TEXT_BODY_FORMAT,
@@ -23,6 +24,7 @@ from app.services.order_chat_service import (
     get_caixa_unread_summary,
     list_caixa_conversations,
     post_system_order_event,
+    send_customer_message,
     serialize_message,
 )
 
@@ -169,11 +171,9 @@ def test_create_conversation_is_unique_per_order(client_and_session):
     assert conv2.id == conv1.id
     assert token2 is None
 
+    # Status inicial pertence ao pedido, não é forçado como mensagem de chat.
     msgs = session.query(OrderMessage).filter(OrderMessage.conversation_id == conv1.id).all()
-    assert len(msgs) == 1
-    assert msgs[0].sender_type == "system"
-    assert msgs[0].body_format == PLAIN_TEXT_BODY_FORMAT
-    assert "recebido" in msgs[0].body.lower()
+    assert msgs == []
 
 
 def test_public_tracking_resolution_and_anti_enumeration(client_and_session):
@@ -235,7 +235,7 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
 
     resp_caixa_msgs = client.get(f"/api/caixa/conversas/{conv.id}/messages", headers=headers_staff)
     assert resp_caixa_msgs.status_code == 200
-    assert len(resp_caixa_msgs.json()) == 2
+    assert len(resp_caixa_msgs.json()) == 1
 
     resp_read = client.post(f"/api/caixa/conversas/{conv.id}/read", headers=headers_staff)
     assert resp_read.status_code == 200
@@ -253,12 +253,12 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     resp_client_msgs = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert resp_client_msgs.status_code == 200
     msgs = resp_client_msgs.json()
-    assert len(msgs) == 3
+    assert len(msgs) == 2
     assert msgs[-1]["sender_type"] == "staff"
     assert "avisamos a cozinha" in msgs[-1]["body"]
 
 
-def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(client_and_session):
+def test_terminal_status_closes_chat_without_persisting_status_as_message(client_and_session):
     client, session = client_and_session
     _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
     conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
@@ -267,30 +267,22 @@ def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(cli
 
     customer_message = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
-        json={"body": "Mensagem antes do encerramento"},
+        json={"body": "Mensagem antes do encerramento", "client_message_id": "customer-terminal-1"},
     )
     assert customer_message.status_code == 200
     assert get_caixa_unread_summary(session, 1) == 1
 
-    msg1 = post_system_order_event(session, 1, "comanda-101", "producao")
-    session.commit()
-    assert msg1 is not None
-    assert "preparo" in msg1.body.lower()
-    msg1_dup = post_system_order_event(session, 1, "comanda-101", "producao")
-    session.commit()
-    assert msg1_dup.id == msg1.id
-
-    msg2 = post_system_order_event(session, 1, "comanda-101", "pronto")
-    session.commit()
-    assert "pronto" in msg2.body.lower()
-    msg3 = post_system_order_event(session, 1, "comanda-101", "transito")
-    session.commit()
-    assert "saiu para entrega" in msg3.body.lower()
+    for status_name in ("producao", "pronto", "transito"):
+        payload = post_system_order_event(session, 1, "comanda-101", status_name)
+        session.commit()
+        assert payload is not None
+        assert payload["status"] == status_name
 
     before_close = datetime.datetime.now(datetime.timezone.utc)
-    msg4 = post_system_order_event(session, 1, "comanda-101", "finalizado")
+    payload = post_system_order_event(session, 1, "comanda-101", "finalizado")
     session.commit()
-    assert "concluído" in msg4.body.lower()
+    assert payload is not None
+    assert payload["status"] == "finalizado"
     session.refresh(conv)
     assert conv.closed_at is not None
     closed_at = conv.closed_at
@@ -299,25 +291,135 @@ def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(cli
     assert closed_at >= before_close - datetime.timedelta(seconds=1)
     assert closed_at <= datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=1)
 
+    # Transições de status nunca poluem a entidade OrderMessage.
+    stored_messages = (
+        session.query(OrderMessage)
+        .filter(OrderMessage.conversation_id == conv.id)
+        .all()
+    )
+    assert len(stored_messages) == 1
+    assert stored_messages[0].sender_type == "customer"
+
     resp_customer = client.post(
         f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
-        json={"body": "Ainda consigo escrever?"},
+        json={"body": "Ainda consigo escrever?", "client_message_id": "customer-terminal-2"},
     )
     assert resp_customer.status_code == 409
 
     resp_staff = client.post(
         f"/api/caixa/conversas/{conv.id}/messages",
         headers=headers_staff,
-        json={"body": "Resposta depois de finalizado"},
+        json={"body": "Resposta depois de finalizado", "client_message_id": "staff-terminal-1"},
     )
     assert resp_staff.status_code == 409
 
     assert list_caixa_conversations(session, 1) == []
     assert get_caixa_unread_summary(session, 1) == 0
 
+    tracking = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}")
+    assert tracking.status_code == 200
+    assert tracking.json()["conversa"]["can_chat"] is False
+
     history = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert history.status_code == 200
-    assert len(history.json()) == 6
+    assert len(history.json()) == 1
+
+
+def test_human_message_retry_is_idempotent(client_and_session):
+    client, session = client_and_session
+    _seed_data(session)
+    conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+
+    payload = {
+        "body": "Pode mandar sem cebola?",
+        "client_message_id": "customer-retry-001",
+    }
+    first = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json=payload,
+    )
+    second = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json=payload,
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+
+    persisted = (
+        session.query(OrderMessage)
+        .filter(
+            OrderMessage.conversation_id == conv.id,
+            OrderMessage.client_message_id == "customer-retry-001",
+        )
+        .all()
+    )
+    assert len(persisted) == 1
+
+
+def test_local_realtime_is_emitted_only_after_commit(client_and_session, monkeypatch):
+    _client, session = client_and_session
+    _seed_data(session)
+    conv, _raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+
+    emitted: list[tuple[int, str, str, dict]] = []
+
+    def capture(restaurante_id, conversation_id, event_type, data):
+        emitted.append((restaurante_id, conversation_id, event_type, data))
+
+    monkeypatch.setattr(order_chat_hub, "publish_event", capture)
+
+    send_customer_message(
+        session,
+        restaurante_id=1,
+        conversation_id=conv.id,
+        pedido_id="comanda-101",
+        raw_body="Commit primeiro, realtime depois.",
+        client_message_id="commit-safe-001",
+    )
+    assert emitted == []
+
+    session.commit()
+    assert len(emitted) == 1
+    assert emitted[0][0:3] == (1, conv.id, "message")
+    assert emitted[0][3]["message_id"]
+
+    send_customer_message(
+        session,
+        restaurante_id=1,
+        conversation_id=conv.id,
+        pedido_id="comanda-101",
+        raw_body="Esta mensagem sofrerá rollback.",
+        client_message_id="rollback-safe-001",
+    )
+    session.rollback()
+    assert len(emitted) == 1
+
+def test_status_hint_is_deduped_inside_same_transaction(client_and_session, monkeypatch):
+    _client, session = client_and_session
+    _seed_data(session)
+    conv, _raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+
+    emitted: list[tuple[int, str, str, dict]] = []
+
+    def capture(restaurante_id, conversation_id, event_type, data):
+        emitted.append((restaurante_id, conversation_id, event_type, data))
+
+    monkeypatch.setattr(order_chat_hub, "publish_event", capture)
+
+    first = post_system_order_event(session, 1, "comanda-101", "producao")
+    second = post_system_order_event(session, 1, "comanda-101", "producao")
+    assert first is not None
+    assert second is not None
+    assert emitted == []
+
+    session.commit()
+    assert len(emitted) == 1
+    assert emitted[0][0:3] == (1, conv.id, "status")
+    assert emitted[0][3]["status"] == "producao"
 
 
 def test_message_body_is_plain_text_and_legacy_rows_are_decoded_at_boundary(client_and_session):
