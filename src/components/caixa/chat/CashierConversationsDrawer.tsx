@@ -876,7 +876,7 @@ export function CashierConversationsDrawer({
                             <button
                               key={reply}
                               type="button"
-                              onClick={() => setReplyText(reply)}
+                              onClick={() => updateReplyText(reply)}
                               disabled={sending}
                               className="shrink-0 rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 transition hover:border-emerald-500/60 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50"
                               title={`Usar resposta: ${reply}`}
