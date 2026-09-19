@@ -1252,6 +1252,7 @@ export function CaixaPanel({
           isOpen={isChatDrawerOpen}
           realtimeEvent={chatRealtimeEvent}
           realtimeHealth={chatUnreadStatus}
+          draftScope={`${Number.isFinite(restId) ? restId : 'tenant'}:${turno?.id ?? 'no-shift'}`}
           onClose={() => setIsChatDrawerOpen(false)}
           onInspectOrder={(pedidoId) => {
             handleSidebarNavigation('vendas_pedidos');
