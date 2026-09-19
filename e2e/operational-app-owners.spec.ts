@@ -108,32 +108,46 @@ test('rascunho e chave de lançamento sobrevivem à falha, recarga e repetição
   expect(writes[0].itens).toEqual(Array.from({ length: 2 }, () => ({ produto_id: '101', observacao: 'Sem cebola', cliente_nome: 'Cliente de teste', modificador_ids: [] })));
 });
 
-test('envio pendente bloqueia outro lançamento e preserva rascunhos de outras mesas', async ({ page }) => {
+test('envio pendente de uma mesa não bloqueia lançamento em outra mesa', async ({ page }) => {
   await setup(page);
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  let writes = 0;
+  let writesMesa7 = 0;
+  let writesMesa8 = 0;
+
   await page.route('**/cardapio/modificadores/lancamentos/cmd-e2e-7', async route => {
-    writes++;
+    writesMesa7++;
     await pending;
     await route.fulfill({ status: 503, json: { detail: 'Envio recusado no teste' } });
   });
+  await page.route('**/cardapio/modificadores/lancamentos/cmd-e2e-8', async route => {
+    writesMesa8++;
+    await route.fulfill({ status: 200, json: { dispensado_impressao: true } });
+  });
+
   await page.goto('/?view=garcom');
-  await reviewDraft(page);
+  await reviewDraft(page, 7);
   await submit(page).click();
-  await expect.poll(() => writes).toBe(1);
+  await expect.poll(() => writesMesa7).toBe(1);
   await expect(page.locator('#modal-outer-overlay')).toBeHidden();
+
+  // O envio da Mesa 7 continua em voo, mas a Mesa 8 precisa permanecer 100%
+  // operacional para o garçom seguir trabalhando sem aguardar Caixa/realtime.
   await reviewDraft(page, 8);
-  await expect(submit(page)).toBeDisabled();
-  expect(writes).toBe(1);
+  await expect(submit(page)).toBeEnabled();
+  await submit(page).click();
+  await expect.poll(() => writesMesa8).toBe(1);
+  await expect(page.locator('#modal-outer-overlay')).toBeHidden();
+
+  // A falha atrasada da Mesa 7 restaura somente aquele rascunho, sem invalidar
+  // o lançamento independente que já foi aceito na Mesa 8.
   release();
   await expect(page.getByRole('heading', { name: 'Mesa 7', exact: true })).toBeVisible();
-  await reviewDraft(page);
-  await expect(submit(page)).toBeEnabled();
-  await page.locator('#close-mesa-modal-btn').click();
-  await reviewDraft(page, 8);
+  await reviewDraft(page, 7);
   await expect(page.getByLabel(/Cliente do pedido/)).toHaveValue('Cliente de teste');
   await expect(submit(page)).toBeEnabled();
+  expect(writesMesa7).toBe(1);
+  expect(writesMesa8).toBe(1);
 });
 
 test('catálogo mantém compatibilidade de deploy sem liberar produtos inativos', async ({ page }) => {
