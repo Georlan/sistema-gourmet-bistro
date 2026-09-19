@@ -139,6 +139,18 @@ export default function CardapioPage() {
     }, 1800);
   }, []);
 
+  const openCart = useCallback(() => {
+    // Garante uma única superfície interativa ao abrir a sacola.
+    // Em celulares reais, FABs sobrepostos podem disputar o mesmo toque.
+    setSelectedProduct(null);
+    setIsOrdersDrawerOpen(false);
+    setIsStoreInfoOpen(false);
+    setIsProfileOpen(false);
+    setIsAuthOpen(false);
+    setIsCartOpen(true);
+  }, []);
+
+
   const activeOrders = useMemo(
     () => storedOrders.filter((order) => !resolveOrderState(order).terminal),
     [storedOrders],
@@ -735,7 +747,7 @@ export default function CardapioPage() {
         user={user}
         onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
         onLogoClick={() => setIsStoreInfoOpen(true)}
-        onCartToggle={() => setIsCartOpen(true)}
+        onCartToggle={openCart}
         cartCount={cartCount}
         onOrdersClick={() => setIsOrdersDrawerOpen(true)}
         ordersCount={storedOrders.length}
@@ -996,9 +1008,9 @@ export default function CardapioPage() {
         </footer>
       </main>
 
-      {cartCount > 0 && !isCartOpen && (
-        <div className="fixed bottom-4 left-1/2 z-30 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0">
-          <button type="button" onClick={() => setIsCartOpen(true)} className="flex h-14 w-full items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl" id="floating-cart-trigger">
+      {cartCount > 0 && !hasOpenOverlay && (
+        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0">
+          <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
             <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
             <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
           </button>
@@ -1110,7 +1122,7 @@ export default function CardapioPage() {
         }}
         onRealtimeStatus={handleRealtimeOrderStatus}
         isRefreshing={isRefreshingOrders}
-        hasFloatingCart={cartCount > 0 && !isCartOpen}
+        hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
       />
     </div>
   );
