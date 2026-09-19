@@ -96,6 +96,9 @@ export default function CardapioOrderChatPanel({
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingMessageIdRef = useRef<string | null>(null);
+  const readInFlightRef = useRef(false);
+  const readQueuedRef = useRef(false);
+  const observedStaffUnreadRef = useRef(false);
 
   const apiRoot = token
     ? `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`
@@ -128,9 +131,44 @@ export default function CardapioOrderChatPanel({
     }
   }, [apiRoot]);
 
-  const markRead = useCallback(() => {
-    if (!apiRoot || document.visibilityState !== "visible") return;
-    void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
+  const markRead = useCallback(async () => {
+    if (
+      !apiRoot
+      || document.visibilityState !== "visible"
+      || !observedStaffUnreadRef.current
+    ) return;
+
+    if (readInFlightRef.current) {
+      readQueuedRef.current = true;
+      return;
+    }
+
+    readInFlightRef.current = true;
+    try {
+      do {
+        readQueuedRef.current = false;
+        if (!observedStaffUnreadRef.current || document.visibilityState !== "visible") break;
+        observedStaffUnreadRef.current = false;
+
+        const response = await fetch(`${apiRoot}/read`, { method: "POST" });
+        if (!response.ok) {
+          observedStaffUnreadRef.current = true;
+          break;
+        }
+        setTracking((current) => current
+          ? {
+              ...current,
+              conversa: current.conversa
+                ? { ...current.conversa, unread_count: 0 }
+                : current.conversa,
+            }
+          : current);
+      } while (readQueuedRef.current || observedStaffUnreadRef.current);
+    } catch {
+      observedStaffUnreadRef.current = true;
+    } finally {
+      readInFlightRef.current = false;
+    }
   }, [apiRoot]);
 
   useEffect(() => {
@@ -177,6 +215,10 @@ export default function CardapioOrderChatPanel({
           setMessages((current) => current.some((item) => item.id === incoming.id)
             ? current
             : [...current, incoming]);
+          if (incoming.sender_type === "staff") {
+            observedStaffUnreadRef.current = true;
+            if (document.visibilityState === "visible") void markRead();
+          }
         } catch {
           startFallback();
         }
@@ -220,14 +262,24 @@ export default function CardapioOrderChatPanel({
       stopFallback();
       source?.close();
     };
-  }, [apiRoot, order.tipo, refresh]);
+  }, [apiRoot, markRead, order.tipo, refresh]);
+
+  const customerUnread = Math.max(0, Number(tracking?.conversa?.unread_count || 0));
 
   useEffect(() => {
-    markRead();
-    const handleVisibility = () => markRead();
+    if (customerUnread > 0) {
+      observedStaffUnreadRef.current = true;
+      if (document.visibilityState === "visible") void markRead();
+    }
+  }, [customerUnread, markRead]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void markRead();
+    };
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [markRead, messages.length]);
+  }, [markRead]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
