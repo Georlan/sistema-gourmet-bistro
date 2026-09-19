@@ -37,7 +37,7 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(mobileSidebar, /<CashierSidebarSearch/);
   assert.match(sidebarSearch, /Pesquisar funções\.\.\./);
   assert.match(sidebarSearch, /handleSidebarNavigation/);
-  assert.match(cashierSettings, /Configuração do restaurante/);
+  assert.match(cashierSettings, /activeSubTab === 'implantacao'/);
   assert.match(cashierSettings, /Implantação inicial/);
   assert.match(cashierSettings, /\/ativar\?resume=1/);
   assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
