@@ -466,7 +466,7 @@ test('modo automático mostra estabelecimento fechado e informa quando abre nova
   });
 
   await page.goto('/cardapio?restaurante_id=2');
-  await expect(page.locator('#brand-banner-hero').getByText('Fechado · abre hoje às 18:00', { exact: true })).toBeVisible();
+  await expect(page.locator('#brand-banner-hero').getByText('Estabelecimento fechado · abre hoje às 18:00', { exact: true })).toBeVisible();
   await expect(page.getByText('Estabelecimento fechado. Abre hoje às 18:00.', { exact: false })).toBeVisible();
   await expect(page.getByText('Pizza Margherita', { exact: true })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();

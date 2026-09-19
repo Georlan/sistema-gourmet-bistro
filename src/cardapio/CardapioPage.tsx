@@ -865,9 +865,11 @@ export default function CardapioPage() {
               {activeBrand.storeStatus === "closed"
                 ? (activeBrand.availabilitySource === "schedule"
                   ? activeBrand.nextOpeningLabel
-                    ? `Fechado · abre ${activeBrand.nextOpeningLabel}`
+                    ? `Estabelecimento fechado · abre ${activeBrand.nextOpeningLabel}`
                     : "Estabelecimento fechado"
-                  : "Pedidos pausados")
+                  : activeBrand.availabilitySource === "cash_closed"
+                    ? "Estabelecimento fechado · aguardando abertura do caixa"
+                    : "Pedidos pausados")
                 : activeBrand.storeStatus === "open"
                   ? "Aberto para pedidos"
                   : "Ver horários"}
@@ -884,9 +886,11 @@ export default function CardapioPage() {
                 ? activeBrand.nextOpeningLabel
                   ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
                   : "Estabelecimento fechado."
-                : "Pedidos pausados."}
+                : activeBrand.availabilitySource === "cash_closed"
+                  ? "Estabelecimento fechado. Aguardando abertura do caixa."
+                  : "Pedidos pausados."}
             </strong>
-            {activeBrand.availabilitySource !== "schedule" && orderingMessage ? ` ${orderingMessage} ` : " "}
+            {!["schedule", "cash_closed"].includes(activeBrand.availabilitySource || "") && orderingMessage ? ` ${orderingMessage} ` : " "}
             O cardápio continua disponível para consulta.
           </div>
         )}

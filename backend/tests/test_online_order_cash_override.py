@@ -63,7 +63,7 @@ def test_forcado_fechado_tem_precedencia_sobre_caixa_aberto():
     assert policy.source == "forced_closed"
 
 
-def test_dentro_do_horario_aceita_mesmo_sem_caixa_aberto():
+def test_dentro_do_horario_sem_caixa_aberto_permanece_fechado():
     now = datetime.datetime(
         2026,
         8,
@@ -82,8 +82,32 @@ def test_dentro_do_horario_aceita_mesmo_sem_caixa_aberto():
         now=now,
     )
 
+    assert policy.accepting_orders is False
+    assert policy.source == "cash_closed"
+    assert policy.reason == "O estabelecimento está fechado até a abertura do caixa."
+
+
+def test_dentro_do_horario_com_caixa_aberto_aceita():
+    now = datetime.datetime(
+        2026,
+        8,
+        27,
+        19,
+        0,
+        tzinfo=ZoneInfo("America/Fortaleza"),
+    )
+    policy = evaluate_online_order_policy(
+        _restaurant(
+            schedule=[{"days": "Quinta", "hours": "18:30 - 23:30"}],
+        ),
+        _config(),
+        modalidade="retirada",
+        cash_open=True,
+        now=now,
+    )
+
     assert policy.accepting_orders is True
-    assert policy.source == "schedule"
+    assert policy.source == "schedule_cash"
 
 
 def test_caixa_aberto_nao_reativa_delivery_desligado():

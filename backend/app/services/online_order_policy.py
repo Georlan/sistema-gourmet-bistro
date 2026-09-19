@@ -285,7 +285,7 @@ def evaluate_online_order_policy(
     1. Pausa de emergência dedicada bloqueia sempre;
     2. Forçado Fechado bloqueia sempre;
     3. agenda válida fecha o cardápio fora dos horários cadastrados;
-    4. dentro da agenda, o cardápio abre automaticamente;
+    4. dentro da agenda, o cardápio acompanha o turno do caixa;
     5. sem agenda interpretável, caixa/override preservam compatibilidade.
 
     Restrições específicas, como delivery desativado, continuam valendo mesmo
@@ -337,6 +337,15 @@ def evaluate_online_order_policy(
             source="schedule",
         )
 
+    if schedule_state is True and not cash_shift_open:
+        return OnlineOrderPolicy(
+            accepting_orders=False,
+            delivery_enabled=delivery_enabled,
+            pickup_enabled=pickup_enabled,
+            reason="O estabelecimento está fechado até a abertura do caixa.",
+            source="cash_closed",
+        )
+
     normalized_mode = _normalize_text(modalidade)
     if normalized_mode == "delivery" and not delivery_enabled:
         return OnlineOrderPolicy(
@@ -347,7 +356,7 @@ def evaluate_online_order_policy(
             source="delivery_disabled",
         )
 
-    source = "schedule" if schedule_state is True else "automatic"
+    source = "schedule_cash" if schedule_state is True else "automatic"
     if schedule_state is not True and forced_open:
         source = "forced_open"
     elif schedule_state is not True and cash_shift_open:
