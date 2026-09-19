@@ -49,52 +49,7 @@ async function navigate(page: Page, label: string) {
     await page.getByRole('button', { name: 'Abrir menu principal' }).click();
     await expect(page.locator('.cashier-sidebar:visible')).toBeVisible();
   }
-  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?import { expect, Page, test } from '@playwright/test';
-
-import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
-
-type Rect = { left: number; right: number; top: number; bottom: number; width: number; height: number };
-
-async function expectNoHorizontalOverflow(page: Page) {
-  const dimensions = await page.evaluate(() => ({
-    viewport: window.innerWidth,
-    documentWidth: document.documentElement.scrollWidth,
-    bodyWidth: document.body.scrollWidth,
-  }));
-  expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewport + 1);
-  expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewport + 1);
-}
-
-async function rect(page: Page, selector: string): Promise<Rect> {
-  return page.locator(selector).evaluate((element) => {
-    const box = element.getBoundingClientRect();
-    return {
-      left: box.left,
-      right: box.right,
-      top: box.top,
-      bottom: box.bottom,
-      width: box.width,
-      height: box.height,
-    };
-  });
-}
-
-function intersects(a: Rect, b: Rect) {
-  return a.left < b.right - 0.5 && a.right > b.left + 0.5 && a.top < b.bottom - 0.5 && a.bottom > b.top + 0.5;
-}
-
-async function openCashier(page: Page, theme: 'dark' | 'light') {
-  await mockCashierBackend(page);
-  await seedCashierSession(page);
-  await page.addInitScript((nextTheme) => {
-    localStorage.setItem('@koma:theme', nextTheme);
-  }, theme);
-  await page.goto('/?view=caixa');
-  await expect(page.locator('html')).toHaveAttribute('data-koma-theme', theme);
-  await expect(page.locator('.cashier-topbar')).toBeVisible();
-}
-
-) }).first().click();
+  await page.locator('.cashier-sidebar:visible').getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) }).first().click();
   await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
 }
 
@@ -106,7 +61,6 @@ async function navigateHorizontal(page: Page, label: string) {
   await expect(button).toHaveClass(/is-active/);
   await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
 }
-
 
 const mobileViewports = [
   { width: 360, height: 800 },
@@ -291,7 +245,7 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_font_size'))).toBe('padrao');
 
   await navigateHorizontal(page, 'Impressão');
-  await expect(page.getByText('Personalização do cupom')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Estado e diagnóstico', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await navigateHorizontal(page, 'App do Garçom');
