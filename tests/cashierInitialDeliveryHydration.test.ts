@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   bucketCourierDeliveryOrders,
+  bucketPickupOrders,
   projectDeliveryOrdersFromSharedSnapshot,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
 import type { Order } from '../src/types';
@@ -106,6 +107,69 @@ test('workspace de entregadores exclui retirada e respeita etapas de despacho', 
   assert.deepEqual(buckets.inTransit.map((order) => order.id), ['delivery-route']);
   assert.equal(
     [...buckets.preparing, ...buckets.ready, ...buckets.inTransit].some((order) => order.id === 'pickup-ready'),
+    false,
+  );
+});
+
+
+test('workspace de retiradas deriva pendentes, prontas e atrasadas do fluxo canônico', () => {
+  const now = Date.parse('2026-09-14T12:20:00Z');
+  const projected = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({
+      id: 'pickup-pending',
+      tipo: 'Retirada',
+      identificador: 'Cliente pendente',
+      origemOperacional: 'cardapio',
+      deliveryStatus: 'pendente',
+      created_at: '2026-09-14T12:10:00Z',
+      timestamp: Date.parse('2026-09-14T12:10:00Z'),
+    }),
+    baseOrder({
+      id: 'pickup-preparing-late',
+      tipo: 'Retirada',
+      identificador: 'Cliente atrasado',
+      origemOperacional: 'cardapio',
+      deliveryStatus: 'producao',
+      created_at: '2026-09-14T11:40:00Z',
+      timestamp: Date.parse('2026-09-14T11:40:00Z'),
+    }),
+    baseOrder({
+      id: 'pickup-ready',
+      tipo: 'Retirada',
+      identificador: 'Cliente pronto',
+      origemOperacional: 'cardapio',
+      deliveryStatus: 'pronto',
+      created_at: '2026-09-14T12:05:00Z',
+      timestamp: Date.parse('2026-09-14T12:05:00Z'),
+    }),
+    baseOrder({
+      id: 'pickup-quick-sale',
+      tipo: 'Retirada',
+      identificador: 'Balcão',
+      clientePhone: '',
+      origemOperacional: 'caixa',
+      deliveryStatus: 'pronto',
+      created_at: '2026-09-14T12:00:00Z',
+      timestamp: Date.parse('2026-09-14T12:00:00Z'),
+    }),
+    baseOrder({
+      id: 'delivery-ready',
+      tipo: 'Entrega',
+      deliveryStatus: 'pronto',
+      created_at: '2026-09-14T11:30:00Z',
+      timestamp: Date.parse('2026-09-14T11:30:00Z'),
+    }),
+  ]);
+
+  const buckets = bucketPickupOrders(projected, now);
+
+  assert.deepEqual(buckets.awaitingAcceptance.map((order) => order.id), ['pickup-pending']);
+  assert.deepEqual(buckets.preparing.map((order) => order.id), ['pickup-preparing-late']);
+  assert.deepEqual(buckets.ready.map((order) => order.id), ['pickup-ready']);
+  assert.deepEqual(buckets.late.map((order) => order.id), ['pickup-preparing-late']);
+  assert.equal(
+    [...buckets.awaitingAcceptance, ...buckets.preparing, ...buckets.ready]
+      .some((order) => order.id === 'pickup-quick-sale' || order.id === 'delivery-ready'),
     false,
   );
 });
