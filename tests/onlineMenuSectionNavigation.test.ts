@@ -6,7 +6,7 @@ import { getCashierNavigationItem, getCashierNavigationTarget } from '../src/com
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('Cardápio online expõe funções diretas sem uma segunda camada de abas', () => {
+test('Cardápio online espelha as mesmas funções no menu lateral e na subnavegação horizontal', () => {
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
     online?.children?.map((child) => child.label),
@@ -20,6 +20,17 @@ test('Cardápio online expõe funções diretas sem uma segunda camada de abas',
 
   const onlineMenu = source('../src/components/caixa/online-menu/CashierOnlineMenu.tsx');
   assert.doesNotMatch(onlineMenu, /CompactOnlineMenuNavigation|detailsByWorkspace|workspaceBySection/);
+
+  const caixa = source('../src/components/CaixaPanel.tsx');
+  assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
+});
+
+test('Configurações também espelha filhos verticais na subnavegação horizontal', () => {
+  const caixa = source('../src/components/CaixaPanel.tsx');
+  assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
 });
 
 test('CashierOnlineMenu routes channel concerns to their canonical owners', () => {

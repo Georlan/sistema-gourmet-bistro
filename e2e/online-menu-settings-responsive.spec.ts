@@ -83,6 +83,15 @@ async function navigate(page: Page, label: string) {
   await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
 }
 
+async function navigateHorizontal(page: Page, label: string) {
+  const subnav = page.locator('.cashier-subnav');
+  await expect(subnav).toBeVisible();
+  const tab = subnav.getByRole('button', { name: label, exact: true });
+  await tab.click();
+  await expect(tab).toHaveClass(/is-active/);
+  await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
+}
+
 async function openOnlineMenu(page: Page, theme: 'dark' | 'light') {
   await setup(page, theme);
   await page.goto('/?view=caixa');
@@ -103,28 +112,31 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize(viewport);
       await openOnlineMenu(page, theme);
 
-      await expect(page.locator('.cashier-subnav')).toBeHidden();
+      const subnav = page.locator('.cashier-subnav');
+      await expect(subnav).toBeVisible();
+      await expect(subnav.getByRole('button')).toHaveCount(7);
+      await expect(subnav.getByRole('button', { name: 'Perfil', exact: true })).toHaveClass(/is-active/);
       await expect(page.getByRole('heading', { name: 'Perfil do cardápio', exact: true })).toBeVisible();
       await expect(page.getByText('Informações principais', { exact: true })).toBeVisible();
       const additional = page.locator('details').filter({ hasText: 'Informações adicionais' });
       await expect(additional).toBeVisible();
       await expect(additional).not.toHaveAttribute('open', '');
 
-      await navigate(page, 'Marca');
+      await navigateHorizontal(page, 'Marca');
       await expect(page.getByRole('heading', { name: 'Marca', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await navigate(page, 'Pedidos online');
+      await navigateHorizontal(page, 'Pedidos online');
       await expect(page.getByRole('heading', { name: 'Pedidos online', exact: true })).toBeVisible();
       await expect(page.getByText('Horário do estabelecimento', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await navigate(page, 'Clientes bloqueados');
+      await navigateHorizontal(page, 'Clientes bloqueados');
       await expect(page.getByRole('heading', { name: 'Clientes bloqueados', exact: true })).toBeVisible();
       await expect(page.getByText('Histórico de bloqueios', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await navigate(page, 'Entrega');
+      await navigateHorizontal(page, 'Entrega');
       await expect(page.getByRole('heading', { name: 'Entrega', exact: true })).toBeVisible();
       await expect(page.getByText('Taxa de entrega automática', { exact: true })).toBeVisible();
       await expect(page.getByText('Sugestão do KÔMA', { exact: true })).toBeVisible();
@@ -134,12 +146,12 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(perKm).toHaveValue('0,50');
       await expectNoHorizontalOverflow(page);
 
-      await navigate(page, 'Pagamentos');
+      await navigateHorizontal(page, 'Pagamentos');
       await expect(page.getByRole('heading', { name: 'Pagamentos', exact: true })).toBeVisible();
       await expect(page.getByText('Formas aceitas', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
-      await navigate(page, 'Divulgação');
+      await navigateHorizontal(page, 'Divulgação');
       await expect(page.getByRole('heading', { name: 'Link e QR Code', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
@@ -149,3 +161,26 @@ for (const theme of ['dark', 'light'] as const) {
     });
   }
 }
+
+test('cardápio online mantém abas verticais e horizontais no notebook', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await setup(page, 'dark');
+  await page.goto('/?view=caixa');
+
+  const sidebar = page.locator('.cashier-sidebar:visible');
+  await expect(sidebar).toBeVisible();
+  await sidebar.getByRole('button', { name: 'Cardápio online', exact: true }).click();
+  await expect(page.locator('.cashier-topbar h2')).toHaveText(/Configurações do cardápio online/i);
+
+  const subnav = page.locator('.cashier-subnav');
+  await expect(subnav).toBeVisible();
+
+  for (const label of ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação']) {
+    await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+    await expect(subnav.getByRole('button', { name: label, exact: true })).toBeVisible();
+  }
+
+  await navigateHorizontal(page, 'Entrega');
+  await expect(page.getByRole('heading', { name: 'Entrega', exact: true })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});

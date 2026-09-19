@@ -4,7 +4,7 @@ Objetivo: reduzir configuração desnecessária, tornar funções fáceis de loc
 
 ## Concluído na base
 
-- [x] Remover a segunda camada de abas horizontais do Cardápio Online e expor destinos diretos na navegação/pesquisa.
+- [x] Manter os destinos diretos do Cardápio Online no menu lateral e espelhá-los também na subnavegação horizontal para troca rápida de seção em celular e notebook.
 - [x] Tornar **Clientes bloqueados** um destino direto, com bloqueios ativos, histórico e ação de desbloquear.
 - [x] Tratar o horário de funcionamento como configuração geral do estabelecimento.
 - [x] Fechar automaticamente o cardápio fora da agenda configurada.
