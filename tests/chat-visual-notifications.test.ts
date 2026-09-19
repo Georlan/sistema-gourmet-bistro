@@ -13,6 +13,7 @@ const trackingRoute = source('../backend/app/routes/order_tracking.py');
 const cashierChatRoute = source('../backend/app/routes/caixa_chat.py');
 const archiveService = source('../backend/app/services/order_chat_archive_service.py');
 const cardapioRoute = source('../backend/app/routes/cardapio.py');
+const cardapioPage = source('../src/cardapio/CardapioPage.tsx');
 
 test('cardapio mantém um gatilho flutuante de chat dentro da própria página', () => {
   assert.match(drawer, /floating-order-chat-trigger/);
@@ -57,6 +58,24 @@ test('conversa aberta continua marcando novas respostas como lidas', () => {
   assert.match(clientPanel, /messages\.length/);
   assert.match(clientPanel, /\/read/);
   assert.match(clientPanel, /visibilitychange/);
+});
+
+
+test('cardapio usa SSE e resumo leve em vez de polling contínuo de pedidos', () => {
+  assert.match(drawer, /new EventSource/);
+  assert.match(drawer, /\/summary/);
+  assert.match(drawer, /30000/);
+  assert.doesNotMatch(drawer, /6000/);
+  assert.match(clientPanel, /\$\{apiRoot\}\/summary/);
+  assert.doesNotMatch(cardapioPage, /ACTIVE_ORDER_REFRESH_MS/);
+  assert.doesNotMatch(cardapioPage, /setInterval\(refresh/);
+  assert.match(cardapioPage, /onRealtimeStatus=\{handleRealtimeOrderStatus\}/);
+});
+
+test('resumo público de tracking evita carregar itens e restaurante no hot path', () => {
+  assert.match(trackingRoute, /@router\.get\("\/\{token\}\/summary"/);
+  assert.match(trackingRoute, /func\.count\(OrderMessage\.id\)/);
+  assert.match(trackingRoute, /customer_unread_count/);
 });
 
 test('caixa usa realtime autenticado e polling somente como fallback', () => {
