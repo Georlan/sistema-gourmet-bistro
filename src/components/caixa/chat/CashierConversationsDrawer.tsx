@@ -109,6 +109,43 @@ function removeCashierDraft(scope: string, conversationId: string): void {
   try { localStorage.removeItem(cashierDraftKey(scope, conversationId)); } catch {}
 }
 
+function pruneCashierDrafts(activeScope: string): void {
+  try {
+    const prefix = 'koma:cashier-chat-draft:v1:';
+    const activePrefix = `${prefix}${activeScope}:`;
+    const activeTenant = activeScope.split(':', 1)[0] || '';
+    const tenantPrefix = activeTenant ? `${prefix}${activeTenant}:` : '';
+    const now = Date.now();
+
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+
+      const raw = localStorage.getItem(key);
+      let expiredOrInvalid = false;
+      try {
+        const parsed = raw ? JSON.parse(raw) as { expiresAt?: unknown } : null;
+        expiredOrInvalid = !parsed
+          || typeof parsed.expiresAt !== 'number'
+          || parsed.expiresAt <= now;
+      } catch {
+        expiredOrInvalid = true;
+      }
+
+      const belongsToPreviousShift = Boolean(
+        tenantPrefix
+        && key.startsWith(tenantPrefix)
+        && !key.startsWith(activePrefix),
+      );
+      if (expiredOrInvalid || belongsToPreviousShift) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage restrito não pode bloquear o chat.
+  }
+}
+
 const TERMINAL_CHAT_STATUSES = new Set([
   'finalizado',
   'finalizada',
@@ -215,6 +252,10 @@ export function CashierConversationsDrawer({
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    pruneCashierDrafts(draftScope);
+  }, [draftScope]);
 
   const activeCount = conversations.length;
 
