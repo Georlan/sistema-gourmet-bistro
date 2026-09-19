@@ -3,29 +3,33 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const settings = readFileSync('src/components/caixa/settings/CashierSettings.tsx', 'utf8');
-const settingsNavigation = readFileSync('src/components/caixa/settings/cashierSettingsNavigation.ts', 'utf8');
 const settingsController = readFileSync('src/components/caixa/settings/useCashierSettings.ts', 'utf8');
 const appearance = readFileSync('src/components/caixa/settings/CashierAppearanceSettings.tsx', 'utf8');
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
 const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiterSettings.tsx', 'utf8');
 const waiterPermissions = readFileSync('src/components/caixa/settings/waiterPermissions.ts', 'utf8');
 
-test('cashier settings expose task groups and remember the last operator section', () => {
-  assert.match(settingsNavigation, /CASHIER_SETTINGS_TAB_STORAGE_KEY = 'koma_cashier_settings_tab'/);
-  assert.match(settings, /useState<CashierSettingsTab>\(readInitialCashierSettingsTab\)/);
-  assert.match(settingsNavigation, /window\.localStorage\.getItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY\)/);
-  assert.match(settingsNavigation, /window\.localStorage\.setItem\(CASHIER_SETTINGS_TAB_STORAGE_KEY, tab\)/);
-  assert.match(settings, /Configurações do Caixa/);
-  assert.match(settings, /aria-label="Configurações do caixa"/);
-  assert.match(settings, /label: 'Neste dispositivo'/);
-  assert.match(settings, /label: 'Operação do salão'/);
-  assert.match(settings, /label: 'Aparência'/);
-  assert.match(settings, /label: 'Impressão'/);
-  assert.match(settings, /label: 'Mesas'/);
-  assert.match(settings, /label: 'App do Garçom'/);
-  assert.match(settings, /label: 'Taxa de Serviço'/);
-  assert.match(settings, /onClick=\{\(\) => selectSettingsTab\(tab\.id\)\}/);
+test('cashier settings render only the active canonical destination without internal navigation cards', () => {
+  const navigation = readFileSync('src/components/caixa/navigation/cashierNavigation.ts', 'utf8');
+  const panel = readFileSync('src/components/CaixaPanel.tsx', 'utf8');
+
+  assert.match(navigation, /config_aparencia[\s\S]*Aparência[\s\S]*subTab: 'aparencia'/);
+  assert.match(navigation, /config_impressao[\s\S]*Impressão[\s\S]*subTab: 'impressao'/);
+  assert.match(navigation, /config_mesas[\s\S]*Mesas[\s\S]*subTab: 'mesas'/);
+  assert.match(navigation, /config_garcom[\s\S]*App do Garçom[\s\S]*subTab: 'garcom'/);
+  assert.match(navigation, /config_taxa[\s\S]*Taxa de Serviço[\s\S]*subTab: 'taxa'/);
+  assert.match(navigation, /config_implantacao[\s\S]*Implantação inicial[\s\S]*subTab: 'implantacao'/);
+  assert.match(navigation, /config_integracoes[\s\S]*Integrações[\s\S]*subTab: 'integracoes'/);
+  assert.match(panel, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
+  assert.match(panel, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
+
+  assert.doesNotMatch(settings, /cashier-settings-tab|CASHIER_SETTINGS_GROUPS|selectSettingsTab|readInitialCashierSettingsTab/);
+  assert.doesNotMatch(settings, /Configurações do Caixa/);
+  assert.match(settings, /activeSubTab === 'aparencia'/);
+  assert.match(settings, /activeSubTab === 'impressao'/);
+  assert.match(settings, /activeSubTab === 'implantacao'/);
   assert.match(settings, /<CashierAppearanceSettings \/>/);
+  assert.match(settings, /<CashierIntegrationsSettings/);
 });
 
 test('appearance settings persist theme and local text size using the cashier preference contract', () => {
