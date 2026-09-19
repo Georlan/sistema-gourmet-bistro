@@ -1,7 +1,7 @@
 """Serviço de domínio para Gerenciamento de Chat e Acompanhamento de Pedidos.
 
 Centraliza regras de criação de conversas por comanda, segurança de tokens públicos
-de alta entropia (SHA-256), validação de texto, idempotência de mensagens de sistema,
+de alta entropia (SHA-256), validação/idempotência de mensagens humanas,
 ciclo de vida (closed_at) e controle de mensagens lidas/não lidas (read tracking).
 """
 
@@ -29,9 +29,10 @@ CANONICAL_STATUS_MESSAGES = {
     "transito": "Seu pedido saiu para entrega.",
     "finalizado": "Pedido concluído. Bom apetite!",
     "recusado": "O restaurante não conseguiu aceitar este pedido.",
+    "cancelado": "Pedido cancelado.",
 }
 
-TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado"})
+TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado", "cancelado"})
 LEGACY_ESCAPED_BODY_FORMAT = "html_escaped_v1"
 PLAIN_TEXT_BODY_FORMAT = "plain_text_v2"
 
