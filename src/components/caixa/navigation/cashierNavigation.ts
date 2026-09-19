@@ -192,7 +192,12 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         id: 'assinatura_pix',
         label: 'Conta & assinatura',
         icon: CreditCard,
-        target: { tab: 'assinatura_pix', subTab: 'planos' },
+        target: { tab: 'assinatura_pix', subTab: 'meu_plano' },
+        children: [
+          { id: 'assinatura_meu_plano', label: 'Meu Plano', target: { tab: 'assinatura_pix', subTab: 'meu_plano' } },
+          { id: 'assinatura_planos_upgrade', label: 'Planos & Upgrade', target: { tab: 'assinatura_pix', subTab: 'planos_upgrade' } },
+          { id: 'assinatura_contrato_documentos', label: 'Contrato e documentos', target: { tab: 'assinatura_pix', subTab: 'contrato_documentos' } },
+        ],
       },
     ],
   },
@@ -300,6 +305,13 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
     salao_impressao: 'impressao',
     salao_e_impressao: 'impressao',
   },
+  assinatura_pix: {
+    planos: 'meu_plano',
+    plano: 'meu_plano',
+    upgrade: 'planos_upgrade',
+    contrato: 'contrato_documentos',
+    documentos: 'contrato_documentos',
+  },
 };
 
 const VALID_TABS = new Set<CashierTab>(CASHIER_PARENT_ITEMS.map((item) => item.target.tab));
@@ -311,6 +323,9 @@ const CHILD_DETAIL_SUBTABS: Readonly<Record<string, readonly string[]>> = {
   relatorios_equipe: ['equipe', 'desempenho_equipe', 'desempenho', 'relatorio_garcons', 'relatorio_garçons'],
   equipe_pessoas: ['pessoas', 'equipe', 'convites'],
   equipe_funcoes_acessos: ['cargos_permissoes', 'cargos', 'permissoes'],
+  assinatura_meu_plano: ['meu_plano', 'planos', 'plano'],
+  assinatura_planos_upgrade: ['planos_upgrade', 'upgrade'],
+  assinatura_contrato_documentos: ['contrato_documentos', 'contrato', 'documentos'],
   online_perfil: ['cardapio_perfil'],
   online_marca: ['cardapio_marca'],
   online_pedidos: ['cardapio_pedidos'],
