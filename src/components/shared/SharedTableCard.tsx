@@ -2,7 +2,7 @@ import React from 'react';
 import { Clock3, FileText, GitMerge, UsersRound } from 'lucide-react';
 import type { Order, Table } from '../../types';
 import type { TableOperationalProjection } from '../../domain/operationalState';
-import { getTableCheckNumbers } from '../../domain/tableReadModel';
+import { describeTableOrders, getTableCheckNumbers } from '../../domain/tableReadModel';
 
 /** Presentation only: financial evidence wins emphasis, never changes production. */
 export function tableCardPresentation(state: TableOperationalProjection, showProduction = true) {
@@ -58,10 +58,19 @@ export function SharedTableCard({
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
   const numbersText = checkNumbers.map(number => `#${number}`).join(' + ');
+  const orderContext = describeTableOrders(orders);
   const customName = table.nome && table.nome !== `Mesa ${table.id}`;
   const Container = onClick ? 'button' : 'article';
   const occupied = operational.occupancy === 'IN_SERVICE' && !operational.mergedIntoMesaId;
   const compact = density === 'compact';
+  const latestDisplayNumber = [...orderContext.launches].reverse().find((launch) => launch.displayNumber)?.displayNumber;
+  const prominentOrderLabel = occupied
+    ? latestDisplayNumber
+      ? `Pedido ${latestDisplayNumber}`
+      : checkNumbers.length > 0
+        ? `Pedido #${checkNumbers[checkNumbers.length - 1]}`
+        : null
+    : null;
   const formattedTotal = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   return (
     <Container
@@ -77,12 +86,16 @@ export function SharedTableCard({
       <span className="absolute left-0 top-0 h-[3px] w-full bg-current opacity-70" aria-hidden="true" />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">{customName ? `Mesa ${table.id}` : 'Mesa'}</span>
-          <strong className={`block text-koma-foreground ${customName ? 'break-words text-sm' : 'font-serif text-3xl leading-none'}`}>{customName ? table.nome : table.id}</strong>
+          <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">
+            {prominentOrderLabel ? (customName ? `Mesa ${table.id} · ${table.nome}` : `Mesa ${String(table.id).padStart(2, '0')}`) : customName ? `Mesa ${table.id}` : 'Mesa'}
+          </span>
+          <strong className={`block text-koma-foreground ${prominentOrderLabel || customName ? 'break-words text-sm leading-tight' : 'font-serif text-3xl leading-none'}`}>
+            {prominentOrderLabel || (customName ? table.nome : table.id)}
+          </strong>
           {mergedSources.length > 0 && <span className="block text-[9px] text-koma-muted">+ mesas {mergedSources.join(', ')}</span>}
         </div>
         {compact && occupied && <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
-        {!compact && checkNumbers.length > 0 && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
+        {!compact && checkNumbers.length > 0 && !prominentOrderLabel && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-1">

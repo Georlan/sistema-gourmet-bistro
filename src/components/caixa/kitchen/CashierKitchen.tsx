@@ -112,10 +112,10 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-extrabold text-koma-foreground">
-                  {getKdsDestinationLabel(ticket)}
+                  {getKdsTicketLabel(ticket)}
                 </span>
                 <span className="rounded-md border border-koma-border bg-koma-panel px-2 py-0.5 font-mono text-[10px] font-bold text-koma-muted">
-                  {getKdsTicketLabel(ticket)}
+                  {getKdsDestinationLabel(ticket)}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-koma-muted">

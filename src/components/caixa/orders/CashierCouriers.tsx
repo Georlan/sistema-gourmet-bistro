@@ -86,7 +86,7 @@ export function CashierCouriers({
                 ) : (
                   <div className="space-y-2">
                     {courierBuckets.preparing.map((order) => (
-                      <div key={order.id} className={"p-3.5 bg-koma-panel/50 border border-koma-border/60 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs"}>
+                      <div key={order.id} className={"p-3.5 bg-koma-panel/50 border border-l-4 border-koma-border/60 border-l-violet-500/70 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs"}>
                         <div className={"space-y-1 flex-1 min-w-0"}>
                           <div className={"flex items-center gap-2 flex-wrap"}>
                             <span className={"font-bold text-koma-foreground text-[11px]"}>Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}</span>
@@ -130,7 +130,7 @@ export function CashierCouriers({
                     {courierBuckets.ready.map((order) => {
                       const motoboyId = selectedMotoboys[order.id] || '';
                       return (
-                        <div key={order.id} className={"p-4 bg-koma-panel border border-emerald-500/20 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs"}>
+                        <div key={order.id} className={"p-4 bg-koma-panel border border-l-4 border-emerald-500/20 border-l-violet-500/70 rounded-2xl flex flex-col sm:flex-row justify-between gap-3 text-xs"}>
                           <div className={"space-y-1.5 flex-1 min-w-0"}>
                             <div className={"flex items-center gap-2 flex-wrap"}>
                               <span className={"font-bold text-koma-foreground text-[11px]"}>Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}</span>

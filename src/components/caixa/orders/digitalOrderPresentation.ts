@@ -28,3 +28,14 @@ export function getDigitalOrderAssociation(
   return `Mesa ${String(mesaId).padStart(2, '0')}${waiter ? ` · ${waiter}` : ''}`;
 }
 
+export function getDigitalOrderCustomerLabel(
+  order: Pick<DeliveryOrderView, 'cliente' | 'modalidade' | 'mesaId' | 'origemOperacional'>,
+): string {
+  const customer = String(order.cliente || '').trim();
+  const isGeneric = !customer || customer.toLocaleLowerCase('pt-BR') === 'cliente sem nome';
+  const mesaId = Number(order.mesaId || 0);
+  if (isGeneric && order.modalidade === 'retirada' && order.origemOperacional === 'garcom' && mesaId > 0) {
+    return `Retirada · Mesa ${String(mesaId).padStart(2, '0')}`;
+  }
+  return customer || (order.modalidade === 'delivery' ? 'Entrega sem nome' : 'Retirada sem nome');
+}

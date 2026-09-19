@@ -133,7 +133,9 @@ test('displayNumber só acompanha lançamento comprovado; agregado não assume p
   const result = slices([order]);
   assert.deepEqual(result.tableOrdersInProduction.map(entry => entry.displayNumber), ['24-A', undefined]);
   assert.equal(getCashierHumanOrderNumber(result.tableOrdersInProduction[0]), '24-A');
-  assert.match(getCashierTableOrderPresentation(result.tableOrdersInProduction[0], [TABLE]).subtitle, /Pedido 24-A/);
+  const presentation = getCashierTableOrderPresentation(result.tableOrdersInProduction[0], [TABLE]);
+  assert.equal(presentation.title, 'Pedido 24-A');
+  assert.match(presentation.subtitle, /Varanda/);
   assert.equal(result.tableOrdersReady[0].displayNumber, undefined);
   assert.equal(getCashierHumanOrderNumber({ ...result.tableOrdersReady[0], displayNumber: '24-A' }), '24');
   // Adding lancamentoId here would change the existing modal reprint route.

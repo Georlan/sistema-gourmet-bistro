@@ -12,7 +12,7 @@ import {
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
 import { useAutomaticOrderAcceptance } from './useAutomaticOrderAcceptance';
-import { getDigitalOrderAssociation, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
+import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly columns: {
@@ -485,7 +485,7 @@ export function CaixaOrdersWorkspace({
                             onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
                             className="orders-card__icon"
                             title="Imprimir pré-conta / conferência"
-                            aria-label={`Imprimir conferência da ${presentation.title}`}
+                            aria-label={`Imprimir conferência de ${presentation.title}`}
                           >
                             <Printer size={12} />
                           </button>
@@ -551,6 +551,7 @@ export function CaixaOrdersWorkspace({
                       className={clsx(
                         'orders-card orders-card--digital rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
                         order.isQuickSale && 'orders-card--quick-sale',
+                        `orders-card--fulfillment-${order.modalidade}`,
                         `orders-card--source-${getDigitalOrderVisualKind(order)}`,
                         sla.borderTopClass
                       )}
@@ -562,7 +563,7 @@ export function CaixaOrdersWorkspace({
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
-                            {order.isQuickSale ? 'Venda rápida' : order.cliente}
+                            {order.isQuickSale ? 'Venda rápida' : getDigitalOrderCustomerLabel(order)}
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
@@ -766,6 +767,7 @@ export function CaixaOrdersWorkspace({
                       className={clsx(
                         'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
                         order.isQuickSale && 'orders-card--quick-sale',
+                        `orders-card--fulfillment-${order.modalidade}`,
                         `orders-card--source-${getDigitalOrderVisualKind(order)}`,
                         sla.borderTopClass
                       )}
