@@ -195,7 +195,7 @@ test('interação real mobile: abre e fecha menu principal e conversas sem quebr
   await expect(chatPanel).not.toBeVisible();
 
   // 3. Navegar nas subtabs de Vendas
-  for (const label of ['Novo pedido', 'Salão', 'Cozinha', 'Entregas', 'Pedidos']) {
+  for (const label of ['Novo pedido', 'Salão', 'Cozinha', 'Retiradas', 'Entregas', 'Pedidos']) {
     const tabBtn = page.locator('.cashier-subnav__button', { hasText: label });
     await tabBtn.click();
     await expect(tabBtn).toHaveClass(/is-active/);
