@@ -77,20 +77,44 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
   assert.equal(getCashierNavigationTarget('clientes_cupons'), undefined);
 });
 
-test('gestao keeps reports and team as single sidebar destinations', () => {
+test('gestão expõe relatórios como destinos canônicos e mantém equipe compacta', () => {
   const relatorios = parents().find((item) => item.id === 'relatorios');
   const equipe = parents().find((item) => item.id === 'permissoes_cargos');
 
-  assert.equal(relatorios?.children, undefined);
+  assert.deepEqual(relatorios?.children?.map((child) => child.label), [
+    'Visão Geral',
+    'Financeiro',
+    'Produtos',
+    'Equipe',
+  ]);
   assert.equal(equipe?.children, undefined);
   assert.deepEqual(getCashierNavigationTarget('relatorios'), {
     tab: 'relatorios', subTab: 'visao_geral',
   });
+  assert.deepEqual(getCashierNavigationTarget('relatorios_visao_geral'), {
+    tab: 'relatorios', subTab: 'visao_geral',
+  });
+  assert.deepEqual(getCashierNavigationTarget('relatorios_financeiro'), {
+    tab: 'relatorios', subTab: 'financeiro',
+  });
+  assert.deepEqual(getCashierNavigationTarget('relatorios_produtos'), {
+    tab: 'relatorios', subTab: 'produtos',
+  });
+  assert.deepEqual(getCashierNavigationTarget('relatorios_equipe'), {
+    tab: 'relatorios', subTab: 'equipe',
+  });
   assert.deepEqual(getCashierNavigationTarget('permissoes_cargos'), {
     tab: 'permissoes_cargos', subTab: 'pessoas',
   });
-  assert.equal(getCashierNavigationTarget('relatorios_financeiro'), undefined);
   assert.equal(getCashierNavigationTarget('equipe_funcoes_acessos'), undefined);
+});
+
+test('relatórios espelha os mesmos destinos canônicos na vertical e horizontal', () => {
+  const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+  assert.match(caixa, /reportsSubnavItems = getCashierNavigationItem\('relatorios'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /\(activeTab === 'relatorios' \|\| activeTab === 'dashboard'\) && reportsSubnavItems\.map/);
+  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
+  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
 });
 
 test('configurações expõe os mesmos destinos canônicos para navegação vertical e horizontal', () => {

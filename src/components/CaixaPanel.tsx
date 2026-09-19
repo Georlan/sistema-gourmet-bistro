@@ -66,6 +66,7 @@ const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
 const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [];
 const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.children ?? [];
 const settingsSubnavItems = getCashierNavigationItem('impressao_salao')?.children ?? [];
+const reportsSubnavItems = getCashierNavigationItem('relatorios')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -836,19 +837,16 @@ export function CaixaPanel({
               return <button key={sub.id} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
             })}
 
-            {(activeTab === 'relatorios' || activeTab === 'dashboard') && [
-              { id: 'visao_geral', label: 'Visão Geral' },
-              { id: 'financeiro', label: 'Financeiro' },
-              { id: 'produtos', label: 'Produtos' },
-              { id: 'equipe', label: 'Equipe' },
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'visao_geral' && ['visao_geral', 'metas', 'vendas', 'indicadores'].includes(activeSubTab)) ||
-                (sub.id === 'financeiro' && ['financeiro', 'dre', 'demonstrativo_dre'].includes(activeSubTab)) ||
-                (sub.id === 'produtos' && ['produtos', 'produtos_mais_vendidos', 'top10'].includes(activeSubTab)) ||
-                (sub.id === 'equipe' && ['equipe', 'desempenho_equipe'].includes(activeSubTab)) || activeSubTab === sub.id;
-              return <button key={sub.id} id={`relatorios-subtab-${sub.id}`} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
+            {(activeTab === 'relatorios' || activeTab === 'dashboard') && reportsSubnavItems.map((sub) => (
+              <button
+                key={sub.id}
+                id={`relatorios-subtab-${sub.target.subTab}`}
+                onClick={() => handleSidebarNavigation(sub.id)}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
+                {sub.label}
+              </button>
+            ))}
 
             {activeTab === 'permissoes_cargos' && [
               { id: 'pessoas', label: 'Pessoas' },

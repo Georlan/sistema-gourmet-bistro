@@ -38,6 +38,13 @@ test('operational aliases route common restaurant language to the canonical func
   assert.equal(searchCashierFunctions(entries, 'clientes bloqueados')[0]?.id, 'online_bloqueios');
 });
 
+test('report aliases open the canonical report section directly', () => {
+  assert.equal(searchCashierFunctions(entries, 'dre')[0]?.id, 'relatorios_financeiro');
+  assert.equal(searchCashierFunctions(entries, 'mais vendidos')[0]?.id, 'relatorios_produtos');
+  assert.equal(searchCashierFunctions(entries, 'desempenho equipe')[0]?.id, 'relatorios_equipe');
+  assert.equal(searchCashierFunctions(entries, 'visão geral')[0]?.id, 'relatorios_visao_geral');
+});
+
 test('exact function names outrank broader related labels', () => {
   assert.equal(searchCashierFunctions(entries, 'mesas')[0]?.id, 'config_mesas');
   assert.equal(searchCashierFunctions(entries, 'impressão')[0]?.id, 'config_impressao');
