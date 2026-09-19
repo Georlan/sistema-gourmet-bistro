@@ -18,7 +18,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import Comanda
+from ..models import Comanda, Item
 from ..order_chat_models import OrderConversation, OrderMessage
 from .order_chat_hub import queue_order_chat_event
 
@@ -521,7 +521,6 @@ def list_caixa_conversations(
         db.query(OrderConversation)
         .options(
             joinedload(OrderConversation.comanda).joinedload(Comanda.cliente),
-            joinedload(OrderConversation.comanda).joinedload(Comanda.itens),
         )
         .filter(
             OrderConversation.restaurante_id == restaurante_id,
@@ -535,6 +534,20 @@ def list_caixa_conversations(
         return []
 
     conversation_ids = [conv.id for conv in conversations]
+    comanda_ids = [conv.pedido_id for conv in conversations]
+    item_total_rows = (
+        db.query(Item.comanda_id, func.coalesce(func.sum(Item.preco_unit), 0.0))
+        .filter(
+            Item.restaurante_id == restaurante_id,
+            Item.comanda_id.in_(comanda_ids),
+        )
+        .group_by(Item.comanda_id)
+        .all()
+    )
+    item_total_by_comanda = {
+        str(comanda_id): float(total or 0.0)
+        for comanda_id, total in item_total_rows
+    }
 
     unread_rows = (
         db.query(OrderMessage.conversation_id, func.count(OrderMessage.id))
@@ -601,7 +614,20 @@ def list_caixa_conversations(
             "cliente_nome": client_name,
             "tipo_pedido": comanda.tipo if comanda else "Delivery",
             "status_pedido": comanda.delivery_status if comanda else "pendente",
-            "total_pedido": compute_comanda_total(comanda),
+            "total_pedido": (
+                round(
+                    max(
+                        0.0,
+                        item_total_by_comanda.get(conv.pedido_id, 0.0)
+                        + float(getattr(comanda, "delivery_taxa", 0.0) or 0.0)
+                        - float(getattr(comanda, "valor_desconto_cupom", 0.0) or 0.0)
+                        - float(getattr(comanda, "valor_desconto_cashback", 0.0) or 0.0),
+                    ),
+                    2,
+                )
+                if comanda
+                else 0.0
+            ),
             "unread_count": unread_by_conversation.get(conv.id, 0),
             "closed_at": None,
             "updated_at": conv.updated_at.isoformat() if conv.updated_at else None,
