@@ -45,7 +45,7 @@ test('mesa preserva formulário após falha e usa os mesmos dados na repetição
     await route.fulfill({ status: bodies.length === 1 ? 503 : 200, json: bodies.length === 1 ? { detail: 'Falha controlada de mesa' } : { id: 31 } });
   });
   await navigate(page, 'Configurações');
-  await page.getByRole('button', { name: 'Mesas', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Mesas', exact: true }).click();
   await page.getByRole('button', { name: 'Adicionar mesa', exact: true }).click();
   const form = page.locator('form').filter({ has: page.getByPlaceholder('Ex: 31') });
   await form.getByPlaceholder('Ex: 31').fill('31');
@@ -72,7 +72,7 @@ test('edição e exclusão de mesa usam o ID escolhido e aguardam confirmação'
     await route.fulfill({ status: 200, json: { id: 10 } });
   });
   await navigate(page, 'Configurações');
-  await page.getByRole('button', { name: 'Mesas', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Mesas', exact: true }).click();
   await page.getByRole('button', { name: 'Editar Mesa 10' }).click();
   const form = page.locator('form').filter({ has: page.getByPlaceholder('Mesa 10') });
   await form.getByPlaceholder('Mesa 10').fill('Terraço');
@@ -129,12 +129,13 @@ test('taxa compartilhada preserva o percentual entre telas e não altera permiss
     await route.fulfill({ status: 200, json: {} });
   });
   await navigate(page, 'Configurações');
-  await page.getByRole('button', { name: 'Taxa de Serviço', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Taxa de Serviço', exact: true }).click();
   await page.getByRole('spinbutton').fill('12');
   await expect.poll(() => updates.length).toBe(1);
   expect(updates).toEqual([{ taxa_servico_padrao: 12 }]);
   await navigate(page, 'Vendas');
   await navigate(page, 'Configurações');
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Taxa de Serviço', exact: true }).click();
   await expect(page.getByRole('spinbutton')).toHaveValue('12');
   await test.info().attach('shared-service-tax', { body: await page.screenshot(), contentType: 'image/png' });
   expect(updates).toHaveLength(1);
