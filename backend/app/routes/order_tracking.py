@@ -456,7 +456,7 @@ async def stream_eventos_pedido(
                     event_payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(event_payload["event"], event_payload["data"])
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    yield _sse_event("transport", order_chat_hub.transport_status())
         finally:
             order_chat_hub.unsubscribe_conversation(conversation_id, sub_id)
 
