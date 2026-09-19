@@ -615,7 +615,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   }, [selectedTableId, portal]);
 
   // 5. Live clock tracker to update permanency timers automatically every 30 seconds (reduces re-renders)
-  const { isSubmitting, drafts, getDraftItems, handleAddToDraft, handleRemoveFromDraft, handleUpdateDraftItem, handleEditDraftItems, handleSubmitDraft } = useOperationalDrafts({ activeWaiterNome, orders, setOrders, activeWaiterId, setSelectedTableId, showToast, fetchOrdersFromAPI, getAuthHeaders });
+  const { isSubmittingMesa, drafts, getDraftItems, handleAddToDraft, handleRemoveFromDraft, handleUpdateDraftItem, handleEditDraftItems, handleSubmitDraft } = useOperationalDrafts({ activeWaiterNome, orders, setOrders, activeWaiterId, setSelectedTableId, showToast, fetchOrdersFromAPI, getAuthHeaders });
 
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
@@ -1779,7 +1779,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             orders={selectedTableOrders}
             allOrders={orders}
             draftItems={getDraftItems(selectedTable.id)}
-            isSubmitting={isSubmitting}
+            isSubmitting={isSubmittingMesa(selectedTable.id)}
             otherWaitersServing={otherWaitersServing}
             salonTables={salonTables}
             settings={settings}
