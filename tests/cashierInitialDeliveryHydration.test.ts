@@ -4,6 +4,7 @@ import {
   bucketCourierDeliveryOrders,
   bucketPickupOrders,
   projectDeliveryOrdersFromSharedSnapshot,
+  reconcileDeliveryOrderAfterStatus,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
 import type { Order } from '../src/types';
 
@@ -49,6 +50,25 @@ test('hidrata pedidos digitais do snapshot compartilhado sem esperar a leitura d
   assert.equal(projected.itens, '1x Refrigerante 600mL');
   assert.equal(projected.pago, true);
   assert.equal(projected.numeroPedido, 90);
+});
+
+test('resposta curta de aceite preserva itens e total até a reconciliação completa', () => {
+  const [previous] = projectDeliveryOrdersFromSharedSnapshot([baseOrder({ deliveryStatus: 'pendente' })]);
+  const [compact] = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({
+      deliveryStatus: 'producao',
+      itens: [],
+      deliveryTax: 0,
+    }),
+  ]);
+
+  const reconciled = reconcileDeliveryOrderAfterStatus(previous, compact);
+
+  assert.equal(reconciled.status, 'producao');
+  assert.equal(reconciled.itens, '1x Refrigerante 600mL');
+  assert.equal(reconciled.quantidadeItens, 1);
+  assert.equal(reconciled.total, 13);
+  assert.equal(reconciled.cliente, 'Georlan');
 });
 
 test('ignora salão e pedidos digitais já encerrados no snapshot inicial', () => {
