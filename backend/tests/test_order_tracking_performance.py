@@ -155,7 +155,8 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
                 pedido_id=comanda_id,
                 sender_type="staff",
                 sender_user_id=user_id,
-                body="Mensagem 1",
+                    body="Mensagem 1",
+                    feed_seq=1,
             ),
             OrderMessage(
                 id=f"msg-track-perf-{suffix}-2",
@@ -164,7 +165,8 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
                 pedido_id=comanda_id,
                 sender_type="staff",
                 sender_user_id=user_id,
-                body="Mensagem 2",
+                    body="Mensagem 2",
+                    feed_seq=2,
             ),
             OrderMessage(
                 id=f"msg-track-perf-{suffix}-3",
@@ -172,7 +174,8 @@ def test_order_tracking_query_count_does_not_scale_with_items(monkeypatch):
                 conversation_id=conversation_id,
                 pedido_id=comanda_id,
                 sender_type="customer",
-                body="Resposta do cliente",
+                    body="Resposta do cliente",
+                    feed_seq=3,
             ),
         ])
         db.commit()

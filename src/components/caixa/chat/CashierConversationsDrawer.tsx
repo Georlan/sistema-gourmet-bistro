@@ -47,6 +47,7 @@ export interface CaixaChatMessage {
   body: string;
   event_key?: string | null;
   created_at?: string | null;
+  seq?: number;
 }
 
 interface CashierConversationsDrawerProps {
@@ -63,6 +64,14 @@ interface CashierConversationsDrawerProps {
 interface MessageState {
   conversationId: string | null;
   items: CaixaChatMessage[];
+  hasMore?: boolean;
+}
+
+interface CaixaFeedPage {
+  items: CaixaChatMessage[];
+  has_more: boolean;
+  oldest_seq: number | null;
+  latest_seq: number | null;
 }
 
 interface FetchConversationsOptions {
@@ -243,6 +252,7 @@ export function CashierConversationsDrawer({
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const selectedIdRef = useRef<string | null>(null);
+  const messageStateRef = useRef<MessageState>(messageState);
   const messageGenerationRef = useRef(0);
   const messageAbortRef = useRef<AbortController | null>(null);
   const visibleMessageLoadRef = useRef(false);
@@ -253,6 +263,8 @@ export function CashierConversationsDrawer({
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => { messageStateRef.current = messageState; }, [messageState]);
 
   useEffect(() => {
     unreadByConversationRef.current = new Map(
@@ -403,20 +415,44 @@ export function CashierConversationsDrawer({
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
+      const snapshot = messageStateRef.current;
+      const currentItems = snapshot.conversationId === conversationId ? snapshot.items : [];
+      const latestSeq = background ? currentItems.at(-1)?.seq : undefined;
+      const suffix = latestSeq ? `?after_seq=${latestSeq}` : '';
+      let response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/feed${suffix}`, {
         headers: { Authorization: authorization },
         cache: 'no-store',
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
-      const items: CaixaChatMessage[] = await response.json();
+      let page: CaixaFeedPage | null = null;
+      if (response.ok) {
+        const parsed = await response.json() as Partial<CaixaFeedPage>;
+        if (Array.isArray(parsed.items)) page = parsed as CaixaFeedPage;
+      }
+      if (!response.ok || !page) {
+        response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
+          headers: { Authorization: authorization }, cache: 'no-store', signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
+        const items: CaixaChatMessage[] = await response.json();
+        page = { items, has_more: false, oldest_seq: null, latest_seq: null };
+      }
       if (
         controller.signal.aborted
         || generation !== messageGenerationRef.current
         || selectedIdRef.current !== conversationId
       ) return;
 
-      setMessageState({ conversationId, items: Array.isArray(items) ? items : [] });
+      setMessageState((current) => {
+        const existing = background && current.conversationId === conversationId ? current.items : [];
+        const byId = new Map(existing.map((item) => [item.id, item]));
+        page.items.forEach((item) => byId.set(item.id, item));
+        return {
+          conversationId,
+          items: [...byId.values()].sort((a, b) => (a.seq || 0) - (b.seq || 0)),
+          hasMore: background ? current.hasMore : page.has_more,
+        };
+      });
       if (markRead) void markConversationRead(conversationId);
       if (!background) window.setTimeout(() => scrollToBottom(false), 50);
     } catch (error) {
@@ -430,6 +466,19 @@ export function CashierConversationsDrawer({
       }
     }
   }, [authorization, markConversationRead, scrollToBottom]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!authorization || !selectedId || !messages[0]?.seq) return;
+    const response = await fetch(
+      `${API_BASE_URL}/api/caixa/conversas/${selectedId}/feed?before_seq=${messages[0].seq}&limit=50`,
+      { headers: { Authorization: authorization }, cache: 'no-store' },
+    );
+    if (!response.ok) return;
+    const page: CaixaFeedPage = await response.json();
+    setMessageState((current) => current.conversationId === selectedId
+      ? { ...current, items: [...page.items, ...current.items], hasMore: page.has_more }
+      : current);
+  }, [authorization, messages, selectedId]);
 
   const openConversation = useCallback((conversationId: string) => {
     selectedIdRef.current = conversationId;
@@ -498,13 +547,15 @@ export function CashierConversationsDrawer({
       body,
       event_key: typeof data?.event_key === 'string' ? data.event_key : null,
       created_at: typeof data?.created_at === 'string' ? data.created_at : null,
+      seq: typeof data?.seq === 'number' ? data.seq : undefined,
     };
 
     if (selectedIdRef.current === eventConversationId) {
       setMessageState((current) => {
         const items = current.conversationId === eventConversationId ? current.items : [];
         if (items.some((item) => item.id === message.id)) return current;
-        return { conversationId: eventConversationId, items: [...items, message] };
+        return { ...current, conversationId: eventConversationId,
+          items: [...items, message].sort((a, b) => (a.seq || 0) - (b.seq || 0)) };
       });
       window.setTimeout(() => scrollToBottom(true), 50);
       if (senderType === 'customer' && document.visibilityState === 'visible') {
@@ -598,7 +649,8 @@ export function CashierConversationsDrawer({
         setMessageState((current) => {
           const items = current.conversationId === targetConversationId ? current.items : [];
           if (items.some((message) => message.id === sentMessage.id)) return current;
-          return { conversationId: targetConversationId, items: [...items, sentMessage] };
+          return { ...current, conversationId: targetConversationId,
+            items: [...items, sentMessage].sort((a, b) => (a.seq || 0) - (b.seq || 0)) };
         });
         pendingSendRef.current = null;
         removeCashierDraft(draftScope, targetConversationId)
@@ -836,6 +888,12 @@ export function CashierConversationsDrawer({
                 </div>
 
                 <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3 scroll-smooth">
+                  {messageState.conversationId === selectedId && messageState.hasMore && (
+                    <button type="button" onClick={() => void loadOlderMessages()}
+                      className="mx-auto block rounded-lg border border-zinc-700 px-3 py-1.5 text-[10px] font-semibold text-zinc-300 hover:border-emerald-500/60">
+                      Carregar mensagens anteriores
+                    </button>
+                  )}
                   {loadingMessages ? (
                     <div className="h-full flex items-center justify-center"><div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /></div>
                   ) : messages.length === 0 ? (

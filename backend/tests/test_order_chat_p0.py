@@ -7,12 +7,13 @@ import pytest
 from fastapi import HTTPException
 
 from test_order_chat_unit import client_and_session, _seed_data
-from app.order_chat_models import OrderConversationEvent, OrderMessage
+from app.order_chat_models import OrderConversationEvent, OrderMessage, OrderPushSubscription
 from app.services import order_chat_hub as transport
 from app.services.order_chat_service import (
-    create_conversation_for_order, list_recent_messages, post_system_order_event,
+    create_conversation_for_order, list_feed_page, list_recent_messages, post_system_order_event,
     send_customer_message, send_staff_message,
 )
+from app.services.order_chat_retention import purge_expired_order_chat_content
 
 
 def test_rollback_and_nested_rollback_never_publish(client_and_session, monkeypatch):
@@ -140,18 +141,59 @@ def test_sqlite_migration_roundtrip_preserves_uuid_and_legacy_event(client_and_s
     with db.get_bind().begin() as conn:
         with Operations.context(MigrationContext.configure(conn)):
             migration.downgrade()
-        conn.execute(text("INSERT INTO order_messages (id,restaurante_id,conversation_id,pedido_id,sender_type,event_key,body,body_format,created_at,client_message_id) VALUES ('human',1,:conv,'comanda-101','customer',NULL,'Original','plain_text_v2',CURRENT_TIMESTAMP,:key), ('event',1,:conv,'comanda-101','system','status:pronto','Pronto','plain_text_v2',CURRENT_TIMESTAMP,NULL)"), {"conv": conv_id, "key": key})
+        conn.execute(text("INSERT INTO order_messages (id,restaurante_id,conversation_id,pedido_id,sender_type,event_key,body,body_format,created_at,client_message_id,feed_seq) VALUES ('human',1,:conv,'comanda-101','customer',NULL,'Original','plain_text_v2',CURRENT_TIMESTAMP,:key,1), ('event',1,:conv,'comanda-101','system','status:pronto','Pronto','plain_text_v2',CURRENT_TIMESTAMP,NULL,2)"), {"conv": conv_id, "key": key})
         with Operations.context(MigrationContext.configure(conn)):
             migration.upgrade()
     assert send_customer_message(db, 1, conv_id, "comanda-101", "Original", key).id == "human"
-    feed = list_recent_messages(db, restaurante_id=1, conversation_id=conv_id)
-    assert {item["kind"] for item in feed} == {"message", "order_event"}
+    assert db.execute(text("SELECT count(*) FROM order_messages WHERE id='human'")).scalar() == 1
+    assert db.execute(text("SELECT count(*) FROM order_conversation_events WHERE id='event'")).scalar() == 1
     db.rollback()
     with db.get_bind().begin() as conn:
+        operations = Operations(MigrationContext.configure(conn))
+        with operations.batch_alter_table("order_messages") as batch:
+            batch.drop_constraint("uq_order_messages_conv_feed_seq", type_="unique")
+            batch.drop_column("feed_seq")
         with Operations.context(MigrationContext.configure(conn)):
             migration.downgrade()
         assert conn.execute(text("SELECT client_message_id FROM order_messages WHERE id='human'")).scalar() == key
         assert conn.execute(text("SELECT count(*) FROM order_messages")).scalar() == 2
+
+
+def test_feed_cursor_pages_and_reconciles_without_duplicates(client_and_session):
+    _, db = client_and_session
+    _seed_data(db)
+    conv, _ = create_conversation_for_order(db, 1, "comanda-101")
+    for index in range(4):
+        send_customer_message(db, 1, conv.id, conv.pedido_id, f"m{index}", str(uuid.uuid4()))
+    post_system_order_event(db, 1, conv.pedido_id, "producao")
+    db.commit()
+
+    latest = list_feed_page(db, restaurante_id=1, conversation_id=conv.id, limit=2)
+    assert [item["seq"] for item in latest["items"]] == sorted(item["seq"] for item in latest["items"])
+    assert latest["has_more"] is True
+    older = list_feed_page(db, restaurante_id=1, conversation_id=conv.id, limit=10,
+                           before_seq=latest["oldest_seq"])
+    assert set(item["id"] for item in older["items"]).isdisjoint(item["id"] for item in latest["items"])
+    assert list_feed_page(db, restaurante_id=1, conversation_id=conv.id,
+                          after_seq=latest["latest_seq"])["items"] == []
+
+
+def test_retention_purges_content_but_preserves_tracking_conversation(client_and_session):
+    _, db = client_and_session
+    OrderPushSubscription.__table__.create(db.get_bind(), checkfirst=True)
+    _seed_data(db)
+    conv, _ = create_conversation_for_order(db, 1, "comanda-101")
+    send_customer_message(db, 1, conv.id, conv.pedido_id, "temporária", str(uuid.uuid4()))
+    post_system_order_event(db, 1, conv.pedido_id, "finalizado")
+    conv.closed_at = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=31)
+    db.commit()
+
+    assert purge_expired_order_chat_content(db, restaurante_id=1) == 1
+    db.commit()
+    assert db.get(type(conv), conv.id) is not None
+    assert db.query(OrderMessage).filter_by(conversation_id=conv.id).count() == 0
+    assert db.query(OrderConversationEvent).filter_by(conversation_id=conv.id).count() == 0
+    assert conv.chat_purged_at is not None
 
 
 def test_staff_retry_does_not_enqueue_duplicate_push(client_and_session, monkeypatch):

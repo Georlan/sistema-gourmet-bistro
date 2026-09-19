@@ -7,6 +7,7 @@ import logging
 import os
 import signal
 import uuid
+import time
 from typing import Optional
 import httpx
 from sqlalchemy import text
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ...database import TenantSession, engine, tenant_session_scope
 from ..scheduled_orders import release_due_scheduled_orders_in_session
+from ..order_chat_retention import purge_expired_order_chat_content
 from .dispatcher import DEFAULT_STALE_TIMEOUT_SECONDS, dispatch_pending_outbox_events
 
 logger = logging.getLogger("koma.outbox.worker")
@@ -65,6 +67,7 @@ class OutboxWorker:
         self._task: Optional[asyncio.Task] = None
         self._wake_event: Optional[asyncio.Event] = None
         self._loop = None
+        self._last_chat_retention_at = 0.0
 
     def wake(self):
         """Commit notification is a hint; periodic reconciliation stays durable."""
@@ -87,6 +90,7 @@ class OutboxWorker:
             "recovered_stale": 0,
             "total": 0,
             "scheduled_released": 0,
+            "chat_conversations_purged": 0,
         }
         try:
             if restaurant_id is not None:
@@ -109,6 +113,15 @@ class OutboxWorker:
                                 released,
                                 rid,
                             )
+
+                        if time.monotonic() - self._last_chat_retention_at >= 21600:
+                            purged = purge_expired_order_chat_content(
+                                db, restaurante_id=rid,
+                                retention_days=int(os.getenv("ORDER_CHAT_RETENTION_DAYS", "30")),
+                            )
+                            if purged:
+                                db.commit()
+                                aggregated_stats["chat_conversations_purged"] += purged
 
                         stats = dispatch_pending_outbox_events(
                             db,
@@ -136,6 +149,7 @@ class OutboxWorker:
                         exc_info=True,
                     )
 
+            self._last_chat_retention_at = time.monotonic()
             return aggregated_stats
         finally:
             db.close()

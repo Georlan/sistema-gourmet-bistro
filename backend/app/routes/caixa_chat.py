@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from ..security import require_permission
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     get_caixa_unread_summary,
+    list_feed_page,
     list_caixa_conversations,
     list_recent_messages,
     mark_staff_read,
@@ -104,6 +105,25 @@ def obter_mensagens_conversa(
             restaurante_id=restaurante_id,
             conversation_id=conversation_id,
         )
+
+
+@router.get("/{conversation_id}/feed", summary="Feed paginado de uma conversa")
+def obter_feed_conversa(
+    conversation_id: str, limit: int = Query(50, ge=1, le=100),
+    before_seq: int | None = Query(None, ge=1), after_seq: int | None = Query(None, ge=0),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("caixa:operar")),
+):
+    restaurante_id = _get_tenant_id(current_user)
+    with tenant_session_scope(db, restaurante_id):
+        conv = db.query(OrderConversation).filter_by(
+            restaurante_id=restaurante_id, id=conversation_id,
+        ).first()
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+        return list_feed_page(db, restaurante_id=restaurante_id,
+                              conversation_id=conversation_id, limit=limit,
+                              before_seq=before_seq, after_seq=after_seq)
 
 
 @router.post("/{conversation_id}/messages", summary="Operador responde mensagem do cliente")
