@@ -93,12 +93,13 @@ test('read_update do Caixa não recarrega a thread nem dispara nova marcação d
   assert.match(cashierDrawer, /items\.some\(\(item\) => item\.id === message\.id\)/);
 });
 
-test('central do Caixa prioriza atenção, oferece respostas rápidas e composer multilinha', () => {
+test('central do Caixa prioriza atenção sem permitir resposta rápida fingir status', () => {
   assert.match(cashierDrawer, /sortedConversations/);
   assert.match(cashierDrawer, /isWaitingForStaff/);
   assert.match(cashierDrawer, /aguardando resposta/);
   assert.match(cashierDrawer, /QUICK_REPLIES/);
-  assert.match(cashierDrawer, /Estamos preparando seu pedido\./);
+  assert.match(cashierDrawer, /Certo, vamos verificar\./);
+  assert.doesNotMatch(cashierDrawer, /Seu pedido saiu para entrega\./);
   assert.match(cashierDrawer, /textarea/);
   assert.match(cashierDrawer, /Enter envia · Shift\+Enter quebra linha/);
   assert.match(cashierDrawer, /aria-modal="true"/);
@@ -112,31 +113,26 @@ test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigi
   assert.match(cashierDrawer, /case 'read_update':/);
 });
 
-test('central do Caixa arquiva pedidos terminais sem apagar histórico', () => {
-  assert.match(cashierDrawer, /type ConversationFilter = 'active' \| 'archived' \| 'all'/);
-  assert.match(cashierDrawer, /isArchivedConversation/);
-  assert.match(cashierDrawer, /TERMINAL_CHAT_STATUSES/);
-  assert.match(cashierDrawer, /'finalizado'/);
-  assert.match(cashierDrawer, /Ativas/);
-  assert.match(cashierDrawer, /Arquivadas/);
-  assert.match(cashierDrawer, /Todas/);
-  assert.match(cashierDrawer, /type="search"/);
-  assert.match(cashierDrawer, /Buscar pedido, cliente ou mensagem/);
-  assert.match(cashierDrawer, /Conversa arquivada/);
-  assert.match(cashierChatRoute, /list_caixa_conversations_for_central/);
-  assert.match(archiveService, /OrderConversation\.closed_at\.isnot\(None\)/);
-  assert.match(archiveService, /"closed_at": conversation\.closed_at\.isoformat/);
+test('central do Caixa consulta somente conversas operacionais ativas', () => {
+  assert.match(cashierChatRoute, /list_caixa_conversations/);
+  assert.doesNotMatch(cashierChatRoute, /list_caixa_conversations_for_central/);
+  assert.match(cashierDrawer, /Somente pedidos ativos/);
+  assert.doesNotMatch(cashierDrawer, /filterButton\('archived'/);
+  assert.doesNotMatch(cashierDrawer, /filterButton\('all'/);
 });
 
-test('mensagem nova em pedido terminal volta para a fila como pós-venda', () => {
-  assert.match(cashierDrawer, /conversation\.unread_count <= 0/);
-  assert.match(cashierDrawer, /!isWaitingForStaff\(conversation\)/);
-  assert.match(cashierDrawer, /Pós-venda/);
-  assert.match(cashierDrawer, /volta automaticamente para Ativas como pós-venda/);
-  assert.match(trackingRoute, /reopen_completed_conversation_if_needed/);
-  assert.match(trackingRoute, /state_contract\["can_chat"\] = True/);
-  assert.match(archiveService, /conversation\.closed_at = None/);
-  assert.match(archiveService, /"status": "post_sale"/);
-  assert.match(clientPanel, /atendimento de pós-venda sem reabrir o pedido/);
-  assert.doesNotMatch(clientPanel, /Boolean\(closedAt\)/);
+test('pedido terminal permanece read-only e não reabre pós-venda', () => {
+  assert.doesNotMatch(trackingRoute, /reopen_completed_conversation_if_needed/);
+  assert.doesNotMatch(trackingRoute, /state_contract\["can_chat"\] = True/);
+  assert.doesNotMatch(clientPanel, /atendimento de pós-venda/);
+  assert.doesNotMatch(archiveService, /conversation\.closed_at = None/);
+});
+
+
+test('rascunhos ficam locais e envios carregam chave idempotente', () => {
+  assert.match(clientPanel, /sessionStorage\.setItem\(draftKey, input\)/);
+  assert.match(clientPanel, /client_message_id: clientMessageId/);
+  assert.match(cashierDrawer, /CASHIER_CHAT_DRAFT_TTL_MS/);
+  assert.match(cashierDrawer, /localStorage\.setItem/);
+  assert.match(cashierDrawer, /client_message_id: clientMessageId/);
 });
