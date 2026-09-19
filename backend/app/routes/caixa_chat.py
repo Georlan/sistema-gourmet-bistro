@@ -147,9 +147,9 @@ def marcar_lida_operador(
     """Atualiza o timestamp de leitura da equipe para zerar as notificações pendentes."""
     restaurante_id = _get_tenant_id(current_user)
     with tenant_session_scope(db, restaurante_id):
-        mark_staff_read(db, restaurante_id, conversation_id)
+        changed = mark_staff_read(db, restaurante_id, conversation_id)
         db.commit()
-        return {"status": "ok"}
+        return {"status": "ok", "changed": changed}
 
 
 @router.get("/events", summary="Stream SSE de novas mensagens e atualizações para o Caixa")
