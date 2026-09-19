@@ -191,7 +191,11 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
-          if (event === 'new_message' || event === 'read_update') {
+          if (
+            event === 'new_message'
+            || event === 'read_update'
+            || (event === 'status_changed' && Boolean(data?.closed_at))
+          ) {
             void fetchUnread();
           }
           realtimeListenersRef.current.forEach((listener) => {
