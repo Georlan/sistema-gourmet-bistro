@@ -197,8 +197,13 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
-          // Mudança de status não altera contagem de mensagens humanas.
-          if (event === 'new_message' || event === 'read_update') {
+          // O badge do Caixa só muda com mensagem do cliente ou leitura da equipe.
+          const affectsCashierUnread = (
+            event === 'new_message' && data?.sender_type === 'customer'
+          ) || (
+            event === 'read_update' && data?.reader === 'staff'
+          );
+          if (affectsCashierUnread) {
             void fetchUnread();
           }
         },
