@@ -30,6 +30,7 @@ from ..services.customer_auth import hash_public_rate_key
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     compute_comanda_total,
+    list_recent_messages,
     mark_customer_read,
     resolve_public_tracking,
     send_customer_message,
@@ -252,16 +253,11 @@ def listar_mensagens_do_pedido(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
-        messages = (
-            db.query(OrderMessage)
-            .filter(
-                OrderMessage.restaurante_id == restaurante_id,
-                OrderMessage.conversation_id == conversation_id,
-            )
-            .order_by(OrderMessage.created_at.asc())
-            .all()
+        return list_recent_messages(
+            db,
+            restaurante_id=restaurante_id,
+            conversation_id=conversation_id,
         )
-        return [serialize_message(msg) for msg in messages]
 
 
 @router.post("/{token}/messages", summary="Envia mensagem do cliente para o restaurante")
