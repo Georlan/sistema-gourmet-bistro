@@ -37,6 +37,36 @@ export type PickupOrderBuckets = {
   late: DeliveryOrderView[];
 };
 
+/**
+ * A resposta de uma transição de status pode ser deliberadamente compacta e
+ * omitir os itens. Durante essa janela, mantém o último snapshot operacional
+ * completo em vez de exibir um pedido fictício de R$ 0,00. A leitura dedicada
+ * seguinte continua sendo a autoridade e substitui o card normalmente.
+ */
+export function reconcileDeliveryOrderAfterStatus(
+  previous: DeliveryOrderView,
+  incoming: DeliveryOrderView,
+): DeliveryOrderView {
+  if (incoming.quantidadeItens > 0 || previous.quantidadeItens <= 0) return incoming;
+
+  return {
+    ...incoming,
+    cliente: previous.cliente,
+    telefone: previous.telefone,
+    itens: previous.itens,
+    detailItems: previous.detailItems,
+    total: previous.total,
+    quantidadeItens: previous.quantidadeItens,
+    pago: previous.pago,
+    endereco: previous.endereco,
+    canal: previous.canal,
+    origemOperacional: previous.origemOperacional,
+    isQuickSale: previous.isQuickSale,
+    modalidade: previous.modalidade,
+    numeroPedido: incoming.numeroPedido ?? previous.numeroPedido,
+  };
+}
+
 export function bucketPickupOrders(
   orders: readonly DeliveryOrderView[],
   now: number,

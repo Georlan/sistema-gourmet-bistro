@@ -5,7 +5,11 @@ import type { Order } from '../../../types';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
-import { projectDeliveryOrdersFromSharedSnapshot, readActiveDeliveryStatus } from './deliveryOrderProjection';
+import {
+  projectDeliveryOrdersFromSharedSnapshot,
+  readActiveDeliveryStatus,
+  reconcileDeliveryOrderAfterStatus,
+} from './deliveryOrderProjection';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -733,7 +737,11 @@ export function useCashierOrders({
           const projected = mapComandaToDeliveryView(updatedComanda);
           setDeliveryOrders((current) =>
             projected
-              ? current.map((order) => (String(order.id) === orderKey ? projected : order))
+              ? current.map((order) => (
+                  String(order.id) === orderKey
+                    ? reconcileDeliveryOrderAfterStatus(order, projected)
+                    : order
+                ))
               : current.filter((order) => String(order.id) !== orderKey)
           );
         }
