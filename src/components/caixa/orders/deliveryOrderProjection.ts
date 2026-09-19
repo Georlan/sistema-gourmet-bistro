@@ -1,4 +1,5 @@
 import type { Order } from '../../../types';
+import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { formatBackendTime } from '../../../utils/dateTime';
 import type { DeliveryOrderView } from './cashierWorkspaceTypes';
 
@@ -28,6 +29,44 @@ export type CourierDeliveryBuckets = {
   ready: DeliveryOrderView[];
   inTransit: DeliveryOrderView[];
 };
+
+export type PickupOrderBuckets = {
+  awaitingAcceptance: DeliveryOrderView[];
+  preparing: DeliveryOrderView[];
+  ready: DeliveryOrderView[];
+  late: DeliveryOrderView[];
+};
+
+export function bucketPickupOrders(
+  orders: readonly DeliveryOrderView[],
+  now: number,
+): PickupOrderBuckets {
+  const buckets: PickupOrderBuckets = {
+    awaitingAcceptance: [],
+    preparing: [],
+    ready: [],
+    late: [],
+  };
+
+  orders.forEach((order) => {
+    if (order.modalidade !== 'retirada' || order.isQuickSale) return;
+
+    if (getCashierOrderSlaData(order, now).minutes > 25) {
+      buckets.late.push(order);
+    }
+
+    if (order.status === 'pendente' || order.status === 'analise') {
+      buckets.awaitingAcceptance.push(order);
+    } else if (order.status === 'producao') {
+      buckets.preparing.push(order);
+    } else if (order.status === 'pronto' || order.status === 'transito') {
+      buckets.ready.push(order);
+    }
+  });
+
+  return buckets;
+}
+
 
 /**
  * A tela de Entregas é deliberadamente exclusiva de delivery. O Kanban geral
