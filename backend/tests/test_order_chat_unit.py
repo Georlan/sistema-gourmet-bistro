@@ -397,6 +397,31 @@ def test_local_realtime_is_emitted_only_after_commit(client_and_session, monkeyp
     session.rollback()
     assert len(emitted) == 1
 
+def test_status_hint_is_deduped_inside_same_transaction(client_and_session, monkeypatch):
+    _client, session = client_and_session
+    _seed_data(session)
+    conv, _raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+
+    emitted: list[tuple[int, str, str, dict]] = []
+
+    def capture(restaurante_id, conversation_id, event_type, data):
+        emitted.append((restaurante_id, conversation_id, event_type, data))
+
+    monkeypatch.setattr(order_chat_hub, "publish_event", capture)
+
+    first = post_system_order_event(session, 1, "comanda-101", "producao")
+    second = post_system_order_event(session, 1, "comanda-101", "producao")
+    assert first is not None
+    assert second is not None
+    assert emitted == []
+
+    session.commit()
+    assert len(emitted) == 1
+    assert emitted[0][0:3] == (1, conv.id, "status")
+    assert emitted[0][3]["status"] == "producao"
+
+
 def test_message_body_is_plain_text_and_legacy_rows_are_decoded_at_boundary(client_and_session):
     client, session = client_and_session
     _seed_data(session)
