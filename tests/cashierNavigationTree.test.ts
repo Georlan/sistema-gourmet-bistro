@@ -232,7 +232,7 @@ test('CaixaPanel delegates operation subnav clicks and active state to the share
 });
 
 
-test('online menu has direct searchable destinations and no horizontal online subnav', () => {
+test('online menu mirrors direct destinations in the horizontal subnav', () => {
   const online = parents().find((item) => item.id === 'cardapio_digital');
   assert.deepEqual(online?.children?.map((child) => child.id), [
     'online_perfil',
@@ -247,6 +247,7 @@ test('online menu has direct searchable destinations and no horizontal online su
   const caixa = readFileSync(
     new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
   );
-  assert.doesNotMatch(caixa, /onlineMenuSubnavItems/);
-  assert.match(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
+  assert.match(caixa, /onlineMenuSubnavItems = getCashierNavigationItem\('cardapio_digital'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'cardapio_digital' && onlineMenuSubnavItems\.map/);
+  assert.doesNotMatch(caixa, /activeTab === 'cardapio_digital' && 'hidden'/);
 });
