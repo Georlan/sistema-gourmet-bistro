@@ -69,13 +69,16 @@ test('Pedidos online keeps hours as restaurant setup and does not own payment or
   assert.doesNotMatch(orders, /\/caixa\/configuracoes/);
 });
 
-test('Entrega & áreas persists through ConfiguracaoRestaurante instead of profile config', () => {
+test('Entrega is always automatic by distance and persists through ConfiguracaoRestaurante', () => {
   const delivery = source('../src/components/caixa/online-menu/OnlineMenuDeliverySettings.tsx');
   assert.match(delivery, /\/caixa\/configuracoes/);
   assert.match(delivery, /delivery_ativo/);
   assert.match(delivery, /pedido_minimo/);
   assert.match(delivery, /frete_gratis_valor/);
-  assert.match(delivery, /tabela_taxas_bairros/);
+  assert.match(delivery, /tipo_taxa_entrega: 'distancia'/);
+  assert.match(delivery, /Valor por km/);
+  assert.match(delivery, /delivery-suggestion/);
+  assert.doesNotMatch(delivery, /Taxa única|Taxa por bairro|chooseFeeMode/);
   assert.doesNotMatch(delivery, /\/api\/cardapio-digital\/config/);
 });
 
