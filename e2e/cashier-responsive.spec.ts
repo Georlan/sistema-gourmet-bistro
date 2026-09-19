@@ -342,11 +342,22 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   expect(requests.filter(path => path === '/relatorios/visao-geral')).toHaveLength(1);
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
 
-  await page.getByRole('button', { name: 'Financeiro', exact: true }).click();
+  const reportsSubnav = page.locator('.cashier-subnav');
+  await expect(reportsSubnav.getByRole('button')).toHaveCount(4);
+
+  const visibleSidebar = page.locator('.cashier-sidebar:visible');
+  if (await visibleSidebar.isVisible()) {
+    for (const label of ['Visão Geral', 'Financeiro', 'Produtos', 'Equipe']) {
+      await expect(visibleSidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(reportsSubnav.getByRole('button', { name: label, exact: true })).toBeVisible();
+    }
+  }
+
+  await reportsSubnav.getByRole('button', { name: 'Financeiro', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Recebimentos por meio' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole('button', { name: 'Produtos', exact: true }).click();
+  await reportsSubnav.getByRole('button', { name: 'Produtos', exact: true }).click();
   await expect(page.getByText('Consumo não é faturamento.', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Unidades', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Valor', exact: true })).toBeVisible();
@@ -354,7 +365,7 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
   expect(requests.filter(path => path === '/produtos/categorias')).toHaveLength(0);
   await expectNoHorizontalOverflow(page);
 
-  await page.locator('#relatorios-subtab-equipe').click();
+  await reportsSubnav.getByRole('button', { name: 'Equipe', exact: true }).click();
   await expect(page.getByText('Desempenho por Funcionário', { exact: true })).toBeVisible();
   await expect(page.getByText('Valor atribuído', { exact: true })).toBeVisible();
   expect(requests.filter(path => path === '/garcons/relatorio')).toHaveLength(0);
