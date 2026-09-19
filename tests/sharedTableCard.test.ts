@@ -75,7 +75,8 @@ test('nome da mesa e referência do pedido não quebram no card mobile do garço
   }));
 
   assert.match(markup, /whitespace-nowrap[^>]*title="Mesa 01"[^>]*>Mesa 01<\/strong>/);
-  assert.match(markup, /title="Pedido #40"[^>]*>Ped\. 40<\/span>/);
+  assert.doesNotMatch(markup, /truncate[^>]*title="Mesa 01"/);
+  assert.match(markup, /shrink-0 whitespace-nowrap[^>]*title="Pedido #40"[^>]*>Ped\. 40<\/span>/);
   assert.doesNotMatch(markup, />Pedido 40<\/span>/);
 });
 
