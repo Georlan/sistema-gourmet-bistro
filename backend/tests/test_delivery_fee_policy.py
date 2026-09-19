@@ -143,7 +143,7 @@ def test_simplified_distance_config_uses_only_minimum_and_per_km_value():
     }
 
 
-def test_simplified_distance_fee_is_minimum_then_per_full_km():
+def test_simplified_distance_fee_is_minimum_then_linear_per_km():
     raw = [{"taxa_minima": 5, "valor_por_km": 1}]
 
     near_fee, near_distance = resolve_distance_delivery_fee(
@@ -164,4 +164,4 @@ def test_simplified_distance_fee_is_minimum_then_per_full_km():
         destination_longitude=-38.4725,
     )
     assert 5 < farther_distance < 7
-    assert farther_fee == Decimal("7.00")
+    assert farther_fee == Decimal("6.01")
