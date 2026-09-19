@@ -59,7 +59,10 @@ export function SharedTableCard({
 }: Props) {
   const presentation = tableCardPresentation(operational, showOperationalStatus);
   const checkNumbers = getTableCheckNumbers(orders);
-  const numbersText = checkNumbers.map(number => `#${number}`).join(' + ');
+  const principalOrders = orders.filter((order) =>
+    order.mesaOrigemId == null || order.mesaOrigemId === table.id);
+  const primaryCheckNumber = getTableCheckNumbers(principalOrders)[0] ?? checkNumbers[0];
+  const numbersText = primaryCheckNumber ? `#${primaryCheckNumber}` : '';
   const orderContext = describeTableOrders(orders);
   const customName = table.nome && table.nome !== `Mesa ${table.id}`;
   const Container = onClick ? 'button' : 'article';
@@ -94,10 +97,10 @@ export function SharedTableCard({
             <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">
               {emphasizeOrder ? tableDisplayName : 'Mesa'}
             </span>
-            {!compact && checkNumbers.length > 0 && !emphasizeOrder && <span className="shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1 py-1 text-[8px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
+            {!compact && primaryCheckNumber != null && !emphasizeOrder && <span className="shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1 py-1 text-[8px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {primaryCheckNumber}</span>}
           </div>
           <strong
-            className={`block min-w-0 whitespace-nowrap text-koma-foreground ${emphasizeOrder || customName ? 'text-sm leading-tight' : 'font-serif text-3xl leading-none'}`}
+            className={`block min-w-0 text-koma-foreground ${emphasizeOrder ? 'whitespace-nowrap text-sm leading-tight' : customName ? 'whitespace-normal break-words text-sm leading-tight' : 'whitespace-nowrap font-serif text-3xl leading-none'}`}
             title={emphasizeOrder ? prominentOrderLabel ?? undefined : customName ? table.nome : undefined}
           >
             {emphasizeOrder ? prominentOrderLabel : customName ? table.nome : table.id}
