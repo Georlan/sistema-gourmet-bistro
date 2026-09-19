@@ -64,6 +64,8 @@ export function reconcileDeliveryOrderAfterStatus(
     isQuickSale: previous.isQuickSale,
     modalidade: previous.modalidade,
     numeroPedido: incoming.numeroPedido ?? previous.numeroPedido,
+    mesaId: incoming.mesaId ?? previous.mesaId,
+    garcomNome: incoming.garcomNome ?? previous.garcomNome,
   };
 }
 
@@ -196,6 +198,8 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       criadoEm: parsedTime === '—' ? '12:00' : parsedTime,
       created_at: order.created_at,
       numeroPedido: order.numeroPedido,
+      mesaId: Number(order.mesaId || 0) || null,
+      garcomNome: order.garcomNome,
     }];
   });
 }
