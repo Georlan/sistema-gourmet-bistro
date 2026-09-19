@@ -23,6 +23,7 @@ import { API_BASE_URL } from "../../config/api";
 import { openWhatsAppMessage, buildPedidoConfirmadoMsg } from "../../config/whatsappUtils";
 import type { DeliveryAddressSnapshot } from "../../domain/deliveryAddress";
 import { createSecureIdempotencyKey } from "../../utils/secureIdempotency";
+import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
@@ -445,9 +446,10 @@ export default function CardapioDigital({
       setErrorMessage(
         error instanceof DOMException && error.name === "AbortError"
           ? "A confirmação demorou mais que o esperado. Tente novamente: o Kôma reutiliza a mesma tentativa sem duplicar o pedido."
-          : error instanceof Error
-            ? error.message
-            : "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente.",
+          : authRequestErrorMessage(
+              error,
+              "Não foi possível enviar o pedido. Verifique sua conexão e tente novamente.",
+            ),
       );
     } finally {
       window.clearTimeout(timeoutId);

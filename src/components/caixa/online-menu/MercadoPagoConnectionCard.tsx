@@ -1,5 +1,6 @@
 import { CheckCircle2, CreditCard, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
 
 interface Props {
   apiBaseUrl: string;
@@ -36,7 +37,7 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
   const loadStatus = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/payments/mercado-pago/status`, {
+      const response = await authFetch(`${apiBaseUrl}/payments/mercado-pago/status`, {
         headers: authHeaders,
         cache: 'no-store',
       });
@@ -56,7 +57,7 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     } catch (error) {
       setFeedback({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Falha ao consultar Mercado Pago.',
+        text: authRequestErrorMessage(error, 'Não foi possível consultar o Mercado Pago.'),
       });
     } finally {
       setIsLoading(false);
@@ -91,7 +92,7 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     setIsConnecting(true);
     setFeedback(null);
     try {
-      const response = await fetch(`${apiBaseUrl}/payments/mercado-pago/connect`, {
+      const response = await authFetch(`${apiBaseUrl}/payments/mercado-pago/connect`, {
         headers: authHeaders,
         cache: 'no-store',
       });
@@ -111,7 +112,7 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     } catch (error) {
       setFeedback({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Falha ao conectar Mercado Pago.',
+        text: authRequestErrorMessage(error, 'Não foi possível conectar o Mercado Pago.'),
       });
       setIsConnecting(false);
     }

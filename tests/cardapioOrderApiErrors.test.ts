@@ -43,4 +43,6 @@ test('checkout uses the formatter for failed order submissions', () => {
   );
   assert.match(source, /formatCardapioApiError/);
   assert.match(source, /throw new Error\(formatCardapioApiError\(data\)\)/);
+  assert.match(source, /authRequestErrorMessage/);
+  assert.doesNotMatch(source, /error instanceof Error\s*\? error\.message/);
 });
