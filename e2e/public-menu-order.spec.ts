@@ -171,6 +171,46 @@ async function openCart(page: Page) {
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
 }
 
+test('sacola abre no primeiro toque real mesmo com o atalho de pedidos e chat visível', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'Regressão de toque coberta no viewport mobile com touch real.');
+
+  await mockPublicMenuBackend(page, []);
+  await page.goto('/cardapio?restaurante_id=2');
+  await page.locator('#btn-fast-add-101').tap();
+
+  const cartTrigger = page.locator('#floating-cart-trigger');
+  const chatTrigger = page.locator('#floating-order-chat-trigger');
+  await expect(cartTrigger).toBeVisible();
+  await expect(chatTrigger).toBeVisible();
+
+  const cartBox = await cartTrigger.boundingBox();
+  const chatBox = await chatTrigger.boundingBox();
+  expect(cartBox).not.toBeNull();
+  expect(chatBox).not.toBeNull();
+  expect(chatBox!.y + chatBox!.height).toBeLessThanOrEqual(cartBox!.y - 4);
+
+  const hitTarget = await page.evaluate(({ x, y }) => {
+    const node = document.elementFromPoint(x, y);
+    return Boolean(node?.closest('#floating-cart-trigger'));
+  }, {
+    x: cartBox!.x + cartBox!.width / 2,
+    y: cartBox!.y + cartBox!.height / 2,
+  });
+  expect(hitTarget).toBe(true);
+
+  await cartTrigger.tap();
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+  await page.locator('#btn-close-cart').tap();
+
+  const headerCart = page.locator('#btn-cart-header');
+  await expect(headerCart).toBeVisible();
+  const headerBox = await headerCart.boundingBox();
+  expect(headerBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(headerBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await headerCart.tap();
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+});
+
 async function fillDeliveryAddress(page: Page) {
   await page.locator('#delivery-address-cep').fill('60000000');
   await page.locator('#delivery-address-uf').fill('CE');
