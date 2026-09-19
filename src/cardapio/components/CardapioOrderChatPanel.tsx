@@ -20,7 +20,9 @@ import {
   StoredOrder,
   fallbackOrderState,
   isOrderStateContract,
+  resolveTrackingToken,
 } from "../orderTracking";
+import { subscribeOrderRealtime } from "../orderChatRealtime";
 import "../cardapioChatPolish.css";
 import CardapioPushNotifications from "./CardapioPushNotifications";
 import { KomaOrderChatIcon } from "./KomaPublicIcons";
@@ -41,27 +43,83 @@ interface TrackingMessage {
   id: string;
   sender_type: "system" | "customer" | "staff";
   body: string;
+  client_message_id?: string | null;
   created_at?: string | null;
+}
+
+interface StoredCustomerChatDraft {
+  body: string;
+  clientMessageId: string;
+  updatedAt: number;
+  expiresAt: number;
+}
+
+const CUSTOMER_CHAT_DRAFT_PREFIX = "koma:customer-chat-draft:v1";
+const CUSTOMER_CHAT_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+function createClientMessageId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function draftStorageKey(orderId: string): string {
+  return `${CUSTOMER_CHAT_DRAFT_PREFIX}:${orderId}`;
+}
+
+function readDraft(orderId: string): StoredCustomerChatDraft | null {
+  try {
+    const raw = sessionStorage.getItem(draftStorageKey(orderId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredCustomerChatDraft>;
+    if (
+      typeof parsed.body !== "string"
+      || typeof parsed.clientMessageId !== "string"
+      || !parsed.clientMessageId
+      || !Number.isFinite(parsed.expiresAt)
+      || Number(parsed.expiresAt) <= Date.now()
+    ) {
+      sessionStorage.removeItem(draftStorageKey(orderId));
+      return null;
+    }
+    return parsed as StoredCustomerChatDraft;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(orderId: string, body: string, clientMessageId: string): void {
+  try {
+    const key = draftStorageKey(orderId);
+    if (!body.trim()) {
+      sessionStorage.removeItem(key);
+      return;
+    }
+    const now = Date.now();
+    sessionStorage.setItem(key, JSON.stringify({
+      body,
+      clientMessageId,
+      updatedAt: now,
+      expiresAt: now + CUSTOMER_CHAT_DRAFT_TTL_MS,
+    } satisfies StoredCustomerChatDraft));
+  } catch {
+    // Rascunho é best-effort e nunca bloqueia o pedido.
+  }
+}
+
+function clearDraft(orderId: string): void {
+  try {
+    sessionStorage.removeItem(draftStorageKey(orderId));
+  } catch {
+    // Best effort.
+  }
 }
 
 interface CardapioOrderChatPanelProps {
   order: StoredOrder;
   onBack: () => void;
   onClose: () => void;
-}
-
-function resolveTrackingToken(order: StoredOrder): string | null {
-  if (order.tracking_token?.trim()) return order.tracking_token.trim();
-  if (!order.tracking_url?.trim()) return null;
-
-  try {
-    const parsed = new URL(order.tracking_url, window.location.origin);
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    const idx = parts.indexOf("acompanhar");
-    return idx >= 0 && parts[idx + 1] ? decodeURIComponent(parts[idx + 1]) : null;
-  } catch {
-    return null;
-  }
 }
 
 function formatTime(value?: string | null): string {
@@ -79,14 +137,16 @@ export default function CardapioOrderChatPanel({
   onBack,
   onClose,
 }: CardapioOrderChatPanelProps) {
-  const token = useMemo(() => resolveTrackingToken(order), [order]);
+  const token = useMemo(() => resolveTrackingToken(order) || null, [order]);
   const [tracking, setTracking] = useState<TrackingPayload | null>(null);
   const [messages, setMessages] = useState<TrackingMessage[]>([]);
   const [input, setInput] = useState("");
+  const [clientMessageId, setClientMessageId] = useState(createClientMessageId);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const attemptedMessageIdRef = useRef<string | null>(null);
 
   const apiRoot = token
     ? `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`
@@ -120,66 +180,63 @@ export default function CardapioOrderChatPanel({
   }, [apiRoot]);
 
   const markRead = useCallback(() => {
-    if (!apiRoot || document.visibilityState !== "visible") return;
-    void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
-  }, [apiRoot]);
+    if (
+      !apiRoot
+      || document.visibilityState !== "visible"
+      || Number(tracking?.conversa?.unread_count || 0) <= 0
+    ) return;
+    setTracking((current) => current?.conversa
+      ? { ...current, conversa: { ...current.conversa, unread_count: 0 } }
+      : current);
+    void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {
+      void refresh();
+    });
+  }, [apiRoot, refresh, tracking?.conversa?.unread_count]);
 
   useEffect(() => {
     void refresh();
-    if (!apiRoot) return;
+    if (!token) return;
 
-    let source: EventSource | null = null;
     let fallbackInterval: number | null = null;
-
     const stopFallback = () => {
       if (fallbackInterval !== null) {
         window.clearInterval(fallbackInterval);
         fallbackInterval = null;
       }
     };
-    const fallbackTick = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
     const startFallback = () => {
       if (fallbackInterval !== null) return;
-      fallbackInterval = window.setInterval(fallbackTick, 15000);
+      fallbackInterval = window.setInterval(() => {
+        if (document.visibilityState === "visible") void refresh();
+      }, 15000);
     };
-    const handleFallbackVisibility = () => {
+    const handleVisibility = () => {
       if (document.visibilityState === "visible" && fallbackInterval !== null) {
         void refresh();
       }
     };
 
-    document.addEventListener("visibilitychange", handleFallbackVisibility);
-
-    try {
-      source = new EventSource(`${apiRoot}/events`);
-      source.onopen = stopFallback;
-      source.onerror = startFallback;
-      source.addEventListener("message", (event: MessageEvent) => {
-        try {
-          const incoming = JSON.parse(event.data) as TrackingMessage;
-          setMessages((current) => current.some((item) => item.id === incoming.id)
-            ? current
-            : [...current, incoming]);
-        } catch {
-          startFallback();
+    const unsubscribe = subscribeOrderRealtime({
+      apiBaseUrl: API_BASE_URL,
+      token,
+      onState: (health) => {
+        if (health === "healthy") stopFallback();
+        else if (health === "degraded") startFallback();
+      },
+      onEvent: ({ event }) => {
+        if (event === "connected" || event === "message" || event === "status") {
+          void refresh();
         }
-      });
-      source.addEventListener("status", () => {
-        void refresh();
-      });
-    } catch {
-      source = null;
-      startFallback();
-    }
+      },
+    });
 
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      document.removeEventListener("visibilitychange", handleFallbackVisibility);
+      document.removeEventListener("visibilitychange", handleVisibility);
       stopFallback();
-      source?.close();
+      unsubscribe();
     };
-  }, [apiRoot, refresh]);
+  }, [refresh, token]);
 
   useEffect(() => {
     markRead();
@@ -208,18 +265,49 @@ export default function CardapioOrderChatPanel({
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
   const isClosed = !state.can_chat || tracking?.conversa?.can_chat === false;
 
+  useEffect(() => {
+    if (isClosed) {
+      clearDraft(String(order.id));
+      setInput("");
+      setClientMessageId(createClientMessageId());
+      attemptedMessageIdRef.current = null;
+      return;
+    }
+    const draft = readDraft(String(order.id));
+    setInput(draft?.body || "");
+    setClientMessageId(draft?.clientMessageId || createClientMessageId());
+    attemptedMessageIdRef.current = null;
+  }, [isClosed, order.id]);
+
+  useEffect(() => {
+    if (isClosed) return;
+    const timer = window.setTimeout(() => {
+      writeDraft(String(order.id), input, clientMessageId);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [clientMessageId, input, isClosed, order.id]);
+
+  const updateInput = (value: string) => {
+    if (attemptedMessageIdRef.current === clientMessageId) {
+      attemptedMessageIdRef.current = null;
+      setClientMessageId(createClientMessageId());
+    }
+    setInput(value);
+  };
+
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const body = input.trim();
     if (!apiRoot || !body || sending || isClosed) return;
 
+    attemptedMessageIdRef.current = clientMessageId;
     setSending(true);
     setError(null);
     try {
       const response = await fetch(`${apiRoot}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, client_message_id: clientMessageId }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.detail || "Não foi possível enviar a mensagem.");
@@ -228,6 +316,9 @@ export default function CardapioOrderChatPanel({
         ? current
         : [...current, sent]);
       setInput("");
+      clearDraft(String(order.id));
+      setClientMessageId(createClientMessageId());
+      attemptedMessageIdRef.current = null;
       void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
@@ -358,13 +449,10 @@ export default function CardapioOrderChatPanel({
           </div>
         ) : (
           <div className="space-y-2">
-            {state.terminal && !rejected && (
-              <p className="text-[10px] text-koma-muted">Pedido concluído · sua mensagem abrirá um atendimento de pós-venda sem reabrir o pedido.</p>
-            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
+                onChange={(event) => updateInput(event.target.value)}
                 rows={1}
                 maxLength={1000}
                 placeholder="Escreva para o restaurante…"
