@@ -30,7 +30,6 @@ from ..services.order_chat_service import (
     send_staff_message,
     serialize_message,
 )
-from ..services.web_push import enqueue_order_push_event
 
 router = APIRouter(prefix="/api/caixa/conversas", tags=["Caixa - Chat"])
 
@@ -125,14 +124,6 @@ def responder_cliente(
             raw_body=payload.body,
             client_message_id=payload.client_message_id,
         )
-        enqueue_order_push_event(
-            db,
-            restaurante_id=restaurante_id,
-            pedido_id=msg.pedido_id,
-            conversation_id=conversation_id,
-            kind="message",
-            message_id=msg.id,
-        )
         db.commit()
         db.refresh(msg)
         return serialize_message(msg)
@@ -163,13 +154,20 @@ async def stream_eventos_caixa(
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_caixa(restaurante_id)
         try:
+            if not await order_chat_hub.wait_ready():
+                return
+            generation = order_chat_hub.generation
             yield _sse_event("connected", {"restaurante_id": restaurante_id})
 
             while not await request.is_disconnected():
+                if not order_chat_hub.ready or generation != order_chat_hub.generation:
+                    return
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(payload["event"], payload["data"])
                 except asyncio.TimeoutError:
+                    if not order_chat_hub.ready or generation != order_chat_hub.generation:
+                        return
                     yield ": keepalive\n\n"
         finally:
             order_chat_hub.unsubscribe_caixa(restaurante_id, sub_id)

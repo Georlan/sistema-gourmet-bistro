@@ -125,11 +125,8 @@ def _parse_troco_para_float(val: Any) -> float | None:
 def _emit_chat_status_event(db: Session, restaurant_id: int, comanda_id: str, status: str | None) -> None:
     if not status:
         return
-    try:
-        from ...services.order_chat_service import post_system_order_event
-        post_system_order_event(db, restaurant_id, comanda_id, status)
-    except Exception:
-        logger.debug("Chat status event not emitted for order %s", comanda_id)
+    from ...services.order_chat_service import post_system_order_event
+    post_system_order_event(db, restaurant_id, comanda_id, status)
 
 
 class OrderApplicationService:

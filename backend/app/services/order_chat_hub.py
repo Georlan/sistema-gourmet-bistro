@@ -20,7 +20,7 @@ from sqlalchemy import event, text
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..database import engine
+from ..database import SessionLocal, engine, tenant_session_scope
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ class OrderChatHub:
         self._stop = threading.Event()
         self._listener_ready = threading.Event()
         self._listener_thread: threading.Thread | None = None
+        self.generation = 0
 
     def ensure_started(self) -> None:
         if engine.dialect.name != "postgresql" or not self._listen_to_postgres:
@@ -66,7 +67,7 @@ class OrderChatHub:
         self._stop.set()
         thread = self._listener_thread
         if thread is not None and thread.is_alive():
-            thread.join(timeout=2.0)
+            thread.join(timeout=12.0)
         self._listener_ready.clear()
 
     def subscribe_conversation(self, conversation_id: str) -> tuple[str, asyncio.Queue]:
@@ -173,6 +174,22 @@ class OrderChatHub:
             logger.warning("[ORDER CHAT] Evento realtime fora do contrato ignorado.")
             return
 
+        # Notifications carry keys only. Rehydrate committed data under the tenant
+        # scope before publishing the existing SSE contract to local consumers.
+        with self._lock:
+            interested = bool(self._conversation_subscribers.get(conversation_id) or self._caixa_subscribers.get(restaurante_id))
+        if not interested:
+            return
+        try:
+            data = self._load_committed_data(restaurante_id, conversation_id, kind, data)
+        except Exception as exc:
+            logger.warning("[ORDER CHAT] Falha ao reler evento confirmado (%s).", type(exc).__name__)
+            # Let the transport reconnect and reconcile; never roll back or report
+            # a failed write after the database has already committed.
+            self.generation += 1
+            return
+        if data is None:
+            return
         enriched = {**data, "conversation_id": conversation_id}
         if kind == "message":
             self.broadcast_to_conversation(conversation_id, "message", enriched)
@@ -183,6 +200,49 @@ class OrderChatHub:
         else:
             self.broadcast_to_conversation(conversation_id, "read_update", enriched)
             self.broadcast_to_caixa(restaurante_id, "read_update", enriched)
+
+    @staticmethod
+    def _load_committed_data(restaurante_id, conversation_id, kind, hint):
+        from ..order_chat_models import OrderConversation, OrderConversationEvent, OrderMessage
+        from .order_chat_service import serialize_message, serialize_feed_event
+
+        with SessionLocal() as db, tenant_session_scope(db, restaurante_id):
+            conv = db.query(OrderConversation).filter_by(
+                restaurante_id=restaurante_id, id=conversation_id,
+            ).first()
+            if conv is None:
+                return None
+            if kind == "message":
+                msg = db.query(OrderMessage).filter_by(
+                    restaurante_id=restaurante_id, conversation_id=conversation_id,
+                    id=hint.get("message_id") or hint.get("id"),
+                ).first()
+                return serialize_message(msg) if msg else None
+            if kind == "status":
+                event = db.query(OrderConversationEvent).filter_by(
+                    restaurante_id=restaurante_id, conversation_id=conversation_id,
+                    id=hint.get("event_id"),
+                ).first()
+                if event is None and "status" not in hint:
+                    return None
+                return {
+                    "status": conv.comanda.delivery_status,
+                    "closed_at": conv.closed_at.isoformat() if conv.closed_at else None,
+                    "feed_event": serialize_feed_event(event) if event else None,
+                }
+            reader = hint.get("reader")
+            if reader not in {"staff", "customer"}:
+                return None
+            watermark = getattr(conv, f"{reader}_last_read_at")
+            return {"reader": reader, "last_read_at": watermark.isoformat() if watermark else None}
+
+    async def wait_ready(self) -> bool:
+        self.ensure_started()
+        return await asyncio.to_thread(self._listener_ready.wait, 10.0)
+
+    @property
+    def ready(self) -> bool:
+        return self._listener_ready.is_set()
 
     @staticmethod
     def _postgres_dsn() -> str:
@@ -208,11 +268,12 @@ class OrderChatHub:
                 connection.autocommit = True
                 cursor = connection.cursor()
                 cursor.execute(f'LISTEN "{ORDER_CHAT_CHANNEL}"')
+                self.generation += 1
                 self._listener_ready.set()
                 logger.info("[ORDER CHAT] PostgreSQL LISTEN ativo.")
 
                 while not self._stop.is_set():
-                    readable, _, _ = select.select([connection], [], [], 5.0)
+                    readable, _, _ = select.select([connection], [], [], 0.5)
                     if not readable:
                         continue
                     connection.poll()
@@ -230,10 +291,7 @@ class OrderChatHub:
             except Exception as exc:
                 self._listener_ready.clear()
                 if not self._stop.is_set():
-                    logger.warning(
-                        "[ORDER CHAT] LISTEN indisponível; SSE dependerá da reconciliação HTTP: %s",
-                        exc,
-                    )
+                    logger.warning("[ORDER CHAT] LISTEN indisponível (%s); reconectar SSE.", type(exc).__name__)
                     self._stop.wait(2.0)
             finally:
                 self._listener_ready.clear()
@@ -264,6 +322,8 @@ def queue_order_chat_event(
 
     if kind not in _ALLOWED_KINDS:
         raise ValueError(f"kind de realtime inválido: {kind}")
+    allowed_keys = {"message": {"message_id"}, "status": {"event_id"}, "read": {"reader"}}
+    data = {key: value for key, value in data.items() if key in allowed_keys[kind]}
     envelope = {
         "restaurante_id": int(restaurante_id),
         "conversation_id": str(conversation_id),
@@ -271,9 +331,8 @@ def queue_order_chat_event(
         "data": data,
     }
     payload = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False)
-    # PostgreSQL NOTIFY has an 8 KiB payload limit. Messages are capped at 1,000
-    # chars, so 7 KiB leaves comfortable room for metadata and UTF-8 expansion.
-    if len(payload.encode("utf-8")) > 7000:
+    # Keys only: never send bodies, PII or state snapshots through NOTIFY.
+    if len(payload.encode("utf-8")) > 1024:
         raise ValueError("Evento realtime do chat excedeu o limite seguro.")
 
     if db.get_bind().dialect.name == "postgresql":
@@ -299,11 +358,25 @@ def _publish_local_chat_events_after_commit(session: Session) -> None:
 
 @event.listens_for(Session, "after_rollback")
 def _discard_local_chat_events_after_rollback(session: Session) -> None:
-    if not session.in_nested_transaction():
+    nested = session.get_nested_transaction()
+    snapshots = session.info.get("order_chat_savepoints", {})
+    if nested in snapshots:
+        session.info[_LOCAL_PENDING_KEY] = list(snapshots[nested])
+    else:
         session.info.pop(_LOCAL_PENDING_KEY, None)
+
+
+@event.listens_for(Session, "after_transaction_create")
+def _snapshot_local_chat_events(session: Session, transaction) -> None:
+    if transaction.nested:
+        session.info.setdefault("order_chat_savepoints", {})[transaction] = list(
+            session.info.get(_LOCAL_PENDING_KEY, [])
+        )
 
 
 @event.listens_for(Session, "after_transaction_end")
 def _cleanup_chat_realtime_state(session: Session, transaction) -> None:
+    session.info.get("order_chat_savepoints", {}).pop(transaction, None)
     if transaction.parent is None:
         session.info.pop(_LOCAL_PENDING_KEY, None)
+        session.info.pop("order_chat_savepoints", None)

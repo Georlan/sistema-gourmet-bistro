@@ -515,12 +515,19 @@ async def stream_eventos_pedido(
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_conversation(conversation_id)
         try:
+            if not await order_chat_hub.wait_ready():
+                return
+            generation = order_chat_hub.generation
             yield _sse_event("connected", {"conversation_id": conversation_id})
             while not await request.is_disconnected():
+                if not order_chat_hub.ready or generation != order_chat_hub.generation:
+                    return
                 try:
                     event_payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(event_payload["event"], event_payload["data"])
                 except asyncio.TimeoutError:
+                    if not order_chat_hub.ready or generation != order_chat_hub.generation:
+                        return
                     yield ": keepalive\n\n"
         finally:
             order_chat_hub.unsubscribe_conversation(conversation_id, sub_id)

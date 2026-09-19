@@ -96,9 +96,13 @@ async def lifespan(app: FastAPI):
         signup_task = asyncio.create_task(run_worker())
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
+    from .services.order_chat_hub import order_chat_hub
+    order_chat_hub.ensure_started()
     try:
         yield
     finally:
+        import asyncio
+        await asyncio.to_thread(order_chat_hub.stop)
         if signup_task:
             import contextlib
             signup_task.cancel()
