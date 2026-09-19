@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 ORDER_CHAT_CHANNEL = "koma_order_chat"
 _PENDING_EVENTS_KEY = "order_chat_pending_events"
+_EVENT_KEYS_KEY = "order_chat_pending_event_keys"
 _SAVEPOINTS_KEY = "order_chat_pending_savepoints"
 
 
@@ -303,6 +304,7 @@ def enqueue_order_chat_event(
     conversation_id: str,
     event_type: str,
     data: dict[str, Any] | None = None,
+    dedupe_key: str | None = None,
 ) -> None:
     """Queue a small realtime hint tied to the current database transaction.
 
@@ -311,10 +313,25 @@ def enqueue_order_chat_event(
     Session.info and fan it out from after_commit.
     """
 
+    normalized_restaurante_id = int(restaurante_id)
+    normalized_conversation_id = str(conversation_id)
+    normalized_event_type = str(event_type)
+    if dedupe_key:
+        event_key = (
+            normalized_restaurante_id,
+            normalized_conversation_id,
+            normalized_event_type,
+            str(dedupe_key),
+        )
+        queued_keys = db.info.setdefault(_EVENT_KEYS_KEY, set())
+        if event_key in queued_keys:
+            return
+        queued_keys.add(event_key)
+
     payload = {
-        "restaurante_id": int(restaurante_id),
-        "conversation_id": str(conversation_id),
-        "event": str(event_type),
+        "restaurante_id": normalized_restaurante_id,
+        "conversation_id": normalized_conversation_id,
+        "event": normalized_event_type,
         "data": dict(data or {}),
     }
     encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
@@ -350,18 +367,22 @@ def _discard_order_chat_events_on_rollback(session: Session) -> None:
     nested = session.get_nested_transaction()
     snapshots = session.info.get(_SAVEPOINTS_KEY, {})
     if nested in snapshots:
-        session.info[_PENDING_EVENTS_KEY] = list(snapshots[nested])
+        snapshot = snapshots[nested]
+        session.info[_PENDING_EVENTS_KEY] = list(snapshot["events"])
+        session.info[_EVENT_KEYS_KEY] = set(snapshot["keys"])
         return
     session.info.pop(_PENDING_EVENTS_KEY, None)
+    session.info.pop(_EVENT_KEYS_KEY, None)
 
 
 @event.listens_for(Session, "after_transaction_create")
 def _snapshot_order_chat_savepoint(session: Session, transaction) -> None:
     if not transaction.nested:
         return
-    session.info.setdefault(_SAVEPOINTS_KEY, {})[transaction] = list(
-        session.info.get(_PENDING_EVENTS_KEY, [])
-    )
+    session.info.setdefault(_SAVEPOINTS_KEY, {})[transaction] = {
+        "events": list(session.info.get(_PENDING_EVENTS_KEY, [])),
+        "keys": set(session.info.get(_EVENT_KEYS_KEY, set())),
+    }
 
 
 @event.listens_for(Session, "after_transaction_end")
@@ -369,4 +390,5 @@ def _cleanup_order_chat_transaction(session: Session, transaction) -> None:
     session.info.get(_SAVEPOINTS_KEY, {}).pop(transaction, None)
     if transaction.parent is None:
         session.info.pop(_PENDING_EVENTS_KEY, None)
+        session.info.pop(_EVENT_KEYS_KEY, None)
         session.info.pop(_SAVEPOINTS_KEY, None)
