@@ -93,13 +93,16 @@ export function SharedTableCard({
           <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">
             {emphasizeOrder ? tableDisplayName : customName ? `Mesa ${table.id}` : 'Mesa'}
           </span>
-          <strong className={`block text-koma-foreground ${emphasizeOrder || customName ? 'break-words text-sm leading-tight' : 'font-serif text-3xl leading-none'}`}>
+          <strong
+            className={`block min-w-0 whitespace-nowrap text-koma-foreground ${emphasizeOrder || customName ? 'truncate text-sm leading-tight' : 'font-serif text-3xl leading-none'}`}
+            title={emphasizeOrder ? prominentOrderLabel ?? undefined : customName ? table.nome : undefined}
+          >
             {emphasizeOrder ? prominentOrderLabel : customName ? table.nome : table.id}
           </strong>
           {mergedSources.length > 0 && <span className="block text-[9px] text-koma-muted">+ mesas {mergedSources.join(', ')}</span>}
         </div>
         {compact && occupied && <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
-        {!compact && checkNumbers.length > 0 && !emphasizeOrder && <span className="max-w-[55%] break-words rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
+        {!compact && checkNumbers.length > 0 && !emphasizeOrder && <span className="max-w-[55%] shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-1">
