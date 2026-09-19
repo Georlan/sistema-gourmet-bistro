@@ -1,4 +1,3 @@
-import type { CashierSettingsTab } from '../settings/cashierSettingsNavigation';
 import type { CashierNavigationGroup } from './cashierNavigation';
 
 export type CashierFunctionSearchEntry = {
@@ -6,7 +5,6 @@ export type CashierFunctionSearchEntry = {
   label: string;
   context: string;
   navigationId: string;
-  settingsTab?: CashierSettingsTab;
   aliases?: readonly string[];
 };
 
@@ -36,53 +34,16 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   online_divulgacao: ['qr code', 'qrcode', 'link cardapio', 'link cardápio'],
   relatorios: ['dashboard', 'indicadores', 'faturamento', 'dre', 'fluxo de caixa', 'mais vendidos'],
   permissoes_cargos: ['equipe', 'funcionarios', 'funcionários', 'cargos', 'permissoes', 'permissões'],
-  config_operacao: ['configuracao', 'configuração', 'preferencias', 'preferências'],
+  impressao_salao: ['configuracao', 'configuração', 'preferencias', 'preferências'],
+  config_aparencia: ['tema', 'tema claro', 'tema escuro', 'fonte', 'tamanho do texto', 'texto grande'],
+  config_impressao: ['impressora', 'impressoras', 'cupom', 'fila impressao', 'fila impressão', 'teste impressora'],
+  config_mesas: ['cadastro mesas', 'capacidade mesa', 'nomes mesas'],
+  config_garcom: ['garcom', 'garçom', 'garcons', 'garçons', 'atendente', 'atendimento', 'app garcom', 'app garçom'],
+  config_taxa: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
+  config_implantacao: ['implantacao', 'implantação', 'ativacao', 'ativação', 'primeiro acesso', 'onboarding'],
   config_integracoes: ['integracao', 'integração', 'integracoes', 'integrações', 'mercado pago', 'pix', 'oauth'],
   assinatura_pix: ['plano', 'planos', 'assinatura', 'cobranca', 'cobrança'],
 };
-
-const SETTINGS_DEEP_LINKS: readonly CashierFunctionSearchEntry[] = [
-  {
-    id: 'settings_aparencia',
-    label: 'Aparência',
-    context: 'Configurações › Neste dispositivo',
-    navigationId: 'config_operacao',
-    settingsTab: 'aparencia',
-    aliases: ['tema', 'tema claro', 'tema escuro', 'fonte', 'tamanho do texto', 'texto grande'],
-  },
-  {
-    id: 'settings_impressao',
-    label: 'Impressão',
-    context: 'Configurações › Neste dispositivo',
-    navigationId: 'config_operacao',
-    settingsTab: 'impressao',
-    aliases: ['impressora', 'impressoras', 'cupom', 'fila impressao', 'fila impressão', 'teste impressora'],
-  },
-  {
-    id: 'settings_mesas',
-    label: 'Mesas',
-    context: 'Configurações › Operação do salão',
-    navigationId: 'config_operacao',
-    settingsTab: 'mesas',
-    aliases: ['cadastro mesas', 'capacidade mesa', 'nomes mesas'],
-  },
-  {
-    id: 'settings_garcom',
-    label: 'App do Garçom',
-    context: 'Configurações › Operação do salão',
-    navigationId: 'config_operacao',
-    settingsTab: 'garcom',
-    aliases: ['garcom', 'garçom', 'garcons', 'garçons', 'atendente', 'atendimento', 'app garcom', 'app garçom'],
-  },
-  {
-    id: 'settings_taxa',
-    label: 'Taxa de Serviço',
-    context: 'Configurações › Operação do salão',
-    navigationId: 'config_operacao',
-    settingsTab: 'taxa',
-    aliases: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
-  },
-];
 
 export function normalizeCashierFunctionSearch(value: string): string {
   return value
@@ -152,7 +113,7 @@ export function buildCashierFunctionSearchEntries(
     }),
   );
 
-  return [...SETTINGS_DEEP_LINKS, ...navigationEntries];
+  return navigationEntries;
 }
 
 export function searchCashierFunctions(
