@@ -123,15 +123,23 @@ def _existing_human_message(
     db: Session,
     *,
     conversation_id: str,
+    sender_type: str,
     client_message_id: str | None,
 ) -> OrderMessage | None:
     if not client_message_id:
         return None
+    # Compatibilidade de rollout: versões imediatamente anteriores codificavam
+    # a chave humana em event_key. Novas mensagens nunca voltam a gravar ali.
+    legacy_event_key = f"{sender_type}:{client_message_id}"
     return (
         db.query(OrderMessage)
         .filter(
             OrderMessage.conversation_id == conversation_id,
-            OrderMessage.client_message_id == client_message_id,
+            OrderMessage.sender_type == sender_type,
+            or_(
+                OrderMessage.client_message_id == client_message_id,
+                OrderMessage.event_key == legacy_event_key,
+            ),
         )
         .first()
     )
@@ -304,6 +312,7 @@ def send_customer_message(
     existing = _existing_human_message(
         db,
         conversation_id=conv.id,
+        sender_type="customer",
         client_message_id=normalized_client_message_id,
     )
     if existing is not None:
@@ -394,6 +403,7 @@ def send_staff_message(
     existing = _existing_human_message(
         db,
         conversation_id=conv.id,
+        sender_type="staff",
         client_message_id=normalized_client_message_id,
     )
     if existing is not None:
