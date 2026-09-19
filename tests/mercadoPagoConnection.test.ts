@@ -15,6 +15,9 @@ test('Mercado Pago connection card uses authenticated backend endpoints', () => 
   assert.match(card, /\/payments\/mercado-pago\/connect/);
   assert.match(card, /headers:\s*authHeaders/);
   assert.match(card, /cache:\s*'no-store'/);
+  assert.match(card, /authFetch/);
+  assert.match(card, /authRequestErrorMessage/);
+  assert.doesNotMatch(card, /text:\s*error instanceof Error \? error\.message/);
 });
 
 test('OAuth redirect is restricted to Mercado Pago HTTPS authorization host', () => {
