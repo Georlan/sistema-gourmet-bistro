@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import './cashierChatAttention.css';
-import { consumeCashierChatEvents } from './cashierChatRealtime';
+import { CashierChatStreamEvent, consumeCashierChatEvents } from './cashierChatRealtime';
 
 export type CashierChatHealth = 'idle' | 'loading' | 'healthy' | 'degraded';
 
@@ -24,6 +24,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
   const chatAudioCtxRef = useRef<AudioContext | null>(null);
   const chatAudioUnlockedRef = useRef(false);
   const soundedMessageIdsRef = useRef<Set<string>>(new Set());
+  const realtimeListenersRef = useRef<Set<(event: CashierChatStreamEvent) => void>>(new Set());
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [chatUnreadStatus, setChatUnreadStatus] = useState<CashierChatHealth>('idle');
@@ -76,6 +77,11 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     }
     playChatMessageAlert();
   }, [playChatMessageAlert]);
+
+  const subscribeChatRealtime = useCallback((listener: (event: CashierChatStreamEvent) => void) => {
+    realtimeListenersRef.current.add(listener);
+    return () => realtimeListenersRef.current.delete(listener);
+  }, []);
 
   const fetchUnread = useCallback(async () => {
     const generation = ++requestGeneration.current;
@@ -180,13 +186,21 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
           stopFallback();
           void fetchUnread();
         },
-        onEvent: ({ event, data }) => {
+        onEvent: (streamEvent) => {
+          const { event, data } = streamEvent;
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
-          if (event === 'new_message' || event === 'status_changed' || event === 'read_update') {
+          if (event === 'new_message' || event === 'read_update') {
             void fetchUnread();
           }
+          realtimeListenersRef.current.forEach((listener) => {
+            try {
+              listener(streamEvent);
+            } catch (error) {
+              console.warn('Falha em consumidor local do realtime do chat:', error);
+            }
+          });
         },
       }).catch((error) => {
         if (stopped || controller.signal.aborted) return;
@@ -230,5 +244,6 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     chatUnreadStatus,
     setChatUnreadCount,
     refreshChatUnreadCount: fetchUnread,
+    subscribeChatRealtime,
   };
 }
