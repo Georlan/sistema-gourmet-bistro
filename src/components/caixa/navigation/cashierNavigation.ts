@@ -151,6 +151,12 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         label: 'Relatórios',
         icon: TrendingUp,
         target: { tab: 'relatorios', subTab: 'visao_geral' },
+        children: [
+          { id: 'relatorios_visao_geral', label: 'Visão Geral', target: { tab: 'relatorios', subTab: 'visao_geral' } },
+          { id: 'relatorios_financeiro', label: 'Financeiro', target: { tab: 'relatorios', subTab: 'financeiro' } },
+          { id: 'relatorios_produtos', label: 'Produtos', target: { tab: 'relatorios', subTab: 'produtos' } },
+          { id: 'relatorios_equipe', label: 'Equipe', target: { tab: 'relatorios', subTab: 'equipe' } },
+        ],
       },
       {
         id: 'permissoes_cargos',
@@ -295,6 +301,10 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
 const VALID_TABS = new Set<CashierTab>(CASHIER_PARENT_ITEMS.map((item) => item.target.tab));
 
 const CHILD_DETAIL_SUBTABS: Readonly<Record<string, readonly string[]>> = {
+  relatorios_visao_geral: ['visao_geral', 'metas', 'vendas', 'indicadores', 'relatorio_geral', 'consolidado_vendas'],
+  relatorios_financeiro: ['financeiro', 'dre', 'demonstrativo_dre', 'fluxo_caixa'],
+  relatorios_produtos: ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'],
+  relatorios_equipe: ['equipe', 'desempenho_equipe', 'desempenho', 'relatorio_garcons', 'relatorio_garçons'],
   online_perfil: ['cardapio_perfil'],
   online_marca: ['cardapio_marca'],
   online_pedidos: ['cardapio_pedidos'],
