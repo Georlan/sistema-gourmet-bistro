@@ -21,10 +21,10 @@ from ..database import get_db, tenant_session_scope
 from ..models import Usuario
 from ..order_chat_models import OrderConversation, OrderMessage
 from ..security import require_permission
-from ..services.order_chat_archive_service import list_caixa_conversations_for_central
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     get_caixa_unread_summary,
+    list_caixa_conversations,
     mark_staff_read,
     send_staff_message,
     serialize_message,
@@ -58,10 +58,10 @@ def listar_conversas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
-    """Retorna fila ativa e histórico arquivado recente para a Central de Conversas."""
+    """Retorna somente conversas operacionais ativas do restaurante."""
     restaurante_id = _get_tenant_id(current_user)
     with tenant_session_scope(db, restaurante_id):
-        return list_caixa_conversations_for_central(db, restaurante_id)
+        return list_caixa_conversations(db, restaurante_id)
 
 
 @router.get("/unread-count", summary="Total global de mensagens não lidas no Caixa")
