@@ -105,40 +105,45 @@ def assert_conversation_writable(conv: OrderConversation) -> None:
 
 
 
-def _human_event_key(sender_type: str, client_message_id: str | None) -> str | None:
-    """Normaliza a chave idempotente enviada pelo navegador.
-
-    Reaproveita a unique key já existente em event_key sem criar nova coluna.
-    """
+def _normalize_client_message_id(client_message_id: str | None) -> str | None:
+    """Valida e canonicaliza a chave idempotente gerada pelo remetente."""
     raw = (client_message_id or "").strip()
     if not raw:
         return None
     try:
-        normalized = str(uuid.UUID(raw))
+        return str(uuid.UUID(raw))
     except (ValueError, AttributeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Identificador idempotente da mensagem é inválido.",
         ) from exc
-    return f"{sender_type}:{normalized}"
 
 
 def _existing_human_message(
     db: Session,
     *,
     conversation_id: str,
-    event_key: str | None,
+    sender_type: str,
+    client_message_id: str | None,
 ) -> OrderMessage | None:
-    if not event_key:
+    if not client_message_id:
         return None
+    # Compatibilidade de rollout: versões imediatamente anteriores codificavam
+    # a chave humana em event_key. Novas mensagens nunca voltam a gravar ali.
+    legacy_event_key = f"{sender_type}:{client_message_id}"
     return (
         db.query(OrderMessage)
         .filter(
             OrderMessage.conversation_id == conversation_id,
-            OrderMessage.event_key == event_key,
+            OrderMessage.sender_type == sender_type,
+            or_(
+                OrderMessage.client_message_id == client_message_id,
+                OrderMessage.event_key == legacy_event_key,
+            ),
         )
         .first()
     )
+
 
 def create_conversation_for_order(
     db: Session,
@@ -303,11 +308,12 @@ def send_customer_message(
         )
     assert_conversation_writable(conv)
 
-    event_key = _human_event_key("customer", client_message_id)
+    normalized_client_message_id = _normalize_client_message_id(client_message_id)
     existing = _existing_human_message(
         db,
         conversation_id=conv.id,
-        event_key=event_key,
+        sender_type="customer",
+        client_message_id=normalized_client_message_id,
     )
     if existing is not None:
         return existing
@@ -338,20 +344,19 @@ def send_customer_message(
         sender_user_id=None,
         body=body,
         body_format=PLAIN_TEXT_BODY_FORMAT,
-        event_key=event_key,
+        client_message_id=normalized_client_message_id,
         created_at=now,
     )
     try:
         with db.begin_nested():
             db.add(msg)
             conv.updated_at = now
-            conv.customer_last_read_at = now
             db.flush()
     except Exception:
         existing = _existing_human_message(
             db,
             conversation_id=conv.id,
-            event_key=event_key,
+            client_message_id=normalized_client_message_id,
         )
         if existing is not None:
             return existing
@@ -394,11 +399,12 @@ def send_staff_message(
         )
     assert_conversation_writable(conv)
 
-    event_key = _human_event_key("staff", client_message_id)
+    normalized_client_message_id = _normalize_client_message_id(client_message_id)
     existing = _existing_human_message(
         db,
         conversation_id=conv.id,
-        event_key=event_key,
+        sender_type="staff",
+        client_message_id=normalized_client_message_id,
     )
     if existing is not None:
         return existing
@@ -412,20 +418,19 @@ def send_staff_message(
         sender_user_id=user_id,
         body=body,
         body_format=PLAIN_TEXT_BODY_FORMAT,
-        event_key=event_key,
+        client_message_id=normalized_client_message_id,
         created_at=now,
     )
     try:
         with db.begin_nested():
             db.add(msg)
             conv.updated_at = now
-            conv.staff_last_read_at = now
             db.flush()
     except Exception:
         existing = _existing_human_message(
             db,
             conversation_id=conv.id,
-            event_key=event_key,
+            client_message_id=normalized_client_message_id,
         )
         if existing is not None:
             return existing
@@ -441,13 +446,23 @@ def send_staff_message(
     return msg
 
 
-def mark_customer_read(
+def _advance_read_watermark(
     db: Session,
+    *,
     restaurante_id: int,
     conversation_id: str,
-) -> None:
-    """Atualiza o timestamp de leitura do cliente para o momento atual."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    reader: str,
+) -> datetime.datetime | None:
+    """Avança leitura somente até a última mensagem oposta já observável no banco.
+
+    O watermark usa o timestamp da própria mensagem, não o relógio atual. Assim
+    uma mensagem concorrente que ainda não foi observada pelo request de leitura
+    não é marcada como lida por acidente. Requests repetidos sem novidade viram
+    no-op: não fazem UPDATE e não publicam evento realtime.
+    """
+    if reader not in {"customer", "staff"}:
+        raise ValueError("reader inválido")
+
     conv = (
         db.query(OrderConversation)
         .filter(
@@ -456,44 +471,63 @@ def mark_customer_read(
         )
         .first()
     )
-    if conv:
-        conv.customer_last_read_at = now
-        db.flush()
-        queue_order_chat_event(
-            db,
-            restaurante_id=restaurante_id,
-            conversation_id=conv.id,
-            kind="read",
-            data={"reader": "customer", "last_read_at": now.isoformat()},
-        )
+    if conv is None:
+        return None
+
+    sender_type = "staff" if reader == "customer" else "customer"
+    watermark_attr = "customer_last_read_at" if reader == "customer" else "staff_last_read_at"
+    current_watermark = getattr(conv, watermark_attr)
+
+    latest_query = db.query(func.max(OrderMessage.created_at)).filter(
+        OrderMessage.restaurante_id == restaurante_id,
+        OrderMessage.conversation_id == conversation_id,
+        OrderMessage.sender_type == sender_type,
+    )
+    if current_watermark is not None:
+        latest_query = latest_query.filter(OrderMessage.created_at > current_watermark)
+
+    latest_visible = latest_query.scalar()
+    if latest_visible is None:
+        return None
+
+    setattr(conv, watermark_attr, latest_visible)
+    db.flush()
+    queue_order_chat_event(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conv.id,
+        kind="read",
+        data={"reader": reader, "last_read_at": latest_visible.isoformat()},
+    )
+    return latest_visible
+
+
+def mark_customer_read(
+    db: Session,
+    restaurante_id: int,
+    conversation_id: str,
+) -> bool:
+    """Marca apenas respostas da equipe realmente observáveis pelo cliente."""
+    return _advance_read_watermark(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conversation_id,
+        reader="customer",
+    ) is not None
 
 
 def mark_staff_read(
     db: Session,
     restaurante_id: int,
     conversation_id: str,
-) -> None:
-    """Atualiza o timestamp de leitura do operador do restaurante para o momento atual."""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    conv = (
-        db.query(OrderConversation)
-        .filter(
-            OrderConversation.restaurante_id == restaurante_id,
-            OrderConversation.id == conversation_id,
-        )
-        .first()
-    )
-    if conv:
-        conv.staff_last_read_at = now
-        db.flush()
-        queue_order_chat_event(
-            db,
-            restaurante_id=restaurante_id,
-            conversation_id=conv.id,
-            kind="read",
-            data={"reader": "staff", "last_read_at": now.isoformat()},
-        )
-
+) -> bool:
+    """Marca apenas mensagens do cliente realmente observáveis pela equipe."""
+    return _advance_read_watermark(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conversation_id,
+        reader="staff",
+    ) is not None
 
 def serialize_message(msg: OrderMessage) -> dict[str, Any]:
     """Serializa mensagem como texto; converte somente o legado HTML-escaped."""
@@ -507,6 +541,7 @@ def serialize_message(msg: OrderMessage) -> dict[str, Any]:
         "sender_type": msg.sender_type,
         "sender_user_id": msg.sender_user_id,
         "body": body,
+        "client_message_id": getattr(msg, "client_message_id", None),
         "event_key": msg.event_key,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }

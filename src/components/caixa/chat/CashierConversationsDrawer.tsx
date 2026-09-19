@@ -247,11 +247,18 @@ export function CashierConversationsDrawer({
   const messageAbortRef = useRef<AbortController | null>(null);
   const visibleMessageLoadRef = useRef(false);
   const markReadInFlightRef = useRef<Set<string>>(new Set());
+  const unreadByConversationRef = useRef<Map<string, number>>(new Map());
   const pendingSendRef = useRef<{ conversationId: string; body: string; id: string } | null>(null);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
+
+  useEffect(() => {
+    unreadByConversationRef.current = new Map(
+      conversations.map((conversation) => [conversation.id, Math.max(0, conversation.unread_count || 0)]),
+    );
+  }, [conversations]);
 
   useEffect(() => {
     pruneCashierDrafts(draftScope);
@@ -349,23 +356,31 @@ export function CashierConversationsDrawer({
     }
   }, [authorization, clearSelection]);
 
-  const markConversationRead = useCallback(async (conversationId: string) => {
+  const markConversationRead = useCallback(async (
+    conversationId: string,
+    { force = false }: { force?: boolean } = {},
+  ) => {
     if (!authorization || markReadInFlightRef.current.has(conversationId)) return;
+    if (!force && (unreadByConversationRef.current.get(conversationId) || 0) <= 0) return;
+
     markReadInFlightRef.current.add(conversationId);
+    unreadByConversationRef.current.set(conversationId, 0);
     setConversations((current) => current.map((conversation) => (
       conversation.id === conversationId ? { ...conversation, unread_count: 0 } : conversation
     )));
     try {
-      await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
+      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/read`, {
         method: 'POST',
         headers: { Authorization: authorization },
       });
+      if (!response.ok) throw new Error(`Falha ao marcar conversa como lida (${response.status}).`);
     } catch {
       // O próximo snapshot autoritativo restaura a contagem se a marcação falhar.
+      void fetchConversations({ background: true });
     } finally {
       markReadInFlightRef.current.delete(conversationId);
     }
-  }, [authorization]);
+  }, [authorization, fetchConversations]);
 
   const loadMessages = useCallback(async (
     conversationId: string,
@@ -493,7 +508,7 @@ export function CashierConversationsDrawer({
       });
       window.setTimeout(() => scrollToBottom(true), 50);
       if (senderType === 'customer' && document.visibilityState === 'visible') {
-        void markConversationRead(eventConversationId);
+        void markConversationRead(eventConversationId, { force: true });
       }
     }
   }, [markConversationRead, scrollToBottom]);
