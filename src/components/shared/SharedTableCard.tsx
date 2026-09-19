@@ -88,13 +88,16 @@ export function SharedTableCard({
       className={`group relative flex min-w-0 min-h-[132px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${fillHeight ? 'h-full' : ''} ${compact ? 'gap-2 p-3' : 'gap-3 p-3 sm:p-4'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
     >
       <span className="absolute left-0 top-0 h-[3px] w-full bg-current opacity-70" aria-hidden="true" />
-      <div className="flex items-start justify-between gap-2">
+      <div className={compact ? 'flex items-start justify-between gap-2' : 'min-w-0'}>
         <div className="min-w-0">
-          <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">
-            {emphasizeOrder ? tableDisplayName : customName ? `Mesa ${table.id}` : 'Mesa'}
-          </span>
+          <div className={!compact ? 'flex items-start justify-between gap-1' : undefined}>
+            <span className="block text-[9px] font-mono font-bold uppercase tracking-widest text-koma-muted">
+              {emphasizeOrder ? tableDisplayName : 'Mesa'}
+            </span>
+            {!compact && checkNumbers.length > 0 && !emphasizeOrder && <span className="shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1 py-1 text-[8px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
+          </div>
           <strong
-            className={`block min-w-0 whitespace-nowrap text-koma-foreground ${emphasizeOrder || customName ? 'truncate text-sm leading-tight' : 'font-serif text-3xl leading-none'}`}
+            className={`block min-w-0 whitespace-nowrap text-koma-foreground ${emphasizeOrder || customName ? 'text-sm leading-tight' : 'font-serif text-3xl leading-none'}`}
             title={emphasizeOrder ? prominentOrderLabel ?? undefined : customName ? table.nome : undefined}
           >
             {emphasizeOrder ? prominentOrderLabel : customName ? table.nome : table.id}
@@ -102,7 +105,6 @@ export function SharedTableCard({
           {mergedSources.length > 0 && <span className="block text-[9px] text-koma-muted">+ mesas {mergedSources.join(', ')}</span>}
         </div>
         {compact && occupied && <strong className="shrink-0 whitespace-nowrap font-mono text-xs text-koma-foreground">{formattedTotal}</strong>}
-        {!compact && checkNumbers.length > 0 && !emphasizeOrder && <span className="max-w-[55%] shrink-0 whitespace-nowrap rounded-md border border-current/20 px-1.5 py-1 text-[9px] font-mono" title={`${identityLabel} ${numbersText}`}>{identityLabel === 'Pedido' ? 'Ped.' : identityLabel} {checkNumbers[0]}{checkNumbers.length > 1 ? ` +${checkNumbers.length - 1}` : ''}</span>}
       </div>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-1">
