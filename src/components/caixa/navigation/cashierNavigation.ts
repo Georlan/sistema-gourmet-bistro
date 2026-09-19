@@ -167,9 +167,14 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
         id: 'impressao_salao',
         label: 'Configurações',
         icon: SlidersHorizontal,
-        target: { tab: 'impressao_salao', subTab: 'impressoras' },
+        target: { tab: 'impressao_salao', subTab: 'aparencia' },
         children: [
-          { id: 'config_operacao', label: 'Salão e impressão', target: { tab: 'impressao_salao', subTab: 'impressoras' } },
+          { id: 'config_aparencia', label: 'Aparência', target: { tab: 'impressao_salao', subTab: 'aparencia' } },
+          { id: 'config_impressao', label: 'Impressão', target: { tab: 'impressao_salao', subTab: 'impressao' } },
+          { id: 'config_mesas', label: 'Mesas', target: { tab: 'impressao_salao', subTab: 'mesas' } },
+          { id: 'config_garcom', label: 'App do Garçom', target: { tab: 'impressao_salao', subTab: 'garcom' } },
+          { id: 'config_taxa', label: 'Taxa de Serviço', target: { tab: 'impressao_salao', subTab: 'taxa' } },
+          { id: 'config_implantacao', label: 'Implantação inicial', target: { tab: 'impressao_salao', subTab: 'implantacao' } },
           { id: 'config_integracoes', label: 'Integrações', target: { tab: 'impressao_salao', subTab: 'integracoes' } },
         ],
       },
@@ -279,6 +284,11 @@ const SUBTAB_ALIASES: Readonly<Partial<Record<CashierTab, Readonly<Record<string
   },
   cardapio_digital: {
     cardapio_digital: 'cardapio_perfil',
+  },
+  impressao_salao: {
+    impressoras: 'impressao',
+    salao_impressao: 'impressao',
+    salao_e_impressao: 'impressao',
   },
 };
 
