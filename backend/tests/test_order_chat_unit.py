@@ -455,6 +455,8 @@ def test_human_message_idempotency_reuses_existing_row(client_and_session):
         .all()
     )
     assert len(human_rows) == 2
+    assert {row.client_message_id for row in human_rows} == {customer_key, staff_key}
+    assert all(row.event_key is None for row in human_rows)
 
 
 def test_realtime_message_is_not_visible_before_commit(client_and_session):
