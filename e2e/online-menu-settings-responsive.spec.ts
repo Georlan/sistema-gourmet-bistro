@@ -77,79 +77,7 @@ async function navigate(page: Page, label: string) {
     await expect(page.locator('.cashier-sidebar:visible')).toBeVisible();
   }
   await page.locator('.cashier-sidebar:visible')
-    .getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?import { expect, Page, test } from '@playwright/test';
-
-import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
-
-const profile = {
-  id: 2,
-  nome: 'Restaurante E2E',
-  subtitulo: 'Cardápio enxuto e direto',
-  sobre_nos: 'Restaurante usado na homologação responsiva.',
-  endereco: 'Rua Central, 100 - Centro',
-  google_maps_url: 'https://maps.google.com/?q=restaurante-e2e',
-  status_override: 'Forçado Aberto',
-  logo_url: '',
-  banner_url: '',
-  socials: { whatsapp: '85999999999', instagram: '@restaurantee2e' },
-  horarios_funcionamento: [{ days: 'Segunda a Sexta', hours: '11:00 - 23:00' }],
-  formas_pagamento_aceitas: ['Pix', 'Dinheiro'],
-  pedido_minimo: 20,
-  frete_gratis_valor: 80,
-  tipo_taxa_entrega: 'fixa',
-  taxa_entrega_fixa: 6,
-  tabela_taxas_bairros: [],
-  delivery_ativo: true,
-};
-
-async function expectNoHorizontalOverflow(page: Page) {
-  const widths = await page.evaluate(() => ({
-    viewport: window.innerWidth,
-    documentWidth: document.documentElement.scrollWidth,
-    bodyWidth: document.body.scrollWidth,
-  }));
-  expect(widths.documentWidth).toBeLessThanOrEqual(widths.viewport + 1);
-  expect(widths.bodyWidth).toBeLessThanOrEqual(widths.viewport + 1);
-}
-
-async function setup(page: Page, theme: 'dark' | 'light') {
-  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
-  await mockCashierBackend(page);
-  await seedCashierSession(page);
-  await page.addInitScript((nextTheme) => {
-    localStorage.setItem('@koma:theme', nextTheme);
-  }, theme);
-  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
-
-  await page.route('**/api/cardapio-digital/config', async route => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: profile });
-      return;
-    }
-    const payload = route.request().postDataJSON() || {};
-    await route.fulfill({ json: { ...profile, ...payload } });
-  });
-  await page.route('**/api/restaurant-features/scheduled-orders', async route => {
-    if (route.request().method() === 'GET') {
-      await route.fulfill({ json: { enabled: false } });
-      return;
-    }
-    const payload = route.request().postDataJSON() || {};
-    await route.fulfill({ json: { enabled: Boolean(payload.enabled) } });
-  });
-  await page.route('**/caixa/configuracoes/delivery-suggestion', route => route.fulfill({
-    json: {
-      taxa_minima: 5,
-      valor_por_km: 1,
-      source: 'default',
-      sample_size: 0,
-      message: 'Sugestão inicial enquanto ainda não há entregas concluídas suficientes.',
-    },
-  }));
-  await page.route('**/api/online-orders/blocks', route => route.fulfill({ json: [] }));
-}
-
-) })
+    .getByRole('button', { name: new RegExp(`^${label}(?: \\d+)?$`) })
     .first()
     .click();
   await expect(page.locator('#mobile-caixa-sidebar')).not.toBeVisible();
@@ -233,7 +161,6 @@ for (const theme of ['dark', 'light'] as const) {
     });
   }
 }
-
 
 test('cardápio online mantém abas verticais e horizontais no notebook', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
