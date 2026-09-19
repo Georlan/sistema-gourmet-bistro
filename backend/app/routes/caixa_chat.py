@@ -19,12 +19,13 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, tenant_session_scope
 from ..models import Usuario
-from ..order_chat_models import OrderConversation, OrderMessage
+from ..order_chat_models import OrderConversation
 from ..security import require_permission
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     get_caixa_unread_summary,
     list_caixa_conversations,
+    list_recent_messages,
     mark_staff_read,
     send_staff_message,
     serialize_message,
@@ -99,16 +100,11 @@ def obter_mensagens_conversa(
                 detail="Conversa não encontrada.",
             )
 
-        messages = (
-            db.query(OrderMessage)
-            .filter(
-                OrderMessage.restaurante_id == restaurante_id,
-                OrderMessage.conversation_id == conversation_id,
-            )
-            .order_by(OrderMessage.created_at.asc())
-            .all()
+        return list_recent_messages(
+            db,
+            restaurante_id=restaurante_id,
+            conversation_id=conversation_id,
         )
-        return [serialize_message(msg) for msg in messages]
 
 
 @router.post("/{conversation_id}/messages", summary="Operador responde mensagem do cliente")
