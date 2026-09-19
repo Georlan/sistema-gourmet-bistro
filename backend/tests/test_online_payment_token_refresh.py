@@ -250,7 +250,7 @@ def test_pix_creation_retries_once_after_provider_401(monkeypatch):
     assert db.commits == 1
 
 
-def test_pix_creation_retries_without_fee_when_account_rejects_application_fee(monkeypatch):
+def test_pix_creation_never_waives_fee_when_provider_rejects_application_fee(monkeypatch):
     account = _account(access_token="connected-access")
     intent = SimpleNamespace(
         id="intent-fee-fallback",
@@ -258,6 +258,8 @@ def test_pix_creation_retries_without_fee_when_account_rejects_application_fee(m
         amount=20.90,
         marketplace_fee=0.43,
         external_payment_id=None,
+        status="created",
+        last_error=None,
     )
     settled = SimpleNamespace(
         qr_code=None, qr_code_base64=None, ticket_url=None,
@@ -271,18 +273,14 @@ def test_pix_creation_retries_without_fee_when_account_rejects_application_fee(m
 
         def create_pix(self, **kwargs):
             calls.append(kwargs)
-            if kwargs["marketplace_fee"] > 0:
-                raise MercadoPagoError("fee rejected [cause=2059]", status_code=400)
-            return ProviderPayment(
-                external_id="pix-without-fee", status="pending",
-                amount=kwargs["amount"], external_reference=kwargs["external_reference"],
-                qr_code="pix-copy-paste", qr_code_base64="pix-base64",
-                ticket_url=None, expires_at=kwargs["expires_at"],
-            )
+            raise MercadoPagoError("fee rejected [cause=2059]", status_code=400)
 
     class _Db(_RequestSession):
         def query(self, _model):
-            raise AssertionError("query de erro não deve ocorrer no caminho recuperado")
+            return _FakeQuery(intent)
+
+        def rollback(self):
+            pass
 
     db = _Db()
     monkeypatch.setattr(service, "MercadoPagoProvider", _Provider)
@@ -292,13 +290,14 @@ def test_pix_creation_retries_without_fee_when_account_rejects_application_fee(m
         classmethod(lambda cls, db, account, intent, payment: (settled, False)),
     )
 
-    result = service.OnlinePaymentService.ensure_pix_created(
-        db, intent=intent, payer_email="cliente@example.com", account=account,
-    )
+    with pytest.raises(MercadoPagoError, match="cause=2059"):
+        service.OnlinePaymentService.ensure_pix_created(
+            db, intent=intent, payer_email="cliente@example.com", account=account,
+        )
 
-    assert result is settled
-    assert [float(call["marketplace_fee"]) for call in calls] == [0.43, 0.0]
+    assert [float(call["marketplace_fee"]) for call in calls] == [0.43]
     assert calls[0]["idempotency_key"] == "koma-online-intent-fee-fallback"
-    assert calls[1]["idempotency_key"] == "koma-online-intent-fee-fallback-no-fee"
-    assert settled.qr_code == "pix-copy-paste"
+    assert settled.qr_code is None
+    assert intent.status == "error"
+    assert "cause=2059" in intent.last_error
     assert db.commits == 1

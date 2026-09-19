@@ -221,10 +221,12 @@ def mercado_pago_oauth_callback(
             db.commit()
     except MercadoPagoAccountConnectionError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+        if "proprietária da aplicação KÔMA" in str(exc):
+            return RedirectResponse(
+                url=_frontend_oauth_result("invalid_seller"),
+                status_code=status.HTTP_303_SEE_OTHER,
+            )
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(

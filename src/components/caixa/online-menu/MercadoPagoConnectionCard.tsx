@@ -72,6 +72,11 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
       setFeedback({ type: 'success', text: 'Mercado Pago conectado. O Pix online já pode ser homologado.' });
     } else if (oauthResult === 'cancelled') {
       setFeedback({ type: 'info', text: 'Conexão com Mercado Pago cancelada. Nenhuma conta foi alterada.' });
+    } else if (oauthResult === 'invalid_seller') {
+      setFeedback({
+        type: 'error',
+        text: 'Essa é a conta proprietária da aplicação KÔMA. Conecte a conta Mercado Pago própria do restaurante para que o split da taxa funcione.',
+      });
     }
 
     if (oauthResult) {
@@ -138,13 +143,18 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders }: Props) {
                 </span>
               ) : (
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[9px] font-black text-amber-700 dark:text-amber-300">
-                  Não conectado
+                  {account.status === 'error' ? 'Conta incompatível' : 'Não conectado'}
                 </span>
               )}
             </div>
             <p className="mt-1.5 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
               Conecte a conta que receberá os pedidos. O cliente paga por Pix no cardápio e o KÔMA só libera o pedido após a confirmação financeira do Mercado Pago.
             </p>
+            {account.status === 'error' && (
+              <p className="mt-2 text-[10px] font-bold text-rose-600 dark:text-rose-300">
+                Conecte uma conta Mercado Pago própria do restaurante. A conta da KÔMA não pode ser usada dos dois lados do split.
+              </p>
+            )}
             {account.connected && account.provider_user_id && (
               <p className="mt-2 text-[9px] text-koma-subtle">
                 Conta Mercado Pago vinculada · ID {account.provider_user_id}

@@ -267,6 +267,9 @@ class Settings:
         int(os.getenv("SMARTPOS_INTENT_TTL_MINUTES", "15")),
     )
     KOMA_PUBLIC_API_URL: str = os.getenv("KOMA_PUBLIC_API_URL", "").strip().rstrip("/")
+    MERCADO_PAGO_MARKETPLACE_USER_ID: str = os.getenv(
+        "MERCADO_PAGO_MARKETPLACE_USER_ID", ""
+    ).strip()
     # Trava operacional: as taxas por plano existem no catálogo e no backend,
     # mas só são enviadas ao provedor quando este flag é habilitado explicitamente.
     ONLINE_PAYMENT_PLAN_FEES_ENABLED: bool = (

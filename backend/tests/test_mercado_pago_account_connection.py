@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
+
 from app.models import RestaurantPaymentAccount
 from app.services.online_payments.account_connection import (
+    MercadoPagoAccountConnectionError,
     payment_account_status,
     upsert_mercado_pago_account,
 )
@@ -110,6 +113,46 @@ def test_reconnect_updates_existing_account_and_preserves_rotating_optional_valu
     assert account.webhook_secret == "new-webhook"
     assert account.public_key == "old-public"
     assert account.token_expires_at is None
+
+
+def test_rejects_marketplace_owner_as_restaurant_seller(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.online_payments.account_connection.settings.MERCADO_PAGO_MARKETPLACE_USER_ID",
+        "marketplace-owner-123",
+    )
+    db = _FakeSession()
+
+    with pytest.raises(MercadoPagoAccountConnectionError, match="split"):
+        upsert_mercado_pago_account(
+            db,
+            restaurant_id=7,
+            tokens=_tokens(provider_user_id="marketplace-owner-123"),
+            webhook_secret="webhook-secret",
+        )
+
+    assert db.added == []
+    assert db.flush_count == 0
+
+
+def test_status_marks_marketplace_owner_connection_as_incompatible(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.online_payments.account_connection.settings.MERCADO_PAGO_MARKETPLACE_USER_ID",
+        "marketplace-owner-123",
+    )
+    account = RestaurantPaymentAccount(
+        id="self-connected",
+        restaurante_id=9,
+        provider="mercado_pago",
+        provider_user_id="marketplace-owner-123",
+        status="active",
+    )
+    account.access_token = "do-not-expose"
+    account.webhook_secret = "also-secret"
+
+    status = payment_account_status(account)
+
+    assert status["connected"] is False
+    assert status["status"] == "error"
 
 
 def test_status_never_exposes_tokens_or_webhook_secret():

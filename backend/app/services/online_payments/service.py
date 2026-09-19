@@ -26,6 +26,7 @@ from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .oauth import MercadoPagoOAuthError, refresh_access_token
+from .account_connection import is_marketplace_owner_account
 
 
 MONEY = Decimal("0.01")
@@ -171,6 +172,11 @@ class OnlinePaymentService:
         if account is None:
             raise OnlinePaymentConfigurationError(
                 "O pagamento online ainda não foi ativado por este restaurante. Escolha dinheiro ou fale com o estabelecimento."
+            )
+        if is_marketplace_owner_account(account.provider_user_id):
+            raise OnlinePaymentConfigurationError(
+                "A conta Mercado Pago conectada é a proprietária da aplicação KÔMA e não pode receber com split. "
+                "O restaurante precisa conectar uma conta Mercado Pago própria."
             )
         if not account.access_token or not account.webhook_secret:
             raise OnlinePaymentConfigurationError("A conta de pagamento precisa ser reconectada.")
@@ -409,21 +415,13 @@ class OnlinePaymentService:
             minutes=settings.ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES
         )
 
-        def create_with_current_token(*, waive_incompatible_fee: bool = False) -> ProviderPayment:
+        def create_with_current_token() -> ProviderPayment:
             return MercadoPagoProvider(account.access_token).create_pix(
                 amount=_money(intent.amount),
-                marketplace_fee=(
-                    Decimal("0.00")
-                    if waive_incompatible_fee
-                    else _money(intent.marketplace_fee)
-                ),
+                marketplace_fee=_money(intent.marketplace_fee),
                 payer_email=payer_email,
                 external_reference=intent.id,
-                idempotency_key=(
-                    f"koma-online-{intent.id}-no-fee"
-                    if waive_incompatible_fee
-                    else f"koma-online-{intent.id}"
-                ),
+                idempotency_key=f"koma-online-{intent.id}",
                 notification_url=(
                     f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/mercado-pago/{account.id}"
                 ),
@@ -434,28 +432,20 @@ class OnlinePaymentService:
             try:
                 payment = create_with_current_token()
             except MercadoPagoError as exc:
-                if exc.status_code == 400 and "cause=2059" in str(exc):
-                    logger.warning(
-                        "Conta Mercado Pago do restaurante %s não aceita application_fee; "
-                        "criando Pix sem taxa de marketplace para não bloquear o pedido.",
-                        account.restaurante_id,
-                    )
-                    payment = create_with_current_token(waive_incompatible_fee=True)
-                elif exc.status_code != 401:
+                if exc.status_code != 401:
                     raise
-                else:
-                    stale_access_token = account.access_token
-                    logger.info(
-                        "Mercado Pago rejeitou access token do restaurante %s; tentando refresh OAuth uma vez.",
-                        account.restaurante_id,
-                    )
-                    account = cls._refresh_account_credentials(
-                        db,
-                        account,
-                        force=True,
-                        known_access_token=stale_access_token,
-                    )
-                    payment = create_with_current_token()
+                stale_access_token = account.access_token
+                logger.info(
+                    "Mercado Pago rejeitou access token do restaurante %s; tentando refresh OAuth uma vez.",
+                    account.restaurante_id,
+                )
+                account = cls._refresh_account_credentials(
+                    db,
+                    account,
+                    force=True,
+                    known_access_token=stale_access_token,
+                )
+                payment = create_with_current_token()
 
             settled_intent, _ = cls.apply_provider_snapshot_in_session(
                 db,
