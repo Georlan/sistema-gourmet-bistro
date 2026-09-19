@@ -394,6 +394,7 @@ export function CaixaPanel({
     };
     const handleOpenImpressoras = () => {
       setActiveTab('impressao_salao');
+      setActiveSubTab('impressao');
     };
 
     window.addEventListener('koma-open-sangria', handleOpenSangria);
@@ -965,7 +966,7 @@ export function CaixaPanel({
             <DeferredCashierSection active={activeTab === 'permissoes_cargos'} label="Equipe" load={loadCashierTeam} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast }} />
 
             <DeferredCashierSection
-              active={activeTab === 'impressao_salao' || activeSubTab === 'impressoras'}
+              active={activeTab === 'impressao_salao'}
               label="Configurações"
               load={loadCashierSettings}
               sectionProps={{

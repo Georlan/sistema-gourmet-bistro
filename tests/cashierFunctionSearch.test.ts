@@ -15,17 +15,17 @@ test('function search ignores accents and ranks App do Garçom as the primary ga
   assert.equal(normalizeCashierFunctionSearch('Garçom'), 'garcom');
 
   const [result] = searchCashierFunctions(entries, 'garçom');
-  assert.equal(result?.id, 'settings_garcom');
+  assert.equal(result?.id, 'config_garcom');
   assert.equal(result?.label, 'App do Garçom');
-  assert.equal(result?.navigationId, 'config_operacao');
-  assert.equal(result?.settingsTab, 'garcom');
+  assert.equal(result?.navigationId, 'config_garcom');
 });
 
 test('aliases find internal settings without requiring exact menu labels', () => {
-  assert.equal(searchCashierFunctions(entries, 'atendente')[0]?.id, 'settings_garcom');
-  assert.equal(searchCashierFunctions(entries, 'tema')[0]?.id, 'settings_aparencia');
-  assert.equal(searchCashierFunctions(entries, 'impressora')[0]?.id, 'settings_impressao');
-  assert.equal(searchCashierFunctions(entries, 'gorjeta')[0]?.id, 'settings_taxa');
+  assert.equal(searchCashierFunctions(entries, 'atendente')[0]?.id, 'config_garcom');
+  assert.equal(searchCashierFunctions(entries, 'tema')[0]?.id, 'config_aparencia');
+  assert.equal(searchCashierFunctions(entries, 'impressora')[0]?.id, 'config_impressao');
+  assert.equal(searchCashierFunctions(entries, 'gorjeta')[0]?.id, 'config_taxa');
+  assert.equal(searchCashierFunctions(entries, 'implantação')[0]?.id, 'config_implantacao');
 });
 
 test('operational aliases route common restaurant language to the canonical function', () => {
@@ -39,8 +39,8 @@ test('operational aliases route common restaurant language to the canonical func
 });
 
 test('exact function names outrank broader related labels', () => {
-  assert.equal(searchCashierFunctions(entries, 'mesas')[0]?.id, 'settings_mesas');
-  assert.equal(searchCashierFunctions(entries, 'impressão')[0]?.id, 'settings_impressao');
+  assert.equal(searchCashierFunctions(entries, 'mesas')[0]?.id, 'config_mesas');
+  assert.equal(searchCashierFunctions(entries, 'impressão')[0]?.id, 'config_impressao');
 });
 
 test('online-only destinations are omitted when the capability is unavailable', () => {
@@ -49,7 +49,7 @@ test('online-only destinations are omitted when the capability is unavailable', 
   assert.equal(searchCashierFunctions(withoutOnlineMenu, 'loja online').length, 0);
 });
 
-test('sidebar search deep-links internal settings and settings listens to live requests', () => {
+test('sidebar search usa a mesma navegação canônica das abas de configurações', () => {
   const searchSource = readFileSync(
     new URL('../src/components/caixa/navigation/CashierSidebarSearch.tsx', import.meta.url),
     'utf8',
@@ -59,9 +59,9 @@ test('sidebar search deep-links internal settings and settings listens to live r
     'utf8',
   );
 
-  assert.match(searchSource, /requestCashierSettingsTab\(entry\.settingsTab\)/);
+  assert.doesNotMatch(searchSource, /requestCashierSettingsTab|settingsTab/);
+  assert.match(searchSource, /handleSidebarNavigation\(entry\.navigationId, closeMobile\)/);
   assert.match(searchSource, /ArrowDown/);
   assert.match(searchSource, /ArrowUp/);
-  assert.match(settingsSource, /CASHIER_SETTINGS_TAB_REQUEST_EVENT/);
-  assert.match(settingsSource, /getRequestedCashierSettingsTab/);
+  assert.doesNotMatch(settingsSource, /CASHIER_SETTINGS_TAB_REQUEST_EVENT|getRequestedCashierSettingsTab|cashier-settings-tab/);
 });

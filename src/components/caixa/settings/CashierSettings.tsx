@@ -1,5 +1,5 @@
-import { Loader2, Lock, Monitor, Percent, Printer, RefreshCw, Smartphone, Sparkles, Users } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { Table } from '../../../types';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
@@ -11,13 +11,6 @@ import { CashierServiceTaxSettings } from './CashierServiceTaxSettings';
 import { CashierTableDialogs } from './CashierTableDialogs';
 import { CashierTableSettings } from './CashierTableSettings';
 import { CashierWaiterSettings } from './CashierWaiterSettings';
-import {
-  CASHIER_SETTINGS_TAB_REQUEST_EVENT,
-  getRequestedCashierSettingsTab,
-  persistCashierSettingsTab,
-  readInitialCashierSettingsTab,
-  type CashierSettingsTab,
-} from './cashierSettingsNavigation';
 import type { useCashierSettings } from './useCashierSettings';
 import { useCashierTableSettings } from './useCashierTableSettings';
 
@@ -38,28 +31,6 @@ interface Props {
   setCheckoutServiceTax: React.Dispatch<React.SetStateAction<boolean>>;
   settings: ReturnType<typeof useCashierSettings>;
 }
-
-const CASHIER_SETTINGS_GROUPS = [
-  {
-    id: 'dispositivo',
-    label: 'Neste dispositivo',
-    description: 'Preferências locais para deixar este caixa confortável e pronto para operar.',
-    tabs: [
-      { id: 'aparencia', label: 'Aparência', description: 'Tema e tamanho do texto', icon: Monitor },
-      { id: 'impressao', label: 'Impressão', description: 'Fila, testes e personalização do cupom', icon: Printer },
-    ],
-  },
-  {
-    id: 'operacao',
-    label: 'Operação do salão',
-    description: 'Regras compartilhadas que afetam atendimento, equipe e cobrança no restaurante.',
-    tabs: [
-      { id: 'mesas', label: 'Mesas', description: 'Cadastro, nomes e capacidade', icon: Users },
-      { id: 'garcom', label: 'App do Garçom', description: 'Permissões e comportamento do atendimento', icon: Smartphone },
-      { id: 'taxa', label: 'Taxa de Serviço', description: 'Ativação e percentual padrão', icon: Percent },
-    ],
-  },
-] as const;
 
 function openInitialSetup() {
   try {
@@ -108,26 +79,15 @@ export default function CashierSettings({
     fetchConfiguracoes,
     handleTestPrinter,
   } = settings;
-  const [settingsTab, setSettingsTab] = useState<CashierSettingsTab>(readInitialCashierSettingsTab);
-  const operationalSettingsTab = settingsTab === 'aparencia' ? null : settingsTab;
+  const operationalSettingsTab =
+    activeSubTab === 'impressao' || activeSubTab === 'mesas' || activeSubTab === 'garcom' || activeSubTab === 'taxa'
+      ? activeSubTab
+      : null;
 
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
   const isTechnicalIntegrations = activeSubTab === 'integracoes';
-
-  const selectSettingsTab = (tab: CashierSettingsTab) => {
-    setSettingsTab(tab);
-    persistCashierSettingsTab(tab);
-  };
-
-  useEffect(() => {
-    const handleRequestedTab = (event: Event) => {
-      const requestedTab = getRequestedCashierSettingsTab(event);
-      if (requestedTab) selectSettingsTab(requestedTab);
-    };
-
-    window.addEventListener(CASHIER_SETTINGS_TAB_REQUEST_EVENT, handleRequestedTab);
-    return () => window.removeEventListener(CASHIER_SETTINGS_TAB_REQUEST_EVENT, handleRequestedTab);
-  }, []);
+  const isAppearance = activeSubTab === 'aparencia';
+  const isInitialSetup = activeSubTab === 'implantacao';
 
   const {
     handleDeleteMesa,
@@ -166,97 +126,36 @@ export default function CashierSettings({
 
   return (
     <>
-      {isTechnicalIntegrations && (
+      {isTechnicalIntegrations && activeTab === 'impressao_salao' && (
         <CashierIntegrationsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
       )}
 
-      {!isTechnicalIntegrations && (activeTab === 'impressao_salao' || activeSubTab === 'impressoras') && (
+      {!isTechnicalIntegrations && activeTab === 'impressao_salao' && (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-koma-border bg-koma-panel p-3 sm:p-4">
-            <div className="mb-4 px-1">
-              <h2 className="text-sm font-bold text-koma-foreground">Configurações do Caixa</h2>
-              <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-koma-muted">
-                Ajustes do dispositivo e da operação do salão separados por contexto. Integrações técnicas continuam isoladas no menu lateral.
-              </p>
-            </div>
+          {isAppearance && <CashierAppearanceSettings />}
 
-            <div className="space-y-4" aria-label="Configurações do caixa">
-              {CASHIER_SETTINGS_GROUPS.map((group) => (
-                <section key={group.id} aria-labelledby={`cashier-settings-group-${group.id}`}>
-                  <div className="mb-2 px-1">
-                    <h3 id={`cashier-settings-group-${group.id}`} className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-koma-secondary">
-                      {group.label}
-                    </h3>
-                    <p className="mt-0.5 text-[9px] leading-relaxed text-koma-muted">{group.description}</p>
-                  </div>
-
-                  <div className={`grid gap-2 ${group.id === 'dispositivo' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
-                    {group.tabs.map((tab) => {
-                      const Icon = tab.icon;
-                      const selected = settingsTab === tab.id;
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          aria-pressed={selected}
-                          onClick={() => selectSettingsTab(tab.id)}
-                          className={`cashier-settings-tab min-h-14 rounded-xl border px-3 py-3 text-left transition-colors flex items-start gap-2.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
-                            selected
-                              ? 'border-emerald-600 bg-emerald-500/10 text-emerald-800 dark:border-emerald-500/50 dark:text-emerald-200'
-                              : 'border-koma-border bg-koma-page text-koma-secondary hover:bg-koma-raised hover:text-koma-foreground'
-                          }`}
-                        >
-                          <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-koma-border bg-koma-raised">
-                            <Icon size={13} />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5 text-[10px] font-bold">
-                              {tab.label}
-                              {tab.id === 'impressao' && !hasPrinting && (
-                                <Lock size={10} className="shrink-0 text-amber-700 dark:text-amber-300" />
-                              )}
-                            </span>
-                            <span className="mt-1 block text-[9px] font-medium leading-snug opacity-75">
-                              {tab.description}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-
-              <section aria-labelledby="cashier-settings-group-implantacao">
-                <div className="mb-2 px-1">
-                  <h3 id="cashier-settings-group-implantacao" className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-koma-secondary">
-                    Configuração do restaurante
-                  </h3>
-                  <p className="mt-0.5 text-[9px] leading-relaxed text-koma-muted">
-                    Acesso eventual para revisar a configuração usada na ativação inicial.
+          {isInitialSetup && (
+            <section className="rounded-2xl border border-koma-border bg-koma-panel p-5 sm:p-6" aria-labelledby="cashier-initial-setup-title">
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-emerald-700 dark:text-emerald-300">
+                  <Sparkles size={18} />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="cashier-initial-setup-title" className="text-sm font-bold text-koma-foreground">Implantação inicial</h2>
+                  <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-koma-muted">
+                    Revise dados básicos, horários e o primeiro cardápio pelo fluxo guiado de ativação do restaurante.
                   </p>
+                  <button
+                    type="button"
+                    onClick={openInitialSetup}
+                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50"
+                  >
+                    Reabrir implantação inicial
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={openInitialSetup}
-                  className="flex w-full items-center gap-2.5 rounded-xl border border-koma-border bg-koma-page px-3 py-3 text-left text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 sm:max-w-md"
-                  aria-label="Reabrir implantação inicial"
-                >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-koma-border bg-koma-raised">
-                    <Sparkles size={13} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[10px] font-bold">Implantação inicial</span>
-                    <span className="mt-1 block text-[9px] font-medium leading-snug text-koma-muted">
-                      Revisar dados básicos, horários e primeiro cardápio.
-                    </span>
-                  </span>
-                </button>
-              </section>
-            </div>
-          </div>
-
-          {settingsTab === 'aparencia' && <CashierAppearanceSettings />}
+              </div>
+            </section>
+          )}
 
           {remoteSettingsUnavailable && (
             <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center text-koma-muted">

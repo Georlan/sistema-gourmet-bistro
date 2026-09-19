@@ -7,12 +7,17 @@ import {
   getCashierNavigationTarget,
 } from '../src/components/caixa/navigation/cashierNavigation';
 
-test('Configurações exposes Salão e impressão plus Integrações without duplicating owners', () => {
+test('Configurações expõe destinos diretos sem duplicar os owners técnicos', () => {
   const system = CASHIER_SIDEBAR_GROUPS.find((group) => group.category === 'Sistema');
   const settings = system?.items.find((item) => item.id === 'impressao_salao');
 
   assert.deepEqual(settings?.children?.map((child) => child.label), [
-    'Salão e impressão',
+    'Aparência',
+    'Impressão',
+    'Mesas',
+    'App do Garçom',
+    'Taxa de Serviço',
+    'Implantação inicial',
     'Integrações',
   ]);
   assert.deepEqual(getCashierNavigationTarget('config_integracoes'), {

@@ -93,12 +93,42 @@ test('gestao keeps reports and team as single sidebar destinations', () => {
   assert.equal(getCashierNavigationTarget('equipe_funcoes_acessos'), undefined);
 });
 
+test('configurações expõe os mesmos destinos canônicos para navegação vertical e horizontal', () => {
+  const settings = parents().find((item) => item.id === 'impressao_salao');
+
+  assert.deepEqual(settings?.children?.map((child) => child.label), [
+    'Aparência',
+    'Impressão',
+    'Mesas',
+    'App do Garçom',
+    'Taxa de Serviço',
+    'Implantação inicial',
+    'Integrações',
+  ]);
+  assert.deepEqual(getCashierNavigationTarget('config_aparencia'), { tab: 'impressao_salao', subTab: 'aparencia' });
+  assert.deepEqual(getCashierNavigationTarget('config_impressao'), { tab: 'impressao_salao', subTab: 'impressao' });
+  assert.deepEqual(getCashierNavigationTarget('config_mesas'), { tab: 'impressao_salao', subTab: 'mesas' });
+  assert.deepEqual(getCashierNavigationTarget('config_garcom'), { tab: 'impressao_salao', subTab: 'garcom' });
+  assert.deepEqual(getCashierNavigationTarget('config_taxa'), { tab: 'impressao_salao', subTab: 'taxa' });
+  assert.deepEqual(getCashierNavigationTarget('config_implantacao'), { tab: 'impressao_salao', subTab: 'implantacao' });
+  assert.deepEqual(getCashierNavigationTarget('config_integracoes'), { tab: 'impressao_salao', subTab: 'integracoes' });
+
+  const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+  assert.match(caixa, /settingsSubnavItems = getCashierNavigationItem\('impressao_salao'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'impressao_salao' && settingsSubnavItems\.map/);
+  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
+  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+});
+
 test('navigation tree owns default tab and subtab destinations', () => {
   assert.deepEqual(getCashierNavigationTarget('operacao'), { tab: 'operacao', subTab: 'pedidos' });
   assert.deepEqual(getCashierNavigationTarget('financeiro'), { tab: 'financeiro', subTab: 'turno_atual' });
   assert.deepEqual(getCashierNavigationTarget('estoque'), { tab: 'estoque', subTab: 'insumos' });
   assert.deepEqual(getCashierNavigationTarget('cardapio_digital'), {
     tab: 'cardapio_digital', subTab: 'cardapio_perfil',
+  });
+  assert.deepEqual(getCashierNavigationTarget('impressao_salao'), {
+    tab: 'impressao_salao', subTab: 'aparencia',
   });
   assert.deepEqual(getCashierNavigationTarget('assinatura_pix'), { tab: 'assinatura_pix', subTab: 'planos' });
   assert.equal(getCashierNavigationTarget('nao-existe'), undefined);
@@ -131,6 +161,9 @@ test('persisted aliases normalize with the active parent context', () => {
   });
   assert.deepEqual(normalizeCashierNavigationState('configuracoes', 'equipe'), {
     tab: 'permissoes_cargos', subTab: 'pessoas',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('impressao_salao', 'impressoras'), {
+    tab: 'impressao_salao', subTab: 'impressao',
   });
   assert.deepEqual(normalizeCashierNavigationState('dashboard', 'dre'), {
     tab: 'relatorios', subTab: 'financeiro',
