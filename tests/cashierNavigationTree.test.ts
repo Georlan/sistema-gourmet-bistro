@@ -226,6 +226,12 @@ test('persisted aliases normalize with the active parent context', () => {
   assert.deepEqual(normalizeCashierNavigationState('configuracoes', 'equipe'), {
     tab: 'permissoes_cargos', subTab: 'pessoas',
   });
+  assert.deepEqual(normalizeCashierNavigationState('configuracoes', 'planos'), {
+    tab: 'assinatura_pix', subTab: 'meu_plano',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('assinatura_pix', 'planos'), {
+    tab: 'assinatura_pix', subTab: 'meu_plano',
+  });
   assert.deepEqual(normalizeCashierNavigationState('impressao_salao', 'impressoras'), {
     tab: 'impressao_salao', subTab: 'impressao',
   });
