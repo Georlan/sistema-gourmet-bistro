@@ -152,6 +152,7 @@ export default function CardapioOrderChatPanel({
 
     let source: EventSource | null = null;
     let fallbackInterval: number | null = null;
+    let hasOpenedOnce = false;
 
     const stopFallback = () => {
       if (fallbackInterval !== null) {
@@ -176,7 +177,12 @@ export default function CardapioOrderChatPanel({
 
     try {
       source = new EventSource(`${apiRoot}/events`);
-      source.onopen = stopFallback;
+      source.onopen = () => {
+        const isReconnect = hasOpenedOnce;
+        hasOpenedOnce = true;
+        stopFallback();
+        if (isReconnect) void refresh();
+      };
       source.onerror = startFallback;
       source.addEventListener("message", (event: MessageEvent) => {
         try {
