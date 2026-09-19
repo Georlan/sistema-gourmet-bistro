@@ -413,7 +413,7 @@ export async function fetchOrderLiveStatus(
 ): Promise<StoredOrder | null> {
   const key = String(order.idempotency_key || "").trim();
   const url = order.tracking_token
-    ? `${apiBaseUrl}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(order.tracking_token)}`
+    ? `${apiBaseUrl}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(order.tracking_token)}/summary`
     : `${apiBaseUrl}/cardapio/pedidos/${encodeURIComponent(order.id)}/status?key=${encodeURIComponent(key)}`;
 
   const response = await fetch(url, { cache: "no-store" });
