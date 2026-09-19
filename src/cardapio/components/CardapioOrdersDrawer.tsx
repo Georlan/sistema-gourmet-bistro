@@ -152,6 +152,7 @@ export default function CardapioOrdersDrawer({
 
     const sources: EventSource[] = [];
     const healthyOrders = new Set<string>();
+    const openedOrders = new Set<string>();
     let fallbackInterval: number | null = null;
 
     const stopFallback = () => {
@@ -183,7 +184,12 @@ export default function CardapioOrdersDrawer({
       );
       sources.push(source);
 
-      source.onopen = () => markHealthy(order.id);
+      source.onopen = () => {
+        const isReconnect = openedOrders.has(order.id);
+        openedOrders.add(order.id);
+        markHealthy(order.id);
+        if (isReconnect) void refreshUnreadCounts();
+      };
       source.onerror = () => markDegraded(order.id);
 
       source.addEventListener("message", (event: MessageEvent) => {
