@@ -236,13 +236,12 @@ test('tracking seguro prefere state do backend e token opaco', async () => {
     return new Response(JSON.stringify({
       id: 'order-1',
       status: 'producao',
+      tipo: 'Retirada',
       state: {
         status: 'ready', phase: 'ready', label: 'Pronto', fulfillment: 'pickup',
         terminal: false, rejected: false, can_chat: true, can_cancel: false,
         progress_step: 3, progress_total: 4,
       },
-      restaurante: { id: 2 },
-      itens: [{ nome: 'Suco', observacao: 'Sem gelo' }],
     }), { status: 200 });
   }) as typeof fetch;
   try {
@@ -250,9 +249,10 @@ test('tracking seguro prefere state do backend e token opaco', async () => {
       id: 'order-1', numero_pedido: 1, timestamp: Date.now(), restaurante_id: 2,
       tipo: 'Retirada', total: 10, idempotency_key: 'tracking-order-1',
       tracking_token: 'opaque/secure',
+      itens: [{ nome: 'Suco', quantidade: 1, observacao: 'Sem gelo' }],
     }, 'https://example.test');
 
-    assert.equal(requested, 'https://example.test/api/cardapio/pedidos/acompanhar/opaque%2Fsecure');
+    assert.equal(requested, 'https://example.test/api/cardapio/pedidos/acompanhar/opaque%2Fsecure/summary');
     assert.equal(updated?.state?.status, 'ready');
     assert.equal(updated?.state?.progress_step, 3);
     assert.equal(updated?.itens?.[0].observacao, 'Sem gelo');
