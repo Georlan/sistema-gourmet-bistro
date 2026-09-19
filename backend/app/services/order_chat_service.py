@@ -345,7 +345,6 @@ def send_customer_message(
         with db.begin_nested():
             db.add(msg)
             conv.updated_at = now
-            conv.customer_last_read_at = now
             db.flush()
     except Exception:
         existing = _existing_human_message(
@@ -419,7 +418,6 @@ def send_staff_message(
         with db.begin_nested():
             db.add(msg)
             conv.updated_at = now
-            conv.staff_last_read_at = now
             db.flush()
     except Exception:
         existing = _existing_human_message(
@@ -441,13 +439,23 @@ def send_staff_message(
     return msg
 
 
-def mark_customer_read(
+def _advance_read_watermark(
     db: Session,
+    *,
     restaurante_id: int,
     conversation_id: str,
-) -> None:
-    """Atualiza o timestamp de leitura do cliente para o momento atual."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    reader: str,
+) -> datetime.datetime | None:
+    """Avança leitura somente até a última mensagem oposta já observável no banco.
+
+    O watermark usa o timestamp da própria mensagem, não o relógio atual. Assim
+    uma mensagem concorrente que ainda não foi observada pelo request de leitura
+    não é marcada como lida por acidente. Requests repetidos sem novidade viram
+    no-op: não fazem UPDATE e não publicam evento realtime.
+    """
+    if reader not in {"customer", "staff"}:
+        raise ValueError("reader inválido")
+
     conv = (
         db.query(OrderConversation)
         .filter(
@@ -456,44 +464,63 @@ def mark_customer_read(
         )
         .first()
     )
-    if conv:
-        conv.customer_last_read_at = now
-        db.flush()
-        queue_order_chat_event(
-            db,
-            restaurante_id=restaurante_id,
-            conversation_id=conv.id,
-            kind="read",
-            data={"reader": "customer", "last_read_at": now.isoformat()},
-        )
+    if conv is None:
+        return None
+
+    sender_type = "staff" if reader == "customer" else "customer"
+    watermark_attr = "customer_last_read_at" if reader == "customer" else "staff_last_read_at"
+    current_watermark = getattr(conv, watermark_attr)
+
+    latest_query = db.query(func.max(OrderMessage.created_at)).filter(
+        OrderMessage.restaurante_id == restaurante_id,
+        OrderMessage.conversation_id == conversation_id,
+        OrderMessage.sender_type == sender_type,
+    )
+    if current_watermark is not None:
+        latest_query = latest_query.filter(OrderMessage.created_at > current_watermark)
+
+    latest_visible = latest_query.scalar()
+    if latest_visible is None:
+        return None
+
+    setattr(conv, watermark_attr, latest_visible)
+    db.flush()
+    queue_order_chat_event(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conv.id,
+        kind="read",
+        data={"reader": reader, "last_read_at": latest_visible.isoformat()},
+    )
+    return latest_visible
+
+
+def mark_customer_read(
+    db: Session,
+    restaurante_id: int,
+    conversation_id: str,
+) -> bool:
+    """Marca apenas respostas da equipe realmente observáveis pelo cliente."""
+    return _advance_read_watermark(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conversation_id,
+        reader="customer",
+    ) is not None
 
 
 def mark_staff_read(
     db: Session,
     restaurante_id: int,
     conversation_id: str,
-) -> None:
-    """Atualiza o timestamp de leitura do operador do restaurante para o momento atual."""
-    now = datetime.datetime.now(datetime.timezone.utc)
-    conv = (
-        db.query(OrderConversation)
-        .filter(
-            OrderConversation.restaurante_id == restaurante_id,
-            OrderConversation.id == conversation_id,
-        )
-        .first()
-    )
-    if conv:
-        conv.staff_last_read_at = now
-        db.flush()
-        queue_order_chat_event(
-            db,
-            restaurante_id=restaurante_id,
-            conversation_id=conv.id,
-            kind="read",
-            data={"reader": "staff", "last_read_at": now.isoformat()},
-        )
-
+) -> bool:
+    """Marca apenas mensagens do cliente realmente observáveis pela equipe."""
+    return _advance_read_watermark(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conversation_id,
+        reader="staff",
+    ) is not None
 
 def serialize_message(msg: OrderMessage) -> dict[str, Any]:
     """Serializa mensagem como texto; converte somente o legado HTML-escaped."""
