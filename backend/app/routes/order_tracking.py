@@ -27,7 +27,6 @@ from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..order_chat_models import OrderConversation, OrderMessage
 from ..services.clientes import normalizar_telefone_cliente
 from ..services.customer_auth import hash_public_rate_key
-from ..services.order_chat_archive_service import reopen_completed_conversation_if_needed
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     compute_comanda_total,
@@ -49,6 +48,7 @@ router = APIRouter(prefix="/api/cardapio/pedidos/acompanhar", tags=["Cardapio - 
 
 class CustomerMessagePayload(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000, description="Texto da mensagem")
+    client_message_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
 class PushSubscriptionKeysPayload(BaseModel):
@@ -211,10 +211,6 @@ def consultar_pedido_por_token(
             comanda.tipo,
             conversation_closed=closed_at is not None,
         )
-        # Pedido concluído mantém o histórico arquivado, mas o cliente pode
-        # iniciar um atendimento de pós-venda sem reabrir o pedido.
-        if effective_status == "finalizado":
-            state_contract["can_chat"] = True
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
@@ -302,17 +298,13 @@ def enviar_mensagem_do_cliente(
         )
         db.commit()
 
-        reopen_completed_conversation_if_needed(
-            db,
-            restaurante_id=restaurante_id,
-            conversation_id=conversation_id,
-        )
         msg = send_customer_message(
             db,
             restaurante_id=restaurante_id,
             conversation_id=conversation_id,
             pedido_id=pedido_id,
             raw_body=payload.body,
+            client_message_id=payload.client_message_id,
         )
         db.commit()
         db.refresh(msg)
