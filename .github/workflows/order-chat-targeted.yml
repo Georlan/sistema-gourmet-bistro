@@ -65,6 +65,12 @@ jobs:
           MIGRATION_DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
             python -m pytest -q -ra backend/tests/test_order_chat_unit.py
 
-          DATABASE_URL=sqlite:///./order-chat-rejection-ci.db \
-          MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-ci.db \
-            python -m pytest -q -ra backend/tests/test_online_order_reasoned_rejection.py
+          DATABASE_URL=sqlite:///./order-chat-rejection-lifecycle-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-lifecycle-ci.db \
+            python -m pytest -q -ra \
+              backend/tests/test_online_order_reasoned_rejection.py::test_reasoned_rejection_uses_canonical_lifecycle
+
+          DATABASE_URL=sqlite:///./order-chat-rejection-block-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-block-ci.db \
+            python -m pytest -q -ra \
+              backend/tests/test_online_order_reasoned_rejection.py::test_rejection_can_block_future_orders_and_secure_tracking_explains_why
