@@ -824,9 +824,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -888,9 +887,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -964,9 +962,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -1030,9 +1027,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -1092,9 +1088,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
@@ -1171,9 +1166,8 @@ class OrderApplicationService:
             aggregate_id=str(eid["order_id"]),
         )
 
-        _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
-
         if commit:
+            _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
             db.commit()
             db.refresh(comanda)
             if lancamento:
