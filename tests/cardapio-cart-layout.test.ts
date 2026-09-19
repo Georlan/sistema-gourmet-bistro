@@ -6,6 +6,7 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 const cart = source('../src/cardapio/components/CardapioCartDrawer.tsx');
 const page = source('../src/cardapio/CardapioPage.tsx');
 const css = source('../src/cardapio/cardapioPublic.css');
+const ordersDrawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 
 test('sacola fica acima do cabeçalho sem cobrir identificação ou checkout', () => {
   const headerLayer = Number(css.match(/\.cardapio-public-header\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
@@ -35,4 +36,18 @@ test('fechar continua sendo um botão nomeado com alvo de toque de 44px', () => 
 test('aviso de item adicionado não encobre ações da sacola ou da confirmação', () => {
   assert.match(page, /\{notice && !isCartOpen && !isCheckoutOpen && \(/);
   assert.match(page, /onClose=\{\(\) => setIsCartOpen\(false\)\}/);
+});
+
+test('gatilhos da sacola priorizam toque mobile e não disputam camada com o chat', () => {
+  assert.match(page, /cartCount > 0 && !hasOpenOverlay/);
+  assert.match(page, /bottom-\[calc\(1\.25rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+  assert.match(page, /z-\[44\]/);
+  assert.match(page, /touch-manipulation select-none/);
+  assert.match(page, /onClick=\{openCart\}/);
+  assert.match(ordersDrawer, /bottom-\[calc\(6\.75rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+  assert.match(ordersDrawer, /fixed right-4 z-40/);
+});
+
+test('sacola do cabeçalho tem alvo de toque de 44px no celular', () => {
+  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.cardapio-public-icon-button\.is-cart\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*touch-action:\s*manipulation;/);
 });
