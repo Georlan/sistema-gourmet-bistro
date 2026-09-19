@@ -6,6 +6,7 @@ export interface CustomerProfile {
   address: string;
   points: number;
   cashback: number;
+  phoneVerified: boolean;
 }
 
 export interface CustomerSession {
@@ -21,6 +22,7 @@ interface CustomerProfileApi {
   endereco?: string;
   saldo_pontos?: number;
   saldo_cashback?: number;
+  telefone_verificado?: boolean;
 }
 
 const sessionKey = (restaurantId: string | number) =>
@@ -49,6 +51,7 @@ export function mapCustomerProfile(payload: CustomerProfileApi): CustomerProfile
     address: String(payload.endereco || ""),
     points: Number(payload.saldo_pontos || 0),
     cashback: Number(payload.saldo_cashback || 0),
+    phoneVerified: payload.telefone_verificado === true,
   };
 }
 

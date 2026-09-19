@@ -936,6 +936,7 @@ class CustomerProfileResponse(BaseModel):
     endereco: str = ""
     saldo_pontos: int = 0
     saldo_cashback: float = 0.0
+    telefone_verificado: bool = False
 
 
 class CustomerRegisterRequest(BaseModel):
@@ -945,6 +946,7 @@ class CustomerRegisterRequest(BaseModel):
     senha: str = Field(min_length=8, max_length=128)
     telefone: str = Field(min_length=10, max_length=20)
     endereco: Optional[str] = Field(default="", max_length=300)
+    codigo: str = Field(pattern=r"^\d{6}$")
 
     @field_validator("nome")
     @classmethod

@@ -331,6 +331,7 @@ def test_cliente_do_caixa_faz_login_otp_e_pedido_vincula_mesmo_id(monkeypatch):
     sessao = login.json()
     assert sessao["cliente"]["id"] == cliente_id
     assert sessao["cliente"]["saldo_pontos"] == 12
+    assert sessao["cliente"]["telefone_verificado"] is True
 
     pedido = client.post(
         "/cardapio/pedidos",
