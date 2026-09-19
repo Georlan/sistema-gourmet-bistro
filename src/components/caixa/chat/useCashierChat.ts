@@ -160,6 +160,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     let fallbackInterval: number | null = null;
     let reconnectTimer: number | null = null;
     let stopped = false;
+    let hasOpenedOnce = false;
 
     const stopFallback = () => {
       if (fallbackInterval !== null) {
@@ -182,8 +183,18 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
         authorization,
         signal: controller.signal,
         onOpen: () => {
+          const isReconnect = hasOpenedOnce;
+          hasOpenedOnce = true;
           stopFallback();
           void fetchUnread();
+          if (isReconnect) {
+            realtimeSequenceRef.current += 1;
+            setChatRealtimeEvent({
+              event: 'reconnected',
+              data: null,
+              sequence: realtimeSequenceRef.current,
+            });
+          }
         },
         onEvent: ({ event, data }) => {
           if (event !== 'connected') {
