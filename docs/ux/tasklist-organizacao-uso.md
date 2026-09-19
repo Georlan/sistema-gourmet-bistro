@@ -21,6 +21,8 @@ Este tracker é executável: cada item deve resultar em mudança concreta, teste
 - [ ] Cardápio Online — onda 2: consolidar navegação/configurações e manter poucos fluxos canônicos.
 - [ ] Super Admin — onda única: organizar ações do tenant por tarefa operacional, suporte, plano e status; destacar ações perigosas.
 - [ ] Onboarding — onda única: reduzir primeiro acesso às decisões essenciais até chegar ao Caixa operacional.
+- [x] Equipe: espelhar Pessoas e Funções e acessos na mesma árvore canônica do menu vertical e da barra horizontal.
+- [ ] Equipe: manter gestão de pessoas e acessos sem telas paralelas.
 - [ ] Equipe — onda única: tornar cargos/permissões explícitos e impedir ações administrativas ambíguas.
 
 ## P1 — Integridade que afeta a operação
