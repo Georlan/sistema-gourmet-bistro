@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..order_chat_models import OrderConversation, OrderMessage
 from .order_chat_hub import enqueue_order_chat_event
-from .order_chat_service import PLAIN_TEXT_BODY_FORMAT, serialize_message
+from .order_chat_service import PLAIN_TEXT_BODY_FORMAT
 
 _REJECTION_REASON_EVENT_KEY = "rejection_reason"
 
