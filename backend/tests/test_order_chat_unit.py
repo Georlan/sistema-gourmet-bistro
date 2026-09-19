@@ -459,6 +459,35 @@ def test_human_message_idempotency_reuses_existing_row(client_and_session):
     assert all(row.event_key is None for row in human_rows)
 
 
+def test_human_message_idempotency_accepts_legacy_event_key_during_rollout(client_and_session):
+    client, session = client_and_session
+    _rest_a, _rest_b, _user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
+    conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    legacy_key = str(uuid.uuid4())
+    legacy = OrderMessage(
+        id=str(uuid.uuid4()),
+        restaurante_id=1,
+        conversation_id=conv.id,
+        pedido_id="comanda-101",
+        sender_type="customer",
+        sender_user_id=None,
+        body="Mensagem antes do rollout",
+        body_format="plain_text_v2",
+        event_key=f"customer:{legacy_key}",
+        created_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    session.add(legacy)
+    session.commit()
+
+    retry = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json={"body": "Mensagem antes do rollout", "client_message_id": legacy_key},
+    )
+    assert retry.status_code == 200
+    assert retry.json()["id"] == legacy.id
+    assert session.query(OrderMessage).filter(OrderMessage.conversation_id == conv.id).count() == 1
+
+
 def test_realtime_message_is_not_visible_before_commit(client_and_session):
     _client, session = client_and_session
     _seed_data(session)
