@@ -131,7 +131,7 @@ def suggest_delivery_fee(db: Session, restaurante_id: int) -> dict[str, Any]:
 
     farther_samples = samples[len(samples) // 2 :]
     per_km_candidates = [
-        fee / max(1, math.ceil(distance))
+        fee / max(1.0, distance)
         for distance, fee in farther_samples
     ]
     suggested_per_km = _round_half_real(statistics.median(per_km_candidates))
