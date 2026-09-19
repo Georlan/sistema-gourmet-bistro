@@ -70,8 +70,6 @@ interface LoadMessagesOptions {
   markRead?: boolean;
 }
 
-type ConversationFilter = 'active' | 'archived' | 'all';
-
 const QUICK_REPLIES = [
   'Certo, vamos verificar.',
   'Obrigado pela informação.',
@@ -197,7 +195,6 @@ export function CashierConversationsDrawer({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
-  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('active');
   const [searchQuery, setSearchQuery] = useState('');
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -212,38 +209,23 @@ export function CashierConversationsDrawer({
     selectedIdRef.current = selectedId;
   }, [selectedId]);
 
-  const activeCount = useMemo(
-    () => conversations.filter((conversation) => !isArchivedConversation(conversation)).length,
-    [conversations],
-  );
-  const archivedCount = useMemo(
-    () => conversations.filter(isArchivedConversation).length,
-    [conversations],
-  );
+  const activeCount = conversations.length;
 
   const sortedConversations = useMemo(() => conversations
-    .filter((conversation) => {
-      const archived = isArchivedConversation(conversation);
-      if (conversationFilter === 'active' && archived) return false;
-      if (conversationFilter === 'archived' && !archived) return false;
-      return matchesConversationSearch(conversation, searchQuery);
-    })
+    .filter((conversation) => matchesConversationSearch(conversation, searchQuery))
     .sort((a, b) => {
       const unreadPriority = Number(b.unread_count > 0) - Number(a.unread_count > 0);
       if (unreadPriority !== 0) return unreadPriority;
       const waitingPriority = Number(isWaitingForStaff(b)) - Number(isWaitingForStaff(a));
       if (waitingPriority !== 0) return waitingPriority;
       return conversationTimestamp(b) - conversationTimestamp(a);
-    }), [conversationFilter, conversations, searchQuery]);
+    }), [conversations, searchQuery]);
 
   const selectedConv = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || null,
     [conversations, selectedId],
   );
   const selectedArchived = selectedConv ? isArchivedConversation(selectedConv) : false;
-  const selectedPostSale = selectedConv
-    ? isTerminalConversation(selectedConv) && !selectedArchived
-    : false;
 
   const messages = messageState.conversationId === selectedId ? messageState.items : [];
 
@@ -623,22 +605,6 @@ export function CashierConversationsDrawer({
 
   if (!isOpen) return null;
 
-  const filterButton = (value: ConversationFilter, label: string, count: number) => (
-    <button
-      type="button"
-      onClick={() => setConversationFilter(value)}
-      className={clsx(
-        'rounded-lg px-2.5 py-1.5 text-[10px] font-bold transition',
-        conversationFilter === value
-          ? 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-          : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
-      )}
-      aria-pressed={conversationFilter === value}
-    >
-      {label} <span className="ml-1 opacity-70">{count}</span>
-    </button>
-  );
-
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-black/65 backdrop-blur-sm animate-fade-in"
@@ -706,8 +672,9 @@ export function CashierConversationsDrawer({
             )}
           >
             <div className="shrink-0 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur space-y-2">
-              <div className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900 p-1">
-                {filterButton('active', 'Ativas', activeCount)}
+              <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-[10px] font-bold text-zinc-300">
+                <span>Pedidos ativos</span>
+                <span className="text-emerald-300">{activeCount}</span>
               </div>
               <input
                 type="search"
@@ -737,7 +704,6 @@ export function CashierConversationsDrawer({
                     const isSelected = conversation.id === selectedId;
                     const awaitingReply = isWaitingForStaff(conversation);
                     const archived = isArchivedConversation(conversation);
-                    const postSale = isTerminalConversation(conversation) && !archived;
                     return (
                       <button
                         key={conversation.id}
@@ -759,7 +725,6 @@ export function CashierConversationsDrawer({
                               {conversation.tipo_pedido}
                             </span>
                             {archived && <span className="text-[9px] font-bold text-zinc-500">Arquivada</span>}
-                            {postSale && <span className="text-[9px] font-bold text-amber-300">Pós-venda</span>}
                           </div>
                           {conversation.unread_count > 0 && (
                             <span className="min-w-5 h-5 px-1 rounded-full bg-emerald-400 text-emerald-950 text-[10px] font-black flex items-center justify-center">
@@ -816,7 +781,6 @@ export function CashierConversationsDrawer({
                         <h3 className="text-sm font-bold text-white">Pedido #{selectedConv.numero_pedido || '—'}</h3>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300">{conversationStatusLabel(selectedConv)}</span>
                         {selectedArchived && <span className="text-[10px] font-bold text-zinc-500">arquivada</span>}
-                        {selectedPostSale && <span className="text-[10px] font-bold text-amber-300">pós-venda</span>}
                         {isWaitingForStaff(selectedConv) && <span className="text-[10px] font-bold text-amber-300">aguardando sua resposta</span>}
                       </div>
                       <span className="block truncate text-xs text-zinc-400">
@@ -873,7 +837,7 @@ export function CashierConversationsDrawer({
                 <div className="border-t border-zinc-800 bg-zinc-900/75 p-3">
                   {selectedArchived ? (
                     <div className="rounded-xl border border-zinc-800 bg-zinc-950 px-3.5 py-3 text-xs text-zinc-400">
-                      Conversa arquivada. O histórico continua disponível; se o cliente enviar uma nova mensagem, ela volta automaticamente para Ativas como pós-venda.
+                      Pedido encerrado. O histórico permanece somente para leitura e não volta para a fila operacional.
                     </div>
                   ) : (
                     <>
@@ -937,7 +901,7 @@ export function CashierConversationsDrawer({
               <div className="text-zinc-500 text-xs flex flex-col items-center text-center px-6">
                 <MessageSquare size={32} className="opacity-20 mb-2" />
                 <p className="font-semibold text-zinc-400">Selecione uma conversa</p>
-                <p className="mt-1 text-[10px]">Ativas ficam limpas; o histórico permanece em Arquivadas.</p>
+                <p className="mt-1 text-[10px]">A fila mostra apenas pedidos em andamento.</p>
               </div>
             )}
           </div>
