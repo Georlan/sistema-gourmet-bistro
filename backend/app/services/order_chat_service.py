@@ -105,40 +105,37 @@ def assert_conversation_writable(conv: OrderConversation) -> None:
 
 
 
-def _human_event_key(sender_type: str, client_message_id: str | None) -> str | None:
-    """Normaliza a chave idempotente enviada pelo navegador.
-
-    Reaproveita a unique key já existente em event_key sem criar nova coluna.
-    """
+def _normalize_client_message_id(client_message_id: str | None) -> str | None:
+    """Valida e canonicaliza a chave idempotente gerada pelo remetente."""
     raw = (client_message_id or "").strip()
     if not raw:
         return None
     try:
-        normalized = str(uuid.UUID(raw))
+        return str(uuid.UUID(raw))
     except (ValueError, AttributeError) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Identificador idempotente da mensagem é inválido.",
         ) from exc
-    return f"{sender_type}:{normalized}"
 
 
 def _existing_human_message(
     db: Session,
     *,
     conversation_id: str,
-    event_key: str | None,
+    client_message_id: str | None,
 ) -> OrderMessage | None:
-    if not event_key:
+    if not client_message_id:
         return None
     return (
         db.query(OrderMessage)
         .filter(
             OrderMessage.conversation_id == conversation_id,
-            OrderMessage.event_key == event_key,
+            OrderMessage.client_message_id == client_message_id,
         )
         .first()
     )
+
 
 def create_conversation_for_order(
     db: Session,
@@ -303,11 +300,11 @@ def send_customer_message(
         )
     assert_conversation_writable(conv)
 
-    event_key = _human_event_key("customer", client_message_id)
+    normalized_client_message_id = _normalize_client_message_id(client_message_id)
     existing = _existing_human_message(
         db,
         conversation_id=conv.id,
-        event_key=event_key,
+        client_message_id=normalized_client_message_id,
     )
     if existing is not None:
         return existing
@@ -338,7 +335,7 @@ def send_customer_message(
         sender_user_id=None,
         body=body,
         body_format=PLAIN_TEXT_BODY_FORMAT,
-        event_key=event_key,
+        client_message_id=normalized_client_message_id,
         created_at=now,
     )
     try:
@@ -350,7 +347,7 @@ def send_customer_message(
         existing = _existing_human_message(
             db,
             conversation_id=conv.id,
-            event_key=event_key,
+            client_message_id=normalized_client_message_id,
         )
         if existing is not None:
             return existing
@@ -393,11 +390,11 @@ def send_staff_message(
         )
     assert_conversation_writable(conv)
 
-    event_key = _human_event_key("staff", client_message_id)
+    normalized_client_message_id = _normalize_client_message_id(client_message_id)
     existing = _existing_human_message(
         db,
         conversation_id=conv.id,
-        event_key=event_key,
+        client_message_id=normalized_client_message_id,
     )
     if existing is not None:
         return existing
@@ -411,7 +408,7 @@ def send_staff_message(
         sender_user_id=user_id,
         body=body,
         body_format=PLAIN_TEXT_BODY_FORMAT,
-        event_key=event_key,
+        client_message_id=normalized_client_message_id,
         created_at=now,
     )
     try:
@@ -423,7 +420,7 @@ def send_staff_message(
         existing = _existing_human_message(
             db,
             conversation_id=conv.id,
-            event_key=event_key,
+            client_message_id=normalized_client_message_id,
         )
         if existing is not None:
             return existing
@@ -534,6 +531,7 @@ def serialize_message(msg: OrderMessage) -> dict[str, Any]:
         "sender_type": msg.sender_type,
         "sender_user_id": msg.sender_user_id,
         "body": body,
+        "client_message_id": getattr(msg, "client_message_id", None),
         "event_key": msg.event_key,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
     }
