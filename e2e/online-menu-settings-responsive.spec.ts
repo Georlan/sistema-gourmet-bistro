@@ -163,12 +163,16 @@ for (const theme of ['dark', 'light'] as const) {
 }
 
 test('cardápio online mantém abas verticais e horizontais no notebook', async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await openOnlineMenu(page, 'dark');
+  await page.setViewportSize({ width: 1366, height: 800 });
+  await setup(page, 'dark');
+  await page.goto('/?view=caixa');
 
   const sidebar = page.locator('.cashier-sidebar:visible');
-  const subnav = page.locator('.cashier-subnav');
   await expect(sidebar).toBeVisible();
+  await sidebar.getByRole('button', { name: 'Cardápio online', exact: true }).click();
+  await expect(page.locator('.cashier-topbar h2')).toHaveText(/Configurações do cardápio online/i);
+
+  const subnav = page.locator('.cashier-subnav');
   await expect(subnav).toBeVisible();
 
   for (const label of ['Perfil', 'Marca', 'Pedidos online', 'Clientes bloqueados', 'Entrega', 'Pagamentos', 'Divulgação']) {
