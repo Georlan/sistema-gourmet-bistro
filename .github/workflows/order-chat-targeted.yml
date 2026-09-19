@@ -60,7 +60,11 @@ jobs:
           python -m py_compile backend/app/routes/caixa_chat.py
 
       - name: Run chat backend contracts
-        run: >-
-          python -m pytest -q -ra
-          backend/tests/test_order_chat_unit.py
-          backend/tests/test_online_order_reasoned_rejection.py
+        run: |
+          DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
+            python -m pytest -q -ra backend/tests/test_order_chat_unit.py
+
+          DATABASE_URL=sqlite:///./order-chat-rejection-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-ci.db \
+            python -m pytest -q -ra backend/tests/test_online_order_reasoned_rejection.py
