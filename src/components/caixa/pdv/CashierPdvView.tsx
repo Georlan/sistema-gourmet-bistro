@@ -358,7 +358,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 </div>
               </div>
 
-              <div className={"flex-1 min-h-0 overflow-y-visible pr-1 overscroll-auto xl:overflow-y-auto xl:overscroll-contain"}>
+              <div className={"cashier-pdv-product-scroll flex-1 min-h-0 overflow-y-visible pr-1 overscroll-auto xl:overflow-y-auto xl:overscroll-contain"}>
                 {filteredProducts.length > 0 ? (
                   <div
                     className={"grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-2.5 pb-2"}
