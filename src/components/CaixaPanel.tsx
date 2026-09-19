@@ -38,6 +38,7 @@ import { useCashierPreferences } from './caixa/navigation/useCashierPreferences'
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
 import { CashierCancelConsumptionDialog } from './caixa/orders/CashierCancelConsumptionDialog';
 import { CashierCouriers } from './caixa/orders/CashierCouriers';
+import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
 import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
@@ -976,6 +977,17 @@ export function CaixaPanel({
             />
 
             <CashierKitchen activeSubTab={activeSubTab} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+
+            <CashierPickups
+              activeSubTab={activeSubTab}
+              deliveryOrders={deliveryOrders}
+              apiBaseUrl={apiBaseUrl}
+              authHeaders={authHeaders}
+              now={nowTimestamp}
+              handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
+              handleFinalizeDigitalOrder={handleFinalizeDigitalOrder}
+              openDeliveryOrderDetails={openDeliveryOrderDetails}
+            />
 
             <DeferredCashierSection active={activeTab === 'permissoes_cargos'} label="Equipe" load={loadCashierTeam} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast }} />
 
