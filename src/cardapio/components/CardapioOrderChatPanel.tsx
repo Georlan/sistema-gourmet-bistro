@@ -128,19 +128,6 @@ export default function CardapioOrderChatPanel({
     }
   }, [apiRoot]);
 
-  const refreshStatus = useCallback(async () => {
-    if (!apiRoot) return;
-    try {
-      const response = await fetch(`${apiRoot}/summary`, { cache: "no-store" });
-      if (!response.ok) throw new Error("Não foi possível atualizar o pedido.");
-      const orderData = await response.json() as TrackingPayload;
-      setTracking(orderData);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao atualizar o pedido.");
-    }
-  }, [apiRoot]);
-
   const markRead = useCallback(() => {
     if (!apiRoot || document.visibilityState !== "visible") return;
     void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
@@ -194,8 +181,34 @@ export default function CardapioOrderChatPanel({
           startFallback();
         }
       });
-      source.addEventListener("status", () => {
-        void refreshStatus();
+      source.addEventListener("status", (event) => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as {
+            status?: unknown;
+            closed_at?: unknown;
+          };
+          if (typeof data.status !== "string" || !data.status) return;
+          setTracking((current) => {
+            const tipo = current?.tipo || order.tipo || "Retirada";
+            const state = fallbackOrderState(data.status as string, tipo);
+            const closedAt = typeof data.closed_at === "string"
+              ? data.closed_at
+              : current?.closed_at || null;
+            return {
+              status: data.status as string,
+              tipo,
+              state,
+              closed_at: closedAt,
+              conversa: {
+                ...(current?.conversa || {}),
+                closed_at: closedAt,
+                can_chat: state.can_chat,
+              },
+            };
+          });
+        } catch {
+          startFallback();
+        }
       });
     } catch {
       source = null;
@@ -207,7 +220,7 @@ export default function CardapioOrderChatPanel({
       stopFallback();
       source?.close();
     };
-  }, [apiRoot, refresh, refreshStatus]);
+  }, [apiRoot, order.tipo, refresh]);
 
   useEffect(() => {
     markRead();
