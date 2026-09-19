@@ -243,7 +243,7 @@ test('permissões compartilham definição sem habilitar integrações pendentes
   });
   await open(page);
   await navigate(page, 'Configurações');
-  await page.locator('.cashier-subnav').getByRole('button', { name: 'App do Garçom', exact: true }).click();
+  await page.getByRole('button', { name: 'App do Garçom', exact: true }).click();
   await expect(page.getByRole('checkbox')).toHaveCount(7);
   await expect(page.getByRole('checkbox').and(page.locator(':disabled'))).toHaveCount(2);
   const delivery = page.getByRole('checkbox', { name: 'Permitir que garçom faça lançamentos de pedidos de delivery', exact: true });
