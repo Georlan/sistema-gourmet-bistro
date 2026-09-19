@@ -9,7 +9,9 @@ const legacyTrackingPage = source('../src/cardapio/OrderTrackingPage.tsx');
 const cashierDrawer = source('../src/components/caixa/chat/CashierConversationsDrawer.tsx');
 const cashierHook = source('../src/components/caixa/chat/useCashierChat.ts');
 const cashierRealtime = source('../src/components/caixa/chat/cashierChatRealtime.ts');
+const orderRealtime = source('../src/cardapio/orderChatRealtime.ts');
 const trackingRoute = source('../backend/app/routes/order_tracking.py');
+const chatService = source('../backend/app/services/order_chat_service.py');
 const cashierChatRoute = source('../backend/app/routes/caixa_chat.py');
 const archiveService = source('../backend/app/services/order_chat_archive_service.py');
 const cardapioRoute = source('../backend/app/routes/cardapio.py');
@@ -83,14 +85,15 @@ test('drawer do Caixa protege seleção contra respostas HTTP atrasadas e não i
   assert.match(cashierDrawer, /\{message\.body\}/);
 });
 
-test('read_update do Caixa não recarrega a thread nem dispara nova marcação de leitura', () => {
-  assert.match(cashierDrawer, /case 'read_update':/);
-  const readUpdateBlock = cashierDrawer.split("case 'read_update':")[1]?.split('default:')[0] ?? '';
-  assert.doesNotMatch(readUpdateBlock, /loadMessages/);
-  assert.doesNotMatch(readUpdateBlock, /markConversationRead/);
-  assert.match(cashierDrawer, /background:\s*true,\s*markRead:\s*false/);
-  assert.match(cashierDrawer, /case 'new_message':/);
-  assert.match(cashierDrawer, /items\.some\(\(item\) => item\.id === message\.id\)/);
+test('drawer do Caixa consome o stream compartilhado e reconcilia hints no banco', () => {
+  assert.match(cashierDrawer, /subscribeRealtime/);
+  assert.doesNotMatch(cashierDrawer, /consumeCashierChatEvents/);
+  assert.match(cashierDrawer, /event === 'new_message'/);
+  assert.match(cashierDrawer, /loadMessages\(eventConversationId, \{ background: true/);
+  assert.match(cashierDrawer, /event === 'status_changed'/);
+  assert.match(cashierDrawer, /event === 'read_update'/);
+  assert.match(cashierDrawer, /realtimeStatus !== 'degraded'/);
+  assert.match(cashierDrawer, /15000/);
 });
 
 test('central do Caixa prioriza atenção, oferece respostas rápidas e composer multilinha', () => {
@@ -98,18 +101,18 @@ test('central do Caixa prioriza atenção, oferece respostas rápidas e composer
   assert.match(cashierDrawer, /isWaitingForStaff/);
   assert.match(cashierDrawer, /aguardando resposta/);
   assert.match(cashierDrawer, /QUICK_REPLIES/);
-  assert.match(cashierDrawer, /Estamos preparando seu pedido\./);
+  assert.match(cashierDrawer, /Certo, vamos verificar\./);
+  assert.doesNotMatch(cashierDrawer, /Seu pedido saiu para entrega\./);
   assert.match(cashierDrawer, /textarea/);
   assert.match(cashierDrawer, /Enter envia · Shift\+Enter quebra linha/);
   assert.match(cashierDrawer, /aria-modal="true"/);
 });
 
-test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigido', () => {
+test('central do Caixa fecha por backdrop e Escape sem criar um segundo SSE', () => {
   assert.match(cashierDrawer, /event\.target === event\.currentTarget/);
   assert.match(cashierDrawer, /event\.key === 'Escape'/);
-  assert.match(cashierDrawer, /case 'new_message':/);
-  assert.match(cashierDrawer, /case 'status_changed':/);
-  assert.match(cashierDrawer, /case 'read_update':/);
+  assert.match(cashierDrawer, /subscribeRealtime/);
+  assert.doesNotMatch(cashierDrawer, /new EventSource/);
 });
 
 test('central do Caixa arquiva pedidos terminais sem apagar histórico', () => {
@@ -122,21 +125,37 @@ test('central do Caixa arquiva pedidos terminais sem apagar histórico', () => {
   assert.match(cashierDrawer, /Todas/);
   assert.match(cashierDrawer, /type="search"/);
   assert.match(cashierDrawer, /Buscar pedido, cliente ou mensagem/);
-  assert.match(cashierDrawer, /Conversa arquivada/);
+  assert.match(cashierDrawer, /Conversa encerrada com o pedido/);
   assert.match(cashierChatRoute, /list_caixa_conversations_for_central/);
   assert.match(archiveService, /OrderConversation\.closed_at\.isnot\(None\)/);
   assert.match(archiveService, /"closed_at": conversation\.closed_at\.isoformat/);
 });
 
-test('mensagem nova em pedido terminal volta para a fila como pós-venda', () => {
-  assert.match(cashierDrawer, /conversation\.unread_count <= 0/);
-  assert.match(cashierDrawer, /!isWaitingForStaff\(conversation\)/);
-  assert.match(cashierDrawer, /Pós-venda/);
-  assert.match(cashierDrawer, /volta automaticamente para Ativas como pós-venda/);
-  assert.match(trackingRoute, /reopen_completed_conversation_if_needed/);
-  assert.match(trackingRoute, /state_contract\["can_chat"\] = True/);
-  assert.match(archiveService, /conversation\.closed_at = None/);
-  assert.match(archiveService, /"status": "post_sale"/);
-  assert.match(clientPanel, /atendimento de pós-venda sem reabrir o pedido/);
-  assert.doesNotMatch(clientPanel, /Boolean\(closedAt\)/);
+test('pedido terminal encerra a conversa e não reabre pós-venda', () => {
+  assert.match(cashierDrawer, /isArchivedConversation/);
+  assert.doesNotMatch(cashierDrawer, /Pós-venda/);
+  assert.doesNotMatch(cashierDrawer, /volta automaticamente para Ativas como pós-venda/);
+  assert.doesNotMatch(trackingRoute, /reopen_completed_conversation_if_needed/);
+  assert.doesNotMatch(trackingRoute, /state_contract\["can_chat"\] = True/);
+  assert.doesNotMatch(archiveService, /conversation\.closed_at = None/);
+  assert.doesNotMatch(clientPanel, /atendimento de pós-venda/);
+  assert.match(clientPanel, /O atendimento deste pedido foi encerrado/);
+});
+
+
+test('status do pedido não é persistido como mensagem e realtime é pós-commit', () => {
+  assert.doesNotMatch(chatService, /CANONICAL_STATUS_MESSAGES/);
+  assert.doesNotMatch(chatService, /event_key = f"status:/);
+  assert.match(chatService, /enqueue_order_chat_event/);
+  assert.match(chatService, /client_message_id/);
+  assert.match(orderRealtime, /const connections = new Map/);
+  assert.match(orderRealtime, /new EventSource/);
+});
+
+test('rascunhos ficam locais e mensagens humanas usam idempotência', () => {
+  assert.match(cashierDrawer, /CHAT_DRAFT_TTL_MS = 24 \* 60 \* 60 \* 1000/);
+  assert.match(cashierDrawer, /client_message_id: clientMessageId/);
+  assert.match(clientPanel, /CUSTOMER_CHAT_DRAFT_TTL_MS = 24 \* 60 \* 60 \* 1000/);
+  assert.match(clientPanel, /sessionStorage/);
+  assert.match(clientPanel, /client_message_id: clientMessageId/);
 });

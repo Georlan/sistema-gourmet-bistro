@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -36,6 +36,12 @@ router = APIRouter(prefix="/api/caixa/conversas", tags=["Caixa - Chat"])
 
 class StaffMessagePayload(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000, description="Texto da resposta do operador")
+    client_message_id: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=64,
+        description="Identificador idempotente gerado pelo Caixa",
+    )
 
 
 def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
@@ -78,6 +84,7 @@ def obter_total_nao_lidas(
 @router.get("/{conversation_id}/messages", summary="Histórico de mensagens de uma conversa")
 def obter_mensagens_conversa(
     conversation_id: str,
+    limit: int = Query(default=100, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
@@ -104,9 +111,11 @@ def obter_mensagens_conversa(
                 OrderMessage.restaurante_id == restaurante_id,
                 OrderMessage.conversation_id == conversation_id,
             )
-            .order_by(OrderMessage.created_at.asc())
+            .order_by(OrderMessage.created_at.desc(), OrderMessage.id.desc())
+            .limit(limit)
             .all()
         )
+        messages.reverse()
         return [serialize_message(msg) for msg in messages]
 
 
@@ -126,6 +135,7 @@ def responder_cliente(
             conversation_id=conversation_id,
             user_id=current_user.id,
             raw_body=payload.body,
+            client_message_id=payload.client_message_id,
         )
         enqueue_order_push_event(
             db,
@@ -165,14 +175,20 @@ async def stream_eventos_caixa(
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_caixa(restaurante_id)
         try:
-            yield _sse_event("connected", {"restaurante_id": restaurante_id})
+            yield _sse_event(
+                "connected",
+                {
+                    "restaurante_id": restaurante_id,
+                    **order_chat_hub.transport_status(),
+                },
+            )
 
             while not await request.is_disconnected():
                 try:
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(payload["event"], payload["data"])
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    yield _sse_event("transport", order_chat_hub.transport_status())
         finally:
             order_chat_hub.unsubscribe_caixa(restaurante_id, sub_id)
 
