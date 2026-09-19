@@ -347,8 +347,9 @@ test('Relatórios preservam uma leitura responsiva sem consultas legadas duplica
 
   const visibleSidebar = page.locator('.cashier-sidebar:visible');
   if (await visibleSidebar.isVisible()) {
+    const reportShortcuts = visibleSidebar.getByLabel('Atalhos de Relatórios');
     for (const label of ['Visão Geral', 'Financeiro', 'Produtos', 'Equipe']) {
-      await expect(visibleSidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(reportShortcuts.getByRole('button', { name: label, exact: true })).toBeVisible();
       await expect(reportsSubnav.getByRole('button', { name: label, exact: true })).toBeVisible();
     }
   }
