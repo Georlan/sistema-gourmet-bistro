@@ -16,6 +16,8 @@ export interface DeliveryOrderView {
   pago: boolean;
   status: 'pendente' | 'analise' | 'producao' | 'pronto' | 'transito';
   endereco?: string;
+  paymentMethod?: string | null;
+  changeFor?: number | null;
   motoboyId?: number | null;
   criadoEm: string;
   created_at?: string;
