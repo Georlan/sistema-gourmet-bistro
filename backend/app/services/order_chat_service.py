@@ -220,6 +220,7 @@ def post_system_order_event(
         conversation_id=conv.id,
         event_type="status",
         data=payload,
+        dedupe_key=f"status:{norm_status}",
     )
     return payload
 
