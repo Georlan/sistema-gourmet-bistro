@@ -36,6 +36,7 @@ router = APIRouter(prefix="/api/caixa/conversas", tags=["Caixa - Chat"])
 
 class StaffMessagePayload(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000, description="Texto da resposta do operador")
+    client_message_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
 def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
@@ -126,6 +127,7 @@ def responder_cliente(
             conversation_id=conversation_id,
             user_id=current_user.id,
             raw_body=payload.body,
+            client_message_id=payload.client_message_id,
         )
         enqueue_order_push_event(
             db,
