@@ -160,8 +160,7 @@ def resolve_distance_delivery_fee(
 
     if "valor_por_km" in config:
         per_km_fee = validate_delivery_fee(config["valor_por_km"])
-        billed_km = Decimal(str(distance_km)).to_integral_value(rounding=ROUND_CEILING)
-        calculated_fee = billed_km * per_km_fee
+        calculated_fee = Decimal(str(distance_km)) * per_km_fee
         fee = max(minimum_fee, calculated_fee)
         return fee.quantize(_MONEY, rounding=ROUND_HALF_UP), distance_km
 
