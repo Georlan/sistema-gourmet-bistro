@@ -6,7 +6,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import './cashierChatAttention.css';
-import { consumeCashierChatEvents } from './cashierChatRealtime';
+import {
+  consumeCashierChatEvents,
+  type CashierChatStreamSnapshot,
+} from './cashierChatRealtime';
 
 export type CashierChatHealth = 'idle' | 'loading' | 'healthy' | 'degraded';
 
@@ -24,6 +27,8 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
   const chatAudioCtxRef = useRef<AudioContext | null>(null);
   const chatAudioUnlockedRef = useRef(false);
   const soundedMessageIdsRef = useRef<Set<string>>(new Set());
+  const realtimeSequenceRef = useRef(0);
+  const [chatRealtimeEvent, setChatRealtimeEvent] = useState<CashierChatStreamSnapshot | null>(null);
   const [isChatDrawerOpen, setIsChatDrawerOpen] = useState(false);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [chatUnreadStatus, setChatUnreadStatus] = useState<CashierChatHealth>('idle');
@@ -181,6 +186,14 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
           void fetchUnread();
         },
         onEvent: ({ event, data }) => {
+          if (event !== 'connected') {
+            realtimeSequenceRef.current += 1;
+            setChatRealtimeEvent({
+              event,
+              data,
+              sequence: realtimeSequenceRef.current,
+            });
+          }
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
@@ -229,6 +242,7 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
     setIsChatDrawerOpen,
     chatUnreadCount,
     chatUnreadStatus,
+    chatRealtimeEvent,
     setChatUnreadCount,
     refreshChatUnreadCount: fetchUnread,
   };
