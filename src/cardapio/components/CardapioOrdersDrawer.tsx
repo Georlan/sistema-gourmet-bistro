@@ -30,6 +30,7 @@ interface CardapioOrdersDrawerProps {
   onSelectOrder: (orderId: string) => void;
   onRefresh: () => void;
   onRemoveOrder: (orderId: string) => void;
+  onRealtimeStatus?: (orderId: string, status: string, closedAt: string | null) => void;
   isRefreshing?: boolean;
   hasFloatingCart?: boolean;
 }
@@ -73,6 +74,7 @@ export default function CardapioOrdersDrawer({
   onSelectOrder,
   onRefresh,
   onRemoveOrder,
+  onRealtimeStatus,
   isRefreshing = false,
   hasFloatingCart = false,
 }: CardapioOrdersDrawerProps) {
@@ -82,15 +84,21 @@ export default function CardapioOrdersDrawer({
   const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
     () => requestedPushOrderFromHash(),
   );
+  const chatOrderIdRef = React.useRef<string | null>(null);
+  const seenRealtimeMessageIdsRef = React.useRef<Set<string>>(new Set());
   const drawerOpen = isOpen || floatingOpen;
 
   const ordersWithChat = React.useMemo(
     () => orders.filter((order) => Boolean(resolveTrackingToken(order))),
     [orders],
   );
+  const activeChatOrders = React.useMemo(
+    () => ordersWithChat.filter((order) => !resolveOrderState(order).terminal),
+    [ordersWithChat],
+  );
 
   const refreshUnreadCounts = React.useCallback(async () => {
-    const targets = ordersWithChat
+    const targets = activeChatOrders
       .map((order) => ({ order, token: resolveTrackingToken(order) }))
       .filter((item): item is { order: StoredOrder; token: string } => Boolean(item.token));
 
@@ -121,26 +129,117 @@ export default function CardapioOrdersDrawer({
         if (result) next[result[0]] = result[1];
       });
       Object.keys(next).forEach((orderId) => {
-        if (!ordersWithChat.some((order) => order.id === orderId)) delete next[orderId];
+        if (!activeChatOrders.some((order) => order.id === orderId)) delete next[orderId];
       });
       return next;
     });
-  }, [ordersWithChat]);
+  }, [activeChatOrders]);
+
+  React.useEffect(() => {
+    chatOrderIdRef.current = chatOrderId;
+  }, [chatOrderId]);
 
   React.useEffect(() => {
     void refreshUnreadCounts();
-    const interval = window.setInterval(() => {
-      if (!document.hidden) void refreshUnreadCounts();
-    }, 6000);
+    if (activeChatOrders.length === 0) return;
+
+    const sources: EventSource[] = [];
+    const healthyOrders = new Set<string>();
+    let fallbackInterval: number | null = null;
+
+    const stopFallback = () => {
+      if (fallbackInterval !== null) {
+        window.clearInterval(fallbackInterval);
+        fallbackInterval = null;
+      }
+    };
+    const startFallback = () => {
+      if (fallbackInterval !== null) return;
+      fallbackInterval = window.setInterval(() => {
+        if (!document.hidden) void refreshUnreadCounts();
+      }, 30000);
+    };
+    const markHealthy = (orderId: string) => {
+      healthyOrders.add(orderId);
+      if (healthyOrders.size === activeChatOrders.length) stopFallback();
+    };
+    const markDegraded = (orderId: string) => {
+      healthyOrders.delete(orderId);
+      startFallback();
+    };
+
+    activeChatOrders.forEach((order) => {
+      const token = resolveTrackingToken(order);
+      if (!token) return;
+      const source = new EventSource(
+        `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}/events`,
+      );
+      sources.push(source);
+
+      source.onopen = () => markHealthy(order.id);
+      source.onerror = () => markDegraded(order.id);
+
+      source.addEventListener("message", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data) as { id?: unknown; sender_type?: unknown };
+          const messageId = typeof data.id === "string" ? data.id : null;
+          if (messageId) {
+            if (seenRealtimeMessageIdsRef.current.has(messageId)) return;
+            seenRealtimeMessageIdsRef.current.add(messageId);
+            if (seenRealtimeMessageIdsRef.current.size > 200) {
+              const oldest = seenRealtimeMessageIdsRef.current.values().next().value;
+              if (oldest) seenRealtimeMessageIdsRef.current.delete(oldest);
+            }
+          }
+          if (data.sender_type === "staff" && chatOrderIdRef.current !== order.id) {
+            setUnreadByOrder((current) => ({
+              ...current,
+              [order.id]: Math.max(0, Number(current[order.id] || 0)) + 1,
+            }));
+          }
+        } catch {
+          markDegraded(order.id);
+        }
+      });
+
+      source.addEventListener("read_update", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data) as { reader?: unknown };
+          if (data.reader === "customer") {
+            setUnreadByOrder((current) => ({ ...current, [order.id]: 0 }));
+          }
+        } catch {
+          markDegraded(order.id);
+        }
+      });
+
+      source.addEventListener("status", (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data) as { status?: unknown; closed_at?: unknown };
+          const status = typeof data.status === "string" ? data.status : "";
+          if (!status) return;
+          onRealtimeStatus?.(
+            order.id,
+            status,
+            typeof data.closed_at === "string" ? data.closed_at : null,
+          );
+        } catch {
+          markDegraded(order.id);
+        }
+      });
+    });
+
     const onVisibilityChange = () => {
-      if (!document.hidden) void refreshUnreadCounts();
+      if (!document.hidden && fallbackInterval !== null) void refreshUnreadCounts();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
-      window.clearInterval(interval);
+      sources.forEach((source) => source.close());
+      stopFallback();
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [refreshUnreadCounts]);
+  }, [activeChatOrders, onRealtimeStatus, refreshUnreadCounts]);
 
   React.useEffect(() => {
     if (chatOrderId && !orders.some((order) => order.id === chatOrderId)) {
@@ -154,8 +253,8 @@ export default function CardapioOrdersDrawer({
   );
 
   const totalUnread = React.useMemo(
-    () => ordersWithChat.reduce((total, order) => total + unreadFor(order.id), 0),
-    [ordersWithChat, unreadFor],
+    () => activeChatOrders.reduce((total, order) => total + unreadFor(order.id), 0),
+    [activeChatOrders, unreadFor],
   );
 
   const sortUnreadFirst = React.useCallback(
