@@ -77,7 +77,7 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
   assert.equal(getCashierNavigationTarget('clientes_cupons'), undefined);
 });
 
-test('gestão expõe relatórios como destinos canônicos e mantém equipe compacta', () => {
+test('gestão expõe relatórios e equipe como destinos canônicos', () => {
   const relatorios = parents().find((item) => item.id === 'relatorios');
   const equipe = parents().find((item) => item.id === 'permissoes_cargos');
 
@@ -87,7 +87,10 @@ test('gestão expõe relatórios como destinos canônicos e mantém equipe compa
     'Produtos',
     'Equipe',
   ]);
-  assert.equal(equipe?.children, undefined);
+  assert.deepEqual(equipe?.children?.map((child) => child.label), [
+    'Pessoas',
+    'Funções e acessos',
+  ]);
   assert.deepEqual(getCashierNavigationTarget('relatorios'), {
     tab: 'relatorios', subTab: 'visao_geral',
   });
@@ -106,13 +109,26 @@ test('gestão expõe relatórios como destinos canônicos e mantém equipe compa
   assert.deepEqual(getCashierNavigationTarget('permissoes_cargos'), {
     tab: 'permissoes_cargos', subTab: 'pessoas',
   });
-  assert.equal(getCashierNavigationTarget('equipe_funcoes_acessos'), undefined);
+  assert.deepEqual(getCashierNavigationTarget('equipe_pessoas'), {
+    tab: 'permissoes_cargos', subTab: 'pessoas',
+  });
+  assert.deepEqual(getCashierNavigationTarget('equipe_funcoes_acessos'), {
+    tab: 'permissoes_cargos', subTab: 'cargos_permissoes',
+  });
 });
 
 test('relatórios espelha os mesmos destinos canônicos na vertical e horizontal', () => {
   const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
   assert.match(caixa, /reportsSubnavItems = getCashierNavigationItem\('relatorios'\)\?\.children \?\? \[\]/);
   assert.match(caixa, /\(activeTab === 'relatorios' \|\| activeTab === 'dashboard'\) && reportsSubnavItems\.map/);
+  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
+  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+});
+
+test('equipe espelha os mesmos destinos canônicos na vertical e horizontal', () => {
+  const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+  assert.match(caixa, /teamSubnavItems = getCashierNavigationItem\('permissoes_cargos'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'permissoes_cargos' && teamSubnavItems\.map/);
   assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
   assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
 });
