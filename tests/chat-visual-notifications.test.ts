@@ -54,10 +54,13 @@ test('cliente recebe badge visual de mensagens não lidas do restaurante', () =>
   assert.match(trackingRoute, /"unread_count": customer_unread_count/);
 });
 
-test('conversa aberta continua marcando novas respostas como lidas', () => {
-  assert.match(clientPanel, /messages\.length/);
+test('conversa aberta marca leitura só quando existe resposta observada da equipe', () => {
+  assert.match(clientPanel, /observedStaffUnreadRef/);
+  assert.match(clientPanel, /incoming\.sender_type === "staff"/);
+  assert.match(clientPanel, /readInFlightRef/);
   assert.match(clientPanel, /\/read/);
   assert.match(clientPanel, /visibilitychange/);
+  assert.doesNotMatch(clientPanel, /\[markRead, messages\.length\]/);
 });
 
 
@@ -102,6 +105,12 @@ test('drawer do Caixa protege seleção contra respostas HTTP atrasadas e não i
   assert.match(cashierDrawer, /selectedIdRef\.current !== conversationId/);
   assert.doesNotMatch(cashierDrawer, /dangerouslySetInnerHTML/);
   assert.match(cashierDrawer, /\{message\.body\}/);
+});
+
+test('Caixa evita POST de leitura quando a conversa já está zerada', () => {
+  assert.match(cashierDrawer, /unreadByConversationRef/);
+  assert.match(cashierDrawer, /if \(!force && \(unreadByConversationRef\.current\.get\(conversationId\) \|\| 0\) <= 0\) return/);
+  assert.match(cashierDrawer, /force: true/);
 });
 
 test('read_update do Caixa não recarrega a thread nem dispara nova marcação de leitura', () => {
