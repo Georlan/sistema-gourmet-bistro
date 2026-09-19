@@ -2537,6 +2537,25 @@ body {
 }
 
 /*
+ * Mobile/touch cashier uses the document as the single vertical scroll owner.
+ * PDV desktop keeps its bounded internal scroll, but on touch these nested
+ * overflow regions must not trap the swipe over product cards or the cart.
+ */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  .cashier-pdv-layout,
+  .cashier-pdv-catalog,
+  .cashier-pdv-cart {
+    overflow: visible !important;
+  }
+
+  .cashier-pdv-product-scroll,
+  .cashier-pdv-cart-scroll {
+    overflow-y: visible !important;
+    overscroll-behavior-y: auto;
+  }
+}
+
+/*
  * Operational rule: a desktop-capable viewport always exposes every enabled
  * Kanban stage side by side. Container width may compact the cards, but it
  * must never turn desktop columns into click-to-switch tabs.
