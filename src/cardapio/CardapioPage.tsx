@@ -441,7 +441,13 @@ export default function CardapioPage() {
       if (stopped || document.hidden) return;
       const socket = new WebSocket(wsUrl);
       ws = socket;
-      socket.onopen = () => { delay = 2000; };
+      socket.onopen = () => {
+        delay = 2000;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+        }
+      };
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -463,14 +469,21 @@ export default function CardapioPage() {
       socket.onerror = () => socket.close();
     };
 
+    const handleVisibility = () => {
+      if (document.hidden || stopped) return;
+      if (!ws || ws.readyState === WebSocket.CLOSED) connect();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
     connect();
     return () => {
       stopped = true;
+      document.removeEventListener("visibilitychange", handleVisibility);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (refreshTimer) clearTimeout(refreshTimer);
       ws?.close();
     };
-  }, [activeBrand?.id, checkActiveOrders, loadRestaurantData]);
+  }, [activeBrand?.id, loadRestaurantData]);
 
   const visibleCategories = useMemo(() => {
     if (!activeBrand) return [];
