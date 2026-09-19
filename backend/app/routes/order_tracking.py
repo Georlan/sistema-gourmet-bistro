@@ -400,9 +400,9 @@ def marcar_mensagens_lidas_cliente(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
     with tenant_session_scope(db, restaurante_id):
-        mark_customer_read(db, restaurante_id, conversation_id)
+        changed = mark_customer_read(db, restaurante_id, conversation_id)
         db.commit()
-        return {"status": "ok"}
+        return {"status": "ok", "changed": changed}
 
 
 @router.get("/{token}/push-config", summary="Configuração pública de Web Push para este pedido")
