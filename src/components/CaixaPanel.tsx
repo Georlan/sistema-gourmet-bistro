@@ -67,6 +67,7 @@ const operationSubnavItems = getCashierNavigationItem('operacao')?.children ?? [
 const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.children ?? [];
 const settingsSubnavItems = getCashierNavigationItem('impressao_salao')?.children ?? [];
 const reportsSubnavItems = getCashierNavigationItem('relatorios')?.children ?? [];
+const teamSubnavItems = getCashierNavigationItem('permissoes_cargos')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -848,15 +849,16 @@ export function CaixaPanel({
               </button>
             ))}
 
-            {activeTab === 'permissoes_cargos' && [
-              { id: 'pessoas', label: 'Pessoas' },
-              { id: 'cargos_permissoes', label: 'Funções e acessos' },
-            ].map((sub) => {
-              const isSubActive =
-                (sub.id === 'pessoas' && ['pessoas', 'equipe', 'convites'].includes(activeSubTab)) ||
-                (sub.id === 'cargos_permissoes' && ['cargos_permissoes', 'cargos', 'permissoes'].includes(activeSubTab)) || activeSubTab === sub.id;
-              return <button key={sub.id} id={`equipe-subtab-${sub.id}`} onClick={() => setActiveSubTab(sub.id)} className={clsx('cashier-subnav__button', isSubActive && 'is-active')}>{sub.label}</button>;
-            })}
+            {activeTab === 'permissoes_cargos' && teamSubnavItems.map((sub) => (
+              <button
+                key={sub.id}
+                id={`equipe-subtab-${sub.target.subTab}`}
+                onClick={() => handleSidebarNavigation(sub.id)}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
+                {sub.label}
+              </button>
+            ))}
           </div>
 
           <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
