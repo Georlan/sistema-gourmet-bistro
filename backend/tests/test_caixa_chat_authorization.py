@@ -7,7 +7,9 @@ def test_caixa_chat_requires_cashier_permission_on_every_route():
     source = Path("backend/app/routes/caixa_chat.py").read_text(encoding="utf-8")
 
     assert "get_current_user" not in source
-    assert source.count('Depends(require_permission("caixa:operar"))') == 6
+    route_count = source.count("@router.get(") + source.count("@router.post(")
+    assert route_count > 0
+    assert source.count('Depends(require_permission("caixa:operar"))') == route_count
 
 
 def test_waiter_role_cannot_use_cashier_permission():

@@ -31,7 +31,6 @@ type Props = Pick<
   setSmartPosRecoveryError: (value: string) => void;
   fetchTurno: () => Promise<void>;
   handleFecharDelivery: (id: string) => Promise<boolean>;
-  handleFinalizarPedido: (id: string) => Promise<boolean>;
 };
 
 export function shouldAutoCloseDigitalOrderAfterPayment(order: Order, selectedItemIds: readonly string[]): boolean {
@@ -64,7 +63,6 @@ export function useCheckoutController({
   setSmartPosRecoveryError,
   fetchTurno,
   handleFecharDelivery,
-  handleFinalizarPedido,
 }: Props) {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
@@ -525,7 +523,11 @@ export function useCheckoutController({
         .reduce((s: number, it: any) => s + (it.preco_unit || it.preco || 0), 0);
       setPaymentValor(sub);
     } else {
-      void handleFinalizarPedido(order.id);
+      showToast(
+        'Os dados financeiros deste pedido ainda estão sincronizando. Atualizamos a lista; tente receber novamente.',
+        'info'
+      );
+      await onRefreshOrders();
     }
   };
 
