@@ -16,6 +16,8 @@ def upgrade():
     if op.get_bind().dialect.name == "postgresql":
         # Fail closed if the migration role cannot see every tenant row.
         op.execute("SET LOCAL row_security = off")
+        # Prevent a legacy writer from inserting between the copy and delete.
+        op.execute("LOCK TABLE order_messages IN ACCESS EXCLUSIVE MODE")
     op.create_table(
         "order_conversation_events",
         sa.Column("id", sa.String(36), primary_key=True),
@@ -59,6 +61,7 @@ def upgrade():
 def downgrade():
     if op.get_bind().dialect.name == "postgresql":
         op.execute("SET LOCAL row_security = off")
+        op.execute("LOCK TABLE order_messages, order_conversation_events IN ACCESS EXCLUSIVE MODE")
     with op.batch_alter_table("order_messages") as batch:
         batch.alter_column("client_message_id", existing_type=sa.Uuid(as_uuid=False),
                            type_=sa.String(64), postgresql_using="client_message_id::text")
