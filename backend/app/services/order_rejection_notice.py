@@ -14,7 +14,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from ..order_chat_models import OrderConversation, OrderMessage
-from .order_chat_hub import order_chat_hub
+from .order_chat_hub import enqueue_order_chat_event
 from .order_chat_service import PLAIN_TEXT_BODY_FORMAT, serialize_message
 
 _REJECTION_REASON_EVENT_KEY = "rejection_reason"
@@ -71,9 +71,15 @@ def append_rejection_reason_notice(
     conversation.updated_at = now
     db.flush()
 
-    order_chat_hub.publish_message(
-        restaurante_id,
-        conversation.id,
-        serialize_message(message),
+    enqueue_order_chat_event(
+        db,
+        restaurante_id=restaurante_id,
+        conversation_id=conversation.id,
+        event_type="message",
+        data={
+            "message_id": message.id,
+            "pedido_id": pedido_id,
+            "sender_type": "system",
+        },
     )
     return message
