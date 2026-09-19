@@ -339,8 +339,16 @@ export default function CardapioPage() {
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
-        setStoredOrders(loadStoredOrders(rid));
-        void checkActiveOrders(rid);
+        const stored = loadStoredOrders(rid);
+        setStoredOrders(stored);
+        // Pedidos modernos são reconciliados pelo SSE/summary do drawer.
+        // Somente registros legados sem capability token precisam de uma
+        // reconciliação HTTP inicial.
+        if (stored.some((order) => (
+          !order.tracking_token && !resolveOrderState(order).terminal
+        ))) {
+          void checkActiveOrders(rid);
+        }
       }
     } catch (error) {
       console.error("Falha ao carregar cardápio público:", error);
@@ -1074,7 +1082,6 @@ export default function CardapioPage() {
             if (activeBrand?.id) {
               const rid = Number(activeBrand.id);
               setStoredOrders(loadStoredOrders(rid));
-              window.setTimeout(() => void checkActiveOrders(rid), 50);
             }
           }}
           onSessionExpired={handleSessionExpired}
