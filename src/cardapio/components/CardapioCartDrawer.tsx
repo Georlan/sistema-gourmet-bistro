@@ -379,6 +379,13 @@ export default function CardapioCartDrawer({
     setLocationQuote({ status: "loading" });
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (!Number.isFinite(position.coords.accuracy) || position.coords.accuracy > 200) {
+          setLocationQuote({
+            status: "error",
+            message: "Sua localização está imprecisa. Ative a localização precisa e tente novamente.",
+          });
+          return;
+        }
         setDeliveryAddressDraft((current) => ({
           ...current,
           latitude: position.coords.latitude,
@@ -391,7 +398,7 @@ export default function CardapioCartDrawer({
           message: "Localização não autorizada. Você pode continuar normalmente com a taxa mínima.",
         });
       },
-      { enableHighAccuracy: false, timeout: 8_000, maximumAge: 120_000 },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 0 },
     );
   };
 
