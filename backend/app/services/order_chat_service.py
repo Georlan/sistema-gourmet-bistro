@@ -512,6 +512,29 @@ def serialize_message(msg: OrderMessage) -> dict[str, Any]:
     }
 
 
+
+def list_recent_messages(
+    db: Session,
+    *,
+    restaurante_id: int,
+    conversation_id: str,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Retorna a cauda cronológica da conversa com limite rígido de leitura."""
+    bounded_limit = max(1, min(int(limit), 200))
+    rows = (
+        db.query(OrderMessage)
+        .filter(
+            OrderMessage.restaurante_id == restaurante_id,
+            OrderMessage.conversation_id == conversation_id,
+        )
+        .order_by(OrderMessage.created_at.desc(), OrderMessage.id.desc())
+        .limit(bounded_limit)
+        .all()
+    )
+    rows.reverse()
+    return [serialize_message(msg) for msg in rows]
+
 def list_caixa_conversations(
     db: Session,
     restaurante_id: int,
@@ -527,7 +550,7 @@ def list_caixa_conversations(
             OrderConversation.closed_at.is_(None),
         )
         .order_by(OrderConversation.updated_at.desc())
-        .limit(50)
+        .limit(150)
         .all()
     )
     if not conversations:
