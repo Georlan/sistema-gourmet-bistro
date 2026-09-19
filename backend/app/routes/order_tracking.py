@@ -15,7 +15,7 @@ import datetime
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
@@ -30,6 +30,7 @@ from ..services.customer_auth import hash_public_rate_key
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     compute_comanda_total,
+    list_feed_page,
     list_recent_messages,
     mark_customer_read,
     resolve_public_tracking,
@@ -344,6 +345,22 @@ def listar_mensagens_do_pedido(token: str, db: Session = Depends(get_db)):
             restaurante_id=restaurante_id,
             conversation_id=conversation_id,
         )
+
+
+@router.get("/{token}/feed", summary="Feed paginado da conversa do pedido")
+def listar_feed_do_pedido(
+    token: str, limit: int = Query(50, ge=1, le=100),
+    before_seq: int | None = Query(None, ge=1), after_seq: int | None = Query(None, ge=0),
+    db: Session = Depends(get_db),
+):
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado.")
+    restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        return list_feed_page(db, restaurante_id=restaurante_id,
+                              conversation_id=conversation_id, limit=limit,
+                              before_seq=before_seq, after_seq=after_seq)
 
 
 @router.post("/{token}/messages", summary="Envia mensagem do cliente para o restaurante")

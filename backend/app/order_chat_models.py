@@ -55,6 +55,8 @@ class OrderConversation(Base):
     customer_last_read_at = Column(DateTime(timezone=True), nullable=True)
     staff_last_read_at = Column(DateTime(timezone=True), nullable=True)
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    chat_purged_at = Column(DateTime(timezone=True), nullable=True)
+    next_feed_seq = Column(Integer, nullable=False, default=1, server_default="1")
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -92,6 +94,7 @@ class OrderMessage(Base):
             "client_message_id",
             name="uq_order_messages_conv_client_message_id",
         ),
+        UniqueConstraint("conversation_id", "feed_seq", name="uq_order_messages_conv_feed_seq"),
         Index("ix_order_messages_conv_created", "conversation_id", "created_at"),
         Index("ix_order_messages_tenant_created", "restaurante_id", "created_at"),
     )
@@ -126,6 +129,7 @@ class OrderMessage(Base):
     # UUID gerado pelo remetente para tornar retries HTTP de mensagens humanas idempotentes.
     # event_key só preserva chaves idempotentes humanas do rollout anterior.
     client_message_id = Column(Uuid(as_uuid=False), nullable=True)
+    feed_seq = Column(Integer, nullable=False)
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -143,6 +147,7 @@ class OrderConversationEvent(Base):
     __tablename__ = "order_conversation_events"
     __table_args__ = (
         UniqueConstraint("conversation_id", "event_key", name="uq_order_conversation_events_key"),
+        UniqueConstraint("conversation_id", "feed_seq", name="uq_order_events_conv_feed_seq"),
         Index("ix_order_conversation_events_feed", "conversation_id", "created_at"),
     )
 
@@ -155,6 +160,7 @@ class OrderConversationEvent(Base):
     status = Column(String(32), nullable=True)
     body = Column(Text, nullable=False)
     body_format = Column(String(32), nullable=False, default="plain_text_v2", server_default="plain_text_v2")
+    feed_seq = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
 

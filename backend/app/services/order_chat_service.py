@@ -15,7 +15,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, or_, text
+from sqlalchemy import func, or_, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -36,6 +36,16 @@ CANONICAL_STATUS_MESSAGES = {
 TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado", "cancelado"})
 LEGACY_ESCAPED_BODY_FORMAT = "html_escaped_v1"
 PLAIN_TEXT_BODY_FORMAT = "plain_text_v2"
+
+
+def _allocate_feed_seq(db: Session, conversation_id: str) -> int:
+    value = db.execute(
+        update(OrderConversation)
+        .where(OrderConversation.id == conversation_id)
+        .values(next_feed_seq=OrderConversation.next_feed_seq + 1)
+        .returning(OrderConversation.next_feed_seq - 1)
+    ).scalar_one()
+    return int(value)
 
 
 def compute_comanda_total(comanda: Comanda | None) -> float:
@@ -295,6 +305,7 @@ def append_order_feed_event(
     event = OrderConversationEvent(
         restaurante_id=conv.restaurante_id, conversation_id=conv.id,
         pedido_id=conv.pedido_id, event_key=event_key, status=order_status, body=body,
+        feed_seq=_allocate_feed_seq(db, conv.id),
     )
     try:
         with _chat_savepoint(db):
@@ -319,6 +330,7 @@ def serialize_feed_event(event: OrderConversationEvent) -> dict[str, Any]:
         "status": event.status, "event_key": event.event_key,
         "body": html.unescape(event.body) if event.body_format == LEGACY_ESCAPED_BODY_FORMAT else event.body,
         "created_at": event.created_at.isoformat() if event.created_at else None,
+        "seq": event.feed_seq or 0,
     }
 
 
@@ -386,6 +398,7 @@ def send_customer_message(
         body_format=PLAIN_TEXT_BODY_FORMAT,
         client_message_id=normalized_client_message_id,
         created_at=now,
+        feed_seq=_allocate_feed_seq(db, conv.id),
     )
     try:
         with _chat_savepoint(db):
@@ -460,6 +473,7 @@ def send_staff_message(
         body_format=PLAIN_TEXT_BODY_FORMAT,
         client_message_id=normalized_client_message_id,
         created_at=now,
+        feed_seq=_allocate_feed_seq(db, conv.id),
     )
     try:
         with _chat_savepoint(db):
@@ -593,6 +607,7 @@ def serialize_message(msg: OrderMessage) -> dict[str, Any]:
         "client_message_id": getattr(msg, "client_message_id", None),
         "event_key": msg.event_key,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
+        "seq": msg.feed_seq or 0,
     }
 
 
@@ -605,23 +620,48 @@ def list_recent_messages(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     """Retorna a cauda cronológica da conversa com limite rígido de leitura."""
-    bounded_limit = max(1, min(int(limit), 200))
-    rows = (
-        db.query(OrderMessage)
-        .filter(
-            OrderMessage.restaurante_id == restaurante_id,
-            OrderMessage.conversation_id == conversation_id,
-        )
-        .order_by(OrderMessage.created_at.desc(), OrderMessage.id.desc())
-        .limit(bounded_limit)
-        .all()
-    )
-    rows.reverse()
-    events = db.query(OrderConversationEvent).filter_by(
-        restaurante_id=restaurante_id, conversation_id=conversation_id,
-    ).order_by(OrderConversationEvent.created_at.desc(), OrderConversationEvent.id.desc()).limit(bounded_limit).all()
-    feed = [serialize_message(msg) for msg in rows] + [serialize_feed_event(event) for event in events]
-    return sorted(feed, key=lambda item: (item["created_at"] or "", item["id"]))[-bounded_limit:]
+    return list_feed_page(db, restaurante_id=restaurante_id,
+                          conversation_id=conversation_id, limit=limit)["items"]
+
+
+def list_feed_page(
+    db: Session, *, restaurante_id: int, conversation_id: str, limit: int = 50,
+    before_seq: int | None = None, after_seq: int | None = None,
+) -> dict[str, Any]:
+    """Lê uma página estável; ``after`` reconcilia SSE e ``before`` pagina."""
+    if before_seq is not None and after_seq is not None:
+        raise HTTPException(status_code=422, detail="Use before_seq ou after_seq, não ambos.")
+    bounded_limit = max(1, min(int(limit), 100))
+
+    def fetch(model):
+        query = db.query(model).filter(model.restaurante_id == restaurante_id,
+                                       model.conversation_id == conversation_id)
+        if after_seq is not None:
+            query = query.filter(model.feed_seq > after_seq).order_by(model.feed_seq.asc())
+        elif before_seq is not None:
+            query = query.filter(model.feed_seq < before_seq).order_by(model.feed_seq.desc())
+        else:
+            query = query.order_by(model.feed_seq.desc())
+        return query.limit(bounded_limit + 1).all()
+
+    feed = ([serialize_message(row) for row in fetch(OrderMessage)]
+            + [serialize_feed_event(row) for row in fetch(OrderConversationEvent)])
+    descending = after_seq is None
+    feed.sort(key=lambda item: item["seq"], reverse=descending)
+    has_more = len(feed) > bounded_limit
+    selected = feed[:bounded_limit]
+    if descending:
+        selected.reverse()
+    conv = db.query(OrderConversation).filter_by(
+        restaurante_id=restaurante_id, id=conversation_id,
+    ).first()
+    return {
+        "items": selected,
+        "has_more": has_more,
+        "oldest_seq": selected[0]["seq"] if selected else None,
+        "latest_seq": selected[-1]["seq"] if selected else None,
+        "purged_at": conv.chat_purged_at.isoformat() if conv and conv.chat_purged_at else None,
+    }
 
 def list_caixa_conversations(
     db: Session,

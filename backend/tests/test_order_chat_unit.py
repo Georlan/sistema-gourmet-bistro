@@ -478,6 +478,7 @@ def test_human_message_idempotency_accepts_legacy_event_key_during_rollout(clien
         body="Mensagem antes do rollout",
         body_format="plain_text_v2",
         event_key=f"customer:{legacy_key}",
+        feed_seq=1,
         created_at=datetime.datetime.now(datetime.timezone.utc),
     )
     session.add(legacy)
@@ -550,6 +551,7 @@ def test_message_body_is_plain_text_and_legacy_rows_are_decoded_at_boundary(clie
         sender_type="staff",
         body="5 &lt; 7 &amp; café",
         body_format=LEGACY_ESCAPED_BODY_FORMAT,
+        feed_seq=2,
         created_at=datetime.datetime.now(datetime.timezone.utc),
     )
     session.add(legacy)

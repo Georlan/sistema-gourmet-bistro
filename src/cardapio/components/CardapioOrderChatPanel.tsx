@@ -43,6 +43,15 @@ interface TrackingMessage {
   sender_type: "system" | "customer" | "staff";
   body: string;
   created_at?: string | null;
+  seq?: number;
+}
+
+interface TrackingFeedPage {
+  items: TrackingMessage[];
+  has_more: boolean;
+  oldest_seq: number | null;
+  latest_seq: number | null;
+  purged_at: string | null;
 }
 
 interface CardapioOrderChatPanelProps {
@@ -84,6 +93,8 @@ export default function CardapioOrderChatPanel({
   const draftKey = token ? `koma:order-chat-draft:v1:${order.id}` : null;
   const [tracking, setTracking] = useState<TrackingPayload | null>(null);
   const [messages, setMessages] = useState<TrackingMessage[]>([]);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [input, setInput] = useState(() => {
     if (!draftKey || typeof sessionStorage === "undefined") return "";
     try {
@@ -100,6 +111,7 @@ export default function CardapioOrderChatPanel({
   const readInFlightRef = useRef(false);
   const readQueuedRef = useRef(false);
   const observedStaffUnreadRef = useRef(false);
+  const latestSeqRef = useRef(0);
 
   const apiRoot = token
     ? `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`
@@ -115,14 +127,23 @@ export default function CardapioOrderChatPanel({
     try {
       const [orderRes, messagesRes] = await Promise.all([
         fetch(`${apiRoot}/summary`, { cache: "no-store" }),
-        fetch(`${apiRoot}/messages`, { cache: "no-store" }),
+        fetch(`${apiRoot}/feed${latestSeqRef.current ? `?after_seq=${latestSeqRef.current}` : ""}`, { cache: "no-store" }),
       ]);
       if (!orderRes.ok) throw new Error("Não foi possível atualizar o pedido.");
       const orderData = await orderRes.json() as TrackingPayload;
       setTracking(orderData);
       if (messagesRes.ok) {
-        const messageData = await messagesRes.json() as TrackingMessage[];
-        if (Array.isArray(messageData)) setMessages(messageData);
+        const page = await messagesRes.json() as TrackingFeedPage;
+        if (Array.isArray(page.items)) {
+          const wasInitialPage = latestSeqRef.current === 0;
+          latestSeqRef.current = Math.max(latestSeqRef.current, page.latest_seq || 0);
+          setMessages((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]));
+            page.items.forEach((item) => byId.set(item.id, item));
+            return [...byId.values()].sort((a, b) => (a.seq || 0) - (b.seq || 0));
+          });
+          if (wasInitialPage) setHasOlderMessages(page.has_more);
+        }
       }
       setError(null);
     } catch (err) {
@@ -131,6 +152,19 @@ export default function CardapioOrderChatPanel({
       setLoading(false);
     }
   }, [apiRoot]);
+
+  const loadOlder = useCallback(async () => {
+    const oldest = messages[0]?.seq;
+    if (!apiRoot || !oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const response = await fetch(`${apiRoot}/feed?before_seq=${oldest}&limit=50`, { cache: "no-store" });
+      if (!response.ok) return;
+      const page = await response.json() as TrackingFeedPage;
+      setMessages((current) => [...page.items, ...current]);
+      setHasOlderMessages(page.has_more);
+    } finally { setLoadingOlder(false); }
+  }, [apiRoot, loadingOlder, messages]);
 
   const markRead = useCallback(async () => {
     if (
@@ -214,9 +248,10 @@ export default function CardapioOrderChatPanel({
       source.addEventListener("message", (event: MessageEvent) => {
         try {
           const incoming = JSON.parse(event.data) as TrackingMessage;
+          latestSeqRef.current = Math.max(latestSeqRef.current, incoming.seq || 0);
           setMessages((current) => current.some((item) => item.id === incoming.id)
             ? current
-            : [...current, incoming]);
+            : [...current, incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
           if (incoming.sender_type === "staff") {
             observedStaffUnreadRef.current = true;
             if (document.visibilityState === "visible") void markRead();
@@ -234,9 +269,10 @@ export default function CardapioOrderChatPanel({
           };
           if (data.feed_event?.id) {
             const incoming = data.feed_event;
+            latestSeqRef.current = Math.max(latestSeqRef.current, incoming.seq || 0);
             setMessages((current) => current.some((item) => item.id === incoming.id)
               ? current
-              : [...current, incoming]);
+              : [...current, incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
           }
           if (typeof data.status !== "string" || !data.status) return;
           setTracking((current) => {
@@ -342,7 +378,7 @@ export default function CardapioOrderChatPanel({
       const sent = payload as TrackingMessage;
       setMessages((current) => current.some((item) => item.id === sent.id)
         ? current
-        : [...current, sent]);
+        : [...current, sent].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
       pendingMessageIdRef.current = null;
       setInput("");
       if (draftKey) {
@@ -430,6 +466,12 @@ export default function CardapioOrderChatPanel({
       <CardapioPushNotifications order={order} />
 
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
+        {hasOlderMessages && (
+          <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder}
+            className="mx-auto block rounded-lg border border-koma-border px-3 py-1.5 text-[10px] font-bold text-koma-secondary disabled:opacity-50">
+            {loadingOlder ? "Carregando…" : "Carregar mensagens anteriores"}
+          </button>
+        )}
         {loading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-koma-muted">Carregando conversa…</div>
         ) : messages.length === 0 ? (
