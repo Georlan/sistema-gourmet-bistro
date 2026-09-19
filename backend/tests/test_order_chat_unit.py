@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
+import uuid
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,8 +25,10 @@ from app.services.order_chat_service import (
     get_caixa_unread_summary,
     list_caixa_conversations,
     post_system_order_event,
+    send_customer_message,
     serialize_message,
 )
+from app.services.order_chat_hub import order_chat_hub
 
 
 @pytest.fixture()
@@ -170,10 +174,7 @@ def test_create_conversation_is_unique_per_order(client_and_session):
     assert token2 is None
 
     msgs = session.query(OrderMessage).filter(OrderMessage.conversation_id == conv1.id).all()
-    assert len(msgs) == 1
-    assert msgs[0].sender_type == "system"
-    assert msgs[0].body_format == PLAIN_TEXT_BODY_FORMAT
-    assert "recebido" in msgs[0].body.lower()
+    assert msgs == []
 
 
 def test_public_tracking_resolution_and_anti_enumeration(client_and_session):
@@ -235,7 +236,7 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
 
     resp_caixa_msgs = client.get(f"/api/caixa/conversas/{conv.id}/messages", headers=headers_staff)
     assert resp_caixa_msgs.status_code == 200
-    assert len(resp_caixa_msgs.json()) == 2
+    assert len(resp_caixa_msgs.json()) == 1
 
     resp_read = client.post(f"/api/caixa/conversas/{conv.id}/read", headers=headers_staff)
     assert resp_read.status_code == 200
@@ -253,7 +254,7 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     resp_client_msgs = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert resp_client_msgs.status_code == 200
     msgs = resp_client_msgs.json()
-    assert len(msgs) == 3
+    assert len(msgs) == 2
     assert msgs[-1]["sender_type"] == "staff"
     assert "avisamos a cozinha" in msgs[-1]["body"]
 
@@ -272,25 +273,36 @@ def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(cli
     assert customer_message.status_code == 200
     assert get_caixa_unread_summary(session, 1) == 1
 
-    msg1 = post_system_order_event(session, 1, "comanda-101", "producao")
+    preparing = post_system_order_event(session, 1, "comanda-101", "producao")
+    assert preparing is not None
+    assert preparing["status"] == "producao"
+    assert "preparo" in preparing["body"].lower()
     session.commit()
-    assert msg1 is not None
-    assert "preparo" in msg1.body.lower()
-    msg1_dup = post_system_order_event(session, 1, "comanda-101", "producao")
-    session.commit()
-    assert msg1_dup.id == msg1.id
 
-    msg2 = post_system_order_event(session, 1, "comanda-101", "pronto")
+    ready = post_system_order_event(session, 1, "comanda-101", "pronto")
+    assert ready is not None and ready["status"] == "pronto"
     session.commit()
-    assert "pronto" in msg2.body.lower()
-    msg3 = post_system_order_event(session, 1, "comanda-101", "transito")
+
+    dispatched = post_system_order_event(session, 1, "comanda-101", "transito")
+    assert dispatched is not None and dispatched["status"] == "transito"
     session.commit()
-    assert "saiu para entrega" in msg3.body.lower()
+
+    # Transições de pedido não ocupam order_messages: mensagem é entidade humana
+    # (com a exceção legada/específica do aviso de motivo de recusa).
+    system_messages = (
+        session.query(OrderMessage)
+        .filter(
+            OrderMessage.conversation_id == conv.id,
+            OrderMessage.sender_type == "system",
+        )
+        .all()
+    )
+    assert system_messages == []
 
     before_close = datetime.datetime.now(datetime.timezone.utc)
-    msg4 = post_system_order_event(session, 1, "comanda-101", "finalizado")
+    completed = post_system_order_event(session, 1, "comanda-101", "finalizado")
+    assert completed is not None and completed["status"] == "finalizado"
     session.commit()
-    assert "concluído" in msg4.body.lower()
     session.refresh(conv)
     assert conv.closed_at is not None
     closed_at = conv.closed_at
@@ -317,7 +329,80 @@ def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(cli
 
     history = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert history.status_code == 200
-    assert len(history.json()) == 6
+    assert len(history.json()) == 1
+
+
+def test_human_message_idempotency_reuses_existing_row(client_and_session):
+    client, session = client_and_session
+    _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
+    conv, raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+    headers_staff = _staff_headers(user_a)
+
+    customer_key = str(uuid.uuid4())
+    payload = {"body": "Sem cebola, por favor", "client_message_id": customer_key}
+    first = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json=payload,
+    )
+    second = client.post(
+        f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages",
+        json=payload,
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+
+    staff_key = str(uuid.uuid4())
+    staff_payload = {"body": "Anotado.", "client_message_id": staff_key}
+    staff_first = client.post(
+        f"/api/caixa/conversas/{conv.id}/messages",
+        headers=headers_staff,
+        json=staff_payload,
+    )
+    staff_second = client.post(
+        f"/api/caixa/conversas/{conv.id}/messages",
+        headers=headers_staff,
+        json=staff_payload,
+    )
+    assert staff_first.status_code == 200
+    assert staff_second.status_code == 200
+    assert staff_second.json()["id"] == staff_first.json()["id"]
+
+    human_rows = (
+        session.query(OrderMessage)
+        .filter(OrderMessage.conversation_id == conv.id)
+        .all()
+    )
+    assert len(human_rows) == 2
+
+
+def test_realtime_message_is_not_visible_before_commit(client_and_session):
+    _client, session = client_and_session
+    _seed_data(session)
+    conv, _raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+
+    async def scenario():
+        sub_id, queue = order_chat_hub.subscribe_conversation(conv.id)
+        try:
+            send_customer_message(
+                session,
+                1,
+                conv.id,
+                "comanda-101",
+                "Mensagem transacional",
+                client_message_id=str(uuid.uuid4()),
+            )
+            assert queue.empty()
+            session.commit()
+            event = await asyncio.wait_for(queue.get(), timeout=1.0)
+            assert event["event"] == "message"
+            assert event["data"]["body"] == "Mensagem transacional"
+        finally:
+            order_chat_hub.unsubscribe_conversation(conv.id, sub_id)
+
+    asyncio.run(scenario())
 
 
 def test_message_body_is_plain_text_and_legacy_rows_are_decoded_at_boundary(client_and_session):

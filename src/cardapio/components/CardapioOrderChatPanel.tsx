@@ -80,13 +80,22 @@ export default function CardapioOrderChatPanel({
   onClose,
 }: CardapioOrderChatPanelProps) {
   const token = useMemo(() => resolveTrackingToken(order), [order]);
+  const draftKey = token ? `koma:order-chat-draft:v1:${order.id}` : null;
   const [tracking, setTracking] = useState<TrackingPayload | null>(null);
   const [messages, setMessages] = useState<TrackingMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => {
+    if (!draftKey || typeof sessionStorage === "undefined") return "";
+    try {
+      return sessionStorage.getItem(draftKey) || "";
+    } catch {
+      return "";
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingMessageIdRef = useRef<string | null>(null);
 
   const apiRoot = token
     ? `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}`
@@ -208,18 +217,32 @@ export default function CardapioOrderChatPanel({
     : ["Recebido", "Em preparo", "Pronto", "Concluído"];
   const isClosed = !state.can_chat || tracking?.conversa?.can_chat === false;
 
+  useEffect(() => {
+    if (!draftKey || typeof sessionStorage === "undefined") return;
+    if (isClosed || !input.trim()) {
+      try { sessionStorage.removeItem(draftKey); } catch {}
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try { sessionStorage.setItem(draftKey, input); } catch {}
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, input, isClosed]);
+
   const sendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
     const body = input.trim();
     if (!apiRoot || !body || sending || isClosed) return;
 
+    const clientMessageId = pendingMessageIdRef.current || crypto.randomUUID();
+    pendingMessageIdRef.current = clientMessageId;
     setSending(true);
     setError(null);
     try {
       const response = await fetch(`${apiRoot}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ body, client_message_id: clientMessageId }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.detail || "Não foi possível enviar a mensagem.");
@@ -227,7 +250,11 @@ export default function CardapioOrderChatPanel({
       setMessages((current) => current.some((item) => item.id === sent.id)
         ? current
         : [...current, sent]);
+      pendingMessageIdRef.current = null;
       setInput("");
+      if (draftKey) {
+        try { sessionStorage.removeItem(draftKey); } catch {}
+      }
       void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
@@ -358,13 +385,13 @@ export default function CardapioOrderChatPanel({
           </div>
         ) : (
           <div className="space-y-2">
-            {state.terminal && !rejected && (
-              <p className="text-[10px] text-koma-muted">Pedido concluído · sua mensagem abrirá um atendimento de pós-venda sem reabrir o pedido.</p>
-            )}
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
-                onChange={(event) => setInput(event.target.value)}
+                onChange={(event) => {
+                setInput(event.target.value);
+                pendingMessageIdRef.current = null;
+              }}
                 rows={1}
                 maxLength={1000}
                 placeholder="Escreva para o restaurante…"

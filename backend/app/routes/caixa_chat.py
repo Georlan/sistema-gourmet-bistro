@@ -19,12 +19,13 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, tenant_session_scope
 from ..models import Usuario
-from ..order_chat_models import OrderConversation, OrderMessage
+from ..order_chat_models import OrderConversation
 from ..security import require_permission
-from ..services.order_chat_archive_service import list_caixa_conversations_for_central
 from ..services.order_chat_hub import order_chat_hub
 from ..services.order_chat_service import (
     get_caixa_unread_summary,
+    list_caixa_conversations,
+    list_recent_messages,
     mark_staff_read,
     send_staff_message,
     serialize_message,
@@ -36,6 +37,7 @@ router = APIRouter(prefix="/api/caixa/conversas", tags=["Caixa - Chat"])
 
 class StaffMessagePayload(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000, description="Texto da resposta do operador")
+    client_message_id: str | None = Field(default=None, min_length=36, max_length=36)
 
 
 def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
@@ -57,10 +59,10 @@ def listar_conversas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("caixa:operar")),
 ):
-    """Retorna fila ativa e histórico arquivado recente para a Central de Conversas."""
+    """Retorna somente conversas operacionais ativas do restaurante."""
     restaurante_id = _get_tenant_id(current_user)
     with tenant_session_scope(db, restaurante_id):
-        return list_caixa_conversations_for_central(db, restaurante_id)
+        return list_caixa_conversations(db, restaurante_id)
 
 
 @router.get("/unread-count", summary="Total global de mensagens não lidas no Caixa")
@@ -98,16 +100,11 @@ def obter_mensagens_conversa(
                 detail="Conversa não encontrada.",
             )
 
-        messages = (
-            db.query(OrderMessage)
-            .filter(
-                OrderMessage.restaurante_id == restaurante_id,
-                OrderMessage.conversation_id == conversation_id,
-            )
-            .order_by(OrderMessage.created_at.asc())
-            .all()
+        return list_recent_messages(
+            db,
+            restaurante_id=restaurante_id,
+            conversation_id=conversation_id,
         )
-        return [serialize_message(msg) for msg in messages]
 
 
 @router.post("/{conversation_id}/messages", summary="Operador responde mensagem do cliente")
@@ -126,6 +123,7 @@ def responder_cliente(
             conversation_id=conversation_id,
             user_id=current_user.id,
             raw_body=payload.body,
+            client_message_id=payload.client_message_id,
         )
         enqueue_order_push_event(
             db,

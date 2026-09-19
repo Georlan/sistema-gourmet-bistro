@@ -164,6 +164,8 @@ export function CaixaPanel({
     isChatDrawerOpen,
     setIsChatDrawerOpen,
     chatUnreadCount,
+    chatUnreadStatus,
+    chatRealtimeEvent,
     setChatUnreadCount,
   } = useCashierChat(apiBaseUrl, authHeaders.Authorization || "");
 
@@ -1248,6 +1250,9 @@ export function CaixaPanel({
           key={authHeaders.Authorization}
           authorization={authHeaders.Authorization || ""}
           isOpen={isChatDrawerOpen}
+          realtimeEvent={chatRealtimeEvent}
+          realtimeHealth={chatUnreadStatus}
+          draftScope={`${Number.isFinite(restId) ? restId : 'tenant'}:${turno?.id ?? 'no-shift'}`}
           onClose={() => setIsChatDrawerOpen(false)}
           onInspectOrder={(pedidoId) => {
             handleSidebarNavigation('vendas_pedidos');

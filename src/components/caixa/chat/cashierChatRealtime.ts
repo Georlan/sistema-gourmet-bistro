@@ -3,6 +3,10 @@ export interface CashierChatStreamEvent {
   data: Record<string, unknown> | null;
 }
 
+export interface CashierChatStreamSnapshot extends CashierChatStreamEvent {
+  sequence: number;
+}
+
 interface ConsumeCashierChatEventsOptions {
   url: string;
   authorization: string;
