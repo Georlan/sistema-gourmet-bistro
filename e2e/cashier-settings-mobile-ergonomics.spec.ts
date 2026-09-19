@@ -295,7 +295,7 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   await expectNoHorizontalOverflow(page);
 
   await navigateHorizontal(page, 'App do Garçom');
-  await expect(page.getByText('Permissões do App do Garçom')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Permissões da equipe', exact: true })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await navigateHorizontal(page, 'Taxa de Serviço');
