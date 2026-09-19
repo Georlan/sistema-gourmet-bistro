@@ -24,7 +24,7 @@ from ..models import Comanda
 from ..order_chat_models import OrderConversation, OrderMessage
 from .order_chat_hub import enqueue_order_chat_event
 
-TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado"})
+TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado", "cancelado", "completed", "rejected", "cancelled"})
 LEGACY_ESCAPED_BODY_FORMAT = "html_escaped_v1"
 PLAIN_TEXT_BODY_FORMAT = "plain_text_v2"
 
@@ -222,6 +222,7 @@ def post_system_order_event(
         data=payload,
     )
     return payload
+
 
 def send_customer_message(
     db: Session,
