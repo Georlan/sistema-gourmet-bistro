@@ -642,18 +642,34 @@ export default function CardapioPage() {
     status: string,
     closedAt: string | null,
   ) => {
-    setStoredOrders((current) => current.map((order) => {
-      if (order.id !== orderId) return order;
-      const state = fallbackOrderState(status, order.tipo);
-      const updated: StoredOrder = {
-        ...order,
-        status,
-        state,
-        fechado: state.terminal || Boolean(closedAt),
-      };
-      updateStoredOrderStatus(orderId, updated);
-      return updated;
-    }));
+    setStoredOrders((current) => {
+      let changed = false;
+      const next = current.map((order) => {
+        if (order.id !== orderId) return order;
+        const state = fallbackOrderState(status, order.tipo);
+        const nextClosed = state.terminal || Boolean(closedAt);
+        const currentState = resolveOrderState(order);
+        if (
+          order.status === status
+          && currentState.status === state.status
+          && currentState.phase === state.phase
+          && Boolean(order.fechado) === nextClosed
+        ) {
+          return order;
+        }
+
+        changed = true;
+        const updated: StoredOrder = {
+          ...order,
+          status,
+          state,
+          fechado: nextClosed,
+        };
+        updateStoredOrderStatus(orderId, updated);
+        return updated;
+      });
+      return changed ? next : current;
+    });
   }, []);
 
   const clearTrackedOrder = (orderId?: string) => {
