@@ -128,6 +128,19 @@ export default function CardapioOrderChatPanel({
     }
   }, [apiRoot]);
 
+  const refreshStatus = useCallback(async () => {
+    if (!apiRoot) return;
+    try {
+      const response = await fetch(`${apiRoot}/summary`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Não foi possível atualizar o pedido.");
+      const orderData = await response.json() as TrackingPayload;
+      setTracking(orderData);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao atualizar o pedido.");
+    }
+  }, [apiRoot]);
+
   const markRead = useCallback(() => {
     if (!apiRoot || document.visibilityState !== "visible") return;
     void fetch(`${apiRoot}/read`, { method: "POST" }).catch(() => {});
@@ -176,7 +189,7 @@ export default function CardapioOrderChatPanel({
         }
       });
       source.addEventListener("status", () => {
-        void refresh();
+        void refreshStatus();
       });
     } catch {
       source = null;
@@ -188,7 +201,7 @@ export default function CardapioOrderChatPanel({
       stopFallback();
       source?.close();
     };
-  }, [apiRoot, refresh]);
+  }, [apiRoot, refresh, refreshStatus]);
 
   useEffect(() => {
     markRead();
@@ -255,7 +268,6 @@ export default function CardapioOrderChatPanel({
       if (draftKey) {
         try { sessionStorage.removeItem(draftKey); } catch {}
       }
-      void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
     } finally {
