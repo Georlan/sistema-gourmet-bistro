@@ -110,7 +110,7 @@ export default function CardapioOrderChatPanel({
 
     try {
       const [orderRes, messagesRes] = await Promise.all([
-        fetch(apiRoot, { cache: "no-store" }),
+        fetch(`${apiRoot}/summary`, { cache: "no-store" }),
         fetch(`${apiRoot}/messages`, { cache: "no-store" }),
       ]);
       if (!orderRes.ok) throw new Error("Não foi possível atualizar o pedido.");
