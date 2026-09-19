@@ -67,6 +67,8 @@ test('cardapio usa SSE e resumo leve em vez de polling contínuo de pedidos', ()
   assert.match(drawer, /30000/);
   assert.doesNotMatch(drawer, /6000/);
   assert.match(clientPanel, /\$\{apiRoot\}\/summary/);
+  assert.match(clientPanel, /isReconnect[\s\S]*void refresh\(\)/);
+  assert.match(drawer, /openedOrders/);
   assert.doesNotMatch(cardapioPage, /ACTIVE_ORDER_REFRESH_MS/);
   assert.doesNotMatch(cardapioPage, /setInterval\(refresh/);
   assert.match(cardapioPage, /onRealtimeStatus=\{handleRealtimeOrderStatus\}/);
@@ -127,9 +129,11 @@ test('central do Caixa prioriza atenção sem permitir resposta rápida fingir s
 test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigido', () => {
   assert.match(cashierDrawer, /event\.target === event\.currentTarget/);
   assert.match(cashierDrawer, /event\.key === 'Escape'/);
+  assert.match(cashierDrawer, /case 'reconnected':/);
   assert.match(cashierDrawer, /case 'new_message':/);
   assert.match(cashierDrawer, /case 'status_changed':/);
   assert.match(cashierDrawer, /case 'read_update':/);
+  assert.match(cashierHook, /event: 'reconnected'/);
 });
 
 test('central do Caixa consulta somente conversas operacionais ativas', () => {
