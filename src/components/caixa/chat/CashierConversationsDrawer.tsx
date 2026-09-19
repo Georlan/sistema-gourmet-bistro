@@ -16,7 +16,8 @@ import {
 import clsx from 'clsx';
 import { API_BASE_URL } from '../../../config/api';
 import { getCashierDeliveryStatusLabel } from '../../../domain/cashierOrderProjection';
-import { consumeCashierChatEvents } from './cashierChatRealtime';
+import type { CashierChatStreamSnapshot } from './cashierChatRealtime';
+import type { CashierChatHealth } from './useCashierChat';
 
 export interface CaixaConversationItem {
   id: string;
@@ -54,6 +55,8 @@ interface CashierConversationsDrawerProps {
   onClose: () => void;
   onInspectOrder?: (pedidoId: string) => void;
   onUnreadCountChange?: (count: number) => void;
+  realtimeEvent?: CashierChatStreamSnapshot | null;
+  realtimeHealth?: CashierChatHealth;
 }
 
 interface MessageState {
@@ -186,6 +189,8 @@ export function CashierConversationsDrawer({
   onClose,
   onInspectOrder,
   onUnreadCountChange,
+  realtimeEvent = null,
+  realtimeHealth = 'idle',
 }: CashierConversationsDrawerProps) {
   const [conversations, setConversations] = useState<CaixaConversationItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -412,117 +417,80 @@ export function CashierConversationsDrawer({
     }
   }, [isOpen, openConversation, selectedId, sortedConversations]);
 
-  useEffect(() => {
-    if (!isOpen || !authorization) return;
-    const controller = new AbortController();
-    let fallbackInterval: number | null = null;
-    let reconnectTimer: number | null = null;
-    let stopped = false;
+  const appendRealtimeMessage = useCallback((data: Record<string, unknown> | null) => {
+    const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
+    const messageId = typeof data?.id === 'string' ? data.id : null;
+    const pedidoId = typeof data?.pedido_id === 'string' ? data.pedido_id : null;
+    const senderType = data?.sender_type;
+    const body = typeof data?.body === 'string' ? data.body : null;
+    if (
+      !eventConversationId
+      || !messageId
+      || !pedidoId
+      || !body
+      || (senderType !== 'system' && senderType !== 'customer' && senderType !== 'staff')
+    ) return;
 
-    const stopFallback = () => {
-      if (fallbackInterval !== null) {
-        window.clearInterval(fallbackInterval);
-        fallbackInterval = null;
-      }
+    const message: CaixaChatMessage = {
+      id: messageId,
+      conversation_id: eventConversationId,
+      pedido_id: pedidoId,
+      sender_type: senderType,
+      sender_user_id: typeof data?.sender_user_id === 'number' ? data.sender_user_id : null,
+      body,
+      event_key: typeof data?.event_key === 'string' ? data.event_key : null,
+      created_at: typeof data?.created_at === 'string' ? data.created_at : null,
     };
-    const refreshSelectedInBackground = () => {
+
+    if (selectedIdRef.current === eventConversationId) {
+      setMessageState((current) => {
+        const items = current.conversationId === eventConversationId ? current.items : [];
+        if (items.some((item) => item.id === message.id)) return current;
+        return { conversationId: eventConversationId, items: [...items, message] };
+      });
+      window.setTimeout(() => scrollToBottom(true), 50);
+      if (senderType === 'customer' && document.visibilityState === 'visible') {
+        void markConversationRead(eventConversationId);
+      }
+    }
+  }, [markConversationRead, scrollToBottom]);
+
+  useEffect(() => {
+    if (!isOpen || !realtimeEvent) return;
+    const { event, data } = realtimeEvent;
+    const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
+    switch (event) {
+      case 'new_message':
+        appendRealtimeMessage(data);
+        void fetchConversations({ background: true });
+        return;
+      case 'status_changed':
+        void fetchConversations({ background: true });
+        return;
+      case 'read_update':
+        if (eventConversationId && data?.reader === 'staff') {
+          setConversations((current) => current.map((conversation) => (
+            conversation.id === eventConversationId
+              ? { ...conversation, unread_count: 0 }
+              : conversation
+          )));
+        }
+        return;
+      default:
+        return;
+    }
+  }, [appendRealtimeMessage, fetchConversations, isOpen, realtimeEvent]);
+
+  useEffect(() => {
+    if (!isOpen || realtimeHealth !== 'degraded') return;
+    const interval = window.setInterval(() => {
+      if (document.hidden) return;
+      void fetchConversations({ background: true });
       const current = selectedIdRef.current;
       if (current) void loadMessages(current, { background: true, markRead: false });
-    };
-    const startFallback = () => {
-      if (fallbackInterval !== null) return;
-      fallbackInterval = window.setInterval(() => {
-        if (document.hidden) return;
-        void fetchConversations({ background: true });
-        refreshSelectedInBackground();
-      }, 15000);
-    };
-
-    const appendRealtimeMessage = (data: Record<string, unknown> | null) => {
-      const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
-      const messageId = typeof data?.id === 'string' ? data.id : null;
-      const pedidoId = typeof data?.pedido_id === 'string' ? data.pedido_id : null;
-      const senderType = data?.sender_type;
-      const body = typeof data?.body === 'string' ? data.body : null;
-      if (
-        !eventConversationId
-        || !messageId
-        || !pedidoId
-        || !body
-        || (senderType !== 'system' && senderType !== 'customer' && senderType !== 'staff')
-      ) return;
-
-      const message: CaixaChatMessage = {
-        id: messageId,
-        conversation_id: eventConversationId,
-        pedido_id: pedidoId,
-        sender_type: senderType,
-        sender_user_id: typeof data?.sender_user_id === 'number' ? data.sender_user_id : null,
-        body,
-        event_key: typeof data?.event_key === 'string' ? data.event_key : null,
-        created_at: typeof data?.created_at === 'string' ? data.created_at : null,
-      };
-
-      if (selectedIdRef.current === eventConversationId) {
-        setMessageState((current) => {
-          const items = current.conversationId === eventConversationId ? current.items : [];
-          if (items.some((item) => item.id === message.id)) return current;
-          return { conversationId: eventConversationId, items: [...items, message] };
-        });
-        window.setTimeout(() => scrollToBottom(true), 50);
-        if (senderType === 'customer' && document.visibilityState === 'visible') {
-          void markConversationRead(eventConversationId);
-        }
-      }
-    };
-
-    const connect = () => {
-      if (stopped || controller.signal.aborted) return;
-      void consumeCashierChatEvents({
-        url: `${API_BASE_URL}/api/caixa/conversas/events`,
-        authorization,
-        signal: controller.signal,
-        onOpen: stopFallback,
-        onEvent: ({ event, data }) => {
-          if (event === 'connected') return;
-          const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
-          switch (event) {
-            case 'new_message':
-              appendRealtimeMessage(data);
-              void fetchConversations({ background: true });
-              return;
-            case 'status_changed':
-              void fetchConversations({ background: true });
-              return;
-            case 'read_update':
-              if (eventConversationId && data?.reader === 'staff') {
-                setConversations((current) => current.map((conversation) => (
-                  conversation.id === eventConversationId
-                    ? { ...conversation, unread_count: 0 }
-                    : conversation
-                )));
-              }
-              return;
-            default:
-              void fetchConversations({ background: true });
-          }
-        },
-      }).catch((error) => {
-        if (stopped || controller.signal.aborted) return;
-        console.warn('Realtime do chat do Caixa degradado; usando polling de fallback:', error);
-        startFallback();
-        reconnectTimer = window.setTimeout(connect, 5000);
-      });
-    };
-
-    connect();
-    return () => {
-      stopped = true;
-      controller.abort();
-      stopFallback();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
-    };
-  }, [authorization, fetchConversations, isOpen, loadMessages, markConversationRead, scrollToBottom]);
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [fetchConversations, isOpen, loadMessages, realtimeHealth]);
 
   useEffect(() => () => {
     messageGenerationRef.current += 1;
