@@ -57,6 +57,7 @@ interface CashierConversationsDrawerProps {
   onUnreadCountChange?: (count: number) => void;
   realtimeEvent?: CashierChatStreamSnapshot | null;
   realtimeHealth?: CashierChatHealth;
+  draftScope?: string;
 }
 
 interface MessageState {
@@ -82,12 +83,12 @@ const QUICK_REPLIES = [
 
 const CASHIER_CHAT_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 
-const cashierDraftKey = (conversationId: string) =>
-  `koma:cashier-chat-draft:v1:${conversationId}`;
+const cashierDraftKey = (scope: string, conversationId: string) =>
+  `koma:cashier-chat-draft:v1:${scope}:${conversationId}`;
 
-function loadCashierDraft(conversationId: string): string {
+function loadCashierDraft(scope: string, conversationId: string): string {
   try {
-    const raw = localStorage.getItem(cashierDraftKey(conversationId));
+    const raw = localStorage.getItem(cashierDraftKey(scope, conversationId));
     if (!raw) return '';
     const parsed = JSON.parse(raw) as { body?: unknown; expiresAt?: unknown };
     if (
@@ -95,7 +96,7 @@ function loadCashierDraft(conversationId: string): string {
       || typeof parsed.expiresAt !== 'number'
       || parsed.expiresAt <= Date.now()
     ) {
-      localStorage.removeItem(cashierDraftKey(conversationId));
+      localStorage.removeItem(cashierDraftKey(scope, conversationId));
       return '';
     }
     return parsed.body;
@@ -104,8 +105,8 @@ function loadCashierDraft(conversationId: string): string {
   }
 }
 
-function removeCashierDraft(conversationId: string): void {
-  try { localStorage.removeItem(cashierDraftKey(conversationId)); } catch {}
+function removeCashierDraft(scope: string, conversationId: string): void {
+  try { localStorage.removeItem(cashierDraftKey(scope, conversationId)); } catch {}
 }
 
 const TERMINAL_CHAT_STATUSES = new Set([
@@ -191,6 +192,7 @@ export function CashierConversationsDrawer({
   onUnreadCountChange,
   realtimeEvent = null,
   realtimeHealth = 'idle',
+  draftScope = 'default',
 }: CashierConversationsDrawerProps) {
   const [conversations, setConversations] = useState<CaixaConversationItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -386,21 +388,21 @@ export function CashierConversationsDrawer({
 
   useEffect(() => {
     if (!isOpen || !selectedId) return;
-    setReplyText(loadCashierDraft(selectedId));
+    setReplyText(loadCashierDraft(draftScope, selectedId));
     void loadMessages(selectedId);
-  }, [isOpen, selectedId, loadMessages]);
+  }, [draftScope, isOpen, selectedId, loadMessages]);
 
   useEffect(() => {
     if (!selectedId) return;
     const timer = window.setTimeout(() => {
       const body = replyText;
       if (!body.trim()) {
-        removeCashierDraft(selectedId);
+        removeCashierDraft(draftScope, selectedId);
         return;
       }
       try {
         localStorage.setItem(
-          cashierDraftKey(selectedId),
+          cashierDraftKey(draftScope, selectedId),
           JSON.stringify({
             body,
             expiresAt: Date.now() + CASHIER_CHAT_DRAFT_TTL_MS,
@@ -409,7 +411,7 @@ export function CashierConversationsDrawer({
       } catch {}
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [replyText, selectedId]);
+  }, [draftScope, replyText, selectedId]);
 
   useEffect(() => {
     if (isOpen && !selectedId && sortedConversations.length > 0 && window.innerWidth >= 640) {
@@ -534,7 +536,7 @@ export function CashierConversationsDrawer({
           return { conversationId: targetConversationId, items: [...items, sentMessage] };
         });
         pendingSendRef.current = null;
-        removeCashierDraft(targetConversationId);
+        removeCashierDraft(draftScope, targetConversationId)
         setReplyText('');
         window.setTimeout(() => scrollToBottom(true), 50);
       }
@@ -558,7 +560,7 @@ export function CashierConversationsDrawer({
     } finally {
       setSending(false);
     }
-  }, [authorization, fetchConversations, replyText, selectedArchived, selectedId, sending, scrollToBottom]);
+  }, [authorization, draftScope, fetchConversations, replyText, selectedArchived, selectedId, sending, scrollToBottom]);
 
   const handleSendReply = (event: React.FormEvent) => {
     event.preventDefault();
