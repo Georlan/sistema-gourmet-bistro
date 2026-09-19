@@ -188,7 +188,7 @@ async def stream_eventos_caixa(
                     payload = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield _sse_event(payload["event"], payload["data"])
                 except asyncio.TimeoutError:
-                    yield ": keepalive\n\n"
+                    yield _sse_event("transport", order_chat_hub.transport_status())
         finally:
             order_chat_hub.unsubscribe_caixa(restaurante_id, sub_id)
 
