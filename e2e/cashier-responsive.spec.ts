@@ -400,7 +400,17 @@ test('Equipe concentra convites e acessos sem funções ou consultas duplicadas'
   await expectNoHorizontalOverflow(page);
   await inviteDialog.getByRole('button', { name: 'Fechar convite' }).click();
 
-  await page.getByRole('button', { name: 'Funções e acessos', exact: true }).click();
+  const teamSubnav = page.locator('.cashier-subnav');
+  await expect(teamSubnav.getByRole('button')).toHaveCount(2);
+
+  const visibleSidebar = page.locator('.cashier-sidebar:visible');
+  if (await visibleSidebar.isVisible()) {
+    const teamShortcuts = visibleSidebar.getByLabel('Atalhos de Equipe');
+    await expect(teamShortcuts.getByRole('button', { name: 'Pessoas', exact: true })).toBeVisible();
+    await expect(teamShortcuts.getByRole('button', { name: 'Funções e acessos', exact: true })).toBeVisible();
+  }
+
+  await teamSubnav.getByRole('button', { name: 'Funções e acessos', exact: true }).click();
   await expect(page.getByLabel('Funções e acessos')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Operador de caixa', exact: true })).toHaveCount(1);
   await expect(page.getByRole('heading', { name: 'Operador Caixa', exact: true })).toHaveCount(0);
