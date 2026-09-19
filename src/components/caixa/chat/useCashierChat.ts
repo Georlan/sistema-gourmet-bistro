@@ -184,7 +184,8 @@ export function useCashierChat(apiBaseUrl: string, authorization: string) {
           if (event === 'new_message') {
             maybePlayChatMessageAlert(data);
           }
-          if (event === 'new_message' || event === 'status_changed' || event === 'read_update') {
+          // Mudança de status não altera contagem de mensagens humanas.
+          if (event === 'new_message' || event === 'read_update') {
             void fetchUnread();
           }
         },
