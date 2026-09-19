@@ -2,6 +2,7 @@ import datetime
 import uuid
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -54,6 +55,7 @@ class OrderConversation(Base):
     customer_last_read_at = Column(DateTime(timezone=True), nullable=True)
     staff_last_read_at = Column(DateTime(timezone=True), nullable=True)
     closed_at = Column(DateTime(timezone=True), nullable=True)
+    next_message_seq = Column(BigInteger, nullable=False, default=1, server_default="1")
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -91,7 +93,9 @@ class OrderMessage(Base):
             "client_message_id",
             name="uq_order_messages_conv_client_message_id",
         ),
+        UniqueConstraint("conversation_id", "seq", name="uq_order_messages_conv_seq"),
         Index("ix_order_messages_conv_created", "conversation_id", "created_at"),
+        Index("ix_order_messages_conv_seq", "conversation_id", "seq"),
         Index("ix_order_messages_tenant_created", "restaurante_id", "created_at"),
     )
 
@@ -110,6 +114,7 @@ class OrderMessage(Base):
         index=True,
     )
     pedido_id = Column(String(64), nullable=False)
+    seq = Column(BigInteger, nullable=False)
     sender_type = Column(String(20), nullable=False)  # customer | staff | system
     sender_user_id = Column(String, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     body = Column(Text, nullable=False)
