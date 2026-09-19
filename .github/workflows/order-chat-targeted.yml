@@ -9,11 +9,16 @@ on:
       - "backend/app/services/order_chat_*.py"
       - "backend/app/services/order_rejection_notice.py"
       - "backend/tests/test_order_chat_unit.py"
+      - "backend/tests/test_order_tracking_performance.py"
       - "backend/tests/test_online_order_reasoned_rejection.py"
+      - "src/cardapio/CardapioPage.tsx"
+      - "src/cardapio/orderTracking.ts"
+      - "src/cardapio/components/CardapioOrdersDrawer.tsx"
       - "src/cardapio/components/CardapioOrderChatPanel.tsx"
       - "src/components/CaixaPanel.tsx"
       - "src/components/caixa/chat/**"
       - "tests/chat-visual-notifications.test.ts"
+      - "tests/cardapio-inline-order-chat.test.ts"
       - ".github/workflows/order-chat-targeted.yml"
 
 permissions:
@@ -64,6 +69,10 @@ jobs:
           DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
           MIGRATION_DATABASE_URL=sqlite:///./order-chat-unit-ci.db \
             python -m pytest -q -ra backend/tests/test_order_chat_unit.py
+
+          DATABASE_URL=sqlite:///./order-chat-performance-ci.db \
+          MIGRATION_DATABASE_URL=sqlite:///./order-chat-performance-ci.db \
+            python -m pytest -q -ra backend/tests/test_order_tracking_performance.py
 
           DATABASE_URL=sqlite:///./order-chat-rejection-lifecycle-ci.db \
           MIGRATION_DATABASE_URL=sqlite:///./order-chat-rejection-lifecycle-ci.db \
