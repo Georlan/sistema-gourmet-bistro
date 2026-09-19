@@ -100,6 +100,26 @@ async function setupChatRoutes(page: Page) {
       });
     }
 
+    if (pathname === `/api/cardapio/pedidos/acompanhar/${trackingToken}/summary` && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: orderId,
+          status: orderStatus,
+          tipo: mockOrder.tipo,
+          fechada: false,
+          closed_at: null,
+          conversa: {
+            id: convId,
+            unread_count: chatMessages.filter((message) => message.sender_type === 'staff').length,
+            can_chat: true,
+            closed_at: null,
+          },
+        }),
+      });
+    }
+
     if (pathname === `/api/cardapio/pedidos/acompanhar/${trackingToken}` && method === 'GET') {
       return route.fulfill({
         status: 200,
