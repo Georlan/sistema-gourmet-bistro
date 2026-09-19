@@ -16,14 +16,6 @@ from ..order_chat_models import OrderConversation, OrderMessage
 from .order_chat_service import compute_comanda_total, list_caixa_conversations, serialize_message
 
 
-_COMPLETED_STATUSES = {"finalizado", "finalizada", "concluido", "concluida", "completed"}
-_REJECTED_STATUSES = {"recusado", "recusada", "rejected", "cancelado", "cancelada", "cancelled"}
-
-
-def _normalize_status(value: str | None) -> str:
-    return (value or "").strip().lower()
-
-
 def _client_name(comanda: Comanda | None) -> str:
     if not comanda:
         return "Cliente"
