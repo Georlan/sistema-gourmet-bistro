@@ -100,8 +100,8 @@ export const getCashierTableOrderPresentation = (order: Order & { projectionScop
 
   return {
     shortLabel: mesaId > 0 ? `M${mesaId}` : 'B',
-    title: configuredName || (mesaId > 0 ? `Mesa ${mesaId}` : 'Balcão'),
-    subtitle: `${orderLabel} · ${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
+    title: orderLabel,
+    subtitle: `${configuredName || (mesaId > 0 ? `Mesa ${String(mesaId).padStart(2, '0')}` : 'Balcão')} · ${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
   };
 };
 

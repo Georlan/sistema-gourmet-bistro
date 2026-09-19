@@ -124,7 +124,7 @@ test('workspace preserves card keyboard guards and stops action clicks before de
   let stopped = 0;
   const click = { stopPropagation: () => stopped++ };
   invoke(button(view, 'Marcar item como pronto'), 'onClick', click);
-  invoke(find(view, element => element.props['aria-label'] === 'Imprimir conferência da Varanda'), 'onClick', click);
+  invoke(find(view, element => element.props['aria-label'] === 'Imprimir conferência de Pedido #24'), 'onClick', click);
   invoke(button(view, 'Receber itens prontos'), 'onClick', click);
   assert.equal(stopped, 3);
   assert.deepEqual(acted, [props.columns.tableProduction[0].order, props.columns.tableProduction[0].order,

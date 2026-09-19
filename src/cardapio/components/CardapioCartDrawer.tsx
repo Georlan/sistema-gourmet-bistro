@@ -369,6 +369,21 @@ export default function CardapioCartDrawer({
   ]);
 
   const requestDeliveryLocation = () => {
+    const typedAddress = [
+      deliveryAddressDraft.logradouro,
+      deliveryAddressDraft.numero,
+      deliveryAddressDraft.bairro,
+      deliveryAddressDraft.cidade,
+      deliveryAddressDraft.uf,
+      deliveryAddressDraft.cep,
+    ].some((value) => String(value || "").trim());
+    if (typedAddress && deliveryAddressDraft.latitude == null && deliveryAddressDraft.longitude == null) {
+      setLocationQuote({
+        status: "error",
+        message: "A localização não foi aplicada porque já existe um endereço digitado. Para evitar calcular outra cidade, mantenha o endereço ou limpe-o antes de usar o GPS.",
+      });
+      return;
+    }
     if (!navigator.geolocation) {
       setLocationQuote({
         status: "error",

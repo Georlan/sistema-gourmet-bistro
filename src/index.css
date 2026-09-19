@@ -1591,6 +1591,10 @@ body {
 .orders-card--source-cashier::before { width: 3px; background: #f59e0b; opacity: 0.9; }
 .orders-card--source-smartpos::before { width: 3px; background: #10b981; opacity: 0.9; }
 
+.orders-card--fulfillment-retirada { box-shadow: inset 0 3px 0 rgba(6, 182, 212, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+.orders-card--fulfillment-delivery { box-shadow: inset 0 3px 0 rgba(139, 92, 246, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+.orders-card--salon { box-shadow: inset 0 3px 0 rgba(16, 185, 129, 0.72), 0 4px 14px rgba(0, 0, 0, 0.08) !important; }
+
 .orders-card--source-online .orders-card__number { color: #7c3aed; border-color: rgba(139, 92, 246, 0.3); background: rgba(139, 92, 246, 0.08); }
 .orders-card--source-waiter .orders-card__number { color: #0891b2; border-color: rgba(6, 182, 212, 0.3); background: rgba(6, 182, 212, 0.08); }
 .orders-card--source-cashier .orders-card__number { color: #b45309; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.08); }

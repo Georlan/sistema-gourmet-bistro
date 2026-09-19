@@ -19,6 +19,7 @@ export type CanonicalOrderStatus =
 
 export type OrderPhase =
   | "payment_pending"
+  | "payment_failed"
   | "scheduled"
   | "received"
   | "preparing"
@@ -112,6 +113,7 @@ function fulfillmentFromType(value?: string): CanonicalFulfillment {
 
 function phaseFor(status: CanonicalOrderStatus, rawStatus: string): OrderPhase {
   if (rawStatus === "aguardando_pagamento") return "payment_pending";
+  if (rawStatus === "falha_pagamento") return "payment_failed";
   if (rawStatus === "agendado") return "scheduled";
   return {
     pending: "received",
@@ -128,6 +130,7 @@ function phaseFor(status: CanonicalOrderStatus, rawStatus: string): OrderPhase {
 function labelFor(phase: OrderPhase): string {
   return {
     payment_pending: "Aguardando pagamento",
+    payment_failed: "Pagamento não gerado",
     scheduled: "Pedido agendado",
     received: "Aguardando aceite",
     preparing: "Em preparo",
@@ -141,7 +144,7 @@ function labelFor(phase: OrderPhase): string {
 
 function progressFor(phase: OrderPhase, fulfillment: CanonicalFulfillment): [number, number] {
   const total = fulfillment === "delivery" ? 5 : 4;
-  if (phase === "rejected" || phase === "cancelled") return [0, total];
+  if (phase === "rejected" || phase === "cancelled" || phase === "payment_failed") return [0, total];
   if (phase === "payment_pending" || phase === "scheduled" || phase === "received") return [1, total];
   if (phase === "preparing") return [2, total];
   if (phase === "ready") return [3, total];

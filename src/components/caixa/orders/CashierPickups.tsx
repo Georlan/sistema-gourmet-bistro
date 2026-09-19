@@ -5,6 +5,7 @@ import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
 import { bucketPickupOrders } from './deliveryOrderProjection';
 import type { DeliveryOrderView } from './cashierWorkspaceTypes';
+import { getDigitalOrderCustomerLabel } from './digitalOrderPresentation';
 import { getDigitalOrderAssociation, getDigitalOrderSourceLabel } from './digitalOrderPresentation';
 
 type CompletedPickupApiOrder = {
@@ -191,7 +192,7 @@ export function CashierPickups({
     return (
       <article
         key={order.id}
-        className={`rounded-2xl border bg-koma-panel/55 p-4 ${late ? 'border-rose-500/35' : readyForPickup ? 'border-emerald-500/30' : 'border-koma-border'}`}
+        className={`rounded-2xl border border-l-4 border-l-cyan-500/70 bg-koma-panel/55 p-4 ${late ? 'border-rose-500/35' : readyForPickup ? 'border-emerald-500/30' : 'border-koma-border'}`}
         data-pickup-status={readyForPickup ? 'ready' : order.status}
       >
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
@@ -218,7 +219,7 @@ export function CashierPickups({
               )}
             </div>
             <div className="text-[11px] font-bold text-koma-secondary">
-              {order.cliente || 'Cliente sem nome'}{order.telefone ? ` · ${order.telefone}` : ''}
+              {getDigitalOrderCustomerLabel(order)}{order.telefone ? ` · ${order.telefone}` : ''}
             </div>
             <div className="truncate text-[10px] text-koma-muted">Itens: {order.itens}</div>
             <div className="flex flex-wrap gap-3 text-[9px] text-koma-muted">
