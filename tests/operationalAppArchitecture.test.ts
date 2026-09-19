@@ -45,8 +45,10 @@ test('shared owners have concrete dependencies and private request/submission gu
   }
   const drafts = read('src/components/app/drafts/useOperationalDrafts.ts').text;
   assert.match(drafts, /ReturnType<typeof useOperationalOrders>/);
-  assert.ok(drafts.indexOf('if (isSubmittingRef.current) return') < drafts.indexOf('await operationalFetch'));
-  assert.match(drafts, /finally\s*\{\s*isSubmittingRef.current = false;/);
+  assert.ok(drafts.indexOf('if (submittingMesaIdsRef.current.has(mesaId)) return') < drafts.indexOf('await operationalFetch'));
+  assert.match(drafts, /finally\s*\{\s*setMesaSubmitting\(mesaId, false\);/);
+  assert.match(drafts, /const isSubmittingMesa = \(mesaId: number\) => submittingMesaIds\.has\(mesaId\)/);
+  assert.doesNotMatch(drafts, /const \[isSubmitting, setIsSubmitting\]/);
   assert.ok(drafts.indexOf('if (!launchRes.ok)') < drafts.indexOf('clearPersistedOperationKey(launchStorageKey, launchIdempotencyKey)'));
 });
 
