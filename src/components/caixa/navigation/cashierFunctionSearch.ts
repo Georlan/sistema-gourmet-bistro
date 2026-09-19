@@ -13,6 +13,7 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   vendas_novo_pedido: ['pdv', 'balcao', 'balcão', 'comanda', 'abrir pedido'],
   vendas_salao: ['atendimento salao', 'atendimento salão'],
   vendas_cozinha: ['kds', 'producao', 'produção'],
+  vendas_retiradas: ['retirada', 'retiradas', 'pickup', 'pedido para retirar', 'retirar pedido', 'balcao retirada', 'balcão retirada'],
   vendas_entregas: ['delivery', 'motoboy', 'entregador', 'entregadores'],
   caixa_turno_atual: ['abrir caixa', 'caixa aberto', 'caixa fechado'],
   caixa_movimentacoes: ['sangria', 'suprimento', 'retirada caixa', 'entrada caixa', 'ajuste caixa'],

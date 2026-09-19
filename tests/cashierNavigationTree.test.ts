@@ -45,13 +45,14 @@ test('vendas and caixa expose existing operational views as children', () => {
   const caixa = parents().find((item) => item.id === 'financeiro');
 
   assert.deepEqual(vendas?.children?.map((child) => child.label), [
-    'Pedidos', 'Novo pedido', 'Salão', 'Cozinha', 'Entregas',
+    'Pedidos', 'Novo pedido', 'Salão', 'Cozinha', 'Retiradas', 'Entregas',
   ]);
   assert.deepEqual(caixa?.children?.map((child) => child.label), [
     'Turno atual', 'Movimentações', 'Fechamento',
   ]);
 
   assert.deepEqual(getCashierNavigationTarget('vendas_cozinha'), { tab: 'operacao', subTab: 'kds' });
+  assert.deepEqual(getCashierNavigationTarget('vendas_retiradas'), { tab: 'operacao', subTab: 'retiradas' });
   assert.deepEqual(getCashierNavigationTarget('vendas_entregas'), { tab: 'operacao', subTab: 'entregadores' });
   assert.deepEqual(getCashierNavigationTarget('caixa_fechamento'), { tab: 'financeiro', subTab: 'fechamento' });
   assert.equal(getCashierNavigationParentId('vendas_salao'), 'operacao');

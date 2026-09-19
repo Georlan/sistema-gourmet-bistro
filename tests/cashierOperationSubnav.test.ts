@@ -13,6 +13,7 @@ test('operation horizontal tabs mirror Navigation Tree v2 children', () => {
       ['vendas_novo_pedido', 'Novo pedido', 'balcao'],
       ['vendas_salao', 'Salão', 'mesas'],
       ['vendas_cozinha', 'Cozinha', 'kds'],
+      ['vendas_retiradas', 'Retiradas', 'retiradas'],
       ['vendas_entregas', 'Entregas', 'entregadores'],
     ],
   );

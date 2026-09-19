@@ -31,6 +31,8 @@ test('aliases find internal settings without requiring exact menu labels', () =>
 test('operational aliases route common restaurant language to the canonical function', () => {
   assert.equal(searchCashierFunctions(entries, 'sangria')[0]?.id, 'caixa_movimentacoes');
   assert.equal(searchCashierFunctions(entries, 'pdv')[0]?.id, 'vendas_novo_pedido');
+  assert.equal(searchCashierFunctions(entries, 'retiradas')[0]?.id, 'vendas_retiradas');
+  assert.equal(searchCashierFunctions(entries, 'pickup')[0]?.id, 'vendas_retiradas');
   assert.equal(searchCashierFunctions(entries, 'mercado pago')[0]?.id, 'config_integracoes');
   assert.equal(searchCashierFunctions(entries, 'qr code')[0]?.id, 'online_divulgacao');
   assert.equal(searchCashierFunctions(entries, 'entrega')[0]?.id, 'online_entrega');

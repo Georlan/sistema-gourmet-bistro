@@ -824,6 +824,35 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
     ).all()
 
 
+@router.get("/delivery/retiradas/concluidas-recentes", response_model=List[ComandaDetail])
+def listar_retiradas_concluidas_recentes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Retorna retiradas fechadas recentemente para a visão operacional do dia.
+
+    A tela filtra o dia local do operador no cliente. O backend limita a janela
+    a 36 horas para cobrir viradas de fuso sem carregar o histórico inteiro.
+    Este endpoint é somente leitura; o ciclo de vida continua pertencendo à
+    máquina de estados e às ações canônicas de comanda.
+    """
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
+    return (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == require_tenant_id(),
+            Comanda.tipo.in_(["Retirada", "Viagem"]),
+            Comanda.fechada.is_(True),
+            Comanda.fechado_em.isnot(None),
+            Comanda.fechado_em >= cutoff,
+            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        )
+        .order_by(Comanda.fechado_em.desc())
+        .limit(100)
+        .all()
+    )
+
+
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
 def listar_motoboys(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
