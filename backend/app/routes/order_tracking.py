@@ -18,7 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db, tenant_session_scope
@@ -71,13 +71,17 @@ def _sse_event(event_name: str, payload: dict[str, Any]) -> str:
     return f"event: {event_name}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 
 
-def _effective_tracking_status(comanda: Comanda) -> str:
-    raw_status = (comanda.delivery_status or "pendente").strip().lower()
+def _effective_tracking_status_values(delivery_status: Any, fechada: Any) -> str:
+    raw_status = str(delivery_status or "pendente").strip().lower()
     if raw_status in {"recusado", "rejected", "cancelado", "cancelled"}:
         return raw_status
-    if comanda.fechada:
+    if bool(fechada):
         return "finalizado"
     return raw_status
+
+
+def _effective_tracking_status(comanda: Comanda) -> str:
+    return _effective_tracking_status_values(comanda.delivery_status, comanda.fechada)
 
 
 def _iso_or_none(value: Any) -> str | None:
@@ -151,6 +155,88 @@ def _active_ordering_block(
             "expires_at": expires_at.isoformat() if expires_at else None,
         }
     return None
+
+
+@router.get("/{token}/summary", summary="Resumo leve e seguro do acompanhamento do pedido")
+def consultar_resumo_pedido_por_token(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Projeção quente para realtime/fallback sem carregar itens, produto ou restaurante."""
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+
+    restaurante_id, conversation_id, pedido_id, _resolved_closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        row = (
+            db.query(
+                Comanda.id.label("id"),
+                Comanda.delivery_status.label("delivery_status"),
+                Comanda.tipo.label("tipo"),
+                Comanda.fechada.label("fechada"),
+                OrderConversation.closed_at.label("closed_at"),
+                OrderConversation.customer_last_read_at.label("customer_last_read_at"),
+                func.count(OrderMessage.id).label("customer_unread_count"),
+            )
+            .join(
+                OrderConversation,
+                and_(
+                    OrderConversation.restaurante_id == Comanda.restaurante_id,
+                    OrderConversation.pedido_id == Comanda.id,
+                    OrderConversation.id == conversation_id,
+                ),
+            )
+            .outerjoin(
+                OrderMessage,
+                and_(
+                    OrderMessage.restaurante_id == OrderConversation.restaurante_id,
+                    OrderMessage.conversation_id == OrderConversation.id,
+                    OrderMessage.sender_type == "staff",
+                    or_(
+                        OrderConversation.customer_last_read_at.is_(None),
+                        OrderMessage.created_at > OrderConversation.customer_last_read_at,
+                    ),
+                ),
+            )
+            .filter(
+                Comanda.restaurante_id == restaurante_id,
+                Comanda.id == pedido_id,
+            )
+            .group_by(
+                Comanda.id,
+                Comanda.delivery_status,
+                Comanda.tipo,
+                Comanda.fechada,
+                OrderConversation.closed_at,
+                OrderConversation.customer_last_read_at,
+            )
+            .first()
+        )
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+
+        closed_at_iso = _iso_or_none(row.closed_at)
+        effective_status = _effective_tracking_status_values(row.delivery_status, row.fechada)
+        state_contract = build_order_state_contract(
+            effective_status,
+            row.tipo,
+            conversation_closed=row.closed_at is not None,
+        )
+        return {
+            "id": str(row.id),
+            "status": effective_status,
+            "state": state_contract,
+            "tipo": row.tipo or "Delivery",
+            "fechada": bool(row.fechada),
+            "closed_at": closed_at_iso,
+            "conversa": {
+                "id": conversation_id,
+                "closed_at": closed_at_iso,
+                "unread_count": int(row.customer_unread_count or 0),
+                "can_chat": state_contract["can_chat"],
+            },
+        }
 
 
 @router.get("/{token}", summary="Consulta segura dos dados de acompanhamento do pedido")
