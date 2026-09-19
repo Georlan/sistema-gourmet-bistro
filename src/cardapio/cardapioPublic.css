@@ -772,6 +772,12 @@
     height: 36px;
   }
 
+  .cardapio-public-icon-button.is-cart {
+    width: 44px;
+    height: 44px;
+    touch-action: manipulation;
+  }
+
   .cardapio-public-actions > .cardapio-public-icon-button:first-child {
     display: none;
   }
