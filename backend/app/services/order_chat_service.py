@@ -484,6 +484,13 @@ def send_staff_message(
         kind="message",
         data={"message_id": msg.id},
     )
+    # Only a newly inserted message creates delivery side effects. A retry
+    # returns above, including when the original HTTP response was lost.
+    from .web_push import enqueue_order_push_event
+    enqueue_order_push_event(
+        db, restaurante_id=restaurante_id, pedido_id=conv.pedido_id,
+        conversation_id=conv.id, kind="message", message_id=msg.id,
+    )
     return msg
 
 

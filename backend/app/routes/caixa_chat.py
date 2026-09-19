@@ -30,7 +30,6 @@ from ..services.order_chat_service import (
     send_staff_message,
     serialize_message,
 )
-from ..services.web_push import enqueue_order_push_event
 
 router = APIRouter(prefix="/api/caixa/conversas", tags=["Caixa - Chat"])
 
@@ -124,14 +123,6 @@ def responder_cliente(
             user_id=current_user.id,
             raw_body=payload.body,
             client_message_id=payload.client_message_id,
-        )
-        enqueue_order_push_event(
-            db,
-            restaurante_id=restaurante_id,
-            pedido_id=msg.pedido_id,
-            conversation_id=conversation_id,
-            kind="message",
-            message_id=msg.id,
         )
         db.commit()
         db.refresh(msg)

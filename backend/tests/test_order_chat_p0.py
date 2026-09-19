@@ -152,3 +152,20 @@ def test_sqlite_migration_roundtrip_preserves_uuid_and_legacy_event(client_and_s
             migration.downgrade()
         assert conn.execute(text("SELECT client_message_id FROM order_messages WHERE id='human'")).scalar() == key
         assert conn.execute(text("SELECT count(*) FROM order_messages")).scalar() == 2
+
+
+def test_staff_retry_does_not_enqueue_duplicate_push(client_and_session, monkeypatch):
+    _, db = client_and_session
+    _seed_data(db)
+    conv, _ = create_conversation_for_order(db, 1, "comanda-101")
+    db.commit()
+    pushes = []
+    monkeypatch.setattr("app.services.web_push.enqueue_order_push_event", lambda *args, **kwargs: pushes.append(kwargs))
+    key = str(uuid.uuid4())
+    first = send_staff_message(db, 1, conv.id, "10", "Resposta", key)
+    db.commit()
+    retry = send_staff_message(db, 1, conv.id, "10", "Resposta", key)
+    db.commit()
+    assert first.id == retry.id
+    assert len(pushes) == 1
+    assert pushes[0]["message_id"] == first.id

@@ -52,6 +52,7 @@ jobs:
           e2e/cardapio-benefits.spec.ts
           e2e/public-menu-order.spec.ts
           e2e/order-tracking-chat.spec.ts
+          e2e/cardapio-chat-viewports.spec.ts
           --project=mobile-390
           --project=desktop-1366
           --workers=2
