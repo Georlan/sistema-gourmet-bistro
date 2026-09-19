@@ -161,7 +161,9 @@ export function CaixaPanel({
     isChatDrawerOpen,
     setIsChatDrawerOpen,
     chatUnreadCount,
+    chatUnreadStatus,
     setChatUnreadCount,
+    subscribeChatRealtime,
   } = useCashierChat(apiBaseUrl, authHeaders.Authorization || "");
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -1233,6 +1235,9 @@ export function CaixaPanel({
         <CashierConversationsDrawer
           key={authHeaders.Authorization}
           authorization={authHeaders.Authorization || ""}
+          realtimeStatus={chatUnreadStatus}
+          subscribeRealtime={subscribeChatRealtime}
+          draftScope={String(turno?.id || 'session')}
           isOpen={isChatDrawerOpen}
           onClose={() => setIsChatDrawerOpen(false)}
           onInspectOrder={(pedidoId) => {
