@@ -14,6 +14,7 @@ export function CashierSalonCard({ card, actions }: { card: SalonCard; actions: 
       orders={tableOrders}
       operational={operational}
       total={card.total}
+      primaryIdentity="order"
       filterStatus={isMerged ? 'merged' : hasPendingPayment ? 'payment' : isOccupied ? 'occupied' : 'free'}
     >
       {!isMerged && (
