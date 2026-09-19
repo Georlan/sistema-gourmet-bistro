@@ -195,6 +195,18 @@ def test_public_tracking_resolution_and_anti_enumeration(client_and_session):
     assert data["itens"][0]["nome"] == "Risoto Trufado"
     assert data["restaurante"]["nome"] == "Bistrô Alpha"
 
+    summary_resp = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/summary")
+    assert summary_resp.status_code == 200
+    summary = summary_resp.json()
+    assert summary["id"] == "comanda-101"
+    assert summary["status"] == "pendente"
+    assert summary["tipo"] == "Delivery"
+    assert summary["conversa"]["unread_count"] == 0
+    assert summary["conversa"]["can_chat"] is True
+    assert "itens" not in summary
+    assert "restaurante" not in summary
+    assert "ordering_block" not in summary
+
     resp_invalid = client.get("/api/cardapio/pedidos/acompanhar/invalid-token-123456789")
     assert resp_invalid.status_code == 404
     assert resp_invalid.json()["detail"] == "Pedido não encontrado."

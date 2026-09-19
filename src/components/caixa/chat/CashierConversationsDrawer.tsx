@@ -503,6 +503,12 @@ export function CashierConversationsDrawer({
     const { event, data } = realtimeEvent;
     const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
     switch (event) {
+      case 'reconnected': {
+        void fetchConversations({ background: true });
+        const current = selectedIdRef.current;
+        if (current) void loadMessages(current, { background: true, markRead: false });
+        return;
+      }
       case 'new_message':
         appendRealtimeMessage(data);
         void fetchConversations({ background: true });
@@ -522,7 +528,7 @@ export function CashierConversationsDrawer({
       default:
         return;
     }
-  }, [appendRealtimeMessage, fetchConversations, isOpen, realtimeEvent]);
+  }, [appendRealtimeMessage, fetchConversations, isOpen, loadMessages, realtimeEvent]);
 
   useEffect(() => {
     if (!isOpen || realtimeHealth !== 'degraded') return;

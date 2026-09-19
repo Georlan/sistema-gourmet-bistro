@@ -55,13 +55,14 @@ import {
   refreshAllStoredOrders,
   removeStoredOrder,
   clearAllStoredOrders,
+  fallbackOrderState,
   resolveOrderState,
+  updateStoredOrderStatus,
 } from "./orderTracking";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
-const ACTIVE_ORDER_REFRESH_MS = 20_000;
 // A consulta pública de CEP é apenas conveniência progressiva; o checkout
 // permanece totalmente utilizável com preenchimento manual.
 
@@ -338,8 +339,16 @@ export default function CardapioPage() {
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : brand.categories[0] || "");
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
-        setStoredOrders(loadStoredOrders(rid));
-        void checkActiveOrders(rid);
+        const stored = loadStoredOrders(rid);
+        setStoredOrders(stored);
+        // Pedidos modernos são reconciliados pelo SSE/summary do drawer.
+        // Somente registros legados sem capability token precisam de uma
+        // reconciliação HTTP inicial.
+        if (stored.some((order) => (
+          !order.tracking_token && !resolveOrderState(order).terminal
+        ))) {
+          void checkActiveOrders(rid);
+        }
       }
     } catch (error) {
       console.error("Falha ao carregar cardápio público:", error);
@@ -429,27 +438,6 @@ export default function CardapioPage() {
 
   useEffect(() => {
     if (!activeBrand?.id) return;
-    const restaurantId = Number(activeBrand.id);
-    if (!Number.isFinite(restaurantId)) return;
-
-    let intervalId: ReturnType<typeof setInterval> | undefined;
-    const refresh = () => {
-      if (document.hidden) return;
-      if (activeOrders.length > 0) void checkActiveOrders(restaurantId);
-    };
-    intervalId = setInterval(refresh, ACTIVE_ORDER_REFRESH_MS);
-    const onVisibility = () => {
-      if (!document.hidden) refresh();
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [activeBrand?.id, activeOrders.length, checkActiveOrders]);
-
-  useEffect(() => {
-    if (!activeBrand?.id) return;
     const wsUrl = `${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}`;
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -461,7 +449,13 @@ export default function CardapioPage() {
       if (stopped || document.hidden) return;
       const socket = new WebSocket(wsUrl);
       ws = socket;
-      socket.onopen = () => { delay = 2000; };
+      socket.onopen = () => {
+        delay = 2000;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = undefined;
+        }
+      };
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -469,9 +463,6 @@ export default function CardapioPage() {
           if (["catalog_updated", "config_updated", "store_status_changed"].includes(eventName)) {
             if (refreshTimer) clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => void loadRestaurantData(), 100);
-          }
-          if (["order_updated", "order_status_updated"].includes(eventName)) {
-            void checkActiveOrders(Number(activeBrand.id));
           }
         } catch {
           // Mensagem inválida do socket não interrompe o cardápio.
@@ -486,14 +477,21 @@ export default function CardapioPage() {
       socket.onerror = () => socket.close();
     };
 
+    const handleVisibility = () => {
+      if (document.hidden || stopped) return;
+      if (!ws || ws.readyState === WebSocket.CLOSED) connect();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
     connect();
     return () => {
       stopped = true;
+      document.removeEventListener("visibilitychange", handleVisibility);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (refreshTimer) clearTimeout(refreshTimer);
       ws?.close();
     };
-  }, [activeBrand?.id, checkActiveOrders, loadRestaurantData]);
+  }, [activeBrand?.id, loadRestaurantData]);
 
   const visibleCategories = useMemo(() => {
     if (!activeBrand) return [];
@@ -646,6 +644,41 @@ export default function CardapioPage() {
     setCheckoutRequest(null);
     setNotice("Sua identificação expirou. A sacola foi preservada e você pode continuar como visitante.");
   };
+
+  const handleRealtimeOrderStatus = useCallback((
+    orderId: string,
+    status: string,
+    closedAt: string | null,
+  ) => {
+    setStoredOrders((current) => {
+      let changed = false;
+      const next = current.map((order) => {
+        if (order.id !== orderId) return order;
+        const state = fallbackOrderState(status, order.tipo);
+        const nextClosed = state.terminal || Boolean(closedAt);
+        const currentState = resolveOrderState(order);
+        if (
+          order.status === status
+          && currentState.status === state.status
+          && currentState.phase === state.phase
+          && Boolean(order.fechado) === nextClosed
+        ) {
+          return order;
+        }
+
+        changed = true;
+        const updated: StoredOrder = {
+          ...order,
+          status,
+          state,
+          fechado: nextClosed,
+        };
+        updateStoredOrderStatus(orderId, updated);
+        return updated;
+      });
+      return changed ? next : current;
+    });
+  }, []);
 
   const clearTrackedOrder = (orderId?: string) => {
     const targetId = orderId || activeOrder?.id;
@@ -1049,7 +1082,6 @@ export default function CardapioPage() {
             if (activeBrand?.id) {
               const rid = Number(activeBrand.id);
               setStoredOrders(loadStoredOrders(rid));
-              window.setTimeout(() => void checkActiveOrders(rid), 50);
             }
           }}
           onSessionExpired={handleSessionExpired}
@@ -1076,6 +1108,7 @@ export default function CardapioPage() {
             setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
           }
         }}
+        onRealtimeStatus={handleRealtimeOrderStatus}
         isRefreshing={isRefreshingOrders}
         hasFloatingCart={cartCount > 0 && !isCartOpen}
       />

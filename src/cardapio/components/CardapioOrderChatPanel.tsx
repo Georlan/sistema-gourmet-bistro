@@ -110,7 +110,7 @@ export default function CardapioOrderChatPanel({
 
     try {
       const [orderRes, messagesRes] = await Promise.all([
-        fetch(apiRoot, { cache: "no-store" }),
+        fetch(`${apiRoot}/summary`, { cache: "no-store" }),
         fetch(`${apiRoot}/messages`, { cache: "no-store" }),
       ]);
       if (!orderRes.ok) throw new Error("Não foi possível atualizar o pedido.");
@@ -139,6 +139,7 @@ export default function CardapioOrderChatPanel({
 
     let source: EventSource | null = null;
     let fallbackInterval: number | null = null;
+    let hasOpenedOnce = false;
 
     const stopFallback = () => {
       if (fallbackInterval !== null) {
@@ -163,7 +164,12 @@ export default function CardapioOrderChatPanel({
 
     try {
       source = new EventSource(`${apiRoot}/events`);
-      source.onopen = stopFallback;
+      source.onopen = () => {
+        const isReconnect = hasOpenedOnce;
+        hasOpenedOnce = true;
+        stopFallback();
+        if (isReconnect) void refresh();
+      };
       source.onerror = startFallback;
       source.addEventListener("message", (event: MessageEvent) => {
         try {
@@ -175,8 +181,34 @@ export default function CardapioOrderChatPanel({
           startFallback();
         }
       });
-      source.addEventListener("status", () => {
-        void refresh();
+      source.addEventListener("status", (event) => {
+        try {
+          const data = JSON.parse((event as MessageEvent).data) as {
+            status?: unknown;
+            closed_at?: unknown;
+          };
+          if (typeof data.status !== "string" || !data.status) return;
+          setTracking((current) => {
+            const tipo = current?.tipo || order.tipo || "Retirada";
+            const state = fallbackOrderState(data.status as string, tipo);
+            const closedAt = typeof data.closed_at === "string"
+              ? data.closed_at
+              : current?.closed_at || null;
+            return {
+              status: data.status as string,
+              tipo,
+              state,
+              closed_at: closedAt,
+              conversa: {
+                ...(current?.conversa || {}),
+                closed_at: closedAt,
+                can_chat: state.can_chat,
+              },
+            };
+          });
+        } catch {
+          startFallback();
+        }
       });
     } catch {
       source = null;
@@ -188,7 +220,7 @@ export default function CardapioOrderChatPanel({
       stopFallback();
       source?.close();
     };
-  }, [apiRoot, refresh]);
+  }, [apiRoot, order.tipo, refresh]);
 
   useEffect(() => {
     markRead();
@@ -255,7 +287,6 @@ export default function CardapioOrderChatPanel({
       if (draftKey) {
         try { sessionStorage.removeItem(draftKey); } catch {}
       }
-      void refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível enviar a mensagem.");
     } finally {

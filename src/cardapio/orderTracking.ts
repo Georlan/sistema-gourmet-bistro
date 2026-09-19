@@ -413,7 +413,7 @@ export async function fetchOrderLiveStatus(
 ): Promise<StoredOrder | null> {
   const key = String(order.idempotency_key || "").trim();
   const url = order.tracking_token
-    ? `${apiBaseUrl}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(order.tracking_token)}`
+    ? `${apiBaseUrl}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(order.tracking_token)}/summary`
     : `${apiBaseUrl}/cardapio/pedidos/${encodeURIComponent(order.id)}/status?key=${encodeURIComponent(key)}`;
 
   const response = await fetch(url, { cache: "no-store" });
@@ -455,7 +455,11 @@ export async function refreshAllStoredOrders(
   if (storedList.length === 0) return [];
 
   const results = await Promise.allSettled(
-    storedList.map((order) => fetchOrderLiveStatus(order, apiBaseUrl)),
+    storedList.map((order) => (
+      resolveOrderState(order).terminal
+        ? Promise.resolve(order)
+        : fetchOrderLiveStatus(order, apiBaseUrl)
+    )),
   );
 
   const updatedList: StoredOrder[] = [];
