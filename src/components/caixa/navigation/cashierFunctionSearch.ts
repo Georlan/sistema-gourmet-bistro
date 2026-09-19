@@ -48,7 +48,10 @@ const NAVIGATION_ALIASES: Readonly<Record<string, readonly string[]>> = {
   config_taxa: ['taxa servico', 'taxa serviço', 'gorjeta', 'percentual servico', 'percentual serviço', '10%'],
   config_implantacao: ['implantacao', 'implantação', 'ativacao', 'ativação', 'primeiro acesso', 'onboarding'],
   config_integracoes: ['integracao', 'integração', 'integracoes', 'integrações', 'mercado pago', 'pix', 'oauth'],
-  assinatura_pix: ['plano', 'planos', 'assinatura', 'cobranca', 'cobrança'],
+  assinatura_pix: ['assinatura', 'cobranca', 'cobrança', 'conta assinatura'],
+  assinatura_meu_plano: ['meu plano', 'plano atual', 'assinatura atual'],
+  assinatura_planos_upgrade: ['planos', 'upgrade', 'comparar planos', 'mudar plano'],
+  assinatura_contrato_documentos: ['contrato', 'documentos', 'comprovante', 'termos'],
 };
 
 export function normalizeCashierFunctionSearch(value: string): string {

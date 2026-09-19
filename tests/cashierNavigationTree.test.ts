@@ -160,6 +160,30 @@ test('configurações expõe os mesmos destinos canônicos para navegação vert
   assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
 });
 
+test('conta e assinatura espelha os mesmos destinos canônicos na vertical e horizontal', () => {
+  const assinatura = parents().find((item) => item.id === 'assinatura_pix');
+  assert.deepEqual(assinatura?.children?.map((child) => child.label), [
+    'Meu Plano',
+    'Planos & Upgrade',
+    'Contrato e documentos',
+  ]);
+  assert.deepEqual(getCashierNavigationTarget('assinatura_meu_plano'), {
+    tab: 'assinatura_pix', subTab: 'meu_plano',
+  });
+  assert.deepEqual(getCashierNavigationTarget('assinatura_planos_upgrade'), {
+    tab: 'assinatura_pix', subTab: 'planos_upgrade',
+  });
+  assert.deepEqual(getCashierNavigationTarget('assinatura_contrato_documentos'), {
+    tab: 'assinatura_pix', subTab: 'contrato_documentos',
+  });
+
+  const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
+  assert.match(caixa, /subscriptionSubnavItems = getCashierNavigationItem\('assinatura_pix'\)\?\.children \?\? \[\]/);
+  assert.match(caixa, /activeTab === 'assinatura_pix' && subscriptionSubnavItems\.map/);
+  assert.match(caixa, /handleSidebarNavigation\(sub\.id\)/);
+  assert.match(caixa, /isSidebarTabActive\(sub\.id\)/);
+});
+
 test('navigation tree owns default tab and subtab destinations', () => {
   assert.deepEqual(getCashierNavigationTarget('operacao'), { tab: 'operacao', subTab: 'pedidos' });
   assert.deepEqual(getCashierNavigationTarget('financeiro'), { tab: 'financeiro', subTab: 'turno_atual' });
@@ -170,7 +194,7 @@ test('navigation tree owns default tab and subtab destinations', () => {
   assert.deepEqual(getCashierNavigationTarget('impressao_salao'), {
     tab: 'impressao_salao', subTab: 'aparencia',
   });
-  assert.deepEqual(getCashierNavigationTarget('assinatura_pix'), { tab: 'assinatura_pix', subTab: 'planos' });
+  assert.deepEqual(getCashierNavigationTarget('assinatura_pix'), { tab: 'assinatura_pix', subTab: 'meu_plano' });
   assert.equal(getCashierNavigationTarget('nao-existe'), undefined);
 });
 
@@ -201,6 +225,12 @@ test('persisted aliases normalize with the active parent context', () => {
   });
   assert.deepEqual(normalizeCashierNavigationState('configuracoes', 'equipe'), {
     tab: 'permissoes_cargos', subTab: 'pessoas',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('configuracoes', 'planos'), {
+    tab: 'assinatura_pix', subTab: 'meu_plano',
+  });
+  assert.deepEqual(normalizeCashierNavigationState('assinatura_pix', 'planos'), {
+    tab: 'assinatura_pix', subTab: 'meu_plano',
   });
   assert.deepEqual(normalizeCashierNavigationState('impressao_salao', 'impressoras'), {
     tab: 'impressao_salao', subTab: 'impressao',

@@ -7,7 +7,6 @@ import { TimelineContent } from '../ui/timeline-animation';
 import {
   CheckCircle2,
   Sparkles,
-  Zap,
   MessageSquare,
   ArrowUpRight,
   ShieldCheck,
@@ -18,7 +17,6 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
-  FileSignature,
 } from 'lucide-react';
 import {
   SUBSCRIPTION_PLANS,
@@ -38,6 +36,8 @@ interface AssinaturaPixTabProps {
   currentPlanId: SubscriptionPlanId;
   hasPrinting: boolean;
   hasOnlineMenu: boolean;
+  activeSubTab: string;
+  setActiveSubTab: (tab: string) => void;
   isTestPlan?: boolean;
   bannerNotice?: string | null;
 }
@@ -95,10 +95,11 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
   currentPlanId,
   hasPrinting,
   hasOnlineMenu,
+  activeSubTab,
+  setActiveSubTab,
   isTestPlan = false,
   bannerNotice
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'meu_plano' | 'planos_upgrade' | 'contrato_documentos'>('meu_plano');
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(currentPlanId);
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
   const [isYearly, setIsYearly] = useState(false);
@@ -110,7 +111,7 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
     if (bannerNotice) {
       setActiveSubTab('planos_upgrade');
     }
-  }, [bannerNotice]);
+  }, [bannerNotice, setActiveSubTab]);
 
   const groupedMatrix = PLAN_COMPARISON_MATRIX.reduce((acc, row) => {
     if (!acc[row.category]) acc[row.category] = [];
@@ -142,51 +143,6 @@ export const AssinaturaPixTab: React.FC<AssinaturaPixTabProps> = ({
 
   return (
     <div className="space-y-6 text-left animate-fade-in pb-12">
-      {/* 1. NAVEGAÇÃO SUPERIOR POR SUB-ABAS (PILLS) */}
-      <div className="flex items-center gap-2 border-b border-koma-border pb-3 overflow-x-auto scrollbar-none">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('meu_plano')}
-          className={clsx(
-            'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
-            activeSubTab === 'meu_plano'
-              ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
-          )}
-        >
-          <ShieldCheck size={15} />
-          <span>Meu Plano</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('planos_upgrade')}
-          className={clsx(
-            'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
-            activeSubTab === 'planos_upgrade'
-              ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
-          )}
-        >
-          <Zap size={15} />
-          <span>Planos & Upgrade</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('contrato_documentos')}
-          className={clsx(
-            'px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer',
-            activeSubTab === 'contrato_documentos'
-              ? 'bg-emerald-500 text-zinc-950 shadow-lg shadow-emerald-950/40'
-              : 'bg-koma-panel text-koma-subtle hover:text-koma-foreground border border-koma-border'
-          )}
-        >
-          <FileSignature size={15} />
-          <span>Contrato e documentos</span>
-        </button>
-      </div>
-
       {/* BANNER FIXO PARA AVISO DE REDIRECIONAMENTO */}
       {bannerNotice && activeSubTab === 'planos_upgrade' && (
         <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-3xl flex items-center justify-between gap-3 text-amber-200 text-xs shadow-lg">

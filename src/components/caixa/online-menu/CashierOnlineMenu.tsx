@@ -66,7 +66,7 @@ export default function CashierOnlineMenu({
             type="button"
             onClick={() => {
               setActiveTab('assinatura_pix');
-              setActiveSubTab('planos');
+              setActiveSubTab('planos_upgrade');
             }}
             className={"px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"}
           >

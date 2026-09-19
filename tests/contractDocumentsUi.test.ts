@@ -3,12 +3,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const subscriptionTab = readFileSync('src/components/assinatura/AssinaturaPixTab.tsx', 'utf8');
+const navigation = readFileSync('src/components/caixa/navigation/cashierNavigation.ts', 'utf8');
 const contractPanel = readFileSync('src/components/assinatura/ContractDocumentsPanel.tsx', 'utf8');
 
-test('assinatura expõe sub-aba de contrato e documentos', () => {
-  assert.match(subscriptionTab, /contrato_documentos/);
-  assert.match(subscriptionTab, /Contrato e documentos/);
+test('assinatura expõe contrato e documentos pela navegação canônica', () => {
+  assert.match(navigation, /assinatura_contrato_documentos/);
+  assert.match(navigation, /Contrato e documentos/);
+  assert.match(subscriptionTab, /activeSubTab === 'contrato_documentos'/);
   assert.match(subscriptionTab, /<ContractDocumentsPanel \/>/);
+  assert.doesNotMatch(subscriptionTab, /NAVEGAÇÃO SUPERIOR POR SUB-ABAS/);
 });
 
 test('segunda via consulta apenas o contrato do tenant autenticado', () => {

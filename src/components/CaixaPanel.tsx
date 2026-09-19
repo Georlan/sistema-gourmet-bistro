@@ -68,6 +68,7 @@ const onlineMenuSubnavItems = getCashierNavigationItem('cardapio_digital')?.chil
 const settingsSubnavItems = getCashierNavigationItem('impressao_salao')?.children ?? [];
 const reportsSubnavItems = getCashierNavigationItem('relatorios')?.children ?? [];
 const teamSubnavItems = getCashierNavigationItem('permissoes_cargos')?.children ?? [];
+const subscriptionSubnavItems = getCashierNavigationItem('assinatura_pix')?.children ?? [];
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -859,6 +860,17 @@ export function CaixaPanel({
                 {sub.label}
               </button>
             ))}
+
+            {activeTab === 'assinatura_pix' && subscriptionSubnavItems.map((sub) => (
+              <button
+                key={sub.id}
+                id={`assinatura-subtab-${sub.target.subTab}`}
+                onClick={() => handleSidebarNavigation(sub.id)}
+                className={clsx('cashier-subnav__button', isSidebarTabActive(sub.id) && 'is-active')}
+              >
+                {sub.label}
+              </button>
+            ))}
           </div>
 
           <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
@@ -988,11 +1000,13 @@ export function CaixaPanel({
               }}
             />
 
-            {activeSubTab === 'planos' && (
+            {activeTab === 'assinatura_pix' && (
               <AssinaturaPixTab
                 currentPlanId={currentPlanId}
                 hasPrinting={hasPrinting}
                 hasOnlineMenu={hasOnlineMenu}
+                activeSubTab={activeSubTab}
+                setActiveSubTab={setActiveSubTab}
                 isTestPlan={restauranteConfig?.plano_modo_teste === true || isRestaurant2Test}
                 bannerNotice={planNoticeBanner}
               />

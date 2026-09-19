@@ -45,6 +45,13 @@ test('team aliases open the canonical team section directly', () => {
   assert.equal(searchCashierFunctions(entries, 'permissões')[0]?.id, 'equipe_funcoes_acessos');
 });
 
+test('subscription aliases open the canonical account section directly', () => {
+  assert.equal(searchCashierFunctions(entries, 'meu plano')[0]?.id, 'assinatura_meu_plano');
+  assert.equal(searchCashierFunctions(entries, 'comparar planos')[0]?.id, 'assinatura_planos_upgrade');
+  assert.equal(searchCashierFunctions(entries, 'contrato')[0]?.id, 'assinatura_contrato_documentos');
+  assert.equal(searchCashierFunctions(entries, 'documentos')[0]?.id, 'assinatura_contrato_documentos');
+});
+
 test('report aliases open the canonical report section directly', () => {
   assert.equal(searchCashierFunctions(entries, 'dre')[0]?.id, 'relatorios_financeiro');
   assert.equal(searchCashierFunctions(entries, 'mais vendidos')[0]?.id, 'relatorios_produtos');
