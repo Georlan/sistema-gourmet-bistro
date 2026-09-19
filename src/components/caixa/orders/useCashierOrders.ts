@@ -429,6 +429,8 @@ export function useCashierOrders({
       criadoEm,
       created_at: c.criado_em,
       numeroPedido: c.numero_pedido,
+      mesaId: Number(c.mesa_id || 0) || null,
+      garcomNome: c.criada_por?.nome || c.garcom?.nome || '',
     };
   };
 
@@ -656,7 +658,7 @@ export function useCashierOrders({
     setSelectedKanbanOrder({
       id: order.id,
       comandaId: order.id,
-      mesaId: 0,
+      mesaId: order.mesaId || 0,
       quantidadeItens: order.quantidadeItens,
       identificador: order.cliente,
       itens: itemsMapped,
@@ -671,6 +673,7 @@ export function useCashierOrders({
       endereco: order.endereco,
       criadoEm: order.criadoEm,
       created_at: order.created_at,
+      garcomNome: order.garcomNome,
       lancamentoId: itemsMapped.find((item: any) => item.lancamentoId)?.lancamentoId,
       courierAssignment: order.modalidade === 'delivery'
         ? {

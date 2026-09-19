@@ -108,6 +108,26 @@ test('preserva retirada e venda rápida do snapshot compartilhado', () => {
   assert.equal(projected.isQuickSale, true);
 });
 
+test('preserva a mesa de origem da retirada lançada pelo garçom', () => {
+  const [projected] = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({
+      id: 'pickup-waiter-1',
+      tipo: 'Retirada',
+      mesaId: 6,
+      identificador: 'Mesa 06',
+      garcomNome: 'Garçom Demo',
+      origemOperacional: 'garcom',
+      deliveryAddress: 'Retirada no balcão',
+      deliveryTax: 0,
+    }),
+  ]);
+
+  assert.equal(projected.modalidade, 'retirada');
+  assert.equal(projected.mesaId, 6);
+  assert.equal(projected.garcomNome, 'Garçom Demo');
+  assert.equal(projected.isQuickSale, false);
+});
+
 test('workspace de entregadores exclui retirada e respeita etapas de despacho', () => {
   const projected = projectDeliveryOrdersFromSharedSnapshot([
     baseOrder({ id: 'delivery-preparing', deliveryStatus: 'producao' }),

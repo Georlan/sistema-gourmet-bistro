@@ -5,6 +5,7 @@ import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
 import { bucketPickupOrders } from './deliveryOrderProjection';
 import type { DeliveryOrderView } from './cashierWorkspaceTypes';
+import { getDigitalOrderAssociation, getDigitalOrderSourceLabel } from './digitalOrderPresentation';
 
 type CompletedPickupApiOrder = {
   id: string;
@@ -200,8 +201,13 @@ export function CashierPickups({
                 Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}
               </strong>
               <span className="rounded-md border border-koma-border bg-koma-card px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-koma-muted">
-                {order.canal}
+                {getDigitalOrderSourceLabel(order)}
               </span>
+              {getDigitalOrderAssociation(order) && (
+                <span className="rounded-md border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-violet-700 dark:text-violet-300">
+                  {getDigitalOrderAssociation(order)}
+                </span>
+              )}
               <span className={`rounded-md px-1.5 py-0.5 text-[8px] font-extrabold uppercase ${readyForPickup ? 'bg-emerald-500/15 text-emerald-400' : awaitingAcceptance ? 'bg-amber-500/10 text-amber-400' : 'bg-sky-500/10 text-sky-400'}`}>
                 {readyForPickup ? 'Pronto para retirada' : awaitingAcceptance ? 'Aguardando aceite' : 'Em preparo'}
               </span>

@@ -133,6 +133,9 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
     );
   const selectedIsDigital = Boolean(selectedKanbanOrder)
     && ['retirada', 'entrega', 'delivery'].includes(String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase());
+  const selectedIsTableLinkedPickup = selectedIsDigital
+    && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
+    && Number(selectedKanbanOrder?.mesaId || 0) > 0;
   const selectedIsDelivery = String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'delivery'
     || String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'entrega';
   const selectedDeliveryStatus = String(selectedKanbanOrder?.deliveryStatus || '').toLowerCase();
@@ -172,12 +175,14 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
           </div>
           <div className="min-w-0 flex-1">
             <span className="orders-detail-modal__eyebrow">
-              {selectedIsQuickSale ? 'Venda rápida' : selectedKanbanOrder.mesaId > 0 ? 'Atendimento do salão' : selectedKanbanOrder.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+              {selectedIsQuickSale ? 'Venda rápida' : selectedIsTableLinkedPickup ? 'Retirada vinculada à mesa' : selectedKanbanOrder.mesaId > 0 ? 'Atendimento do salão' : selectedKanbanOrder.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
             </span>
             <h3 id="kanban-detail-title" className="orders-detail-modal__title">
               {selectedIsQuickSale
                 ? `Pedido #${selectedOrderNumber}`
-                : selectedKanbanOrder.mesaId > 0
+                : selectedIsTableLinkedPickup
+                  ? `Retirada · Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
+                  : selectedKanbanOrder.mesaId > 0
                   ? `Mesa ${selectedKanbanOrder.mesaId}`
                   : selectedKanbanOrder.identificador || `Pedido #${selectedOrderNumber}`}
             </h3>

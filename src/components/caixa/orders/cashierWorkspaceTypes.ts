@@ -20,6 +20,8 @@ export interface DeliveryOrderView {
   criadoEm: string;
   created_at?: string;
   numeroPedido?: number;
+  mesaId?: number | null;
+  garcomNome?: string;
 }
 
 export interface SmartPosCardState {
