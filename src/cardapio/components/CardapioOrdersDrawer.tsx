@@ -396,7 +396,7 @@ export default function CardapioOrdersDrawer({
         className={clsx(
           "fixed right-4 z-40 sm:right-6 transition-all duration-300 pointer-events-auto",
           hasFloatingCart
-            ? "bottom-24"
+            ? "bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))]"
             : "bottom-5 sm:bottom-6 pb-[env(safe-area-inset-bottom,0px)]"
         )}
         id="floating-order-chat-container"
