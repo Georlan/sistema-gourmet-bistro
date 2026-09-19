@@ -221,7 +221,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           />
 
           <div
-            className={"min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
+            className={"min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-visible xl:overflow-hidden relative"}
           >
             <div
               className={"flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-koma-border rounded-xl shrink-0"}
@@ -253,7 +253,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
-              className={`min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
+              className={`min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-visible xl:overflow-hidden w-full`}
             >
               <div
                 className={"shrink-0 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3 space-y-2.5"}
@@ -358,7 +358,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 </div>
               </div>
 
-              <div className={"flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain"}>
+              <div className={"flex-1 min-h-0 overflow-y-visible pr-1 overscroll-auto xl:overflow-y-auto xl:overscroll-contain"}>
                 {filteredProducts.length > 0 ? (
                   <div
                     className={"grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-2.5 pb-2"}
@@ -512,7 +512,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
-              className={`w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
+              className={`w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-visible xl:overflow-hidden shrink-0 shadow-sm`}
             >
               <div
                 className={"bg-koma-raised px-4 py-3.5 border-b border-koma-border flex justify-between items-center shrink-0"}
@@ -532,7 +532,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 </span>
               </div>
 
-              <div className={"flex-1 overflow-y-auto p-3 space-y-2"}>
+              <div className={"flex-1 overflow-y-visible p-3 space-y-2 xl:overflow-y-auto"}>
                 {pdvCart.length === 0 ? (
                   <div
                     className={"h-full min-h-44 flex flex-col items-center justify-center text-center px-6 text-koma-muted"}
