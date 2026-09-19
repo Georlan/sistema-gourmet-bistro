@@ -24,8 +24,11 @@ from app.services.order_chat_service import (
     create_conversation_for_order,
     get_caixa_unread_summary,
     list_caixa_conversations,
+    mark_customer_read,
+    mark_staff_read,
     post_system_order_event,
     send_customer_message,
+    send_staff_message,
     serialize_message,
 )
 from app.services.order_chat_hub import order_chat_hub
@@ -250,8 +253,15 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     assert resp_caixa_msgs.status_code == 200
     assert len(resp_caixa_msgs.json()) == 1
 
+    session.refresh(conv)
+    assert conv.staff_last_read_at is None
+
     resp_read = client.post(f"/api/caixa/conversas/{conv.id}/read", headers=headers_staff)
     assert resp_read.status_code == 200
+    assert resp_read.json()["changed"] is True
+    resp_read_again = client.post(f"/api/caixa/conversas/{conv.id}/read", headers=headers_staff)
+    assert resp_read_again.status_code == 200
+    assert resp_read_again.json()["changed"] is False
     resp_badge_after = client.get("/api/caixa/conversas/unread-count", headers=headers_staff)
     assert resp_badge_after.json()["total_unread"] == 0
 
@@ -263,12 +273,70 @@ def test_chat_messaging_bidirectional_and_read_tracking(client_and_session):
     assert resp_reply.status_code == 200
     assert resp_reply.json()["sender_type"] == "staff"
 
+    session.refresh(conv)
+    assert conv.customer_last_read_at is None
+    resp_customer_read = client.post(f"/api/cardapio/pedidos/acompanhar/{raw_token}/read")
+    assert resp_customer_read.status_code == 200
+    assert resp_customer_read.json()["changed"] is True
+    resp_customer_read_again = client.post(f"/api/cardapio/pedidos/acompanhar/{raw_token}/read")
+    assert resp_customer_read_again.status_code == 200
+    assert resp_customer_read_again.json()["changed"] is False
+
     resp_client_msgs = client.get(f"/api/cardapio/pedidos/acompanhar/{raw_token}/messages")
     assert resp_client_msgs.status_code == 200
     msgs = resp_client_msgs.json()
     assert len(msgs) == 2
     assert msgs[-1]["sender_type"] == "staff"
     assert "avisamos a cozinha" in msgs[-1]["body"]
+
+
+def test_read_watermarks_advance_only_to_observed_opposite_messages(client_and_session):
+    _client, session = client_and_session
+    _rest_a, _rest_b, user_a, _user_b, _comanda_a, _comanda_b = _seed_data(session)
+    conv, _raw_token = create_conversation_for_order(session, 1, "comanda-101")
+    session.commit()
+
+    customer = send_customer_message(
+        session,
+        1,
+        conv.id,
+        "comanda-101",
+        "Mensagem do cliente",
+        client_message_id=str(uuid.uuid4()),
+    )
+    session.commit()
+    session.refresh(conv)
+    assert conv.staff_last_read_at is None
+    assert mark_staff_read(session, 1, conv.id) is True
+    session.commit()
+    session.refresh(conv)
+    assert conv.staff_last_read_at == customer.created_at
+    first_staff_watermark = conv.staff_last_read_at
+    assert mark_staff_read(session, 1, conv.id) is False
+    session.commit()
+    session.refresh(conv)
+    assert conv.staff_last_read_at == first_staff_watermark
+
+    staff = send_staff_message(
+        session,
+        1,
+        conv.id,
+        user_a.id,
+        "Resposta da equipe",
+        client_message_id=str(uuid.uuid4()),
+    )
+    session.commit()
+    session.refresh(conv)
+    assert conv.customer_last_read_at is None
+    assert mark_customer_read(session, 1, conv.id) is True
+    session.commit()
+    session.refresh(conv)
+    assert conv.customer_last_read_at == staff.created_at
+    first_customer_watermark = conv.customer_last_read_at
+    assert mark_customer_read(session, 1, conv.id) is False
+    session.commit()
+    session.refresh(conv)
+    assert conv.customer_last_read_at == first_customer_watermark
 
 
 def test_terminal_status_closes_chat_immediately_for_both_sides_and_hot_path(client_and_session):
