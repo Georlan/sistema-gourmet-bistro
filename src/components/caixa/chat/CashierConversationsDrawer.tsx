@@ -419,13 +419,24 @@ export function CashierConversationsDrawer({
       const currentItems = snapshot.conversationId === conversationId ? snapshot.items : [];
       const latestSeq = background ? currentItems.at(-1)?.seq : undefined;
       const suffix = latestSeq ? `?after_seq=${latestSeq}` : '';
-      const response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/feed${suffix}`, {
+      let response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/feed${suffix}`, {
         headers: { Authorization: authorization },
         cache: 'no-store',
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
-      const page: CaixaFeedPage = await response.json();
+      let page: CaixaFeedPage | null = null;
+      if (response.ok) {
+        const parsed = await response.json() as Partial<CaixaFeedPage>;
+        if (Array.isArray(parsed.items)) page = parsed as CaixaFeedPage;
+      }
+      if (!response.ok || !page) {
+        response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
+          headers: { Authorization: authorization }, cache: 'no-store', signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Falha ao carregar conversa (${response.status}).`);
+        const items: CaixaChatMessage[] = await response.json();
+        page = { items, has_more: false, oldest_seq: null, latest_seq: null };
+      }
       if (
         controller.signal.aborted
         || generation !== messageGenerationRef.current

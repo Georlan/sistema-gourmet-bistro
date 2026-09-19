@@ -125,16 +125,24 @@ export default function CardapioOrderChatPanel({
     }
 
     try {
-      const [orderRes, messagesRes] = await Promise.all([
+      const [orderRes, page] = await Promise.all([
         fetch(`${apiRoot}/summary`, { cache: "no-store" }),
-        fetch(`${apiRoot}/feed${latestSeqRef.current ? `?after_seq=${latestSeqRef.current}` : ""}`, { cache: "no-store" }),
+        (async (): Promise<TrackingFeedPage | null> => {
+          const response = await fetch(`${apiRoot}/feed${latestSeqRef.current ? `?after_seq=${latestSeqRef.current}` : ""}`, { cache: "no-store" });
+          if (response.ok) {
+            const parsed = await response.json() as Partial<TrackingFeedPage>;
+            if (Array.isArray(parsed.items)) return parsed as TrackingFeedPage;
+          }
+          const legacy = await fetch(`${apiRoot}/messages`, { cache: "no-store" });
+          if (!legacy.ok) return null;
+          const items = await legacy.json() as TrackingMessage[];
+          return { items, has_more: false, oldest_seq: null, latest_seq: null, purged_at: null };
+        })(),
       ]);
       if (!orderRes.ok) throw new Error("Não foi possível atualizar o pedido.");
       const orderData = await orderRes.json() as TrackingPayload;
       setTracking(orderData);
-      if (messagesRes.ok) {
-        const page = await messagesRes.json() as TrackingFeedPage;
-        if (Array.isArray(page.items)) {
+      if (page && Array.isArray(page.items)) {
           const wasInitialPage = latestSeqRef.current === 0;
           latestSeqRef.current = Math.max(latestSeqRef.current, page.latest_seq || 0);
           setMessages((current) => {
@@ -143,7 +151,6 @@ export default function CardapioOrderChatPanel({
             return [...byId.values()].sort((a, b) => (a.seq || 0) - (b.seq || 0));
           });
           if (wasInitialPage) setHasOlderMessages(page.has_more);
-        }
       }
       setError(null);
     } catch (err) {
