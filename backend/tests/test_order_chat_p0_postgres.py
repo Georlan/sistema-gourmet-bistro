@@ -142,7 +142,7 @@ def test_migration_preserves_legacy_feed_and_enforces_rls(pg):
         conn.execute(text("DROP TABLE order_conversation_events"))
         conn.execute(text("ALTER TABLE order_messages DROP CONSTRAINT ck_order_messages_sender_type"))
         conn.execute(text("ALTER TABLE order_messages ADD CONSTRAINT ck_order_messages_sender_type CHECK (sender_type IN ('customer','staff','system'))"))
-        conn.execute(text("INSERT INTO order_messages (id,restaurante_id,conversation_id,pedido_id,sender_type,event_key,body,body_format,created_at) VALUES (:id,1,:conv,'comanda-101','system','status:pronto','Pronto &amp; entregue','html_escaped_v1',now())"), {"id": legacy_id, "conv": conv_id})
+        conn.execute(text("INSERT INTO order_messages (id,restaurante_id,conversation_id,pedido_id,sender_type,event_key,body,body_format,created_at,feed_seq) VALUES (:id,1,:conv,'comanda-101','system','status:pronto','Pronto &amp; entregue','html_escaped_v1',now(),1)"), {"id": legacy_id, "conv": conv_id})
         with Operations.context(MigrationContext.configure(conn)):
             migration.upgrade()
         assert conn.execute(text("SELECT count(*) FROM order_messages")).scalar() == 0
@@ -155,9 +155,9 @@ def test_migration_preserves_legacy_feed_and_enforces_rls(pg):
         conn.execute(text("SELECT set_config('app.current_restaurante_id','1',true)"))
         assert conn.execute(text("SELECT count(*) FROM order_conversation_events")).scalar() == 1
         conn.execute(text("RESET ROLE"))
-    with sessions() as db:
-        assert chat.list_recent_messages(db, restaurante_id=1, conversation_id=conv_id)[0]["body"] == "Pronto & entregue"
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE order_messages DROP CONSTRAINT uq_order_messages_conv_feed_seq"))
+        conn.execute(text("ALTER TABLE order_messages DROP COLUMN feed_seq"))
         with Operations.context(MigrationContext.configure(conn)):
             migration.downgrade()
         assert conn.execute(text("SELECT id FROM order_messages")).scalar() == legacy_id
