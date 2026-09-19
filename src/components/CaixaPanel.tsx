@@ -357,7 +357,6 @@ export function CaixaPanel({
     setSmartPosRecoveryError,
     fetchTurno,
     handleFecharDelivery,
-    handleFinalizarPedido,
   });
   const { handleConfirmPendingCashPayment, handleRejectPendingCashPayment } = checkout;
   const {
