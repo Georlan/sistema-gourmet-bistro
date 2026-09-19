@@ -52,6 +52,8 @@ export interface KanbanDetailOrder {
   readonly deliveryStatus?: string;
   readonly identificador?: string;
   readonly telefone?: string;
+  readonly paymentMethod?: string | null;
+  readonly changeFor?: number | null;
   readonly criadoEm?: string;
   readonly created_at?: string;
   readonly mesaOrigemId?: number;
@@ -276,6 +278,17 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                 <strong>{selectedKanbanOrder.identificador}</strong>
               </div>
               {selectedKanbanOrder.telefone && <span>{selectedKanbanOrder.telefone}</span>}
+            </div>
+          )}
+          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0) && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3" aria-label="Pagamento do pedido">
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Pagamento na entrega ou retirada</span>
+              {selectedKanbanOrder.paymentMethod && (
+                <strong className="mt-1 block text-sm capitalize text-koma-foreground">{selectedKanbanOrder.paymentMethod}</strong>
+              )}
+              {Number(selectedKanbanOrder.changeFor || 0) > 0 && (
+                <p className="mt-1 text-xs font-bold text-koma-foreground">Troco para {formatCurrency(Number(selectedKanbanOrder.changeFor))}</p>
+              )}
             </div>
           )}
           {selectedIsDelivery && selectedKanbanOrder.courierAssignment && (

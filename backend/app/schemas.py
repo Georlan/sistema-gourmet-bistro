@@ -216,6 +216,8 @@ class ComandaResponse(BaseModel):
     delivery_telefone: Optional[str] = None
     delivery_endereco: Optional[str] = None
     delivery_taxa: float = 0.0
+    delivery_forma_pagamento: Optional[str] = None
+    delivery_troco_para: Optional[float] = None
     motoboy_id: Optional[int] = None
 
     # Cashier flow

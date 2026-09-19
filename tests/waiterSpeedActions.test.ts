@@ -64,14 +64,14 @@ test('produto esgotado continua bloqueado e só ganha visibilidade durante busca
   assert.match(menu, /aria-disabled="true"/);
 });
 
-test('card do garçom prioriza a mesa e deixa Pedido como referência secundária', () => {
+test('salão do garçom e do caixa priorizam a mesa e deixam Pedido como referência secundária', () => {
   const card = readFileSync(new URL('../src/components/MesaCard.tsx', import.meta.url), 'utf8');
   const cashier = readFileSync(new URL('../src/components/caixa/salao/CashierSalonCard.tsx', import.meta.url), 'utf8');
   const shared = readFileSync(new URL('../src/components/shared/SharedTableCard.tsx', import.meta.url), 'utf8');
 
   assert.match(card, /identityLabel="Pedido"/);
   assert.doesNotMatch(card, /primaryIdentity="order"/);
-  assert.match(cashier, /primaryIdentity="order"/);
+  assert.doesNotMatch(cashier, /primaryIdentity="order"/);
   assert.match(shared, /identityLabel\?: string/);
   assert.match(shared, /identityLabel = 'Comanda'/);
   assert.match(shared, /primaryIdentity = 'table'/);

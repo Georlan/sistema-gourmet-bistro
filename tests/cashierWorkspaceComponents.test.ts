@@ -272,3 +272,18 @@ test('digital detail uses the same controlled advance and order-only cancellatio
   assert.deepEqual(calls, ['advance', 'order']);
   assert.doesNotMatch(renderToStaticMarkup(createElement(KanbanOrderDetails, props)), /Mesa de destino/);
 });
+
+test('digital detail shows the payment method and requested cash change', () => {
+  const props: KanbanOrderDetailsProps = {
+    order: { id: 'digital-cash', mesaId: 0, numeroPedido: 49, modalidade: 'retirada', deliveryStatus: 'producao',
+      paymentMethod: 'dinheiro', changeFor: 100, itens: [] },
+    transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
+    actions: { close: noop, advanceDigitalOrder: noop, reprintProduction: noop, printFullTable: noop,
+      printTableValues: noop, transferTable: noop, cancelConsumption: noop, cancelOrder: noop },
+  };
+
+  const markup = renderToStaticMarkup(createElement(KanbanOrderDetails, props));
+  assert.match(markup, /Pagamento na entrega ou retirada/);
+  assert.match(markup, /dinheiro/i);
+  assert.match(markup, /Troco para R\$\s*100,00/);
+});
