@@ -75,7 +75,8 @@ test('salão do garçom e do caixa priorizam a mesa e deixam Pedido como referê
   assert.match(shared, /identityLabel\?: string/);
   assert.match(shared, /identityLabel = 'Comanda'/);
   assert.match(shared, /primaryIdentity = 'table'/);
-  assert.match(shared, /\{identityLabel\} \{checkNumbers\[0\]\}/);
+  assert.match(shared, /identityLabel === 'Pedido' \? 'Ped\.' : identityLabel/);
+  assert.match(shared, /whitespace-nowrap/);
   assert.doesNotMatch(card, /footerAction/);
 });
 
