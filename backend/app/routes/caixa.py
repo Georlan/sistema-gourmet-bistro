@@ -46,6 +46,7 @@ from ..services.delivery_fee_policy import (
     normalize_neighborhood_fee_table,
     validate_delivery_fee,
 )
+from ..services.delivery_fee_suggestion import suggest_delivery_fee
 from ..services.notificacoes import agendar_convite_equipe_task
 from ..timezone_utils import elapsed_minutes_since
 
@@ -1562,6 +1563,16 @@ def obter_configuracoes(
             detail="Configurações do restaurante ainda não foram provisionadas.",
         )
     return _serializar_configuracoes(config)
+
+
+@router.get("/configuracoes/delivery-suggestion")
+def obter_sugestao_taxa_entrega(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    """Sugere valores sem sobrescrever a decisão manual do restaurante."""
+    del current_user
+    return suggest_delivery_fee(db, require_tenant_id())
 
 
 @router.put("/configuracoes/delivery-origin")
