@@ -32,14 +32,12 @@ import {
 import { KOMA_LANDING_CONFIG } from '../../landing/config/landingConfig';
 import { ContractDocumentsPanel } from './ContractDocumentsPanel';
 
-type SubscriptionSection = 'meu_plano' | 'planos_upgrade' | 'contrato_documentos';
-
 interface AssinaturaPixTabProps {
   currentPlanId: SubscriptionPlanId;
   hasPrinting: boolean;
   hasOnlineMenu: boolean;
-  activeSubTab: SubscriptionSection;
-  setActiveSubTab: (tab: SubscriptionSection) => void;
+  activeSubTab: string;
+  setActiveSubTab: (tab: string) => void;
   isTestPlan?: boolean;
   bannerNotice?: string | null;
 }
