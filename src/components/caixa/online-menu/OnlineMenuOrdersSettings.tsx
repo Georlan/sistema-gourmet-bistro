@@ -238,7 +238,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
         <div className="min-w-0">
           <h2 className="text-base font-black text-koma-foreground">Pedidos online</h2>
           <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-            O cardápio abre e fecha automaticamente pelo horário geral do estabelecimento. Fora do horário, aparece como fechado e informa a próxima abertura.
+            O cardápio acompanha o caixa e respeita o horário geral do estabelecimento. Fora do horário, aparece como fechado e informa a próxima abertura.
           </p>
         </div>
         {publicMenuUrl && (
@@ -287,7 +287,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
             <div>
               <h3 className="text-sm font-black text-koma-foreground">Horário do estabelecimento</h3>
               <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-                Esta é uma configuração geral do restaurante, não apenas do cardápio online. Abrir o caixa não libera pedidos fora do horário cadastrado.
+                Esta é uma configuração geral do restaurante, não apenas do cardápio online. O cardápio só aceita pedidos quando o caixa estiver aberto e o horário cadastrado permitir.
               </p>
             </div>
           </div>
