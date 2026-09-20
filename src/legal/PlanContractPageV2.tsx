@@ -592,8 +592,8 @@ export default function PlanContractPageV2() {
             <p>{activationResult.message || (!fixedBillingRequired
               ? 'Pocket ativado sem mensalidade fixa e sem assinatura recorrente de R$ 0 no provedor.'
               : pixSelected
-                ? 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
-                : 'A mensalidade fixa continua R$ 0 hoje e os 7 dias grátis começam após a implantação essencial.')}</p>
+                ? 'Nenhum Pix é cobrado hoje. Depois da configuração, você inicia seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
+                : 'A mensalidade fixa continua R$ 0 hoje. Depois da configuração, você escolhe quando iniciar os 7 dias grátis.')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
             {activationResult.status === 'awaiting_release' ? (
               <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Aguarde o convite para criar sua senha.</strong></div>
@@ -641,7 +641,7 @@ export default function PlanContractPageV2() {
 
           {step === 1 ? (
             <>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>Pocket começa sem mensalidade. Pro e Premium mantêm 7 dias de teste no componente fixo após a implantação essencial.</p></div>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>Pocket começa sem mensalidade. Pro e Premium mantêm 7 dias de teste no componente fixo, iniciados por você após concluir a configuração.</p></div>
               <div className="koma-sub-plan-grid" role="radiogroup" aria-label="Escolha um plano KÔMA">
                 {SUBSCRIPTION_PLANS.map(candidate => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);
@@ -666,7 +666,7 @@ export default function PlanContractPageV2() {
                 <button type="button" role="radio" aria-checked={billingCycle === 'mensal'} className={billingCycle === 'mensal' ? 'is-selected' : ''} onClick={() => setBillingCycle('mensal')}><span>Mensal</span><strong>{formatCurrency(pricing.monthly)}/mês</strong><small>{selectedPlanId === 'pocket' ? 'Sem componente fixo.' : 'Primeira cobrança depois do trial.'}</small></button>
                 {selectedPlanId !== 'pocket' && <button type="button" role="radio" aria-checked={billingCycle === 'anual'} className={billingCycle === 'anual' ? 'is-selected' : ''} onClick={() => setBillingCycle('anual')}><span>Anual <em>Economize 10%</em></span><strong>{formatCurrency(pricing.annualMonthlyEquivalent)}/mês equivalente</strong><small>{formatCurrency(pricing.annualTotal)} por ano, cobrado depois do trial. O desconto anual não altera a taxa percentual.</small></button>}
               </div>
-              <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>{selectedPlanId === 'pocket' ? 'Pocket sem mensalidade fixa.' : '7 dias grátis no componente fixo.'}</strong><p>{selectedPlanId === 'pocket' ? 'Não é necessário cadastrar meio de pagamento para uma recorrência de R$ 0.' : 'Os 7 dias só começam depois dos 3 passos essenciais de implantação.'}</p></div></div>
+              <div className="koma-sub-trial-note"><Gift size={19} /><div><strong>{selectedPlanId === 'pocket' ? 'Pocket sem mensalidade fixa.' : '7 dias grátis no componente fixo.'}</strong><p>{selectedPlanId === 'pocket' ? 'Não é necessário cadastrar meio de pagamento para uma recorrência de R$ 0.' : 'Os 7 dias não começam sozinhos: depois da configuração, você escolhe quando iniciar.'}</p></div></div>
             </>
           ) : step === 2 ? (
             <>
@@ -774,7 +774,7 @@ export default function PlanContractPageV2() {
               ) : (
                 <>
                   <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Selecione {billingMethodLabel}. Mensalidade fixa: R$ 0.</p></div></div>
-                  <div><span><Info size={16} /></span><div><strong>Após a implantação</strong><p>Começam 7 dias grátis completos.</p></div></div>
+                  <div><span><Info size={16} /></span><div><strong>Depois da configuração</strong><p>Você escolhe quando iniciar os 7 dias grátis completos.</p></div></div>
                   <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : billingMethod === 'account_money' ? <Wallet size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
                 </>
               )}
@@ -788,7 +788,7 @@ export default function PlanContractPageV2() {
                 : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'
               : billingMethod === 'account_money'
                 ? 'Saldo Mercado Pago é recorrente e depende de saldo disponível na sua conta Mercado Pago no vencimento.'
-                : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>
+                : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois dos 7 dias grátis iniciados por você.'}</p>
             {step === 1 ? (
               <button type="button" className="koma-sub-primary-action" onClick={() => { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
