@@ -813,7 +813,7 @@ def update_item_status(
 @router.get("/delivery/ativos", response_model=List[ComandaDetail])
 def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Retorna comandas com ciclo operacional digital que ainda estão abertas.\n    Inclui delivery, retirada e consumo no local digital; consumo de salão\n    tradicional continua fora porque não possui delivery_status legado.\n    """
+    Retorna comandas com ciclo operacional da coluna central que ainda estão abertas.\n    Inclui delivery, retirada, consumo local online e consumo local do Caixa sem mesa;\n    salão tradicional continua fora porque não possui esse ciclo operacional.\n    """
     return db.query(Comanda).filter(
         Comanda.restaurante_id == require_tenant_id(),
         or_(
@@ -821,7 +821,7 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
             and_(
                 Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
                 Comanda.delivery_status.isnot(None),
-                Comanda.lancamentos.any(Lancamento.origem == "cardapio"),
+                Comanda.lancamentos.any(Lancamento.origem.in_(["cardapio", "caixa"])),
             ),
         ),
         Comanda.fechada == False,
