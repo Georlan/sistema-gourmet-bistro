@@ -592,8 +592,8 @@ export default function PlanContractPageV2() {
             <p>{activationResult.message || (!fixedBillingRequired
               ? 'Pocket ativado sem mensalidade fixa e sem assinatura recorrente de R$ 0 no provedor.'
               : pixSelected
-                ? 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
-                : 'A mensalidade fixa continua R$ 0 hoje e os 7 dias grátis começam após a implantação essencial.')}</p>
+                ? 'Nenhum Pix é cobrado hoje. Depois de concluir a configuração, você inicia a operação quando quiser; nesse clique começam seus 7 dias grátis e o primeiro QR aparece no KÔMA somente no vencimento.'
+                : 'A mensalidade fixa continua R$ 0 hoje e os 7 dias grátis começam somente quando você iniciar explicitamente a operação após a configuração.')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
             {activationResult.status === 'awaiting_release' ? (
               <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Aguarde o convite para criar sua senha.</strong></div>
