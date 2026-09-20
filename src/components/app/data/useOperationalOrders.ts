@@ -2,7 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../../config/api';
 import { Order, Product } from '../../../types';
 import type { OperationalRequestContext, OperationalErrorSink } from '../operationalContracts';
-import { mapBackendComandaToOperationalOrder } from './operationalOrderMapping';
+import {
+  mapBackendComandaToOperationalOrder,
+  preserveOptimisticOrderIdentity,
+} from './operationalOrderMapping';
 
 type BoundaryProps = OperationalRequestContext & OperationalErrorSink & {
   liveProdutos: Product[];
@@ -22,25 +25,6 @@ type OptimisticOrderReconcileDetail = {
 type OptimisticOrderRemoveDetail = {
   orderId?: string;
 };
-
-const isPlaceholderOrderIdentifier = (value: unknown) => {
-  const normalized = String(value || '').trim().toLocaleLowerCase('pt-BR');
-  return !normalized || normalized === 'cliente sem nome';
-};
-
-export function preserveOptimisticOrderIdentity(
-  optimistic: Order | undefined,
-  mapped: Order,
-): Order {
-  if (!optimistic) return mapped;
-  if (
-    isPlaceholderOrderIdentifier(mapped.identificador)
-    && !isPlaceholderOrderIdentifier(optimistic.identificador)
-  ) {
-    return { ...mapped, identificador: optimistic.identificador };
-  }
-  return mapped;
-}
 
 /** Owns the shared order snapshot, response mapping, targeted refresh and optimistic overlays. */
 export function useOperationalOrders({
