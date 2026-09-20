@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 import requests
 
 log = logging.getLogger("print-agent.api")
-AGENT_CAPABILITIES = ["connect_usb", "thermal_simulator"]
+AGENT_CAPABILITIES = ["connect_usb"]
 AGENT_VERSION = "2026.09.20.1"
 
 
