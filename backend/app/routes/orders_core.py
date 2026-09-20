@@ -821,7 +821,7 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
             and_(
                 Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"]),
                 Comanda.delivery_status.isnot(None),
-                Comanda.lancamentos.any(Lancamento.origem == "cardapio"),
+                Comanda.lancamentos.any(Lancamento.origem.in_(["cardapio", "caixa"])),
             ),
         ),
         Comanda.fechada == False,
