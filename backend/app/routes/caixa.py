@@ -1851,9 +1851,10 @@ def atualizar_configuracoes(
     if config_in.tipos_pedido_ativos is not None:
         # Pydantic já limita os valores; deduplicamos preservando a ordem escolhida.
         config.tipos_pedido_ativos = list(dict.fromkeys(config_in.tipos_pedido_ativos))
-        # Delivery tem uma autoridade operacional já existente. Mantemos os dois
-        # contratos sincronizados para que onboarding e pedido público não divirjam.
+        # Mantemos as autoridades legadas sincronizadas para não produzir um
+        # tenant simultaneamente "somente salão" e com canais externos selecionados.
         config.delivery_ativo = "delivery" in config.tipos_pedido_ativos
+        config.modo_exclusivo_salao = set(config.tipos_pedido_ativos) == {"consumo_local"}
     if config_in.pedido_minimo is not None:
         config.pedido_minimo = config_in.pedido_minimo
     if config_in.frete_gratis_valor is not None:
