@@ -54,6 +54,7 @@ from ...models import (
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
 from ...services.online_order_policy import evaluate_online_order_policy
+from ...services.online_order_auto_accept import auto_accept_order_if_enabled
 from ...services.online_payments import (
     OnlinePaymentConfigurationError,
     OnlinePaymentService,
@@ -575,6 +576,14 @@ class CardapioWebAdapter:
                     payer_email=payload.cliente_email or "",
                     account=payment_account,
                 )
+            elif comanda is not None:
+                auto_accept_order_if_enabled(
+                    db,
+                    restaurante_id=rest_id,
+                    comanda_id=comanda.id,
+                    commit=True,
+                )
+                db.refresh(comanda)
 
         except HTTPException:
             db.rollback()
