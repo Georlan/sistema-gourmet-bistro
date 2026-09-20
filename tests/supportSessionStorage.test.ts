@@ -23,3 +23,12 @@ test('encerramento limpa contexto temporário em ambos os storages', () => {
   assert.match(banner, /localStorage\.removeItem\(SUPPORT_SESSION_STORAGE_KEY\)/);
   assert.match(banner, /clearOperatorSession\(\)/);
 });
+
+
+test('entrada de suporte limpa implantação antiga e expõe a bancada térmica interna', () => {
+  assert.match(modal, /removeItem\("koma_onboarding_setup_mode"\)/);
+  assert.match(modal, /setItem\("koma_active_tab", "operacao"\)/);
+  assert.match(modal, /setItem\("koma_active_subtab", "pedidos"\)/);
+  assert.match(banner, /\/ferramentas\/simulador-impressao/);
+  assert.match(banner, /Simulador térmico/);
+});
