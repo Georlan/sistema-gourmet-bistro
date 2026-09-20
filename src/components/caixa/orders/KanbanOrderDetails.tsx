@@ -12,6 +12,7 @@ import {
 } from '../../../domain/cashierOrderProjection';
 import { formatBackendTime } from '../../../utils/dateTime';
 import { formatCurrency, operationalOriginLabel } from '../cashierPresentation';
+import { getDigitalOrderFulfillmentLabel } from './digitalOrderPresentation';
 
 export interface KanbanDetailSourceItem {
   readonly id?: string;
@@ -134,7 +135,9 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
       && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
     );
   const selectedIsDigital = Boolean(selectedKanbanOrder)
-    && ['retirada', 'entrega', 'delivery'].includes(String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase());
+    && ['retirada', 'entrega', 'delivery', 'consumo_local', 'consumo no local'].includes(
+      String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase(),
+    );
   const selectedIsTableLinkedPickup = selectedIsDigital
     && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
     && Number(selectedKanbanOrder?.mesaId || 0) > 0;
@@ -177,7 +180,19 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
           </div>
           <div className="min-w-0 flex-1">
             <span className="orders-detail-modal__eyebrow">
-              {selectedIsQuickSale ? 'Venda rápida' : selectedIsTableLinkedPickup ? 'Retirada vinculada à mesa' : selectedKanbanOrder.mesaId > 0 ? 'Atendimento do salão' : selectedKanbanOrder.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+              {selectedIsQuickSale
+                ? 'Venda rápida'
+                : selectedIsTableLinkedPickup
+                  ? 'Retirada vinculada à mesa'
+                  : selectedKanbanOrder.mesaId > 0
+                    ? 'Atendimento do salão'
+                    : getDigitalOrderFulfillmentLabel({
+                        modalidade: selectedKanbanOrder.modalidade === 'consumo_local'
+                          ? 'consumo_local'
+                          : selectedKanbanOrder.modalidade === 'delivery'
+                            ? 'delivery'
+                            : 'retirada',
+                      })}
             </span>
             <h3 id="kanban-detail-title" className="orders-detail-modal__title">
               {selectedIsQuickSale
