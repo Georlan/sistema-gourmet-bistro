@@ -62,9 +62,10 @@ test('cotações usam apenas a configuração fornecida de cada restaurante', ()
   assert.equal(getDeliveryQuote({ tabelaTaxasBairros: neighborhoods }, 25, 'Centro').fee, 5);
 });
 
-test('pedido mínimo bloqueia somente entrega, nunca retirada', () => {
+test('pedido mínimo bloqueia somente entrega, nunca retirada ou consumo local', () => {
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'delivery'), 10);
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'pickup'), 0);
+  assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 20, 'dine_in'), 0);
   assert.equal(getDeliveryMinimumRemaining({ pedidoMinimo: 30 }, 30, 'delivery'), 0);
 });
 
@@ -73,6 +74,9 @@ const deliveryAddressFields = readFileSync(new URL('../src/components/shared/Del
 
 test('UI expõe seleção, nome acessível do bairro e endereço legível sem alterar checkout', () => {
   assert.match(cart, /aria-pressed=\{deliveryMethod === "pickup"\}/);
+  assert.match(cart, /aria-pressed=\{deliveryMethod === "dine_in"\}/);
+  assert.match(cart, /Consumo local/);
+  assert.match(cart, /O restaurante pode associar seu pedido a uma mesa depois/);
   assert.match(cart, /aria-pressed=\{deliveryMethod === "delivery"\}/);
   assert.match(cart, /idPrefix="delivery-address"/);
   assert.match(deliveryAddressFields, /<span className=\{labelClass\}>Bairro<\/span>/);
