@@ -523,6 +523,7 @@ class ConfiguracaoRestauranteResponse(BaseModel):
     nicho: str
     mapa_mesas_ativo: bool
     delivery_ativo: bool
+    tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     taxa_servico_ativa: bool
     taxa_servico_padrao: float
     meta_mensal: Optional[float] = 0.0
@@ -578,6 +579,7 @@ class ConfiguracaoRestauranteUpdate(BaseModel):
     nicho: Optional[str] = None
     mapa_mesas_ativo: Optional[bool] = None
     delivery_ativo: Optional[bool] = None
+    tipos_pedido_ativos: Optional[List[Literal["consumo_local", "retirada", "delivery"]]] = None
     pedido_minimo: Optional[float] = None
     frete_gratis_valor: Optional[float] = None
     tipo_taxa_entrega: Optional[str] = None
