@@ -24,7 +24,7 @@ import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import { RESTAURANT_CONFIG } from './data';
 import { countWaiterSalonTables, projectWaiterSalonTables } from './domain/waiterSalonProjection';
-import { resolveKomaHost } from './domain/komaHost';
+import { isCentralSupportOperationalBridge, resolveKomaHost } from './domain/komaHost';
 import { AppRole, AppSettings, CaixaTurnoResumo } from './types';
 import { authFetch, authRequestErrorMessage } from './utils/authRequest';
 import { getOperatorSession, saveOperatorSession, type OperationalPortal } from './utils/authSession';
@@ -57,6 +57,16 @@ const LOCAL_STORAGE_SETTINGS_KEY = 'koma_settings_vFinal_v3';
 const LOCAL_STORAGE_RESTAURANT_NAME_KEY = 'koma_restaurant_name_v3';
 const LOCAL_STORAGE_HIST_CLIENTS_KEY = 'koma_historic_clients_v3';
 
+const SUPPORT_SESSION_STORAGE_KEY = 'koma_support_session';
+
+function hasInternalSupportSessionContext(): boolean {
+  try {
+    return Boolean(window.sessionStorage.getItem(SUPPORT_SESSION_STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
 const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
 const isManagementRole = (role: AppRole) => MANAGEMENT_ROLES.has(role);
 
@@ -76,8 +86,10 @@ const readJwtSubject = (token: string): string => {
 
 export default function App({ initialPortal }: { initialPortal?: OperationalPortal } = {}) {
   const hostConfig = useMemo(() => resolveKomaHost(), []);
+  const invalidCentralSupportBridge =
+    isCentralSupportOperationalBridge() && !hasInternalSupportSessionContext();
 
-  if (hostConfig.surface === 'central') {
+  if (hostConfig.surface === 'central' || invalidCentralSupportBridge) {
     return <AppRouteBoundary label="administração"><SuperAdminGate /></AppRouteBoundary>;
   }
 
