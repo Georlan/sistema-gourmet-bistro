@@ -6,6 +6,7 @@ import {
   projectDeliveryOrdersFromSharedSnapshot,
   reconcileDeliveryOrderAfterStatus,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
+import { preserveOptimisticOrderIdentity } from '../src/components/app/data/useOperationalOrders';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
@@ -79,6 +80,29 @@ test('delivery hydration never replaces a known customer with the generic placeh
 
   const authoritative = { ...base, cliente: 'Nome Atualizado' } as any;
   assert.equal(reconcileDeliveryOrderAfterStatus(previous, authoritative).cliente, 'Nome Atualizado');
+});
+
+test('temp to confirmed reconciliation never regresses a known customer name', () => {
+  const optimistic = {
+    id: 'temp-identity',
+    identificador: 'georlan',
+  } as Order;
+  const mapped = {
+    id: 'confirmed-identity',
+    identificador: '',
+  } as Order;
+
+  assert.equal(
+    preserveOptimisticOrderIdentity(optimistic, mapped).identificador,
+    'georlan',
+  );
+  assert.equal(
+    preserveOptimisticOrderIdentity(
+      optimistic,
+      { ...mapped, identificador: 'Nome Atualizado' },
+    ).identificador,
+    'Nome Atualizado',
+  );
 });
 
 test('PDV reconciles or rolls back the temporary order instead of leaving duplicate cards', () => {
