@@ -610,10 +610,11 @@ export function PrintMonitorPanel({
       if (monitorData.summary.delayed > 0) {
         return {
           tone: 'warning',
-          title: `${monitorData.summary.delayed} impressão(ões) aguardando; agente local conectado`,
+          title: `${queueTotal} na fila; ${monitorData.summary.delayed} atrasada(s)`,
           detail: (
-            `A ponte do Kôma Print está online, mas não há impressora física pronta. `
-            + `Espera mais antiga: ${formatAge(monitorData.summary.oldest_unresolved_seconds)}.`
+            `O agente local está conectado, mas não há impressora física pronta. `
+            + `Atraso significa mais de ${Math.round(monitorData.delay_threshold_seconds / 60)} min na fila; `
+            + `espera mais antiga: ${formatAge(monitorData.summary.oldest_unresolved_seconds)}.`
           )
         };
       }
