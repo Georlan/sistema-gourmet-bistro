@@ -53,6 +53,7 @@ from ...models import (
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
+from ...services.onboarding_readiness import normalize_operation_capabilities
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.online_payments import (
     OnlinePaymentConfigurationError,
@@ -402,6 +403,32 @@ class CardapioWebAdapter:
             configuracao = db.query(ConfiguracaoRestaurante).filter(
                 ConfiguracaoRestaurante.restaurante_id == rest_id,
             ).first()
+            capabilities = normalize_operation_capabilities(
+                configuracao.operation_capabilities if configuracao else None
+            )
+            if capabilities is not None:
+                if not capabilities["online_menu"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="O cardápio online não está habilitado para este restaurante.",
+                    )
+                mode_key = {
+                    "delivery": "delivery",
+                    "retirada": "pickup",
+                    "consumo_local": "dine_in",
+                }[modalidade]
+                if mode_key not in capabilities["order_modes"]:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Este tipo de pedido não está habilitado pelo restaurante.",
+                    )
+                try:
+                    OnlinePaymentService.active_account(db, rest_id)
+                except OnlinePaymentConfigurationError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Conecte o Mercado Pago para receber pedidos pelo cardápio online.",
+                    ) from exc
             policy_now = None
             if normalized_schedule is not None:
                 operational_tz = get_operational_now().tzinfo
