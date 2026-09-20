@@ -186,7 +186,8 @@ def test_associate_pickup_converts_to_dine_in_and_materializes_table_family():
     db = SessionLocal()
     try:
         command = _command(db, "c-associate-pickup", None, 302, tipo="Retirada")
-        _launch(db, command, "l-associate-pickup", "i-associate-pickup")
+        launch = _launch(db, command, "l-associate-pickup", "i-associate-pickup")
+        launch.origem = "cardapio"
 
         associated = associate_order_to_table(
             db,
@@ -198,6 +199,7 @@ def test_associate_pickup_converts_to_dine_in_and_materializes_table_family():
 
         assert associated.tipo == "Consumo no Local"
         assert associated.mesa_id == 4
+        assert launch.origem == "cardapio"
         link = (
             db.query(AtendimentoComanda)
             .filter(
