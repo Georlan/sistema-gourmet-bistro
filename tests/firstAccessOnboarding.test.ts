@@ -43,14 +43,16 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
 });
 
-test('required onboarding persists and blocks normal operation until 3 of 3 is complete', () => {
-  assert.match(onboarding, /Antes de liberar a operação, conclua os 3 passos essenciais/);
-  assert.match(onboarding, /requiredComplete/);
-  assert.match(onboarding, /Entrar no KÔMA/);
+test('operation stays gated until the owner explicitly starts it', () => {
+  assert.match(onboarding, /\/api\/onboarding\/start-operation/);
+  assert.match(onboarding, /Iniciar trial e testar operação/);
+  assert.match(onboarding, /configuration\.complete/);
+  assert.match(onboarding, /operation\.started/);
   assert.match(onboarding, /sessionStorage\.setItem\(ONBOARDING_SETUP_MODE_KEY, '1'\)/);
   assert.match(onboarding, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
-  assert.match(boundary, /!gate\.requiredComplete/);
+  assert.match(boundary, /!gate\.operationStarted/);
   assert.match(boundary, /<FirstAccessOnboarding/);
+  assert.match(gateHook, /operation\?:/);
   assert.match(gateHook, /\/api\/onboarding\/status/);
 });
 
@@ -58,8 +60,9 @@ test('setup mode exposes canonical configuration and fiscal without exposing nor
   assert.match(navigation, /SETUP_DIRECT_TABS/);
   assert.match(navigation, /'cardapio'/);
   assert.match(navigation, /'cardapio_digital'/);
-  assert.match(navigation, /tab === 'impressao_salao' && subTab === 'integracoes'/);
-  assert.match(navigation, /Finalize a implantação inicial antes de acessar a operação/);
+  assert.match(navigation, /'permissoes_cargos'/);
+  assert.match(navigation, /\['integracoes', 'mesas', 'taxa'\]/);
+  assert.match(navigation, /Inicie a operação quando a configuração estiver concluída/);
   assert.match(desktopSidebar, /setupMode \?/);
   assert.match(desktopSidebar, /<CashierOnboardingShortcut/);
   assert.match(desktopSidebar, /Conclua dados do restaurante, horários e cardápio/);
@@ -74,10 +77,14 @@ test('setup mode exposes canonical configuration and fiscal without exposing nor
   assert.match(integrationsSettings, />\s*Fiscal\s*</);
 });
 
-test('initial setup reuses the same cashier online-menu screens and Mercado Pago integration owner', () => {
+test('initial setup reuses canonical configuration screens and Mercado Pago integration owner', () => {
   assert.match(onboarding, /subTab: 'cardapio_perfil'/);
   assert.match(onboarding, /subTab: 'cardapio_pedidos'/);
-  assert.match(onboarding, /subTab: 'cardapio_pagamentos'/);
+  assert.match(onboarding, /'cardapio_pagamentos'/);
+  assert.match(onboarding, /'cardapio_entrega'/);
+  assert.match(onboarding, /'impressao_salao', 'mesas'/);
+  assert.match(onboarding, /'impressao_salao', 'taxa'/);
+  assert.match(onboarding, /'permissoes_cargos', 'pessoas'/);
   assert.match(onlineMenu, /cardapio_perfil: 'perfil'/);
   assert.match(onlineMenu, /cardapio_pedidos: 'pedidos'/);
   assert.match(onlineMenu, /cardapio_pagamentos: 'pagamentos'/);
@@ -103,24 +110,31 @@ test('onboarding status request cannot trap first access in infinite loading', (
   assert.match(onboarding, /const controller = new AbortController\(\)/);
   assert.match(onboarding, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_LOAD_TIMEOUT_MS\)/);
   assert.match(onboarding, /signal: controller\.signal/);
-  assert.match(onboarding, /Tente novamente para continuar a implantação/);
+  assert.match(onboarding, /A configuração demorou para responder/);
   assert.match(onboarding, /clearTimeout\(timeoutId\)/);
 });
 
-test('onboarding uses canonical server progress and exposes the five launch steps', () => {
+test('onboarding exposes capability choices and two business readiness signals', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
+  assert.match(onboarding, /\/api\/onboarding\/capabilities/);
   for (const label of [
     'Complete os dados do restaurante',
     'Defina os horários de funcionamento',
-    'Monte o primeiro cardápio',
-    'Conecte o Mercado Pago',
-    'Faça um primeiro pedido de teste',
+    'Publique o primeiro produto',
+    'Como este restaurante vai operar?',
+    'Salão',
+    'Retirada \/ balcão',
+    'Delivery',
+    'Cardápio online',
+    'Taxa de serviço do garçom',
+    'Configuração concluída',
+    'Pronto para operar',
   ]) {
     assert.match(onboarding, new RegExp(label));
   }
-  assert.match(onboarding, /daysRemaining/);
-  assert.match(onboarding, /Atualizar progresso/);
-  assert.match(onboarding, /Disponível depois/);
+  assert.match(onboarding, /testOrderComplete/);
+  assert.match(onboarding, /Ainda não iniciado/);
+  assert.match(onboarding, /Faça um pedido no tipo de operação escolhido/);
 });
 
 test('onboarding route is composed once into the existing root router', () => {
