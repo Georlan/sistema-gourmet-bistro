@@ -99,6 +99,6 @@ def test_activation_message_marks_trial_start_and_next_steps(monkeypatch):
     message = calls[0]["message"]
     assert "7 dias grátis ainda não estão correndo" in message
     assert "válido por 72 horas" in message
-    assert "dados do restaurante, horários e cardápio" in message
+    assert "depois da configuração" in message
     assert "você escolhe quando iniciar o período de teste" in message
     assert "https://komafood.com.br/ativar#token=invite-token" in message
