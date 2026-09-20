@@ -24,7 +24,7 @@ test('courier delivered action routes the delivery through the canonical checkou
   const courierBridge = functionSlice(
     panel,
     'const handleFinalizeCourierOrder',
-    'const [autoAccept, setAutoAccept]',
+    'const { autoAccept, updateAutoAccept }',
   );
 
   assert.match(couriers, /runOrderAction\(order\.id, \(\) => handleFinalizarPedido\(order\.id\)\)/);
