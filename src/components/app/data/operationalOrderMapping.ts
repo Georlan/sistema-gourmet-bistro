@@ -16,6 +16,25 @@ const readOperationalOrigin = (comanda: any): NonNullable<Order['origemOperacion
   return 'desconhecida';
 };
 
+const isPlaceholderOrderIdentifier = (value: unknown) => {
+  const normalized = String(value || '').trim().toLocaleLowerCase('pt-BR');
+  return !normalized || normalized === 'cliente sem nome';
+};
+
+export function preserveOptimisticOrderIdentity(
+  optimistic: Order | undefined,
+  mapped: Order,
+): Order {
+  if (!optimistic) return mapped;
+  if (
+    isPlaceholderOrderIdentifier(mapped.identificador)
+    && !isPlaceholderOrderIdentifier(optimistic.identificador)
+  ) {
+    return { ...mapped, identificador: optimistic.identificador };
+  }
+  return mapped;
+}
+
 const readPersistedModifiers = (item: any): OrderItemModifier[] =>
   (Array.isArray(item?.modificadores) ? item.modificadores : []).flatMap((modifier: any) => {
     const id = String(modifier?.id || '').trim();
