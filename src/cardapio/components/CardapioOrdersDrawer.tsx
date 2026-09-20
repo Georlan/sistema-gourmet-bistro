@@ -610,7 +610,6 @@ export default function CardapioOrdersDrawer({
                               </span>
                             </div>
                           </div>
-
                           <div className="text-right">
                             <span className="text-xs font-black text-koma-foreground">
                               {formatCurrency(order.total)}
@@ -761,7 +760,7 @@ export default function CardapioOrdersDrawer({
                         </div>
 
                         <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-koma-border/40 pt-2 text-[10px]">
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
                               onClick={() => {
@@ -777,11 +776,16 @@ export default function CardapioOrdersDrawer({
                                 type="button"
                                 onClick={() => openChat(order.id)}
                                 className={clsx(
-                                  "inline-flex items-center gap-1 font-bold",
-                                  unread > 0 ? "text-emerald-300" : "text-emerald-400 hover:text-emerald-300",
+                                  "inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 font-bold transition",
+                                  rejected
+                                    ? "border-rose-500/35 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
+                                    : unread > 0
+                                      ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300"
+                                      : "border-transparent text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300",
                                 )}
                               >
-                                <MessageCircle className="h-3 w-3" /> {unread > 0 ? "Ler mensagem" : "Chat"}
+                                <MessageCircle className="h-3 w-3" />
+                                {rejected ? "Ver motivo da recusa" : unread > 0 ? "Ler mensagem" : "Chat"}
                               </button>
                             )}
                           </div>

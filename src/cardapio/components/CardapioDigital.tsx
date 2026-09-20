@@ -27,6 +27,7 @@ import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems } from "../orderItems";
+import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
 import {
@@ -134,6 +135,7 @@ export default function CardapioDigital({
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [orderingBlocked, setOrderingBlocked] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<"now" | "scheduled">("now");
@@ -388,6 +390,13 @@ export default function CardapioDigital({
         onSessionExpired?.();
         throw new Error("Sua identificação expirou. Você pode tentar novamente sem perder a sacola.");
       }
+      if (isOrderingBlockConflict(response.status, data?.detail)) {
+        clearPendingSubmission(idempotencyKey);
+        idempotencyKeyRef.current = "";
+        idempotencyFingerprintRef.current = null;
+        setOrderingBlocked(true);
+        return;
+      }
       if (!response.ok || !(data?.comanda_id || data?.id) || data?.numero_pedido == null) {
         throw new Error(formatCardapioApiError(data));
       }
@@ -503,20 +512,25 @@ export default function CardapioDigital({
           <header className="shrink-0 border-b border-koma-border px-5 py-4 sm:px-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.15em] text-emerald-500"><ShoppingBag className="h-3.5 w-3.5" /> Etapa final</div>
-                <h2 className="mt-1.5 font-display text-lg font-black tracking-tight text-koma-foreground">Revise e confirme</h2>
-                <p className="mt-1 text-[10px] text-koma-muted">Confira contato, modalidade, itens e total antes do envio.</p>
+                <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.15em] ${orderingBlocked ? "text-rose-400" : "text-emerald-500"}`}>
+                  {orderingBlocked ? <AlertCircle className="h-3.5 w-3.5" /> : <ShoppingBag className="h-3.5 w-3.5" />}
+                  {orderingBlocked ? "Pedido indisponível" : "Etapa final"}
+                </div>
+                <h2 className="mt-1.5 font-display text-lg font-black tracking-tight text-koma-foreground">{orderingBlocked ? "Novos pedidos bloqueados" : "Revise e confirme"}</h2>
+                <p className="mt-1 text-[10px] text-koma-muted">{orderingBlocked ? "O restaurante não está aceitando um novo pedido para este contato neste momento." : "Confira contato, modalidade, itens e total antes do envio."}</p>
               </div>
               <button type="button" disabled={isSubmitting} onClick={() => !isSubmitting && onClose()} className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-koma-muted transition hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-wait disabled:opacity-35" id="btn-close-checkout" aria-label="Fechar revisão do pedido"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2 text-[9px] font-bold">
-              {["Sacola", deliveryMethod === "delivery" ? "Entrega" : "Retirada", "Revisão"].map((label, index) => (
-                <div key={label} className={index < 2 ? "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2 py-2 text-emerald-500" : "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-2 text-koma-foreground"}>
-                  {index < 2 ? <Check className="h-3 w-3" /> : <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[8px] text-white">3</span>}{label}
-                </div>
-              ))}
-            </div>
+            {!orderingBlocked && (
+              <div className="mt-4 grid grid-cols-3 gap-2 text-[9px] font-bold">
+                {["Sacola", deliveryMethod === "delivery" ? "Entrega" : "Retirada", "Revisão"].map((label, index) => (
+                  <div key={label} className={index < 2 ? "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2 py-2 text-emerald-500" : "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-2 text-koma-foreground"}>
+                    {index < 2 ? <Check className="h-3 w-3" /> : <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[8px] text-white">3</span>}{label}
+                  </div>
+                ))}
+              </div>
+            )}
           </header>
         )}
 
@@ -580,6 +594,24 @@ export default function CardapioDigital({
                 )}
               </div>
             </div>
+          ) : orderingBlocked ? (
+            <div className="mx-auto flex min-h-[360px] w-full max-w-md flex-col items-center justify-center py-8 text-center animate-scale-up">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-rose-500/25 bg-rose-500/10 text-rose-400"><AlertCircle className="h-9 w-9" /></div>
+              <h3 className="mt-5 font-display text-xl font-black tracking-tight text-koma-foreground">Não é possível enviar um novo pedido agora</h3>
+              <p className="mt-2 text-xs leading-relaxed text-koma-muted">O restaurante bloqueou temporariamente novos pedidos associados a este contato.</p>
+              <div className="mt-5 w-full rounded-2xl border border-koma-border bg-koma-card p-4 text-left">
+                <div className="flex items-start gap-3">
+                  <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                  <div>
+                    <p className="text-[11px] font-black text-koma-foreground">Quer saber o motivo?</p>
+                    <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Se um pedido anterior foi recusado, abra <strong className="text-koma-foreground">Meus Pedidos</strong> e consulte o acompanhamento daquele pedido. O motivo informado pelo restaurante fica disponível somente nesse acesso seguro.</p>
+                  </div>
+                </div>
+              </div>
+              <button type="button" onClick={onClose} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-koma-raised px-4 text-xs font-black uppercase tracking-wider text-koma-foreground transition hover:bg-koma-card">
+                <ArrowLeft className="h-4 w-4" /> Voltar ao cardápio
+              </button>
+            </div>
           ) : (
             <div className="space-y-5">
               <div className="grid gap-2 sm:grid-cols-2">
@@ -634,7 +666,7 @@ export default function CardapioDigital({
           )}
         </div>
 
-        {!createdOrder && (
+        {!createdOrder && !orderingBlocked && (
           <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
             <button type="button" onClick={handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || Boolean(paymentError || schedulePaymentError)} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
             <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados entram na operação somente no horário escolhido." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
