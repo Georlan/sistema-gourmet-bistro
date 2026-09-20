@@ -1500,6 +1500,24 @@ def aprovar_pagamento(
     ).with_for_update().first()
     if comanda is None:
         raise HTTPException(status_code=409, detail="Comanda do pagamento não encontrada.")
+    itens_selecionados = _lock_exact_payment_items(
+        db,
+        restaurante_id=rest_id,
+        comanda_ids=[comanda.id],
+        item_ids=pagamento.item_ids,
+        require_ready=False,
+    )
+    if itens_selecionados:
+        total_selecionado = _valor_monetario(sum(
+            (_valor_monetario(item.preco_unit) for item in itens_selecionados),
+            Decimal("0.00"),
+        ))
+        if _valor_monetario(pagamento.valor) != total_selecionado:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
+
     saldo_aberto = max(
         Decimal("0.00"),
         _subtotal_ativo(comanda) - _valor_monetario(comanda.valor_pago),
@@ -1508,17 +1526,24 @@ def aprovar_pagamento(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "A comanda já foi liquidada ou não possui saldo suficiente "
-                "para aprovar este pagamento pendente."
+                _ITEM_SELECTION_CHANGED_DETAIL
+                if itens_selecionados
+                else (
+                    "A comanda já foi liquidada ou não possui saldo suficiente "
+                    "para aprovar este pagamento pendente."
+                )
             ),
         )
-        
+
     pagamento.status = "aprovado"
     comanda.valor_pago = float(_valor_monetario(
         _valor_monetario(comanda.valor_pago) + _valor_monetario(pagamento.valor)
     ))
-    
-    # Aprovar dinheiro também respeita o saldo monetário, sem depender de itens.
+    for item in itens_selecionados:
+        item.pago = True
+
+    # A quitação continua monetária; o escopo persistido impede que uma aprovação
+    # por itens seja reinterpretada como pagamento livre.
     subtotal_total = float(_subtotal_ativo(comanda))
     
     if comanda.valor_pago >= subtotal_total:
