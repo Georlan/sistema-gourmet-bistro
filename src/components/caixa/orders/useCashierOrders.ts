@@ -249,6 +249,9 @@ export function useCashierOrders({
   const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrderView[]>(
     () => projectDeliveryOrdersFromSharedSnapshot(orders)
   );
+  const [deliveryOrdersLoadState, setDeliveryOrdersLoadState] = useState<'loading' | 'loaded' | 'error'>(
+    () => projectDeliveryOrdersFromSharedSnapshot(orders).length > 0 ? 'loaded' : 'loading'
+  );
   const deliveryOrdersRequestRef = useRef(0);
   const pendingDeliveryMutationRef = useRef<Record<string, PendingDeliveryMutation>>({});
   const deliveryMutationSequenceRef = useRef(0);
@@ -384,6 +387,8 @@ export function useCashierOrders({
     const itensStr = Object.entries(itemCounts).map(([name, qty]) => `${qty}x ${name}`).join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum: number, it: any) => sum + (it.preco_unit || it.preco || 0), 0);
     const total = subtotal + (c.delivery_taxa || 0);
+    const amountPaid = Math.max(0, Number(c.valor_pago) || 0);
+    const amountDue = Math.max(0, total - amountPaid);
     const parsedTime = formatBackendTime(c.criado_em);
     const criadoEm = parsedTime === '—' ? '12:00' : parsedTime;
 
@@ -419,6 +424,8 @@ export function useCashierOrders({
       itens: itensStr,
       detailItems: activeItems,
       total,
+      amountPaid,
+      amountDue,
       canal,
       origemOperacional,
       isQuickSale,
@@ -459,6 +466,7 @@ export function useCashierOrders({
 
   const fetchDeliveryOrders = async () => {
     const requestId = ++deliveryOrdersRequestRef.current;
+    setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
       if (res.ok) {
@@ -484,9 +492,15 @@ export function useCashierOrders({
           });
         });
         syncSelectedMotoboysFromServer(mapped);
+        setDeliveryOrdersLoadState('loaded');
+      } else if (requestId === deliveryOrdersRequestRef.current) {
+        setDeliveryOrdersLoadState('error');
       }
     } catch (err) {
-      if (requestId === deliveryOrdersRequestRef.current) console.error('Error fetching delivery orders', err);
+      if (requestId === deliveryOrdersRequestRef.current) {
+        setDeliveryOrdersLoadState('error');
+        console.error('Error fetching delivery orders', err);
+      }
     }
   };
 
@@ -1102,6 +1116,7 @@ export function useCashierOrders({
     handleTransferTableFromSalon,
     getTableMovementContext,
     deliveryOrders,
+    deliveryOrdersLoadState,
     motoboys,
     motoboysLoadState,
     selectedMotoboys,
