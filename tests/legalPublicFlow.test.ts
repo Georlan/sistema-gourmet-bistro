@@ -31,19 +31,21 @@ test('central legal preserva snapshots anteriores e publica fachada vigente 2.7'
   assert.match(legalV2, /LEGAL_VERSION = '2\.0'/);
   assert.match(legalV25, /LEGAL_VERSION = '2\.5'/);
   assert.match(legalV25, /15\/09\/2026/);
-  assert.match(legalContent, /LEGAL_VERSION = '2\.6'/);
-  assert.match(legalContent, /18\/09\/2026/);
-  assert.match(legalContent, /from '\.\/legalContentRecurring'/);
+  assert.match(legalV26, /LEGAL_VERSION = '2\.6'/);
+  assert.match(legalV26, /18\/09\/2026/);
+  assert.match(legalContent, /LEGAL_VERSION = '2\.7'/);
+  assert.match(legalContent, /20\/09\/2026/);
+  assert.match(legalContent, /from '\.\/legalContentV26'/);
   assert.match(legacyLegalContent, /LEGAL_VERSION = '1\.2'/);
   assert.match(legalPage, /legalContentV27/);
   assert.match(legalPage, /DOCUMENTOS VERSIONADOS/);
 });
 
 test('Legal 2.7 documenta cobrança fixa, Pocket gratuito e início explícito do trial', () => {
-  assert.match(legalContent, /mensalidade fixa é R\$ 0/);
-  assert.match(legalContent, /sem criar recorrência de valor zero no provedor/);
-  assert.match(legalContent, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
-  assert.match(legalContent, /conta Mercado Pago conectada pelo próprio estabelecimento/);
+  assert.match(legalV26, /mensalidade fixa é R\$ 0/);
+  assert.match(legalV26, /sem criar recorrência de valor zero no provedor/);
+  assert.match(legalV26, /cartão de crédito, Pix por QR Code e Pix Copia e Cola interoperável e Saldo Mercado Pago/);
+  assert.match(legalV26, /conta Mercado Pago conectada pelo próprio estabelecimento/);
   assert.match(legalContent, /inicia expressamente a operação/);
   assert.match(legalContent, /primeiro pedido de validação/);
   assert.match(legalV2, /O WhatsApp não é requisito/);
@@ -125,17 +127,18 @@ test('landing não privilegia Pocket e envia cada plano para sua própria contra
 });
 
 test('condições comerciais 2.7 preservam o catálogo 2.6 e mudam apenas o gatilho do trial', () => {
-  assert.match(legalContent, /Pocket: R\$ 0 por mês \+ 1,79%/);
-  assert.match(legalContent, /Pro: R\$ 129 por mês \+ 0,50%/);
-  assert.match(legalContent, /Premium: R\$ 249 por mês \+ 0,20%/);
-  assert.match(legalContent, /Pro R\$ 1\.393,20 por ano/);
-  assert.match(legalContent, /R\$ 116,10 por mês/);
-  assert.match(legalContent, /Premium R\$ 2\.689,20 por ano/);
-  assert.match(legalContent, /R\$ 224,10 por mês/);
-  assert.match(legalContent, /10% de desconto exclusivamente ao componente fixo/);
-  assert.match(legalContent, /taxa percentual sobre pagamentos online não recebe desconto anual/);
-  assert.match(legalContent, /não realiza upgrade automático de plano com base em volume de vendas ou GMV/);
-  assert.match(legalContent, /snapshot comercial aceito/);
+  assert.match(legalV26, /Pocket: R\$ 0 por mês \+ 1,79%/);
+  assert.match(legalV26, /Pro: R\$ 129 por mês \+ 0,50%/);
+  assert.match(legalV26, /Premium: R\$ 249 por mês \+ 0,20%/);
+  assert.match(legalV26, /Pro R\$ 1\.393,20 por ano/);
+  assert.match(legalV26, /R\$ 116,10 por mês/);
+  assert.match(legalV26, /Premium R\$ 2\.689,20 por ano/);
+  assert.match(legalV26, /R\$ 224,10 por mês/);
+  assert.match(legalV26, /10% de desconto exclusivamente ao componente fixo/);
+  assert.match(legalV26, /taxa percentual sobre pagamentos online não recebe desconto anual/);
+  assert.match(legalV26, /não realiza upgrade automático de plano com base em volume de vendas ou GMV/);
+  assert.match(legalV26, /snapshot comercial aceito/);
+  assert.match(legalContent, /Apenas salvar perfil, horários, catálogo ou capacidades operacionais não inicia o trial/);
 
   assert.match(legalV25, /LEGAL_VERSION = '2\.5'/);
   assert.match(legalV25, /LEGAL_EFFECTIVE_DATE = '15\/09\/2026'/);
