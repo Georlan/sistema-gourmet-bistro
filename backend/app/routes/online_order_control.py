@@ -19,6 +19,7 @@ from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationE
 from ..models import Comanda, Usuario
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..security import require_roles
+from ..services.online_order_auto_accept import auto_accept_pending_online_orders_in_session
 from ..services.online_order_control import (
     block_from_order,
     operational_status,
@@ -178,6 +179,13 @@ def configure_auto_accept(
         actor_user_id=str(current_user.id),
         enabled=payload.enabled,
     )
+    if payload.enabled:
+        auto_accept_pending_online_orders_in_session(
+            db,
+            restaurante_id=rid,
+            operator_user_id=str(current_user.id),
+            requested_by=current_user.nome,
+        )
     db.commit()
     result = operational_status(db, rid)
     _notify_orders(background_tasks, rid)
