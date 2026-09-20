@@ -18,8 +18,12 @@ export function projectCashierDeliveryState(status?: string, modalidade?: string
 
 export function getCashierDeliveryStatusLabel(status?: string, modalidade?: string): string {
   if (status === 'producao') return 'Em preparo';
-  if (status === 'pronto') return modalidade === 'delivery' ? 'Pronto para envio' : 'Pronto para retirada';
-  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando retirada';
+  if (status === 'pronto') {
+    if (modalidade === 'delivery') return 'Pronto para envio';
+    if (modalidade === 'consumo_local') return 'Pronto para servir';
+    return 'Pronto para retirada';
+  }
+  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando conclusão';
   if (status === 'pendente' || status === 'analise') return 'Aguardando aceite';
   return 'Em atendimento';
 }
