@@ -14,6 +14,7 @@ from journal import PrintJournal
 from adapters import get_adapter
 from dispatcher import dispatch_claimed_jobs
 from wake_listener import PrintWakeupListener
+from simulator import start_simulator_server
 
 log = logging.getLogger("print-agent.worker")
 
@@ -211,6 +212,7 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     maintenance = AgentMaintenance(config, adapter, hardware_lock)
     wakeup_event = Event()
     wakeup_listener = None
+    simulator_server = None
     # Focused unit tests run a bounded loop and must never open external
     # sockets. Production is unbounded, so only the real daemon starts SSE.
     if max_loops is None and config.agent_token:
@@ -220,6 +222,7 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
             wakeup_event,
         )
         wakeup_listener.start()
+        simulator_server = start_simulator_server(type(adapter).__name__)
     pending = {}
     ack_future = maintenance_future = None
     ack_items = []
@@ -327,6 +330,8 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     finally:
         if wakeup_listener is not None:
             wakeup_listener.stop()
+        if simulator_server is not None:
+            simulator_server.close()
         client.session.close()
         ack_client.session.close()
         maintenance.client.session.close()
