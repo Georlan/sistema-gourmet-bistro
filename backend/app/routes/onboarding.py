@@ -283,11 +283,9 @@ def _build_onboarding_status(
         and subscription_status in {"onboarding", "suspended"}
     )
     legacy_policy_allowed = bool(
-        subscription
-        and (
-            subscription.trial_started_at is not None
-            or subscription_status not in {"onboarding", "suspended"}
-        )
+        subscription is None
+        or subscription.trial_started_at is not None
+        or subscription_status not in {"onboarding", "suspended"}
     )
 
     product_count = int(
