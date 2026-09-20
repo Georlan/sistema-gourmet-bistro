@@ -502,7 +502,7 @@ class TestOrderApplicationServicePhase31:
             assert comanda_digital_dine.delivery_status == "pendente"
             assert comanda_digital_dine.mesa_id is None
 
-            # Salão / POS nasce como producao
+            # Caixa sem mesa usa a fila operacional central.
             cmd_dine_in = CreateOrderCommand(
                 restaurant_id=CHAR_RESTAURANT_ID,
                 channel=OrderChannel.POS,
@@ -517,7 +517,25 @@ class TestOrderApplicationServicePhase31:
             assert dto_dine.status == "producao"
             comanda_dine = db.query(Comanda).filter(Comanda.id == dto_dine.comanda_id).first()
             assert comanda_dine is not None
-            assert comanda_dine.delivery_status is None
+            assert comanda_dine.mesa_id is None
+            assert comanda_dine.delivery_status == "producao"
+
+            # Consumo local POS que já nasce com mesa continua salão tradicional.
+            cmd_seated_dine_in = CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.POS,
+                fulfillment=FulfillmentType.DINE_IN,
+                table_id=1,
+                items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1.00")),),
+                customer=CustomerInput(name="Cliente Mesa", phone="11999990005"),
+            )
+            dto_seated_dine = OrderApplicationService.create_order(db, cmd_seated_dine_in)
+            comanda_seated_dine = db.query(Comanda).filter(
+                Comanda.id == dto_seated_dine.comanda_id
+            ).first()
+            assert comanda_seated_dine is not None
+            assert int(comanda_seated_dine.mesa_id) == 1
+            assert comanda_seated_dine.delivery_status is None
         finally:
             db.close()
 
