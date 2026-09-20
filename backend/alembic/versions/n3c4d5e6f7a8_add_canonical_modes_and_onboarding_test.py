@@ -30,15 +30,8 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index(
-        "ix_comandas_onboarding_test",
-        "comandas",
-        ["onboarding_test"],
-        unique=False,
-    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_comandas_onboarding_test", table_name="comandas")
     op.drop_column("comandas", "onboarding_test")
     op.drop_column("configuracoes_restaurante", "tipos_pedido_ativos")
