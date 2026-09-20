@@ -392,6 +392,42 @@ def auto_accept_online_order_if_enabled(
     return True
 
 
+def auto_accept_pending_online_orders(
+    db: Session,
+    *,
+    restaurante_id: int,
+    operator_user_id: str | int | None = None,
+) -> int:
+    """Aplica a política recém-ativada também ao backlog online elegível."""
+    candidates = (
+        db.query(Comanda)
+        .join(
+            Lancamento,
+            (Lancamento.comanda_id == Comanda.id)
+            & (Lancamento.restaurante_id == Comanda.restaurante_id),
+        )
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.fechada.is_(False),
+            Comanda.delivery_status.in_(("pendente", "analise")),
+            Lancamento.origem == "cardapio",
+        )
+        .distinct()
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+        .all()
+    )
+    accepted = 0
+    for comanda in candidates:
+        if auto_accept_online_order_if_enabled(
+            db,
+            restaurante_id=restaurante_id,
+            comanda=comanda,
+            operator_user_id=operator_user_id,
+        ):
+            accepted += 1
+    return accepted
+
+
 @dataclass(frozen=True)
 class CapacityGateResult:
     blocked: bool
