@@ -1,6 +1,8 @@
 import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
+from app.application.printing.service import PrintingApplicationService
 from app.application.printing.comanda_renderer import (
     ComandaVariant,
     render_canonical_comanda,
@@ -152,3 +154,41 @@ def test_online_remote_engine_owns_customer_payment_financial_and_loyalty_contex
     assert "load_customer_relationship_metrics(" in remote_engine
     assert "loyalty_previous_orders = relationship.pedidos_concluidos" in remote_engine
     assert "loyalty_previous_orders=(" in remote_engine
+
+
+def test_dine_in_layout_selection_uses_remote_context_when_unseated_or_online():
+    online_launch = SimpleNamespace(origem="cardapio")
+    pos_launch = SimpleNamespace(origem="caixa")
+    waiter_launch = SimpleNamespace(origem="garcom")
+
+    assert PrintingApplicationService._uses_remote_order_layout(
+        online_launch,
+        SimpleNamespace(mesa_id=None),
+    ) is True
+    assert PrintingApplicationService._uses_remote_order_layout(
+        online_launch,
+        SimpleNamespace(mesa_id=12),
+    ) is True
+    assert PrintingApplicationService._uses_remote_order_layout(
+        pos_launch,
+        SimpleNamespace(mesa_id=None),
+    ) is True
+    assert PrintingApplicationService._uses_remote_order_layout(
+        waiter_launch,
+        SimpleNamespace(mesa_id=12),
+    ) is False
+
+
+def test_remote_dine_in_engine_passes_table_only_when_real_and_never_needs_fake_table():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "app/application/printing/service.py"
+    ).read_text(encoding="utf-8")
+    remote_engine = source.split("def _run_remote_order_engine", 1)[1].split(
+        "def _run_delivery_dispatch_engine", 1
+    )[0]
+
+    assert "is_dine_in = cls._is_dine_in_type(comanda.tipo)" in remote_engine
+    assert "table_id=table_id" in remote_engine
+    assert 'location_label = None if table_id is not None else "SEM MESA"' in remote_engine
+    assert 'is_online_order = origin_label == "CARDÁPIO ONLINE"' in remote_engine
