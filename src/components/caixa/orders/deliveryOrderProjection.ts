@@ -11,7 +11,7 @@ const ACTIVE_DELIVERY_STATUSES = new Set<DeliveryOrderView['status']>([
   'transito',
 ]);
 
-const DIGITAL_TYPES = new Set(['delivery', 'entrega', 'retirada']);
+const DIGITAL_TYPES = new Set(['delivery', 'entrega', 'retirada', 'consumo no local']);
 
 export function readActiveDeliveryStatus(raw: unknown): DeliveryOrderView['status'] | null {
   const status = String(raw || '').trim().toLowerCase() as DeliveryOrderView['status'];
@@ -175,9 +175,11 @@ export function projectDeliveryOrdersFromSharedSnapshot(
     const rawAddress = String(order.deliveryAddress || '').trim();
     const rawType = String(order.tipo || '').toLowerCase();
     const modalidade: DeliveryOrderView['modalidade'] =
-      rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
-        ? 'retirada'
-        : 'delivery';
+      rawType === 'consumo no local'
+        ? 'consumo_local'
+        : rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress)
+          ? 'retirada'
+          : 'delivery';
 
     const origemOperacional = order.origemOperacional || 'desconhecida';
     let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
