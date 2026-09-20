@@ -29,7 +29,7 @@ test('seleção comercial mantém Pocket mensal e anual apenas nos planos pagos'
   assert.match(planContract, /setBillingCycle\('mensal'\)/);
   assert.match(planContract, /O desconto anual não altera a taxa percentual/);
   assert.match(planContract, /annualMonthlyEquivalent/);
-  assert.match(planContract, /Os 7 dias só começam depois dos 3 passos essenciais/);
+  assert.match(planContract, /Os 7 dias não começam sozinhos: depois da configuração, você escolhe quando iniciar/);
   assert.match(landingPlans, /Pro e Premium: valor mensal equivalente/);
   assert.match(landingPlans, /Pocket permanece sem mensalidade e sem componente anual/);
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
