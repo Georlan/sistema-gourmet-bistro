@@ -47,6 +47,7 @@ from ..services.delivery_fee_policy import (
     validate_delivery_fee,
 )
 from ..services.delivery_fee_suggestion import suggest_delivery_fee
+from ..services.operational_modes import normalize_order_types
 from ..services.notificacoes import agendar_convite_equipe_task
 from ..timezone_utils import elapsed_minutes_since
 
@@ -1792,6 +1793,15 @@ def atualizar_configuracoes(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Use taxa fixa, taxa por bairro ou cobrança automática por distância.",
         )
+    normalized_order_types = None
+    if config_in.tipos_pedido_ativos is not None:
+        normalized_order_types = normalize_order_types(config_in.tipos_pedido_ativos)
+        if not normalized_order_types:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Escolha ao menos uma modalidade: consumo local, retirada ou delivery.",
+            )
+
     try:
         normalized_fixed_fee = (
             validate_delivery_fee(config_in.taxa_entrega_fixa)
@@ -1848,6 +1858,8 @@ def atualizar_configuracoes(
         config.mapa_mesas_ativo = config_in.mapa_mesas_ativo
     if config_in.delivery_ativo is not None:
         config.delivery_ativo = config_in.delivery_ativo
+    if normalized_order_types is not None:
+        config.tipos_pedido_ativos = normalized_order_types
     if config_in.pedido_minimo is not None:
         config.pedido_minimo = config_in.pedido_minimo
     if config_in.frete_gratis_valor is not None:
