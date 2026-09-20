@@ -307,7 +307,7 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
           )}
           {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0) && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3" aria-label="Pagamento do pedido">
-              <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Pagamento na entrega ou retirada</span>
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Pagamento no atendimento</span>
               {selectedKanbanOrder.paymentMethod && (
                 <strong className="mt-1 block text-sm capitalize text-koma-foreground">{selectedKanbanOrder.paymentMethod}</strong>
               )}
