@@ -134,14 +134,18 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
       && Number(selectedKanbanOrder?.mesaId || 0) === 0
       && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
     );
-  const selectedIsDigital = Boolean(selectedKanbanOrder)
-    && ['retirada', 'entrega', 'delivery'].includes(String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase());
-  const selectedIsTableLinkedPickup = selectedIsDigital
-    && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
-    && Number(selectedKanbanOrder?.mesaId || 0) > 0;
   const selectedNormalizedFulfillment = String(
     selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '',
   ).trim().toLowerCase();
+  const selectedIsDigital = Boolean(selectedKanbanOrder)
+    && ['retirada', 'pickup', 'entrega', 'delivery', 'dine_in', 'consumo_local', 'consumo no local'].includes(selectedNormalizedFulfillment);
+  const selectedIsTableLinkedPickup = selectedIsDigital
+    && ['retirada', 'pickup'].includes(selectedNormalizedFulfillment)
+    && Number(selectedKanbanOrder?.mesaId || 0) > 0;
+  const selectedIsDineIn = ['dine_in', 'consumo_local', 'consumo no local'].includes(selectedNormalizedFulfillment);
+  const selectedIsTableLinkedDineIn = selectedIsDigital
+    && selectedIsDineIn
+    && Number(selectedKanbanOrder?.mesaId || 0) > 0;
   const selectedIsDelivery = selectedNormalizedFulfillment === 'delivery'
     || selectedNormalizedFulfillment === 'entrega';
   const selectedCanAssociateTable = !selectedIsQuickSale
@@ -184,16 +188,30 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
           </div>
           <div className="min-w-0 flex-1">
             <span className="orders-detail-modal__eyebrow">
-              {selectedIsQuickSale ? 'Venda rápida' : selectedIsTableLinkedPickup ? 'Retirada vinculada à mesa' : selectedKanbanOrder.mesaId > 0 ? 'Atendimento do salão' : selectedKanbanOrder.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+              {selectedIsQuickSale
+                ? 'Venda rápida'
+                : selectedIsTableLinkedPickup
+                  ? 'Retirada vinculada à mesa'
+                  : selectedIsTableLinkedDineIn
+                    ? 'Consumo local vinculado à mesa'
+                    : selectedKanbanOrder.contextoSalao
+                      ? 'Atendimento do salão'
+                      : selectedIsDelivery
+                        ? 'Delivery'
+                        : selectedIsDineIn
+                          ? 'Consumo no local'
+                          : 'Retirada'}
             </span>
             <h3 id="kanban-detail-title" className="orders-detail-modal__title">
               {selectedIsQuickSale
                 ? `Pedido #${selectedOrderNumber}`
                 : selectedIsTableLinkedPickup
                   ? `Retirada · Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
-                  : selectedKanbanOrder.mesaId > 0
-                  ? `Mesa ${selectedKanbanOrder.mesaId}`
-                  : selectedKanbanOrder.identificador || `Pedido #${selectedOrderNumber}`}
+                  : selectedIsTableLinkedDineIn
+                    ? `Consumo local · Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
+                    : selectedKanbanOrder.contextoSalao && selectedKanbanOrder.mesaId > 0
+                      ? `Mesa ${selectedKanbanOrder.mesaId}`
+                      : selectedKanbanOrder.identificador || `Pedido #${selectedOrderNumber}`}
             </h3>
             <div className="orders-detail-modal__status-line">
               <span>{operationalOriginLabel(selectedKanbanOrder.origemOperacional)}</span>
@@ -370,7 +388,9 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
                     ? 'Saiu para entrega'
                     : selectedIsDelivery
                       ? 'Marcar pronto para sair'
-                      : 'Marcar pronto para retirada'}
+                      : selectedIsDineIn
+                        ? 'Marcar pronto para servir'
+                        : 'Marcar pronto para retirada'}
                 </span>
               </button>
             )}
