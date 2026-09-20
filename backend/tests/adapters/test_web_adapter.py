@@ -65,6 +65,47 @@ class TestCardapioWebAdapter:
             assert len(cmd.items) == 1
             assert cmd.items[0].product_id == "prod-char-simples"
 
+    def test_web_adapter_maps_public_dine_in_without_address(self, char_client, char_setup):
+        payload = {
+            "restaurante_id": CHAR_RESTAURANT_ID,
+            "cliente_nome": "Cliente Consumo Local",
+            "cliente_telefone": "11999990006",
+            "tipo_pedido": "consumo_local",
+            "itens": [
+                {
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": [],
+                }
+            ],
+        }
+
+        with patch.object(
+            OrderApplicationService,
+            "create_order",
+            wraps=OrderApplicationService.create_order,
+        ) as spy_create_order:
+            res = char_client.post("/cardapio/pedidos", json=payload)
+            assert res.status_code == 201, res.text
+            cmd: CreateOrderCommand = spy_create_order.call_args[0][1]
+            assert cmd.channel == OrderChannel.WEB_CARDAPIO
+            assert cmd.fulfillment == FulfillmentType.DINE_IN
+            assert cmd.delivery is None
+            assert cmd.table_id is None
+
+        db = SessionLocal()
+        try:
+            comanda = db.query(Comanda).filter(
+                Comanda.id == res.json()["comanda_id"]
+            ).one()
+            assert comanda.tipo == "Consumo no Local"
+            assert comanda.mesa_id is None
+            assert comanda.delivery_status == "pendente"
+            assert float(comanda.delivery_taxa or 0) == 0.0
+            assert not comanda.delivery_endereco
+        finally:
+            db.close()
+
     def test_web_adapter_response_contract_matches_legacy(self, char_client, char_setup):
         """[CONTRATO] A resposta HTTP possui exatamente as chaves e tipos esperados pelo frontend."""
         payload = {
