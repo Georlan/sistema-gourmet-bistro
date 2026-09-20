@@ -6,7 +6,7 @@ import {
   projectDeliveryOrdersFromSharedSnapshot,
   reconcileDeliveryOrderAfterStatus,
 } from '../src/components/caixa/orders/deliveryOrderProjection';
-import { preserveOptimisticOrderIdentity } from '../src/components/app/data/useOperationalOrders';
+import { preserveOptimisticOrderIdentity } from '../src/components/app/data/operationalOrderMapping';
 
 const source = (path: string) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
 
