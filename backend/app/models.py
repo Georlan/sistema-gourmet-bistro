@@ -404,7 +404,7 @@ class Comanda(Base):
     fechada = Column(Boolean, default=False, index=True)
     # Marca uma venda real criada intencionalmente para homologar o onboarding.
     # Continua usando modalidade, pagamento, estoque e fechamento canônicos.
-    onboarding_test = Column(Boolean, default=False, server_default=text("false"), nullable=False, index=True)
+    onboarding_test = Column(Boolean, default=False, server_default=text("false"), nullable=False)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     fechado_em = Column(DateTime, nullable=True)
     valor_pago = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)  # Sum of generic partial payments made
