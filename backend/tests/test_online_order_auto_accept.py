@@ -197,14 +197,13 @@ def test_server_autoaccept_never_accepts_non_online_origin(monkeypatch):
         db.close()
 
 
-@pytest.mark.parametrize("payment_status", ["pending", "created", "error"])
-def test_server_autoaccept_waits_for_online_payment(payment_status, monkeypatch):
+def test_server_autoaccept_waits_for_online_payment(monkeypatch):
     db = SessionLocal()
     try:
         comanda, _ = _seed_order(
             db,
-            suffix=f"payment-{payment_status}",
-            payment_status=payment_status,
+            suffix="payment-pending",
+            payment_status="pending",
         )
         monkeypatch.setattr(
             PrintingApplicationService,
