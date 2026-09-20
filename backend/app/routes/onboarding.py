@@ -101,7 +101,8 @@ def _trial_status_payload(row: dict[str, Any] | None, *, setup_pending: bool = F
 def _profile_is_configured(restaurant: Restaurante) -> bool:
     if bool(str(restaurant.endereco or "").strip()):
         return True
-    socials = restaurant.socials if isinstance(restaurant.socials, dict) else {}
+    raw_socials = getattr(restaurant, "socials", None)
+    socials = raw_socials if isinstance(raw_socials, dict) else {}
     return bool(str(socials.get("whatsapp") or socials.get("telefone") or "").strip())
 
 
