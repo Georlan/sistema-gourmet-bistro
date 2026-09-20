@@ -1186,6 +1186,7 @@ def registrar_pagamento_comanda(
             existing.comanda_id != comanda_id
             or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
             or existing.metodo != pag_in.metodo
+            or not _same_item_scope(existing, pag_in.item_ids)
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -1247,12 +1248,43 @@ def registrar_pagamento_comanda(
             detail="Comanda já está fechada e liquidada."
         )
 
+    # Validate payment method before interpreting the financial scope.
+    if pag_in.metodo not in _METODOS_PAGAMENTO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Método de pagamento inválido. Use 'dinheiro', 'pix', 'cartao_debito' ou 'cartao_credito'."
+        )
+
+    ids_solicitados = _normalized_item_ids(pag_in.item_ids)
+    itens_selecionados = _lock_exact_payment_items(
+        db,
+        restaurante_id=rest_id,
+        comanda_ids=[comanda_id],
+        item_ids=ids_solicitados,
+        require_ready=False,
+    )
+    valor_solicitado = _valor_monetario(pag_in.valor)
+    if itens_selecionados:
+        total_selecionado = _valor_monetario(sum(
+            (_valor_monetario(item.preco_unit) for item in itens_selecionados),
+            Decimal("0.00"),
+        ))
+        if valor_solicitado != total_selecionado:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O valor deve corresponder exatamente aos itens selecionados.",
+            )
+
     saldo_aberto = max(
         Decimal("0.00"),
         _subtotal_ativo(comanda) - _valor_monetario(comanda.valor_pago),
     )
-    valor_solicitado = _valor_monetario(pag_in.valor)
     if valor_solicitado > saldo_aberto:
+        if itens_selecionados:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
@@ -1260,15 +1292,9 @@ def registrar_pagamento_comanda(
                 f"Saldo atual: R$ {saldo_aberto:.2f}."
             ),
         )
-        
-    # Validate payment method
-    if pag_in.metodo not in _METODOS_PAGAMENTO:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Método de pagamento inválido. Use 'dinheiro', 'pix', 'cartao_debito' ou 'cartao_credito'."
-        )
 
-    # Determine if payment should be pending confirmation (Garçom + Dinheiro)
+    # Determine if payment should be pending confirmation (Garçom + Dinheiro).
+    # A seleção permanece persistida no Pagamento para ser revalidada no Caixa.
     is_pending = (
         current_user.role == "garcom"
         and pag_in.metodo == "dinheiro"
@@ -1276,29 +1302,9 @@ def registrar_pagamento_comanda(
     )
     pag_status = "pendente" if is_pending else "aprovado"
 
-    # 3. Process payment if approved immediately
     if not is_pending:
-        if pag_in.item_ids:
-            # Pay by item selection
-            itens_selecionados = db.query(Item).filter(
-                Item.restaurante_id == rest_id,
-                Item.comanda_id == comanda_id,
-                Item.id.in_(pag_in.item_ids),
-                Item.status != 'cancelado',
-                Item.pago == False
-            ).all()
-            
-            if not itens_selecionados:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Nenhum item válido pendente de pagamento foi selecionado."
-                )
-                
-            # Settle selected items only if the payment valor covers their subtotal
-            subtotal_selecionado = sum(item.preco_unit for item in itens_selecionados)
-            if pag_in.valor >= round(subtotal_selecionado, 2) - 0.01:
-                for item in itens_selecionados:
-                    item.pago = True
+        for item in itens_selecionados:
+            item.pago = True
 
     # Create the Pagamento transaction
     novo_pagamento = Pagamento(
@@ -1310,6 +1316,7 @@ def registrar_pagamento_comanda(
         metodo=pag_in.metodo,
         status=pag_status,
         idempotency_key=pag_in.idempotency_key,
+        item_ids=ids_solicitados or None,
         cliente_id=cliente_pagamento.id if cliente_pagamento else None,
         cpf_cliente=(
             cliente_pagamento.telefone if cliente_pagamento else pag_in.cpf_cliente
@@ -1387,6 +1394,7 @@ def registrar_pagamento_comanda(
                 existing.comanda_id != comanda_id
                 or _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
                 or existing.metodo != pag_in.metodo
+                or not _same_item_scope(existing, pag_in.item_ids)
             ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
