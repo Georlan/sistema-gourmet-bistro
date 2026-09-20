@@ -8,6 +8,7 @@ import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorks
 import {
   projectDeliveryOrdersFromSharedSnapshot,
   readActiveDeliveryStatus,
+  readDigitalOrderFulfillment,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
 
@@ -403,8 +404,8 @@ export function useCashierOrders({
     else if (c.identificador && c.identificador.toLowerCase().includes('whats')) canal = 'whats';
 
     const rawAddress = String(c.delivery_endereco || '').trim();
-    const rawType = String(c.tipo || '').toLowerCase();
-    const modalidade = rawType === 'retirada' || /retirada\s+no\s+balc[aã]o/i.test(rawAddress) ? 'retirada' : 'delivery';
+    const modalidade = readDigitalOrderFulfillment(c.tipo, rawAddress);
+    if (!modalidade) return null;
     const isQuickSale =
       modalidade === 'retirada' &&
       (origemOperacional === 'smartpos' ||
