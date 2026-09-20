@@ -16,6 +16,7 @@ const calls = (node: ts.Node) => descendants(node).filter(ts.isCallExpression);
 const callName = (call: ts.CallExpression) => call.expression.getText().replace(/^React\./, '');
 const ownerFiles = [
   'checkout/useCheckoutController.ts', 'orders/useCashierOrders.ts',
+  'orders/useOnlineAutoAcceptPolicy.ts',
   'smartpos/useCashierSmartPos.ts', 'shift/useCashShift.ts',
   'realtime/useCashierAlerts.ts', 'realtime/useCashierClock.ts', 'realtime/useCashierRealtime.ts',
   'catalog/useCashierCatalog.ts', 'customers/useCashierCustomers.ts',
