@@ -127,3 +127,11 @@ test('onboarding route is composed once into the existing root router', () => {
   assert.match(routeComposition, /from \.onboarding import router as _onboarding_router/);
   assert.match(routeComposition, /_root_router\.router\.include_router\(_onboarding_router\)/);
 });
+
+
+test('audited support mode bypasses customer onboarding without mutating tenant setup', () => {
+  assert.match(boundary, /SUPPORT_SESSION_STORAGE_KEY/);
+  assert.match(boundary, /readInternalSupportMode/);
+  assert.match(boundary, /enabled: isManagementSetupOwner && !internalSupportMode/);
+  assert.match(boundary, /if \(internalSupportMode \|\| setupMode\) return <>\{children\}<\/>/);
+});

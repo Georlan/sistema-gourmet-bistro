@@ -9,6 +9,7 @@ from app.main import app
 from app.routes.onboarding import (
     _profile_is_configured,
     _required_progress,
+    _should_start_trial_after_onboarding,
     _trial_status_payload,
 )
 
@@ -103,3 +104,25 @@ def test_required_progress_does_not_let_optional_steps_mask_missing_setup():
         "total": 3,
         "percent": 33,
     }
+
+
+
+def test_support_mode_never_starts_trial_from_status_check():
+    support_user = SimpleNamespace(is_support_mode=True)
+    tenant_admin = SimpleNamespace(is_support_mode=False)
+
+    assert _should_start_trial_after_onboarding(
+        required_complete=True,
+        setup_pending=True,
+        current_user=support_user,
+    ) is False
+    assert _should_start_trial_after_onboarding(
+        required_complete=True,
+        setup_pending=True,
+        current_user=tenant_admin,
+    ) is True
+    assert _should_start_trial_after_onboarding(
+        required_complete=False,
+        setup_pending=True,
+        current_user=tenant_admin,
+    ) is False
