@@ -91,6 +91,31 @@ describe('resolveKomaHost', () => {
     assert.equal(resolved.surface, 'central');
   });
 
+
+  it('keeps arbitrary caixa query on central inside Super Admin', () => {
+    const resolved = resolveKomaHost('central.komafood.com.br', '/', '?view=caixa');
+    assert.equal(resolved.kind, 'central');
+    assert.equal(resolved.surface, 'central');
+  });
+
+  it('honors only the audited support bridge on central', () => {
+    const resolved = resolveKomaHost(
+      'central.komafood.com.br',
+      '/',
+      '?view=caixa&support=1',
+    );
+    assert.equal(resolved.kind, 'generic');
+    assert.equal(resolved.surface, 'caixa');
+    assert.equal(resolved.tenantSlug, null);
+
+    const wrongSupportFlag = resolveKomaHost(
+      'central.komafood.com.br',
+      '/',
+      '?view=caixa&support=0',
+    );
+    assert.equal(wrongSupportFlag.surface, 'central');
+  });
+
   it('resolves /super-admin path to central', () => {
     const resolved = resolveKomaHost('localhost', '/super-admin', '');
     assert.equal(resolved.kind, 'central');
