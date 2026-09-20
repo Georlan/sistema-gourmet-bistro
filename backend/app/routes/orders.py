@@ -296,11 +296,8 @@ def atualizar_status_delivery(
         {"event": "tables_updated"},
         rid,
     )
-    response_payload = ComandaResponse.model_validate(comanda)
-    if estoque_alertas:
-        response_payload = response_payload.model_copy(
-            update={"estoque_alertas": estoque_alertas}
-        )
+    response_payload = ComandaResponse.model_validate(comanda).model_dump()
+    response_payload["estoque_alertas"] = estoque_alertas
     return response_payload
 
 
