@@ -134,7 +134,7 @@ export function SubscriptionControl({ accessToken }: { accessToken?: string }) {
       <p className="my-2">
         {summary}{' '}
         {setupPending
-          ? 'Conclua os 3 passos essenciais da implantação; o período grátis começa automaticamente só depois disso.'
+          ? 'Conclua a configuração do restaurante. O período grátis só começa quando você clicar para iniciar a operação.'
           : subscription.paidUntil
             ? `Período vigente até ${new Date(subscription.paidUntil).toLocaleDateString('pt-BR')}.`
             : ''}
