@@ -65,7 +65,8 @@ from ...services.clientes import (
     normalizar_telefone_cliente,
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
-from ...services.order_numbers import gerar_novo_numero_pedido_atomico\nfrom ...services.operational_modes import is_fulfillment_allowed
+from ...services.order_numbers import gerar_novo_numero_pedido_atomico
+from ...services.operational_modes import is_fulfillment_allowed
 from ...services.delivery_fee_policy import (
     normalize_distance_fee_config,
     normalize_neighborhood,
