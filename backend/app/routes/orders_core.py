@@ -813,12 +813,16 @@ def update_item_status(
 @router.get("/delivery/ativos", response_model=List[ComandaDetail])
 def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
-    Retorna todas as comandas de delivery ou retirada que não estejam finalizadas/fechadas.
-    Inclui as pendentes (na gaveta de aceite) e as em produção/trânsito.
-    """
+    Retorna comandas com ciclo operacional digital que ainda estão abertas.\n    Inclui delivery, retirada e consumo no local digital; consumo de salão\n    tradicional continua fora porque não possui delivery_status legado.\n    """
     return db.query(Comanda).filter(
         Comanda.restaurante_id == require_tenant_id(),
-        Comanda.tipo.in_(["Delivery", "Entrega", "Retirada"]),
+        or_(
+            Comanda.tipo.in_(["Delivery", "Entrega", "Retirada", "Viagem"]),
+            (
+                Comanda.tipo.in_(["Consumo no Local", "Mesa", "Local"])
+                & Comanda.delivery_status.isnot(None)
+            ),
+        ),
         Comanda.fechada == False,
         or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
     ).all()
