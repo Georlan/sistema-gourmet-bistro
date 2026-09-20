@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from dataclasses import dataclass
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from ..models import Comanda
+from ..application.orders.lifecycle import OrderLifecycleCoordinator
+from ..application.printing import (
+    PrintAction,
+    PrintIntent,
+    PrintSourceType,
+    PrintTrigger,
+    PrintingApplicationService,
+    UniversalPrintingError,
+)
+from ..domain.orders.types import OrderStatus, normalize_to_order_status
+from ..models import Comanda, Lancamento
 from ..online_order_control_models import (
     OnlineOrderControl,
     OnlineOrderCustomerBlock,
@@ -18,10 +30,13 @@ from ..online_order_control_models import (
 from ..scheduled_models import ScheduledOrder
 from .clientes import normalizar_telefone_cliente
 from .customer_auth import hash_public_rate_key
+from .shifts import require_open_cash_shift
 
 # Estados que ainda ocupam a capacidade operacional do restaurante.
 # ``transito`` já saiu da cozinha; finalizado/recusado também não contam.
 ACTIVE_OPERATIONAL_STATUSES = ("analise", "pendente", "producao", "pronto")
+
+logger = logging.getLogger("koma.online_order_control")
 
 
 def utcnow() -> datetime.datetime:
@@ -121,6 +136,7 @@ def operational_status(db: Session, restaurante_id: int) -> dict[str, Any]:
         "pause_until": control.pause_until.isoformat() if paused and control.pause_until else None,
         "max_active_orders": capacity,
         "auto_pause": bool(control.auto_pause),
+        "auto_accept": bool(control.auto_accept),
         "counts": counts,
         "capacity_ratio": round(ratio, 4) if ratio is not None else None,
         "level": level,
@@ -208,6 +224,146 @@ def resume_online_orders(
         after_data=after,
     )
     return control
+
+
+def update_auto_accept(
+    db: Session,
+    *,
+    restaurante_id: int,
+    actor_user_id: str | None,
+    enabled: bool,
+) -> OnlineOrderControl:
+    """Persiste a política tenant-local de aceite automático de pedidos online."""
+    control = get_or_create_control(db, restaurante_id, for_update=True)
+    before = operational_status(db, restaurante_id)
+    control.auto_accept = bool(enabled)
+    control.updated_at = utcnow()
+    db.flush()
+    after = operational_status(db, restaurante_id)
+    _audit(
+        db,
+        restaurante_id=restaurante_id,
+        actor_user_id=actor_user_id,
+        action="online_orders_auto_accept_updated",
+        reason=(
+            "Aceite automático de pedidos online ativado"
+            if enabled
+            else "Aceite automático de pedidos online desativado"
+        ),
+        before_data=before,
+        after_data=after,
+    )
+    return control
+
+
+def auto_accept_online_order_if_enabled(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda_id: str,
+    requested_by: str = "Autoaceite online",
+) -> bool:
+    """Aceita um pedido WEB_CARDAPIO no backend quando a política estiver ativa.
+
+    A decisão é serializada pela própria Comanda e passa pelo lifecycle canônico,
+    portanto retries, webhooks duplicados e múltiplas telas não criam um segundo
+    aceite. Pix só entra após aprovação e pedidos agendados só após liberação.
+    """
+    control = (
+        db.query(OnlineOrderControl)
+        .filter(OnlineOrderControl.restaurante_id == restaurante_id)
+        .first()
+    )
+    if control is None or not bool(control.auto_accept):
+        return False
+
+    comanda = (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.id == comanda_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if comanda is None or bool(comanda.fechada):
+        return False
+
+    current = normalize_to_order_status(comanda.delivery_status)
+    if current != OrderStatus.PENDING:
+        return False
+
+    payment_status = str(comanda.online_payment_status or "").strip().casefold()
+    if payment_status and payment_status != "approved":
+        return False
+
+    from ..scheduled_models import ScheduledOrder
+    unreleased_schedule = (
+        db.query(ScheduledOrder.id)
+        .filter(
+            ScheduledOrder.restaurante_id == restaurante_id,
+            ScheduledOrder.comanda_id == comanda.id,
+            ScheduledOrder.released_at.is_(None),
+        )
+        .first()
+    )
+    if unreleased_schedule is not None:
+        return False
+
+    launch = (
+        db.query(Lancamento)
+        .filter(
+            Lancamento.restaurante_id == restaurante_id,
+            Lancamento.comanda_id == comanda.id,
+        )
+        .order_by(Lancamento.timestamp.asc(), Lancamento.id.asc())
+        .first()
+    )
+    if launch is None or str(launch.origem or "").strip().casefold() != "cardapio":
+        return False
+
+    try:
+        require_open_cash_shift(db, restaurante_id)
+    except HTTPException:
+        # A venda já existe e deve continuar pendente se a operação estiver sem
+        # turno aberto; autoaceite nunca transforma isso em falha do checkout.
+        return False
+
+    transition = OrderLifecycleCoordinator.transition_check_status(
+        db,
+        restaurant_id=restaurante_id,
+        comanda_id=comanda.id,
+        target_status=OrderStatus.PREPARING,
+        operator_user_id=None,
+        reason="Aceite automático de pedido online",
+        commit=False,
+    )
+    if not transition.changed:
+        return False
+
+    if transition.first_accept:
+        try:
+            PrintingApplicationService.request_print(
+                db,
+                PrintIntent(
+                    restaurant_id=restaurante_id,
+                    source_type=PrintSourceType.ORDER,
+                    source_id=comanda.id,
+                    action=PrintAction.PRINT,
+                    trigger=PrintTrigger.AUTOMATIC,
+                    requested_by=requested_by,
+                    idempotency_key=f"aceite:pedido:{comanda.id}:producao",
+                ),
+            )
+        except UniversalPrintingError as exc:
+            logger.warning(
+                "Falha no Core Universal de Impressão no autoaceite do pedido %s: %s",
+                comanda.id,
+                exc,
+            )
+
+    db.flush()
+    return True
 
 
 def update_capacity(
