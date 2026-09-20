@@ -444,6 +444,17 @@ class OnlinePaymentService:
                     aggregate_id=str(lancamento.id),
                 )
 
+        # Pix aprovado deixa de estar barrado financeiramente. Se o restaurante
+        # usa autoaceite, a mesma transação pode liberar produção sem depender
+        # de uma tela do Caixa aberta.
+        from ..online_order_auto_accept import auto_accept_order_if_enabled
+        auto_accept_order_if_enabled(
+            db,
+            restaurante_id=account.restaurante_id,
+            comanda_id=comanda.id,
+            commit=False,
+        )
+
         return locked_intent, approval_effects_applied
 
     @classmethod
