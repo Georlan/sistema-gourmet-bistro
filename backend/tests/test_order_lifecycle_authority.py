@@ -2,9 +2,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from decimal import Decimal
+
+from app.application.orders.commands import CreateOrderCommand, CustomerInput, OrderItemInput
 from app.application.orders.lifecycle import OrderLifecycleCoordinator
+from app.application.orders.service import OrderApplicationService
 from app.database import SessionLocal
-from app.domain.orders.types import FulfillmentType, OrderStatus
+from app.domain.orders.types import FulfillmentType, OrderChannel, OrderStatus
 from app.models import Comanda, IntegrationOutbox, Lancamento
 from tests.characterization.orders.fixtures import (
     CHAR_RESTAURANT_ID,
@@ -170,6 +174,32 @@ def _event_names_for_check(comanda_id: str) -> list[str]:
         db.close()
 
 
+def _create_internal_digital_dine_in() -> str:
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        created = OrderApplicationService.create_order(
+            db,
+            CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.WEB_CARDAPIO,
+                fulfillment=FulfillmentType.DINE_IN,
+                items=(
+                    OrderItemInput(
+                        product_id="prod-char-simples",
+                        quantity=Decimal("1.00"),
+                    ),
+                ),
+                customer=CustomerInput(
+                    name="Cliente Local Digital",
+                    phone="11977770009",
+                ),
+            ),
+        )
+        return created.comanda_id
+    finally:
+        db.close()
+
+
 def _create_pickup(char_client, *, phone: str, customer_name: str) -> str:
     created = char_client.post(
         "/cardapio/pedidos",
@@ -189,6 +219,48 @@ def _create_pickup(char_client, *, phone: str, customer_name: str) -> str:
     )
     assert created.status_code in {200, 201}, created.text
     return created.json()["comanda_id"]
+
+
+def test_digital_dine_in_uses_active_digital_route_without_delivery_transit(char_client, char_setup):
+    _clear_outbox()
+    headers = char_setup["headers"]
+    comanda_id = _create_internal_digital_dine_in()
+
+    active = char_client.get("/comandas/delivery/ativos", headers=headers)
+    assert active.status_code == 200, active.text
+    active_ids = {row["id"] for row in active.json()}
+    assert comanda_id in active_ids
+
+    accepted = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "producao"},
+        headers=headers,
+    )
+    assert accepted.status_code == 200, accepted.text
+
+    ready = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "pronto"},
+        headers=headers,
+    )
+    assert ready.status_code == 200, ready.text
+
+    invalid_transit = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "transito"},
+        headers=headers,
+    )
+    assert invalid_transit.status_code == 409, invalid_transit.text
+
+    completed = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "finalizado"},
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["tipo"] == "Consumo no Local"
+    assert completed.json()["delivery_status"] == "finalizado"
+    assert completed.json()["fechada"] is True
 
 
 @patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
