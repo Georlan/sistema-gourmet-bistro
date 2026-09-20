@@ -14,6 +14,7 @@ import { Product } from '../../../types';
 import { makeOperationKey, operationalFetch } from '../../../utils/operationalRequest';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { formatCompactCurrency } from '../cashierPresentation';
+import { ONBOARDING_TEST_ORDER_KEY } from '../../onboarding/FirstAccessOnboarding';
 
 export type PdvModifierSelection = {
   id: string;
@@ -377,6 +378,12 @@ export function useCashierPdv({
           modificador_ids: item.modifierIds || [],
         })),
       );
+      let onboardingTest = false;
+      try {
+        onboardingTest = sessionStorage.getItem(ONBOARDING_TEST_ORDER_KEY) === '1';
+      } catch {
+        onboardingTest = false;
+      }
       const salePayload = {
         cliente_id: orderType === 'dine_in' ? undefined : customerId || undefined,
         mesa_id: orderType === 'delivery' ? null : mesaId || null,
@@ -388,6 +395,7 @@ export function useCashierPdv({
         address_snapshot: orderType === 'delivery' ? deliverySnapshot || undefined : undefined,
         delivery_taxa: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0.0,
         itens: itemsList,
+        onboarding_test: onboardingTest,
       };
       const saleFingerprint = JSON.stringify(salePayload);
       if (pdvPendingOperationRef.current?.fingerprint !== saleFingerprint) {
@@ -409,6 +417,13 @@ export function useCashierPdv({
       if (res.ok) {
         const confirmedComanda = await res.json().catch(() => null);
         pdvPendingOperationRef.current = null;
+        if (onboardingTest) {
+          try {
+            sessionStorage.removeItem(ONBOARDING_TEST_ORDER_KEY);
+          } catch {
+            // The order is already persisted; stale intent must not affect retries.
+          }
+        }
 
         if (optimisticTempId && confirmedComanda?.id) {
           window.dispatchEvent(new CustomEvent('koma_optimistic_order_reconcile', {
