@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 import time
+from types import SimpleNamespace
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -30,8 +31,10 @@ from worker import (
     execute_agent_command,
     run_agent_loop,
     process_unconfirmed_journal_jobs,
+    process_shadow_simulation,
 )
 from dispatcher import dispatch_claimed_jobs
+from simulator import AutoSimulationState
 
 
 @pytest.fixture
@@ -39,6 +42,59 @@ def temp_dir():
     dir_path = tempfile.mkdtemp()
     yield dir_path
     shutil.rmtree(dir_path, ignore_errors=True)
+
+
+def test_shadow_simulation_observes_and_renders_without_claiming():
+    client = MagicMock(spec=KomaApiClient)
+    state = AutoSimulationState()
+    state.start()
+    simulator_server = SimpleNamespace(auto_state=state)
+    client.get_simulator_feed.return_value = {
+        "cursor": {
+            "created_at": "2026-09-20T20:00:00+00:00",
+            "id": "job-shadow-1",
+        },
+        "items": [
+            {
+                "id": "job-shadow-1",
+                "reference": "Pedido #742",
+                "document_type": "producao",
+                "destination": "COZINHA",
+                "source_type": "pedido",
+                "source_id": "pedido-742",
+                "status": "pending",
+                "payload_text": "PEDIDO #742\n1x X-Salada",
+                "created_at": "2026-09-20T20:00:00+00:00",
+                "claimed_at": None,
+                "printed_at": None,
+                "queue_latency_ms": None,
+                "server_observed_latency_ms": 18,
+                "physical_completion_tracking": False,
+            }
+        ],
+    }
+
+    processed = process_shadow_simulation(client, simulator_server)
+
+    assert processed == 1
+    status = state.snapshot()
+    assert status["enabled"] is True
+    assert status["processed_count"] == 1
+    assert status["authoritative_queue_mutation"] is False
+    assert status["physical_usb_write"] is False
+    assert status["last_event"]["job"]["id"] == "job-shadow-1"
+    assert status["last_event"]["simulation"]["raw_byte_count"] > 0
+    assert status["last_event"]["observed"]["server_observed_latency_ms"] == 18
+    client.claim_jobs.assert_not_called()
+    client.complete_jobs.assert_not_called()
+
+
+def test_shadow_simulation_is_idle_until_explicitly_enabled():
+    client = MagicMock(spec=KomaApiClient)
+    simulator_server = SimpleNamespace(auto_state=AutoSimulationState())
+
+    assert process_shadow_simulation(client, simulator_server) == 0
+    client.get_simulator_feed.assert_not_called()
 
 
 def test_file_printer_adapter_generates_readable_ticket(temp_dir):
@@ -772,6 +828,42 @@ def test_api_client_completes_usb_command():
         assert session.post.call_args.kwargs["json"][
             "diagnostics"
         ]["capabilities"] == ["connect_usb"]
+
+
+def test_api_client_reads_shadow_feed_without_claiming():
+    payload = {
+        "cursor": {
+            "created_at": "2026-09-20T20:00:00+00:00",
+            "id": "job-shadow-1",
+        },
+        "items": [{"id": "job-shadow-1"}],
+    }
+
+    with patch("api_client.requests.Session") as SessionClass:
+        session = SessionClass.return_value
+        response = MagicMock(status_code=200)
+        response.json.return_value = payload
+        session.get.return_value = response
+
+        client = KomaApiClient("https://api.koma.test", "agent-token")
+        result = client.get_simulator_feed(
+            {
+                "created_at": "2026-09-20T19:59:59+00:00",
+                "id": "job-shadow-0",
+            },
+            limit=10,
+        )
+
+        assert result == payload
+        assert session.get.call_args.args[0].endswith(
+            "/api/print-agents/simulator/agent-feed"
+        )
+        assert session.get.call_args.kwargs["params"] == {
+            "limit": 10,
+            "after_created_at": "2026-09-20T19:59:59+00:00",
+            "after_id": "job-shadow-0",
+        }
+        session.post.assert_not_called()
 
 
 def test_api_client_falls_back_during_backend_rollout():

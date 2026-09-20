@@ -8,7 +8,7 @@ import requests
 
 log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb"]
-AGENT_VERSION = "2026.09.20.1"
+AGENT_VERSION = "2026.09.20.2"
 
 
 class AgentAuthenticationError(RuntimeError):
@@ -104,6 +104,45 @@ class KomaApiClient:
         except Exception as e:
             log.debug(f"Erro ao enviar heartbeat: {e}")
             return None
+
+    def get_simulator_feed(
+        self,
+        cursor: Optional[Dict[str, str]] = None,
+        limit: int = 10,
+    ) -> Optional[Dict[str, Any]]:
+        """Observa novos PrintJobs sem reservar nem alterar a fila."""
+        if not self.agent_token:
+            return None
+        safe_limit = max(1, min(int(limit), 20))
+        params: Dict[str, Any] = {"limit": safe_limit}
+        if cursor and cursor.get("created_at"):
+            params["after_created_at"] = cursor["created_at"]
+            params["after_id"] = cursor.get("id", "")
+        url = f"{self.api_url}/api/print-agents/simulator/agent-feed"
+        try:
+            resp = self.session.get(
+                url,
+                params=params,
+                headers=self.headers,
+                timeout=5,
+            )
+            self._check_auth(resp)
+            if resp.status_code == 200:
+                payload = resp.json()
+                return payload if isinstance(payload, dict) else None
+            if resp.status_code in (404, 405):
+                log.debug("Backend ainda não oferece o feed do simulador automático.")
+                return None
+            log.warning(
+                "Falha ao observar fila para simulação (HTTP %s): %s",
+                resp.status_code,
+                resp.text,
+            )
+        except AgentAuthenticationError:
+            raise
+        except Exception as exc:
+            log.debug("Feed do simulador automático indisponível: %s", exc)
+        return None
 
     def complete_command(
         self,

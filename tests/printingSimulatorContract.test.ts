@@ -11,6 +11,7 @@ const cashierPrinting = readFileSync("src/components/caixa/settings/CashierPrint
 const supportBanner = readFileSync("src/components/app/SupportSessionBanner.tsx", "utf8");
 const linuxInstaller = readFileSync("print-agent/install-linux.sh", "utf8");
 const windowsInstaller = readFileSync("print-agent/install-windows.ps1", "utf8");
+const apiClient = readFileSync("print-agent/api_client.py", "utf8");
 
 test("thermal simulator has a standalone operational route", () => {
   assert.match(main, /\/ferramentas\/simulador-impressao/);
@@ -53,4 +54,22 @@ test("support mode exposes one-click simulator access and installers ship the br
   assert.match(windowsInstaller, /"simulator\.py"/);
   assert.match(windowsInstaller, /"wake_listener\.py"/);
   assert.match(page, /2026\.09\.20\.1/);
+});
+
+
+test("automatic simulator observes new jobs without becoming the print queue authority", () => {
+  assert.match(routes, /\/simulator\/agent-feed/);
+  assert.match(routes, /Depends\(get_current_agent\)/);
+  assert.match(routes, /PrintJob\.restaurante_id == agent\.restaurante_id/);
+  assert.match(apiClient, /get_simulator_feed/);
+  assert.match(simulator, /class AutoSimulationState/);
+  assert.match(simulator, /authoritative_queue_mutation": False/);
+  assert.match(simulator, /physical_usb_write": False/);
+  assert.match(simulator, /\/simulator\/auto\/start/);
+  assert.match(simulator, /\/simulator\/auto\/status/);
+  assert.match(worker, /process_shadow_simulation/);
+  assert.match(worker, /simulate_payload\(job\["payload_text"\]\)/);
+  assert.match(page, /Observar novos pedidos automaticamente/);
+  assert.match(page, /Modo sombra: não faz claim, não altera o status do PrintJob/);
+  assert.match(page, /2026\.09\.20\.2/);
 });
