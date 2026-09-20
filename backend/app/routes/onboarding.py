@@ -35,7 +35,7 @@ from ..saas_billing_models import SaaSSubscription
 from ..security import get_current_user
 from ..services.onboarding_readiness import evaluate_operation_readiness
 from ..services.onboarding_trial import ensure_trial_started_after_onboarding
-from ..services.operational_modes import canonical_order_type_from_comanda, explicit_order_types
+from ..services.operational_modes import explicit_order_types
 from .super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
 
 
@@ -172,6 +172,11 @@ async def submit_catalog_assistance(
 ):
     """Recebe PDF/foto do cardápio para implantação assistida pela equipe KÔMA."""
     _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte pode consultar, mas não alterar o onboarding do cliente.",
+        )
     tenant_id = require_tenant_id()
     restaurant = (
         db.query(Restaurante)
