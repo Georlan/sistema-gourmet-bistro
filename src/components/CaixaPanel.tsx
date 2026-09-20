@@ -288,6 +288,7 @@ export function CaixaPanel({
     handlePrintSelectedKanbanValues,
     handleInspectSalonTable,
     handleTransferSelectedKanbanTable,
+    handleAssociateSelectedKanbanTable,
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
   } = useCashierOrders({
@@ -1212,6 +1213,7 @@ export function CaixaPanel({
               printFullTable: handlePrintSelectedKanbanTable,
               printTableValues: handlePrintSelectedKanbanValues,
               transferTable: handleTransferSelectedKanbanTable,
+              associateTable: handleAssociateSelectedKanbanTable,
               cancelConsumption: handleCancelSelectedKanbanConsumption,
               cancelOrder: handleCancelSelectedKanbanOrder,
             }}
