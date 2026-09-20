@@ -980,43 +980,98 @@ def registrar_pagamento_mesa(
         if itens_selecionados
         else min(valor_solicitado, saldo_mesa)
     )
-    restante_a_distribuir = valor_aplicado
     agora = datetime.datetime.now(datetime.timezone.utc)
     comandas_quitadas: List[Comanda] = []
-
-    for debito in debitos:
-        if restante_a_distribuir <= Decimal("0.00"):
-            break
-        if debito["saldo"] <= Decimal("0.00"):
-            continue
-
-        valor_na_comanda = min(restante_a_distribuir, debito["saldo"])
-        novo_total_pago = min(
-            debito["total"],
-            debito["pago"] + valor_na_comanda,
-        )
-        comanda = debito["comanda"]
-        comanda.valor_pago = float(_valor_monetario(novo_total_pago))
-        restante_a_distribuir -= valor_na_comanda
-
-        if novo_total_pago >= debito["total"]:
-            for item in comanda.itens:
-                if item.status != "cancelado":
-                    item.pago = True
-            comanda.fechada = True
-            comanda.fechado_em = agora
-            comanda.status_comanda = None
-            comandas_quitadas.append(comanda)
+    debitos_by_comanda = {
+        debito["comanda"].id: debito
+        for debito in debitos
+    }
 
     if itens_selecionados:
+        # Pagamento por itens não usa a distribuição FIFO da mesa. O valor
+        # confirmado é atribuído somente às comandas que possuem os itens
+        # selecionados, preservando o escopo escolhido pelo operador.
+        selected_subtotals: dict[str, Decimal] = {}
+        selected_comanda_ids: List[str] = []
+        for item in itens_selecionados:
+            if item.comanda_id not in selected_subtotals:
+                selected_subtotals[item.comanda_id] = Decimal("0.00")
+                selected_comanda_ids.append(item.comanda_id)
+            selected_subtotals[item.comanda_id] += _valor_monetario(item.preco_unit)
+
+        selected_allocations: dict[str, Decimal] = {}
+        allocated = Decimal("0.00")
+        for index, comanda_id in enumerate(selected_comanda_ids):
+            if index == len(selected_comanda_ids) - 1:
+                amount = valor_aplicado - allocated
+            else:
+                amount = _valor_monetario(
+                    selected_subtotals[comanda_id]
+                    * (Decimal("1.00") + taxa_percentual / Decimal("100"))
+                )
+                allocated += amount
+            selected_allocations[comanda_id] = amount
+
+        if any(
+            selected_allocations[comanda_id] > debitos_by_comanda[comanda_id]["saldo"]
+            for comanda_id in selected_comanda_ids
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
+
+        for comanda_id in selected_comanda_ids:
+            debito = debitos_by_comanda[comanda_id]
+            novo_total_pago = _valor_monetario(
+                debito["pago"] + selected_allocations[comanda_id]
+            )
+            comanda = debito["comanda"]
+            comanda.valor_pago = float(novo_total_pago)
+            if novo_total_pago >= debito["total"]:
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.pago = True
+                comanda.fechada = True
+                comanda.fechado_em = agora
+                comanda.status_comanda = None
+                comandas_quitadas.append(comanda)
+
         for item in itens_selecionados:
             item.pago = True
 
-    comanda_referencia = next(
-        debito["comanda"]
-        for debito in debitos
-        if debito["saldo"] > Decimal("0.00")
-    )
+        comanda_referencia = debitos_by_comanda[selected_comanda_ids[0]]["comanda"]
+    else:
+        restante_a_distribuir = valor_aplicado
+        for debito in debitos:
+            if restante_a_distribuir <= Decimal("0.00"):
+                break
+            if debito["saldo"] <= Decimal("0.00"):
+                continue
+
+            valor_na_comanda = min(restante_a_distribuir, debito["saldo"])
+            novo_total_pago = min(
+                debito["total"],
+                debito["pago"] + valor_na_comanda,
+            )
+            comanda = debito["comanda"]
+            comanda.valor_pago = float(_valor_monetario(novo_total_pago))
+            restante_a_distribuir -= valor_na_comanda
+
+            if novo_total_pago >= debito["total"]:
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.pago = True
+                comanda.fechada = True
+                comanda.fechado_em = agora
+                comanda.status_comanda = None
+                comandas_quitadas.append(comanda)
+
+        comanda_referencia = next(
+            debito["comanda"]
+            for debito in debitos
+            if debito["saldo"] > Decimal("0.00")
+        )
 
     cliente_pagamento = _resolver_cliente_pagamento(
         db,
