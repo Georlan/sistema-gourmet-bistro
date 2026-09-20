@@ -106,6 +106,7 @@ function bypassTenantSuspensionBoundary(): boolean {
 
   return pathname === "/recuperar-senha"
     || pathname.startsWith("/super-admin")
+    || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/c/")
     || pathname.startsWith("/cardapio")
     || pathname.startsWith("/ativar")
