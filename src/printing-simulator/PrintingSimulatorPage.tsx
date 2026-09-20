@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { API_BASE_URL } from "../config/api";
+import { getSuperAdminToken } from "../super-admin/superAdminApi";
 import { getOperatorSession } from "../utils/authSession";
 
 type SourceSummary = {
@@ -96,6 +97,7 @@ type StageError = {
 };
 
 const AGENT_PORTS = Array.from({ length: 11 }, (_, index) => 17654 + index);
+const SUPPORT_SESSION_STORAGE_KEY = "koma_support_session";
 
 function formatDate(value: string | null): string {
   if (!value) return "—";
@@ -188,6 +190,15 @@ function Metric({
 
 export default function PrintingSimulatorPage() {
   const session = useMemo(() => getOperatorSession("caixa"), []);
+  const superAdminToken = useMemo(() => getSuperAdminToken(), []);
+  const supportSessionActive = useMemo(() => {
+    try {
+      return Boolean(window.sessionStorage.getItem(SUPPORT_SESSION_STORAGE_KEY));
+    } catch {
+      return false;
+    }
+  }, []);
+  const internalAccess = Boolean(session?.token && superAdminToken && supportSessionActive);
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [source, setSource] = useState<SourceDetail | null>(null);
   const [monitor, setMonitor] = useState<MonitorPayload | null>(null);
@@ -274,10 +285,10 @@ export default function PrintingSimulatorPage() {
   }, []);
 
   useEffect(() => {
-    if (!session?.token) return;
+    if (!internalAccess) return;
     void refreshBackend();
     void probeBridge();
-  }, [probeBridge, refreshBackend, session?.token]);
+  }, [internalAccess, probeBridge, refreshBackend]);
 
   const simulate = async () => {
     if (!bridge) {
@@ -333,18 +344,18 @@ export default function PrintingSimulatorPage() {
     }
   };
 
-  if (!session?.token) {
+  if (!internalAccess) {
     return (
       <main className="min-h-dvh bg-koma-page px-6 py-16 text-koma-foreground">
         <div className="mx-auto max-w-xl rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
           <AlertTriangle className="mb-4 text-amber-300" />
-          <h1 className="font-serif text-2xl font-black">Simulador de impressão</h1>
+          <h1 className="font-serif text-2xl font-black">Simulador térmico interno</h1>
           <p className="mt-3 text-sm leading-relaxed text-koma-muted">
-            Esta ferramenta usa a sessão de gestão do restaurante. Entre no KÔMA como Caixa,
-            Gerente ou Admin e abra esta página novamente.
+            Esta bancada não faz parte das ferramentas do restaurante. O acesso exige uma
+            sessão de Super Admin e um Modo Suporte auditado ativo para o tenant que será inspecionado.
           </p>
-          <a href="/" className="mt-5 inline-flex rounded-xl bg-koma-accent px-4 py-2 text-xs font-bold text-black">
-            Voltar ao KÔMA
+          <a href="/super-admin" className="mt-5 inline-flex rounded-xl bg-koma-accent px-4 py-2 text-xs font-bold text-black">
+            Abrir Super Admin
           </a>
         </div>
       </main>
@@ -365,8 +376,8 @@ export default function PrintingSimulatorPage() {
               Nenhum comando desta página é enviado à impressora física.
             </p>
           </div>
-          <a href="/" className="rounded-xl border border-white/10 px-4 py-2 text-xs font-bold hover:bg-white/5">
-            Voltar à operação
+          <a href="/super-admin" className="rounded-xl border border-white/10 px-4 py-2 text-xs font-bold hover:bg-white/5">
+            Voltar ao Super Admin
           </a>
         </div>
       </header>
