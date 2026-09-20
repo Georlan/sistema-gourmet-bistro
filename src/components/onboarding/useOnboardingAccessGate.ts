@@ -3,7 +3,8 @@ import { API_BASE_URL } from '../../config/api';
 
 type GateState = 'idle' | 'loading' | 'ready' | 'error';
 
-type OnboardingProgressPayload = {
+type OnboardingGatePayload = {
+  setupPending?: boolean;
   progress?: {
     completed?: number;
     total?: number;
@@ -19,11 +20,13 @@ export function useOnboardingAccessGate({
 }) {
   const [state, setState] = useState<GateState>('idle');
   const [requiredComplete, setRequiredComplete] = useState(false);
+  const [operationReleased, setOperationReleased] = useState(false);
 
   useEffect(() => {
     if (!enabled || !accessToken) {
       setState('idle');
       setRequiredComplete(false);
+      setOperationReleased(false);
       return;
     }
 
@@ -42,18 +45,20 @@ export function useOnboardingAccessGate({
     })
       .then(async (response) => {
         if (!response.ok) throw new Error('Não foi possível validar a implantação inicial.');
-        return response.json() as Promise<OnboardingProgressPayload>;
+        return response.json() as Promise<OnboardingGatePayload>;
       })
       .then((payload) => {
         if (cancelled) return;
         const completed = Number(payload.progress?.completed || 0);
         const total = Number(payload.progress?.total || 0);
         setRequiredComplete(total > 0 && completed >= total);
+        setOperationReleased(payload.setupPending === false);
         setState('ready');
       })
       .catch((error) => {
         if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) return;
         setRequiredComplete(false);
+        setOperationReleased(false);
         setState('error');
       });
 
@@ -66,6 +71,7 @@ export function useOnboardingAccessGate({
   return {
     state,
     requiredComplete,
+    operationReleased,
     isChecking: enabled && state === 'loading',
   };
 }
