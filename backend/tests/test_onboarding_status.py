@@ -201,26 +201,26 @@ def test_delivery_and_service_charge_use_existing_configuration_as_capabilities(
     assert payload["capabilities"]["serviceCharge"] == {"enabled": True, "ready": True}
 
 
-def test_mercado_pago_blocks_only_when_online_payment_is_enabled():
+def test_mercado_pago_is_optional_and_connection_enables_online_payment_capability():
     config = _operation_config(tipos_pedido_ativos=["retirada"])
 
     offline = _operation_readiness(
         config=config,
-        restaurant=_restaurant(pagamento_online_ativo=False),
+        restaurant=_restaurant(),
         table_count=0,
         mercado_pago_connected=False,
     )
     assert offline["ready"] is True
-    assert "mercado_pago" not in offline["blockers"]
+    assert offline["capabilities"]["onlinePayment"] == {"enabled": False, "ready": True}
 
-    online = _operation_readiness(
+    connected = _operation_readiness(
         config=config,
-        restaurant=_restaurant(pagamento_online_ativo=True),
+        restaurant=_restaurant(),
         table_count=0,
-        mercado_pago_connected=False,
+        mercado_pago_connected=True,
     )
-    assert online["ready"] is False
-    assert "mercado_pago" in online["blockers"]
+    assert connected["ready"] is True
+    assert connected["capabilities"]["onlinePayment"] == {"enabled": True, "ready": True}
 
 
 
