@@ -522,9 +522,10 @@ export function useCheckoutController({
     const taxa = taxaServicoAtiva && includeServiceTax ? subtotal * (serviceTaxRate / 100) : 0;
     const selectedTotal = subtotal + taxa;
 
-    return isTableCheckoutOrder(order)
-      ? Math.min(selectedTotal, getCheckoutBalance(order, includeServiceTax))
-      : selectedTotal;
+    // Pagamento por itens é estrito: o valor exibido e enviado corresponde
+    // exatamente aos itens confirmados. Saldo monetário parcial não transforma
+    // silenciosamente a seleção em "pagar o restante".
+    return selectedTotal;
   };
 
   const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
