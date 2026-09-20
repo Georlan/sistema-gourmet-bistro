@@ -219,11 +219,114 @@ def simulate_payload(payload_text: str) -> dict[str, Any]:
     }
 
 
+class AutoSimulationState:
+    """Estado local e não autoritativo da bancada automática."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._enabled = False
+        self._cursor: Optional[dict[str, str]] = None
+        self._started_at: Optional[str] = None
+        self._processed_count = 0
+        self._last_event: Optional[dict[str, Any]] = None
+        self._last_error: Optional[dict[str, str]] = None
+
+    def start(self) -> dict[str, Any]:
+        with self._lock:
+            self._enabled = True
+            self._cursor = None
+            self._started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            self._processed_count = 0
+            self._last_event = None
+            self._last_error = None
+            return self._snapshot_unlocked()
+
+    def stop(self) -> dict[str, Any]:
+        with self._lock:
+            self._enabled = False
+            return self._snapshot_unlocked()
+
+    def is_enabled(self) -> bool:
+        with self._lock:
+            return self._enabled
+
+    def cursor(self) -> Optional[dict[str, str]]:
+        with self._lock:
+            return dict(self._cursor) if self._cursor else None
+
+    def update_cursor(self, cursor: Any) -> None:
+        if not isinstance(cursor, dict) or not cursor.get("created_at"):
+            return
+        with self._lock:
+            self._cursor = {
+                "created_at": str(cursor["created_at"]),
+                "id": str(cursor.get("id") or ""),
+            }
+
+    def record(
+        self,
+        *,
+        job: dict[str, Any],
+        simulation: dict[str, Any],
+        feed_request_ms: float,
+    ) -> None:
+        server_observed_ms = job.get("server_observed_latency_ms")
+        upper_bound_ms = None
+        if isinstance(server_observed_ms, (int, float)):
+            upper_bound_ms = round(
+                float(server_observed_ms)
+                + float(feed_request_ms)
+                + float(simulation.get("agent_render_ms") or 0.0),
+                3,
+            )
+        with self._lock:
+            self._processed_count += 1
+            self._last_error = None
+            self._last_event = {
+                "job": job,
+                "simulation": simulation,
+                "observed": {
+                    "server_observed_latency_ms": server_observed_ms,
+                    "feed_request_ms": round(float(feed_request_ms), 3),
+                    "virtual_ready_upper_bound_ms": upper_bound_ms,
+                },
+                "simulated_at": time.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ",
+                    time.gmtime(),
+                ),
+            }
+
+    def record_error(self, stage: str, message: str) -> None:
+        with self._lock:
+            self._last_error = {
+                "stage": str(stage),
+                "message": str(message),
+            }
+
+    def _snapshot_unlocked(self) -> dict[str, Any]:
+        return {
+            "enabled": self._enabled,
+            "mode": "shadow",
+            "started_at": self._started_at,
+            "processed_count": self._processed_count,
+            "cursor": dict(self._cursor) if self._cursor else None,
+            "last_event": self._last_event,
+            "last_error": self._last_error,
+            "authoritative_queue_mutation": False,
+            "physical_usb_write": False,
+        }
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return self._snapshot_unlocked()
+
+
 @dataclass
 class SimulatorServer:
     server: ThreadingHTTPServer
     thread: threading.Thread
     port: int
+    auto_state: AutoSimulationState
 
     def close(self) -> None:
         self.server.shutdown()
@@ -233,6 +336,8 @@ class SimulatorServer:
 
 def start_simulator_server(adapter_name: str) -> Optional[SimulatorServer]:
     """Sobe a ponte local na mesma faixa já autorizada pelo CSP do Kôma."""
+
+    auto_state = AutoSimulationState()
 
     class SimulatorHandler(BaseHTTPRequestHandler):
         server_version = "KomaPrintSimulator/1"
@@ -282,7 +387,11 @@ def start_simulator_server(adapter_name: str) -> Optional[SimulatorServer]:
         def do_GET(self) -> None:
             if self._reject_origin():
                 return
-            if self.path != "/simulator/health":
+            path = urlparse(self.path).path
+            if path == "/simulator/auto/status":
+                self._send_json(200, auto_state.snapshot())
+                return
+            if path != "/simulator/health":
                 self._send_json(404, {"error": {"stage": "routing", "code": "not_found", "message": "Endpoint local não encontrado."}})
                 return
             self._send_json(
@@ -299,13 +408,21 @@ def start_simulator_server(adapter_name: str) -> Optional[SimulatorServer]:
                         "physical_usb_write": False,
                         "physical_printer_required": False,
                     },
+                    "auto_simulation": auto_state.snapshot(),
                 },
             )
 
         def do_POST(self) -> None:
             if self._reject_origin():
                 return
-            if self.path != "/simulator/render":
+            path = urlparse(self.path).path
+            if path == "/simulator/auto/start":
+                self._send_json(200, auto_state.start())
+                return
+            if path == "/simulator/auto/stop":
+                self._send_json(200, auto_state.stop())
+                return
+            if path != "/simulator/render":
                 self._send_json(404, {"error": {"stage": "routing", "code": "not_found", "message": "Endpoint local não encontrado."}})
                 return
             try:
@@ -371,4 +488,9 @@ def start_simulator_server(adapter_name: str) -> Optional[SimulatorServer]:
         "[SIMULADOR] Ponte local ESC/POS disponível em http://127.0.0.1:%s.",
         port,
     )
-    return SimulatorServer(server=server, thread=thread, port=port)
+    return SimulatorServer(
+        server=server,
+        thread=thread,
+        port=port,
+        auto_state=auto_state,
+    )

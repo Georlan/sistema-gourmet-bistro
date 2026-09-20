@@ -246,3 +246,27 @@ não é anunciada nem linkada nas configurações operacionais do restaurante.
 O campo de edição manual da página é uma entrada técnica. Regras de pedido,
 mesa, delivery, preço e roteamento continuam pertencendo ao Core de Impressão;
 o frontend não possui formatter térmico próprio.
+
+
+### Simulação automática em modo sombra
+
+A bancada interna pode ativar uma observação automática do fluxo real de
+PrintJobs. Esse modo existe para medir o caminho **criação do PrintJob → wake-up
+do agente → leitura do backend → conversão ESC/POS**, sem confundir a medição com
+uma impressão física.
+
+O contrato é deliberadamente não autoritativo:
+
+- a ativação começa com um cursor do relógio do backend e ignora backlog anterior;
+- o feed do agente é autenticado pelo token tenant-scoped já usado pelo Print Agent;
+- cada item observado mantém o `PrintJob` intacto: sem claim, sem `agent_id`,
+  sem `claimed_at`, sem `printed_at` e sem mudança de status;
+- o daemon reaproveita `simulate_payload` e, portanto, o mesmo
+  `build_escpos_payload(..., encoding="cp860")` da impressão real;
+- nenhum adapter físico, CUPS, Spooler ou `/dev/usb/lp*` é chamado;
+- a bancada mostra separadamente latência observada no servidor, roundtrip do
+  feed e tempo de renderização; um valor agregado é identificado apenas como
+  limite superior conservador, nunca como tempo físico.
+
+O modo sombra é opt-in e local. Reiniciar o agente o deixa desligado novamente.
+A fila PostgreSQL continua sendo a única autoridade da impressão física.

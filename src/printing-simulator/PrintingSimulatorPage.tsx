@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Cable,
@@ -35,6 +35,7 @@ type SourceDetail = SourceSummary & {
   printed_at: string | null;
   queue_latency_ms: number | null;
   physical_completion_tracking: false;
+  server_observed_latency_ms?: number | null;
 };
 
 type MonitorPayload = {
@@ -95,6 +96,32 @@ type StageError = {
   stage: string;
   message: string;
 };
+
+type AutoSimulationObserved = {
+  server_observed_latency_ms: number | null;
+  feed_request_ms: number;
+  virtual_ready_upper_bound_ms: number | null;
+};
+
+type AutoSimulationEvent = {
+  job: SourceDetail;
+  simulation: SimulatorResult;
+  observed: AutoSimulationObserved;
+  simulated_at: string;
+};
+
+type AutoSimulationStatus = {
+  enabled: boolean;
+  mode: "shadow";
+  started_at: string | null;
+  processed_count: number;
+  cursor: { created_at: string; id: string } | null;
+  last_event: AutoSimulationEvent | null;
+  last_error: StageError | null;
+  authoritative_queue_mutation: false;
+  physical_usb_write: false;
+};
+
 
 const AGENT_PORTS = Array.from({ length: 11 }, (_, index) => 17654 + index);
 const SUPPORT_SESSION_STORAGE_KEY = "koma_support_session";
@@ -209,7 +236,10 @@ export default function PrintingSimulatorPage() {
   const [loadingSources, setLoadingSources] = useState(false);
   const [probing, setProbing] = useState(false);
   const [rendering, setRendering] = useState(false);
+  const [autoStatus, setAutoStatus] = useState<AutoSimulationStatus | null>(null);
+  const [autoControlBusy, setAutoControlBusy] = useState(false);
   const [error, setError] = useState<StageError | null>(null);
+  const lastAutoJobIdRef = useRef<string | null>(null);
 
   const authHeaders = useMemo(
     () => session?.token ? { Authorization: `Bearer ${session.token}` } : null,
@@ -290,6 +320,82 @@ export default function PrintingSimulatorPage() {
     void probeBridge();
   }, [internalAccess, probeBridge, refreshBackend]);
 
+  useEffect(() => {
+    if (!bridge) {
+      setAutoStatus(null);
+      return;
+    }
+
+    let disposed = false;
+    const poll = async () => {
+      try {
+        const status = await fetchJson<AutoSimulationStatus>(
+          `http://127.0.0.1:${bridge.port}/simulator/auto/status`,
+          { cache: "no-store" },
+        );
+        if (disposed) return;
+        setAutoStatus(status);
+
+        const event = status.last_event;
+        if (!event || lastAutoJobIdRef.current === event.job.id) return;
+        lastAutoJobIdRef.current = event.job.id;
+        setSource(event.job);
+        setPayloadText(event.job.payload_text);
+        setResult(event.simulation);
+        setRoundtripMs(null);
+        setSources((current) => {
+          const summary: SourceSummary = {
+            id: event.job.id,
+            reference: event.job.reference,
+            document_type: event.job.document_type,
+            destination: event.job.destination,
+            source_type: event.job.source_type,
+            source_id: event.job.source_id,
+            status: event.job.status,
+            created_at: event.job.created_at,
+          };
+          return [summary, ...current.filter((item) => item.id !== summary.id)].slice(0, 20);
+        });
+      } catch {
+        if (!disposed) setAutoStatus(null);
+      }
+    };
+
+    void poll();
+    const intervalId = window.setInterval(() => void poll(), 600);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [bridge]);
+
+  const toggleAutoSimulation = async () => {
+    if (!bridge || autoControlBusy) return;
+    setAutoControlBusy(true);
+    setError(null);
+    try {
+      const action = autoStatus?.enabled ? "stop" : "start";
+      const status = await fetchJson<AutoSimulationStatus>(
+        `http://127.0.0.1:${bridge.port}/simulator/auto/${action}`,
+        { method: "POST" },
+      );
+      lastAutoJobIdRef.current = null;
+      setAutoStatus(status);
+      if (action === "start") {
+        setRoundtripMs(null);
+      }
+    } catch (reason) {
+      setError({
+        stage: "auto_simulation_control",
+        message: reason instanceof Error
+          ? reason.message
+          : "Não foi possível alterar a simulação automática.",
+      });
+    } finally {
+      setAutoControlBusy(false);
+    }
+  };
+
   const simulate = async () => {
     if (!bridge) {
       setError({
@@ -363,6 +469,8 @@ export default function PrintingSimulatorPage() {
   }
 
   const physicalReady = monitor?.summary?.printer_ready === true;
+  const autoEvent = autoStatus?.last_event || null;
+  const autoObserved = autoEvent?.observed || null;
 
   return (
     <main className="min-h-dvh bg-koma-page text-koma-foreground">
@@ -418,6 +526,58 @@ export default function PrintingSimulatorPage() {
               <strong>Transporte do simulador:</strong> ESC/POS RAW virtual. A ponte local
               deliberadamente não escreve em CUPS, Spooler ou <code>/dev/usb/lp*</code>.
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.13em]">
+                  <Clock3 size={16} /> Simulação automática
+                </h2>
+                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+                  Observa somente PrintJobs criados depois da ativação e renderiza cada um assim que o agente os detectar.
+                </p>
+              </div>
+              <Badge ok={autoStatus?.enabled === true}>
+                {autoStatus?.enabled ? "observando" : "parada"}
+              </Badge>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void toggleAutoSimulation()}
+              disabled={!bridge || autoControlBusy}
+              className={`mt-4 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                autoStatus?.enabled
+                  ? "border border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                  : "bg-koma-accent text-black"
+              }`}
+            >
+              {autoControlBusy ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              {autoStatus?.enabled ? "Parar observação automática" : "Observar novos pedidos automaticamente"}
+            </button>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <span className="block text-koma-muted">Simulados nesta sessão</span>
+                <strong className="mt-1 block font-mono text-sm">{autoStatus?.processed_count ?? 0}</strong>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                <span className="block text-koma-muted">Último observado</span>
+                <strong className="mt-1 block truncate text-xs">{autoEvent?.job.reference || "—"}</strong>
+              </div>
+            </div>
+
+            {autoStatus?.last_error ? (
+              <p className="mt-3 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-[10px] text-rose-200">
+                {autoStatus.last_error.stage}: {autoStatus.last_error.message}
+              </p>
+            ) : null}
+
+            <p className="mt-3 text-[10px] leading-relaxed text-koma-muted">
+              Modo sombra: não faz claim, não altera o status do PrintJob e não confirma impressão.
+              O backlog anterior à ativação é ignorado. Requer Kôma Print 2026.09.20.2+.
+            </p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
@@ -546,8 +706,27 @@ export default function PrintingSimulatorPage() {
               <Metric
                 label="Browser ↔ agente local"
                 value={roundtripMs == null ? "—" : `${roundtripMs} ms`}
-                detail="Tempo observado da requisição localhost desta simulação."
+                detail="Preenchido apenas quando você usa o botão manual de simulação."
               />
+              {autoObserved ? (
+                <>
+                  <Metric
+                    label="PrintJob → observado"
+                    value={autoObserved.server_observed_latency_ms == null ? "—" : `${autoObserved.server_observed_latency_ms} ms`}
+                    detail="Relógio do backend: criação do PrintJob até a primeira leitura do feed pelo agente."
+                  />
+                  <Metric
+                    label="Backend ↔ agente"
+                    value={`${autoObserved.feed_request_ms} ms`}
+                    detail="Roundtrip HTTP real da consulta read-only feita pelo daemon local."
+                  />
+                  <Metric
+                    label="Até papel virtual · limite superior"
+                    value={autoObserved.virtual_ready_upper_bound_ms == null ? "—" : `${autoObserved.virtual_ready_upper_bound_ms} ms`}
+                    detail="Soma conservadora de observação + roundtrip + render; não é tempo físico da impressora."
+                  />
+                </>
+              ) : null}
               <Metric
                 label="Bytes ESC/POS"
                 value={result ? String(result.raw_byte_count) : "—"}

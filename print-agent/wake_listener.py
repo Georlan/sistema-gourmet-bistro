@@ -13,6 +13,8 @@ from typing import Iterable, Iterator, Tuple
 
 import requests
 
+from api_client import AGENT_VERSION
+
 
 log = logging.getLogger("print-agent.wakeup")
 PUSH_FALLBACK_POLL_SECONDS = 1.0
@@ -130,7 +132,7 @@ class PrintWakeupListener:
             "Accept": "text/event-stream",
             "Cache-Control": "no-cache",
             "X-Agent-Token": self.agent_token,
-            "User-Agent": "KomaPrintAgent/2026.09.05.2",
+            "User-Agent": f"KomaPrintAgent/{AGENT_VERSION}",
         }
         url = f"{self.api_url}/api/print-agents/events"
 

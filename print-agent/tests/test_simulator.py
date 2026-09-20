@@ -6,7 +6,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from adapters.escpos import build_escpos_payload
-from simulator import _origin_allowed, parse_escpos_payload, simulate_payload
+from simulator import AutoSimulationState, _origin_allowed, parse_escpos_payload, simulate_payload
 
 
 def test_simulator_uses_exact_production_escpos_builder():
@@ -82,3 +82,40 @@ def test_installers_ship_simulator_runtime_files():
     assert "wake_listener.py" in linux_installer
     assert '"simulator.py"' in windows_installer
     assert '"wake_listener.py"' in windows_installer
+
+
+
+def test_auto_simulation_state_is_opt_in_and_never_physical():
+    state = AutoSimulationState()
+
+    assert state.snapshot()["enabled"] is False
+    started = state.start()
+    assert started["enabled"] is True
+    assert started["cursor"] is None
+    assert started["authoritative_queue_mutation"] is False
+    assert started["physical_usb_write"] is False
+
+    state.update_cursor({
+        "created_at": "2026-09-20T20:00:00+00:00",
+        "id": "job-1",
+    })
+    state.record(
+        job={
+            "id": "job-1",
+            "server_observed_latency_ms": 25,
+        },
+        simulation={
+            "agent_render_ms": 0.4,
+            "raw_byte_count": 128,
+        },
+        feed_request_ms=4.6,
+    )
+
+    snapshot = state.snapshot()
+    assert snapshot["processed_count"] == 1
+    assert snapshot["cursor"]["id"] == "job-1"
+    assert snapshot["last_event"]["job"]["id"] == "job-1"
+    assert snapshot["last_event"]["observed"]["virtual_ready_upper_bound_ms"] == 30.0
+
+    stopped = state.stop()
+    assert stopped["enabled"] is False
