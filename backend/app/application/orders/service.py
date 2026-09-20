@@ -484,7 +484,23 @@ class OrderApplicationService:
             if comanda and comanda.fechada:
                 raise OrderValidationError("Não é permitido adicionar pedidos a uma comanda fechada.")
 
-        # Status inicial de comanda e lançamento
+        # Status inicial de comanda e lançamento.
+        #
+        # delivery_status é uma coluna legada que hoje armazena o ciclo
+        # operacional dos pedidos digitais; não deve ser interpretada como
+        # classificação de modalidade. Por isso DINE_IN originado em canal
+        # digital também recebe pendente -> produção -> pronto -> concluído,
+        # enquanto consumo local criado no POS/garçom continua no fluxo de salão.
+        digital_intake_channels = {
+            OrderChannel.WEB_CARDAPIO,
+            OrderChannel.QR_MESA,
+            OrderChannel.KIOSK,
+            OrderChannel.IFOOD,
+            OrderChannel.NINE_NINE_FOOD,
+            OrderChannel.KEETA,
+            OrderChannel.WHATSAPP,
+            OrderChannel.API,
+        }
         if cmd.channel == OrderChannel.POS:
             if cmd.fulfillment == FulfillmentType.PICKUP:
                 tipo_comanda = "Retirada"
@@ -508,8 +524,9 @@ class OrderApplicationService:
             initial_lancamento_status = "pendente"
         else:
             tipo_comanda = "Consumo no Local"
-            auto_delivery_status = None
-            initial_lancamento_status = "producao"
+            is_digital_dine_in = cmd.channel in digital_intake_channels
+            auto_delivery_status = "pendente" if is_digital_dine_in else None
+            initial_lancamento_status = "pendente" if is_digital_dine_in else "producao"
 
         cupom_db_id = None
         coupon_discount_applied = Decimal("0.00")
