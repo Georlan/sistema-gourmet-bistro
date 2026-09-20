@@ -31,6 +31,12 @@ export type OrderPhase =
 
 export type CanonicalFulfillment = "dine_in" | "pickup" | "delivery";
 
+export function fulfillmentLabel(fulfillment: CanonicalFulfillment): string {
+  if (fulfillment === "delivery") return "Delivery";
+  if (fulfillment === "dine_in") return "Consumo no local";
+  return "Retirada";
+}
+
 export interface OrderStateContract {
   status: CanonicalOrderStatus;
   phase: OrderPhase;
