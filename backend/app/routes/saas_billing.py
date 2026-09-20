@@ -404,7 +404,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 "authorizationUrl": authorization_url or None,
                 "amountDueToday": 0,
                 "trialDays": SAAS_TRIAL_DAYS,
-                "message": f"Autorize o {method_label}. Os 7 dias grátis começam somente depois da implantação essencial.",
+                "message": f"Autorize o {method_label}. Os 7 dias grátis começam somente quando o restaurante iniciar explicitamente a operação após concluir a configuração.",
             }
 
         raise HTTPException(409, "A autorização anterior ainda está em confirmação. Aguarde antes de tentar novamente.")
