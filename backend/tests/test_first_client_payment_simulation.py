@@ -20,8 +20,11 @@ import httpx
 import pytest
 
 from app.application.orders.commands import (
+    AcceptOrderCommand,
+    CompleteOrderCommand,
     CreateOrderCommand,
     CustomerInput,
+    MarkOrderReadyCommand,
     OrderItemInput,
 )
 from app.application.orders.service import OrderApplicationService
@@ -54,6 +57,7 @@ from app.services.refund_guard import create_refund_guarded
 
 SUCCESS_RESTAURANT_ID = 8841
 REFUSAL_RESTAURANT_ID = 8842
+DINE_IN_RESTAURANT_ID = 8843
 PAYMENT_EXTERNAL_ID = "990001"
 REFUND_EXTERNAL_ID = "880001"
 ORDER_TOTAL = Decimal("100.00")
@@ -104,7 +108,12 @@ def _cleanup(db, restaurante_id: int) -> None:
     db.commit()
 
 
-def _seed_online_order(db, restaurante_id: int):
+def _seed_online_order(
+    db,
+    restaurante_id: int,
+    *,
+    fulfillment: FulfillmentType = FulfillmentType.PICKUP,
+):
     user_id = f"first-client-user-{restaurante_id}"
     category_id = f"first-client-category-{restaurante_id}"
     product_id = f"first-client-product-{restaurante_id}"
@@ -161,13 +170,12 @@ def _seed_online_order(db, restaurante_id: int):
     db.add_all([shift, account])
     db.commit()
 
-    # Retirada torna o total determinístico em R$ 100,00. Delivery aplica a taxa
-    # padrão de entrega do domínio (R$ 7,00 quando não há configuração explícita),
-    # que não faz parte do que este gate financeiro pretende testar.
+    # Retirada e consumo local tornam o total determinístico em R$ 100,00.
+    # Delivery aplica a taxa padrão do domínio e fica fora deste gate financeiro.
     command = CreateOrderCommand(
         restaurant_id=restaurante_id,
         channel=OrderChannel.WEB_CARDAPIO,
-        fulfillment=FulfillmentType.PICKUP,
+        fulfillment=fulfillment,
         items=(OrderItemInput(product_id=product_id, quantity=Decimal("1")),),
         customer=CustomerInput(name="Cliente Simulado", phone="85999999999"),
         payment_method="pix",
@@ -446,6 +454,99 @@ def test_first_client_split_payment_and_full_refund_simulation(monkeypatch):
             PagamentoEstorno.restaurante_id == restaurante_id,
             PagamentoEstorno.pagamento_id == payment.id,
         ).count() == 1
+    finally:
+        db.rollback()
+        _cleanup(db, restaurante_id)
+        db.close()
+        current_restaurante_id.reset(tenant_token)
+
+
+
+
+def test_dine_in_pix_split_approval_and_full_lifecycle_simulation(monkeypatch):
+    """Simula Pix Split de DINE_IN sem mesa até a conclusão, sem dinheiro real."""
+    restaurante_id = DINE_IN_RESTAURANT_ID
+    tenant_token = current_restaurante_id.set(restaurante_id)
+    db = _session(restaurante_id)
+    try:
+        _cleanup(db, restaurante_id)
+        monkeypatch.setattr(settings, "ONLINE_PAYMENT_PLAN_FEES_ENABLED", True)
+        monkeypatch.setattr(settings, "KOMA_PUBLIC_API_URL", "https://api.koma.test")
+        state = _simulated_provider(monkeypatch)
+
+        user_id, account, _shift, comanda, intent = _seed_online_order(
+            db,
+            restaurante_id,
+            fulfillment=FulfillmentType.DINE_IN,
+        )
+        assert comanda.tipo == "Consumo no Local"
+        assert comanda.mesa_id is None
+        assert comanda.delivery_status == "pendente"
+        assert comanda.online_payment_status == "pending"
+        assert Decimal(str(intent.amount)) == ORDER_TOTAL
+        assert Decimal(str(intent.marketplace_fee)) == EXPECTED_PRO_FEE
+
+        created = OnlinePaymentService.ensure_pix_created(
+            db,
+            intent=intent,
+            payer_email="cliente.dinein@example.invalid",
+            account=account,
+        )
+        assert created.external_payment_id == PAYMENT_EXTERNAL_ID
+        assert created.qr_code == "000201-first-client-simulation"
+
+        create_requests = _requests_by(state, "POST", "/v1/payments")
+        assert len(create_requests) == 1
+        create_payload = json.loads(create_requests[0].content)
+        assert Decimal(str(create_payload["transaction_amount"])) == ORDER_TOTAL
+        assert Decimal(str(create_payload["application_fee"])) == EXPECTED_PRO_FEE
+        assert create_payload["payment_method_id"] == "pix"
+
+        settled, first_approval = OnlinePaymentService.reconcile_provider_payment(
+            db,
+            account=account,
+            external_payment_id=PAYMENT_EXTERNAL_ID,
+        )
+        assert first_approval is True
+        assert settled is not None and settled.status == "approved"
+        db.refresh(comanda)
+        assert comanda.online_payment_status == "approved"
+        assert Decimal(str(comanda.valor_pago)) == ORDER_TOTAL
+        assert comanda.delivery_status == "pendente"
+        assert all(item.pago for item in comanda.itens)
+
+        accepted = OrderApplicationService.accept_order(
+            db,
+            AcceptOrderCommand(
+                restaurant_id=restaurante_id,
+                order_id=comanda.lancamentos[0].id,
+                operator_user_id=user_id,
+            ),
+        )
+        assert accepted.status == "producao"
+
+        ready = OrderApplicationService.mark_order_ready(
+            db,
+            MarkOrderReadyCommand(
+                restaurant_id=restaurante_id,
+                order_id=comanda.lancamentos[0].id,
+                operator_user_id=user_id,
+            ),
+        )
+        assert ready.status == "pronto"
+
+        completed = OrderApplicationService.complete_order(
+            db,
+            CompleteOrderCommand(
+                restaurant_id=restaurante_id,
+                order_id=comanda.lancamentos[0].id,
+                operator_user_id=user_id,
+            ),
+        )
+        assert completed.status == "finalizado"
+        db.refresh(comanda)
+        assert comanda.delivery_status == "finalizado"
+        assert comanda.online_payment_status == "approved"
     finally:
         db.rollback()
         _cleanup(db, restaurante_id)

@@ -209,3 +209,86 @@ def test_secondary_sector_still_uses_same_visual_base():
     assert "ITENS" in ticket
     assert "VALOR" in ticket
     assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
+
+
+def test_online_dine_in_without_table_prints_customer_pix_and_never_fakes_delivery():
+    ticket = _render(
+        [
+            PrintItem(
+                codigo="dine-01",
+                nome="EXECUTIVO DA CASA COM NOME MUITO COMPRIDO",
+                quantidade=2,
+                preco_unit=32.90,
+                observacao=(
+                    "SEM CEBOLA, MOLHO SEPARADO, UM PRATO SEM SALADA E O OUTRO "
+                    "COM ARROZ BEM PASSADO"
+                ),
+                destino_impressao="COZINHA",
+            ),
+            PrintItem(
+                codigo="dine-02",
+                nome="COCA-COLA LATA",
+                preco_unit=6.0,
+                destino_impressao="NENHUM",
+            ),
+        ],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="CLIENTE ONLINE COM NOME EXTREMAMENTE COMPRIDO PARA TESTE",
+            customer_phone="88999991234",
+            event_at=datetime.datetime(2026, 9, 20, 15, 1, tzinfo=LOCAL_TIMEZONE),
+            payment_method="pix",
+            coupon_discount=5.0,
+            cashback_discount=3.0,
+            online_payment_status="approved",
+            amount_paid=63.80,
+            show_financial_breakdown=True,
+        ),
+        order_type="Consumo no Local",
+    )
+
+    assert "CONSUMO NO LOCAL" in ticket
+    assert "ORIGEM: CARDÁPIO ONLINE" in ticket
+    assert "MESA:" not in ticket
+    assert "SEM MESA" not in ticket
+    assert "ENTREGA" not in ticket
+    assert "TAXA DE ENTREGA:" not in ticket
+    assert "CLIENTE" in ticket
+    assert "NOME: CLIENTE ONLINE COM NOME" in ticket
+    assert "TELEFONE: (88) 9XXXX-XX34" in ticket
+    assert "2x EXECUTIVO DA CASA" in ticket
+    assert "1x COCA-COLA LATA" in ticket
+    assert "FORMA: PIX ONLINE" in ticket
+    assert "PAGO ONLINE" in ticket
+    assert "NÃO COBRAR DO CLIENTE" in ticket
+    assert "DESCONTO CUPOM:" in ticket
+    assert "DESCONTO CASHBACK:" in ticket
+    assert "TOTAL DO PEDIDO:" in ticket
+
+
+def test_online_dine_in_reprint_after_table_association_keeps_online_customer_and_adds_table():
+    ticket = _render(
+        [PrintItem(codigo="dine-03", nome="BROWNIE COM SORVETE", preco_unit=14.90)],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="GABRIELE",
+            customer_phone="88996601927",
+            payment_method="dinheiro",
+            table_id=4,
+            is_reprint=True,
+            show_financial_breakdown=True,
+        ),
+        order_type="Consumo no Local",
+    )
+
+    assert "CONSUMO NO LOCAL" in ticket
+    assert "ORIGEM: CARDÁPIO ONLINE" in ticket
+    assert "MESA: 4" in ticket
+    assert "NOME: GABRIELE" in ticket
+    assert "TELEFONE: (88) 9XXXX-XX27" in ticket
+    assert "FORMA: DINHEIRO" in ticket
+    assert ticket.count("REIMPRESSÃO") == 1
