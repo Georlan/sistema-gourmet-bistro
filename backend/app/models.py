@@ -690,6 +690,7 @@ class Pagamento(Base):
     metodo = Column(String, nullable=False)  # "dinheiro" | "pix" | "cartao"
     status = Column(String, default="aprovado") # "pendente" | "aprovado" | "cancelado"
     idempotency_key = Column(String(128), nullable=True, index=True)
+    item_ids = Column(JSON, nullable=True)
     cliente_id = Column(String, nullable=True)
     cpf_cliente = Column(String, nullable=True, index=True)
     nome_cliente = Column(String, nullable=True)
