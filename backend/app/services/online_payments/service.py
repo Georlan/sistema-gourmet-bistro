@@ -23,6 +23,7 @@ from ...models import (
 from ...subscription import subscription_marketplace_rate
 from ..billing_service import tenant_marketplace_rate
 from ..outbox import enqueue_outbox_event_in_session
+from ..online_order_auto_accept import try_auto_accept_online_order_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
 from .oauth import MercadoPagoOAuthError, refresh_access_token
@@ -443,6 +444,14 @@ class OnlinePaymentService:
                     aggregate_type="order",
                     aggregate_id=str(lancamento.id),
                 )
+
+            try_auto_accept_online_order_in_session(
+                db,
+                restaurante_id=account.restaurante_id,
+                comanda_id=comanda.id,
+                operator_user_id=comanda.garcom_id,
+                requested_by="Autoaceite online",
+            )
 
         return locked_intent, approval_effects_applied
 
