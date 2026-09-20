@@ -107,6 +107,20 @@ def _required_progress(steps: dict[str, bool]) -> dict[str, int]:
     }
 
 
+def _should_start_trial_after_onboarding(
+    *,
+    required_complete: bool,
+    setup_pending: bool,
+    current_user: Usuario,
+) -> bool:
+    """Modo Suporte pode observar o onboarding, mas nunca iniciar cobrança/trial."""
+    return bool(
+        required_complete
+        and setup_pending
+        and not getattr(current_user, "is_support_mode", False)
+    )
+
+
 def _require_onboarding_role(current_user: Usuario) -> None:
     role = str(current_user.cargo or current_user.role or "").strip().lower()
     if role not in {"admin", "gerente"}:
@@ -289,8 +303,11 @@ def get_onboarding_status(
     # O primeiro GET do checklist após o 3/3 faz a transição idempotente. Isso
     # garante que abrir/recarregar a implantação seja suficiente para iniciar o
     # trial, sem botão extra e sem consumir dias durante cadastro/configuração.
-    is_internal_support = bool(getattr(current_user, "is_support_mode", False))
-    if required_complete and setup_pending and not is_internal_support:
+    if _should_start_trial_after_onboarding(
+        required_complete=required_complete,
+        setup_pending=setup_pending,
+        current_user=current_user,
+    ):
         ensure_trial_started_after_onboarding(
             db,
             restaurante_id=tenant_id,
