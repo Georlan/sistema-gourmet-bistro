@@ -42,7 +42,8 @@ from ..services.online_order_policy import (
     next_schedule_opening,
     next_schedule_opening_label,
 )
-from ..services.delivery_fee_policy import resolve_distance_delivery_fee\nfrom ..services.operational_modes import explicit_order_types
+from ..services.delivery_fee_policy import resolve_distance_delivery_fee
+from ..services.operational_modes import explicit_order_types
 from .products import notify_catalog_update, ordered_categories as _ordered_categories
 
 logger = logging.getLogger("koma.cardapio_digital")
