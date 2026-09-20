@@ -87,6 +87,8 @@ export function reconcileDeliveryOrderAfterStatus(
     itens: previous.itens,
     detailItems: previous.detailItems,
     total: previous.total,
+    amountPaid: incoming.amountPaid ?? previous.amountPaid,
+    amountDue: incoming.amountDue ?? previous.amountDue,
     quantidadeItens: previous.quantidadeItens,
     pago: previous.pago,
     endereco: previous.endereco,
@@ -191,6 +193,9 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       .map(([name, qty]) => `${qty}x ${name}`)
       .join(' + ') || 'Nenhum item';
     const subtotal = activeItems.reduce((sum, item) => sum + (Number(item.preco) || 0), 0);
+    const total = subtotal + (Number(order.deliveryTax) || 0);
+    const amountPaid = Math.max(0, Number(order.valorPago) || 0);
+    const amountDue = Math.max(0, total - amountPaid);
     const rawAddress = String(order.deliveryAddress || '').trim();
     const modalidade = readDigitalOrderFulfillment(order.tipo, rawAddress);
     if (!modalidade) return [];
@@ -215,7 +220,9 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       telefone: order.clientePhone || '',
       itens,
       detailItems: activeItems,
-      total: subtotal + (Number(order.deliveryTax) || 0),
+      total,
+      amountPaid,
+      amountDue,
       canal,
       origemOperacional,
       isQuickSale,
