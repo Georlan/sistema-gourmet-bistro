@@ -963,6 +963,8 @@ class ConfiguracaoRestaurante(Base):
     impressao_mensagem_rodape = Column(String(160), nullable=True)
     impressao_mostrar_descricao = Column(Boolean, default=True, nullable=False)
     modo_exclusivo_salao = Column(Boolean, default=True)
+    operation_capabilities = Column(JSON, nullable=True)
+    operation_started_at = Column(DateTime(timezone=True), nullable=True)
     perm_garcom_delivery = Column(Boolean, default=True)
     perm_garcom_editar = Column(Boolean, default=True)
     perm_garcom_taxas = Column(Boolean, default=False)
