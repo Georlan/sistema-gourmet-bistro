@@ -15,6 +15,7 @@ MENSAGENS_STATUS = {
     "recebido": "✅ Pedido recebido! {restaurante} já começou a preparar.\nPedido #{numero_pedido}.",
     "em_preparo": "🍳 Seu pedido está sendo preparado com carinho!\nPedido #{numero_pedido} • {restaurante}.",
     "pronto": "🎉 Seu pedido está pronto! Pode retirar na loja.\nPedido #{numero_pedido} • {restaurante}.",
+    "pronto_local": "🎉 Seu pedido está pronto para servir no restaurante.\nPedido #{numero_pedido} • {restaurante}.",
     "pronto_delivery": "🎉 Seu pedido está pronto e aguardando o entregador.\nPedido #{numero_pedido} • {restaurante}.",
     "saiu_entrega": "🛵 Saiu para entrega! O entregador já está a caminho.\nPedido #{numero_pedido} • {restaurante}.",
     "saiu_entrega_rastreio": "🛵 Saiu para entrega! Acompanhe: {link_rastreamento}",
@@ -139,11 +140,20 @@ async def notificar_cliente_status_pedido(
     template_msg = MENSAGENS_STATUS.get(status_normalizado)
     if status_normalizado == "saiu_entrega" and link_rastreamento:
         template_msg = MENSAGENS_STATUS["saiu_entrega_rastreio"]
-    if status_normalizado == "pronto" and (modalidade or "").strip().casefold() in {
+    modalidade_normalizada = (modalidade or "").strip().casefold()
+    if status_normalizado == "pronto" and modalidade_normalizada in {
         "entrega",
         "delivery",
     }:
         template_msg = MENSAGENS_STATUS["pronto_delivery"]
+    elif status_normalizado == "pronto" and modalidade_normalizada in {
+        "consumo no local",
+        "consumo_local",
+        "dine_in",
+        "local",
+        "mesa",
+    }:
+        template_msg = MENSAGENS_STATUS["pronto_local"]
 
     if not template_msg:
         if "preparo" in status_normalizado or "producao" in status_normalizado:
