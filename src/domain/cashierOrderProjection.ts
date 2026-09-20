@@ -18,8 +18,12 @@ export function projectCashierDeliveryState(status?: string, modalidade?: string
 
 export function getCashierDeliveryStatusLabel(status?: string, modalidade?: string): string {
   if (status === 'producao') return 'Em preparo';
-  if (status === 'pronto') return modalidade === 'delivery' ? 'Pronto para envio' : 'Pronto para retirada';
-  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Aguardando retirada';
+  if (status === 'pronto') {
+    if (modalidade === 'delivery') return 'Pronto para envio';
+    if (modalidade === 'dine_in') return 'Pronto para servir';
+    return 'Pronto para retirada';
+  }
+  if (status === 'transito') return modalidade === 'delivery' ? 'Em rota' : 'Em atendimento';
   if (status === 'pendente' || status === 'analise') return 'Aguardando aceite';
   return 'Em atendimento';
 }
@@ -52,6 +56,14 @@ type CashierNumberSource = Partial<Pick<Order, 'id' | 'numeroPedido' | 'displayN
 /** This predicate classifies fulfillment only; it does not decide payment state. */
 export const isCashierTableOrder = (order: Order | null | undefined) => {
   if (!order || Number(order.mesaId) <= 0) return false;
+
+  // Um pedido pode receber mesa depois de criado sem deixar de pertencer ao
+  // fluxo digital. O ciclo digital tem precedência sobre a localização física,
+  // evitando que o mesmo pedido apareça simultaneamente no Kanban e no salão.
+  if (['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(String(order.deliveryStatus || '').toLowerCase())) {
+    return false;
+  }
+
   return !['delivery', 'entrega', 'retirada'].includes(String(order.tipo || '').toLowerCase());
 };
 
