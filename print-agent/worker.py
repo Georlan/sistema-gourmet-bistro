@@ -14,7 +14,7 @@ from journal import PrintJournal
 from adapters import get_adapter
 from dispatcher import dispatch_claimed_jobs
 from wake_listener import PrintWakeupListener
-from simulator import start_simulator_server
+from simulator import simulate_payload, start_simulator_server
 
 log = logging.getLogger("print-agent.worker")
 
@@ -198,6 +198,64 @@ def process_unconfirmed_journal_jobs(client: KomaApiClient, journal: PrintJourna
             log.info(f"[RESILIÊNCIA] Job '{job_id}' re-confirmado com SUCESSO no backend!")
 
 
+def process_shadow_simulation(
+    client: KomaApiClient,
+    simulator_server,
+) -> int:
+    """Renderiza novos jobs em paralelo lógico, sem tocar na fila autoritativa."""
+    if simulator_server is None or not simulator_server.auto_state.is_enabled():
+        return 0
+
+    state = simulator_server.auto_state
+    started = time.perf_counter()
+    feed = client.get_simulator_feed(state.cursor(), limit=10)
+    feed_ms = round((time.perf_counter() - started) * 1000, 3)
+    if feed is None:
+        state.record_error(
+            "backend_feed",
+            "O backend não respondeu ao feed read-only do simulador.",
+        )
+        return 0
+
+    state.update_cursor(feed.get("cursor"))
+    items = feed.get("items") if isinstance(feed, dict) else []
+    if not isinstance(items, list):
+        state.record_error(
+            "backend_feed",
+            "O backend retornou um feed de simulação inválido.",
+        )
+        return 0
+
+    processed = 0
+    for job in items:
+        if not isinstance(job, dict) or not isinstance(job.get("payload_text"), str):
+            continue
+        try:
+            simulation = simulate_payload(job["payload_text"])
+            state.record(
+                job=job,
+                simulation=simulation,
+                feed_request_ms=feed_ms,
+            )
+            processed += 1
+            log.info(
+                "[SIMULADOR] job=%s observacao_backend_ms=%s "
+                "feed_api_ms=%s render_ms=%s bytes=%s",
+                job.get("id"),
+                job.get("server_observed_latency_ms"),
+                feed_ms,
+                simulation.get("agent_render_ms"),
+                simulation.get("raw_byte_count"),
+            )
+        except Exception as exc:
+            log.exception(
+                "[SIMULADOR] Falha ao renderizar job '%s' em modo sombra.",
+                job.get("id"),
+            )
+            state.record_error("escpos_render", str(exc))
+    return processed
+
+
 def run_agent_loop(config: AgentConfig, max_loops: int = None):
     """Drain tickets independently of slow diagnostics and cloud acknowledgments.
 
@@ -271,6 +329,9 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                             for item in journal.get_unconfirmed_printed_jobs():
                                 pending[item["job_id"]] = {"job_id": item["job_id"], "printer_name": item["printer_name"] or "Padrão"}
                             last_reconciliation = now
+
+                        if simulator_server is not None and simulator_server.auto_state.is_enabled():
+                            process_shadow_simulation(client, simulator_server)
 
                         diagnostics, checked_at = maintenance.snapshot
                         ready = not bool(getattr(adapter, "requires_physical_printer", True)) or (
