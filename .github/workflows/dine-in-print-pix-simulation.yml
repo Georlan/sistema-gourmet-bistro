@@ -1,0 +1,66 @@
+name: Dine-In Print and Pix Simulation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/dine-in-print-pix-simulation.yml'
+      - 'backend/app/application/printing/**'
+      - 'backend/app/services/online_payments/**'
+      - 'backend/tests/test_canonical_comanda_renderer.py'
+      - 'backend/tests/test_local_comanda_visual_hierarchy.py'
+      - 'backend/tests/test_first_client_payment_simulation.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  targeted:
+    name: Dine-in print + Pix simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: dine-in-print-pix-simulation-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      DATABASE_URL: sqlite:///./dine-in-print-pix-simulation.db
+      MIGRATION_DATABASE_URL: sqlite:///./dine-in-print-pix-simulation.db
+      KOMA_PUBLIC_API_URL: https://api.example.test
+      KOMA_PUBLIC_APP_URL: https://app.example.test
+      MERCADO_PAGO_CLIENT_ID: app-ci
+      MERCADO_PAGO_CLIENT_SECRET: secret-ci
+      MERCADO_PAGO_WEBHOOK_SECRET: webhook-ci
+      MERCADO_PAGO_OAUTH_REDIRECT_URI: https://api.example.test/payments/mercado-pago/oauth/callback
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Compile changed modules
+        run: |
+          python -m py_compile backend/app/application/printing/service.py
+          python -m py_compile backend/tests/test_canonical_comanda_renderer.py
+          python -m py_compile backend/tests/test_local_comanda_visual_hierarchy.py
+          python -m py_compile backend/tests/test_first_client_payment_simulation.py
+
+      - name: Run printing simulations
+        working-directory: backend
+        run: |
+          python -m pytest -q -x             tests/test_canonical_comanda_renderer.py             tests/test_local_comanda_visual_hierarchy.py
+
+      - name: Run DINE_IN Pix split lifecycle simulation
+        working-directory: backend
+        run: >-
+          python -m pytest -q -x
+          tests/test_first_client_payment_simulation.py::test_dine_in_pix_split_approval_and_full_lifecycle_simulation
