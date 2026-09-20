@@ -191,7 +191,8 @@ class MovimentoAtendimento(Base):
     __table_args__ = (
         CheckConstraint(
             "tipo IN ('abertura', 'transferencia', 'mesclagem', 'desmesclagem', "
-            "'transferencia_item', 'fechamento', 'reabertura', 'promocao_principal')",
+            "'transferencia_item', 'fechamento', 'reabertura', 'promocao_principal', "
+            "'conversao_modalidade')",
             name="ck_movimento_atendimento_tipo",
         ),
         Index(
