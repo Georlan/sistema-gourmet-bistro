@@ -529,6 +529,12 @@ async def stream_eventos_pedido(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     _restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
 
+    # O stream pode permanecer aberto por minutos. Nenhuma consulta ao banco é
+    # feita depois da resolução do capability token, então devolvemos a conexão
+    # ao pool antes de iniciar a resposta SSE. O finalizer de get_db pode chamar
+    # close() novamente com segurança.
+    db.close()
+
     async def event_generator():
         sub_id, queue = order_chat_hub.subscribe_conversation(conversation_id)
         try:
