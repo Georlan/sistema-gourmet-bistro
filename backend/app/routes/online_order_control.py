@@ -25,6 +25,8 @@ from ..services.online_order_control import (
     pause_online_orders,
     release_block,
     resume_online_orders,
+    auto_accept_pending_online_orders,
+    update_auto_accept,
     update_capacity,
 )
 from ..services.order_rejection_notice import append_rejection_reason_notice
@@ -45,6 +47,10 @@ class ResumeOrdersPayload(BaseModel):
 class CapacityPayload(BaseModel):
     max_active_orders: int | None = Field(default=None, ge=1, le=500)
     auto_pause: bool = False
+
+
+class AutoAcceptPayload(BaseModel):
+    enabled: bool
 
 
 class BlockCustomerPayload(BaseModel):
@@ -134,6 +140,32 @@ def resume_orders(
     db.commit()
     result = operational_status(db, rid)
     _notify_public_menu(background_tasks, rid)
+    return result
+
+
+@router.put("/auto-accept")
+def configure_auto_accept(
+    payload: AutoAcceptPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(_authorized_operator),
+):
+    rid = require_tenant_id()
+    update_auto_accept(
+        db,
+        restaurante_id=rid,
+        actor_user_id=str(current_user.id),
+        enabled=payload.enabled,
+    )
+    if payload.enabled:
+        auto_accept_pending_online_orders(
+            db,
+            restaurante_id=rid,
+            operator_user_id=str(current_user.id),
+        )
+    db.commit()
+    result = operational_status(db, rid)
+    _notify_orders(background_tasks, rid)
     return result
 
 
