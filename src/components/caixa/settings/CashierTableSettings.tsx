@@ -1,7 +1,6 @@
 
 import { Edit3, Plus, Users } from 'lucide-react';
 import { Table } from '../../../types';
-import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { useCashierTableSettings } from './useCashierTableSettings';
 type BoundaryProps = Pick<
   ReturnType<typeof useCashierTableSettings>,
@@ -30,26 +29,6 @@ export function CashierTableSettings({
   return (
     <>
       {printingSettingsTab === 'mesas' && (
-        <OperationalBanner
-          id="salon-tables-title"
-          eyebrow="CONFIGURAÇÕES / SALÃO"
-          title="Mesas"
-          accent="prontas para receber"
-          description="Capacidade e identificação do salão sem misturar configuração com comandas abertas."
-          metrics={[
-            { label: 'mesas cadastradas', value: salonTables.length },
-            {
-              label: 'lugares disponíveis',
-              value: salonTables.reduce((total, table) => total + (table.capacidade || 4), 0),
-            },
-            {
-              label: 'nomes personalizados',
-              value: salonTables.filter((table) => Boolean(table.nome?.trim())).length,
-            },
-          ]}
-        />
-      )}
-      {printingSettingsTab === 'mesas' && (
         <section
           className={"overflow-hidden rounded-[22px] border border-koma-border bg-koma-panel"}
         >
@@ -59,7 +38,7 @@ export function CashierTableSettings({
             <div>
               <h3 className={"text-sm font-bold text-koma-foreground"}>Configuração das mesas</h3>
               <p className={"mt-1 text-[10px] text-koma-muted"}>
-                Cadastre, nomeie e defina a capacidade. A ocupação continua sendo controlada pelas comandas.
+                Crie, renomeie, ajuste a capacidade ou remova mesas. Atendimento, ocupação e comandas ficam no Salão.
               </p>
             </div>
             <button
@@ -105,7 +84,7 @@ export function CashierTableSettings({
                         Mesa {table.id}
                       </span>
                       <strong
-                        className={"mt-0.5 block truncate text-xs text-koma-foreground"}
+                        className={"mt-0.5 block break-words text-xs text-koma-foreground"}
                       >
                         {table.nome || `Mesa ${table.id}`}
                       </strong>
