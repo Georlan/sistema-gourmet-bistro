@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -15,6 +16,8 @@ from .outbox import enqueue_outbox_event_in_session
 
 
 SCHEDULED_ORDERS_CAPABILITY = "scheduled_orders"
+
+logger = logging.getLogger("koma.scheduled_orders")
 MIN_SCHEDULE_LEAD = datetime.timedelta(minutes=30)
 MAX_SCHEDULE_HORIZON = datetime.timedelta(days=7)
 
@@ -164,6 +167,23 @@ def release_due_scheduled_orders_in_session(
         comanda.online_payment_status = None
         _publish_created_event(db, comanda)
         record.released_at = now
+        db.flush()
+
+        try:
+            from .online_order_control import auto_accept_online_order_if_enabled
+
+            with db.begin_nested():
+                auto_accept_online_order_if_enabled(
+                    db,
+                    restaurante_id=restaurante_id,
+                    comanda_id=comanda.id,
+                )
+        except Exception:
+            logger.exception(
+                "Falha no autoaceite de pedido agendado liberado %s; mantendo pendente.",
+                comanda.id,
+            )
+
         released += 1
 
     if released:
