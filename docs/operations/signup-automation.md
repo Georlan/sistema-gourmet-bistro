@@ -2,7 +2,7 @@
 
 ## Regra comercial canônica
 
-Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → 7 dias grátis → primeira cobrança automática → operação normal.
+Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → configuração inicial → início explícito da operação → 7 dias grátis → primeira cobrança automática → operação normal.
 
 A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
 
@@ -30,7 +30,7 @@ Métodos recorrentes modelados no backend devem obedecer à mesma regra de autor
 - Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, uma autorização recorrente pronta entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
 - Assim que uma autorização recorrente fica pronta para o fluxo de onboarding, ela deve permanecer pausada até a conclusão da implantação essencial. Se a pausa não puder ser confirmada, o fluxo falha fechado em vez de arriscar cobrança antecipada.
 - Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e pode configurar o restaurante, mas o gate de onboarding mantém Vendas/Caixa bloqueados até 3/3.
-- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Ao detectar 3/3 pela primeira vez, inicia o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
+- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Concluir a configuração não inicia o trial. O trial começa apenas no comando explícito de início da operação, que valida o readiness de configuração, define D+7 no provedor quando aplicável, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
 - Se o alinhamento D+7 ou a reativação do provedor falhar, o backend não inicia o trial localmente e não libera uma cobrança antecipada; a configuração já salva permanece intacta para nova tentativa.
 - Recarregar a implantação depois do início do trial não renova nem empurra a data final.
 - Assinaturas antigas que já estavam `trialing` ou `active` não são reescritas por esta regra.
