@@ -210,6 +210,7 @@ def _build_onboarding_status(
             dict(trial_row) if trial_row else None,
             setup_pending=setup_pending,
         ),
+        "setupPending": setup_pending,
         "trialCanStart": bool(
             setup_pending
             and readiness["readiness"]["configurationComplete"]
