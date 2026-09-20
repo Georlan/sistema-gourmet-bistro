@@ -19,6 +19,7 @@ import {
   OrderStateContract,
   StoredOrder,
   fallbackOrderState,
+  fulfillmentLabel,
   isOrderStateContract,
 } from "../orderTracking";
 import "../cardapioChatPolish.css";
@@ -452,7 +453,7 @@ export default function CardapioOrderChatPanel({
               <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : "text-emerald-400")}>{state.label}</p>
             </div>
           </div>
-          <span className="text-[10px] font-bold text-koma-muted">{isDelivery ? "Delivery" : "Retirada"}</span>
+          <span className="text-[10px] font-bold text-koma-muted">{fulfillmentLabel(state.fulfillment)}</span>
         </div>
 
         {!rejected && (
