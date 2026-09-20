@@ -76,6 +76,8 @@ interface PrintJobHistory {
   destination: string;
   source_type: string;
   source_id: string;
+  origin_kind?: 'automatic' | 'manual' | 'manual_reprint' | 'test';
+  origin_label?: string;
   reference: string;
   order_number: string | null;
   table_number: string | null;
@@ -118,6 +120,12 @@ interface PrintMonitorResponse {
     delayed: number;
     ready_printers?: number;
     printer_ready?: boolean;
+    queue_origins?: {
+      automatic: number;
+      manual: number;
+      manual_reprint: number;
+      test: number;
+    };
     oldest_unresolved_seconds: number | null;
   };
   jobs: PrintJobHistory[];
@@ -184,6 +192,13 @@ function formatDate(value: string | null): string {
 
 function friendlyDocumentType(value: string): string {
   return value.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function friendlyQueueOrigin(job: PrintJobHistory): string {
+  if (job.origin_label) return job.origin_label;
+  if (job.is_reprint || job.source_type === 'reimpressao') return 'Reimpressão manual';
+  if (job.source_type.startsWith('teste')) return 'Teste';
+  return 'Origem não identificada';
 }
 
 function friendlyPrinterName(value: string | null): string {
@@ -595,10 +610,11 @@ export function PrintMonitorPanel({
       if (monitorData.summary.delayed > 0) {
         return {
           tone: 'warning',
-          title: `${monitorData.summary.delayed} impressão(ões) aguardando; agente local conectado`,
+          title: `${queueTotal} na fila; ${monitorData.summary.delayed} atrasada(s)`,
           detail: (
-            `A ponte do Kôma Print está online, mas não há impressora física pronta. `
-            + `Espera mais antiga: ${formatAge(monitorData.summary.oldest_unresolved_seconds)}.`
+            `O agente local está conectado, mas não há impressora física pronta. `
+            + `Atraso significa mais de ${Math.round(monitorData.delay_threshold_seconds / 60)} min na fila; `
+            + `espera mais antiga: ${formatAge(monitorData.summary.oldest_unresolved_seconds)}.`
           )
         };
       }
@@ -693,6 +709,15 @@ export function PrintMonitorPanel({
       : hasReadyPrinter
         ? 'pronta para imprimir'
         : 'agente online · USB desconectado';
+  const queueOrigins = monitorData?.summary.queue_origins;
+  const queueOriginSummary = queueOrigins
+    ? [
+        queueOrigins.automatic > 0 ? `${queueOrigins.automatic} automática(s)` : '',
+        queueOrigins.manual_reprint > 0 ? `${queueOrigins.manual_reprint} reimpressão(ões)` : '',
+        queueOrigins.manual > 0 ? `${queueOrigins.manual} manual(is)` : '',
+        queueOrigins.test > 0 ? `${queueOrigins.test} teste(s)` : ''
+      ].filter(Boolean).join(' · ')
+    : '';
 
   return (
     <div className="space-y-4">
@@ -867,8 +892,9 @@ export function PrintMonitorPanel({
               <strong className="block text-xs font-bold text-koma-foreground">Fila e recuperação</strong>
               <span className="block text-[10px] font-normal text-koma-muted">
                 {queueTotal > 0
-                  ? `${queueTotal} aguardando · mais antiga ${formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)}`
+                  ? `${queueTotal} aguardando · mais antiga ${formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)} · mais antiga primeiro`
                   : 'Nenhum trabalho aguardando'}
+                {queueOriginSummary ? ` · ${queueOriginSummary}` : ''}
                 {' · '}{failedJobs.length} com falha
               </span>
             </span>
@@ -889,7 +915,7 @@ export function PrintMonitorPanel({
                           {job.reference || friendlyDocumentType(job.document_type)}
                         </strong>
                         <span className="text-[10px] text-koma-muted font-medium">
-                          {friendlyDocumentType(job.document_type)} · {job.destination} · aguardando {formatAge(job.age_seconds)}
+                          {friendlyQueueOrigin(job)} · {friendlyDocumentType(job.document_type)} · {job.destination} · aguardando {formatAge(job.age_seconds)}
                         </span>
                         {job.last_error && (
                           <span className="mt-1 block truncate text-[9px] text-rose-600 dark:text-rose-300 font-medium" title={job.last_error}>
