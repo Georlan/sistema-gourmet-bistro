@@ -274,8 +274,8 @@ def setup_contract_billing(
 def _setup_contract_billing(protocol, payload, background_tasks, db):
     """
     Configura exclusivamente meios recorrentes com a mesma regra comercial:
-    autorização hoje, R$ 0 de mensalidade fixa durante a implantação e início
-    dos 7 dias grátis somente quando os 3 passos essenciais estiverem prontos.
+    autorização hoje, R$ 0 de mensalidade fixa durante a configuração e início
+    dos 7 dias grátis somente após ação explícita do responsável no onboarding.
     """
     if not default_saas_mp_service.checkout_capabilities().get(payload.payment_method_type):
         raise HTTPException(503, "Inscrição salva. Este método recorrente está temporariamente indisponível; tente novamente mais tarde.")
@@ -404,7 +404,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
                 "authorizationUrl": authorization_url or None,
                 "amountDueToday": 0,
                 "trialDays": SAAS_TRIAL_DAYS,
-                "message": f"Autorize o {method_label}. Os 7 dias grátis começam somente depois da implantação essencial.",
+                "message": f"Autorize o {method_label}. Os 7 dias grátis só começam quando você concluir a configuração e iniciar o período de teste.",
             }
 
         raise HTTPException(409, "A autorização anterior ainda está em confirmação. Aguarde antes de tentar novamente.")
@@ -536,7 +536,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             "authorizationUrl": authorization_url,
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
-            "message": "Autorize o Pix Automático no ambiente seguro do Mercado Pago. Os 7 dias grátis começam somente depois da implantação essencial.",
+            "message": "Autorize o Pix Automático no ambiente seguro do Mercado Pago. Os 7 dias grátis só começam quando você concluir a configuração e iniciar o período de teste.",
         }
 
     if payload.payment_method_type == "account_money":
@@ -590,7 +590,7 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
             "authorizationUrl": authorization_url,
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
-            "message": "Autorize a assinatura com seu Saldo Mercado Pago no ambiente seguro. Os 7 dias grátis começam somente depois da implantação essencial.",
+            "message": "Autorize a assinatura com seu Saldo Mercado Pago no ambiente seguro. Os 7 dias grátis só começam quando você concluir a configuração e iniciar o período de teste.",
         }
 
     raise HTTPException(422, "Método recorrente não suportado.")
