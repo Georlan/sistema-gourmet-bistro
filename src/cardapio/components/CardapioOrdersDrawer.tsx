@@ -597,7 +597,7 @@ export default function CardapioOrdersDrawer({
                                   Pedido #{order.numero_pedido}
                                 </span>
                                 <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[9px] font-bold text-koma-secondary">
-                                  {isDelivery ? "Delivery" : "Retirada"}
+                                  {orderFulfillmentLabel(state.fulfillment)}
                                 </span>
                                 {unread > 0 && (
                                   <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-black animate-pulse">
@@ -736,7 +736,7 @@ export default function CardapioOrdersDrawer({
                                   Pedido #{order.numero_pedido}
                                 </span>
                                 <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">
-                                  {isDelivery ? "Delivery" : "Retirada"}
+                                  {orderFulfillmentLabel(state.fulfillment)}
                                 </span>
                                 {unread > 0 && (
                                   <span className="rounded-full bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black text-black">
