@@ -10,6 +10,7 @@ on:
       - 'backend/app/routes/caixa.py'
       - 'backend/app/schemas.py'
       - 'backend/tests/test_critical_pdv_caixa_flow.py'
+      - 'backend/tests/test_caixa_legacy_coverage.py'
       - 'backend/tests/test_payment_item_concurrency_postgres.py'
       - 'src/components/caixa/checkout/useCheckoutController.ts'
       - 'src/components/caixa/checkout/**'
@@ -53,11 +54,10 @@ jobs:
           python -m py_compile backend/tests/test_payment_item_concurrency_postgres.py
 
       - name: Run strict item payment regressions
-        run: >-
-          python -m pytest
-          backend/tests/test_critical_pdv_caixa_flow.py
-          -q -x
-          -k "stale_item_selection or table_item_selection or pending_cash_item_scope"
+        run: |
+          python -m pytest backend/tests/test_critical_pdv_caixa_flow.py -q -x \
+            -k "stale_item_selection or table_item_selection or pending_cash_item_scope"
+          python -m pytest backend/tests/test_caixa_legacy_coverage.py::test_caixa_payments -q -x
 
   postgres-race:
     name: Two-session PostgreSQL race
