@@ -9,6 +9,7 @@ import datetime
 import logging
 import re
 from ..database import get_db, require_tenant_id
+from ..services.online_order_auto_accept import auto_accept_pending_online_orders_in_session
 from ..services.restaurant_profile import apply_restaurant_profile_update
 from ..services.cash_reconciliation import cash_shift_totals, count_open_commands as _comandas_abertas_count
 from ..services.cash_activity import recent_cash_activities as _atividades_recentes_turno
@@ -273,11 +274,37 @@ def abrir_turno(
             detail="Não foi possível abrir o turno com os valores informados.",
         )
     db.refresh(novo_turno)
+
+    try:
+        auto_accepted = auto_accept_pending_online_orders_in_session(
+            db,
+            restaurante_id=rest_id,
+            operator_user_id=str(current_user.id),
+            requested_by=current_user.nome,
+        )
+        if auto_accepted:
+            db.commit()
+            db.refresh(novo_turno)
+    except Exception:
+        # O turno já foi aberto com sucesso. A automação não pode desfazer isso.
+        db.rollback()
+        logger.exception(
+            "Falha ao processar backlog do autoaceite após abertura do turno %s",
+            novo_turno.id,
+        )
+        auto_accepted = []
+
     background_tasks.add_task(
         manager.broadcast,
         {"event": "cash_updated", "detail": {"type": "turno_aberto"}},
         rest_id,
     )
+    if auto_accepted:
+        background_tasks.add_task(
+            manager.broadcast,
+            {"event": "tables_updated", "source": "online_auto_accept"},
+            rest_id,
+        )
     return novo_turno
 
 
