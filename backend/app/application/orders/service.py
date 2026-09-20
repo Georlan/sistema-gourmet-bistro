@@ -498,6 +498,16 @@ class OrderApplicationService:
                 tipo_comanda = "Consumo no Local"
                 auto_delivery_status = None
                 initial_lancamento_status = "producao"
+        elif cmd.channel == OrderChannel.WEB_CARDAPIO:
+            tipo_comanda = (
+                "Delivery"
+                if cmd.fulfillment == FulfillmentType.DELIVERY
+                else ("Retirada" if cmd.fulfillment == FulfillmentType.PICKUP else "Consumo no Local")
+            )
+            # Pedidos públicos, inclusive consumo no local, passam pelo mesmo gate
+            # explícito de aceite antes de entrar em produção.
+            auto_delivery_status = "pendente"
+            initial_lancamento_status = "pendente"
         elif cmd.fulfillment == FulfillmentType.PICKUP:
             tipo_comanda = "Retirada"
             auto_delivery_status = "pendente"
