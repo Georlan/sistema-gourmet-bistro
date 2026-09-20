@@ -1453,3 +1453,50 @@ def test_compacted_print_can_no_longer_be_reprinted():
     )
 
     assert response.status_code == 410
+
+
+
+def test_print_simulator_sources_are_tenant_scoped_and_read_only():
+    client = TestClient(app)
+    headers = jwt_headers("2", 2, "admin")
+
+    response = client.get(
+        "/api/print-agents/simulator/sources",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["id"] for item in items] == ["job-2001"]
+    assert "payload_text" not in items[0]
+
+    detail = client.get(
+        "/api/print-agents/simulator/sources/job-2001",
+        headers=headers,
+    )
+    assert detail.status_code == 200, detail.text
+    payload = detail.json()
+    assert payload["payload_text"] == "1x Pedido tenant 2"
+    assert payload["physical_completion_tracking"] is False
+
+    cross_tenant = client.get(
+        "/api/print-agents/simulator/sources/job-1001",
+        headers=headers,
+    )
+    assert cross_tenant.status_code == 404
+
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-2001").one()
+        assert job.status == "pending"
+        assert job.agent_id is None
+    finally:
+        db.close()
+
+
+def test_print_simulator_sources_reject_waiter():
+    client = TestClient(app)
+    response = client.get(
+        "/api/print-agents/simulator/sources",
+        headers=jwt_headers("garcom-2", 2, "garcom"),
+    )
+    assert response.status_code == 403
