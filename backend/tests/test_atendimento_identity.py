@@ -182,7 +182,7 @@ def test_associate_dine_in_without_table_materializes_table_family():
         db.close()
 
 
-def test_associate_pickup_keeps_table_as_context_without_table_family():
+def test_associate_pickup_converts_to_dine_in_and_materializes_table_family():
     db = SessionLocal()
     try:
         command = _command(db, "c-associate-pickup", None, 302, tipo="Retirada")
@@ -195,15 +195,37 @@ def test_associate_pickup_keeps_table_as_context_without_table_family():
             actor_id=USER,
         )
         assert associated.mesa_id == 4
-        assert (
+        assert associated.tipo == "Consumo no Local"
+
+        link = (
             db.query(AtendimentoComanda)
             .filter(
                 AtendimentoComanda.restaurante_id == TENANT,
                 AtendimentoComanda.comanda_id == command.id,
             )
-            .count()
-            == 0
+            .one()
         )
+        account = (
+            db.query(AtendimentoMesa)
+            .filter(
+                AtendimentoMesa.restaurante_id == TENANT,
+                AtendimentoMesa.id == link.atendimento_id,
+            )
+            .one()
+        )
+        assert account.mesa_id == 4
+        conversion = (
+            db.query(MovimentoAtendimento)
+            .filter(
+                MovimentoAtendimento.restaurante_id == TENANT,
+                MovimentoAtendimento.atendimento_id == account.id,
+                MovimentoAtendimento.tipo == "conversao_modalidade",
+            )
+            .one()
+        )
+        assert conversion.mesa_destino_id == 4
+        assert conversion.detalhes["modalidade_anterior"] == "Retirada"
+        assert conversion.detalhes["modalidade_atual"] == "Consumo no Local"
 
         reassociated = associate_order_to_table(
             db,
@@ -213,20 +235,23 @@ def test_associate_pickup_keeps_table_as_context_without_table_family():
             actor_id=USER,
         )
         assert reassociated.mesa_id == 5
-        assert reassociated.mesa_transferida_de == 4
-        assert (
-            db.query(AtendimentoComanda)
+        assert reassociated.tipo == "Consumo no Local"
+        moved_account = (
+            db.query(AtendimentoMesa)
             .filter(
-                AtendimentoComanda.restaurante_id == TENANT,
-                AtendimentoComanda.comanda_id == command.id,
+                AtendimentoMesa.restaurante_id == TENANT,
+                AtendimentoMesa.id == account.id,
             )
-            .count()
-            == 0
+            .one()
         )
+        assert moved_account.mesa_id == 5
+        assert db.query(AtendimentoComanda).filter(
+            AtendimentoComanda.restaurante_id == TENANT,
+            AtendimentoComanda.comanda_id == command.id,
+        ).count() == 1
         db.commit()
     finally:
         db.close()
-
 
 def test_associate_delivery_to_table_is_rejected():
     db = SessionLocal()
