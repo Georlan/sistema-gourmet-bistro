@@ -19,11 +19,19 @@ export function getDigitalOrderSourceLabel(order: Pick<DeliveryOrderView, 'orige
   return 'Kôma';
 }
 
+export function getDigitalOrderFulfillmentLabel(
+  order: Pick<DeliveryOrderView, 'modalidade'>,
+): string {
+  if (order.modalidade === 'delivery') return 'Delivery';
+  if (order.modalidade === 'dine_in') return 'Consumo no local';
+  return 'Retirada';
+}
+
 export function getDigitalOrderAssociation(
   order: Pick<DeliveryOrderView, 'modalidade' | 'mesaId' | 'garcomNome'>,
 ): string | null {
   const mesaId = Number(order.mesaId || 0);
-  if (order.modalidade !== 'retirada' || mesaId <= 0) return null;
+  if (!['retirada', 'dine_in'].includes(order.modalidade) || mesaId <= 0) return null;
   const waiter = String(order.garcomNome || '').trim();
   return `Mesa ${String(mesaId).padStart(2, '0')}${waiter ? ` · ${waiter}` : ''}`;
 }
@@ -37,5 +45,10 @@ export function getDigitalOrderCustomerLabel(
   if (isGeneric && order.modalidade === 'retirada' && order.origemOperacional === 'garcom' && mesaId > 0) {
     return `Retirada · Mesa ${String(mesaId).padStart(2, '0')}`;
   }
-  return customer || (order.modalidade === 'delivery' ? 'Entrega sem nome' : 'Retirada sem nome');
+  if (customer) return customer;
+  if (order.modalidade === 'delivery') return 'Entrega sem nome';
+  if (order.modalidade === 'dine_in') return mesaId > 0
+    ? `Consumo local · Mesa ${String(mesaId).padStart(2, '0')}`
+    : 'Consumo local sem nome';
+  return 'Retirada sem nome';
 }
