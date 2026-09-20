@@ -344,7 +344,9 @@ export function useCashierPdv({
         clienteId: customerId,
         clientePhone: orderType === 'dine_in' ? null : customerPhone,
         statusComanda: null,
-        deliveryStatus: orderType === 'dine_in' ? null : 'producao' as const,
+        deliveryStatus: orderType === 'dine_in'
+          ? (mesaId > 0 ? null : 'producao' as const)
+          : 'producao' as const,
         deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
         deliveryTax: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0,
         origemOperacional: 'caixa' as const,
