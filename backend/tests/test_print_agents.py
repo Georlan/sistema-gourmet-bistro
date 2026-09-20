@@ -226,6 +226,76 @@ def test_concurrent_claim_second_agent_gets_conflict():
     assert "já foi assumido" in resp2.json()["detail"]
 
 
+def test_shadow_simulator_feed_starts_now_and_never_claims_jobs():
+    client = TestClient(app)
+    headers = {"X-Agent-Token": "token_agent_1"}
+
+    initial = client.get(
+        "/api/print-agents/simulator/agent-feed",
+        headers=headers,
+    )
+    assert initial.status_code == 200
+    assert initial.json()["items"] == []
+    cursor = initial.json()["cursor"]
+    cursor_at = datetime.datetime.fromisoformat(cursor["created_at"])
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            PrintJob(
+                id="job-shadow-new",
+                restaurante_id=1,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="pedido",
+                source_id="pedido-shadow",
+                payload_text="PEDIDO #742\n1x X-Salada",
+                status="pending",
+                idempotency_key="idemp:shadow:new",
+                created_at=cursor_at + datetime.timedelta(milliseconds=1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    observed = client.get(
+        "/api/print-agents/simulator/agent-feed",
+        headers=headers,
+        params={
+            "after_created_at": cursor["created_at"],
+            "after_id": cursor["id"],
+        },
+    )
+
+    assert observed.status_code == 200
+    items = observed.json()["items"]
+    assert [item["id"] for item in items] == ["job-shadow-new"]
+    assert items[0]["reference"] == "Pedido #742"
+    assert items[0]["server_observed_latency_ms"] >= 0
+    assert items[0]["physical_completion_tracking"] is False
+
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-shadow-new").one()
+        assert job.status == "pending"
+        assert job.claimed_at is None
+        assert job.agent_id is None
+        assert job.printed_at is None
+    finally:
+        db.close()
+
+
+def test_shadow_simulator_feed_rejects_invalid_cursor():
+    response = TestClient(app).get(
+        "/api/print-agents/simulator/agent-feed",
+        headers={"X-Agent-Token": "token_agent_1"},
+        params={"after_created_at": "not-a-date"},
+    )
+
+    assert response.status_code == 400
+
+
 def test_claim_next_reserves_job_in_one_request():
     """Busca e claim acontecem juntos, com telemetria da fila."""
     mark_agent_printer_ready("a1")
