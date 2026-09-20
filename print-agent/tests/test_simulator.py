@@ -6,7 +6,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from adapters.escpos import build_escpos_payload
-from simulator import parse_escpos_payload, simulate_payload
+from simulator import _origin_allowed, parse_escpos_payload, simulate_payload
 
 
 def test_simulator_uses_exact_production_escpos_builder():
@@ -61,3 +61,13 @@ def test_unknown_escpos_command_is_reported_instead_of_guessed():
 
     assert parsed["unknown_commands"]
     assert parsed["unknown_commands"][0]["name"] == "ESC ?"
+
+
+
+def test_simulator_origin_allowlist_is_explicit():
+    assert _origin_allowed("https://app.komafood.com.br") is True
+    assert _origin_allowed("https://central.komafood.com.br") is True
+    assert _origin_allowed("https://sistema-gourmet-bistro.pages.dev") is True
+    assert _origin_allowed("http://127.0.0.1:4173") is True
+    assert _origin_allowed("https://tenant.komafood.com.br") is False
+    assert _origin_allowed("https://example.com") is False
