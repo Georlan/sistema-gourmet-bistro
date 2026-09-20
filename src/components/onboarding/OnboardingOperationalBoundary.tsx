@@ -40,7 +40,7 @@ export function OnboardingOperationalBoundary({
     );
   }
 
-  if (gate.state === 'error' || !gate.requiredComplete) {
+  if (gate.state === 'error' || !gate.operationStarted) {
     return (
       <FirstAccessOnboarding
         accessToken={session.token}
