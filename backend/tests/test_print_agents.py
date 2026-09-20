@@ -4,6 +4,7 @@ Tests for print agent authentication, atomic claiming, anti-duplication, and stu
 import hashlib
 import pytest
 import datetime
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -23,6 +24,41 @@ engine = create_engine(
     connect_args={"check_same_thread": False, "timeout": 30}
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.mark.parametrize(
+    "payload_text",
+    [
+        "TOTAL DO PEDIDO: R$ 42,00",
+        "TOTAL DESTE PEDIDO: R$ 99,90",
+    ],
+)
+def test_print_reference_does_not_treat_brl_total_as_order_number(payload_text):
+    job = SimpleNamespace(
+        payload_text=payload_text,
+        source_type="pedido",
+        source_id="pedido-sem-numero",
+        document_type="producao",
+    )
+
+    reference = print_agents_route._print_job_reference(job)
+
+    assert reference["label"] == "Pedido"
+    assert reference["order_number"] is None
+
+
+def test_print_reference_keeps_legacy_identity_with_explicit_hash():
+    job = SimpleNamespace(
+        payload_text="PEDIDO: #9516\nTOTAL DO PEDIDO: R$ 42,00",
+        source_type="pedido",
+        source_id="pedido-9516",
+        document_type="producao",
+    )
+
+    reference = print_agents_route._print_job_reference(job)
+
+    assert reference["label"] == "Pedido #9516"
+    assert reference["order_number"] == "9516"
 
 
 def test_agent_token_hash_never_matches_the_raw_secret():
