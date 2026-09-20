@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
 import type { useCashierOrders } from './useCashierOrders';
@@ -99,6 +99,7 @@ export function CashierCouriers({
     [deliveryOrders],
   );
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const pendingIdsRef = useRef<Set<string>>(new Set());
   const [completedRecent, setCompletedRecent] = useState<CompletedDeliveryApiOrder[]>([]);
   const [historyError, setHistoryError] = useState(false);
 
@@ -148,16 +149,15 @@ export function CashierCouriers({
   if (activeSubTab !== 'entregadores') return null;
 
   const setPending = (orderId: string, pending: boolean) => {
-    setPendingIds((current) => {
-      const next = new Set(current);
-      if (pending) next.add(orderId);
-      else next.delete(orderId);
-      return next;
-    });
+    const next = new Set(pendingIdsRef.current);
+    if (pending) next.add(orderId);
+    else next.delete(orderId);
+    pendingIdsRef.current = next;
+    setPendingIds(next);
   };
 
   const runOrderAction = async (orderId: string, action: () => Promise<unknown>) => {
-    if (pendingIds.has(orderId)) return;
+    if (pendingIdsRef.current.has(orderId)) return;
     setPending(orderId, true);
     try {
       await action();
