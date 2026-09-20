@@ -174,6 +174,32 @@ def _event_names_for_check(comanda_id: str) -> list[str]:
         db.close()
 
 
+def _create_unseated_pos_dine_in() -> str:
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        created = OrderApplicationService.create_order(
+            db,
+            CreateOrderCommand(
+                restaurant_id=CHAR_RESTAURANT_ID,
+                channel=OrderChannel.POS,
+                fulfillment=FulfillmentType.DINE_IN,
+                items=(
+                    OrderItemInput(
+                        product_id="prod-char-simples",
+                        quantity=Decimal("1.00"),
+                    ),
+                ),
+                customer=CustomerInput(
+                    name="Cliente Local Caixa",
+                    phone="11977770010",
+                ),
+            ),
+        )
+        return created.comanda_id
+    finally:
+        db.close()
+
+
 def _create_internal_digital_dine_in() -> str:
     db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
     try:
@@ -219,6 +245,32 @@ def _create_pickup(char_client, *, phone: str, customer_name: str) -> str:
     )
     assert created.status_code in {200, 201}, created.text
     return created.json()["comanda_id"]
+
+
+def test_unseated_pos_dine_in_uses_center_operational_lifecycle(char_client, char_setup):
+    headers = char_setup["headers"]
+    comanda_id = _create_unseated_pos_dine_in()
+
+    active = char_client.get("/comandas/delivery/ativos", headers=headers)
+    assert active.status_code == 200, active.text
+    active_ids = {row["id"] for row in active.json()}
+    assert comanda_id in active_ids
+
+    ready = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "pronto"},
+        headers=headers,
+    )
+    assert ready.status_code == 200, ready.text
+    assert ready.json()["tipo"] == "Consumo no Local"
+    assert ready.json()["delivery_status"] == "pronto"
+
+    invalid_transit = char_client.put(
+        f"/comandas/{comanda_id}/delivery/status",
+        params={"status_novo": "transito"},
+        headers=headers,
+    )
+    assert invalid_transit.status_code == 409, invalid_transit.text
 
 
 def test_digital_dine_in_uses_active_digital_route_without_delivery_transit(char_client, char_setup):
