@@ -4,9 +4,8 @@ import { API_BASE_URL } from '../../config/api';
 type GateState = 'idle' | 'loading' | 'ready' | 'error';
 
 type OnboardingProgressPayload = {
-  progress?: {
-    completed?: number;
-    total?: number;
+  operation?: {
+    started?: boolean;
   };
 };
 
@@ -18,12 +17,12 @@ export function useOnboardingAccessGate({
   accessToken: string;
 }) {
   const [state, setState] = useState<GateState>('idle');
-  const [requiredComplete, setRequiredComplete] = useState(false);
+  const [operationStarted, setOperationStarted] = useState(false);
 
   useEffect(() => {
     if (!enabled || !accessToken) {
       setState('idle');
-      setRequiredComplete(false);
+      setOperationStarted(false);
       return;
     }
 
@@ -46,9 +45,7 @@ export function useOnboardingAccessGate({
       })
       .then((payload) => {
         if (cancelled) return;
-        const completed = Number(payload.progress?.completed || 0);
-        const total = Number(payload.progress?.total || 0);
-        setRequiredComplete(total > 0 && completed >= total);
+        setOperationStarted(Boolean(payload.operation?.started));
         setState('ready');
       })
       .catch((error) => {
@@ -65,7 +62,7 @@ export function useOnboardingAccessGate({
 
   return {
     state,
-    requiredComplete,
+    operationStarted,
     isChecking: enabled && state === 'loading',
   };
 }
