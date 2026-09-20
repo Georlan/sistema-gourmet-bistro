@@ -423,7 +423,7 @@ class Comanda(Base):
     status_comanda = Column(String, nullable=True)  # null (normal) | aguardando_pagamento (table requested bill)
     # Pedidos públicos online só entram nas projeções operacionais após aprovação.
     # NULL preserva todos os fluxos presenciais/legados; pending é uma barreira.
-    online_payment_status = Column(String(20), nullable=True)
+    online_payment_status = Column(String(20), nullable=True)\n    onboarding_test = Column(Boolean, default=False, nullable=False)
 
     @hybrid_property
     def delivery_telefone(self):
@@ -943,7 +943,7 @@ class ConfiguracaoRestaurante(Base):
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
-    delivery_ativo = Column(Boolean, default=True)
+    delivery_ativo = Column(Boolean, default=True)\n    tipos_pedido_ativos = Column(JSON, nullable=True)
     pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
