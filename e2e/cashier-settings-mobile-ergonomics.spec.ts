@@ -219,6 +219,10 @@ test('configurações usam somente a navegação canônica vertical + horizontal
   // O mesmo destino também existe no menu vertical e fecha a gaveta ao navegar.
   await navigate(page, 'Mesas');
   await expect(page.getByText('Configuração das mesas')).toBeVisible();
+  await expect(page.getByText('Mesas por situação', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Mesas prontas para receber', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('mesas cadastradas', { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-operational-state]')).toHaveCount(0);
   const addTableBtn = page.getByRole('button', { name: /Adicionar mesa/i });
   await expect(addTableBtn).toBeVisible();
   const addTableBox = await addTableBtn.boundingBox();
@@ -299,6 +303,9 @@ test('configurações espelham os mesmos sete destinos no menu vertical e horizo
   await navigateHorizontal(page, 'Mesas');
   await expect(sidebar.getByRole('button', { name: 'Mesas', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Configuração das mesas')).toBeVisible();
+  await expect(page.getByText('Mesas por situação', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Mesas prontas para receber', { exact: true })).toHaveCount(0);
+  await expect(page.locator('[data-operational-state]')).toHaveCount(0);
   await expect(page.locator('.cashier-settings-tab')).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 });
