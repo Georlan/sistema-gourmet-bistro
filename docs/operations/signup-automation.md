@@ -2,7 +2,7 @@
 
 ## Regra comercial canônica
 
-Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → implantação essencial → 7 dias grátis → primeira cobrança automática → operação normal.
+Plano e ciclo → dados mínimos salvos → aceite jurídico → autorização recorrente → liberação → configuração do restaurante → início explícito do trial → pedido de teste → operação normal.
 
 A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:
 
@@ -10,14 +10,14 @@ A mensalidade fixa do KÔMA segue a mesma regra em qualquer forma de pagamento d
 - o cliente apenas autoriza a recorrência antes da liberação;
 - a recorrência fica **pausada durante a implantação inicial**;
 - cadastro, criação de senha, perfil, horários e preparação do primeiro cardápio **não consomem nenhum dia grátis**;
-- os **7 dias grátis começam somente quando os 3 passos essenciais estiverem concluídos**: perfil, horários e ao menos um produto publicado;
+- os **7 dias grátis não começam automaticamente**: depois de concluir perfil, horários, ao menos um produto ativo e o modo de operação, o responsável escolhe quando iniciar o trial;
 - no início do trial, a primeira cobrança é alinhada para D+7 antes de reativar a recorrência;
 - mensal renova mensalmente e anual renova a cada 12 meses;
 - o anual conserva o desconto de 10% sobre a mensalidade fixa, mas não é cobrado antecipadamente no dia da adesão;
 - não existem “dias bônus” em substituição ao trial;
 - Pix avulso/QR Code antecipado não é um método válido para novas assinaturas SaaS.
 
-Métodos recorrentes modelados no backend devem obedecer à mesma regra de autorização recorrente + implantação sem consumir trial + 7 dias grátis completos + cobrança posterior. A disponibilidade comercial de cada método continua controlada pelas capabilities do ambiente.
+Métodos recorrentes modelados no backend devem obedecer à mesma regra de autorização recorrente + configuração sem consumir trial + início explícito + 7 dias grátis completos + cobrança posterior. A disponibilidade comercial de cada método continua controlada pelas capabilities do ambiente.
 
 ## Comportamento entregue
 
@@ -28,11 +28,11 @@ Métodos recorrentes modelados no backend devem obedecer à mesma regra de autor
 - **Pix Automático mensal/anual:** quando habilitado pelo provedor, cria uma assinatura pendente no Mercado Pago e recebe `init_point` para o cliente autorizar a recorrência no ambiente do provedor. O KÔMA só aceita a autorização como pronta depois que o provedor confirma o preapproval e o método corresponde a Pix. Nenhuma cobrança Pix avulsa é gerada pelo checkout SaaS.
 - `payment_method_type=pix` é recusado para novas contratações. Registros históricos podem continuar existindo para reconciliação/migração, mas nunca liberam uma nova assinatura.
 - Quando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED=true`, uma autorização recorrente pronta entra em `awaiting_release`; nenhum tenant é criado antes da ação do SuperAdmin.
-- Assim que uma autorização recorrente fica pronta para o fluxo de onboarding, ela deve permanecer pausada até a conclusão da implantação essencial. Se a pausa não puder ser confirmada, o fluxo falha fechado em vez de arriscar cobrança antecipada.
-- Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e pode configurar o restaurante, mas o gate de onboarding mantém Vendas/Caixa bloqueados até 3/3.
-- O endpoint canônico `/api/onboarding/status` calcula o progresso usando dados reais. Ao detectar 3/3 pela primeira vez, inicia o trial de forma idempotente: define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
+- Assim que uma autorização recorrente fica pronta para o fluxo de onboarding, ela deve permanecer pausada durante a configuração. Se a pausa não puder ser confirmada, o fluxo falha fechado em vez de arriscar cobrança antecipada.
+- Na liberação, o tenant nasce com assinatura canônica em estado `onboarding`, sem `trial_started_at`, `trial_ends_at` ou período corrente. O cliente recebe o convite e configura o restaurante; o gate mantém a operação normal bloqueada até a configuração e, nos planos elegíveis, até o início explícito do trial.
+- O endpoint canônico `GET /api/onboarding/status` é somente leitura e calcula configuração/readiness usando dados reais. `POST /api/onboarding/start-trial` é a única ação normal que inicia o trial após configuração concluída; ela define D+7 no provedor, reativa a recorrência, grava `trial_started_at`/`trial_ends_at` e muda a assinatura para `trialing`.
 - Se o alinhamento D+7 ou a reativação do provedor falhar, o backend não inicia o trial localmente e não libera uma cobrança antecipada; a configuração já salva permanece intacta para nova tentativa.
-- Recarregar a implantação depois do início do trial não renova nem empurra a data final.
+- Recarregar o onboarding nunca inicia, renova ou empurra a data final do trial.
 - Assinaturas antigas que já estavam `trialing` ou `active` não são reescritas por esta regra.
 - A ativação é idempotente. Repetir webhook ou retomar uma ativação interrompida não cria outro restaurante.
 - Retentativas com resultado incerto procuram a autorização anterior antes de permitir nova recorrência.
@@ -79,7 +79,7 @@ Métodos recorrentes podem cancelar as cobranças futuras. Se o cancelamento aco
 - WhatsApp: integração existente + `KOMA_WHATSAPP_AUTOMATION_ENABLED=true`.
 - Worker: `ENABLE_OUTBOX_WORKER=true`.
 
-As mensagens de aceite, liberação e primeiro acesso devem dizer explicitamente que os 7 dias grátis ainda não estão correndo durante a implantação.
+As mensagens de aceite, liberação e primeiro acesso devem dizer explicitamente que os 7 dias grátis ainda não estão correndo durante a configuração e só começam por ação explícita do responsável.
 
 ## Homologação obrigatória antes de habilitar checkout
 
