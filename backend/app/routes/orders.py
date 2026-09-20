@@ -26,7 +26,9 @@ from ..config import settings
 from ..database import current_restaurante_id, get_db, require_tenant_id
 from ..domain.orders.errors import InvalidOrderTransitionError, OrderValidationError
 from ..domain.orders.types import (
+    FulfillmentType,
     OrderStatus,
+    normalize_to_fulfillment,
     normalize_to_order_status,
     to_legacy_order_status,
 )
@@ -147,13 +149,19 @@ def _is_delivery(comanda: Comanda) -> bool:
     return (comanda.tipo or "").strip().casefold() in {"delivery", "entrega"}
 
 
-def _is_delivery_or_pickup(comanda: Comanda) -> bool:
-    return (comanda.tipo or "").strip().casefold() in {
-        "delivery",
-        "entrega",
-        "retirada",
-        "viagem",
-    }
+def _has_digital_order_lifecycle(comanda: Comanda) -> bool:
+    """Diz se a comanda usa o ciclo operacional digital legado.
+
+    DELIVERY/PICKUP sempre usam esse ciclo. DINE_IN só usa quando a própria
+    comanda possui status operacional digital, preservando o salão tradicional.
+    """
+    fulfillment = normalize_to_fulfillment(comanda.tipo)
+    if fulfillment in {FulfillmentType.DELIVERY, FulfillmentType.PICKUP}:
+        return True
+    return (
+        fulfillment == FulfillmentType.DINE_IN
+        and bool(str(comanda.delivery_status or "").strip())
+    )
 
 
 def _normalize_legacy_progress_target(comanda: Comanda, target: str) -> str:
@@ -192,10 +200,10 @@ def atualizar_status_delivery(
     )
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
-    if not _is_delivery_or_pickup(comanda):
+    if not _has_digital_order_lifecycle(comanda):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A comanda informada não é um pedido de delivery ou retirada.",
+            detail="A comanda informada não possui ciclo operacional digital.",
         )
 
     target = _normalize_legacy_progress_target(comanda, target)
