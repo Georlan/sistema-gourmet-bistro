@@ -111,6 +111,12 @@ function fulfillmentFromType(value?: string): CanonicalFulfillment {
   return "dine_in";
 }
 
+export function orderFulfillmentLabel(fulfillment: CanonicalFulfillment): string {
+  if (fulfillment === "delivery") return "Delivery";
+  if (fulfillment === "dine_in") return "Consumo local";
+  return "Retirada";
+}
+
 function phaseFor(status: CanonicalOrderStatus, rawStatus: string): OrderPhase {
   if (rawStatus === "aguardando_pagamento") return "payment_pending";
   if (rawStatus === "falha_pagamento") return "payment_failed";
