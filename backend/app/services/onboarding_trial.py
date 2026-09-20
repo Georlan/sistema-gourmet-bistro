@@ -80,7 +80,7 @@ def ensure_trial_started_after_onboarding(
     restaurante_id: int,
     actor: str,
 ) -> dict[str, Any] | None:
-    """Inicia o trial após a implantação essencial sem antecipar Pix."""
+    """Inicia o trial após readiness e ação explícita, sem antecipar Pix."""
     subscription = (
         db.query(SaaSSubscription)
         .filter(SaaSSubscription.restaurante_id == restaurante_id)
@@ -162,7 +162,7 @@ def ensure_trial_started_after_onboarding(
             restaurante_id=restaurante_id,
             actor=actor,
             action="SAAS_TRIAL_START_AFTER_ONBOARDING",
-            reason="Implantação essencial concluída; início automático dos 7 dias grátis",
+            reason="Readiness operacional confirmado; início explícito dos 7 dias grátis",
             before_data={
                 "status": previous_status,
                 "trial_started_at": None,
