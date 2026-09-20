@@ -9,6 +9,7 @@ import {
   fetchOrderLiveStatus,
   loadStoredOrders,
   removeStoredOrder,
+  orderFulfillmentLabel,
   resolveOrderState,
   saveStoredOrder,
 } from '../src/cardapio/orderTracking';
@@ -259,4 +260,10 @@ test('tracking seguro prefere state do backend e token opaco', async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('fulfillment label distinguishes dine-in from pickup', () => {
+  assert.equal(orderFulfillmentLabel('delivery'), 'Delivery');
+  assert.equal(orderFulfillmentLabel('pickup'), 'Retirada');
+  assert.equal(orderFulfillmentLabel('dine_in'), 'Consumo local');
 });

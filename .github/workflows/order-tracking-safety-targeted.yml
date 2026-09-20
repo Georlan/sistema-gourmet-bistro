@@ -1,0 +1,53 @@
+name: Order Tracking Safety Targeted
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/order-tracking-safety-targeted.yml'
+      - 'backend/app/routes/order_tracking.py'
+      - 'backend/app/services/web_push.py'
+      - 'backend/tests/test_order_tracking_sse_session.py'
+      - 'backend/tests/test_web_push_unit.py'
+      - 'src/cardapio/orderTracking.ts'
+      - 'src/cardapio/CardapioPage.tsx'
+      - 'src/cardapio/components/CardapioOrdersDrawer.tsx'
+      - 'tests/orderTracking.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  targeted:
+    name: Tracking SSE + fulfillment labels
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: order-tracking-targeted-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      DATABASE_URL: sqlite:///./order-tracking-targeted.db
+      MIGRATION_DATABASE_URL: sqlite:///./order-tracking-targeted.db
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install -r backend/requirements-dev.txt
+      - name: Frontend fulfillment regression
+        run: node --import tsx --test tests/orderTracking.test.ts
+      - name: Backend tracking regressions
+        run: >-
+          python -m pytest -q -x
+          backend/tests/test_order_tracking_sse_session.py
+          backend/tests/test_web_push_unit.py
