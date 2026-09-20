@@ -51,6 +51,14 @@ function isOperationalUtilityRoute(): boolean {
     || pathname.startsWith("/entregador");
 }
 
+function hasInternalSupportSessionContext(): boolean {
+  try {
+    return Boolean(window.sessionStorage.getItem("koma_support_session"));
+  } catch {
+    return false;
+  }
+}
+
 function isLocalOperationalTestRoute(): boolean {
   const hostname = window.location.hostname.trim().toLowerCase();
   if (hostname !== "127.0.0.1" && hostname !== "localhost") return false;
@@ -82,6 +90,7 @@ function isCanonicalOperationalEntryRoute(): boolean {
 function isHostedManagementEntryRoute(): boolean {
   if (isOperationalAppHost() || isLocalOperationalTestRoute()) return false;
   if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  if (isCentralSupportOperationalBridge()) return hasInternalSupportSessionContext();
   return resolveKomaHost().surface === "caixa";
 }
 
@@ -107,7 +116,7 @@ function bypassTenantSuspensionBoundary(): boolean {
 
   return pathname === "/recuperar-senha"
     || pathname.startsWith("/super-admin")
-    || isCentralSupportOperationalBridge()
+    || (isCentralSupportOperationalBridge() && hasInternalSupportSessionContext())
     || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/c/")
     || pathname.startsWith("/cardapio")
@@ -167,7 +176,8 @@ const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
 const isOnboardingAwareManagementRoute = isHostedManagementEntryRoute();
-const isInternalSupportOperationalRoute = isCentralSupportOperationalBridge();
+const isInternalSupportOperationalRoute =
+  isCentralSupportOperationalBridge() && hasInternalSupportSessionContext();
 const hasCustomerSupportSurface =
   !pathname.startsWith("/super-admin")
   && !isInternalSupportOperationalRoute
