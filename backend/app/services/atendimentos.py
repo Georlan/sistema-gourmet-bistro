@@ -865,9 +865,10 @@ def associate_order_to_table(
 ) -> Comanda:
     """Associa uma comanda aberta a uma mesa sem confundir associação com transferência.
 
-    Consumo no local passa a participar da família operacional da mesa. Retirada
-    mantém a mesa apenas como contexto do pedido e não cria AtendimentoMesa.
-    Delivery nunca pode receber mesa.
+    Consumo no local passa a participar da família operacional da mesa. Quando uma
+    Retirada é associada porque o cliente decidiu permanecer no restaurante, a
+    modalidade atual passa canonicamente a Consumo no Local e o atendimento de
+    mesa é materializado. Delivery nunca pode receber mesa.
     """
     command = (
         db.query(Comanda)
@@ -919,11 +920,30 @@ def associate_order_to_table(
         db.flush()
         return command
 
-    # PICKUP: mesa é apenas contexto operacional do pedido. Não materializamos
-    # AtendimentoMesa nem transformamos retirada em consumo no local.
+    # PICKUP -> DINE_IN é uma mudança real de fulfillment: o cliente chegou,
+    # decidiu consumir no estabelecimento e agora precisa participar do mesmo
+    # atendimento onde novos itens poderão ser lançados.
+    original_type = str(command.tipo or "Retirada")
     if current_table is not None:
         command.mesa_transferida_de = current_table
+    command.tipo = "Consumo no Local"
     command.mesa_id = mesa_id
+    db.flush()
+    account = ensure_atendimento_for_comanda(db, command, actor_id=actor_id)
+    _record_movement(
+        db,
+        account,
+        "conversao_modalidade",
+        actor_id=actor_id,
+        origin=current_table,
+        destination=mesa_id,
+        details={
+            "fulfillment_original": original_type,
+            "fulfillment_atual": "Consumo no Local",
+            "motivo": "cliente_optou_consumir_no_local",
+            "comanda_id": command.id,
+        },
+    )
     db.flush()
     return command
 
