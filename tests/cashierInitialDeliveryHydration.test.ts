@@ -143,6 +143,40 @@ test('projeta consumo no local digital e mantém salão tradicional fora do flux
   );
 });
 
+test('consumo local sem mesa do Caixa entra na fila central e continua nela após associar mesa', () => {
+  const [unseated] = projectDeliveryOrdersFromSharedSnapshot([
+    baseOrder({
+      id: 'cashier-dine-in-unseated',
+      tipo: 'Consumo no Local',
+      mesaId: 0,
+      origemOperacional: 'caixa',
+      deliveryStatus: 'producao',
+      deliveryAddress: '',
+      deliveryTax: 0,
+    }),
+  ]);
+
+  assert.ok(unseated);
+  assert.equal(unseated.modalidade, 'dine_in');
+  assert.equal(unseated.status, 'producao');
+
+  const associatedOrder = baseOrder({
+    id: 'cashier-dine-in-associated',
+    tipo: 'Consumo no Local',
+    mesaId: 8,
+    origemOperacional: 'caixa',
+    deliveryStatus: 'producao',
+    deliveryAddress: '',
+    deliveryTax: 0,
+  });
+  assert.equal(isCashierTableOrder(associatedOrder), false);
+
+  const [associated] = projectDeliveryOrdersFromSharedSnapshot([associatedOrder]);
+  assert.ok(associated);
+  assert.equal(associated.modalidade, 'dine_in');
+  assert.equal(associated.mesaId, 8);
+});
+
 test('não inventa pendente quando o snapshot não trouxe um estado digital autoritativo', () => {
   const missingStatus = baseOrder({ id: 'delivery-no-status', deliveryStatus: null });
   const unknownStatus = baseOrder({ id: 'delivery-unknown', deliveryStatus: 'legacy' as Order['deliveryStatus'] });
