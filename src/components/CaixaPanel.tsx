@@ -384,6 +384,54 @@ export function CaixaPanel({
   const [autoAccept, setAutoAccept] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    const loadAutoAccept = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/online-orders/control`, {
+          headers: authHeaders,
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) setAutoAccept(Boolean(data?.auto_accept));
+      } catch {
+        // O estado visual permanece conservador (desligado) se o controle falhar.
+      }
+    };
+    void loadAutoAccept();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, authHeaders.Authorization]);
+
+  const handleAutoAcceptChange = useCallback(async (enabled: boolean) => {
+    const previous = autoAccept;
+    setAutoAccept(enabled);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/online-orders/auto-accept`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível atualizar o aceite automático.');
+
+      setAutoAccept(Boolean(data?.auto_accept));
+      const acceptedNow = Number(data?.accepted_now || 0);
+      if (enabled && acceptedNow > 0) {
+        showToast(
+          `${acceptedNow} pedido${acceptedNow === 1 ? '' : 's'} online aceito${acceptedNow === 1 ? '' : 's'} automaticamente.`,
+          'success',
+        );
+      }
+      await Promise.allSettled([fetchDeliveryOrders(), onRefreshOrders()]);
+    } catch (error: any) {
+      setAutoAccept(previous);
+      showToast(error?.message || 'Não foi possível atualizar o aceite automático.', 'error');
+    }
+  }, [apiBaseUrl, authHeaders, autoAccept, fetchDeliveryOrders, onRefreshOrders]);
+
+
+  useEffect(() => {
     const handleOpenSangria = () => {
       setActiveTab('financeiro');
       setActiveSubTab('turno_atual');
@@ -928,7 +976,7 @@ export function CaixaPanel({
                   orders: deliveryOrders,
                   automatic: autoAccept,
                   drawerOpen: isDrawerOpen,
-                  onAutomaticChange: setAutoAccept,
+                  onAutomaticChange: handleAutoAcceptChange,
                   onDrawerChange: setIsDrawerOpen,
                 }}
                 navigation={{
