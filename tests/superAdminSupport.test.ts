@@ -18,6 +18,10 @@ const app = readFileSync(
   new URL('../src/App.tsx', import.meta.url),
   'utf8',
 );
+const main = readFileSync(
+  new URL('../src/main.tsx', import.meta.url),
+  'utf8',
+);
 
 test('Super Admin expõe Modo Suporte na listagem e nos detalhes do estabelecimento', () => {
   assert.match(tenantsTab, /SuperAdminSupportModal/);
@@ -58,4 +62,12 @@ test('banner de suporte informa contexto operacional, tempo restante e encerrame
 test('App.tsx integra o banner de suporte nos shells operacionais', () => {
   assert.match(app, /import \{ SupportSessionBanner \} from '\.\/components\/app\/SupportSessionBanner'/);
   assert.match(app, /<SupportSessionBanner \/>/);
+});
+
+
+test('central preserva a mesma origem durante suporte e monta a operação', () => {
+  assert.match(supportModal, /\?view=caixa&support=1/);
+  assert.match(main, /isCentralSupportOperationalBridge/);
+  assert.match(main, /isInternalSupportOperationalRoute/);
+  assert.match(main, /!isInternalSupportOperationalRoute/);
 });
