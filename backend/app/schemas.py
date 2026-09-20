@@ -44,6 +44,20 @@ class UsuarioCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+
+class UsuarioAccessUpdate(BaseModel):
+    cargo: Optional[Literal["gerente", "caixa", "garcom", "motoboy"]] = None
+    status: Optional[Literal["ativo", "inativo"]] = None
+
+    @model_validator(mode="after")
+    def validate_mutation(self):
+        if self.cargo is None and self.status is None:
+            raise ValueError("Informe ao menos uma alteração de cargo ou status.")
+        return self
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str
