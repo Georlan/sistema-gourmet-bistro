@@ -50,6 +50,8 @@ def _seed() -> None:
     try:
         with _tenant_session() as db:
             db.add(Restaurante(id=RID, nome="Payment Items Concurrency", plano="bistro"))
+            db.flush()
+
             db.add(
                 Usuario(
                     id=USER_ID,
@@ -71,6 +73,7 @@ def _seed() -> None:
                 )
             )
             db.flush()
+
             db.add(
                 Produto(
                     id="prod-payment-items-concurrency",
@@ -81,6 +84,8 @@ def _seed() -> None:
                     ativo=True,
                 )
             )
+            db.flush()
+
             db.add(
                 CaixaTurno(
                     restaurante_id=RID,
@@ -89,6 +94,8 @@ def _seed() -> None:
                     status="aberto",
                 )
             )
+            db.flush()
+
             comanda = Comanda(
                 id=COMANDA_ID,
                 restaurante_id=RID,
@@ -109,7 +116,9 @@ def _seed() -> None:
                 origem="caixa",
                 status="pronto",
             )
-            db.add_all([comanda, lancamento])
+            db.add(comanda)
+            db.flush()
+            db.add(lancamento)
             db.flush()
             db.add_all(
                 [
