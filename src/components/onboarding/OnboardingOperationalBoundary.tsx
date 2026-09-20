@@ -32,6 +32,13 @@ export function OnboardingOperationalBoundary({
   const isManagementSetupOwner = portal === 'caixa' && (role === 'admin' || role === 'gerente');
   const setupMode = readSetupMode();
   const internalSupportMode = readInternalSupportMode();
+  if (internalSupportMode && setupMode) {
+    try {
+      sessionStorage.removeItem(ONBOARDING_SETUP_MODE_KEY);
+    } catch {
+      // Support mode must not stay trapped in customer onboarding UI.
+    }
+  }
   const gate = useOnboardingAccessGate({
     enabled: isManagementSetupOwner && !internalSupportMode,
     accessToken: session?.token || '',
