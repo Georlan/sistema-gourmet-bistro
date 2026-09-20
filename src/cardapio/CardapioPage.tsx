@@ -312,6 +312,11 @@ export default function CardapioPage() {
         operatingHours,
         googleMapsUrl: String(restaurant.google_maps_url || ""),
         deliveryEnabled: restaurant.delivery_ativo !== false,
+        orderTypes: Array.isArray(restaurant.tipos_pedido_ativos)
+          ? restaurant.tipos_pedido_ativos.filter((value: unknown): value is 'consumo_local' | 'retirada' | 'delivery' => (
+              value === 'consumo_local' || value === 'retirada' || value === 'delivery'
+            ))
+          : undefined,
         pedidoMinimo: Number(restaurant.pedido_minimo || 0),
         freteGratisValor: Number(restaurant.frete_gratis_valor || 0),
         tipoTaxaEntrega: String(restaurant.tipo_taxa_entrega || "fixa"),
