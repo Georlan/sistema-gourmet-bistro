@@ -48,6 +48,9 @@ def setup_operational_safety_db():
         db.query(ScheduledOrder).filter(
             ScheduledOrder.restaurante_id.in_([RID, RID_OTHER])
         ).delete(synchronize_session=False)
+        db.query(Lancamento).filter(
+            Lancamento.restaurante_id.in_([RID, RID_OTHER])
+        ).delete(synchronize_session=False)
         db.query(Comanda).filter(Comanda.restaurante_id.in_([RID, RID_OTHER])).delete(
             synchronize_session=False
         )
