@@ -622,7 +622,7 @@ export function CaixaPanel({
   }, [deliveryOrders, nowTimestamp, pagamentosPendentes, tableOrdersInProduction, tableOrdersReady]);
 
   const handleOpenSalonTableOrder = (tableId: number) => {
-    setPdvOrderType('mesa');
+    setPdvOrderType('dine_in');
     setPdvTargetMesaId(tableId);
     setBalcaoMobileView('produtos');
     setActiveSubTab('balcao');
