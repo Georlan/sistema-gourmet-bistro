@@ -64,6 +64,7 @@ from ...services.atendimentos import (
     ensure_launch_identity,
 )
 from ...services.capabilities import has_capability
+from ...services.operational_modes import mode_is_allowed
 from ...services.clientes import (
     buscar_cliente_por_id,
     cadastrar_ou_atualizar_cliente,
@@ -120,6 +121,22 @@ class PosAdapter:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Tipo de pedido inválido. Use Consumo no Local, Delivery ou Retirada.",
+            )
+
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == rid)
+            .one_or_none()
+        )
+        canonical_mode = {
+            "Consumo no Local": "consumo_local",
+            "Retirada": "retirada",
+            "Entrega": "delivery",
+        }[tipo_pedido]
+        if not mode_is_allowed(config, canonical_mode):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Esta modalidade de pedido está desativada para o restaurante.",
             )
 
         address_snapshot = (
@@ -300,6 +317,7 @@ class PosAdapter:
             delivery=delivery_input,
             idempotency_key=normalized_idempotency_key,
             operator_user_id=garcom_id,
+            onboarding_test=bool(venda_in.onboarding_test),
             table_id=str(venda_in.mesa_id) if venda_in.mesa_id is not None else None,
         )
 
