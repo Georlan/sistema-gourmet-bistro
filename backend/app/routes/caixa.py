@@ -71,6 +71,57 @@ def _valor_monetario(valor: object) -> Decimal:
     return Decimal(str(valor or 0)).quantize(_CENTAVO, rounding=ROUND_HALF_UP)
 
 
+_ITEM_SELECTION_CHANGED_DETAIL = (
+    "A conta mudou enquanto você recebia. Um ou mais itens selecionados já foram "
+    "pagos, cancelados ou alterados. Atualize a conta, revise a seleção e confirme novamente."
+)
+
+
+def _normalized_item_ids(item_ids: Optional[List[str]]) -> List[str]:
+    return list(dict.fromkeys(item_ids or []))
+
+
+def _same_item_scope(existing: Pagamento, item_ids: Optional[List[str]]) -> bool:
+    return sorted(existing.item_ids or []) == sorted(_normalized_item_ids(item_ids))
+
+
+def _lock_exact_payment_items(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda_ids: List[str],
+    item_ids: Optional[List[str]],
+    require_ready: bool,
+) -> List[Item]:
+    requested_ids = _normalized_item_ids(item_ids)
+    if not requested_ids:
+        return []
+
+    items = db.query(Item).filter(
+        Item.restaurante_id == restaurante_id,
+        Item.comanda_id.in_(comanda_ids),
+        Item.id.in_(requested_ids),
+    ).with_for_update().all()
+    by_id = {item.id: item for item in items}
+
+    changed = any(
+        item_id not in by_id
+        or by_id[item_id].pago
+        or by_id[item_id].status == "cancelado"
+        or (
+            require_ready
+            and by_id[item_id].status not in {"pronto", "entregue"}
+        )
+        for item_id in requested_ids
+    )
+    if changed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_ITEM_SELECTION_CHANGED_DETAIL,
+        )
+    return [by_id[item_id] for item_id in requested_ids]
+
+
 def _totais_financeiros_turno(db: Session, restaurante_id: int, turno: CaixaTurno) -> dict:
     return cash_shift_totals(db, restaurante_id, turno).as_legacy_dict()
 
@@ -816,6 +867,15 @@ def registrar_pagamento_mesa(
         Pagamento.idempotency_key == pag_in.idempotency_key,
     ).first()
     if existing:
+        if (
+            _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+            or existing.metodo != pag_in.metodo
+            or not _same_item_scope(existing, pag_in.item_ids)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A chave idempotente já foi usada em outro pagamento.",
+            )
         return existing
 
     if pag_in.metodo not in _METODOS_PAGAMENTO:
@@ -863,28 +923,14 @@ def registrar_pagamento_mesa(
         ConfiguracaoRestaurante.restaurante_id == rest_id
     ).first()
 
-    itens_selecionados: List[Item] = []
-    if pag_in.item_ids:
-        ids_solicitados = list(dict.fromkeys(pag_in.item_ids))
-        itens_disponiveis = {
-            item.id: item
-            for comanda in comandas
-            for item in comanda.itens
-            if item.status in {"pronto", "entregue"} and not item.pago
-        }
-        itens_selecionados = [
-            itens_disponiveis[item_id]
-            for item_id in ids_solicitados
-            if item_id in itens_disponiveis
-        ]
-        if len(itens_selecionados) != len(ids_solicitados):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Um ou mais itens selecionados não pertencem à mesa, "
-                    "ainda estão em preparo, foram cancelados ou já estão pagos."
-                ),
-            )
+    ids_solicitados = _normalized_item_ids(pag_in.item_ids)
+    itens_selecionados = _lock_exact_payment_items(
+        db,
+        restaurante_id=rest_id,
+        comanda_ids=[comanda.id for comanda in comandas],
+        item_ids=ids_solicitados,
+        require_ready=True,
+    )
 
     debitos = _debitos_da_mesa(
         comandas,
@@ -915,18 +961,25 @@ def registrar_pagamento_mesa(
             subtotal_selecionado
             * (Decimal("1.00") + taxa_percentual / Decimal("100"))
         )
-        valor_necessario = min(total_selecionado, saldo_mesa)
-        if valor_solicitado < valor_necessario:
+        if total_selecionado > saldo_mesa:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_ITEM_SELECTION_CHANGED_DETAIL,
+            )
+        if valor_solicitado != total_selecionado:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Para dar baixa nos itens selecionados, receba o valor "
-                    "total da seleção ou limpe a seleção para lançar um "
-                    "pagamento livre."
+                    "Para pagar itens selecionados, o valor deve corresponder "
+                    "exatamente ao total da seleção."
                 ),
             )
 
-    valor_aplicado = min(valor_solicitado, saldo_mesa)
+    valor_aplicado = (
+        valor_solicitado
+        if itens_selecionados
+        else min(valor_solicitado, saldo_mesa)
+    )
     restante_a_distribuir = valor_aplicado
     agora = datetime.datetime.now(datetime.timezone.utc)
     comandas_quitadas: List[Comanda] = []
@@ -1016,6 +1069,7 @@ def registrar_pagamento_mesa(
         metodo=pag_in.metodo,
         status="aprovado",
         idempotency_key=pag_in.idempotency_key,
+        item_ids=ids_solicitados or None,
         cliente_id=cliente_pagamento.id if cliente_pagamento else None,
         cpf_cliente=(
             cliente_pagamento.telefone if cliente_pagamento else pag_in.cpf_cliente
@@ -1049,6 +1103,15 @@ def registrar_pagamento_mesa(
             Pagamento.idempotency_key == pag_in.idempotency_key,
         ).first()
         if existing:
+            if (
+                _valor_monetario(existing.valor) != _valor_monetario(pag_in.valor)
+                or existing.metodo != pag_in.metodo
+                or not _same_item_scope(existing, pag_in.item_ids)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="A chave idempotente já foi usada em outro pagamento.",
+                )
             return existing
         logger.exception("Falha de integridade ao processar pagamento da mesa")
         raise HTTPException(
