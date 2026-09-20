@@ -120,7 +120,7 @@ const trialLabel = (trial: OnboardingStatus['trial']) => {
   if (trial.status === 'setup') return 'Ainda não iniciado';
   if (trial.status === 'unavailable') return 'Sem trial pendente';
   if (trial.status === 'expired' || trial.status === 'ended') return 'Trial encerrado';
-  if (trial.status === 'converted' || trial.status === 'active') return 'Plano ativo';
+  if (trial.status === 'converted') return 'Plano ativo';
   if (typeof trial.daysRemaining === 'number') {
     return trial.daysRemaining === 1 ? '1 dia restante' : `${trial.daysRemaining} dias restantes`;
   }
@@ -176,7 +176,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível carregar o onboarding.'));
       }
-      setSnapshot(await response.json() as OnboardingStatus);
+      const next = await response.json() as OnboardingStatus;
+      setSnapshot(next);
+      openCashierAt('operacao', 'balcao', false);
       setState('ready');
     } catch (error) {
       setState('error');
@@ -325,7 +327,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     {
       id: 'first-order',
       title: 'Valide com um pedido de teste',
-      description: 'Abra o Caixa e complete o ciclo pedido → preparo → pagamento → conclusão. Só então o KÔMA marca o restaurante como pronto para operar.',
+      description: 'Depois de iniciar o trial, abra o Caixa e complete o ciclo pedido → preparo → pagamento → conclusão. Só então o KÔMA marca o restaurante como pronto para operar.',
       done: snapshot.steps.firstOrder,
       actionLabel: snapshot.steps.firstOrder ? 'Ver pedidos' : 'Fazer pedido de teste',
       tab: 'operacao',
@@ -511,7 +513,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             <div className="mt-5 space-y-3">
               {steps.map((step) => {
                 const Icon = step.icon;
-                const blockedUntilCore = step.id === 'first-order' && !configurationComplete;
+                const blockedUntilCore = step.id === 'first-order'
+                  && (!configurationComplete || snapshot.trial.status === 'setup');
                 return (
                   <article key={step.id} className="flex flex-col gap-4 rounded-2xl border border-koma-border bg-koma-page p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 gap-3">
@@ -549,30 +552,32 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                 <p className="text-xs font-black">
                   {!configurationComplete
                     ? 'Finalize a configuração'
-                    : !readyToOperate
-                      ? 'Configuração concluída — falta validar'
-                      : 'Restaurante pronto para operar'}
+                    : snapshot.trial.status === 'setup'
+                      ? 'Configuração concluída — você decide quando iniciar'
+                      : !readyToOperate
+                        ? 'Trial iniciado — falta validar a operação'
+                        : 'Restaurante pronto para operar'}
                 </p>
                 <p className="mt-1 text-[10px] text-koma-muted">
                   {!configurationComplete
                     ? 'Conclua os quatro itens essenciais acima.'
-                    : !readyToOperate
-                      ? 'Faça um pedido de teste completo com pagamento e conclusão.'
-                      : snapshot.trial.status === 'setup'
-                        ? 'O teste passou. O trial ainda não começou; inicie quando decidir abrir a operação.'
+                    : snapshot.trial.status === 'setup'
+                      ? 'Nada começa automaticamente. Clique quando quiser iniciar os 7 dias grátis e fazer o pedido de teste.'
+                      : !readyToOperate
+                        ? 'Faça um pedido de teste completo com pagamento e conclusão.'
                         : 'A prontidão operacional foi validada.'}
                 </p>
               </div>
 
-              {configurationComplete && !readyToOperate && (
-                <button type="button" onClick={() => openCashierAt('operacao', 'balcao', false)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-koma-foreground px-5 py-3 text-xs font-black text-koma-page">
-                  Fazer pedido de teste <ArrowRight size={14} />
+              {configurationComplete && snapshot.trialCanStart && (
+                <button type="button" disabled={startingTrial} onClick={() => void startTrial()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 disabled:opacity-60">
+                  {startingTrial ? 'Iniciando…' : 'Iniciar 7 dias e fazer teste'} <ArrowRight size={14} />
                 </button>
               )}
 
-              {readyToOperate && snapshot.trialCanStart && (
-                <button type="button" disabled={startingTrial} onClick={() => void startTrial()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-xs font-black text-zinc-950 disabled:opacity-60">
-                  {startingTrial ? 'Iniciando…' : 'Iniciar operação e 7 dias grátis'} <ArrowRight size={14} />
+              {configurationComplete && !snapshot.trialCanStart && !readyToOperate && (
+                <button type="button" onClick={() => openCashierAt('operacao', 'balcao', false)} className="inline-flex items-center justify-center gap-2 rounded-xl bg-koma-foreground px-5 py-3 text-xs font-black text-koma-page">
+                  Fazer pedido de teste <ArrowRight size={14} />
                 </button>
               )}
 
