@@ -121,6 +121,7 @@ def operational_status(db: Session, restaurante_id: int) -> dict[str, Any]:
         "pause_until": control.pause_until.isoformat() if paused and control.pause_until else None,
         "max_active_orders": capacity,
         "auto_pause": bool(control.auto_pause),
+        "auto_accept": bool(control.auto_accept),
         "counts": counts,
         "capacity_ratio": round(ratio, 4) if ratio is not None else None,
         "level": level,
@@ -231,6 +232,31 @@ def update_capacity(
         actor_user_id=actor_user_id,
         action="online_orders_capacity_updated",
         reason="Capacidade operacional atualizada",
+        before_data=before,
+        after_data=after,
+    )
+    return control
+
+
+def update_auto_accept(
+    db: Session,
+    *,
+    restaurante_id: int,
+    actor_user_id: str | None,
+    enabled: bool,
+) -> OnlineOrderControl:
+    control = get_or_create_control(db, restaurante_id, for_update=True)
+    before = operational_status(db, restaurante_id)
+    control.auto_accept = bool(enabled)
+    control.updated_at = utcnow()
+    db.flush()
+    after = operational_status(db, restaurante_id)
+    _audit(
+        db,
+        restaurante_id=restaurante_id,
+        actor_user_id=actor_user_id,
+        action="online_orders_auto_accept_updated",
+        reason="Aceite automático de pedidos online atualizado",
         before_data=before,
         after_data=after,
     )
