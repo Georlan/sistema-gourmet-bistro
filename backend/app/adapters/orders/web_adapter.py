@@ -543,6 +543,18 @@ class CardapioWebAdapter:
             except Exception:
                 logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
 
+            if not online_payment and not is_scheduled and comanda is not None:
+                from ...services.online_order_control import auto_accept_online_order_if_enabled
+
+                if auto_accept_online_order_if_enabled(
+                    db,
+                    restaurante_id=rest_id,
+                    comanda=comanda,
+                    operator_user_id=garcom.id,
+                ):
+                    db.commit()
+                    db.refresh(comanda)
+
             if is_scheduled:
                 if comanda is None or normalized_schedule is None:
                     raise HTTPException(
