@@ -176,9 +176,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível carregar o onboarding.'));
       }
-      const next = await response.json() as OnboardingStatus;
-      setSnapshot(next);
-      openCashierAt('operacao', 'balcao', false);
+      setSnapshot(await response.json() as OnboardingStatus);
       setState('ready');
     } catch (error) {
       setState('error');
@@ -272,7 +270,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (!response.ok) {
         throw new Error(await responseDetail(response, 'Não foi possível iniciar o período grátis.'));
       }
-      setSnapshot(await response.json() as OnboardingStatus);
+      const next = await response.json() as OnboardingStatus;
+      setSnapshot(next);
+      openCashierAt('operacao', 'balcao', false);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Não foi possível iniciar o período grátis.');
     } finally {
