@@ -1,12 +1,16 @@
 import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, Search, Store } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getCashierOrderSlaData } from '../../../domain/cashierOrderProjection';
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
 import { bucketPickupOrders } from './deliveryOrderProjection';
 import type { DeliveryOrderView } from './cashierWorkspaceTypes';
-import { getDigitalOrderCustomerLabel } from './digitalOrderPresentation';
-import { getDigitalOrderAssociation, getDigitalOrderSourceLabel } from './digitalOrderPresentation';
+import {
+  getDigitalOrderAssociation,
+  getDigitalOrderCustomerLabel,
+  getDigitalOrderPaymentSummary,
+  getDigitalOrderSourceLabel,
+} from './digitalOrderPresentation';
 
 type CompletedPickupApiOrder = {
   id: string;
@@ -28,9 +32,12 @@ type CompletedPickupApiOrder = {
 type Props = {
   activeSubTab: string;
   deliveryOrders: DeliveryOrderView[];
+  deliveryOrdersLoadState: 'loading' | 'loaded' | 'error';
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
   now: number;
+  handleAcceptPendingDeliveryOrder: (order: DeliveryOrderView) => Promise<void>;
+  handleRejectPendingDeliveryOrder: (order: DeliveryOrderView) => void;
   handleAdvanceDigitalOrder: (order: DeliveryOrderView) => Promise<void>;
   handleFinalizeDigitalOrder: (order: DeliveryOrderView) => Promise<void>;
   openDeliveryOrderDetails: (order: DeliveryOrderView) => void;
@@ -78,9 +85,12 @@ const matchesQuery = (order: DeliveryOrderView, query: string) => {
 export function CashierPickups({
   activeSubTab,
   deliveryOrders,
+  deliveryOrdersLoadState,
   apiBaseUrl,
   authHeaders,
   now,
+  handleAcceptPendingDeliveryOrder,
+  handleRejectPendingDeliveryOrder,
   handleAdvanceDigitalOrder,
   handleFinalizeDigitalOrder,
   openDeliveryOrderDetails,
@@ -89,6 +99,7 @@ export function CashierPickups({
   const [completedRecent, setCompletedRecent] = useState<CompletedPickupApiOrder[]>([]);
   const [historyError, setHistoryError] = useState(false);
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const pendingIdsRef = useRef<Set<string>>(new Set());
 
   const refreshCompleted = useCallback(async () => {
     try {
@@ -156,15 +167,25 @@ export function CashierPickups({
   if (activeSubTab !== 'retiradas') return null;
 
   const setPending = (orderId: string, pending: boolean) => {
-    setPendingIds((current) => {
-      const next = new Set(current);
-      if (pending) next.add(orderId);
-      else next.delete(orderId);
-      return next;
-    });
+    const next = new Set(pendingIdsRef.current);
+    if (pending) next.add(orderId);
+    else next.delete(orderId);
+    pendingIdsRef.current = next;
+    setPendingIds(next);
+  };
+
+  const acceptPickup = async (order: DeliveryOrderView) => {
+    if (pendingIdsRef.current.has(order.id)) return;
+    setPending(order.id, true);
+    try {
+      await handleAcceptPendingDeliveryOrder(order);
+    } finally {
+      setPending(order.id, false);
+    }
   };
 
   const markReady = async (order: DeliveryOrderView) => {
+    if (pendingIdsRef.current.has(order.id)) return;
     setPending(order.id, true);
     try {
       await handleAdvanceDigitalOrder(order);
@@ -174,6 +195,7 @@ export function CashierPickups({
   };
 
   const finishPickup = async (order: DeliveryOrderView) => {
+    if (pendingIdsRef.current.has(order.id)) return;
     setPending(order.id, true);
     try {
       await handleFinalizeDigitalOrder(order);
@@ -225,7 +247,9 @@ export function CashierPickups({
             <div className="flex flex-wrap gap-3 text-[9px] text-koma-muted">
               <span>Aberto há {sla.label}</span>
               <span>{money(order.total)}</span>
-              <span>{order.pago ? 'Pago' : 'Pagamento pendente'}</span>
+              <span className={order.pago ? 'text-emerald-500' : 'text-amber-500'}>
+                {getDigitalOrderPaymentSummary(order)}
+              </span>
             </div>
           </div>
 
@@ -238,6 +262,27 @@ export function CashierPickups({
               Ver pedido
             </button>
 
+            {awaitingAcceptance && (
+              <>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void acceptPickup(order)}
+                  className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-extrabold text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {pending ? 'Aceitando…' : 'Aceitar pedido'}
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => handleRejectPendingDeliveryOrder(order)}
+                  className="rounded-xl border border-rose-500/35 px-3 py-2 text-[9px] font-extrabold text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
+                >
+                  Recusar
+                </button>
+              </>
+            )}
+
             {!readyForPickup && order.status === 'producao' && (
               <button
                 type="button"
@@ -245,7 +290,7 @@ export function CashierPickups({
                 onClick={() => void markReady(order)}
                 className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[9px] font-extrabold text-emerald-400 disabled:opacity-50"
               >
-                {pending ? 'Atualizando…' : 'Marcar pronto'}
+                {pending ? 'Atualizando…' : 'Marcar pronto para retirada'}
               </button>
             )}
 
@@ -256,7 +301,9 @@ export function CashierPickups({
                 onClick={() => void finishPickup(order)}
                 className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-extrabold text-white hover:bg-emerald-500 disabled:opacity-50"
               >
-                {pending ? 'Abrindo…' : order.pago ? 'Confirmar retirada' : 'Receber e entregar'}
+                {pending
+                  ? order.pago ? 'Concluindo…' : 'Abrindo recebimento…'
+                  : order.pago ? 'Confirmar retirada' : 'Receber e concluir retirada'}
               </button>
             )}
           </div>
@@ -264,7 +311,7 @@ export function CashierPickups({
 
         {awaitingAcceptance && (
           <p className="mt-3 border-t border-koma-border/70 pt-2 text-[9px] text-koma-muted">
-            O aceite continua no Kanban de Pedidos, que é a visão geral e autoridade operacional do fluxo.
+            Aceite ou recuse aqui; a ação usa o mesmo fluxo canônico exibido em Pedidos.
           </p>
         )}
       </article>
@@ -282,7 +329,7 @@ export function CashierPickups({
             </div>
             <h2 className="mt-1 font-serif text-base font-bold text-koma-foreground">Retiradas do balcão</h2>
             <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-koma-muted">
-              Visão operacional derivada do mesmo fluxo de Pedidos. Use para acompanhar espera, atrasos e saída; o Kanban continua sendo a referência geral.
+              Workspace de balcão para aceitar, acompanhar, receber e concluir retiradas sem trocar de tela.
             </p>
           </div>
 
@@ -306,6 +353,17 @@ export function CashierPickups({
           </div>
         </div>
 
+        {deliveryOrdersLoadState === 'loading' && deliveryOrders.length === 0 && (
+          <div className="mt-4 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-[9px] text-koma-muted" role="status">
+            Sincronizando retiradas…
+          </div>
+        )}
+        {deliveryOrdersLoadState === 'error' && (
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-400" role="status">
+            Não foi possível atualizar os pedidos agora. Mostrando o último estado conhecido.
+          </div>
+        )}
+
         <label className="mt-4 flex max-w-xl items-center gap-2 rounded-xl border border-koma-border bg-koma-page px-3 py-2.5 focus-within:border-emerald-500/50">
           <Search size={14} className="text-koma-muted" />
           <span className="sr-only">Buscar retiradas</span>
@@ -325,7 +383,7 @@ export function CashierPickups({
               <h3 className="flex items-center gap-2 text-xs font-extrabold text-koma-foreground">
                 <Clock3 size={15} /> Aguardando e em preparo
               </h3>
-              <p className="mt-0.5 text-[9px] text-koma-muted">Aceite no Kanban; preparo pode ser concluído aqui ou no fluxo geral.</p>
+              <p className="mt-0.5 text-[9px] text-koma-muted">Aceite ou recuse novos pedidos e avance o preparo sem sair deste workspace.</p>
             </div>
             <span className="rounded-full bg-amber-500/10 px-2 py-1 font-mono text-[9px] font-bold text-amber-400">{awaiting.length}</span>
           </div>

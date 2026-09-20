@@ -27,7 +27,8 @@ test('courier delivered action routes the delivery through the canonical checkou
     'const [autoAccept, setAutoAccept]',
   );
 
-  assert.match(couriers, /onClick=\{\(\) => handleFinalizarPedido\(order\.id\)\}/);
+  assert.match(couriers, /runOrderAction\(order\.id, \(\) => handleFinalizarPedido\(order\.id\)\)/);
+  assert.match(couriers, /pendingIdsRef\.current\.has\(orderId\)/);
   assert.match(panel, /handleFinalizarPedido=\{handleFinalizeCourierOrder\}/);
   assert.match(courierBridge, /deliveryOrders\.find\(\(order\) => order\.id === orderId\)/);
   assert.match(courierBridge, /await handleFinalizeDigitalOrder\(deliveryOrder\);/);
