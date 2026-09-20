@@ -1036,7 +1036,7 @@ class CardapioPedidoCreate(BaseModel):
     bairro: Optional[str] = Field(default=None, max_length=100)
     cupom_codigo: Optional[str] = Field(default=None, max_length=50)
     usar_cashback: bool = Field(default=False)
-    tipo_pedido: Literal["delivery", "retirada"] = "delivery"
+    tipo_pedido: Literal["delivery", "retirada", "consumo_local"] = "delivery"
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
 
     @field_validator("cliente_nome")
