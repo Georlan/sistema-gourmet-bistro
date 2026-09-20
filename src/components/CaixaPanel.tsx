@@ -384,6 +384,53 @@ export function CaixaPanel({
   const [autoAccept, setAutoAccept] = useState(false);
 
   useEffect(() => {
+    let active = true;
+    const loadAutoAcceptPolicy = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/online-orders/control`, {
+          headers: authHeaders,
+          cache: 'no-store',
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (active) setAutoAccept(payload?.auto_accept === true);
+      } catch {
+        // O toggle continua conservadoramente desligado até a política ser lida.
+      }
+    };
+    void loadAutoAcceptPolicy();
+    return () => {
+      active = false;
+    };
+  }, [apiBaseUrl, authHeaders.Authorization]);
+
+  const handleAutoAcceptChange = async (enabled: boolean) => {
+    const previous = autoAccept;
+    setAutoAccept(enabled);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/online-orders/auto-accept`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (!response.ok) {
+        throw new Error('Não foi possível atualizar o autoaceite.');
+      }
+      const payload = await response.json();
+      setAutoAccept(payload?.auto_accept === true);
+      showToast(
+        payload?.auto_accept
+          ? 'Aceite automático ativado para todos os pedidos online.'
+          : 'Aceite automático desativado.',
+        'success',
+      );
+    } catch {
+      setAutoAccept(previous);
+      showToast('Não foi possível alterar o aceite automático.', 'error');
+    }
+  };
+
+  useEffect(() => {
     const handleOpenSangria = () => {
       setActiveTab('financeiro');
       setActiveSubTab('turno_atual');
@@ -928,7 +975,7 @@ export function CaixaPanel({
                   orders: deliveryOrders,
                   automatic: autoAccept,
                   drawerOpen: isDrawerOpen,
-                  onAutomaticChange: setAutoAccept,
+                  onAutomaticChange: handleAutoAcceptChange,
                   onDrawerChange: setIsDrawerOpen,
                 }}
                 navigation={{
