@@ -784,7 +784,7 @@ export function CaixaOrdersWorkspace({
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
                               ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
-                              : `${isDeliveryOrder ? 'Delivery' : 'Retirada'}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : order.telefone ? ` · ${order.telefone}` : ''}`}
+                              : `${getDigitalOrderFulfillmentLabel(order)}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : order.telefone ? ` · ${order.telefone}` : ''}`}
                           </span>
                           <div className="orders-card__identity-chips">
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
