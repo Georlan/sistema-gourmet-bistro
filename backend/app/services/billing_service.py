@@ -447,7 +447,7 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
 
         # Durante a implantação a autorização recorrente fica pausada no provedor.
         # O acesso às telas de configuração precisa continuar liberado, enquanto o
-        # gate de onboarding impede Vendas/Caixa até o 3/3. Um webhook de pausa pode
+        # gate de onboarding impede Vendas/Caixa até a configuração e o início explícito do trial. Um webhook de pausa pode
         # temporariamente refletir "suspended" localmente; sem datas de período isso
         # ainda representa implantação, não inadimplência/suspensão administrativa.
         if sub_status == "onboarding" or (
