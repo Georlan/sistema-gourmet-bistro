@@ -60,7 +60,7 @@ interface CardapioDigitalProps {
   activeBrand: BrandConfig;
   cart: CartItem[];
   deliveryFee: number;
-  deliveryMethod: "delivery" | "pickup";
+  deliveryMethod: "delivery" | "pickup" | "dine_in";
   address: string;
   addressSnapshot?: DeliveryAddressSnapshot | null;
   customerName: string;
@@ -346,7 +346,11 @@ export default function CardapioDigital({
       bairro: deliveryMethod === "delivery" ? bairro?.trim() || undefined : undefined,
       cupom_codigo: cupomCodigo?.trim().toUpperCase() || undefined,
       usar_cashback: usarCashback,
-      tipo_pedido: deliveryMethod === "delivery" ? "delivery" : "retirada",
+      tipo_pedido: deliveryMethod === "delivery"
+        ? "delivery"
+        : deliveryMethod === "dine_in"
+          ? "consumo_local"
+          : "retirada",
       scheduled_for: scheduledForIso || null,
     };
     const fingerprint = buildOrderSubmissionFingerprint(orderRequest);
@@ -408,7 +412,11 @@ export default function CardapioDigital({
         restaurante_id: targetRestauranteId,
         cliente_nome: normalizedName,
         cliente_telefone: normalizedPhone,
-        tipo: deliveryMethod === "delivery" ? "Delivery" : "Retirada",
+        tipo: deliveryMethod === "delivery"
+          ? "Delivery"
+          : deliveryMethod === "dine_in"
+            ? "Consumo no Local"
+            : "Retirada",
         total: orderTotal,
         idempotency_key: idempotencyKey,
         status: confirmedSchedule
@@ -511,7 +519,7 @@ export default function CardapioDigital({
             </div>
 
             <div className="mt-4 grid grid-cols-3 gap-2 text-[9px] font-bold">
-              {["Sacola", deliveryMethod === "delivery" ? "Entrega" : "Retirada", "Revisão"].map((label, index) => (
+              {["Sacola", deliveryMethod === "delivery" ? "Entrega" : deliveryMethod === "dine_in" ? "Consumo local" : "Retirada", "Revisão"].map((label, index) => (
                 <div key={label} className={index < 2 ? "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2 py-2 text-emerald-500" : "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-2 text-koma-foreground"}>
                   {index < 2 ? <Check className="h-3 w-3" /> : <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[8px] text-white">3</span>}{label}
                 </div>
@@ -584,7 +592,7 @@ export default function CardapioDigital({
             <div className="space-y-5">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><UserRound className="h-3.5 w-3.5 text-emerald-500" /> Contato</div><p className="mt-2 text-xs font-black text-koma-foreground">{customerName}</p><p className="mt-0.5 text-[10px] text-koma-muted">{customerPhone}</p></div>
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {deliveryMethod === "delivery" ? "Entrega" : "Retirada"}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
+                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {deliveryMethod === "delivery" ? "Entrega" : deliveryMethod === "dine_in" ? "Consumo local" : "Retirada"}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : activeBrand.address || (deliveryMethod === "dine_in" ? "Consumo no restaurante" : "Retirada no balcão do restaurante")}</p></div>
               </div>
 
               {scheduledOrdersEnabled && (
