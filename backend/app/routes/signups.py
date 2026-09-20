@@ -256,7 +256,7 @@ def release_signup(
         "protocol": normalized,
         "idempotent": False,
         "message": (
-            "Inscrição liberada com sucesso. O restaurante já pode concluir a implantação; "
-            "os 7 dias grátis permanecem preservados até os 3 passos essenciais ficarem prontos."
+            "Inscrição liberada com sucesso. O restaurante já pode concluir a configuração; "
+            "os 7 dias grátis permanecem preservados até o responsável iniciar explicitamente o período de teste."
         ),
     }
