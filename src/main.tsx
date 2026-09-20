@@ -43,6 +43,7 @@ function isPublicCommercialRoute(): boolean {
 function isOperationalUtilityRoute(): boolean {
   const pathname = window.location.pathname;
   return pathname === "/recuperar-senha"
+    || pathname.startsWith("/ferramentas/simulador-impressao")
     || pathname.startsWith("/smartpos")
     || pathname.startsWith("/ativar")
     || pathname.startsWith("/acompanhar")
@@ -158,6 +159,7 @@ if (sentryDsn) {
 
 const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
+const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isUnifiedOperationalRoute = isCanonicalOperationalEntryRoute() || isLegacyOperationalRedirect;
@@ -182,9 +184,11 @@ if (
 const RootApp = React.lazy(
   pathname === "/recuperar-senha"
     ? () => import("./components/auth/PasswordResetPage")
+    : isPrintSimulatorRoute
+    ? () => import("./printing-simulator/PrintingSimulatorPage")
     : isSmartPosRoute
-    ? () => import("./smartpos/SmartPosPage")
-    : isLegalRoute
+      ? () => import("./smartpos/SmartPosPage")
+      : isLegalRoute
       ? () => import("./legal/LegalPage")
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
