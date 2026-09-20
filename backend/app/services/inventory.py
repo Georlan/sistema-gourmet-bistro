@@ -137,6 +137,66 @@ def consumir_estoque_dos_itens(
             )
 
 
+def alertas_estoque_dos_itens(
+    db: Session,
+    itens: Iterable[Item],
+) -> list[dict[str, object]]:
+    """Retorna alertas informativos para ingredientes zerados ou negativos.
+
+    Esta função nunca bloqueia venda, aceite ou produção. O estoque do KÔMA
+    permanece uma referência operacional: divergência física deve ser corrigida
+    por contagem/entrada, enquanto o operador recebe contexto para decidir se
+    precisa confirmar o item disponível fisicamente ou cancelar o pedido.
+    """
+
+    produtos_por_tenant: dict[int, set[str]] = {}
+    for item in itens:
+        if getattr(item, "status", None) == "cancelado":
+            continue
+        restaurante_id = int(item.restaurante_id)
+        produtos_por_tenant.setdefault(restaurante_id, set()).add(str(item.produto_id))
+
+    alertas: list[dict[str, object]] = []
+    for restaurante_id, produto_ids in produtos_por_tenant.items():
+        if not produto_ids:
+            continue
+
+        receitas = (
+            db.query(ProdutoInsumo)
+            .filter(
+                ProdutoInsumo.restaurante_id == restaurante_id,
+                ProdutoInsumo.produto_id.in_(produto_ids),
+            )
+            .all()
+        )
+        insumo_ids = sorted({str(receita.insumo_id) for receita in receitas})
+        if not insumo_ids:
+            continue
+
+        insumos = (
+            db.query(Insumo)
+            .filter(
+                Insumo.restaurante_id == restaurante_id,
+                Insumo.id.in_(insumo_ids),
+            )
+            .all()
+        )
+        for insumo in insumos:
+            saldo = float(insumo.estoque_atual or 0)
+            if saldo > 0:
+                continue
+            alertas.append(
+                {
+                    "insumo_id": str(insumo.id),
+                    "nome": str(insumo.nome),
+                    "saldo_atual": saldo,
+                    "unidade_medida": str(insumo.unidade_medida or "un"),
+                }
+            )
+
+    return sorted(alertas, key=lambda item: (str(item["nome"]).casefold(), str(item["insumo_id"])))
+
+
 def estornar_estoque_dos_itens(
     db: Session,
     itens: Iterable[Item],
