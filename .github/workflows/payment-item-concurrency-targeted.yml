@@ -56,7 +56,7 @@ jobs:
       - name: Run strict item payment regressions
         run: |
           python -m pytest backend/tests/test_critical_pdv_caixa_flow.py -q -x \
-            -k "stale_item_selection or table_item_selection or pending_cash_item_scope"
+            -k "stale_item_selection or table_item_selection or table_item_payment_allocates or pending_cash_item_scope"
           python -m pytest backend/tests/test_caixa_legacy_coverage.py::test_caixa_payments -q -x
 
   postgres-race:
