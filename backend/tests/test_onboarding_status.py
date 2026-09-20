@@ -526,3 +526,67 @@ def test_test_order_must_use_an_active_mode(onboarding_db):
     payload = onboarding_route.get_onboarding_status(db=db, current_user=user)
     assert payload["operations"]["orderTypes"] == ["retirada"]
     assert payload["steps"]["firstOrder"] is False
+
+
+def test_test_order_readiness_is_strictly_tenant_scoped(onboarding_db):
+    db, user, tenant_id = onboarding_db
+    _start_trial_locally(db, tenant_id)
+    other_tenant_id = tenant_id + 1
+    other_restaurant = Restaurante(
+        id=other_tenant_id,
+        nome="Outro Bistro",
+        slug="outro-bistro-readiness",
+        plano="pro",
+        endereco="Rua Outro Tenant, 1",
+        horarios_funcionamento=[{"days": "segunda a sexta", "hours": "11:00-22:00"}],
+    )
+    other_user = Usuario(
+        id="admin-other-readiness",
+        restaurante_id=other_tenant_id,
+        nome="Admin Outro",
+        email="admin-other-readiness@example.test",
+        cargo="admin",
+        status="ativo",
+        senha_hash="test-only",
+    )
+    db.add_all([other_restaurant, other_user])
+    db.flush()
+    other_shift = CaixaTurno(
+        restaurante_id=other_tenant_id,
+        aberto_por_id=other_user.id,
+        saldo_inicial=0,
+        status="aberto",
+    )
+    db.add(other_shift)
+    db.flush()
+    other_order = Comanda(
+        id="other-tenant-test-readiness",
+        restaurante_id=other_tenant_id,
+        garcom_id=other_user.id,
+        tipo="Retirada",
+        numero_pedido=1,
+        fechada=True,
+        onboarding_test=True,
+        criado_em=datetime.datetime.now(datetime.timezone.utc),
+    )
+    db.add(other_order)
+    db.flush()
+    db.add(
+        Pagamento(
+            id="other-tenant-payment-readiness",
+            restaurante_id=other_tenant_id,
+            comanda_id=other_order.id,
+            turno_id=other_shift.id,
+            valor=10,
+            metodo="dinheiro",
+            status="aprovado",
+            idempotency_key="other-tenant-payment-readiness",
+        )
+    )
+    db.commit()
+
+    payload = onboarding_route.get_onboarding_status(db=db, current_user=user)
+
+    assert payload["restaurant"]["id"] == str(tenant_id)
+    assert payload["steps"]["firstOrder"] is False
+    assert payload["readiness"]["readyToOperate"] is False
