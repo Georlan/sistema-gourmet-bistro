@@ -49,7 +49,8 @@ def db(monkeypatch):
     Base.metadata.create_all(engine)
     session = TestingSession()
     monkeypatch.setattr(settings, "KOMA_PUBLIC_API_URL", "https://api.example.test")
-    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", 5)
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES", 30)
+    monkeypatch.setattr(settings, "ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES", 5)
     try:
         session.add(Restaurante(id=RID, nome="Pix Close Test", plano="premium"))
         session.add(
@@ -149,7 +150,7 @@ def _pending_pix(
         idempotency_key=f"intent-key-{suffix}",
         external_payment_id=external_payment_id,
         created_at=created_at,
-        expires_at=created_at + datetime.timedelta(minutes=5),
+        expires_at=created_at + datetime.timedelta(minutes=30),
     )
     db.add_all([command, launch, intent])
     db.commit()
