@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, selectinload
 
-from ..database import get_db, tenant_session_scope
+from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Comanda, Item, Restaurante
 from ..online_order_control_models import OnlineOrderCustomerBlock
 from ..order_chat_models import OrderConversation, OrderMessage
@@ -522,9 +522,13 @@ def desativar_push_do_pedido(
 async def stream_eventos_pedido(
     token: str,
     request: Request,
-    db: Session = Depends(get_db),
 ):
-    resolved = resolve_public_tracking(db, token)
+    # A resolução do capability token toca o banco uma única vez. A sessão
+    # precisa ser devolvida ao pool ANTES de iniciar o StreamingResponse; manter
+    # a dependency get_db viva pelo tempo do SSE esgota o QueuePool quando vários
+    # clientes acompanham pedidos simultaneamente.
+    with SessionLocal() as lookup_db:
+        resolved = resolve_public_tracking(lookup_db, token)
     if not resolved:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
     _restaurante_id, conversation_id, _pedido_id, _closed_at = resolved
