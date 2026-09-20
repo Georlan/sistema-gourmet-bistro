@@ -211,6 +211,23 @@ class MercadoPagoProvider:
             )
         return self._map(response.json())
 
+    def cancel_payment(self, external_payment_id: str) -> ProviderPayment:
+        payment_id = _validated_payment_id(external_payment_id)
+        try:
+            response = self._client.put(
+                f"/v1/payments/{payment_id:d}",
+                json={"status": "cancelled"},
+            )
+        except httpx.RequestError as exc:
+            raise _provider_transport_error("o cancelamento do pagamento", exc) from exc
+        if response.status_code >= 400:
+            raise MercadoPagoError(
+                _provider_error_message(response, "o cancelamento do pagamento"),
+                status_code=response.status_code,
+                retryable=response.status_code >= 500 or response.status_code in {408, 409, 429},
+            )
+        return self._map(response.json())
+
     def refund_payment(
         self,
         external_payment_id: str,

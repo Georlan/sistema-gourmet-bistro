@@ -31,6 +31,8 @@ from .account_connection import is_marketplace_owner_account
 
 MONEY = Decimal("0.01")
 TOKEN_REFRESH_SKEW = datetime.timedelta(minutes=5)
+UNPAID_TERMINAL_STATUSES = frozenset({"rejected", "cancelled", "expired"})
+UNRESOLVED_ONLINE_PAYMENT_STATUSES = frozenset({"created", "pending", "error"})
 logger = logging.getLogger("koma.online_payments")
 
 
@@ -44,6 +46,12 @@ class OnlinePaymentValidationError(RuntimeError):
 
 def _money(value: object) -> Decimal:
     return Decimal(str(value)).quantize(MONEY, rounding=ROUND_HALF_UP)
+
+
+def _as_utc(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
 
 
 def _mapped_status(provider_status: str) -> str:
@@ -191,7 +199,7 @@ class OnlinePaymentService:
         shift = db.query(CaixaTurno).filter(
             CaixaTurno.restaurante_id == restaurant_id,
             CaixaTurno.status == "aberto",
-        ).order_by(CaixaTurno.id.desc()).first()
+        ).order_by(CaixaTurno.id.desc()).with_for_update().first()
         if shift is None:
             raise OnlinePaymentConfigurationError(
                 "O caixa precisa estar aberto para receber pagamentos online."
@@ -258,6 +266,36 @@ class OnlinePaymentService:
         db.flush()
         return intent
 
+    @staticmethod
+    def _finalize_unpaid_order_in_session(
+        db: Session,
+        *,
+        intent: OnlinePaymentIntent,
+        comanda: Comanda,
+    ) -> None:
+        """Encerra pedido nunca publicado após estado terminal sem recebimento."""
+        if intent.status not in UNPAID_TERMINAL_STATUSES or comanda.fechada:
+            return
+
+        lancamentos = db.query(Lancamento).filter(
+            Lancamento.restaurante_id == intent.restaurante_id,
+            Lancamento.comanda_id == comanda.id,
+        ).with_for_update().all()
+        for lancamento in lancamentos:
+            if lancamento.status not in {"finalizado", "recusado", "cancelado"}:
+                lancamento.status = "recusado"
+
+        for item in comanda.itens:
+            if item.status != "cancelado":
+                item.status = "cancelado"
+            item.pago = False
+
+        comanda.delivery_status = "recusado"
+        comanda.status_comanda = None
+        comanda.fechada = True
+        if comanda.fechado_em is None:
+            comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+
     @classmethod
     def apply_provider_snapshot_in_session(
         cls,
@@ -295,9 +333,16 @@ class OnlinePaymentService:
         mapped = _mapped_status(payment.status)
 
         # Aprovação financeira é monotônica: um snapshot posterior pendente ou
-        # rejeitado não desfaz receita já reconhecida. Reembolsos/chargebacks
-        # pertencem ao ledger de estornos e serão tratados em fluxo próprio.
+        # rejeitado não desfaz receita já reconhecida. Estados terminais sem
+        # recebimento também não regridem para pendente. Uma aprovação posterior
+        # a cancelamento/expiração é uma anomalia que precisa de conciliação manual.
         if locked_intent.status == "approved" and mapped != "approved":
+            return locked_intent, False
+        if locked_intent.status in UNPAID_TERMINAL_STATUSES:
+            if mapped == "approved":
+                raise OnlinePaymentValidationError(
+                    "Pagamento aprovado após encerramento definitivo da cobrança."
+                )
             return locked_intent, False
 
         comanda = db.query(Comanda).filter(
@@ -308,6 +353,12 @@ class OnlinePaymentService:
         comanda.online_payment_status = mapped
 
         if mapped != "approved":
+            if mapped in UNPAID_TERMINAL_STATUSES:
+                cls._finalize_unpaid_order_in_session(
+                    db,
+                    intent=locked_intent,
+                    comanda=comanda,
+                )
             return locked_intent, False
 
         payment_idempotency_key = f"online:mercado_pago:{payment.external_id}"
@@ -329,16 +380,14 @@ class OnlinePaymentService:
                 CaixaTurno.restaurante_id == account.restaurante_id,
                 CaixaTurno.id == locked_intent.turno_id,
             ).with_for_update().first()
-            if shift is None or shift.status != "aberto":
-                shift = db.query(CaixaTurno).filter(
-                    CaixaTurno.restaurante_id == account.restaurante_id,
-                    CaixaTurno.status == "aberto",
-                ).order_by(CaixaTurno.id.desc()).with_for_update().first()
-                if shift is None:
-                    raise OnlinePaymentConfigurationError(
-                        "Pagamento aprovado sem turno de caixa aberto para conciliação."
-                    )
-                locked_intent.turno_id = shift.id
+            if shift is None:
+                raise OnlinePaymentConfigurationError(
+                    "Pagamento aprovado sem o turno de caixa original para conciliação."
+                )
+            if shift.status != "aberto":
+                raise OnlinePaymentConfigurationError(
+                    "Pagamento aprovado para Pix vinculado a turno já encerrado."
+                )
 
             pagamento = Pagamento(
                 id=str(uuid.uuid4()),
@@ -473,6 +522,62 @@ class OnlinePaymentService:
                 db.commit()
             raise
 
+    @classmethod
+    def cancel_provider_payment(
+        cls,
+        db: Session,
+        *,
+        account: RestaurantPaymentAccount,
+        intent: OnlinePaymentIntent,
+    ) -> OnlinePaymentIntent:
+        """Cancela no provedor e reaplica a resposta autoritativa no mesmo turno."""
+        if intent.status == "approved" or intent.status in UNPAID_TERMINAL_STATUSES:
+            return intent
+        if not intent.external_payment_id:
+            raise OnlinePaymentConfigurationError(
+                "Pix sem identificador externo não pode ser cancelado com segurança."
+            )
+
+        provider = MercadoPagoProvider(account.access_token)
+        try:
+            payment = provider.cancel_payment(intent.external_payment_id)
+        except MercadoPagoError as exc:
+            if exc.status_code == 401:
+                stale_access_token = account.access_token
+                account = cls._refresh_account_credentials(
+                    db,
+                    account,
+                    force=True,
+                    known_access_token=stale_access_token,
+                )
+                provider = MercadoPagoProvider(account.access_token)
+                try:
+                    payment = provider.cancel_payment(intent.external_payment_id)
+                except MercadoPagoError:
+                    payment = provider.get_payment(intent.external_payment_id)
+            else:
+                # A aprovação pode vencer a corrida entre o GET e o cancelamento.
+                # Nessa situação consultamos novamente a fonte de verdade e deixamos
+                # a resposta autoritativa decidir entre approved e ainda-pendente.
+                payment = provider.get_payment(intent.external_payment_id)
+
+        settled_intent, _ = cls.apply_provider_snapshot_in_session(
+            db,
+            account=account,
+            intent=intent,
+            payment=payment,
+        )
+        if (
+            settled_intent.status != "approved"
+            and settled_intent.status not in UNPAID_TERMINAL_STATUSES
+        ):
+            raise OnlinePaymentConfigurationError(
+                "Mercado Pago não confirmou o cancelamento do Pix pendente."
+            )
+        db.commit()
+        db.refresh(settled_intent)
+        return settled_intent
+
     @staticmethod
     def public_payload(intent: OnlinePaymentIntent) -> dict:
         return {
@@ -524,3 +629,119 @@ class OnlinePaymentService:
         )
         db.commit()
         return settled_intent, approval_effects_applied
+
+    @classmethod
+    def prepare_shift_for_close(
+        cls,
+        db: Session,
+        *,
+        restaurant_id: int,
+        shift_id: int,
+        now: datetime.datetime | None = None,
+    ) -> None:
+        """Resolve Pix do turno antes de adquirir o lock final de fechamento.
+
+        O fechamento consulta sempre o provedor para intents com payment_id externo.
+        Intents ainda pendentes só podem ser canceladas após a janela operacional
+        de fechamento. A validade do QR no provedor permanece independente e
+        respeita o mínimo aceito pelo Mercado Pago. Nenhuma intenção é movida
+        para outro turno.
+        """
+        current_time = _as_utc(now or datetime.datetime.now(datetime.timezone.utc))
+        intents = db.query(OnlinePaymentIntent).filter(
+            OnlinePaymentIntent.restaurante_id == restaurant_id,
+            OnlinePaymentIntent.turno_id == shift_id,
+        ).order_by(OnlinePaymentIntent.created_at.asc(), OnlinePaymentIntent.id.asc()).all()
+        account: RestaurantPaymentAccount | None = None
+
+        for snapshot in intents:
+            intent = db.query(OnlinePaymentIntent).filter(
+                OnlinePaymentIntent.restaurante_id == restaurant_id,
+                OnlinePaymentIntent.id == snapshot.id,
+            ).first()
+            if intent is None:
+                continue
+
+            if intent.status == "approved":
+                pagamento = None
+                if intent.pagamento_id:
+                    pagamento = db.query(Pagamento).filter(
+                        Pagamento.restaurante_id == restaurant_id,
+                        Pagamento.id == intent.pagamento_id,
+                    ).first()
+                if (
+                    pagamento is None
+                    or pagamento.status != "aprovado"
+                    or pagamento.turno_id != shift_id
+                    or _money(pagamento.valor) != _money(intent.amount)
+                ):
+                    raise OnlinePaymentConfigurationError(
+                        "Pix aprovado sem recebimento íntegro no turno de origem."
+                    )
+                continue
+
+            if intent.status in UNPAID_TERMINAL_STATUSES:
+                comanda = db.query(Comanda).filter(
+                    Comanda.restaurante_id == restaurant_id,
+                    Comanda.id == intent.comanda_id,
+                ).with_for_update().one()
+                cls._finalize_unpaid_order_in_session(
+                    db,
+                    intent=intent,
+                    comanda=comanda,
+                )
+                db.commit()
+                continue
+
+            if intent.external_payment_id:
+                account = account or cls.active_account(db, restaurant_id)
+                intent, _ = cls.reconcile_provider_payment(
+                    db,
+                    account=account,
+                    external_payment_id=intent.external_payment_id,
+                )
+                if intent is None:
+                    raise OnlinePaymentConfigurationError(
+                        "Pix do turno não foi localizado durante a conciliação."
+                    )
+                if intent.status == "approved" or intent.status in UNPAID_TERMINAL_STATUSES:
+                    continue
+
+            created_at = _as_utc(intent.created_at)
+            close_grace_at = created_at + datetime.timedelta(
+                minutes=settings.ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES
+            )
+            if current_time < close_grace_at:
+                continue
+
+            if intent.status in {"created", "error"} and not intent.external_payment_id:
+                locked_intent = db.query(OnlinePaymentIntent).filter(
+                    OnlinePaymentIntent.restaurante_id == restaurant_id,
+                    OnlinePaymentIntent.id == intent.id,
+                ).with_for_update().one()
+                comanda = db.query(Comanda).filter(
+                    Comanda.restaurante_id == restaurant_id,
+                    Comanda.id == locked_intent.comanda_id,
+                ).with_for_update().one()
+                locked_intent.status = "cancelled"
+                comanda.online_payment_status = "cancelled"
+                cls._finalize_unpaid_order_in_session(
+                    db,
+                    intent=locked_intent,
+                    comanda=comanda,
+                )
+                db.commit()
+                continue
+
+            if intent.external_payment_id:
+                account = account or cls.active_account(db, restaurant_id)
+                cls.cancel_provider_payment(
+                    db,
+                    account=account,
+                    intent=intent,
+                )
+                continue
+
+            raise OnlinePaymentConfigurationError(
+                "Pix pendente sem identificação externa não pode ser encerrado com segurança."
+            )
