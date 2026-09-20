@@ -25,6 +25,8 @@ type SourceSummary = {
   destination: string;
   source_type: string;
   source_id: string;
+  origin_kind?: "automatic" | "manual" | "manual_reprint" | "test";
+  origin_label?: string;
   status: string;
   created_at: string | null;
 };
@@ -595,7 +597,7 @@ export default function PrintingSimulatorPage() {
               <option value="">Payload manual</option>
               {sources.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.reference} · {item.status} · {item.destination}
+                  {item.reference} · {item.origin_label || item.source_type} · {item.status} · {item.destination}
                 </option>
               ))}
             </select>
@@ -604,6 +606,7 @@ export default function PrintingSimulatorPage() {
               <dl className="mt-4 grid grid-cols-2 gap-2 text-[10px]">
                 <div><dt className="text-koma-muted">Job</dt><dd className="font-mono">{source.id}</dd></div>
                 <div><dt className="text-koma-muted">Status</dt><dd>{source.status}</dd></div>
+                <div><dt className="text-koma-muted">Origem da impressão</dt><dd>{source.origin_label || source.source_type}</dd></div>
                 <div><dt className="text-koma-muted">Documento</dt><dd>{source.document_type}</dd></div>
                 <div><dt className="text-koma-muted">Destino</dt><dd>{source.destination}</dd></div>
                 <div className="col-span-2"><dt className="text-koma-muted">Criado</dt><dd>{formatDate(source.created_at)}</dd></div>
