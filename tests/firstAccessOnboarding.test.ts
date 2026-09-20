@@ -43,10 +43,11 @@ test('configured restaurants prioritize function search and can resume setup fro
   assert.match(cashierSettings, /removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
 });
 
-test('required onboarding persists and blocks normal operation until 3 of 3 is complete', () => {
-  assert.match(onboarding, /Antes de liberar a operação, conclua os 3 passos essenciais/);
-  assert.match(onboarding, /requiredComplete/);
-  assert.match(onboarding, /Entrar no KÔMA/);
+test('required onboarding persists and releases operation only after explicit trial start', () => {
+  assert.match(onboarding, /Conclua os quatro itens mínimos/);
+  assert.match(onboarding, /configurationComplete/);
+  assert.match(onboarding, /\/api\/onboarding\/start-trial/);
+  assert.match(onboarding, /Iniciar 7 dias e fazer teste/);
   assert.match(onboarding, /sessionStorage\.setItem\(ONBOARDING_SETUP_MODE_KEY, '1'\)/);
   assert.match(onboarding, /sessionStorage\.removeItem\(ONBOARDING_SETUP_MODE_KEY\)/);
   assert.match(boundary, /!gate\.requiredComplete/);
@@ -103,24 +104,26 @@ test('onboarding status request cannot trap first access in infinite loading', (
   assert.match(onboarding, /const controller = new AbortController\(\)/);
   assert.match(onboarding, /setTimeout\(\(\) => controller\.abort\(\), ONBOARDING_LOAD_TIMEOUT_MS\)/);
   assert.match(onboarding, /signal: controller\.signal/);
-  assert.match(onboarding, /Tente novamente para continuar a implantação/);
+  assert.match(onboarding, /A implantação demorou para responder/);
   assert.match(onboarding, /clearTimeout\(timeoutId\)/);
 });
 
-test('onboarding uses canonical server progress and exposes the five launch steps', () => {
+test('onboarding uses canonical server progress, canonical modes and optional Mercado Pago', () => {
   assert.match(onboarding, /\/api\/onboarding\/status/);
   for (const label of [
     'Complete os dados do restaurante',
     'Defina os horários de funcionamento',
-    'Monte o primeiro cardápio',
-    'Conecte o Mercado Pago',
-    'Faça um primeiro pedido de teste',
+    'Publique o primeiro produto',
+    'Conecte o Mercado Pago para Pix online',
+    'Valide com um pedido de teste',
   ]) {
     assert.match(onboarding, new RegExp(label));
   }
   assert.match(onboarding, /daysRemaining/);
-  assert.match(onboarding, /Atualizar progresso/);
-  assert.match(onboarding, /Disponível depois/);
+  assert.match(onboarding, /Salvar modalidades/);
+  assert.match(onboarding, /order_types/);
+  assert.match(onboarding, /Cardápio Online funciona com pagamento no atendimento sem Mercado Pago/);
+  assert.match(onboarding, /Depois de iniciar/);
 });
 
 test('onboarding route is composed once into the existing root router', () => {

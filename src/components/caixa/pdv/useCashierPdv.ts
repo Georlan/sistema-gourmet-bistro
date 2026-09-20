@@ -377,6 +377,13 @@ export function useCashierPdv({
           modificador_ids: item.modifierIds || [],
         })),
       );
+      const onboardingTest = (() => {
+        try {
+          return sessionStorage.getItem("koma_onboarding_test_order") === "1";
+        } catch {
+          return false;
+        }
+      })();
       const salePayload = {
         cliente_id: orderType === 'dine_in' ? undefined : customerId || undefined,
         mesa_id: orderType === 'delivery' ? null : mesaId || null,
@@ -387,6 +394,7 @@ export function useCashierPdv({
         delivery_endereco: orderType === 'delivery' ? deliveryAddress : undefined,
         address_snapshot: orderType === 'delivery' ? deliverySnapshot || undefined : undefined,
         delivery_taxa: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0.0,
+        onboarding_test: onboardingTest,
         itens: itemsList,
       };
       const saleFingerprint = JSON.stringify(salePayload);
@@ -409,6 +417,13 @@ export function useCashierPdv({
       if (res.ok) {
         const confirmedComanda = await res.json().catch(() => null);
         pdvPendingOperationRef.current = null;
+        if (onboardingTest) {
+          try {
+            sessionStorage.removeItem("koma_onboarding_test_order");
+          } catch {
+            // Restricted browser storage must not invalidate a confirmed sale.
+          }
+        }
 
         if (optimisticTempId && confirmedComanda?.id) {
           window.dispatchEvent(new CustomEvent('koma_optimistic_order_reconcile', {

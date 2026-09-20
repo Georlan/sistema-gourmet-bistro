@@ -124,6 +124,9 @@ export default function CardapioCartDrawer({
   orderingMessage = "Pedidos temporariamente pausados.",
 }: CardapioCartDrawerProps) {
   const [deliveryMethod, setDeliveryMethod] = useState<CardapioFulfillment>("pickup");
+  const explicitOrderTypes = brandConfig?.activeOrderTypes;
+  const pickupEnabled = !explicitOrderTypes || explicitOrderTypes.includes("retirada");
+  const dineInEnabled = !explicitOrderTypes || explicitOrderTypes.includes("consumo_local");
   const [address, setAddress] = useState(user?.address || "");
   const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddressDraft>(() => (
     parseDeliveryAddressLegacy(user?.address) || emptyAddress()
@@ -297,7 +300,7 @@ export default function CardapioCartDrawer({
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
-  const deliveryEnabled = brandConfig?.deliveryEnabled !== false;
+  const deliveryEnabled = brandConfig?.deliveryEnabled !== false && (!explicitOrderTypes || explicitOrderTypes.includes("delivery"));
   const distanceMode = brandConfig?.tipoTaxaEntrega === "distancia";
   const quotedDistanceFee = distanceMode && locationQuote.status === "success"
     ? Number(locationQuote.fee)
@@ -320,11 +323,23 @@ export default function CardapioCartDrawer({
   const freeDeliveryThreshold = brandConfig?.freteGratisValor || 0;
 
   useEffect(() => {
-    if (!deliveryEnabled && deliveryMethod === "delivery") {
-      setDeliveryMethod("pickup");
+    const methodEnabled = deliveryMethod === "pickup"
+      ? pickupEnabled
+      : deliveryMethod === "dine_in"
+        ? dineInEnabled
+        : deliveryEnabled;
+    if (!methodEnabled) {
+      const fallback: CardapioFulfillment | null = pickupEnabled
+        ? "pickup"
+        : dineInEnabled
+          ? "dine_in"
+          : deliveryEnabled
+            ? "delivery"
+            : null;
+      if (fallback) setDeliveryMethod(fallback);
       setSelectedBairro("");
     }
-  }, [deliveryEnabled, deliveryMethod]);
+  }, [deliveryEnabled, deliveryMethod, dineInEnabled, pickupEnabled]);
 
   useEffect(() => {
     const latitude = deliveryAddressDraft.latitude;
@@ -832,15 +847,15 @@ export default function CardapioCartDrawer({
               <section className="border-t border-koma-border pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
                 <h3 className="text-xs font-black uppercase tracking-wider text-koma-muted">2. Como quer receber?</h3>
                 <div className="mt-3 grid grid-cols-3 gap-2">
-                  <button type="button" aria-pressed={deliveryMethod === "pickup"} onClick={() => { setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                  <button type="button" disabled={!pickupEnabled} aria-pressed={deliveryMethod === "pickup"} onClick={() => { if (pickupEnabled) setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "pickup" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Retirada</strong>
-                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">Buscar no restaurante</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">{pickupEnabled ? "Buscar no restaurante" : "Indisponível no momento"}</span>
                   </button>
-                  <button type="button" aria-pressed={deliveryMethod === "dine_in"} onClick={() => { setDeliveryMethod("dine_in"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${deliveryMethod === "dine_in" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
+                  <button type="button" disabled={!dineInEnabled} aria-pressed={deliveryMethod === "dine_in"} onClick={() => { if (dineInEnabled) setDeliveryMethod("dine_in"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "dine_in" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><Store className={deliveryMethod === "dine_in" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "dine_in" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>
                     <strong className="mt-2 block text-sm text-koma-foreground">Consumo local</strong>
-                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">Comer no restaurante</span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-koma-muted">{dineInEnabled ? "Comer no restaurante" : "Indisponível no momento"}</span>
                   </button>
                   <button type="button" disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"} onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }} className={`min-w-0 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-55 ${deliveryMethod === "delivery" ? "border-emerald-500/45 bg-emerald-500/10" : "border-koma-border bg-koma-card hover:border-emerald-500/25"}`}>
                     <span className="flex items-center justify-between gap-2"><Truck className={deliveryMethod === "delivery" ? "h-5 w-5 text-emerald-500" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "delivery" && <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />}</span>

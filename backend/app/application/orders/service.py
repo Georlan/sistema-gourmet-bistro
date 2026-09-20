@@ -605,6 +605,7 @@ class OrderApplicationService:
                     identificador=cmd.customer.name if cmd.customer else None,
                     numero_pedido=numero_pedido,
                     fechada=False,
+                    onboarding_test=bool(cmd.onboarding_test),
                     criado_em=datetime.datetime.now(datetime.timezone.utc),
                     delivery_status=auto_delivery_status,
                     delivery_telefone=clean_phone,
