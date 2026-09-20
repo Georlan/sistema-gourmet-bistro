@@ -6,6 +6,7 @@ import React from "react";
 import { CheckCircle2, ChevronDown, Clock3, History, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react";
 import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
+import { fallbackOrderState, orderFulfillmentLabel } from "../orderTracking";
 
 interface HistoryModifier {
   grupo_id?: string | null;
@@ -167,7 +168,8 @@ export default function CardapioCustomerOrderHistory({
             const expanded = expandedOrderId === order.id;
             const rejected = Boolean(order.state?.rejected);
             const terminal = Boolean(order.state?.terminal);
-            const delivery = order.state?.fulfillment === "delivery" || order.tipo.toLocaleLowerCase("pt-BR").includes("delivery");
+            const fulfillment = fallbackOrderState(order.status, order.tipo).fulfillment;
+            const delivery = fulfillment === "delivery";
             return (
               <article key={order.id} className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/30">
                 <button
@@ -185,7 +187,7 @@ export default function CardapioCustomerOrderHistory({
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5">
                       <strong className="text-[11px] text-koma-foreground">Pedido #{order.numero_pedido}</strong>
-                      <small className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">{delivery ? "Delivery" : "Retirada"}</small>
+                      <small className="rounded-md bg-slate-800 px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">{orderFulfillmentLabel(fulfillment)}</small>
                     </span>
                     <span className={clsx("mt-0.5 block text-[9px] font-bold", rejected ? "text-rose-400" : terminal ? "text-emerald-400" : "text-amber-300")}>
                       {order.state?.label || order.status}
