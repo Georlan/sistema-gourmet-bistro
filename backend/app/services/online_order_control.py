@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from ..models import Comanda
+from ..models import Comanda, Lancamento
 from ..online_order_control_models import (
     OnlineOrderControl,
     OnlineOrderCustomerBlock,
@@ -22,6 +23,8 @@ from .customer_auth import hash_public_rate_key
 # Estados que ainda ocupam a capacidade operacional do restaurante.
 # ``transito`` já saiu da cozinha; finalizado/recusado também não contam.
 ACTIVE_OPERATIONAL_STATUSES = ("analise", "pendente", "producao", "pronto")
+
+logger = logging.getLogger("koma.online_order_control")
 
 
 def utcnow() -> datetime.datetime:
@@ -121,6 +124,7 @@ def operational_status(db: Session, restaurante_id: int) -> dict[str, Any]:
         "pause_until": control.pause_until.isoformat() if paused and control.pause_until else None,
         "max_active_orders": capacity,
         "auto_pause": bool(control.auto_pause),
+        "auto_accept": bool(control.auto_accept),
         "counts": counts,
         "capacity_ratio": round(ratio, 4) if ratio is not None else None,
         "level": level,
@@ -235,6 +239,193 @@ def update_capacity(
         after_data=after,
     )
     return control
+
+
+def update_auto_accept(
+    db: Session,
+    *,
+    restaurante_id: int,
+    actor_user_id: str | None,
+    enabled: bool,
+) -> OnlineOrderControl:
+    """Persiste a política de aceite automático no backend por tenant."""
+    control = get_or_create_control(db, restaurante_id, for_update=True)
+    before = operational_status(db, restaurante_id)
+    control.auto_accept = bool(enabled)
+    control.updated_at = utcnow()
+    db.flush()
+    after = operational_status(db, restaurante_id)
+    _audit(
+        db,
+        restaurante_id=restaurante_id,
+        actor_user_id=actor_user_id,
+        action="online_orders_auto_accept_updated",
+        reason=(
+            "Aceite automático de pedidos online ativado"
+            if enabled
+            else "Aceite automático de pedidos online desativado"
+        ),
+        before_data=before,
+        after_data=after,
+    )
+    return control
+
+
+def auto_accept_online_order_if_enabled(
+    db: Session,
+    *,
+    restaurante_id: int,
+    comanda: Comanda,
+    operator_user_id: str | int | None = None,
+) -> bool:
+    """Aceita no servidor um pedido online elegível quando a política está ativa.
+
+    Pagamentos online só entram após aprovação; pedidos agendados apenas depois
+    da liberação. A função não faz commit: o chamador mantém a atomicidade do
+    fluxo que publicou o pedido.
+    """
+    control = db.query(OnlineOrderControl).filter(
+        OnlineOrderControl.restaurante_id == restaurante_id,
+    ).first()
+    if control is None or not bool(control.auto_accept):
+        return False
+    if comanda.fechada or str(comanda.delivery_status or "").strip().lower() not in {
+        "pendente",
+        "analise",
+    }:
+        return False
+    payment_status = str(comanda.online_payment_status or "").strip().lower()
+    if payment_status and payment_status != "approved":
+        return False
+
+    launch = (
+        db.query(Lancamento)
+        .filter(
+            Lancamento.restaurante_id == restaurante_id,
+            Lancamento.comanda_id == comanda.id,
+        )
+        .order_by(Lancamento.timestamp.asc(), Lancamento.id.asc())
+        .first()
+    )
+    if launch is None or str(launch.origem or "").strip().casefold() != "cardapio":
+        return False
+
+    unreleased_schedule = db.query(ScheduledOrder.id).filter(
+        ScheduledOrder.restaurante_id == restaurante_id,
+        ScheduledOrder.comanda_id == comanda.id,
+        ScheduledOrder.released_at.is_(None),
+    ).first()
+    if unreleased_schedule is not None:
+        return False
+
+    # A política automática nunca contorna o gate operacional do caixa. Se o
+    # turno fechou entre a criação e o aceite, o pedido permanece pendente.
+    from fastapi import HTTPException
+    from .shifts import require_open_cash_shift
+
+    try:
+        require_open_cash_shift(db, restaurante_id)
+    except HTTPException:
+        logger.warning(
+            "Autoaceite ignorado para pedido %s: caixa fechado",
+            comanda.id,
+        )
+        return False
+
+    from ..application.orders.lifecycle import OrderLifecycleCoordinator
+    from ..application.printing import (
+        PrintAction,
+        PrintIntent,
+        PrintSourceType,
+        PrintTrigger,
+        PrintingApplicationService,
+        UniversalPrintingError,
+    )
+
+    before_status = str(comanda.delivery_status or "pendente")
+    transition = OrderLifecycleCoordinator.transition_check_status(
+        db,
+        restaurant_id=restaurante_id,
+        comanda_id=comanda.id,
+        target_status="producao",
+        operator_user_id=operator_user_id or getattr(comanda, "garcom_id", None),
+        commit=False,
+    )
+    if not transition.changed:
+        return False
+
+    if transition.first_accept:
+        try:
+            PrintingApplicationService.request_print(
+                db,
+                PrintIntent(
+                    restaurant_id=restaurante_id,
+                    source_type=PrintSourceType.ORDER,
+                    source_id=comanda.id,
+                    action=PrintAction.PRINT,
+                    trigger=PrintTrigger.AUTOMATIC,
+                    requested_by="Autoaceite online",
+                    idempotency_key=f"aceite:pedido:{comanda.id}:producao",
+                ),
+            )
+        except UniversalPrintingError as exc:
+            logger.warning(
+                "Impressão automática falhou no autoaceite do pedido %s: %s",
+                comanda.id,
+                exc,
+            )
+
+    _audit(
+        db,
+        restaurante_id=restaurante_id,
+        actor_user_id=(
+            str(operator_user_id)
+            if operator_user_id is not None
+            else str(getattr(comanda, "garcom_id", "") or "") or None
+        ),
+        action="online_order_auto_accepted",
+        reason="Pedido online aceito automaticamente pela política do restaurante",
+        before_data={"comanda_id": comanda.id, "status": before_status},
+        after_data={"comanda_id": comanda.id, "status": "producao"},
+    )
+    db.flush()
+    return True
+
+
+def auto_accept_pending_online_orders(
+    db: Session,
+    *,
+    restaurante_id: int,
+    operator_user_id: str | int | None = None,
+) -> int:
+    """Aplica a política recém-ativada também ao backlog online elegível."""
+    candidates = (
+        db.query(Comanda)
+        .join(
+            Lancamento,
+            (Lancamento.comanda_id == Comanda.id)
+            & (Lancamento.restaurante_id == Comanda.restaurante_id),
+        )
+        .filter(
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.fechada.is_(False),
+            Comanda.delivery_status.in_(("pendente", "analise")),
+            Lancamento.origem == "cardapio",
+        )
+        .distinct()
+        .order_by(Comanda.criado_em.asc(), Comanda.id.asc())
+        .all()
+    )
+    accepted = 0
+    for comanda in candidates:
+        if auto_accept_online_order_if_enabled(
+            db,
+            restaurante_id=restaurante_id,
+            comanda=comanda,
+            operator_user_id=operator_user_id,
+        ):
+            accepted += 1
+    return accepted
 
 
 @dataclass(frozen=True)
