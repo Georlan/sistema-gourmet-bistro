@@ -65,7 +65,7 @@ from ...services.clientes import (
     normalizar_telefone_cliente,
 )
 from ...services.inventory import consumir_estoque_dos_itens, estornar_estoque_dos_itens
-from ...services.order_numbers import gerar_novo_numero_pedido_atomico
+from ...services.order_numbers import gerar_novo_numero_pedido_atomico\nfrom ...services.operational_modes import is_fulfillment_allowed
 from ...services.delivery_fee_policy import (
     normalize_distance_fee_config,
     normalize_neighborhood,
@@ -356,6 +356,16 @@ class OrderApplicationService:
                     .first()
                 )
                 return cls._to_order_dto(db=db, comanda=existing_comanda, lancamento=lanc)
+
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == cmd.restaurant_id)
+            .one_or_none()
+        )
+        if not is_fulfillment_allowed(config, cmd.fulfillment):
+            raise OrderValidationError(
+                "Esta modalidade de pedido está desativada nas configurações operacionais do restaurante."
+            )
 
         # 2. Validação Pura e Contexto
         delivery_address_snapshot = cmd.delivery.address_snapshot if cmd.delivery else None
