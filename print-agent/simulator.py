@@ -27,6 +27,7 @@ MAX_PAYLOAD_CHARS = 64 * 1024
 
 EXACT_ALLOWED_ORIGINS = {
     "https://app.komafood.com.br",
+    "https://central.komafood.com.br",
     "https://sistema-gourmet-bistro.pages.dev",
 }
 LOCAL_ALLOWED_PORTS = {3000, 4173, 4283}
