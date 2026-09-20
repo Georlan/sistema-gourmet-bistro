@@ -18,6 +18,7 @@ import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
 import {
   StoredOrder,
+  orderFulfillmentLabel,
   resolveOrderState,
 } from "../orderTracking";
 import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
