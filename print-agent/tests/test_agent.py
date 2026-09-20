@@ -830,6 +830,42 @@ def test_api_client_completes_usb_command():
         ]["capabilities"] == ["connect_usb"]
 
 
+def test_api_client_reads_shadow_feed_without_claiming():
+    payload = {
+        "cursor": {
+            "created_at": "2026-09-20T20:00:00+00:00",
+            "id": "job-shadow-1",
+        },
+        "items": [{"id": "job-shadow-1"}],
+    }
+
+    with patch("api_client.requests.Session") as SessionClass:
+        session = SessionClass.return_value
+        response = MagicMock(status_code=200)
+        response.json.return_value = payload
+        session.get.return_value = response
+
+        client = KomaApiClient("https://api.koma.test", "agent-token")
+        result = client.get_simulator_feed(
+            {
+                "created_at": "2026-09-20T19:59:59+00:00",
+                "id": "job-shadow-0",
+            },
+            limit=10,
+        )
+
+        assert result == payload
+        assert session.get.call_args.args[0].endswith(
+            "/api/print-agents/simulator/agent-feed"
+        )
+        assert session.get.call_args.kwargs["params"] == {
+            "limit": 10,
+            "after_created_at": "2026-09-20T19:59:59+00:00",
+            "after_id": "job-shadow-0",
+        }
+        session.post.assert_not_called()
+
+
 def test_api_client_falls_back_during_backend_rollout():
     """Agente novo continua funcional enquanto o backend antigo é atualizado."""
     job = {"id": "job-legacy"}
