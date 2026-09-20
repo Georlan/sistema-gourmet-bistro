@@ -658,3 +658,114 @@ def test_pagamento_da_mesa_distribui_entre_multiplas_comandas():
         assert total_pagamentos == 42.0
     finally:
         db.close()
+
+
+def test_current_behavior_reproduces_stale_item_selection_bug():
+    """Reproduz seleção obsoleta: pagamento aceita subconjunto e quita item não confirmado."""
+    headers = get_pdv_auth_headers()
+
+    opened = client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    )
+    assert opened.status_code == 201, opened.text
+
+    db = SessionLocal()
+    try:
+        comanda = Comanda(
+            id="cmd-stale-items-777",
+            restaurante_id=777,
+            mesa_id=None,
+            garcom_id="usr_pdv_777",
+            tipo="Retirada",
+            numero_pedido=77731,
+            delivery_status="pronto",
+            status_comanda="aguardando_pagamento",
+            valor_pago=0.0,
+            fechada=False,
+        )
+        lancamento = Lancamento(
+            id="lan-stale-items-777",
+            restaurante_id=777,
+            comanda_id=comanda.id,
+            garcom_id="usr_pdv_777",
+            status="pronto",
+        )
+        items = [
+            Item(
+                id=f"item-stale-{suffix}",
+                restaurante_id=777,
+                comanda_id=comanda.id,
+                lancamento_id=lancamento.id,
+                produto_id="prod-pdv-777",
+                preco_unit=42.0,
+                status="pronto",
+                pago=False,
+            )
+            for suffix in ("a", "b", "c")
+        ]
+        db.add_all([comanda, lancamento, *items])
+        db.commit()
+    finally:
+        db.close()
+
+    # Operador B confirma primeiro apenas o item A.
+    first = client.post(
+        "/caixa/comandas/cmd-stale-items-777/pagar",
+        headers=headers,
+        json={
+            "valor": 42.0,
+            "metodo": "pix",
+            "item_ids": ["item-stale-a"],
+            "idempotency_key": "stale-item-first-777",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    # Operador A ainda confirma a seleção antiga [A, B], cujo total original era R$ 84.
+    stale = client.post(
+        "/caixa/comandas/cmd-stale-items-777/pagar",
+        headers=headers,
+        json={
+            "valor": 84.0,
+            "metodo": "cartao_credito",
+            "item_ids": ["item-stale-a", "item-stale-b"],
+            "idempotency_key": "stale-item-second-777",
+        },
+    )
+
+    # Comportamento observado na main antes do hardening:
+    # A já não é elegível, mas a API aceita somente B como subconjunto e aplica
+    # os R$ 84 ao saldo geral. Como a comanda fecha, C também termina pago apesar
+    # de não fazer parte da confirmação do segundo operador.
+    assert stale.status_code == 201, stale.text
+
+    db = SessionLocal()
+    try:
+        persisted = db.query(Comanda).filter(
+            Comanda.restaurante_id == 777,
+            Comanda.id == "cmd-stale-items-777",
+        ).one()
+        item_state = {
+            item.id: item.pago
+            for item in db.query(Item).filter(
+                Item.restaurante_id == 777,
+                Item.comanda_id == persisted.id,
+            ).all()
+        }
+        payments = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == 777,
+            Pagamento.comanda_id == persisted.id,
+        ).order_by(Pagamento.criado_em.asc()).all()
+
+        assert float(persisted.valor_pago) == 126.0
+        assert persisted.fechada is True
+        assert item_state == {
+            "item-stale-a": True,
+            "item-stale-b": True,
+            "item-stale-c": True,
+        }
+        assert [float(payment.valor) for payment in payments] == [42.0, 84.0]
+    finally:
+        db.close()
