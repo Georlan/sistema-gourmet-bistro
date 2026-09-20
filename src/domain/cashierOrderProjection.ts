@@ -57,14 +57,22 @@ type CashierNumberSource = Partial<Pick<Order, 'id' | 'numeroPedido' | 'displayN
 export const isCashierTableOrder = (order: Order | null | undefined) => {
   if (!order || Number(order.mesaId) <= 0) return false;
 
-  // Um pedido pode receber mesa depois de criado sem deixar de pertencer ao
-  // fluxo digital. O ciclo digital tem precedência sobre a localização física,
-  // evitando que o mesmo pedido apareça simultaneamente no Kanban e no salão.
-  if (['pendente', 'analise', 'producao', 'pronto', 'transito'].includes(String(order.deliveryStatus || '').toLowerCase())) {
-    return false;
-  }
+  const normalizedType = String(order.tipo || '').trim().toLowerCase();
+  if (['delivery', 'entrega', 'retirada', 'pickup'].includes(normalizedType)) return false;
 
-  return !['delivery', 'entrega', 'retirada'].includes(String(order.tipo || '').toLowerCase());
+  const isDineIn = ['consumo no local', 'consumo_local', 'dine_in', 'mesa', 'local', 'salao', 'salão']
+    .includes(normalizedType);
+  if (!isDineIn) return true;
+
+  // Origem define se o consumo local nasceu em canal digital. A mesa é somente
+  // localização e deliveryStatus é somente ciclo operacional. O fallback por
+  // status fica restrito a snapshots legados sem origem conhecida.
+  const origin = String(order.origemOperacional || '').trim().toLowerCase();
+  if (origin === 'cardapio') return false;
+  if (['caixa', 'garcom', 'smartpos'].includes(origin)) return true;
+
+  return !['pendente', 'analise', 'producao', 'pronto', 'transito']
+    .includes(String(order.deliveryStatus || '').toLowerCase());
 };
 
 /**
