@@ -22,11 +22,11 @@ O KÔMA separa a criação técnica do pedido da sua liberação operacional.
 
 O Pix online pertence ao turno de Caixa em que a intenção foi criada. Esse vínculo é histórico: `OnlinePaymentIntent.turno_id` não é transferido para um turno posterior.
 
-A validade operacional padrão do Pix é de **5 minutos**. No fechamento do turno, o backend consulta a verdade do Mercado Pago antes de decidir:
+O QR Code mantém **30 minutos** de validade no Mercado Pago (mínimo aceito pela integração atual). Separadamente, o KÔMA usa uma **janela operacional de 5 minutos** para fechamento: depois dela, uma tentativa de fechar o turno consulta a verdade do provedor e pode cancelar explicitamente um Pix que continue pendente.
 
 - `approved`: materializa exatamente um `Pagamento(status="aprovado")` no mesmo `turno_id`; o pedido continua válido e o turno não fecha enquanto a comanda permanecer aberta.
-- `created/pending/error` ainda dentro da validade: o fechamento é bloqueado.
-- pendente após a validade: o backend tenta cancelar no Mercado Pago; somente uma resposta autoritativa terminal libera o pedido como abandonado.
+- `created/pending/error` ainda dentro da janela operacional de 5 minutos: o fechamento é bloqueado.
+- pendente após a janela operacional: o backend tenta cancelar no Mercado Pago; somente uma resposta autoritativa terminal libera o pedido como abandonado.
 - `rejected/cancelled/expired`: o pedido ainda não publicado é encerrado como inválido, seus itens são cancelados e ele deixa de bloquear o Caixa.
 - estado incerto, indisponibilidade do provedor ou divergência financeira: o fechamento falha fechado.
 
@@ -76,7 +76,8 @@ O deploy precisa definir:
 
 - `KOMA_PUBLIC_API_URL`: origem HTTPS pública do backend.
 - `ONLINE_PAYMENT_PLAN_FEES_ENABLED`: `false` por padrão. Somente `true` autoriza o backend a calcular e enviar a taxa comercial resolvida do contrato do tenant ao provedor.
-- `ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES`: validade do Pix.
+- `ONLINE_PAYMENT_PIX_EXPIRATION_MINUTES`: validade do Pix no provedor; mínimo de 30 minutos na integração atual.
+- `ONLINE_PAYMENT_PIX_CLOSE_GRACE_MINUTES`: janela operacional antes de o fechamento poder cancelar um Pix ainda pendente; padrão de 5 minutos.
 
 A trava existe para impedir que um merge de código passe a cobrar comissão em produção sem decisão operacional explícita. Antes de habilitar, validar contrato, documentação fiscal, fluxo OAuth/marketplace, credenciais do provedor, reembolso, chargeback e conciliação.
 
