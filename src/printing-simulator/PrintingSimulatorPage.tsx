@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Cable,
@@ -35,6 +35,7 @@ type SourceDetail = SourceSummary & {
   printed_at: string | null;
   queue_latency_ms: number | null;
   physical_completion_tracking: false;
+  server_observed_latency_ms?: number | null;
 };
 
 type MonitorPayload = {
@@ -95,6 +96,32 @@ type StageError = {
   stage: string;
   message: string;
 };
+
+type AutoSimulationObserved = {
+  server_observed_latency_ms: number | null;
+  feed_request_ms: number;
+  virtual_ready_upper_bound_ms: number | null;
+};
+
+type AutoSimulationEvent = {
+  job: SourceDetail;
+  simulation: SimulatorResult;
+  observed: AutoSimulationObserved;
+  simulated_at: string;
+};
+
+type AutoSimulationStatus = {
+  enabled: boolean;
+  mode: "shadow";
+  started_at: string | null;
+  processed_count: number;
+  cursor: { created_at: string; id: string } | null;
+  last_event: AutoSimulationEvent | null;
+  last_error: StageError | null;
+  authoritative_queue_mutation: false;
+  physical_usb_write: false;
+};
+
 
 const AGENT_PORTS = Array.from({ length: 11 }, (_, index) => 17654 + index);
 const SUPPORT_SESSION_STORAGE_KEY = "koma_support_session";
@@ -209,7 +236,10 @@ export default function PrintingSimulatorPage() {
   const [loadingSources, setLoadingSources] = useState(false);
   const [probing, setProbing] = useState(false);
   const [rendering, setRendering] = useState(false);
+  const [autoStatus, setAutoStatus] = useState<AutoSimulationStatus | null>(null);
+  const [autoControlBusy, setAutoControlBusy] = useState(false);
   const [error, setError] = useState<StageError | null>(null);
+  const lastAutoJobIdRef = useRef<string | null>(null);
 
   const authHeaders = useMemo(
     () => session?.token ? { Authorization: `Bearer ${session.token}` } : null,
