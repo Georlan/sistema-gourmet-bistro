@@ -154,3 +154,12 @@ test('printing queue explains FIFO order and job origin', () => {
   assert.match(monitor, /automática\(s\)/);
   assert.match(monitor, /reimpressão\(ões\)/);
 });
+
+
+test('printing diagnostics distinguish total queue from delayed subset', () => {
+  const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
+
+  assert.match(monitor, /\$\{queueTotal\} na fila; \$\{monitorData\.summary\.delayed\} atrasada\(s\)/);
+  assert.match(monitor, /Atraso significa mais de/);
+  assert.doesNotMatch(monitor, /impressão\(ões\) aguardando; agente local conectado/);
+});
