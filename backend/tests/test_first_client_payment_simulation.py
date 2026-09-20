@@ -48,6 +48,7 @@ from app.models import (
     RestaurantPaymentAccount,
     Usuario,
 )
+from app.online_order_control_models import OnlineOrderControl
 from app.online_payment_refund_models import OnlinePaymentRefund
 from app.services.cash_reconciliation import RefundDomainError
 from app.services.online_payments.mercado_pago import MercadoPagoProvider
@@ -89,6 +90,7 @@ def _cleanup(db, restaurante_id: int) -> None:
         OnlinePaymentIntent,
         Pagamento,
         IntegrationOutbox,
+        OnlineOrderControl,
         Item,
         Lancamento,
         Comanda,
@@ -479,6 +481,9 @@ def test_dine_in_pix_split_approval_and_full_lifecycle_simulation(monkeypatch):
             restaurante_id,
             fulfillment=FulfillmentType.DINE_IN,
         )
+        db.add(OnlineOrderControl(restaurante_id=restaurante_id, auto_accept=True))
+        db.commit()
+
         assert comanda.tipo == "Consumo no Local"
         assert comanda.mesa_id is None
         assert comanda.delivery_status == "pendente"
@@ -512,18 +517,9 @@ def test_dine_in_pix_split_approval_and_full_lifecycle_simulation(monkeypatch):
         db.refresh(comanda)
         assert comanda.online_payment_status == "approved"
         assert Decimal(str(comanda.valor_pago)) == ORDER_TOTAL
-        assert comanda.delivery_status == "pendente"
+        assert comanda.delivery_status == "producao"
         assert all(item.pago for item in comanda.itens)
-
-        accepted = OrderApplicationService.accept_order(
-            db,
-            AcceptOrderCommand(
-                restaurant_id=restaurante_id,
-                order_id=comanda.lancamentos[0].id,
-                operator_user_id=user_id,
-            ),
-        )
-        assert accepted.status == "producao"
+        assert comanda.lancamentos[0].status == "producao"
 
         ready = OrderApplicationService.mark_order_ready(
             db,

@@ -53,6 +53,7 @@ from ...models import (
 )
 from ...schemas import CardapioPedidoCreate
 from ...services.clientes import normalizar_telefone_cliente
+from ...services.online_order_control import auto_accept_online_order_if_enabled
 from ...services.online_order_policy import evaluate_online_order_policy
 from ...services.online_payments import (
     OnlinePaymentConfigurationError,
@@ -343,6 +344,24 @@ class CardapioWebAdapter:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
                 )
+
+            if not (online_payment or is_scheduled) and comanda is not None:
+                try:
+                    if auto_accept_online_order_if_enabled(
+                        db,
+                        restaurante_id=rest_id,
+                        comanda_id=comanda.id,
+                    ):
+                        db.commit()
+                        db.refresh(comanda)
+                except Exception:
+                    # O pedido já foi persistido. Autoaceite é uma conveniência
+                    # operacional e jamais pode converter uma venda válida em 5xx.
+                    db.rollback()
+                    logger.exception(
+                        "Falha no autoaceite backend do pedido %s; mantendo pendente.",
+                        comanda.id,
+                    )
 
             if is_scheduled:
                 normalized_schedule = validate_schedule_request(
