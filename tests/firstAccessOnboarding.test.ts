@@ -102,6 +102,13 @@ test('resume route fails safely when the browser no longer has an admin session'
   assert.match(activation, /window\.location\.href = '\/\?view=caixa'/);
 });
 
+test('status load never redirects into operation before explicit trial action', () => {
+  const loadHandler = onboarding.split('const loadSnapshot', 2)[1]?.split('const openCashierAt', 1)[0] || '';
+  const trialHandler = onboarding.split('const startTrial', 2)[1]?.split('const steps:', 1)[0] || '';
+  assert.doesNotMatch(loadHandler, /openCashierAt/);
+  assert.match(trialHandler, /openCashierAt\('operacao', 'balcao', false\)/);
+});
+
 test('onboarding status request cannot trap first access in infinite loading', () => {
   assert.match(onboarding, /const ONBOARDING_LOAD_TIMEOUT_MS = 10_000/);
   assert.match(onboarding, /const controller = new AbortController\(\)/);
