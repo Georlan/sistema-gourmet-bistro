@@ -244,10 +244,10 @@ class CardapioWebAdapter:
     ) -> dict[str, Any]:
         """Processa a requisição pública HTTP de criação de pedido pelo Cardápio Web."""
         modalidade = payload.tipo_pedido.strip().lower()
-        if modalidade not in {"delivery", "retirada"}:
+        if modalidade not in {"delivery", "retirada", "consumo_local"}:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="tipo_pedido deve ser 'delivery' ou 'retirada'.",
+                detail="tipo_pedido deve ser 'delivery', 'retirada' ou 'consumo_local'.",
             )
 
         address_snapshot = (
@@ -316,8 +316,12 @@ class CardapioWebAdapter:
                 detail="Pagamento no atendimento aceita dinheiro, cartão de crédito ou cartão de débito.",
             )
 
-        tipo_comanda = "Retirada" if modalidade == "retirada" else "Delivery"
-        endereco_comanda = None if modalidade == "retirada" else endereco_entrega
+        tipo_comanda = {
+            "delivery": "Delivery",
+            "retirada": "Retirada",
+            "consumo_local": "Consumo no Local",
+        }[modalidade]
+        endereco_comanda = endereco_entrega if modalidade == "delivery" else None
 
         rest_id = resolve_restaurant_id(str(payload.restaurante_id), None, db)
         token_context = current_restaurante_id.set(rest_id)
@@ -458,7 +462,11 @@ class CardapioWebAdapter:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
 
-            fulfillment = FulfillmentType.DELIVERY if modalidade == "delivery" else FulfillmentType.PICKUP
+            fulfillment = {
+                "delivery": FulfillmentType.DELIVERY,
+                "retirada": FulfillmentType.PICKUP,
+                "consumo_local": FulfillmentType.DINE_IN,
+            }[modalidade]
             items_input = tuple(
                 OrderItemInput(
                     product_id=item.produto_id,

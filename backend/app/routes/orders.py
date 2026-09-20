@@ -152,8 +152,9 @@ def _is_delivery(comanda: Comanda) -> bool:
 def _has_digital_order_lifecycle(comanda: Comanda) -> bool:
     """Diz se a comanda usa o ciclo operacional digital legado.
 
-    DELIVERY/PICKUP sempre usam esse ciclo. DINE_IN usa quando há lançamento
-    com origem digital persistida, preservando o salão tradicional.
+    DELIVERY/PICKUP sempre usam esse ciclo. DINE_IN usa quando veio do
+    Cardápio Online ou quando o Caixa o criou sem mesa com ciclo operacional
+    explícito, preservando o salão tradicional.
     """
     fulfillment = normalize_to_fulfillment(comanda.tipo)
     if fulfillment in {FulfillmentType.DELIVERY, FulfillmentType.PICKUP}:
@@ -161,13 +162,17 @@ def _has_digital_order_lifecycle(comanda: Comanda) -> bool:
     if fulfillment != FulfillmentType.DINE_IN:
         return False
 
-    # Para consumo local, origem define o canal; delivery_status define somente
-    # o estado. Isso evita classificar uma mesa de salão como digital apenas
-    # porque algum dado legado carregou status operacional.
-    return any(
-        str(lancamento.origem or "").strip().casefold() == "cardapio"
+    origins = {
+        str(lancamento.origem or "").strip().casefold()
         for lancamento in (comanda.lancamentos or [])
-    )
+    }
+    if "cardapio" in origins:
+        return True
+
+    # Consumo local criado pelo Caixa sem mesa recebe explicitamente um ciclo
+    # operacional (producao -> pronto -> concluido). Se uma mesa for associada
+    # depois, o status permanece e o pedido continua nessa mesma fila.
+    return "caixa" in origins and bool(str(comanda.delivery_status or "").strip())
 
 
 def _normalize_legacy_progress_target(comanda: Comanda, target: str) -> str:

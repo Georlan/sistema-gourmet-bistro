@@ -68,11 +68,14 @@ export const isCashierTableOrder = (order: Order | null | undefined) => {
   // localização e deliveryStatus é somente ciclo operacional. O fallback por
   // status fica restrito a snapshots legados sem origem conhecida.
   const origin = String(order.origemOperacional || '').trim().toLowerCase();
-  if (origin === 'cardapio') return false;
-  if (['caixa', 'garcom', 'smartpos'].includes(origin)) return true;
-
-  return !['pendente', 'analise', 'producao', 'pronto', 'transito']
+  const hasOperationalLifecycle = ['pendente', 'analise', 'producao', 'pronto', 'transito']
     .includes(String(order.deliveryStatus || '').toLowerCase());
+
+  if (origin === 'cardapio') return false;
+  if (origin === 'caixa') return !hasOperationalLifecycle;
+  if (['garcom', 'smartpos'].includes(origin)) return true;
+
+  return !hasOperationalLifecycle;
 };
 
 /**
