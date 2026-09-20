@@ -450,6 +450,11 @@ def update_onboarding_operations(
 ):
     """Persist only the canonical fulfillment policy; specialized settings stay separate."""
     _require_onboarding_role(current_user)
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte pode consultar, mas não alterar o onboarding do cliente.",
+        )
     tenant_id = require_tenant_id()
     config = (
         db.query(ConfiguracaoRestaurante)
