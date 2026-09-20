@@ -256,7 +256,7 @@ def test_dine_in_only_requires_table_when_map_is_enabled(onboarding_db):
     blocked = onboarding_route.get_onboarding_status(db=db, current_user=user)
     assert "dine_in_tables" in blocked["operations"]["blockers"]
 
-    db.add(Mesa(restaurante_id=tenant_id, numero=1))
+    db.add(Mesa(restaurante_id=tenant_id, id=1, capacidade=4))
     db.commit()
     ready = onboarding_route.get_onboarding_status(db=db, current_user=user)
     assert ready["operations"]["ready"] is True
