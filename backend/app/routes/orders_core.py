@@ -539,7 +539,7 @@ def fechar_comanda(
     status_anterior = comanda.delivery_status
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
-    if comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
+    if comanda.delivery_status is not None or comanda.tipo in {"Delivery", "Entrega", "Retirada", "Viagem", "balcao", "balcão"}:
         if comanda.delivery_status != "recusado":
             comanda.delivery_status = "finalizado"
             for lanc in (comanda.lancamentos or []):
