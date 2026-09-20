@@ -12,7 +12,7 @@ import {
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
 import { useAutomaticOrderAcceptance } from './useAutomaticOrderAcceptance';
-import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
+import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly columns: {
@@ -333,7 +333,7 @@ export function CaixaOrdersWorkspace({
                       <div>
                         <div className={"flex flex-wrap gap-1 mb-1"}>
                           <span className={"orders-card__chip is-primary"}>
-                            {order.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+                            {getDigitalOrderFulfillmentLabel(order)}
                           </span>
                           <span className={"orders-card__chip is-muted"}>
                             {getDigitalOrderSourceLabel(order)}
