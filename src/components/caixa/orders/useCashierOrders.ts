@@ -90,7 +90,8 @@ export function useCashierOrders({
     );
     const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
     const isDigitalOrder =
-      Number(order?.mesaId || 0) <= 0 || ['delivery', 'entrega', 'retirada'].includes(normalizedType);
+      Number(order?.mesaId || 0) <= 0
+      || ['delivery', 'entrega', 'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(normalizedType);
     const comandaIds = new Set(
       activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean)
     );
