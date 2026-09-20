@@ -23,28 +23,18 @@ def upgrade() -> None:
     )
 
     # Tenants que já existiam antes deste onboarding não podem voltar a ficar
-    # bloqueados por uma escolha que nunca tiveram oportunidade de confirmar.
-    # Preservamos o comportamento legado: consumo local + retirada sempre
-    # disponíveis e delivery somente quando já estava habilitado.
-    bind = op.get_bind()
+    # bloqueados por uma seleção que nunca tiveram oportunidade de confirmar.
+    # A capability neutra de retirada satisfaz apenas o novo passo de onboarding
+    # e NÃO altera delivery_ativo, mapa de mesas ou qualquer comportamento runtime.
+    # Quando o responsável revisar/salvar o novo passo, a seleção passa a refletir
+    # explicitamente a operação real do restaurante.
     table = sa.table(
         "configuracoes_restaurante",
-        sa.column("id", sa.Integer()),
-        sa.column("delivery_ativo", sa.Boolean()),
         sa.column("tipos_pedido_ativos", sa.JSON()),
     )
-    rows = bind.execute(
-        sa.select(table.c.id, table.c.delivery_ativo)
-    ).mappings().all()
-    for row in rows:
-        order_types = ["consumo_local", "retirada"]
-        if row["delivery_ativo"] is not False:
-            order_types.append("delivery")
-        bind.execute(
-            table.update()
-            .where(table.c.id == row["id"])
-            .values(tipos_pedido_ativos=order_types)
-        )
+    op.get_bind().execute(
+        table.update().values(tipos_pedido_ativos=["retirada"])
+    )
 
 
 def downgrade() -> None:
