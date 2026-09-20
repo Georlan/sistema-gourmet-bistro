@@ -51,6 +51,9 @@ def setup_operational_safety_db():
         db.query(Comanda).filter(Comanda.restaurante_id.in_([RID, RID_OTHER])).delete(
             synchronize_session=False
         )
+        db.query(CaixaTurno).filter(
+            CaixaTurno.restaurante_id.in_([RID, RID_OTHER])
+        ).delete(synchronize_session=False)
         db.commit()
 
         # Preserve os pais: outras suítes podem manter FKs legítimas para estes
