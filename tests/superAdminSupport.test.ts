@@ -68,6 +68,13 @@ test('App.tsx integra o banner de suporte nos shells operacionais', () => {
 test('central preserva a mesma origem durante suporte e monta a operação', () => {
   assert.match(supportModal, /\?view=caixa&support=1/);
   assert.match(main, /isCentralSupportOperationalBridge/);
+  assert.match(main, /hasInternalSupportSessionContext/);
   assert.match(main, /isInternalSupportOperationalRoute/);
   assert.match(main, /!isInternalSupportOperationalRoute/);
+});
+
+test('query de suporte sem contexto auditado não vira login operacional na central', () => {
+  assert.match(app, /invalidCentralSupportBridge/);
+  assert.match(app, /isCentralSupportOperationalBridge\(\) && !hasInternalSupportSessionContext\(\)/);
+  assert.match(app, /hostConfig\.surface === 'central' \|\| invalidCentralSupportBridge/);
 });
