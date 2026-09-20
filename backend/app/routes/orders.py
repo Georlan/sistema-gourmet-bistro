@@ -35,6 +35,7 @@ from ..domain.orders.types import (
 from ..models import Comanda, Lancamento, Motoboy, Restaurante, Usuario
 from ..schemas import ComandaResponse
 from ..security import motoboy_rate_limiter, require_permission, verify_motoboy_token
+from ..services.inventory import alertas_estoque_dos_itens
 from ..services.notificacoes import agendar_notificacao_whatsapp_task
 from ..services.shifts import require_open_cash_shift
 from ..websocket_manager import manager
@@ -253,6 +254,12 @@ def atualizar_status_delivery(
     if not transition.changed:
         return transition.comanda
 
+    estoque_alertas = (
+        alertas_estoque_dos_itens(db, comanda.itens or [])
+        if target_status == OrderStatus.PREPARING
+        else []
+    )
+
     if transition.first_accept:
         try:
             PrintingApplicationService.request_print(
@@ -289,7 +296,12 @@ def atualizar_status_delivery(
         {"event": "tables_updated"},
         rid,
     )
-    return comanda
+    response_payload = ComandaResponse.model_validate(comanda)
+    if estoque_alertas:
+        response_payload = response_payload.model_copy(
+            update={"estoque_alertas": estoque_alertas}
+        )
+    return response_payload
 
 
 @router.put("/{comanda_id}/delivery/entregador", response_model=ComandaResponse)
