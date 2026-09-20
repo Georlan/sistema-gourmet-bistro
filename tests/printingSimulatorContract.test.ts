@@ -8,6 +8,9 @@ const worker = readFileSync("print-agent/worker.py", "utf8");
 const simulator = readFileSync("print-agent/simulator.py", "utf8");
 const routes = readFileSync("backend/app/routes/print_agents.py", "utf8");
 const cashierPrinting = readFileSync("src/components/caixa/settings/CashierPrintingSettings.tsx", "utf8");
+const supportBanner = readFileSync("src/components/app/SupportSessionBanner.tsx", "utf8");
+const linuxInstaller = readFileSync("print-agent/install-linux.sh", "utf8");
+const windowsInstaller = readFileSync("print-agent/install-windows.ps1", "utf8");
 
 test("thermal simulator has a standalone operational route", () => {
   assert.match(main, /\/ferramentas\/simulador-impressao/);
@@ -40,4 +43,14 @@ test("simulator is internal support tooling, not a restaurant feature", () => {
   assert.doesNotMatch(cashierPrinting, /simulador-impressao|Abrir simulador térmico|Bancada virtual de impressão/);
   assert.match(page, /Tempo físico/);
   assert.match(page, /não medido/);
+});
+
+
+test("support mode exposes one-click simulator access and installers ship the bridge", () => {
+  assert.match(supportBanner, /\/ferramentas\/simulador-impressao/);
+  assert.match(supportBanner, /Simulador térmico/);
+  assert.match(linuxInstaller, /simulator\.py/);
+  assert.match(windowsInstaller, /"simulator\.py"/);
+  assert.match(windowsInstaller, /"wake_listener\.py"/);
+  assert.match(page, /2026\.09\.20\.1/);
 });
