@@ -65,17 +65,29 @@ test('mobile cashier topbar reserves independent 44px touch targets for menu, ch
   assert.match(responsiveCss, /\.cashier-subnav__button[\s\S]*min-height: 2\.75rem/);
 });
 
-test('cashier printing settings separates state and diagnostics, coupon, and delivery into operational contexts', () => {
+test('cashier printing settings keeps every action while prioritizing daily operation', () => {
   const printing = readFileSync('src/components/caixa/settings/CashierPrintingSettings.tsx', 'utf8');
+  const monitor = readFileSync('src/components/printing/PrintMonitorPanel.tsx', 'utf8');
 
-  // Contexto 1: Estado e diagnóstico
-  assert.match(printing, /Estado e diagnóstico/);
+  // Contexto 1: leitura operacional primeiro, homologação avançada sob demanda.
+  assert.match(printing, /Veja primeiro o que precisa de atenção/);
   assert.match(printing, /<PrintMonitorPanel/);
-  assert.match(printing, /Homologação do App do Garçom/);
-  assert.match(printing, /Teste extremo — Garçom/);
+  assert.match(printing, /Testes avançados/);
+  assert.match(printing, /Teste extremo do App do Garçom/);
+  assert.match(printing, /Gerar comanda de teste/);
   assert.match(printing, /\/impressao\/teste-extremo-garcom/);
   assert.match(printing, /sem criar pedido real, estoque ou movimento de caixa/);
   assert.match(printing, /Impressão não incluída no Kôma Pocket/);
+  assert.doesNotMatch(printing, /Fila ativa/);
+
+  // O monitor distingue agente, USB físico e fila em vez de fundir os estados.
+  assert.match(monitor, /label: 'agente local'/);
+  assert.match(monitor, /label: 'impressora física'/);
+  assert.match(monitor, /label: 'fila'/);
+  assert.match(monitor, /Kôma Print conectado; impressora física desconectada/);
+  assert.match(monitor, /agente online · USB desconectado/);
+  assert.doesNotMatch(monitor, /sem surpresa na fila/);
+  assert.doesNotMatch(monitor, /limite visual/);
 
   // Contexto 2: Cupom
   assert.match(printing, /aria-labelledby="printing-receipt-heading"/);
@@ -85,17 +97,20 @@ test('cashier printing settings separates state and diagnostics, coupon, and del
   assert.match(printing, /Mensagem adicional de rodapé:/);
   assert.match(printing, /SALVO NO RESTAURANTE/);
   assert.match(printing, /Prévia aproximada/);
+  assert.match(printing, /PEDIDO #305/);
+  assert.doesNotMatch(printing, /PEDIDO: #305/);
 
-  // Contexto 3: Delivery
+  // Contexto 3: Delivery vira uma escolha explícita de duas opções.
   assert.match(printing, /aria-labelledby="printing-delivery-heading"/);
-  assert.match(printing, /<Truck /);
-  assert.match(printing, /Unificar vias de delivery \(via única\)/);
+  assert.match(printing, /role="radiogroup"/);
+  assert.match(printing, /aria-checked=\{!unificarViasDelivery\}/);
+  assert.match(printing, /aria-checked=\{unificarViasDelivery\}/);
   assert.match(printing, /unificar_vias_delivery/);
-  assert.match(printing, /Via única \(marcado\)/);
-  assert.match(printing, /Vias separadas \(desmarcado\)/);
-  assert.match(printing, /Imprime uma única comanda com dados do cliente, itens e entrega juntos/);
+  assert.match(printing, />Vias separadas</);
+  assert.match(printing, />Via única</);
+  assert.doesNotMatch(printing, /marcado|desmarcado/);
 
-  // Contrato do controller preservado
+  // Contrato do controller preservado.
   assert.match(printing, /ReturnType<typeof useCashierSettings>/);
 });
 

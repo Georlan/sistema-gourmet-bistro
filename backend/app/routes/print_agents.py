@@ -82,7 +82,9 @@ PRINT_HISTORY_TIMEZONE = OPERATIONAL_TIMEZONE
 
 ORDER_REFERENCE_PATTERNS = (
     re.compile(
-        r"\bPEDIDO\s*:\s*#?\s*([A-Z0-9][A-Z0-9._/-]*)",
+        # O "#" é obrigatório. Sem isso, "TOTAL DO PEDIDO: R$ 42,00"
+        # era interpretado como número de pedido "R".
+        r"\bPEDIDO\s*:\s*#\s*([A-Z0-9][A-Z0-9._/-]*)",
         re.IGNORECASE,
     ),
     re.compile(

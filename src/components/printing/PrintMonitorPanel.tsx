@@ -592,10 +592,23 @@ export function PrintMonitorPanel({
       };
     }
     if (!hasReadyPrinter) {
+      if (monitorData.summary.delayed > 0) {
+        return {
+          tone: 'warning',
+          title: `${monitorData.summary.delayed} impressão(ões) aguardando; agente local conectado`,
+          detail: (
+            `A ponte do Kôma Print está online, mas não há impressora física pronta. `
+            + `Espera mais antiga: ${formatAge(monitorData.summary.oldest_unresolved_seconds)}.`
+          )
+        };
+      }
       return {
-        tone: 'danger',
-        title: 'Nenhuma impressora física no USB',
-        detail: 'Conecte o cabo e clique em “Procurar e conectar USB”.'
+        tone: 'warning',
+        title: 'Kôma Print conectado; impressora física desconectada',
+        detail: (
+          'O agente local está online e pode ser diagnosticado. '
+          + 'Conecte o USB somente quando quiser imprimir em papel.'
+        )
       };
     }
     if (monitorData.summary.delayed > 0) {
@@ -661,43 +674,51 @@ export function PrintMonitorPanel({
     neutral: 'bg-sky-500/20 text-sky-800 dark:text-sky-300 border border-sky-500/30'
   };
 
+  const agentState = hasOnlineAgent ? 'Conectado' : 'Offline';
   const equipmentState = hasReadyPrinter
     ? 'Pronta'
     : presentUsbPrinters.length
       ? 'Detectada'
-      : 'Ausente';
-  const oldestQueueValue = queueTotal > 0
-    ? formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)
+      : 'Não conectada';
+  const queueState = queueTotal > 0
+    ? `${queueTotal} aguardando`
     : 'Livre';
   const latestSentValue = monitorData?.latest_spooler_success
     ? `há ${formatAge(monitorData.latest_spooler_success.age_seconds)}`
-    : 'Nenhum hoje';
+    : 'Nenhuma hoje';
+  const operationAccent = !hasOnlineAgent
+    ? 'agente offline'
+    : queueTotal > 0
+      ? `${queueTotal} na fila`
+      : hasReadyPrinter
+        ? 'pronta para imprimir'
+        : 'agente online · USB desconectado';
 
   return (
     <div className="space-y-4">
       <OperationalBanner
         id="printing-operation-title"
-        eyebrow="SALÃO / IMPRESSÃO"
-        title="Impressão"
-        accent={hasReadyPrinter ? 'pronta para operar' : 'sem surpresa na fila'}
-        description="Conexão física, trabalhos pendentes e último envio em uma leitura rápida."
+        eyebrow="IMPRESSÃO"
+        title="Estado da impressão"
+        accent={operationAccent}
+        description="Agente local, impressora física e fila são estados independentes. Veja exatamente onde há atenção."
         metrics={[
           {
-            label: 'equipamento USB',
+            label: 'agente local',
+            value: agentState,
+            valueClassName: hasOnlineAgent ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-rose-700 dark:text-rose-300 font-bold'
+          },
+          {
+            label: 'impressora física',
             value: equipmentState,
             valueClassName: hasReadyPrinter ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-amber-800 dark:text-amber-300 font-bold'
           },
           {
-            label: queueTotal > 0 ? 'espera mais antiga' : 'fila de impressão',
-            value: oldestQueueValue,
-            valueClassName: monitorData?.summary.delayed ? 'text-amber-800 dark:text-amber-300 font-bold' : undefined
+            label: 'fila',
+            value: queueState,
+            valueClassName: queueTotal > 0 ? 'text-amber-800 dark:text-amber-300 font-bold' : 'text-emerald-700 dark:text-emerald-400 font-bold'
           },
-          { label: 'último envio', value: latestSentValue },
-          {
-            label: 'falhas hoje',
-            value: monitorData?.summary.failed ?? 0,
-            valueClassName: monitorData?.summary.failed ? 'text-rose-700 dark:text-rose-300 font-bold' : undefined
-          }
+          { label: 'última impressão física', value: latestSentValue }
         ]}
       />
 
@@ -706,10 +727,10 @@ export function PrintMonitorPanel({
           <div>
             <div className="flex items-center gap-2">
               <Printer size={16} className="text-emerald-700 dark:text-emerald-400" />
-              <h4 className="font-serif text-sm font-bold text-koma-foreground">Conexão da impressora USB</h4>
+              <h4 className="font-serif text-sm font-bold text-koma-foreground">Diagnóstico atual</h4>
             </div>
           <p className="mt-1 text-[10px] text-koma-muted">
-            Controle o equipamento físico sem abrir aplicativos ou configurações do computador.
+            O agente local pode estar conectado mesmo quando não há impressora física no USB.
           </p>
         </div>
         <button
@@ -827,20 +848,6 @@ export function PrintMonitorPanel({
         </div>
       </div>
 
-      {monitorData && monitorData.summary.delayed > 0 && (
-        <div className="flex items-start gap-3 rounded-2xl koma-badge-warning px-4 py-3 shadow-xs">
-          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-800 dark:text-amber-300" />
-          <div>
-            <strong className="block text-xs font-bold text-amber-950 dark:text-amber-200">
-              Há impressão aguardando há mais de 2 minutos
-            </strong>
-            <span className="text-[10px] text-amber-900/80 dark:text-amber-300/80 font-medium">
-              Espera mais antiga: {formatAge(monitorData.summary.oldest_unresolved_seconds)}.
-            </span>
-          </div>
-        </div>
-      )}
-
       <div className="overflow-hidden rounded-2xl border border-koma-border shadow-xs">
         <button
           type="button"
@@ -859,7 +866,10 @@ export function PrintMonitorPanel({
             <span>
               <strong className="block text-xs font-bold text-koma-foreground">Fila e recuperação</strong>
               <span className="block text-[10px] font-normal text-koma-muted">
-                {queueTotal} em processamento · {failedJobs.length} com falha · limite visual {monitorData?.queue_limit || 50}
+                {queueTotal > 0
+                  ? `${queueTotal} aguardando · mais antiga ${formatAge(monitorData?.summary.oldest_unresolved_seconds ?? null)}`
+                  : 'Nenhum trabalho aguardando'}
+                {' · '}{failedJobs.length} com falha
               </span>
             </span>
           </span>
@@ -918,9 +928,9 @@ export function PrintMonitorPanel({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-bold text-koma-foreground">Impressoras físicas no USB</h3>
+            <h3 className="text-xs font-bold text-koma-foreground">Detalhes do equipamento físico</h3>
             <p className="mt-0.5 text-[10px] text-koma-muted">
-              Filas PDF, fax, OneNote e outros dispositivos virtuais ficam ocultos.
+              Use esta área somente para conectar, reconectar ou conferir a impressora USB.
             </p>
           </div>
           <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
@@ -1003,7 +1013,7 @@ export function PrintMonitorPanel({
                 Nenhuma impressora USB detectada
               </strong>
               <span className="mt-1 block text-[10px] text-koma-muted">
-                Conecte o cabo ao computador do caixa e use o botão de busca acima.
+                O agente local continua online; conecte o USB apenas quando quiser imprimir em papel.
               </span>
             </div>
           )}

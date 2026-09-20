@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Lock, Printer, Receipt, RefreshCw, Truck } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, Lock, Printer, Receipt, RefreshCw, Truck } from 'lucide-react';
 import { PrintMonitorPanel } from '../../printing/PrintMonitorPanel';
 import type { CashierTab } from '../cashierContracts';
 import type { useCashierSettings } from './useCashierSettings';
@@ -55,6 +55,7 @@ export function CashierPrintingSettings({
 }: BoundaryProps) {
   const [isTestingWaiterPrinter, setIsTestingWaiterPrinter] = useState(false);
   const [waiterTestFeedback, setWaiterTestFeedback] = useState('');
+  const [showAdvancedTests, setShowAdvancedTests] = useState(false);
 
   if (printingSettingsTab !== 'impressao') {
     return null;
@@ -88,21 +89,14 @@ export function CashierPrintingSettings({
     <div className="space-y-6">
       {/* 1. Estado e diagnóstico */}
       <section className="space-y-3" aria-labelledby="printing-status-heading">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 id="printing-status-heading" className="text-sm font-bold text-koma-foreground flex items-center gap-2">
-              <Activity size={16} className="text-emerald-500" />
-              Estado e diagnóstico
-            </h3>
-            <p className="text-[11px] text-koma-muted">
-              Status da fila de impressão, agentes conectados e ações de homologação.
-            </p>
-          </div>
-          {hasPrinting && (
-            <span className="self-start sm:self-auto rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-400">
-              Fila ativa
-            </span>
-          )}
+        <div>
+          <h3 id="printing-status-heading" className="text-sm font-bold text-koma-foreground flex items-center gap-2">
+            <Activity size={16} className="text-emerald-500" />
+            Impressão
+          </h3>
+          <p className="text-[11px] text-koma-muted">
+            Veja primeiro o que precisa de atenção: agente local, impressora física e fila pendente.
+          </p>
         </div>
 
         {!hasPrinting ? (
@@ -133,34 +127,50 @@ export function CashierPrintingSettings({
               testInProgress={isTestingPrinter}
             />
 
-            <div className="flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between shadow-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  <strong className="text-xs font-bold text-koma-foreground">Homologação do App do Garçom</strong>
-                </div>
-                <p className="text-[11px] text-koma-muted leading-relaxed">
-                  Gera uma comanda sintética extrema de mesa, sem criar pedido real, estoque ou movimento de caixa.
-                </p>
-                {waiterTestFeedback && (
-                  <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">
-                    {waiterTestFeedback}
-                  </p>
-                )}
-              </div>
+            <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel shadow-xs">
               <button
                 type="button"
-                disabled={isTestingWaiterPrinter}
-                onClick={() => void handleTestWaiterPrinter()}
-                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground transition hover:border-emerald-500/40 hover:text-emerald-600 disabled:cursor-wait disabled:opacity-60 dark:hover:text-emerald-300"
+                onClick={() => setShowAdvancedTests(current => !current)}
+                className="flex min-h-11 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-koma-raised"
+                aria-expanded={showAdvancedTests}
               >
-                {isTestingWaiterPrinter ? (
-                  <RefreshCw size={15} className="animate-spin text-emerald-500" />
-                ) : (
-                  <Printer size={15} />
-                )}
-                {isTestingWaiterPrinter ? 'Enviando…' : 'Teste extremo — Garçom'}
+                <span>
+                  <strong className="block text-xs font-bold text-koma-foreground">Testes avançados</strong>
+                  <span className="block text-[10px] text-koma-muted">
+                    Ferramentas de homologação; não são necessárias na operação diária.
+                  </span>
+                </span>
+                {showAdvancedTests ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
               </button>
+
+              {showAdvancedTests && (
+                <div className="flex flex-col gap-3 border-t border-koma-border p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <strong className="text-xs font-bold text-koma-foreground">Teste extremo do App do Garçom</strong>
+                    <p className="text-[11px] text-koma-muted leading-relaxed">
+                      Gera uma comanda sintética extrema sem criar pedido real, estoque ou movimento de caixa.
+                    </p>
+                    {waiterTestFeedback && (
+                      <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">
+                        {waiterTestFeedback}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isTestingWaiterPrinter}
+                    onClick={() => void handleTestWaiterPrinter()}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground transition hover:border-emerald-500/40 hover:text-emerald-600 disabled:cursor-wait disabled:opacity-60 dark:hover:text-emerald-300"
+                  >
+                    {isTestingWaiterPrinter ? (
+                      <RefreshCw size={15} className="animate-spin text-emerald-500" />
+                    ) : (
+                      <Printer size={15} />
+                    )}
+                    {isTestingWaiterPrinter ? 'Enviando…' : 'Gerar comanda de teste'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -283,10 +293,8 @@ export function CashierPrintingSettings({
 
                 <div className="text-center font-bold text-[12px]">CONSUMO NO LOCAL</div>
                 <div className="border-t border-dashed border-gray-500 my-1.5" />
-                <div className="flex justify-between">
-                  <span>PEDIDO: #305</span>
-                  <span>MESA: 3</span>
-                </div>
+                <div className="text-center font-bold text-[11px]">MESA: 3</div>
+                <div className="text-center font-bold text-[11px]">PEDIDO #305</div>
                 <div className="flex justify-between">
                   <span>DATA: 28/07/2026</span>
                   <span>HORA: 18:01</span>
@@ -366,63 +374,60 @@ export function CashierPrintingSettings({
             </p>
           </div>
 
-          <div className="rounded-[22px] border border-koma-border bg-koma-panel p-5 space-y-4 shadow-xs">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-1.5 max-w-xl">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xs font-bold text-koma-foreground">
-                    Unificar vias de delivery (via única)
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[8px] font-extrabold tracking-wide ${
-                      unificarViasDelivery ? 'koma-badge-success' : 'koma-badge-neutral'
-                    }`}
-                  >
-                    {unificarViasDelivery ? 'VIA ÚNICA ATIVA' : 'VIAS SEPARADAS'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-koma-muted leading-relaxed">
-                  {unificarViasDelivery
-                    ? 'Imprime uma única comanda com dados do cliente, itens e entrega juntos. Economiza papel de bobina e simplifica a expedição.'
-                    : 'Imprime vias separadas para produção (cozinha/bar) e entrega (motoboy/cliente com endereço e conferência).'}
-                </p>
-              </div>
+          <div
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label="Formato das vias de delivery"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!unificarViasDelivery}
+              onClick={() => {
+                setUnificarViasDelivery(false);
+                updateConfiguracoes({ unificar_vias_delivery: false });
+              }}
+              className={`rounded-2xl border p-4 text-left transition ${
+                !unificarViasDelivery
+                  ? 'border-emerald-500/50 bg-emerald-500/10'
+                  : 'border-koma-border bg-koma-panel hover:bg-koma-raised'
+              }`}
+            >
+              <span className="flex items-center justify-between gap-3">
+                <strong className="text-xs text-koma-foreground">Vias separadas</strong>
+                {!unificarViasDelivery && (
+                  <span className="rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">ATUAL</span>
+                )}
+              </span>
+              <span className="mt-1.5 block text-[10px] leading-relaxed text-koma-muted">
+                Produção recebe a via de cozinha/bar e a expedição recebe a via com cliente e endereço.
+              </span>
+            </button>
 
-              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1 sm:mt-0">
-                <input
-                  type="checkbox"
-                  checked={unificarViasDelivery}
-                  onChange={(e) => {
-                    setUnificarViasDelivery(e.target.checked);
-                    updateConfiguracoes({ unificar_vias_delivery: e.target.checked });
-                  }}
-                  className="sr-only peer"
-                  aria-label="Unificar vias de delivery"
-                />
-                <div className="w-9 h-5 bg-zinc-300 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
-              </label>
-            </div>
-
-            <div className="border-t border-koma-border pt-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
-                <div
-                  className={`p-3 rounded-xl border transition-colors ${
-                    unificarViasDelivery ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-koma-border bg-koma-card'
-                  }`}
-                >
-                  <span className="font-bold block text-koma-foreground mb-0.5">Via única (marcado)</span>
-                  <span className="text-koma-muted">1 via unificada com cliente, endereço, itens e pagamento.</span>
-                </div>
-                <div
-                  className={`p-3 rounded-xl border transition-colors ${
-                    !unificarViasDelivery ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-koma-border bg-koma-card'
-                  }`}
-                >
-                  <span className="font-bold block text-koma-foreground mb-0.5">Vias separadas (desmarcado)</span>
-                  <span className="text-koma-muted">2 vias: 1 da cozinha para preparar + 1 de entrega para despachar.</span>
-                </div>
-              </div>
-            </div>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={unificarViasDelivery}
+              onClick={() => {
+                setUnificarViasDelivery(true);
+                updateConfiguracoes({ unificar_vias_delivery: true });
+              }}
+              className={`rounded-2xl border p-4 text-left transition ${
+                unificarViasDelivery
+                  ? 'border-emerald-500/50 bg-emerald-500/10'
+                  : 'border-koma-border bg-koma-panel hover:bg-koma-raised'
+              }`}
+            >
+              <span className="flex items-center justify-between gap-3">
+                <strong className="text-xs text-koma-foreground">Via única</strong>
+                {unificarViasDelivery && (
+                  <span className="rounded-full koma-badge-success px-2 py-0.5 text-[8px] font-extrabold">ATUAL</span>
+                )}
+              </span>
+              <span className="mt-1.5 block text-[10px] leading-relaxed text-koma-muted">
+                Um único cupom reúne cliente, endereço, itens e pagamento para reduzir papel e passos na expedição.
+              </span>
+            </button>
           </div>
         </section>
       )}
