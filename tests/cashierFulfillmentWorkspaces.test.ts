@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import React, { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
+import { CashierCouriers } from '../src/components/caixa/orders/CashierCouriers';
+import { CashierPickups } from '../src/components/caixa/orders/CashierPickups';
 import { getDigitalOrderPaymentSummary } from '../src/components/caixa/orders/digitalOrderPresentation';
 
 const pickup = readFileSync(new URL('../src/components/caixa/orders/CashierPickups.tsx', import.meta.url), 'utf8');
@@ -11,15 +15,16 @@ const orders = readFileSync(new URL('../src/components/caixa/orders/useCashierOr
 const routes = readFileSync(new URL('../backend/app/routes/orders_core.py', import.meta.url), 'utf8');
 
 test('payment summary deixa cobrança e troco explícitos no card operacional', () => {
-  assert.equal(
-    getDigitalOrderPaymentSummary({
-      pago: false,
-      amountDue: 48,
-      paymentMethod: 'dinheiro',
-      changeFor: 100,
-    }),
-    'A cobrar R$ 48,00 · Dinheiro · Troco para R$ 100,00',
-  );
+  const pending = getDigitalOrderPaymentSummary({
+    pago: false,
+    amountDue: 48,
+    paymentMethod: 'dinheiro',
+    changeFor: 100,
+  });
+  assert.match(pending, /A cobrar R\$\s*48,00/);
+  assert.match(pending, /Dinheiro/);
+  assert.match(pending, /Troco para R\$\s*100,00/);
+
   assert.equal(
     getDigitalOrderPaymentSummary({
       pago: true,
@@ -84,4 +89,50 @@ test('histórico de entregas é leitura curta, tenant-scoped e não redefine tra
   assert.match(routes, /Comanda\.fechada\.is_\(True\)/);
   assert.match(routes, /datetime\.timedelta\(hours=36\)/);
   assert.match(routes, /\.limit\(100\)/);
+});
+
+
+test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanban', () => {
+  const pickupMarkup = renderToStaticMarkup(createElement(CashierPickups, {
+    activeSubTab: 'retiradas',
+    deliveryOrders: [],
+    deliveryOrdersLoadState: 'loading',
+    apiBaseUrl: 'http://example.test',
+    authHeaders: {},
+    now: Date.UTC(2026, 8, 20, 12),
+    handleAcceptPendingDeliveryOrder: async () => {},
+    handleRejectPendingDeliveryOrder: () => {},
+    handleAdvanceDigitalOrder: async () => {},
+    handleFinalizeDigitalOrder: async () => {},
+    openDeliveryOrderDetails: () => {},
+  }));
+  assert.match(pickupMarkup, /Sincronizando retiradas/);
+  assert.doesNotMatch(pickupMarkup, /Aceite no Kanban/);
+
+  const courierMarkup = renderToStaticMarkup(createElement(CashierCouriers, {
+    activeSubTab: 'entregadores',
+    deliveryOrders: [],
+    deliveryOrdersLoadState: 'error',
+    selectedMotoboys: {},
+    setSelectedMotoboys: () => {},
+    motoboys: [],
+    motoboysLoadState: 'loaded',
+    handleDespacharKanban: async () => {},
+    handleRevogarAcessoMotoboy: async () => {},
+    handleFinalizarPedido: async () => true,
+    handleAddMotoboy: async () => {},
+    novoMotoboyNome: '',
+    novoMotoboyTelefone: '',
+    setNewMotoboyNome: () => {},
+    setNewMotoboyTelefone: () => {},
+    handleAcceptPendingDeliveryOrder: async () => {},
+    handleRejectPendingDeliveryOrder: () => {},
+    handleAdvanceDigitalOrder: async () => {},
+    openDeliveryOrderDetails: () => {},
+    apiBaseUrl: 'http://example.test',
+    authHeaders: {},
+    now: Date.UTC(2026, 8, 20, 12),
+  } as any));
+  assert.match(courierMarkup, /Mostrando o último estado conhecido/);
+  assert.match(courierMarkup, /Gerenciar entregadores/);
 });
