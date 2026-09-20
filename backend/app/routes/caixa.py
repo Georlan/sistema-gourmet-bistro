@@ -1848,6 +1848,12 @@ def atualizar_configuracoes(
         config.mapa_mesas_ativo = config_in.mapa_mesas_ativo
     if config_in.delivery_ativo is not None:
         config.delivery_ativo = config_in.delivery_ativo
+    if config_in.tipos_pedido_ativos is not None:
+        # Pydantic já limita os valores; deduplicamos preservando a ordem escolhida.
+        config.tipos_pedido_ativos = list(dict.fromkeys(config_in.tipos_pedido_ativos))
+        # Delivery tem uma autoridade operacional já existente. Mantemos os dois
+        # contratos sincronizados para que onboarding e pedido público não divirjam.
+        config.delivery_ativo = "delivery" in config.tipos_pedido_ativos
     if config_in.pedido_minimo is not None:
         config.pedido_minimo = config_in.pedido_minimo
     if config_in.frete_gratis_valor is not None:
