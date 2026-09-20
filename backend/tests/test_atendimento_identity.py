@@ -182,10 +182,11 @@ def test_associate_dine_in_without_table_materializes_table_family():
         db.close()
 
 
-def test_associate_pickup_keeps_table_as_context_without_table_family():
+def test_associate_pickup_converts_to_dine_in_and_materializes_table_family():
     db = SessionLocal()
     try:
         command = _command(db, "c-associate-pickup", None, 302, tipo="Retirada")
+        _launch(db, command, "l-associate-pickup", "i-associate-pickup")
 
         associated = associate_order_to_table(
             db,
@@ -194,16 +195,40 @@ def test_associate_pickup_keeps_table_as_context_without_table_family():
             4,
             actor_id=USER,
         )
+
+        assert associated.tipo == "Consumo no Local"
         assert associated.mesa_id == 4
-        assert (
+        link = (
             db.query(AtendimentoComanda)
             .filter(
                 AtendimentoComanda.restaurante_id == TENANT,
                 AtendimentoComanda.comanda_id == command.id,
             )
-            .count()
-            == 0
+            .one()
         )
+        account = (
+            db.query(AtendimentoMesa)
+            .filter(
+                AtendimentoMesa.restaurante_id == TENANT,
+                AtendimentoMesa.id == link.atendimento_id,
+            )
+            .one()
+        )
+        assert account.mesa_id == 4
+
+        movement = (
+            db.query(MovimentoAtendimento)
+            .filter(
+                MovimentoAtendimento.restaurante_id == TENANT,
+                MovimentoAtendimento.atendimento_id == account.id,
+            )
+            .order_by(MovimentoAtendimento.id.asc())
+            .first()
+        )
+        assert movement is not None
+        assert movement.detalhes["fulfillment_anterior"] == "Retirada"
+        assert movement.detalhes["fulfillment_atual"] == "Consumo no Local"
+        assert movement.detalhes["motivo"] == "cliente_permaneceu_no_estabelecimento"
 
         reassociated = associate_order_to_table(
             db,
@@ -212,6 +237,7 @@ def test_associate_pickup_keeps_table_as_context_without_table_family():
             5,
             actor_id=USER,
         )
+        assert reassociated.tipo == "Consumo no Local"
         assert reassociated.mesa_id == 5
         assert reassociated.mesa_transferida_de == 4
         assert (
@@ -221,7 +247,7 @@ def test_associate_pickup_keeps_table_as_context_without_table_family():
                 AtendimentoComanda.comanda_id == command.id,
             )
             .count()
-            == 0
+            == 1
         )
         db.commit()
     finally:
