@@ -465,7 +465,7 @@ def _build_onboarding_status(
             dict(trial_row) if trial_row else None,
             setup_pending=setup_pending,
         ),
-        "trialCanStart": bool(setup_pending and ready_to_operate),
+        "trialCanStart": bool(setup_pending and configuration_complete),
         "payments": {
             "mercadoPagoConnected": mercado_pago_connected,
         },
@@ -506,13 +506,10 @@ def start_trial_after_readiness(
     """Inicia o período grátis apenas após ação explícita do responsável."""
     _require_onboarding_role(current_user)
     snapshot = _build_onboarding_status(db, current_user=current_user)
-    if not snapshot["readiness"]["readyToOperate"]:
+    if not snapshot["readiness"]["configurationComplete"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "Conclua a configuração e finalize um pedido de teste com pagamento "
-                "antes de iniciar o período grátis."
-            ),
+            detail="Conclua a configuração do restaurante antes de iniciar o período grátis.",
         )
 
     if snapshot["trial"]["status"] == "setup":
