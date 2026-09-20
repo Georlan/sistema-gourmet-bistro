@@ -858,6 +858,33 @@ def listar_retiradas_concluidas_recentes(
     )
 
 
+@router.get("/delivery/entregas/concluidas-recentes", response_model=List[ComandaDetail])
+def listar_entregas_concluidas_recentes(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Retorna deliveries fechados recentemente para consulta operacional.
+
+    A resposta é somente leitura e usa a mesma janela curta das retiradas. O
+    cliente recorta o dia local sem introduzir uma segunda máquina de estados.
+    """
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
+    return (
+        db.query(Comanda)
+        .filter(
+            Comanda.restaurante_id == require_tenant_id(),
+            Comanda.tipo.in_(["Delivery", "Entrega"]),
+            Comanda.fechada.is_(True),
+            Comanda.fechado_em.isnot(None),
+            Comanda.fechado_em >= cutoff,
+            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        )
+        .order_by(Comanda.fechado_em.desc())
+        .limit(100)
+        .all()
+    )
+
+
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
 def listar_motoboys(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """
