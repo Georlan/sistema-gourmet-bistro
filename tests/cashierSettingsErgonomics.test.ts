@@ -8,6 +8,7 @@ const appearance = readFileSync('src/components/caixa/settings/CashierAppearance
 const responsiveCss = readFileSync('src/components/caixa/navigation/cashierLowHeight.css', 'utf8');
 const waiterSettings = readFileSync('src/components/caixa/settings/CashierWaiterSettings.tsx', 'utf8');
 const waiterPermissions = readFileSync('src/components/caixa/settings/waiterPermissions.ts', 'utf8');
+const tableSettings = readFileSync('src/components/caixa/settings/CashierTableSettings.tsx', 'utf8');
 
 test('cashier settings render only the active canonical destination without internal navigation cards', () => {
   const navigation = readFileSync('src/components/caixa/navigation/cashierNavigation.ts', 'utf8');
@@ -30,6 +31,19 @@ test('cashier settings render only the active canonical destination without inte
   assert.match(settings, /activeSubTab === 'implantacao'/);
   assert.match(settings, /<CashierAppearanceSettings \/>/);
   assert.match(settings, /<CashierIntegrationsSettings/);
+});
+
+test('table settings stay configuration-only and do not leak the operational salon', () => {
+  const panel = readFileSync('src/components/CaixaPanel.tsx', 'utf8');
+
+  assert.match(panel, /activeTab === 'operacao' && activeSubTab === 'mesas'/);
+  assert.match(panel, /activeTab === 'operacao' && cashShiftUiState !== 'open'/);
+  assert.match(panel, /active=\{activeTab === 'operacao' && activeSubTab === 'balcao'\}/);
+  assert.doesNotMatch(tableSettings, /OperationalBanner|prontas para receber|mesas cadastradas|lugares disponíveis|nomes personalizados/);
+  assert.match(tableSettings, /Configuração das mesas/);
+  assert.match(tableSettings, /Adicionar mesa/);
+  assert.match(tableSettings, /Crie, renomeie, ajuste a capacidade ou remova mesas/);
+  assert.match(tableSettings, /setEditingTable\(table\)/);
 });
 
 test('appearance settings persist theme and local text size using the cashier preference contract', () => {

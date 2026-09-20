@@ -876,7 +876,7 @@ export function CaixaPanel({
           </div>
 
           <div className={"cashier-content min-w-0 min-h-0 flex-1 p-5 relative"}>
-            {cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
+            {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
                 <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
                   {cashShiftUiState === 'loading' ? <Loader2 size={32} className="animate-spin" /> : <Lock size={32} />}
@@ -908,7 +908,7 @@ export function CaixaPanel({
               </div>
             )}
 
-            {activeSubTab === 'pedidos' && (
+            {activeTab === 'operacao' && activeSubTab === 'pedidos' && (
               <CaixaOrdersWorkspace
                 columns={{
                   tableProduction: filteredCol1.map(buildCashierTableCard),
@@ -953,9 +953,9 @@ export function CaixaPanel({
               />
             )}
 
-            <DeferredCashierSection active={activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />
+            <DeferredCashierSection active={activeTab === 'operacao' && activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />
 
-            {activeSubTab === 'mesas' && (
+            {activeTab === 'operacao' && activeSubTab === 'mesas' && (
               <CaixaSalonTab
                 cards={salonTableCards}
                 visibleCards={visibleSalonTableCards}
@@ -975,10 +975,10 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            <CashierKitchen activeSubTab={activeSubTab} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+            <CashierKitchen activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
 
             <CashierPickups
-              activeSubTab={activeSubTab}
+              activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
