@@ -209,7 +209,7 @@ def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
         "trialEndsAt": None,
         "activationToken": provisioned.get("invitation_token"),
         "amountDueToday": 0,
-        "message": "Pix selecionado. O trial começa após a implantação essencial e nenhum QR de cobrança é criado antes do vencimento.",
+        "message": "Pix selecionado. O trial começa somente quando o restaurante iniciar explicitamente a operação após concluir a configuração, e nenhum QR de cobrança é criado antes do vencimento.",
     }
 
 
