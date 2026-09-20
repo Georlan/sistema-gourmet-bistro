@@ -474,7 +474,13 @@ export function useCashierOrders({
               ...(pendingCourier ? { motoboyId: pendingCourier.value ? Number(pendingCourier.value) : null } : {}),
             };
           });
-        setDeliveryOrders(mapped);
+        setDeliveryOrders((current) => {
+          const previousById = new Map(current.map((order) => [String(order.id), order]));
+          return mapped.map((order: DeliveryOrderView) => {
+            const previous = previousById.get(String(order.id));
+            return previous ? reconcileDeliveryOrderAfterStatus(previous, order) : order;
+          });
+        });
         syncSelectedMotoboysFromServer(mapped);
       }
     } catch (err) {

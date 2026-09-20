@@ -93,7 +93,7 @@ export function useCashierPdv({
 
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
 
-  const [pdvOrderType, setPdvOrderType] = useState<'retirada' | 'entrega' | 'mesa'>('retirada');
+  const [pdvOrderType, setPdvOrderType] = useState<'pickup' | 'delivery' | 'dine_in'>('pickup');
 
   // Legacy text remains only as a projection/backward-compatible payload. The
   // editable source of truth for new delivery orders is the structured draft.
@@ -117,7 +117,7 @@ export function useCashierPdv({
   const pdvCartItemCount = pdvCart.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
-    if (pdvOrderType === 'mesa') {
+    if (pdvOrderType === 'dine_in') {
       setPdvCustomerId(null);
       setPdvCustomerLookup('idle');
       return;
@@ -149,7 +149,7 @@ export function useCashierPdv({
         const customer = await response.json();
         setPdvCustomerId(String(customer.id));
         setPdvCustomerName(String(customer.cliente || customer.nome || ''));
-        if (pdvOrderType === 'entrega' && customer.endereco) {
+        if (pdvOrderType === 'delivery' && customer.endereco) {
           const storedAddress = String(customer.endereco).trim();
           const parsedAddress = parseDeliveryAddressLegacy(storedAddress);
           setPdvDeliveryAddress(storedAddress);
@@ -190,21 +190,21 @@ export function useCashierPdv({
         }
       } else if (e.key === 'F2') {
         e.preventDefault();
-        setPdvOrderType('retirada');
+        setPdvOrderType('pickup');
         setTimeout(() => {
           const phoneInput = document.getElementById('pdv-customer-phone-input');
           if (phoneInput) phoneInput.focus();
         }, 50);
       } else if (e.key === 'F3') {
         e.preventDefault();
-        setPdvOrderType('mesa');
+        setPdvOrderType('dine_in');
         setTimeout(() => {
-          const mesaSelect = document.getElementById('pdv-mesa-select');
+          const mesaSelect = document.getElementById('pdv-target-table');
           if (mesaSelect) mesaSelect.focus();
         }, 50);
       } else if (e.key === 'F8') {
         e.preventDefault();
-        setPdvOrderType('entrega');
+        setPdvOrderType('delivery');
         setTimeout(() => {
           const phoneInput = document.getElementById('pdv-customer-phone-input');
           if (phoneInput) phoneInput.focus();
@@ -267,24 +267,20 @@ export function useCashierPdv({
       showToast('Seu carrinho de vendas está vazio.', 'info');
       return;
     }
-    if (pdvOrderType === 'mesa' && (!pdvTargetMesaId || pdvTargetMesaId === 0)) {
-      showToast('Selecione a mesa de destino antes de lançar o pedido.', 'info');
-      return;
-    }
     const normalizedCustomerPhone = pdvCustomerPhone.replace(/\D/g, '');
-    if (pdvOrderType !== 'mesa' && ![10, 11].includes(normalizedCustomerPhone.length)) {
+    if (pdvOrderType !== 'dine_in' && ![10, 11].includes(normalizedCustomerPhone.length)) {
       showToast('Informe um celular válido com DDD.', 'info');
       return;
     }
-    if (pdvOrderType !== 'mesa' && pdvCustomerName.trim().length < 2) {
+    if (pdvOrderType !== 'dine_in' && pdvCustomerName.trim().length < 2) {
       showToast('Informe o nome do cliente.', 'info');
       return;
     }
 
-    const deliverySnapshot = pdvOrderType === 'entrega'
+    const deliverySnapshot = pdvOrderType === 'delivery'
       ? deliveryAddressDraftToSnapshot(pdvDeliveryAddressDraft)
       : null;
-    if (pdvOrderType === 'entrega' && !deliverySnapshot) {
+    if (pdvOrderType === 'delivery' && !deliverySnapshot) {
       showToast(
         getDeliveryAddressValidationError(pdvDeliveryAddressDraft) || 'Informe o endereço completo de entrega.',
         'info',
@@ -337,20 +333,20 @@ export function useCashierPdv({
 
       const optimisticOrder = {
         id: tempId,
-        mesaId: orderType === 'mesa' ? mesaId || 0 : 0,
+        mesaId: orderType === 'delivery' ? 0 : mesaId || 0,
         garcomId: 'c-01',
         garcomNome: activeWaiterNome || 'Caixa 1',
         timestamp: now,
         created_at: new Date(now).toISOString(),
-        tipo: orderType === 'mesa' ? 'Consumo no Local' as const : orderType === 'entrega' ? 'Entrega' as const : 'Retirada' as const,
+        tipo: orderType === 'dine_in' ? 'Consumo no Local' as const : orderType === 'delivery' ? 'Entrega' as const : 'Retirada' as const,
         valorPago: 0,
         identificador: customerName || undefined,
         clienteId: customerId,
-        clientePhone: orderType === 'mesa' ? null : customerPhone,
+        clientePhone: orderType === 'dine_in' ? null : customerPhone,
         statusComanda: null,
-        deliveryStatus: orderType === 'mesa' ? null : 'producao' as const,
-        deliveryAddress: orderType === 'entrega' ? deliveryAddress : null,
-        deliveryTax: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0,
+        deliveryStatus: orderType === 'dine_in' ? null : 'producao' as const,
+        deliveryAddress: orderType === 'delivery' ? deliveryAddress : null,
+        deliveryTax: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0,
         origemOperacional: 'caixa' as const,
         mesaOrigemId: null,
         mesaTransferidaDe: null,
@@ -380,15 +376,15 @@ export function useCashierPdv({
         })),
       );
       const salePayload = {
-        cliente_id: orderType === 'mesa' ? undefined : customerId || undefined,
-        mesa_id: orderType === 'mesa' ? mesaId : null,
-        tipo: orderType === 'mesa' ? 'Consumo no Local' : orderType === 'entrega' ? 'Entrega' : 'Retirada',
+        cliente_id: orderType === 'dine_in' ? undefined : customerId || undefined,
+        mesa_id: orderType === 'delivery' ? null : mesaId || null,
+        tipo: orderType === 'dine_in' ? 'Consumo no Local' : orderType === 'delivery' ? 'Entrega' : 'Retirada',
         identificador: customerName || undefined,
-        delivery_status: orderType === 'mesa' ? undefined : 'producao',
-        delivery_telefone: orderType === 'mesa' ? undefined : customerPhone,
-        delivery_endereco: orderType === 'entrega' ? deliveryAddress : undefined,
-        address_snapshot: orderType === 'entrega' ? deliverySnapshot || undefined : undefined,
-        delivery_taxa: orderType === 'entrega' ? Number(deliveryTaxa || 0) : 0.0,
+        delivery_status: orderType === 'dine_in' ? undefined : 'producao',
+        delivery_telefone: orderType === 'dine_in' ? undefined : customerPhone,
+        delivery_endereco: orderType === 'delivery' ? deliveryAddress : undefined,
+        address_snapshot: orderType === 'delivery' ? deliverySnapshot || undefined : undefined,
+        delivery_taxa: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0.0,
         itens: itemsList,
       };
       const saleFingerprint = JSON.stringify(salePayload);
@@ -468,13 +464,15 @@ export function useCashierPdv({
     const itemCount = pdvCart.reduce((total, item) => total + item.quantity, 0);
     const cartTotal = pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity, 0);
     const destination =
-      pdvOrderType === 'mesa'
-        ? pdvTargetMesaId > 0
-          ? `Mesa ${pdvTargetMesaId}`
-          : 'Escolher mesa'
-        : pdvOrderType === 'entrega'
-          ? 'Delivery'
-          : 'Retirada';
+      pdvOrderType === 'delivery'
+        ? 'Delivery'
+        : pdvOrderType === 'pickup'
+          ? pdvTargetMesaId > 0
+            ? `Retirada · Mesa ${pdvTargetMesaId}`
+            : 'Retirada'
+          : pdvTargetMesaId > 0
+            ? `Consumo local · Mesa ${pdvTargetMesaId}`
+            : 'Consumo no local';
     return {
       destination,
       itemCount,
@@ -511,7 +509,7 @@ export function useCashierPdv({
   // Returning to an existing draft/retry must not silently change its destination.
   const openCounter = () => {
     if (pdvCart.length === 0 && !isPdvSubmittingRef.current && !pdvPendingOperationRef.current) {
-      setPdvOrderType('retirada');
+      setPdvOrderType('pickup');
       setPdvTargetMesaId(0);
     }
     setBalcaoMobileView('produtos');

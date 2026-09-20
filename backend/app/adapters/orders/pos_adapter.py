@@ -107,6 +107,7 @@ class PosAdapter:
         tipo_pedido = {
             "consumo no local": "Consumo no Local",
             "mesa": "Consumo no Local",
+            "local": "Consumo no Local",
             "delivery": "Entrega",
             "entrega": "Entrega",
             "retirada": "Retirada",
@@ -118,7 +119,7 @@ class PosAdapter:
         if tipo_pedido is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Tipo de pedido inválido. Use Mesa, Delivery ou Retirada.",
+                detail="Tipo de pedido inválido. Use Consumo no Local, Delivery ou Retirada.",
             )
 
         address_snapshot = (
@@ -141,15 +142,13 @@ class PosAdapter:
 
         require_open_cash_shift(db, rid)
 
-        if tipo_pedido == "Consumo no Local" and venda_in.mesa_id is None:
+        # Modalidade e associação a mesa são dimensões independentes:
+        # consumo no local e retirada podem existir com ou sem mesa. Delivery
+        # continua sem mesa porque seu destino canônico é o endereço de entrega.
+        if tipo_pedido == "Entrega" and venda_in.mesa_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Selecione uma mesa para pedidos de consumo no local.",
-            )
-        if tipo_pedido != "Consumo no Local" and venda_in.mesa_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="Pedidos de delivery ou retirada não podem ser vinculados a uma mesa.",
+                detail="Pedidos de delivery não podem ser vinculados a uma mesa.",
             )
 
         if tipo_pedido == "Entrega":

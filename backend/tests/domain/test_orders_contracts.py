@@ -59,6 +59,8 @@ class TestOrderTypesAndLegacyMapping:
         assert normalize_to_fulfillment("balcao") == FulfillmentType.PICKUP
         assert normalize_to_fulfillment("mesa") == FulfillmentType.DINE_IN
         assert normalize_to_fulfillment("salao") == FulfillmentType.DINE_IN
+        assert normalize_to_fulfillment("consumo no local") == FulfillmentType.DINE_IN
+        assert normalize_to_fulfillment("local") == FulfillmentType.DINE_IN
         assert normalize_to_fulfillment(None) == FulfillmentType.DINE_IN
 
         assert to_legacy_fulfillment(FulfillmentType.DELIVERY) == "delivery"
@@ -170,6 +172,36 @@ class TestOrderCommandsAndInvariants:
                 delivery=None,
             )
         assert "DELIVERY exigem informações de entrega" in str(exc_info.value)
+
+    def test_fulfillment_and_table_association_are_independent(self):
+        item = OrderItemInput(product_id=5, quantity=Decimal("1.00"))
+
+        dine_in_without_table = CreateOrderCommand(
+            restaurant_id=1,
+            channel=OrderChannel.POS,
+            fulfillment=FulfillmentType.DINE_IN,
+            items=(item,),
+        )
+        assert dine_in_without_table.table_id is None
+
+        pickup_with_table = CreateOrderCommand(
+            restaurant_id=1,
+            channel=OrderChannel.POS,
+            fulfillment=FulfillmentType.PICKUP,
+            table_id=12,
+            items=(item,),
+        )
+        assert pickup_with_table.table_id == 12
+
+        with pytest.raises(InvalidFulfillmentDetailsError, match="delivery não podem ser vinculados"):
+            CreateOrderCommand(
+                restaurant_id=1,
+                channel=OrderChannel.POS,
+                fulfillment=FulfillmentType.DELIVERY,
+                table_id=12,
+                items=(item,),
+                delivery=DeliveryInput(address="Rua das Flores, 123"),
+            )
 
     def test_delivery_input_requires_non_empty_address(self):
         with pytest.raises(InvalidFulfillmentDetailsError):

@@ -74,6 +74,8 @@ _LEGACY_FULFILLMENT_TO_CANONICAL = {
     "salao": FulfillmentType.DINE_IN,
     "salão": FulfillmentType.DINE_IN,
     "comanda": FulfillmentType.DINE_IN,
+    "consumo no local": FulfillmentType.DINE_IN,
+    "local": FulfillmentType.DINE_IN,
     "dine_in": FulfillmentType.DINE_IN,
     "pickup": FulfillmentType.PICKUP,
 }
