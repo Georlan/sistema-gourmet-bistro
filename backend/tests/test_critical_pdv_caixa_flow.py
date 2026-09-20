@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.database import engine, Base, SessionLocal, current_restaurante_id
+from app.financial_models import PagamentoAlocacao
 from app.security import create_access_token
 from app.models import (
     Restaurante,
@@ -826,6 +827,62 @@ def test_table_item_selection_returns_conflict_when_an_item_was_paid_elsewhere()
     finally:
         db.close()
 
+
+
+def test_table_item_payment_allocates_value_only_to_selected_items_command():
+    """Selecionar item da segunda comanda não pode creditar a primeira por FIFO."""
+    headers = get_pdv_auth_headers()
+    assert client.post(
+        "/caixa/turno/abrir",
+        headers=headers,
+        json={"saldo_inicial": 0},
+    ).status_code == 201
+
+    criar_comanda_mesa(
+        comanda_id="cmd-scope-owner-a",
+        item_id="item-scope-owner-a",
+        valor=15.0,
+        numero_pedido=77745,
+    )
+    criar_comanda_mesa(
+        comanda_id="cmd-scope-owner-b",
+        item_id="item-scope-owner-b",
+        valor=27.0,
+        numero_pedido=77746,
+    )
+
+    paid = client.post(
+        "/caixa/mesas/7/pagar",
+        headers=headers,
+        json={
+            "valor": 27.0,
+            "metodo": "pix",
+            "incluir_taxa_servico": False,
+            "item_ids": ["item-scope-owner-b"],
+            "idempotency_key": "scope-owner-second-command-777",
+        },
+    )
+    assert paid.status_code == 201, paid.text
+    assert paid.json()["item_ids"] == ["item-scope-owner-b"]
+
+    db = SessionLocal()
+    try:
+        first = db.query(Comanda).filter(Comanda.id == "cmd-scope-owner-a").one()
+        second = db.query(Comanda).filter(Comanda.id == "cmd-scope-owner-b").one()
+        item_a = db.query(Item).filter(Item.id == "item-scope-owner-a").one()
+        item_b = db.query(Item).filter(Item.id == "item-scope-owner-b").one()
+        allocation = db.query(PagamentoAlocacao).filter(
+            PagamentoAlocacao.pagamento_id == paid.json()["id"]
+        ).one()
+
+        assert float(first.valor_pago) == 0.0
+        assert float(second.valor_pago) == 27.0
+        assert item_a.pago is False
+        assert item_b.pago is True
+        assert allocation.comanda_id == second.id
+        assert float(allocation.valor) == 27.0
+    finally:
+        db.close()
 
 def test_pending_cash_item_scope_is_preserved_and_revalidated_on_approval():
     headers_caixa = get_pdv_auth_headers()
