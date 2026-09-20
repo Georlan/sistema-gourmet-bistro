@@ -444,6 +444,24 @@ class OnlinePaymentService:
                     aggregate_id=str(lancamento.id),
                 )
 
+            # Pix só pode entrar na operação depois que o provedor confirmou o
+            # recebimento. A política de autoaceite é aplicada na mesma transação
+            # e protegida por savepoint para nunca comprometer a conciliação.
+            try:
+                from ..online_order_control import auto_accept_online_order_if_enabled
+
+                with db.begin_nested():
+                    auto_accept_online_order_if_enabled(
+                        db,
+                        restaurante_id=account.restaurante_id,
+                        comanda_id=comanda.id,
+                    )
+            except Exception:
+                logger.exception(
+                    "Falha no autoaceite após aprovação Pix do pedido %s; mantendo pendente.",
+                    comanda.id,
+                )
+
         return locked_intent, approval_effects_applied
 
     @classmethod
