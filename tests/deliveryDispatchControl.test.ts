@@ -138,6 +138,7 @@ test('modal de despacho exige entregador e confirma saída com a atribuição se
       printFullTable: noop,
       printTableValues: noop,
       transferTable: noop,
+      associateTable: noop,
       cancelConsumption: noop,
       cancelOrder: noop,
     },

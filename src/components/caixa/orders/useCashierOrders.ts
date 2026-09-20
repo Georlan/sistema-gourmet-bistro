@@ -488,6 +488,49 @@ export function useCashierOrders({
     }
   };
 
+  const handleAssociateTableToOrder = async (order: any) => {
+    const targetMesaId = Number(tableTransferTargetId || 0);
+    const primaryComandaId = String(order?.comandaId || order?.id || '');
+    const normalizedType = String(order?.modalidade || order?.tipo || '').trim().toLowerCase();
+    const isDelivery = ['delivery', 'entrega'].includes(normalizedType);
+    if (!targetMesaId || !primaryComandaId || isTransferringTable) return false;
+    if (isDelivery) {
+      showToast('Pedidos de delivery não podem ser associados a uma mesa.', 'error');
+      return false;
+    }
+
+    setIsTransferringTable(true);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/comandas/${encodeURIComponent(primaryComandaId)}/associar-mesa/${targetMesaId}`,
+        {
+          method: 'POST',
+          headers: authHeaders,
+        },
+      );
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.detail || 'Não foi possível associar o pedido à mesa.');
+
+      setDeliveryOrders((current) =>
+        current.map((candidate) =>
+          String(candidate.id) === primaryComandaId
+            ? { ...candidate, mesaId: targetMesaId }
+            : candidate,
+        ),
+      );
+      setSelectedKanbanOrder(null);
+      setTableTransferTargetId('');
+      await Promise.allSettled([onRefreshOrders(), fetchDeliveryOrders()]);
+      showToast(`Pedido associado à Mesa ${targetMesaId}.`, 'success');
+      return true;
+    } catch (error: any) {
+      showToast(error?.message || 'Não foi possível associar o pedido à mesa.', 'error');
+      return false;
+    } finally {
+      setIsTransferringTable(false);
+    }
+  };
+
   const fetchMotoboys = async () => {
     const requestId = ++motoboysRequestRef.current;
     setMotoboysLoadState((current) => current === 'loaded' ? current : 'loading');
@@ -1019,6 +1062,7 @@ export function useCashierOrders({
     });
 
   const handleTransferSelectedKanbanTable = () => handleTransferTableFromSalon(selectedKanbanOrder);
+  const handleAssociateSelectedKanbanTable = () => handleAssociateTableToOrder(selectedKanbanOrder);
   const handleCancelSelectedKanbanConsumption = () =>
     selectedKanbanOrder.contextoSalao
       ? openCancelTableConfirmation(Number(selectedKanbanOrder.mesaId))
@@ -1089,6 +1133,7 @@ export function useCashierOrders({
     handlePrintSelectedKanbanValues,
     handleInspectSalonTable,
     handleTransferSelectedKanbanTable,
+    handleAssociateSelectedKanbanTable,
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
   };

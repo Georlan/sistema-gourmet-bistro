@@ -31,6 +31,7 @@ from ..security import get_current_user, require_permission
 from ..services.atendimento_projection import build_table_family_view
 from ..services.atendimentos import (
     AtendimentoError,
+    associate_order_to_table,
     ensure_atendimento_for_comanda,
     materialize_table_accounts_for_write,
     merge_tables,
@@ -282,6 +283,38 @@ def venda_direta_respeitando_familia_principal(
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
+
+
+@router.post(
+    "/comandas/{comanda_id}/associar-mesa/{mesa_id}",
+    response_model=ComandaResponse,
+)
+def associar_mesa_ao_pedido(
+    comanda_id: str,
+    mesa_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Associa mesa a DINE_IN/PICKUP sem reutilizar a semântica de transferência."""
+    require_waiter_permission(db, current_user, "perm_garcom_transferir_mesa")
+    rid = require_tenant_id()
+    try:
+        command = associate_order_to_table(
+            db,
+            rid,
+            comanda_id,
+            mesa_id,
+            actor_id=current_user.id,
+        )
+        db.commit()
+        db.refresh(command)
+    except AtendimentoError as exc:
+        db.rollback()
+        _raise_domain(exc)
+
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rid)
+    return command
 
 
 @router.post(

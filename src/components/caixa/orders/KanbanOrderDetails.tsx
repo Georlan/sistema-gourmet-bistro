@@ -85,6 +85,7 @@ export interface KanbanOrderDetailsProps {
     readonly printFullTable: () => void;
     readonly printTableValues: () => void;
     readonly transferTable: () => void;
+    readonly associateTable: () => void;
     readonly cancelConsumption: () => void;
     readonly cancelOrder: () => void;
   };
@@ -138,8 +139,14 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
   const selectedIsTableLinkedPickup = selectedIsDigital
     && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
     && Number(selectedKanbanOrder?.mesaId || 0) > 0;
-  const selectedIsDelivery = String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'delivery'
-    || String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'entrega';
+  const selectedNormalizedFulfillment = String(
+    selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '',
+  ).trim().toLowerCase();
+  const selectedIsDelivery = selectedNormalizedFulfillment === 'delivery'
+    || selectedNormalizedFulfillment === 'entrega';
+  const selectedCanAssociateTable = !selectedIsQuickSale
+    && Number(selectedKanbanOrder?.mesaId || 0) <= 0
+    && ['retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(selectedNormalizedFulfillment);
   const selectedDeliveryStatus = String(selectedKanbanOrder?.deliveryStatus || '').toLowerCase();
   const selectedIsReadyDelivery = selectedIsDelivery && selectedDeliveryStatus === 'pronto';
   const selectedCanAssignCourier = selectedIsDelivery
@@ -379,26 +386,28 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
             )}
             {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
               <div className={"space-y-2 w-full"}>
-                <div className={"flex gap-2 w-full"}>
-                  <button
-                    type="button"
-                    onClick={actions.printFullTable}
-                    title="Reimprime todos os itens ativos da mesa"
-                    className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                  >
-                    <Printer size={13} />
-                    <span>Reimpressão total</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={actions.printTableValues}
-                    title="Imprime a Conta da Mesa"
-                    className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                  >
-                    <Printer size={13} />
-                    <span>Conta da Mesa</span>
-                  </button>
-                </div>
+                {selectedKanbanOrder.contextoSalao && (
+                  <div className={"flex gap-2 w-full"}>
+                    <button
+                      type="button"
+                      onClick={actions.printFullTable}
+                      title="Reimprime todos os itens ativos da mesa"
+                      className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
+                    >
+                      <Printer size={13} />
+                      <span>Reimpressão total</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={actions.printTableValues}
+                      title="Imprime a Conta da Mesa"
+                      className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
+                    >
+                      <Printer size={13} />
+                      <span>Conta da Mesa</span>
+                    </button>
+                  </div>
+                )}
                 {selectedKanbanOrder.contextoSalao && (
                   <div className={"flex gap-2 w-full"}>
                     <select
@@ -435,14 +444,43 @@ export function KanbanOrderDetails({ order: selectedKanbanOrder, transfer, actio
               </div>
             )}
             {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
-              <button
-                type="button"
-                onClick={actions.cancelOrder}
-                className={"flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-300 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/40"}
-              >
-                <Trash2 size={13} />
-                Cancelar pedido
-              </button>
+              <div className="w-full space-y-2">
+                {selectedCanAssociateTable && (
+                  <div className="flex gap-2 w-full">
+                    <select
+                      aria-label="Mesa para associar ao pedido"
+                      value={tableTransferTargetId}
+                      onChange={(event) => setTableTransferTargetId(event.target.value)}
+                      disabled={isTransferringTable}
+                      className="min-h-10 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary outline-none focus:border-emerald-500/60"
+                    >
+                      <option value="">Associar à mesa…</option>
+                      {salonTables.map((table) => (
+                        <option key={table.id} value={table.id}>
+                          Mesa {table.id}{table.nome ? ` · ${table.nome}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={actions.associateTable}
+                      disabled={!tableTransferTargetId || isTransferringTable}
+                      className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <Users size={13} />}
+                      Associar
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={actions.cancelOrder}
+                  className={"flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-300 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/40"}
+                >
+                  <Trash2 size={13} />
+                  Cancelar pedido
+                </button>
+              </div>
             )}
           </div>
         </div>
