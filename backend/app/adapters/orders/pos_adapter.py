@@ -58,6 +58,7 @@ from ...models import (
     Usuario,
 )
 from ...schemas import ComandaDetail, VendaDiretaCreate
+from ...saas_billing_models import SaaSSubscription
 from ...security import ensure_permission
 from ...services.atendimentos import (
     ensure_atendimento_for_comanda,
@@ -121,6 +122,18 @@ class PosAdapter:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Tipo de pedido inválido. Use Consumo no Local, Delivery ou Retirada.",
             )
+
+        if venda_in.onboarding_test:
+            subscription = (
+                db.query(SaaSSubscription)
+                .filter(SaaSSubscription.restaurante_id == rid)
+                .one_or_none()
+            )
+            if subscription is None or subscription.trial_started_at is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Inicie o período grátis antes de registrar o pedido de teste.",
+                )
 
         address_snapshot = (
             delivery_address_from_payload(venda_in.address_snapshot)
@@ -321,6 +334,9 @@ class PosAdapter:
                 )
                 .first()
             )
+
+            if venda_in.onboarding_test:
+                comanda.onboarding_test = True
 
             # Ajuste de origem caso SmartPOS
             if is_smartpos:
