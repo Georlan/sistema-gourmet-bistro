@@ -94,6 +94,21 @@ test('PDV reconciles or rolls back the temporary order instead of leaving duplic
   assert.match(cashierOrders, /id\.startsWith\('temp-'\)/);
 });
 
+test('PDV models fulfillment separately from optional table association', () => {
+  const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
+  const view = source('src/components/caixa/pdv/CashierPdvView.tsx');
+
+  assert.match(pdv, /useState<'pickup' \| 'delivery' \| 'dine_in'>\('pickup'\)/);
+  assert.match(pdv, /mesa_id: orderType === 'delivery' \? null : mesaId \|\| null/);
+  assert.doesNotMatch(pdv, /Selecione a mesa de destino antes de lançar o pedido/);
+  assert.match(pdv, /getElementById\('pdv-target-table'\)/);
+
+  assert.match(view, /pdvOrderType !== 'delivery'/);
+  assert.match(view, /<option value="">Sem mesa<\/option>/);
+  assert.match(view, /type\.id === 'delivery'\) setPdvTargetMesaId\(0\)/);
+  assert.match(view, /id: 'dine_in', label: 'Consumo local'/);
+});
+
 test('customer lookup keeps validation and cancellation while removing artificial wait', () => {
   const pdv = source('src/components/caixa/pdv/useCashierPdv.ts');
 
