@@ -26,7 +26,7 @@ from ..database import (
     current_restaurante_id,
 )
 from ..models import PrintJob, PrintAgentToken, Usuario
-from ..security import require_permission
+from ..security import ensure_permission, get_current_user, require_permission
 from ..websocket_manager import manager
 from ..timezone_utils import OPERATIONAL_TIMEZONE
 
@@ -43,6 +43,20 @@ PRINT_QUEUE_VISIBLE_LIMIT = 50
 AGENT_COMMAND_TIMEOUT_SECONDS = 45
 UNRESOLVED_JOB_STATUSES = ("pending", "claimed", "printing")
 TERMINAL_JOB_STATUSES = ("printed", "failed", "cancelled")
+
+
+def require_internal_print_simulator_user(current_user=Depends(get_current_user)):
+    """Restringe a bancada térmica ao Modo Suporte auditado da plataforma."""
+    ensure_permission(current_user, "impressao:administrar")
+    if not bool(getattr(current_user, "is_support_mode", False)):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Simulador térmico restrito ao Modo Suporte interno do KÔMA."
+            ),
+        )
+    return current_user
+
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -1163,7 +1177,7 @@ def get_print_monitor(
 @router.get("/simulator/sources", summary="Listar payloads recentes para o simulador")
 def list_print_simulator_sources(
     limit: int = Query(default=10, ge=1, le=20),
-    current_user: Usuario = Depends(require_permission("impressao:administrar")),
+    current_user = Depends(require_internal_print_simulator_user),
     db: Session = Depends(get_db),
 ):
     """Expõe somente metadados de jobs recentes que ainda conservam payload.
@@ -1216,7 +1230,7 @@ def list_print_simulator_sources(
 )
 def get_print_simulator_source(
     job_id: str,
-    current_user: Usuario = Depends(require_permission("impressao:administrar")),
+    current_user = Depends(require_internal_print_simulator_user),
     db: Session = Depends(get_db),
 ):
     """Retorna o payload persistido sem produzir efeitos na fila ou no hardware."""
