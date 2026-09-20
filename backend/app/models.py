@@ -402,6 +402,9 @@ class Comanda(Base):
         self._identificador = encrypt_field(value)
     
     fechada = Column(Boolean, default=False, index=True)
+    # Marca uma venda real criada intencionalmente para homologar o onboarding.
+    # Continua usando modalidade, pagamento, estoque e fechamento canônicos.
+    onboarding_test = Column(Boolean, default=False, server_default=text("false"), nullable=False, index=True)
     criado_em = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     fechado_em = Column(DateTime, nullable=True)
     valor_pago = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)  # Sum of generic partial payments made
@@ -944,6 +947,9 @@ class ConfiguracaoRestaurante(Base):
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
     delivery_ativo = Column(Boolean, default=True)
+    # Política operacional canônica. NULL preserva o contrato legado até o
+    # restaurante confirmar explicitamente as modalidades que aceita.
+    tipos_pedido_ativos = Column(JSON, nullable=True)
     pedido_minimo = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     frete_gratis_valor = Column(Numeric(14, 2, asdecimal=False), default=0.0)
     tipo_taxa_entrega = Column(String, default="fixa")  # "fixa" | "bairro" | "distancia"
