@@ -12,7 +12,7 @@ import {
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
 import { useAutomaticOrderAcceptance } from './useAutomaticOrderAcceptance';
-import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
+import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly columns: {
@@ -273,7 +273,7 @@ export function CaixaOrdersWorkspace({
             <span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>
           </label>
           <div className="orders-delivery-total">
-            <span>Balcão e delivery</span>
+            <span>Pedidos digitais</span>
             <strong>{formatCurrency(deliveryOrders.reduce((s, o) => s + o.total, 0))}</strong>
           </div>
           {/* Bell button — opens floating drawer */}
@@ -333,7 +333,7 @@ export function CaixaOrdersWorkspace({
                       <div>
                         <div className={"flex flex-wrap gap-1 mb-1"}>
                           <span className={"orders-card__chip is-primary"}>
-                            {order.modalidade === 'delivery' ? 'Delivery' : 'Retirada'}
+                            {getDigitalOrderFulfillmentLabel(order)}
                           </span>
                           <span className={"orders-card__chip is-muted"}>
                             {getDigitalOrderSourceLabel(order)}
@@ -511,9 +511,9 @@ export function CaixaOrdersWorkspace({
         <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
           <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
             <div>
-              <span className="orders-column__number">02 / SEM MESA</span>
-              <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Balcão e delivery</span>
-              <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Venda rápida, retirada e entrega</span>
+              <span className="orders-column__number">02 / DIGITAL</span>
+              <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Pedidos digitais</span>
+              <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Retirada, consumo no local e delivery</span>
             </div>
             <span className="orders-column__count">
               {filteredDigitalProduction.length}
@@ -533,7 +533,7 @@ export function CaixaOrdersWorkspace({
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
                   const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
-                  const buttonText = isDeliveryOrder ? 'PRONTO PARA SAIR' : 'PRONTO PARA RETIRADA';
+                  const buttonText = isDeliveryOrder ? 'Pronto para sair' : order.modalidade === 'dine_in' ? 'Pronto para servir' : 'Pronto para retirada';
                   return (
                     <div
                       key={order.id}
@@ -568,7 +568,7 @@ export function CaixaOrdersWorkspace({
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
                               ? `Retirada no balcão · ${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
-                              : `${isDeliveryOrder ? 'Delivery' : 'Retirada'}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : order.telefone ? ` · ${order.telefone}` : ''}`}
+                              : `${getDigitalOrderFulfillmentLabel(order)}${getDigitalOrderAssociation(order) ? ` · ${getDigitalOrderAssociation(order)}` : order.telefone ? ` · ${order.telefone}` : ''}`}
                           </span>
                           <div className="orders-card__identity-chips">
                             <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
@@ -604,7 +604,7 @@ export function CaixaOrdersWorkspace({
                         className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
                       >
                         <Check size={13} />
-                        <span>{buttonText === 'PRONTO PARA SAIR' ? 'Pronto para sair' : 'Pronto para retirada'}</span>
+                        <span>{buttonText}</span>
                       </button>
                     </div>
                   );
@@ -740,7 +740,7 @@ export function CaixaOrdersWorkspace({
                     </div>
                   );
                 })}
-                {/* 2. Delivery/Retirada prontos ou em trânsito. */}
+                {/* 2. Pedidos digitais prontos ou em trânsito. */}
                 {filteredDeliveryFinalization.map((order) => {
                   const cardId = `transito-${order.id}`;
                   const sla = getOrderSlaData(order, nowTimestamp);
